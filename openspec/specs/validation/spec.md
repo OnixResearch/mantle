@@ -117,14 +117,14 @@ The hello-world eval round-trip validation MUST assert the builder contract that
 #### Scenario: Targeted hello-world eval rerun passes with the current builder
 
 - GIVEN `examples/hello-world.ncl` defines `builder = "/bin/sh"`
-- WHEN a contributor runs `cargo test -p crunch --test integration_build eval_hello_world_with_seed -- --nocapture` under the documented Cargo environment
+- WHEN a contributor runs `cargo test -p mantle --test integration_build eval_hello_world_with_seed -- --nocapture` under the documented Cargo environment
 - THEN `tests/integration_build.rs::eval_hello_world_with_seed` passes
 - AND the output contains `test eval_hello_world_with_seed ... ok`
 
 #### Scenario: Broader lib/tests rerun keeps the aligned assertion green
 
 - GIVEN the hello-world builder assertion is aligned with the current example contract
-- WHEN a contributor runs `cargo test -p crunch -p crunch-pipeline --lib --tests` under the documented Cargo environment
+- WHEN a contributor runs `cargo test -p mantle -p crunch-pipeline --lib --tests` under the documented Cargo environment
 - THEN the command exits successfully
 - AND `tests/integration_build.rs` reports `9 passed; 0 failed`
 
@@ -148,7 +148,7 @@ unwinds.
 
 #### Scenario: Targeted regression rerun passes the controlled cases
 
-- GIVEN a contributor runs `cargo test -p crunch --bin crunch resolve_bwrap_source_ -- --nocapture` under the repo's documented Cargo build environment
+- GIVEN a contributor runs `cargo test -p mantle --bin mantle resolve_bwrap_source_ -- --nocapture` under the repo's documented Cargo build environment
 - WHEN the targeted self-build regression tests execute
 - THEN the controlled host-fallback and no-host cases pass
 - AND the output does not contain the panic text `should error when no bwrap`
@@ -165,15 +165,15 @@ unwinds.
 
 ### Requirement: Broader lib/tests rerun is no longer blocked by ambient PATH discovery
 
-The repo MUST keep the broader `cargo test -p crunch -p crunch-pipeline --lib --tests`
+The repo MUST keep the broader `cargo test -p mantle -p crunch-pipeline --lib --tests`
 validation path from failing because `resolve_bwrap_source_falls_back_to_path`
 observed an unexpected host `bwrap`.
 
 #### Scenario: Broader lib/tests rerun advances past the self-build PATH flake
 
 - GIVEN the self-build PATH-sensitive validation fix is in place
-- AND the broader command includes the `crunch` package unit-test target that owns `src/self_build.rs`
-- AND a contributor reruns `cargo test -p crunch -p crunch-pipeline --lib --tests` under the repo's documented Cargo build environment
+- AND the broader command includes the `mantle` package unit-test target that owns `src/self_build.rs`
+- AND a contributor reruns `cargo test -p mantle -p crunch-pipeline --lib --tests` under the repo's documented Cargo build environment
 - WHEN the broader validation command executes
 - THEN that command does not fail because `resolve_bwrap_source_falls_back_to_path` saw an ambient host `bwrap`
 - AND the output does not contain the panic text `should error when no bwrap`

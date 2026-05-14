@@ -36,9 +36,9 @@ derivation per machine whose builder writes the merged NixOS config tree to
 `$out/system-config.json`. The backend MUST NOT shell out to `nix-build`,
 `nixos-rebuild`, or any other Nix command.
 
-The end-to-end `crunch system eval` and `crunch system build` pipeline MUST NOT
+The end-to-end `mantle system eval` and `mantle system build` pipeline MUST NOT
 require a Nix runtime dependency to be installed on the host. All required
-behavior for this phase MUST come from crunch's own evaluator, assembler, and
+behavior for this phase MUST come from mantle's own evaluator, assembler, and
 build pipeline.
 
 #### Scenario: NixOS backend emits one structural passthrough derivation
@@ -82,9 +82,9 @@ an alternative derivation execution path.
 ID: systemconfig.system.assembler.asm4.scenario
 
 - GIVEN a backend-produced `CrunchDerivation`
-- WHEN `crunch system build` submits it for execution
+- WHEN `mantle system build` submits it for execution
 - THEN the derivation flows through the same conversion and build pipeline used
-  by existing crunch builds
+  by existing mantle builds
 
 ### Requirement: ASM-5 Backend isolation
 
@@ -105,7 +105,7 @@ ID: systemconfig.system.assembler.asm5.scenario
 
 ### Requirement: ASM-6 Dry-run support
 
-The assembler layer MUST support dry-run operation so that `crunch system eval`
+The assembler layer MUST support dry-run operation so that `mantle system eval`
 can return derivation records without invoking the build pipeline.
 ID: systemconfig.system.assembler.asm6
 
@@ -114,7 +114,7 @@ Dry-run mode MUST preserve the same backend selection rules as real builds.
 #### Scenario: Eval uses assembler dry-run mode
 ID: systemconfig.system.assembler.asm6.scenario
 
-- GIVEN `crunch system eval <inventory.ncl>`
+- GIVEN `mantle system eval <inventory.ncl>`
 - WHEN assembly completes in dry-run mode
 - THEN stdout contains derivation records rather than built outputs
 - AND no derivation is submitted to `crunch-pipeline::build()`

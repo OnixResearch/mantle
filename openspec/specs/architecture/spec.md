@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines crunch workspace structure, crate responsibilities, and critical-path
+Defines mantle workspace structure, crate responsibilities, and critical-path
 boundary rules so project-management, build, and functional-core ownership stay
 explicit as the workspace evolves.
 ## Requirements
@@ -12,7 +12,7 @@ The workspace MUST contain the following crates:
 
 | Crate | Role |
 |---|---|
-| `crunch` (binary) | CLI parsing, error formatting, log writing, bootstrap, self-build dispatch |
+| `mantle` (binary) | CLI parsing, error formatting, log writing, bootstrap, self-build dispatch |
 | `crunch-project` | Project manifest, lockfile, refresh, stale detection, upgrade, generated inputs |
 | `crunch-pipeline` | Eval->convert->build integration, store/builder construction |
 | `crunch-eval` | Nickel evaluation wrapper |
@@ -23,7 +23,7 @@ The workspace MUST contain the following crates:
 
 #### Scenario: Project command uses dedicated crate
 
-- GIVEN a project-management CLI command such as `crunch refresh`
+- GIVEN a project-management CLI command such as `mantle refresh`
 - WHEN the binary handles the command
 - THEN it delegates to `crunch-project`
 - AND the binary does not own manifest, lock, or refresh logic itself
@@ -46,7 +46,7 @@ fetcher/build/store layers.
 - GIVEN an input described in `crunch-project.ncl`
 - WHEN the project layer resolves and materializes that input
 - THEN it records the metadata needed by the build path
-- AND actual fetch/build execution still flows through crunch's existing
+- AND actual fetch/build execution still flows through mantle's existing
   fetcher and pipeline crates
 
 ### Requirement: Critical-path orchestrators stay narrow
@@ -70,9 +70,9 @@ responsibility boundaries.
 
 #### Scenario: Self-build orchestration delegates stages
 
-- GIVEN `crunch self-build` runs
+- GIVEN `mantle self-build` runs
 - WHEN the command advances through source staging, bootstrap-tool builds,
-  crunch build, and verification
+  mantle build, and verification
 - THEN each stage is implemented by a dedicated helper or helper cluster
 - AND the parent function remains responsible only for sequencing, shared
   config, and final reporting
@@ -91,7 +91,7 @@ registry mutation, or logging.
 #### Scenario: CA finalization computes plan before store mutation
 
 - GIVEN a content-addressed output is being finalized
-- WHEN crunch computes marker rewrites, final output names, or other derived
+- WHEN mantle computes marker rewrites, final output names, or other derived
   planning data
 - THEN that planning step runs before store mutation
 - AND the planning helper can be tested without blob, directory, or pathinfo
@@ -110,7 +110,7 @@ with a clear limit error when the configured bound is exceeded.
 #### Scenario: Deep castore tree hits explicit traversal limit
 
 - GIVEN a castore tree deeper than the supported traversal bound
-- WHEN crunch rewrites or exports that tree
+- WHEN mantle rewrites or exports that tree
 - THEN the traversal fails with a clear limit error
 - AND the failure comes from the explicit traversal bound rather than stack
   growth from recursive helper calls
@@ -152,7 +152,7 @@ The adopted no-std waves MUST contain these crates and roles:
 | `crunch-project` | std adaptor/re-export layer that retains `RefreshResolver` implementations, resolver I/O, tempdirs, file reads/writes, and shell-facing project APIs around the moved project-core logic |
 | `crunch-shell` | std adaptor layer that retains `PathBuf`, `OsString`, `split_paths(...)`, non-UTF-8 rejection, and `ExecTarget` reconstruction around `crunch-shell-core` |
 | `crunch-delta` | std adaptor/re-export layer that retains fixture building, manifest probing, async substitution/session orchestration, `PathInfo`/attestation integration, and runtime conversion around `crunch-delta-core` |
-| `crunch` | std shell for release evidence that retains `src/release_evidence.rs`, `src/release_cmd.rs`, file copying, directory hashing, proof-bundle loading, manifest I/O, and CLI formatting around `crunch-release-core` |
+| `mantle` | std shell for release evidence that retains `src/release_evidence.rs`, `src/release_cmd.rs`, file copying, directory hashing, proof-bundle loading, manifest I/O, and CLI formatting around `crunch-release-core` |
 
 #### Scenario: Workspace shows explicit no-std core tier
 ID: architecture.nostd.core.workspace.tier.visible
@@ -163,7 +163,7 @@ ID: architecture.nostd.core.workspace.tier.visible
   `crunch-project-core`, `crunch-shell-core`, `crunch-release-core`, and
   `crunch-delta-core` as dedicated no-std crates
 - AND the existing std-facing `crunch-attestation`, `crunch-project`,
-  `crunch-shell`, `crunch-delta`, and root `crunch` release-evidence path
+  `crunch-shell`, `crunch-delta`, and root `mantle` release-evidence path
   remain present as shell/adaptor layers
 
 ### Requirement: Adopted no-std core crates use crate boundaries for shell separation
@@ -192,7 +192,7 @@ ID: architecture.nostd.core.crate.boundary.effectful.dependency.outside
   splitting, shell-target reconstruction, proof-bundle loading, release bundle
   hashing, castore probing, remote delta-session framing, or attestation/store
   persistence for one of the adopted no-std domains
-- WHEN that code is added to crunch
+- WHEN that code is added to mantle
 - THEN it lands in a std shell/adaptor crate or std root module
 - AND the no-std core crate interface accepts only normalized request data and
   returns typed results

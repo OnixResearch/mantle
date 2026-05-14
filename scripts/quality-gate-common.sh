@@ -6,7 +6,7 @@ readonly QUALITY_GATE_REPO_ROOT="$(cd -- "$QUALITY_GATE_SCRIPT_DIR/.." && pwd)"
 
 # Keep first-party package scope in one checked-in place.
 readonly -a FIRST_PARTY_PACKAGES=(
-  crunch
+  mantle
   crunch-attestation
   crunch-build
   crunch-delta

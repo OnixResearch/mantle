@@ -4,7 +4,7 @@
 
 Defines Nickel project manifests, JSON lockfiles, generated locked inputs,
 refresh and stale-detection behavior, resolver ownership, upgrade paths,
-and drift checks for crunch projects.
+and drift checks for mantle projects.
 ## Requirements
 ### Requirement: Dedicated project-management crate
 
@@ -12,13 +12,13 @@ The workspace MUST contain a dedicated crate, `crunch-project`, that owns
 project manifests, lockfiles, refresh logic, stale detection, upgrades, and
 input materialization.
 
-The `crunch` binary MUST delegate project-management commands to this crate.
+The `mantle` binary MUST delegate project-management commands to this crate.
 The existing build, pipeline, and store crates MUST remain responsible for
 fetch execution, sandboxed builds, and store persistence.
 
 #### Scenario: Project command delegation
 
-- GIVEN `crunch refresh` is invoked
+- GIVEN `mantle refresh` is invoked
 - WHEN the CLI dispatches the command
 - THEN the binary delegates the operation to `crunch-project`
 - AND `crunch-build` is not used as the primary home for manifest or lock logic
@@ -41,7 +41,7 @@ The system MUST NOT require KDL for project input management.
 #### Scenario: Project manifest defines inputs
 
 - GIVEN a `crunch-project.ncl` file with named source inputs
-- WHEN `crunch check` reads the project state
+- WHEN `mantle check` reads the project state
 - THEN the manifest is validated through the project layer
 - AND invalid input shapes are reported before any refresh or build work starts
 
@@ -56,7 +56,7 @@ selected mirrors, patch locks, and verified hashes.
 #### Scenario: Refresh writes lockfile
 
 - GIVEN a valid project manifest
-- WHEN `crunch refresh` updates an input
+- WHEN `mantle refresh` updates an input
 - THEN `crunch.lock` is rewritten with the new resolved state
 - AND the result is sufficient to reproduce the same input later without
   consulting the network for freshness data
@@ -74,7 +74,7 @@ The system MUST materialize a generated file at `.crunch/inputs.ncl` from the
 current lockfile.
 
 Package Nickel code MUST be able to import that file to access locked inputs.
-Normal `crunch eval` and `crunch build` flows MUST stay pure with respect to
+Normal `mantle eval` and `mantle build` flows MUST stay pure with respect to
 network updates: they read the manifest, lock, and generated inputs file, but
 MUST NOT refresh inputs implicitly.
 
@@ -88,7 +88,7 @@ MUST NOT refresh inputs implicitly.
 #### Scenario: Build does not refresh inputs
 
 - GIVEN a project with an existing manifest, lockfile, and generated inputs file
-- WHEN `crunch build` evaluates a package file that imports `.crunch/inputs.ncl`
+- WHEN `mantle build` evaluates a package file that imports `.crunch/inputs.ncl`
 - THEN the build uses the locked inputs already on disk
 - AND no stale detection or network refresh is triggered implicitly
 
@@ -104,11 +104,11 @@ record the hash semantics required by the downstream fetch helpers:
   commit SHA. Branch and tag refs MUST be resolved with `git ls-remote`.
   Rev refs MUST be validated as full 40-character hex SHAs.
 - For git inputs, it MUST also compute the recursive/NAR hash of the
-  checkout at the resolved commit, matching `crunch.fetchGit`.
+  checkout at the resolved commit, matching `mantle.fetchGit`.
 - For file inputs, it MUST download the URL content and compute the
   manifest-declared flat content hash over the raw downloaded bytes.
 - For tarball inputs, it MUST download, unpack, and hash the unpacked tree
-  using the same recursive/NAR semantics as `crunch.fetchTarball`. It MUST
+  using the same recursive/NAR semantics as `mantle.fetchTarball`. It MUST
   NOT lock a flat hash of the compressed archive bytes.
 - When `refresh` writes the lockfile, any referenced local patch MUST be
   resolved relative to the project root, hashed from disk, and recorded in
@@ -130,7 +130,7 @@ checked.
 #### Scenario: Git input refresh resolves current rev and checkout hash
 
 - GIVEN a git input configured to follow the `main` branch
-- WHEN `crunch refresh` runs
+- WHEN `mantle refresh` runs
 - THEN the resolver calls `git ls-remote <repository> refs/heads/main`
 - AND the lockfile entry is updated with the resolved commit SHA
 - AND the lockfile hash is updated with the recursive hash of the checkout at that SHA
@@ -139,7 +139,7 @@ checked.
 #### Scenario: Git tag reference resolved with peeled tag target
 
 - GIVEN a git input configured to follow the `v1.0` tag
-- WHEN `crunch refresh` runs
+- WHEN `mantle refresh` runs
 - THEN the resolver calls `git ls-remote <repository> refs/tags/v1.0`
 - AND it prefers the peeled `^{}` line when present
 - AND the lockfile records the commit SHA that the tag points to
@@ -147,7 +147,7 @@ checked.
 #### Scenario: Git rev reference validated
 
 - GIVEN a git input configured with an explicit rev `abc123...`
-- WHEN `crunch refresh` runs
+- WHEN `mantle refresh` runs
 - THEN the resolver validates the rev string as 40-character hex
 - AND returns that rev unchanged
 - AND refresh still computes the recursive checkout hash for the lock entry
@@ -155,16 +155,16 @@ checked.
 #### Scenario: Tarball input hash resolved from unpacked tree
 
 - GIVEN a tarball input whose declared hash algorithm is `sha256`
-- WHEN `crunch refresh` runs
+- WHEN `mantle refresh` runs
 - THEN the resolver downloads the tarball
-- AND unpacks it using the same semantics as `crunch.fetchTarball`
+- AND unpacks it using the same semantics as `mantle.fetchTarball`
 - AND computes the sha256 recursive/NAR hash of the unpacked tree
 - AND updates the lockfile with the SRI-encoded tree hash
 
 #### Scenario: File input hash resolved from downloaded bytes
 
 - GIVEN a file input whose declared hash algorithm is `blake3`
-- WHEN `crunch refresh` runs
+- WHEN `mantle refresh` runs
 - THEN the resolver downloads the file content
 - AND computes the blake3 hash over the raw bytes
 - AND updates the lockfile with the SRI-encoded hash
@@ -172,7 +172,7 @@ checked.
 #### Scenario: Local patch hash resolved during refresh
 
 - GIVEN an input that references a local patch
-- WHEN `crunch refresh` runs
+- WHEN `mantle refresh` runs
 - THEN the patch path is resolved relative to the project root
 - AND the patch file is hashed from disk
 - AND `Lockfile.patches` records a non-empty locked hash for that patch
@@ -180,7 +180,7 @@ checked.
 #### Scenario: Network failure on one input does not block others
 
 - GIVEN a manifest with inputs A (reachable) and B (unreachable)
-- WHEN `crunch refresh` runs
+- WHEN `mantle refresh` runs
 - THEN input A is resolved and updated in the lockfile
 - AND input B's error is reported to the user
 - AND the command exits non-zero
@@ -188,14 +188,14 @@ checked.
 #### Scenario: Stale detection uses live resolution
 
 - GIVEN a locked git input at rev `aaa...` but upstream `main` now points to `bbb...`
-- WHEN `crunch list-stale` runs
+- WHEN `mantle list-stale` runs
 - THEN the input is reported as stale with the current and new revs
 - AND neither `crunch.lock` nor `.crunch/inputs.ncl` is modified
 
 #### Scenario: Stale detection reports failures distinctly
 
 - GIVEN one input is stale and another input cannot be checked
-- WHEN `crunch list-stale` runs
+- WHEN `mantle list-stale` runs
 - THEN the stale input is reported
 - AND the failed check is reported separately
 - AND the command does not print `all inputs up to date`
@@ -221,7 +221,7 @@ pipeline instead of introducing a second fetch implementation.
 - WHEN `.crunch/inputs.ncl` is generated
 - THEN the materialized input data preserves the locked patch information
 - AND downstream package code can apply those patches through the existing
-  crunch fetch/build mechanisms
+  mantle fetch/build mechanisms
 
 ### Requirement: Versioned manifest and lock formats
 
@@ -232,7 +232,7 @@ versions.
 #### Scenario: Upgrade rewrites old schema
 
 - GIVEN a project manifest and lockfile written in an older supported version
-- WHEN `crunch upgrade` runs
+- WHEN `mantle upgrade` runs
 - THEN the files are rewritten to the current schema version
 - AND the resulting project state remains loadable by `crunch-project`
 
@@ -244,13 +244,13 @@ The project layer MUST detect drift between `crunch.lock` and
 #### Scenario: Generated inputs file out of date
 
 - GIVEN `crunch.lock` changed but `.crunch/inputs.ncl` was not regenerated
-- WHEN `crunch check` runs
+- WHEN `mantle check` runs
 - THEN the command reports drift
 - AND exits non-zero until the generated inputs file is refreshed
 
 ### Requirement: Resolver implementation in binary crate
 
-The `crunch` binary crate MUST provide a concrete `RefreshResolver`
+The `mantle` binary crate MUST provide a concrete `RefreshResolver`
 implementation that performs real I/O. The `StubResolver` MUST be removed.
 
 The resolver MUST NOT live in `crunch-project` — that crate remains
@@ -264,7 +264,7 @@ root.
 
 #### Scenario: No stub resolver in production code
 
-- GIVEN the crunch binary crate source
+- GIVEN the mantle binary crate source
 - WHEN inspected for `RefreshResolver` implementations
 - THEN exactly one implementation exists (the live resolver)
 - AND it performs actual network/subprocess/path-based resolution
@@ -323,7 +323,7 @@ separately.
 - AND the CLI does not print `all inputs up to date`
 
 ### Requirement: Bootstrap Drain State Hygiene [r[bootstrap-state-handoff-hygiene]]
-Crunch MUST keep bootstrap drain handoff state consistent with live OpenSpec queue state so agents do not resume stale blockers as active work.
+Mantle MUST keep bootstrap drain handoff state consistent with live OpenSpec queue state so agents do not resume stale blockers as active work.
 
 #### Scenario: Stale state is not presented as active [r[bootstrap-state-handoff-hygiene.1]]
 - GIVEN there are no active OpenSpec changes

@@ -4,9 +4,9 @@
 # then compiles a C program. Zero Nix dependencies at runtime.
 #
 # Usage:
-#   crunch build examples/bootstrap-no-nix.ncl -I lib --store /tmp/crunch-store
+#   mantle build examples/bootstrap-no-nix.ncl -I lib --store /tmp/mantle-store
 
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 let seed = import "../bootstrap/seed.ncl" in
 let toolchain = seed.toolchain in
 let seed_name = seed.name in
@@ -38,7 +38,7 @@ let seed_target = seed.target in
       cat > /tmp/hello.c << 'CEOF'
 #include <stdio.h>
 int main() {
-    printf("Hello from crunch — no Nix involved!\n");
+    printf("Hello from mantle — no Nix involved!\n");
     return 0;
 }
 CEOF
@@ -50,4 +50,4 @@ CEOF
     "%,
   ],
   inputs = [toolchain],
-} | crunch.Derivation
+} | mantle.Derivation

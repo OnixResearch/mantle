@@ -33,7 +33,7 @@ MUST contain:
 #### Scenario: Cached outputs retain PathInfo
 
 - GIVEN a previously built output with PathInfo in the database
-- WHEN `crunch build` is run again and the output is cached
+- WHEN `mantle build` is run again and the output is cached
 - THEN the existing PathInfo is returned without re-ingesting
 
 ### Requirement: Cache check uses PathInfoService and castore
@@ -61,7 +61,7 @@ and rebuild.
 
 - GIVEN PathInfo for `/nix/store/<hash>-hello` in the database
 - AND the blob referenced by PathInfo.node exists in the blob service
-- WHEN `crunch build` processes this derivation
+- WHEN `mantle build` processes this derivation
 - THEN the build is skipped (cache hit)
 - AND `output_nodes` is populated from PathInfo for downstream use
 
@@ -69,14 +69,14 @@ and rebuild.
 
 - GIVEN PathInfo for `/nix/store/<hash>-hello` in the database
 - BUT the blob referenced by PathInfo.node is absent from the blob service
-- WHEN `crunch build` processes this derivation
+- WHEN `mantle build` processes this derivation
 - THEN the derivation is rebuilt
 - AND a warning is logged about missing castore content
 
 #### Scenario: No PathInfo = cache miss
 
 - GIVEN no PathInfo in the database for an output
-- WHEN `crunch build` processes this derivation
+- WHEN `mantle build` processes this derivation
 - THEN the derivation is rebuilt
 
 ### Requirement: Database location
@@ -91,14 +91,14 @@ The directory MUST be created automatically if it doesn't exist.
 
 #### Scenario: First run creates database
 
-- GIVEN no prior crunch state directory
-- WHEN `crunch build` runs for the first time
+- GIVEN no prior mantle state directory
+- WHEN `mantle build` runs for the first time
 - THEN the state directory and redb file are created
 
 #### Scenario: Custom state dir
 
 - GIVEN `CRUNCH_STATE_DIR=/tmp/crunch-test`
-- WHEN `crunch build` runs
+- WHEN `mantle build` runs
 - THEN PathInfo is stored in `/tmp/crunch-test/pathinfo.redb`
 
 ### Requirement: RedbPathInfoService backend
@@ -114,7 +114,7 @@ in the vendored code.
 #### Scenario: Database survives restart
 
 - GIVEN a build that persists PathInfo to redb
-- WHEN the crunch process exits and restarts
+- WHEN the mantle process exits and restarts
 - THEN `PathInfoService::get()` returns the previously stored PathInfo
 
 ### Requirement: Builder accepts PathInfoService
@@ -136,26 +136,26 @@ in the vendored code.
 
 ### Requirement: Store query subcommand
 
-The CLI MUST provide a `crunch store` subcommand with:
+The CLI MUST provide a `mantle store` subcommand with:
 
-- `crunch store list` — list all known store paths with name,
+- `mantle store list` — list all known store paths with name,
   deriver, NAR size
-- `crunch store info <path>` — show full PathInfo for a store
+- `mantle store info <path>` — show full PathInfo for a store
   path (references, NAR hash, deriver, CA info)
-- `crunch store verify [<path>]` — re-compute NAR hash and
+- `mantle store verify [<path>]` — re-compute NAR hash and
   compare with stored value. Report mismatches.
 
 #### Scenario: List known paths
 
 - GIVEN three paths in the PathInfo database
-- WHEN `crunch store list` is run
+- WHEN `mantle store list` is run
 - THEN all three are printed with name, deriver, and NAR size
 
 #### Scenario: Verify detects corruption
 
 - GIVEN a stored PathInfo with NAR hash H
 - AND the output on disk has been modified
-- WHEN `crunch store verify` is run
+- WHEN `mantle store verify` is run
 - THEN the mismatch is reported
 
 ### Requirement: Concurrency safety
@@ -164,14 +164,14 @@ The redb database MUST support concurrent reads from multiple
 processes. Write access MUST be serialized (redb provides this
 via its write transaction model).
 
-A second `crunch build` invocation while the first is running
+A second `mantle build` invocation while the first is running
 MUST NOT corrupt the database. It MAY block on write transactions
 (acceptable for v1).
 
 #### Scenario: Concurrent reads
 
-- GIVEN `crunch build` is running
-- WHEN `crunch store list` is run simultaneously
+- GIVEN `mantle build` is running
+- WHEN `mantle store list` is run simultaneously
 - THEN the list command succeeds without blocking the build
 
 ### Requirement: Graceful degradation
@@ -183,6 +183,6 @@ opened due to permissions or corruption by falling back to the v0 behavior
 #### Scenario: Corrupt database
 
 - GIVEN a corrupted `pathinfo.redb` file
-- WHEN `crunch build` attempts to open it
+- WHEN `mantle build` attempts to open it
 - THEN a warning is logged
 - AND builds proceed with in-memory PathInfo (no persistence)

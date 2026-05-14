@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how crunch computes, stores, and references store paths using a
+Defines how mantle computes, stores, and references store paths using a
 configurable prefix instead of the hardcoded `/nix/store`.
 
 ## Requirements
@@ -11,27 +11,27 @@ configurable prefix instead of the hardcoded `/nix/store`.
 
 The system MUST accept a `--store-prefix` CLI flag that sets the logical
 store path prefix for all derivation hash computations, path construction,
-and sandbox environment variables. Default: `/crunch/store`.
+and sandbox environment variables. Default: `/mantle/store`.
 
 #### Scenario: Default prefix
 
 - GIVEN no `--store-prefix` flag
-- WHEN crunch evaluates and builds a derivation
-- THEN all store paths use the `/crunch/store` prefix
-- THEN the sandbox `NIX_STORE` env var is set to `/crunch/store`
+- WHEN mantle evaluates and builds a derivation
+- THEN all store paths use the `/mantle/store` prefix
+- THEN the sandbox `NIX_STORE` env var is set to `/mantle/store`
 - THEN output paths printed to stdout begin with the `--store` directory
 
 #### Scenario: Nix-compat prefix
 
 - GIVEN `--nix-compat` flag
-- WHEN crunch evaluates and builds a derivation
+- WHEN mantle evaluates and builds a derivation
 - THEN all store paths use the `/nix/store` prefix
-- THEN derivation hashes match prior crunch behavior
+- THEN derivation hashes match prior mantle behavior
 
 #### Scenario: Custom prefix
 
 - GIVEN `--store-prefix /opt/mystore`
-- WHEN crunch evaluates and builds a derivation
+- WHEN mantle evaluates and builds a derivation
 - THEN all store paths use the `/opt/mystore` prefix
 
 ### Requirement: Prefix flows through all hash computations
@@ -62,7 +62,7 @@ a single build invocation. The system SHOULD reject prefixes shorter than
 #### Scenario: Reject empty prefix
 
 - GIVEN `--store-prefix ""`
-- WHEN crunch starts
+- WHEN mantle starts
 - THEN it exits with an error before any evaluation
 
 ### Requirement: nix_compat STORE_DIR patched
@@ -93,6 +93,6 @@ It MUST NOT change any other behavior.
 #### Scenario: nix-compat flag only changes prefix
 
 - GIVEN `--nix-compat` is passed without any other behavior flag
-- WHEN crunch initializes its store-prefix configuration
+- WHEN mantle initializes its store-prefix configuration
 - THEN the logical prefix is `/nix/store`
 - AND every other configuration value matches the ordinary defaults

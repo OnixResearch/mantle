@@ -144,7 +144,7 @@ The workspace MUST contain the following crates:
 
 | Crate | Role |
 |---|---|
-| `crunch` (binary) | CLI entry point, arg parsing, error formatting, log writing |
+| `mantle` (binary) | CLI entry point, arg parsing, error formatting, log writing |
 | `crunch-pipeline` | Eval->convert->build integration, store/builder construction |
 | `crunch-eval` | Nickel evaluation wrapper |
 | `crunch-glue` | CrunchDerivation -> nix_compat::Derivation conversion |
@@ -155,7 +155,7 @@ The workspace MUST contain the following crates:
 
 - GIVEN the workspace manifest and crate directories
 - WHEN the project layout is inspected
-- THEN the workspace contains `crunch`, `crunch-pipeline`, `crunch-eval`,
+- THEN the workspace contains `mantle`, `crunch-pipeline`, `crunch-eval`,
   `crunch-glue`, `crunch-build`, and `crunch-store`
 - AND each crate owns the role listed above
 

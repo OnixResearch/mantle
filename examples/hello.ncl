@@ -1,6 +1,6 @@
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 {
   name = "hello",
   builder = "/bin/sh",
-  args = ["-c", "echo 'Hello, crunch!' > $out"],
-} | crunch.Derivation
+  args = ["-c", "echo 'Hello, mantle!' > $out"],
+} | mantle.Derivation

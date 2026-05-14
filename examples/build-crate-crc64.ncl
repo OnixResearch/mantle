@@ -1,21 +1,21 @@
-# Build a real Rust crate from crates.io with crunch.
+# Build a real Rust crate from crates.io with mantle.
 #
 # Usage:
-#   mkdir -p /tmp/crunch-examples-store /tmp/crunch-examples-state
-#   crunch build examples/build-crate-crc64.ncl \
-#     --store /tmp/crunch-examples-store \
-#     --state-dir /tmp/crunch-examples-state \
+#   mkdir -p /tmp/mantle-examples-store /tmp/mantle-examples-state
+#   mantle build examples/build-crate-crc64.ncl \
+#     --store /tmp/mantle-examples-store \
+#     --state-dir /tmp/mantle-examples-state \
 #     --no-substitute
 #
 # What this does:
 #   - fetches the published `crc64` crate source from crates.io
-#   - builds crunch's bootstrap Rust toolchain
+#   - builds mantle's bootstrap Rust toolchain
 #   - compiles the crate with `cargo build --release --offline`
 #
 # `crc64` is a good example crate because version 2.0.0 has no Cargo
 # dependencies, so the build stays offline inside the sandbox.
 
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 let seed = import "../bootstrap/seed.ncl" in
 let toolchain = seed.toolchain in
 let seed_name = seed.name in
@@ -24,7 +24,7 @@ let seed_dynamic_linker = seed.dynamic_linker in
 let rust = import "../bootstrap/rust.ncl" in
 let musl = import "../bootstrap/musl.ncl" in
 
-let src = crunch.fetchTarball {
+let src = mantle.fetchTarball {
   url = "https://static.crates.io/crates/crc64/crc64-2.0.0.crate",
   hash = "sha256-G2t3VkrTsVRXQrfE4NYeYPnQUgnzxpGz2eI3QlVE/rA=",
   name = "crc64-src",
@@ -100,10 +100,10 @@ CARGOEOF
 
       mkdir -p $out/bin
       cp $CARGO_TARGET_DIR/x86_64-unknown-linux-musl/release/crc64 $out/bin/
-      echo 'crunch example payload' > /tmp/crc64-input.txt
+      echo 'mantle example payload' > /tmp/crc64-input.txt
       $out/bin/crc64 /tmp/crc64-input.txt > /tmp/crc64-output.txt
       cat /tmp/crc64-output.txt
     "%,
   ],
   inputs = [toolchain, musl, rust, src],
-} | crunch.Derivation
+} | mantle.Derivation

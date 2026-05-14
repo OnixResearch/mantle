@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how crunch computes output paths from build output content
+Defines how mantle computes output paths from build output content
 rather than from derivation inputs, enabling deduplication of
 identical outputs and avoiding unnecessary rebuild cascades.
 
@@ -19,7 +19,7 @@ serialization of the output. The path format is:
 ```
 
 This uses `build_ca_path` with `CAHash::Nar(NixHash::Sha256(nar_hash))`
-— except crunch uses BLAKE3 for the outer fingerprint hash per the
+— except mantle uses BLAKE3 for the outer fingerprint hash per the
 defaults spec. The inner content hash (the NAR hash) also uses BLAKE3.
 
 #### Scenario: Identical outputs from different inputs

@@ -3,13 +3,13 @@
 # This demonstrates the project outputs schema.
 #
 # Usage:
-#   1. Generate seed: crunch bootstrap -o examples/project/seed.ncl
-#   2. Build default: cd examples/project && crunch build
-#   3. Build hello:   cd examples/project && crunch build .#hello
-#   4. Run hello:     cd examples/project && crunch run .#hello
-#   5. Run checks:    cd examples/project && crunch build .#checks.test-hello
+#   1. Generate seed: mantle bootstrap -o examples/project/seed.ncl
+#   2. Build default: cd examples/project && mantle build
+#   3. Build hello:   cd examples/project && mantle build .#hello
+#   4. Run hello:     cd examples/project && mantle run .#hello
+#   5. Run checks:    cd examples/project && mantle build .#checks.test-hello
 
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 let seed = import "seed.ncl" in
 
 {
@@ -20,11 +20,11 @@ let seed = import "seed.ncl" in
       args = ["-c", m%"
         mkdir -p $out/bin
         echo '#!/bin/sh' > $out/bin/hello
-        echo 'echo "Hello from crunch project!"' >> $out/bin/hello
+        echo 'echo "Hello from mantle project!"' >> $out/bin/hello
         chmod +x $out/bin/hello
       "%],
       inputs = [seed.bash],
-    } | crunch.Derivation,
+    } | mantle.Derivation,
 
     goodbye = {
       name = "goodbye",
@@ -32,11 +32,11 @@ let seed = import "seed.ncl" in
       args = ["-c", m%"
         mkdir -p $out/bin
         echo '#!/bin/sh' > $out/bin/goodbye
-        echo 'echo "Goodbye from crunch project!"' >> $out/bin/goodbye
+        echo 'echo "Goodbye from mantle project!"' >> $out/bin/goodbye
         chmod +x $out/bin/goodbye
       "%],
       inputs = [seed.bash],
-    } | crunch.Derivation,
+    } | mantle.Derivation,
   },
 
   checks = {
@@ -50,10 +50,10 @@ let seed = import "seed.ncl" in
         echo "ok" > $out/result
       "%],
       inputs = [seed.bash],
-    } | crunch.Derivation,
+    } | mantle.Derivation,
   },
 
   default = {
     package = "hello",
   },
-} | crunch.Project
+} | mantle.Project

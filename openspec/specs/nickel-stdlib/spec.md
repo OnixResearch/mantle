@@ -3,14 +3,14 @@
 ## Purpose
 
 Defines the **minimal** Nickel contracts and conversion helpers shipped with
-crunch for describing derivations. The stdlib is the thinnest possible layer
+mantle for describing derivations. The stdlib is the thinnest possible layer
 between user-written Nickel and the Rust glue — it defines *what a derivation
 is*, not how to conveniently build software.
 
 Builder templates, build phases, mkDerivation patterns, stdenv equivalents,
 and input set helpers are NOT part of this stdlib. They belong in separate
-Nickel packages that import the crunch stdlib and layer convenience on top.
-crunch's core ships the schema; the ecosystem ships the opinions.
+Nickel packages that import the mantle stdlib and layer convenience on top.
+mantle's core ships the schema; the ecosystem ships the opinions.
 ## Requirements
 ### Requirement: Scope boundary
 
@@ -35,11 +35,11 @@ The stdlib MUST NOT contain:
 - Default phase implementations (unpackPhase, configurePhase, etc.)
 
 These MUST live in a separate Nickel package (`builders/`) that
-imports the crunch stdlib.
+imports the mantle stdlib.
 
 #### Scenario: Core stdlib has no builder logic
 
-- GIVEN the crunch stdlib files in `lib/`
+- GIVEN the mantle stdlib files in `lib/`
 - WHEN inspected
 - THEN no file contains `mkDerivation`, `mkStdenv`, `mkShell`,
   phase names, or shell script templates
@@ -100,19 +100,19 @@ The Derivation contract MUST allow exactly these fields:
 
 #### Scenario: Valid derivation
 
-- GIVEN `{ name = "foo", builder = "/bin/sh" } | crunch.Derivation`
+- GIVEN `{ name = "foo", builder = "/bin/sh" } | mantle.Derivation`
 - WHEN evaluated
 - THEN succeeds with defaults applied
 
 #### Scenario: Contract catches missing name
 
-- GIVEN `{ builder = "/bin/sh" } | crunch.Derivation`
+- GIVEN `{ builder = "/bin/sh" } | mantle.Derivation`
 - WHEN evaluated
 - THEN Nickel reports a contract violation for missing `name`
 
 #### Scenario: Extra field rejected
 
-- GIVEN `{ name = "foo", builder = "/bin/sh", bogus = true } | crunch.Derivation`
+- GIVEN `{ name = "foo", builder = "/bin/sh", bogus = true } | mantle.Derivation`
 - WHEN evaluated
 - THEN Nickel rejects the extra field
 
@@ -182,7 +182,7 @@ This allows mixed inputs naturally:
 
 ```nickel
 let seed = import "seed.ncl" in
-let libfoo = { name = "libfoo", ... } | crunch.Derivation in
+let libfoo = { name = "libfoo", ... } | mantle.Derivation in
 {
   inputs = [
     seed.bash,       # string → source input
@@ -338,7 +338,7 @@ discoverability.
 
 #### Scenario: Query a field
 
-- GIVEN the crunch stdlib loaded
+- GIVEN the mantle stdlib loaded
 - WHEN `nickel query --field name crunch/lib/derivation.ncl`
 - THEN the doc string, contract type, and default (if any) are displayed
 
@@ -361,7 +361,7 @@ discoverability.
 It MUST NOT re-export mkStdenv, mkShell, mkDerivation, callPackage,
 or MkDerivationArgs.
 
-Users import one file: `let crunch = import "lib.ncl" in`
+Users import one file: `let mantle = import "lib.ncl" in`
 
 #### Scenario: Entry point re-exports core contracts only
 
@@ -394,7 +394,7 @@ independent from the core derivation contract.
 
 #### Scenario: Builder package exists
 
-- GIVEN the crunch source tree
+- GIVEN the mantle source tree
 - WHEN `builders/lib.ncl` is inspected
 - THEN it contains mkStdenv, mkDerivation, mkShell, callPackage
 
@@ -419,19 +419,19 @@ independent from the core derivation contract.
 
 - GIVEN `bootstrap/hello.ncl`
 - WHEN it needs to build something
-- THEN it uses `crunch.Derivation` directly (bootstrap files do not
+- THEN it uses `mantle.Derivation` directly (bootstrap files do not
   use mkDerivation)
 
 ### Requirement: Stdlib ships with the binary
 
-The `.ncl` files MUST be embedded in the crunch binary at compile time
+The `.ncl` files MUST be embedded in the mantle binary at compile time
 (`include_str!`) and written to a known path at runtime, or resolved via
 `--import-path`. The stdlib MUST also be usable directly from the source
 tree during development.
 
 #### Scenario: Binary can resolve stdlib without checkout-relative imports
 
-- GIVEN a built crunch binary outside the source tree
+- GIVEN a built mantle binary outside the source tree
 - WHEN it evaluates a Nickel file importing `lib.ncl`
 - THEN the stdlib resolves successfully
 
@@ -447,7 +447,7 @@ the build fails.
 
 - GIVEN a build script string that mentions a store path not listed in `inputs`
 - WHEN the build runs
-- THEN crunch does not infer that dependency from string context alone
+- THEN mantle does not infer that dependency from string context alone
 - AND the build fails unless the input is declared explicitly
 
 ### Requirement: Extensibility by external packages
@@ -458,13 +458,13 @@ it via merge.
 #### Scenario: External builder package can layer on Derivation
 
 - GIVEN an external Nickel package that imports `lib.ncl`
-- WHEN it merges its own builder helpers on top of `crunch.Derivation`
+- WHEN it merges its own builder helpers on top of `mantle.Derivation`
 - THEN those helpers can produce valid derivation-shaped records without
   modifying the core stdlib
 
 #### Scenario: Core stdlib stays minimal while external packages extend it
 
-- GIVEN the crunch stdlib and a separate builder package
+- GIVEN the mantle stdlib and a separate builder package
 - WHEN both are inspected together
 - THEN the stdlib defines the contracts and helpers
 - AND the external package provides higher-level builders without editing the stdlib
@@ -473,7 +473,7 @@ Example shape:
 
 ```nickel
 # Hypothetical external package: crunch-builders
-let crunch = import "crunch/lib.ncl" in
+let mantle = import "crunch/lib.ncl" in
 
 {
   bash_builder = {
@@ -482,7 +482,7 @@ let crunch = import "crunch/lib.ncl" in
     builder = "%{_seed.bash}/bin/bash",
     args = ["-c", script],
     inputs | default = [_seed.bash, _seed.coreutils],
-  } | crunch.Derivation & { .. },
+  } | mantle.Derivation & { .. },
 
   mk_derivation = { ... },
 }

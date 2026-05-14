@@ -1,41 +1,41 @@
-# crunch
+# mantle
 
 Nickel build system on the Nix store protocol.
 
-crunch evaluates `.ncl` files describing derivations, constructs store
+mantle evaluates `.ncl` files describing derivations, constructs store
 paths using BLAKE3 hashing, and executes builds in a bwrap sandbox. No
 Nix evaluator in the loop.
 
 ## Quick Start
 
 ```bash
-# Build crunch (requires Rust nightly, clang, mold, openssl-dev)
+# Build mantle (requires Rust nightly, clang, mold, openssl-dev)
 cargo build --release
 
 # Generate a seed toolchain from your Nix store
-crunch bootstrap -o seed.ncl
+mantle bootstrap -o seed.ncl
 
 # Write a derivation
 cat > hello.ncl << 'EOF'
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 {
   name = "hello",
   builder = "/bin/sh",
-  args = ["-c", "echo 'Hello, crunch!' > $out"],
-} | crunch.Derivation
+  args = ["-c", "echo 'Hello, mantle!' > $out"],
+} | mantle.Derivation
 EOF
 
 # Evaluate (print JSON, no build)
-crunch eval hello.ncl
+mantle eval hello.ncl
 
 # Build (requires Linux + bwrap)
-crunch build hello.ncl
+mantle build hello.ncl
 
 # Machine-readable build summary for audit tooling
-crunch --json build hello.ncl
+mantle --json build hello.ncl
 ```
 
-`crunch --json build` writes a stable `crunch-build-report-v1` JSON
+`mantle --json build` writes a stable `crunch-build-report-v1` JSON
 object to stdout. It includes per-root outcomes, cache hits, failure
 records, output paths, hermeticity audit data, and per-output
 `artifact_attestation` references (`logical_path` + sidecar `path`) so
@@ -44,11 +44,11 @@ human text. The optional `log_file` fields are only present when the
 corresponding log was actually written to disk.
 
 For successful cache hits, each output may also include a `substitution`
-object. `mode` is `delta` when crunch completed the hit through delta
+object. `mode` is `delta` when mantle completed the hit through delta
 reuse and `full` when it completed through ordinary full-artifact fetch.
 `transferred_bytes` reports bytes fetched from the cache, `reused_bytes`
 reports receiver-local reuse, and `fallback_reason` only appears when
-crunch started delta negotiation but finished through full fetch.
+mantle started delta negotiation but finished through full fetch.
 
 Human output reports same facts inline on cached outputs, for example:
 
@@ -59,14 +59,14 @@ Human output reports same facts inline on cached outputs, for example:
 
 ## Operator diagnostics
 
-Use `crunch doctor` before a fresh build host or self-build run:
+Use `mantle doctor` before a fresh build host or self-build run:
 
 ```bash
 # Default profile: build
-crunch doctor
+mantle doctor
 
 # Self-build prerequisites
-crunch doctor --profile self-build
+mantle doctor --profile self-build
 ```
 
 Current doctor profiles:
@@ -79,24 +79,24 @@ Current doctor profiles:
 Doctor is read-only: it does not start builds, download substitutes, or mutate
 store state.
 
-For bootstrap runtime-validation work, `crunch bootstrap validate` combines the
+For bootstrap runtime-validation work, `mantle bootstrap validate` combines the
 build doctor preflight, a no-substitute build, captured stdout/stderr logs, a
 coarse host-path leakage scan, and OpenSpec-ready JSON/Markdown evidence:
 
 ```bash
-crunch --json --store .crunch-drain/make-store \
-  --state-dir .crunch-drain/make-state \
+mantle --json --store .mantle-drain/make-store \
+  --state-dir .mantle-drain/make-state \
   bootstrap validate bootstrap/make-tcc.ncl \
   --evidence-dir openspec/changes/live-part-make-3-82-runtime-validation/evidence \
   --resume
 ```
 
-Use `crunch build --plan` to preview what crunch will do per root without
+Use `mantle build --plan` to preview what mantle will do per root without
 building:
 
 ```bash
-crunch build --plan hello.ncl
-crunch --json build --plan hello.ncl
+mantle build --plan hello.ncl
+mantle --json build --plan hello.ncl
 ```
 
 Planned action labels:
@@ -105,14 +105,14 @@ Planned action labels:
 - `substitute` — at least one output is missing locally but remote narinfo says
   a cache hit is available, and no local build is needed
 - `build` — no acceptable cache hit exists, but local build preflight passed
-- `preflight-error` — crunch cannot perform the local build path for that root
+- `preflight-error` — mantle cannot perform the local build path for that root
   (for example missing output store dir, missing `bwrap`, or missing sandbox
   shell)
 
 Recommended operator workflow:
 
-1. Run `crunch doctor` for the intended workflow profile.
-2. Run `crunch build --plan ...` to see which roots are cached,
+1. Run `mantle doctor` for the intended workflow profile.
+2. Run `mantle build --plan ...` to see which roots are cached,
    substitutable, buildable, or blocked by preflight.
 3. Run the real build only after doctor and plan look sane.
 4. If a build fails, read the structured failure summary first, then open the
@@ -127,19 +127,19 @@ envelope under `failed[]` with these fields:
 - `error_class` — typed class such as `preflight`,
   `fixed-output-hash-mismatch`, or `sandbox`
 - `message` — original failure text
-- `saved_log_path` — only present when crunch wrote a saved failure log
+- `saved_log_path` — only present when mantle wrote a saved failure log
 
 Human failure output prints the same facts in the same order before any deeper
 error text.
 
 Output lands in `/nix/store/<hash>-hello` by default (the `--store`
-default). Derivation hashes are computed under the `/crunch/store`
+default). Derivation hashes are computed under the `/mantle/store`
 logical prefix (`--store-prefix`). Use `--store /tmp/mystore` to
 write outputs elsewhere, or `--nix-compat` to switch the logical
 prefix to `/nix/store` for interop testing. See
 [Store Paths and Prefixes](#store-paths-and-prefixes) for details.
 
-Pass `--strict-hermetic` to `crunch build` or `crunch self-build` when
+Pass `--strict-hermetic` to `mantle build` or `mantle self-build` when
 degraded hermetic behavior should fail instead of warn. Human and JSON
 reports both surface `hermeticity_mode` and any
 `hermeticity_audit_events` recorded during the run.
@@ -148,25 +148,25 @@ reports both surface `hermeticity_mode` and any
 
 Current operator loops:
 
-- Plan and build: `crunch doctor`, `crunch build --plan`, `crunch build`,
-  `crunch self-build --strict-hermetic`
-- Develop and run: `crunch shell`, `crunch develop`, `crunch run`
-- Inspect and publish: `crunch attest`, `crunch release`
+- Plan and build: `mantle doctor`, `mantle build --plan`, `mantle build`,
+  `mantle self-build --strict-hermetic`
+- Develop and run: `mantle shell`, `mantle develop`, `mantle run`
+- Inspect and publish: `mantle attest`, `mantle release`
 
 Short examples:
 
 ```bash
-# Shells and package execution from crunch.ncl
-crunch shell --command env
-crunch develop            # deprecated alias for shell
-crunch run .#hello -- --help
-crunch run ./tool.ncl --bin tool -- --version
+# Shells and package execution from mantle.ncl
+mantle shell --command env
+mantle develop            # deprecated alias for shell
+mantle run .#hello -- --help
+mantle run ./tool.ncl --bin tool -- --version
 
 # Attestation and release evidence entry points
-crunch attest show /nix/store/<hash>-hello
-crunch release verify target/release-evidence/<release-id>
-crunch release attest target/release-evidence/<release-id>
-crunch attest release-verify target/release-verification/<release-id> --trusted-public-key <name:base64>
+mantle attest show /nix/store/<hash>-hello
+mantle release verify target/release-evidence/<release-id>
+mantle release attest target/release-evidence/<release-id>
+mantle attest release-verify target/release-verification/<release-id> --trusted-public-key <name:base64>
 ```
 
 For the full command path, examples, and sidecar rules, see
@@ -189,7 +189,7 @@ That wrapper runs three ordinary edit-time checks in order:
 
 ```bash
 cargo fmt --check \
-  -p crunch \
+  -p mantle \
   -p crunch-attestation \
   -p crunch-build \
   -p crunch-delta \
@@ -203,7 +203,7 @@ cargo fmt --check \
 cargo test --workspace --lib --tests
 ```
 
-The root `-p crunch` rustfmt leg covers the root package's `src/`,
+The root `-p mantle` rustfmt leg covers the root package's `src/`,
 `examples/`, and `tests/`, including `tests/benchmark_harness.rs`.
 The strict clippy helper excludes vendored workspace members
 `fuse-backend-rs`, `nix-compat`, `nix-compat-derive`, `snix-build`,
@@ -250,7 +250,7 @@ full ignored proof run stays heavier:
 **Vendored maintenance lane**
 
 Workspace-wide vendored upkeep stays separate from the first-party gate.
-Do not treat vendored clippy debt as an ordinary edit blocker for tracked crunch
+Do not treat vendored clippy debt as an ordinary edit blocker for tracked mantle
 code.
 
 If you bypass the checked-in wrappers and run direct compile-heavy `cargo`
@@ -264,10 +264,10 @@ failures.
 The repo ships runnable examples under [`examples/`](examples/):
 
 - [`examples/fetch-crate-crc64.ncl`](examples/fetch-crate-crc64.ncl) — fetch a real crates.io source tarball (`crc64` 2.0.0)
-- [`examples/build-crate-crc64.ncl`](examples/build-crate-crc64.ncl) — build that real crate with crunch's bootstrap Rust toolchain and shared reduced seed provider
+- [`examples/build-crate-crc64.ncl`](examples/build-crate-crc64.ncl) — build that real crate with mantle's bootstrap Rust toolchain and shared reduced seed provider
 - [`examples/build-from-source.ncl`](examples/build-from-source.ncl) — build a multi-file C project with `make`
 - [`examples/bootstrap-no-nix.ncl`](examples/bootstrap-no-nix.ncl) — compile C with the shared reduced bootstrap seed provider
-- [`examples/project/`](examples/project/) — project-aware `crunch build .#name` layout
+- [`examples/project/`](examples/project/) — project-aware `mantle build .#name` layout
 - [`examples/README.md`](examples/README.md) — short index of the full example set
 
 ## Benchmark suite
@@ -289,22 +289,22 @@ highlights the largest regressions or wins. See
 Download files, tarballs, and git repos as fixed-output derivations:
 
 ```nickel
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 
 # Single file
-crunch.fetchurl {
+mantle.fetchurl {
   url = "https://example.com/foo.tar.gz",
   hash = "sha256-...",
 }
 
 # Tarball (auto-decompress + unpack + strip top-level dir)
-crunch.fetchTarball {
+mantle.fetchTarball {
   url = "https://github.com/user/repo/archive/v1.0.tar.gz",
   hash = "sha256-...",
 }
 
 # Git repository at a specific rev
-crunch.fetchGit {
+mantle.fetchGit {
   url = "https://github.com/user/repo.git",
   rev = "abc123...",
   hash = "sha256-...",
@@ -314,7 +314,7 @@ crunch.fetchGit {
 Hash mismatches show the correct hash. Use `--fix` to auto-update:
 
 ```bash
-crunch build --fix hello.ncl
+mantle build --fix hello.ncl
 ```
 
 Supported hash algorithms: sha256, sha512, sha1, md5, blake3.
@@ -328,10 +328,10 @@ the derivation inputs. Identical outputs get identical paths.
 
 ```nickel
 # CA is the default — no opt-in needed
-{ name = "my-tool", builder = "...", ... } | crunch.Derivation
+{ name = "my-tool", builder = "...", ... } | mantle.Derivation
 
 # Opt into input-addressed if needed
-{ name = "my-tool", addressing_mode = 'input-addressed, ... } | crunch.Derivation
+{ name = "my-tool", addressing_mode = 'input-addressed, ... } | mantle.Derivation
 ```
 
 CA self-reference rewriting works: if a build output embeds its own
@@ -357,7 +357,7 @@ Split a package into separate outputs (binary, headers, man pages):
     mkdir -p $man/share/man/man1 && echo '.TH HELLO 1' > $man/share/man/man1/hello.1
   "%],
   ...
-} | crunch.Derivation
+} | mantle.Derivation
 ```
 
 Each output gets a distinct store path. The builder receives `$outputs`
@@ -365,19 +365,19 @@ Each output gets a distinct store path. The builder receives `$outputs`
 `$man`). Works with both input-addressed and content-addressed modes.
 
 To depend on a single output of a multi-output package, use
-`crunch.select`:
+`mantle.select`:
 
 ```nickel
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 # Only mount the `dev` output of libfoo (not `out` or `lib`)
 {
   name = "consumer",
   inputs = [
-    crunch.select libfoo "dev",
-    crunch.select libfoo "lib",
+    mantle.select libfoo "dev",
+    mantle.select libfoo "lib",
   ],
   ...
-} | crunch.Derivation
+} | mantle.Derivation
 ```
 
 Multiple selections from the same dependency are coalesced into a single
@@ -419,7 +419,7 @@ added without restructuring the scheduler.
 
 | Crate | Role |
 |---|---|
-| `crunch` | CLI binary — build, eval, bootstrap, store, log, project management, self-build |
+| `mantle` | CLI binary — build, eval, bootstrap, store, log, project management, self-build |
 | `crunch-eval` | Nickel evaluation, stdlib embedding |
 | `crunch-glue` | `CrunchDerivation` → `nix_compat::Derivation`, ConversionCache |
 | `crunch-build` | `Derivation` → `BuildRequest`, goal scheduler, build orchestration, fetchers |
@@ -436,7 +436,7 @@ added without restructuring the scheduler.
 The stdlib (`lib/`) defines the derivation schema and fetch helpers:
 
 ```nickel
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 {
   name = "myapp",              # | Name (validated)
   builder = "/bin/sh",         # | String
@@ -457,7 +457,7 @@ let crunch = import "lib.ncl" in
     = 'content-addressed,      #   content-addressed | input-addressed
   sandbox                      # | default = 'native
     = 'native,                 #   'native today; 'oci and 'wasm are reserved for future backends
-} | crunch.Derivation
+} | mantle.Derivation
 ```
 
 Contracts catch errors at eval time:
@@ -467,7 +467,7 @@ Contracts catch errors at eval time:
 
 ## How It Differs From Nix
 
-| | Nix | crunch |
+| | Nix | mantle |
 |---|---|---|
 | Config language | Nix | Nickel |
 | Derivation hash | SHA-256 | BLAKE3 |
@@ -481,48 +481,48 @@ Contracts catch errors at eval time:
 
 ## Store Paths and Prefixes
 
-crunch separates two concepts:
+mantle separates two concepts:
 
 - **Logical prefix** (`--store-prefix`, default `/crunch/store`): used for
   derivation hash computation, ATerm serialization, and output path names.
   Different prefixes produce different derivation hashes.
-- **Physical directory** (`--store`, default `/nix/store`): where crunch
+- **Physical directory** (`--store`, default `/nix/store`): where mantle
   writes build outputs on disk. Source inputs (seed packages) are always
   read from `/nix/store`.
 
 ```bash
 # Default: logical paths under /crunch/store, outputs written to /nix/store
-crunch build hello.ncl
+mantle build hello.ncl
 
 # Write outputs to a custom directory
-crunch build --store /tmp/mystore hello.ncl
+mantle build --store /tmp/mystore hello.ncl
 
 # Nix-compatible hashes (for interop testing)
-crunch build --nix-compat hello.ncl
+mantle build --nix-compat hello.ncl
 ```
 
 `--nix-compat` is shorthand for `--store-prefix=/nix/store`.
 
 ## Signing and Trust
 
-crunch signs PathInfo entries with ed25519 keys. If no `--signing-key` is
+mantle signs PathInfo entries with ed25519 keys. If no `--signing-key` is
 provided, an auto-generated key is created at
 `$CRUNCH_CONFIG_DIR/signing-key` (or `$state_dir/signing-key` when
 `CRUNCH_CONFIG_DIR` is unset; default state dir is
-`~/.local/state/crunch`).
+`~/.local/state/mantle`).
 
 ```bash
 # Build with an explicit signing key
-crunch build --signing-key ./my-key hello.ncl
+mantle build --signing-key ./my-key hello.ncl
 
 # Verify signatures against trusted public keys
-crunch store verify --trusted-public-keys "mykey-1:base64pubkey..."
+mantle store verify --trusted-public-keys "mykey-1:base64pubkey..."
 
 # Sign all unsigned PathInfo entries (migration from unsigned stores)
-crunch store sign --all
+mantle store sign --all
 
 # Accept unsigned PathInfo on cache hits (escape hatch)
-crunch build --trust-unsigned hello.ncl
+mantle build --trust-unsigned hello.ncl
 ```
 
 By default, cached PathInfo must be signed by a trusted key. The default
@@ -531,18 +531,18 @@ override.
 
 ### Retained roots and manual GC
 
-Successful top-level outputs from `crunch build`, `crunch self-build`, and
-`crunch bootstrap --fetch` are retained automatically as GC roots. Use:
+Successful top-level outputs from `mantle build`, `mantle self-build`, and
+`mantle bootstrap --fetch` are retained automatically as GC roots. Use:
 
 ```bash
-crunch store roots
-crunch store pin /nix/store/<hash>-name
-crunch store unpin /nix/store/<hash>-name
-crunch store gc --dry-run
-crunch store gc
+mantle store roots
+mantle store pin /nix/store/<hash>-name
+mantle store unpin /nix/store/<hash>-name
+mantle store gc --dry-run
+mantle store gc
 ```
 
-`crunch store gc --dry-run` reports the retained-root count, candidate path
+`mantle store gc --dry-run` reports the retained-root count, candidate path
 count, reclaimable bytes, and each candidate logical store path without
 mutating state. Real GC sweeps unreachable exported outputs, PathInfo rows,
 attestation sidecars, and unreachable castore content. GC fails closed if a
@@ -560,30 +560,30 @@ pull imports into it.
 
 ```bash
 # Push all signed paths to a cache directory
-crunch store push --all --to /srv/cache
+mantle store push --all --to /srv/cache
 
 # Push specific paths
-crunch store push --to /srv/cache /crunch/store/<hash>-hello
+mantle store push --to /srv/cache /crunch/store/<hash>-hello
 
 # Include unsigned entries (normally skipped)
-crunch store push --all --to /srv/cache --trust-unsigned
+mantle store push --all --to /srv/cache --trust-unsigned
 
 # Pull all paths from a cache directory
-crunch store pull --all --from /srv/cache
+mantle store pull --all --from /srv/cache
 
 # Pull specific paths from a cache directory
-crunch store pull --from /srv/cache /crunch/store/<hash>-hello
+mantle store pull --from /srv/cache /crunch/store/<hash>-hello
 
 # Pull specific paths from an HTTP cache
-crunch store pull --from https://cache.example.com /crunch/store/<hash>-hello
+mantle store pull --from https://cache.example.com /crunch/store/<hash>-hello
 
 # Pull from HTTP with explicit trust (signature verification)
-crunch store pull --from https://cache.example.com \
+mantle store pull --from https://cache.example.com \
   --trusted-public-keys "builder-1:base64pubkey..." \
   /crunch/store/<hash>-hello
 
 # Accept unsigned narinfos
-crunch store pull --all --from /srv/cache --trust-unsigned
+mantle store pull --all --from /srv/cache --trust-unsigned
 ```
 
 Push writes `nix-cache-info` into the target directory if absent, so the
@@ -591,7 +591,7 @@ result is directly servable by `nix-serve`, `harmonia`, nginx, or S3
 sync. Paths already present in the target are skipped.
 
 Pull verifies narinfo signatures against the configured trusted keys
-(same trust set as `crunch build --substituters`). Paths that fail
+(same trust set as `mantle build --substituters`). Paths that fail
 signature verification, have a store-directory prefix mismatch, or whose
 NAR content does not match the declared hash are skipped with a warning.
 HTTP pull is explicit-path only: `--all` works for directory caches, but
@@ -605,25 +605,25 @@ Typical CI workflow:
 
 ```bash
 # Builder machine: build and publish
-crunch build my-package.ncl
-crunch store push --all --to /shared/cache
+mantle build my-package.ncl
+mantle store push --all --to /shared/cache
 
 # Consumer machine: import pre-built results
-crunch store pull --all --from /shared/cache \
+mantle store pull --all --from /shared/cache \
   --trusted-public-keys "ci-builder-1:base64pubkey..."
-crunch build my-package.ncl   # cache hit, no rebuild
+mantle build my-package.ncl   # cache hit, no rebuild
 ```
 
 ## Bootstrap
 
-crunch needs some trusted inputs to build anything. The repo tracks four
+mantle needs some trusted inputs to build anything. The repo tracks four
 different bootstrap paths, and they do not all prove the same thing.
 
 ### Bootstrap maturity levels
 
-- **Seed-assisted bootstrap**: crunch can start from declared external seeds
+- **Seed-assisted bootstrap**: mantle can start from declared external seeds
   and build later bootstrap stages.
-- **Self-hosting proof**: a crunch-built `crunch` can rebuild `crunch` from
+- **Self-hosting proof**: a mantle-built `mantle` can rebuild `mantle` from
   the same staged source tree.
 - **Packaged release evidence**: a release bundle carries the exact binary,
   source archive with tracked worktree files plus verified vendored Cargo inputs,
@@ -666,42 +666,42 @@ Remaining environmental assumptions not yet eliminated:
 - The Linux kernel and FUSE/bwrap sandbox runtime are trusted host components.
 - Network transport for bootstrap artifact fetches is trusted.
 
-Verify with: `crunch release verify <bundle-dir> --require-stagex-no-quorum`
+Verify with: `mantle release verify <bundle-dir> --require-stagex-no-quorum`
 
 ### Trust inventory by entry point
 
 For the stricter stage0 view, see [`docs/bootstrap-stage0-inventory.md`](docs/bootstrap-stage0-inventory.md).
 That inventory groups first-bootstrap dependencies into host prerequisites,
-pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
+pinned fetched artifacts, mantle-built outputs, and host-convenience probes.
 
-#### `crunch bootstrap`
+#### `mantle bootstrap`
 
 - **Current claim**: seed-assisted bootstrap from an existing Nix installation.
 - **Trusted inputs today**: the host's Nix tooling and the `/nix/store` paths
   returned by `nix-build` or `nix build`.
 - **Host prerequisites**: Nix installed, selected packages available in
   `nixpkgs`, and a machine where those store paths remain reachable.
-- **Evidence today**: `crunch bootstrap -o seed.ncl ...` writes a
+- **Evidence today**: `mantle bootstrap -o seed.ncl ...` writes a
   `StorePath`-validated seed file, and later builds mount the declared source
   closures in the sandbox.
 - **Not yet proven**: the imported Nix seed is not reduced to an auditable
-  minimal root inside crunch itself.
+  minimal root inside mantle itself.
 
-#### `crunch bootstrap --fetch`
+#### `mantle bootstrap --fetch`
 
 - **Current claim**: seed-assisted bootstrap without Nix.
 - **Trusted inputs today**: the pinned musl.cc native tarball declared in
   `bootstrap/seed.ncl`, plus the checked-in reducer that turns it into the
   normalized `musl-seed-toolchain` provider.
 - **Host prerequisites**: Linux, network access to fetch the raw tarball,
-  and a working crunch binary with enough local disk for fetched outputs.
+  and a working mantle binary with enough local disk for fetched outputs.
 - **Evidence today**: the fetch path evaluates `bootstrap/seed.ncl`, builds
   the reduced provider, writes `seed.ncl`, and installs provider provenance at
   `<seed>/share/crunch-bootstrap/provider.json`.
 - **Not yet proven**: the reduced provider is still derived from a trusted
   binary tarball, not a source-built root.
 
-#### `crunch self-build`
+#### `mantle self-build`
 
 - **Current claim**: seed-assisted self-build from the current checkout.
 - **Trusted inputs today**: the current source tree, the source-tree
@@ -711,16 +711,16 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
   the host sandbox entry points used for the first bootstrap stage.
 - **Host prerequisites**: `bwrap` and a static sandbox shell for the first
   bootstrap stage.
-- **Evidence today**: `crunch self-build --store /tmp/crunch-store -j 4 --no-substitute`
-  builds the bootstrap chain `seed -> make -> dash -> binutils -> musl -> gcc -> busybox -> bwrap -> rust -> crunch`.
+- **Evidence today**: `mantle self-build --store /tmp/mantle-store -j 4 --no-substitute`
+  builds the bootstrap chain `seed -> make -> dash -> binutils -> musl -> gcc -> busybox -> bwrap -> rust -> mantle`.
 - **Not yet proven**: this first build still relies on host tooling and the
   reduced seed provider, so it is not a host-tool-free or full-source bootstrap.
 
 #### `./scripts/prove-self-hosting.sh`
 
 - **Current claim**: checked-in self-hosting proof.
-- **Trusted inputs today**: a checkout-built stage0 `crunch` binary, the same
-  reduced seed provider and host-tool assumptions as `crunch self-build`, and
+- **Trusted inputs today**: a checkout-built stage0 `mantle` binary, the same
+  reduced seed provider and host-tool assumptions as `mantle self-build`, and
   the staged source tree recorded by stage0.
 - **Host prerequisites**: Linux, the repo's nightly Rust toolchain, `clang`,
   `mold`, `pkg-config`, OpenSSL development files, `bwrap`, `git`, `cargo`,
@@ -728,7 +728,7 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
   filesystem (`target/self-hosting-proof/work/` by default, or
   `CRUNCH_PROOF_SCRATCH_DIR`).
 - **Evidence today**: the helper prepares the environment and runs
-  `cargo test -p crunch --test self_hosting -- --ignored --nocapture`, which
+  `cargo test -p mantle --test self_hosting -- --ignored --nocapture`, which
   drives the stage0 -> stage1 -> stage2 proof path.
 - **Not yet proven**: the proof still stops short of a full-source bootstrap
   root, independent rebuild agreement, or reproducible release artifacts.
@@ -737,34 +737,34 @@ pinned fetched artifacts, crunch-built outputs, and host-convenience probes.
 
 | Best-practice item | Status | Evidence today | Gap that remains |
 |---|---|---|---|
-| Provide an alternative way to build the build system | Yes | `cargo build --release` builds the checkout binary, and `crunch self-build` provides the in-repo bootstrap path | The bootstrap path still starts from host tooling and a reduced fetched seed provider |
-| Label where bootstrap binaries or tarballs came from | Partial | `crunch bootstrap` names the Nix-backed path, and `crunch bootstrap --fetch` reuses the checked-in `bootstrap/seed.ncl` metadata and writes provider provenance into `provider.json` inside the fetched store path | The repo still trusts that reduced provider; it does not yet derive it from a smaller source bootstrap |
-| Reproduce bootstrap binaries from source end-to-end | Not yet | The repo can build `make`, `dash`, `binutils`, `musl`, `gcc`, `busybox`, `bwrap`, `rust`, and `crunch` from the reduced seed provider | The reduced provider itself still comes from a trusted musl.cc binary tarball |
-| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/`, and `crunch release create` can package that bundle with the release binary and a source archive containing tracked worktree files plus verified vendored Cargo inputs for later bundle-local integrity and proof-context checks with `crunch release verify` | The proof and release bundle still stop short of independent reproducibility evidence for release outputs |
+| Provide an alternative way to build the build system | Yes | `cargo build --release` builds the checkout binary, and `mantle self-build` provides the in-repo bootstrap path | The bootstrap path still starts from host tooling and a reduced fetched seed provider |
+| Label where bootstrap binaries or tarballs came from | Partial | `mantle bootstrap` names the Nix-backed path, and `mantle bootstrap --fetch` reuses the checked-in `bootstrap/seed.ncl` metadata and writes provider provenance into `provider.json` inside the fetched store path | The repo still trusts that reduced provider; it does not yet derive it from a smaller source bootstrap |
+| Reproduce bootstrap binaries from source end-to-end | Not yet | The repo can build `make`, `dash`, `binutils`, `musl`, `gcc`, `busybox`, `bwrap`, `rust`, and `mantle` from the reduced seed provider | The reduced provider itself still comes from a trusted musl.cc binary tarball |
+| Automate bootstrap traceability or self-hosting checks | Partial | `./scripts/prove-self-hosting.sh` runs the checked-in stage0 -> stage1 -> stage2 proof, `--check` verifies prerequisites first, successful runs write a proof bundle with `manifest.json`, `summary.txt`, and per-stage logs under `target/self-hosting-proof/`, and `mantle release create` can package that bundle with the release binary and a source archive containing tracked worktree files plus verified vendored Cargo inputs for later bundle-local integrity and proof-context checks with `mantle release verify` | The proof and release bundle still stop short of independent reproducibility evidence for release outputs |
 
 ## Self-Build
 
-crunch can rebuild itself from source once the stage0 prerequisites are already present:
+mantle can rebuild itself from source once the stage0 prerequisites are already present:
 
 ```bash
-crunch self-build --store /tmp/crunch-store -j 4 --no-substitute
+mantle self-build --store /tmp/mantle-store -j 4 --no-substitute
 ```
 
 Pass `--strict-hermetic` when degraded hermeticity should fail instead of
 warn during the self-build path.
 
 This builds the full bootstrap chain (`seed -> make -> dash ->
-binutils -> musl -> gcc -> busybox -> bwrap -> rust -> crunch`) inside a
+binutils -> musl -> gcc -> busybox -> bwrap -> rust -> mantle`) inside a
 bwrap sandbox. Output is a statically linked musl binary.
 
 This is still seed-assisted bootstrap. It does not yet prove that the first
 bootstrap works on a host with Nix commands absent from `PATH`.
 
 First bootstrap requires the source tree with `vendor-deps/` and
-`.cargo/vendor-config.toml`; `crunch self-build` validates the staged vendored
+`.cargo/vendor-config.toml`; `mantle self-build` validates the staged vendored
 inputs against `Cargo.lock` and Cargo checksum metadata before building them.
 It also requires `bwrap` and a static sandbox shell on `PATH`.
-After the first self-build, the crunch-built `bwrap` and `busybox` are used
+After the first self-build, the mantle-built `bwrap` and `busybox` are used
 for subsequent builds.
 
 ### Proving self-hosting
@@ -781,7 +781,7 @@ The helper sets the nightly Rust toolchain, `CC`, linker or tool lookup,
 invokes the canonical ignored proof test:
 
 ```bash
-cargo test -p crunch --test self_hosting -- --ignored --nocapture
+cargo test -p mantle --test self_hosting -- --ignored --nocapture
 ```
 
 Use `./scripts/prove-self-hosting.sh --check` to validate prerequisites,
@@ -806,8 +806,8 @@ PATH used by stage0. The stage0 `self-build` command passes `--no-host-tools
 --stage0-inventory <file>` and installs the protected exec supervisor before
 sandbox startup.
 
-The protected stage begins at no-host-tools stage0 `crunch self-build` entry and
-ends only after crunch-built `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl`
+The protected stage begins at no-host-tools stage0 `mantle self-build` entry and
+ends only after mantle-built `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl`
 outputs have been built, exported, verified, selected, and recorded in the proof
 audit. Linux direct kernel interfaces allowed in that protected phase are the
 seccomp user-notification listener, `execve`/`execveat` interception,
@@ -858,15 +858,15 @@ onto disk-backed scratch yourself:
 export TMPDIR="$PWD/target/manual-work/tmp"
 export CARGO_TARGET_DIR="$PWD/target/manual-work/cargo-target"
 mkdir -p "$TMPDIR" "$CARGO_TARGET_DIR"
-cargo test -p crunch --test self_hosting -- --list
+cargo test -p mantle --test self_hosting -- --list
 ```
 
 That example is scratch guidance only. For self-hosting evidence, keep using
 `./scripts/prove-self-hosting.sh`.
 
 This runs two stages: the checkout binary builds stage1, then the stage1
-binary rebuilds crunch as stage2 from the same staged source tree. The test
-asserts that stage2 selected crunch-built `bwrap` and `busybox`, not host
+binary rebuilds mantle as stage2 from the same staged source tree. The test
+asserts that stage2 selected mantle-built `bwrap` and `busybox`, not host
 fallbacks. Expect about 30 minutes and about 4 GiB free in the selected proof
 scratch filesystem.
 
@@ -877,7 +877,7 @@ Each proof bundle contains:
   stage0 prerequisite paths
 - `summary.txt` — a short human-readable digest summary, including protected
   execution audit digest and protected transition summary when present
-- `binaries/stage1-crunch` and `binaries/stage2-crunch` — durable copies of
+- `binaries/stage1-mantle` and `binaries/stage2-mantle` — durable copies of
   the fixed-point binaries, so release packaging and witness rebuilds do not
   depend on temporary proof scratch paths surviving after the proof exits
 - `stage0/` and `stage2/` — copied `meta.json`, `stdout.txt`, `stderr.txt`, and
@@ -886,11 +886,11 @@ Each proof bundle contains:
   the proof bundle
 - `protected-exec-audit.json` — machine-readable protected execution audit with
   no-host-tools mode, optional stage0 inventory digest, blocked host command
-  set, fallback markers, crunch-built sandbox transition records, and final
+  set, fallback markers, mantle-built sandbox transition records, and final
   result
 
 The proof does demonstrate a fixed point: stage1 and stage2 must match
-byte-for-byte, and the stage0 and stage2 crunch-built `busybox` and `bwrap`
+byte-for-byte, and the stage0 and stage2 mantle-built `busybox` and `bwrap`
 outputs must match too. In `--non-nix-host` mode it also proves that the stage0
 command path completed with `nix-build`, `nix-store`, `nix-shell`, and `nix`
 absent from `PATH`. In `--no-host-tools` mode it additionally proves that
@@ -904,9 +904,9 @@ bootstrap root.
 A successful proof bundle can be packaged as release evidence:
 
 ```bash
-crunch release create \
-  --release-id crunch-<version> \
-  --binary target/self-hosting-proof/run-.../binaries/stage2-crunch \
+mantle release create \
+  --release-id mantle-<version> \
+  --binary target/self-hosting-proof/run-.../binaries/stage2-mantle \
   --proof-bundle target/self-hosting-proof/run-...
 ```
 
@@ -915,9 +915,9 @@ If a separate byte-for-byte reproduction run has already produced a canonical
 report, package it explicitly:
 
 ```bash
-crunch release create \
-  --release-id crunch-<version> \
-  --binary target/self-hosting-proof/run-.../binaries/stage2-crunch \
+mantle release create \
+  --release-id mantle-<version> \
+  --binary target/self-hosting-proof/run-.../binaries/stage2-mantle \
   --proof-bundle target/self-hosting-proof/run-... \
   --reproducibility-report target/release-evidence/<release-id>/reproducibility/reproducibility-report.json
 ```
@@ -935,10 +935,10 @@ inventory, and the proof-linkage facts copied from the full self-hosting proof.
 Later verification is bundle-local:
 
 ```bash
-crunch release verify target/release-evidence/<release-id>
+mantle release verify target/release-evidence/<release-id>
 ```
 
-`crunch release verify` checks that every required bundled artifact exists,
+`mantle release verify` checks that every required bundled artifact exists,
 that the top-level manifest stays canonical, that bundled digests still match,
 and that the nested proof bundle is a full `crunch-self-hosting-proof-v2`
 artifact rather than prerequisite-only `--check` output. It reports
@@ -947,7 +947,7 @@ integrity. Use `--require-reproducible` when callers need a verified
 byte-for-byte report:
 
 ```bash
-crunch release verify target/release-evidence/<release-id> --require-reproducible
+mantle release verify target/release-evidence/<release-id> --require-reproducible
 ```
 
 The bit-for-bit reproducible release label is reserved for bundles whose
@@ -965,20 +965,20 @@ cross-machine flow is publisher -> witness -> publisher:
 
 ```bash
 # Publisher: sign the verified release bundle into a verification directory
-crunch release attest target/release-evidence/<release-id>
+mantle release attest target/release-evidence/<release-id>
 
 # Publisher: export the verifier-ready public key string used by release-verify
-RELEASE_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/release.key)
+RELEASE_TRUSTED_KEY=$(mantle attest key-show --signing-key /path/to/release.key)
 RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"
 
 # Publisher: scaffold verifier-local policy and empty revocations files
-crunch attest policy-init target/release-verification/<release-id> \
+mantle attest policy-init target/release-verification/<release-id> \
   --profile single-witness \
   --trusted-release-signer "$RELEASE_SIGNER_NAME" \
   --trusted-witness-identity <witness-identity>
 
 # Publisher: export a public-only witness-request directory for the witness
-crunch release witness-export target/release-evidence/<release-id> \
+mantle release witness-export target/release-evidence/<release-id> \
   --verification-dir target/release-verification/<release-id> \
   --request-dir target/release-witness-requests/<release-id>
 
@@ -990,34 +990,34 @@ crunch release witness-export target/release-evidence/<release-id> \
   --toolchain rust-1.91.1 \
   --host-class nixos-25.05 \
   --signing-key /path/to/witness.key
-WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
+WITNESS_TRUSTED_KEY=$(mantle attest key-show --signing-key /path/to/witness.key)
 
 # Publisher: import the returned witness sidecars and verify the final status
-crunch attest witness-import target/release-verification/<release-id> \
+mantle attest witness-import target/release-verification/<release-id> \
   target/release-witness-requests/<release-id>.work/release-verification/<release-id>
-crunch attest release-verify target/release-verification/<release-id> \
+mantle attest release-verify target/release-verification/<release-id> \
   --trusted-public-key "$RELEASE_TRUSTED_KEY" \
   --trusted-public-key "$WITNESS_TRUSTED_KEY"
 ```
 
-`crunch release attest` writes `release-attestation.json` plus a detached
-`.sig` file. `crunch attest key-show` reads an existing signing keypair and
+`mantle release attest` writes `release-attestation.json` plus a detached
+`.sig` file. `mantle attest key-show` reads an existing signing keypair and
 prints the exact `name:base64` token accepted by `--trusted-public-key`; omit
 `--signing-key` to inspect the default configured signing key instead. The
 release-signer name passed to `--trusted-release-signer` is the substring
 before `:` in that token, so shell workflows can derive it with
 `RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"` when keys were
-auto-generated in a per-operator `CRUNCH_CONFIG_DIR`. `crunch attest
+auto-generated in a per-operator `CRUNCH_CONFIG_DIR`. `mantle attest
 policy-init` writes verifier-local `policy.json` and `revocations.json` for
 either `self-proof-only` or `single-witness` publication without hand-authoring
-JSON. `crunch release witness-export` copies only public verification material:
+JSON. `mantle release witness-export` copies only public verification material:
 a verified release-evidence bundle, the signed release attestation, and request
 metadata. It does not copy signing keys or verifier-local policy files. The
 checked-in witness-side wrapper `./scripts/rebuild-witness-request.sh` is the
 operator-facing path for replaying that request. It preflights `bwrap`, resolves
 an absolute static `SNIX_BUILD_SANDBOX_SHELL`, derives a controlled scratch
 root (`<request-dir>.work/` by default or `$CRUNCH_WITNESS_SCRATCH_DIR`), and
-then calls the machine-readable core command `crunch release witness-rebuild
+then calls the machine-readable core command `mantle release witness-rebuild
 <request-dir> ...`. The core replay preserves the published proof mode, so a
 `non-nix-host` release proof is rebuilt with the helper's `--non-nix-host` path
 scrub instead of silently weakening to the default fixed-point mode. The
@@ -1025,10 +1025,10 @@ request directory stays immutable after validation; the rebuild output lands
 under the scratch verification directory together with
 `witnesses/<identity>.json`, the matching `.sig`, and
 `witness-rebuild-audit/meta.json` describing the replayed workflow, scratch
-paths, timestamps, and rebuilt output digests. `crunch attest witness-import`
+paths, timestamps, and rebuilt output digests. `mantle attest witness-import`
 fails closed on missing signatures, release-digest mismatches, and conflicting
 existing witness identities before touching the publisher verification
-directory. `crunch attest release-verify` separates technical validity from
+directory. `mantle attest release-verify` separates technical validity from
 policy sufficiency, so a release can stay technically valid even when the
 witness set is policy-insufficient. In JSON mode it also reports independent
 agreement separately through `independent_agreement_status`,
@@ -1083,63 +1083,63 @@ Related bootstrap work worth keeping handy:
 | `error: proof scratch root from CRUNCH_PROOF_SCRATCH_DIR is not usable:` | explicit scratch override points at a blocked or unwritable location | point `CRUNCH_PROOF_SCRATCH_DIR` at a writable directory |
 | `error: default proof scratch root is not usable:` | repo-local `target/self-hosting-proof/work/` cannot be created or written | fix repo `target/` permissions or set `CRUNCH_PROOF_SCRATCH_DIR` to a writable directory |
 | Stage0 fails with permission errors writing to store | unwritable output directory | The proof uses the selected scratch root for temp files, but build outputs still need writable store and state directories |
-| Stage2 reports `bwrap-source=host-fallback:` | stage0 did not produce crunch-built bwrap | Clear the proof store and rerun; the bootstrap chain may have failed silently |
-| Stage2 reports `busybox-path=none` | no crunch-built busybox in the proof store | Same as above — the bootstrap chain did not complete |
-| Stale pathinfo.redb causes false cache hits | prior run left state in `~/.local/state/crunch/` | The proof uses per-stage state dirs to avoid this; if running manually, pass `--state-dir` to a fresh directory |
+| Stage2 reports `bwrap-source=host-fallback:` | stage0 did not produce mantle-built bwrap | Clear the proof store and rerun; the bootstrap chain may have failed silently |
+| Stage2 reports `busybox-path=none` | no mantle-built busybox in the proof store | Same as above — the bootstrap chain did not complete |
+| Stale pathinfo.redb causes false cache hits | prior run left state in `~/.local/state/mantle/` | The proof uses per-stage state dirs to avoid this; if running manually, pass `--state-dir` to a fresh directory |
 | `No space left on device` | selected proof scratch filesystem or later proof outputs still ran out of space | free about 4 GiB under `target/self-hosting-proof/work/` or set `CRUNCH_PROOF_SCRATCH_DIR` to a larger filesystem |
 
 ## Project Management
 
-crunch has built-in dependency management for project inputs — git repos,
+mantle has built-in dependency management for project inputs — git repos,
 tarballs, and files declared in a Nickel manifest (`crunch-project.ncl`).
 
 ```bash
 # Create a new project (manifest, lockfile, .crunch/ directory)
-crunch init
+mantle init
 
 # Validate manifest, lockfile, and generated inputs
-crunch check
+mantle check
 
 # Show resolved input state from the lockfile
-crunch show
+mantle show
 
 # Refresh all inputs (or specific ones)
-crunch refresh
-crunch refresh nixpkgs my-lib
+mantle refresh
+mantle refresh nixpkgs my-lib
 
 # Check which inputs would change without modifying anything
-crunch list-stale
+mantle list-stale
 
 # Migrate project files to the current schema version
-crunch upgrade
+mantle upgrade
 ```
 
 The lockfile (`crunch.lock`) stores resolved revisions and NAR hashes.
-`crunch refresh` resolves upstream references (git ls-remote, content
+`mantle refresh` resolves upstream references (git ls-remote, content
 hashing) and updates both `crunch.lock` and `.crunch/inputs.ncl`
 (generated Nickel bindings).
 
 ## System configuration
 
-`crunch` now has a native system-configuration pipeline for Nickel module
+`mantle` now has a native system-configuration pipeline for Nickel module
 inventories.
 
 ```bash
 # Dry-run a checked-in example inventory to merged derivations
-crunch system eval examples/system-config/inventory.ncl
+mantle system eval examples/system-config/inventory.ncl
 
 # Stop after merged fragments instead of assembling derivations
-crunch system eval examples/system-config/inventory.ncl --stop-after fragments
+mantle system eval examples/system-config/inventory.ncl --stop-after fragments
 
 # Build the assembled machine derivations
-crunch system build examples/system-config/inventory.ncl
+mantle system build examples/system-config/inventory.ncl
 ```
 
 The default module directory is `./modules` next to the inventory file, and the
-checked-in example inventory uses `examples/system-config/modules/`. `crunch
+checked-in example inventory uses `examples/system-config/modules/`. `mantle
 system eval` supports `--machine <name>` filters, `--assembler <name>` backend
 overrides, and `--format json|nickel` output selection (`nickel` is reserved but
-not implemented yet). `crunch system build` reuses the standard crunch build
+not implemented yet). `mantle system build` reuses the standard mantle build
 pipeline and, under `--json`, returns a machine-level envelope whose successful
 machine entries embed the existing `crunch-build-report-v1` payloads.
 
@@ -1153,34 +1153,34 @@ For module shape, inventory schema, and authoring examples, see
 
 ```
 # Build, diagnostics, bootstrap
-crunch doctor                    No-mutate preflight for build or self-build hosts
-crunch build [file.ncl|.#name]   Evaluate and build
-crunch build --plan <target>     Preview cached/substitute/build/preflight-error
-crunch build --fix <file>        Build and rewrite FOD mismatches in source
-crunch eval <file.ncl>           Evaluate and print JSON
-crunch bootstrap [-o seed.ncl]   Generate a seed file (`--fetch` for Nix-free)
-crunch self-build                Rebuild crunch from source
+mantle doctor                    No-mutate preflight for build or self-build hosts
+mantle build [file.ncl|.#name]   Evaluate and build
+mantle build --plan <target>     Preview cached/substitute/build/preflight-error
+mantle build --fix <file>        Build and rewrite FOD mismatches in source
+mantle eval <file.ncl>           Evaluate and print JSON
+mantle bootstrap [-o seed.ncl]   Generate a seed file (`--fetch` for Nix-free)
+mantle self-build                Rebuild mantle from source
 
 # Store, logs, attestations, release evidence
-crunch store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state
-crunch log [query]               Show a stored build log
-crunch attest <subcommand>       Show, verify, diff, or synthesize attestations
-crunch release <subcommand>      Create or verify a release-evidence bundle
+mantle store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state
+mantle log [query]               Show a stored build log
+mantle attest <subcommand>       Show, verify, diff, or synthesize attestations
+mantle release <subcommand>      Create or verify a release-evidence bundle
 
 # Project workflows
-crunch init                      Initialize crunch-project.ncl, crunch.lock, .crunch/
-crunch check                     Validate manifest, lockfile, and generated inputs
-crunch show                      Show resolved input state
-crunch refresh [names...]        Refresh selected or all project inputs
-crunch list-stale                Report which inputs would change on refresh
-crunch upgrade                   Migrate project files to the current schema
-crunch shell [name]              Enter or execute inside a dev shell
-crunch develop [name]            Deprecated alias for `crunch shell`
-crunch run [target] [-- args...] Build and execute a package binary (`.#name`, bare project package, or .ncl file)
+mantle init                      Initialize crunch-project.ncl, crunch.lock, .crunch/
+mantle check                     Validate manifest, lockfile, and generated inputs
+mantle show                      Show resolved input state
+mantle refresh [names...]        Refresh selected or all project inputs
+mantle list-stale                Report which inputs would change on refresh
+mantle upgrade                   Migrate project files to the current schema
+mantle shell [name]              Enter or execute inside a dev shell
+mantle develop [name]            Deprecated alias for `mantle shell`
+mantle run [target] [-- args...] Build and execute a package binary (`.#name`, bare project package, or .ncl file)
 
 # System configuration
-crunch system eval <inventory>   Evaluate a module inventory to fragments or derivations
-crunch system build <inventory>  Build a module inventory through the system pipeline
+mantle system eval <inventory>   Evaluate a module inventory to fragments or derivations
+mantle system build <inventory>  Build a module inventory through the system pipeline
 ```
 
 ### Global flags
@@ -1190,7 +1190,7 @@ crunch system build <inventory>  Build a module inventory through the system pip
 --store-prefix <prefix>     Logical store prefix (default: /crunch/store)
 --nix-compat                Shorthand for --store-prefix=/nix/store
 --state-dir <path>          State directory for databases and blobs
-                            (default: $CRUNCH_STATE_DIR or ~/.local/state/crunch)
+                            (default: $CRUNCH_STATE_DIR or ~/.local/state/mantle)
 --json                      Emit errors as JSON for tooling integration
 -v, --verbose               Debug logging
 --log-level <lvl>           trace|debug|info|warn|error
@@ -1213,7 +1213,7 @@ crunch system build <inventory>  Build a module inventory through the system pip
 
 ## Requirements
 
-**Build time** (compiling crunch itself):
+**Build time** (compiling mantle itself):
 - Linux
 - Rust nightly
 - clang + mold (linker)
@@ -1225,8 +1225,8 @@ crunch system build <inventory>  Build a module inventory through the system pip
 
 **Not required**:
 - protoc — gRPC/protobuf replaced with postcard serialization
-- Nix — closure resolution uses crunch's own PathInfo, not `nix-store`.
-  A Nix installation is only needed for `crunch bootstrap` (without
+- Nix — closure resolution uses mantle's own PathInfo, not `nix-store`.
+  A Nix installation is only needed for `mantle bootstrap` (without
   `--fetch`)
 - Writable `/nix/store` — the castore is the primary store. Cache
   validation uses PathInfo + castore content probes, not filesystem
@@ -1235,7 +1235,7 @@ crunch system build <inventory>  Build a module inventory through the system pip
 
 ## Known Limitations
 
-- **Manual GC only**: `crunch store gc` is implemented, but background or
+- **Manual GC only**: `mantle store gc` is implemented, but background or
   low-space-triggered collection is still future work.
 - **Concurrent builds**: independent derivations run in parallel (up to
   `-j N`, default: CPU count, max 16). The lazy goal scheduler
@@ -1243,7 +1243,7 @@ crunch system build <inventory>  Build a module inventory through the system pip
   is concurrent via `tokio::JoinSet`. Preparation and output processing
   are sequential.
 - **Multi-output**: outputs work end-to-end. Output *selection* is
-  supported via `crunch.select dep "dev"` to mount a single output of
+  supported via `mantle.select dep "dev"` to mount a single output of
   a multi-output dependency in the sandbox (like Nix's `pkg.dev`).
 
 ## References

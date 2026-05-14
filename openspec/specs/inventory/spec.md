@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This spec defines the structural inventory document consumed by `crunch system`
+This spec defines the structural inventory document consumed by `mantle system`
 and the boundary between inventory validation and module evaluation.
 ## Requirements
 ### Requirement: INV-1 Machine records
@@ -64,11 +64,11 @@ ID: systemconfig.inventory.inv3.scenario
 
 ### Requirement: INV-4 Embedded Nickel contract
 
-The inventory structural contract MUST ship with crunch's embedded Nickel
+The inventory structural contract MUST ship with mantle's embedded Nickel
 stdlib.
 ID: systemconfig.inventory.inv4
 
-`crunch system eval` and `crunch system build` MUST apply `crunch.Inventory`
+`mantle system eval` and `mantle system build` MUST apply `mantle.Inventory`
 at the Nickel boundary themselves before Rust-side deserialization and limit
 validation run. User inventories therefore MAY be plain pure-data Nickel
 records and are NOT required to spell the merge explicitly in the file.
@@ -82,10 +82,10 @@ any module loading or machine evaluation begins.
 #### Scenario: Inventory contract is available from the embedded stdlib
 ID: systemconfig.inventory.inv4.scenario
 
-- GIVEN a plain pure-data user inventory evaluated through crunch's embedded
+- GIVEN a plain pure-data user inventory evaluated through mantle's embedded
   stdlib
-- WHEN `crunch system eval` or `crunch system build` applies
-  `crunch.Inventory` at the pipeline boundary
+- WHEN `mantle system eval` or `mantle system build` applies
+  `mantle.Inventory` at the pipeline boundary
 - THEN the structural contract is resolved without needing external files
 - AND later pipeline stages receive a validated pure-data inventory value
 - AND a contract failure would stop the command before any module loading or
@@ -118,7 +118,7 @@ otherwise depend on system-module execution semantics.
 #### Scenario: Inventory does not execute module code
 ID: systemconfig.inventory.inv6.scenario
 
-- GIVEN an inventory file submitted to `crunch system eval`
+- GIVEN an inventory file submitted to `mantle system eval`
 - WHEN the inventory is loaded
 - THEN only inventory data is evaluated at that step
 - AND no module `impl` function is called during inventory loading

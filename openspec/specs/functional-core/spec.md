@@ -1,7 +1,7 @@
 # functional-core Specification
 
 ## Purpose
-Define the adopted no-std functional-core boundaries for crunch so pure
+Define the adopted no-std functional-core boundaries for mantle so pure
 attestation, project-management, shell-activation, and release-evidence logic
 stay in dedicated `#![no_std]` crates while std crates remain thin
 translation and effect shells.
@@ -78,7 +78,7 @@ ID: functional.core.dedicated.nostd.crates.second.wave
 - WHEN the workspace is inspected
 - THEN `crunch-shell-core` and `crunch-release-core` exist as dedicated no-std
   crates
-- AND `crunch-shell` plus the root `crunch` release-evidence path remain std
+- AND `crunch-shell` plus the root `mantle` release-evidence path remain std
   shell/adaptor layers around those cores
 
 #### Scenario: Third wave adds delta planning core crate
@@ -180,16 +180,16 @@ The required shell-adapter tests MUST prove these assertions:
 - `cargo test -p crunch-shell non_utf8_with_path_is_rejected` proves non-UTF-8
   `--with` or `PATH`-derived entries fail in the std adapter before the core
   receives normalized strings
-- `cargo test -p crunch --bin crunch create_and_verify_release_bundle_round_trip`
-  and `cargo test -p crunch --bin crunch load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact`
+- `cargo test -p mantle --bin mantle create_and_verify_release_bundle_round_trip`
+  and `cargo test -p mantle --bin mantle load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact`
   prove `src/release_evidence.rs` keeps proof-bundle loading, file copying,
   directory hashing, and manifest I/O in the std shell while
   `crunch-release-core` only validates or normalizes owned bytes and manifest
   data
-- `cargo test -p crunch --test release_cli release_verify_rejects_manifest_schema_mismatch`,
-  `cargo test -p crunch --test release_cli release_verify_rejects_missing_workflow_provenance`,
-  `cargo test -p crunch --test release_cli release_verify_rejects_claim_boundary_violation`,
-  and `cargo test -p crunch --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch`
+- `cargo test -p mantle --test release_cli release_verify_rejects_manifest_schema_mismatch`,
+  `cargo test -p mantle --test release_cli release_verify_rejects_missing_workflow_provenance`,
+  `cargo test -p mantle --test release_cli release_verify_rejects_claim_boundary_violation`,
+  and `cargo test -p mantle --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch`
   prove malformed release evidence is rejected without pushing file I/O or CLI
   formatting into the no-std core boundary
 - `cargo test -p crunch-delta substitution_adapter_keeps_async_store_and_network_in_shell`
@@ -212,7 +212,7 @@ The required shell-adapter tests MUST prove these assertions:
 ID: functional.core.shell.adapters.effect.translation.project.refresh.io.in.shell
 
 - GIVEN project refresh needs git, local files, or downloaded URL content
-- WHEN crunch evaluates refresh state
+- WHEN mantle evaluates refresh state
 - THEN the std shell/adaptor layer performs that I/O first
 - AND `crunch-project-core` only receives normalized resolver results and plain
   project state
@@ -221,7 +221,7 @@ ID: functional.core.shell.adapters.effect.translation.project.refresh.io.in.shel
 ID: functional.core.shell.adapters.effect.translation.attestation.file.discovery.in.shell
 
 - GIVEN attestation verification needs to scan a witness directory on disk
-- WHEN crunch loads that verification material
+- WHEN mantle loads that verification material
 - THEN the std shell/adaptor layer finds and reads those files
 - AND `crunch-attestation-core` only receives plain attestation values and
   verification inputs
@@ -231,7 +231,7 @@ ID: functional.core.shell.adapters.effect.translation.shell.activation.path.tran
 
 - GIVEN shell activation needs host PATH splitting, `PathBuf` handling, or
   exec-target reconstruction
-- WHEN crunch computes an activation plan
+- WHEN mantle computes an activation plan
 - THEN `crunch-shell` performs those std/path/OS translations first
 - AND `crunch-shell-core` only receives owned UTF-8 strings and owned maps
 
@@ -240,7 +240,7 @@ ID: functional.core.shell.adapters.effect.translation.release.evidence.bundle.io
 
 - GIVEN release evidence needs file copying, directory hashing, or proof-bundle
   loading from disk
-- WHEN crunch creates or verifies a release-evidence bundle
+- WHEN mantle creates or verifies a release-evidence bundle
 - THEN `src/release_evidence.rs` performs those filesystem and hashing steps in
   the std shell before or after the core call
 - AND `crunch-release-core` only receives manifest bytes or owned manifest data
@@ -250,7 +250,7 @@ ID: functional.core.shell.adapters.effect.translation.delta.substitution.io.in.s
 
 - GIVEN delta substitution needs castore probing, remote negotiation, or final
   `PathInfo` / attestation integration
-- WHEN crunch performs delta planning or reuse negotiation
+- WHEN mantle performs delta planning or reuse negotiation
 - THEN `crunch-delta` performs that std/async/store/network work before or
   after the core call
 - AND `crunch-delta-core` only receives normalized planning and negotiation
@@ -303,12 +303,12 @@ Validation MUST then include these exact commands:
 - `cargo test -p crunch-project shell_adapter_keeps_refresh_io_outside_core`
 - `cargo test -p crunch-shell adapter_preserves_path_order_and_appends_bin`
 - `cargo test -p crunch-shell non_utf8_with_path_is_rejected`
-- `cargo test -p crunch --bin crunch create_and_verify_release_bundle_round_trip`
-- `cargo test -p crunch --bin crunch load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact`
-- `cargo test -p crunch --test release_cli release_verify_rejects_manifest_schema_mismatch`
-- `cargo test -p crunch --test release_cli release_verify_rejects_missing_workflow_provenance`
-- `cargo test -p crunch --test release_cli release_verify_rejects_claim_boundary_violation`
-- `cargo test -p crunch --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch`
+- `cargo test -p mantle --bin mantle create_and_verify_release_bundle_round_trip`
+- `cargo test -p mantle --bin mantle load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact`
+- `cargo test -p mantle --test release_cli release_verify_rejects_manifest_schema_mismatch`
+- `cargo test -p mantle --test release_cli release_verify_rejects_missing_workflow_provenance`
+- `cargo test -p mantle --test release_cli release_verify_rejects_claim_boundary_violation`
+- `cargo test -p mantle --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch`
 - `cargo test -p crunch-delta substitution_adapter_keeps_async_store_and_network_in_shell`
 - `cargo test -p crunch-delta delta_facade_reexports_core_planner_types`
 - `scripts/check-no-std-core-deps.sh`

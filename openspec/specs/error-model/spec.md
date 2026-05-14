@@ -54,7 +54,7 @@ ID: systemconfig.error.model.err2.scenario
 
 ### Requirement: ERR-3 Structured stderr diagnostics
 
-When crunch's global `--json` flag is active, warnings and errors MUST be
+When mantle's global `--json` flag is active, warnings and errors MUST be
 emitted to stderr as one structured JSON diagnostic object per line.
 ID: systemconfig.error.model.err3
 
@@ -73,7 +73,7 @@ finally by stable message text as a last tiebreak.
 #### Scenario: JSON diagnostics stay on stderr
 ID: systemconfig.error.model.err3.scenario
 
-- GIVEN `crunch system build --json <inventory.ncl>`
+- GIVEN `mantle system build --json <inventory.ncl>`
 - AND one selected machine fails during assembly
 - WHEN the command exits
 - THEN stderr contains a JSON diagnostic object with `severity = "error"`

@@ -2,12 +2,12 @@
 
 ## Purpose
 
-This spec defines the public `crunch system eval` and `crunch system build`
+This spec defines the public `mantle system eval` and `mantle system build`
 CLI contract for the native system-config pipeline.
 ## Requirements
 ### Requirement: CLI-1 System eval command
 
-The CLI MUST provide `crunch system eval <inventory.ncl>` as the dry-run entry
+The CLI MUST provide `mantle system eval <inventory.ncl>` as the dry-run entry
 point for the system-config pipeline.
 ID: systemconfig.cli.surface.cli1
 
@@ -48,7 +48,7 @@ ID: systemconfig.cli.surface.cli1.scenario
 - GIVEN an inventory with two selected machines
 - AND one machine evaluates successfully to dry-run derivations
 - AND the other machine produces a non-fatal module error
-- WHEN `crunch system eval <inventory.ncl>` runs
+- WHEN `mantle system eval <inventory.ncl>` runs
 - THEN stdout contains a `SystemPipelineResult` with the successful machine
   outcome, `MachineOutcome::Failed` for the failed selected machine, and the
   collected `errors` and `warnings`
@@ -57,13 +57,13 @@ ID: systemconfig.cli.surface.cli1.scenario
 
 ### Requirement: CLI-2 System build command
 
-The CLI MUST provide `crunch system build <inventory.ncl>` as the build entry
+The CLI MUST provide `mantle system build <inventory.ncl>` as the build entry
 point for the system-config pipeline.
 ID: systemconfig.cli.surface.cli2
 
 The command MUST evaluate the selected modules, assemble derivations, and build
 successful machine plans through `crunch-pipeline::build()`. It MUST inherit
-crunch's existing global `--json` flag. Without `--json`, stdout MUST be a
+mantle's existing global `--json` flag. Without `--json`, stdout MUST be a
 human-readable summary derived from the in-memory `SystemPipelineResult` that
 names successful machines, failed selected machines, and total warning/error
 counts, while stderr remains human-readable diagnostics. With
@@ -84,7 +84,7 @@ ID: systemconfig.cli.surface.cli2.scenario
 
 - GIVEN a selected-machine build where one machine succeeds and one machine
   fails
-- WHEN `crunch system build <inventory.ncl>` runs without `--json`
+- WHEN `mantle system build <inventory.ncl>` runs without `--json`
 - THEN stdout summarizes the successful machine, the failed machine, and
   warning/error counts
 - AND stderr carries the human-readable diagnostics for the failed machine
@@ -103,7 +103,7 @@ ID: systemconfig.cli.surface.cli3.scenario
 
 - GIVEN an inventory at `examples/system-config/inventory.ncl`
 - AND no `--modules` flag
-- WHEN `crunch system eval` or `crunch system build` runs
+- WHEN `mantle system eval` or `mantle system build` runs
 - THEN the module directory defaults to `examples/system-config/modules/`
 
 ### Requirement: CLI-4 Machine filter
@@ -123,7 +123,7 @@ leave stdout empty, and MUST emit a CLI diagnostic naming the unknown machine.
 ID: systemconfig.cli.surface.cli4.scenario
 
 - GIVEN an inventory with machines `server1` and `server2`
-- WHEN `crunch system eval <inventory.ncl> --machine server1` runs
+- WHEN `mantle system eval <inventory.ncl> --machine server1` runs
 - THEN only `server1` is evaluated
 - AND stdout contains no machine outcome for `server2`
 - AND requesting `--machine server3` instead would fail before evaluation with
@@ -131,7 +131,7 @@ ID: systemconfig.cli.surface.cli4.scenario
 
 ### Requirement: CLI-5 Assembler selection precedence
 
-Both `crunch system eval` and `crunch system build` MUST accept
+Both `mantle system eval` and `mantle system build` MUST accept
 `--assembler <name>` to override backend selection for every machine selected
 after `--machine` filtering.
 ID: systemconfig.cli.surface.cli5
@@ -141,7 +141,7 @@ machine's `class` field. When `--assembler` is present, the override MUST take
 precedence over every selected machine's `class` value. If the named backend is
 not registered, each selected machine MUST fail with an assembler diagnostic
 before assembly begins whenever the command reaches assembly work. For
-`crunch system eval --stop-after=fragments`, assembler lookup is skipped as
+`mantle system eval --stop-after=fragments`, assembler lookup is skipped as
 specified by CLI-1, so `--assembler` is accepted but ignored and unknown
 backend names MUST NOT produce assembler diagnostics in that mode.
 
@@ -150,13 +150,13 @@ ID: systemconfig.cli.surface.cli5.scenario
 
 - GIVEN two selected machines whose inventory records set `class = "nixos"`
 - AND a registered backend named `container`
-- WHEN `crunch system eval <inventory.ncl> --assembler container` runs
+- WHEN `mantle system eval <inventory.ncl> --assembler container` runs
 - THEN both selected machines use the `container` backend for dry-run assembly
 - AND the inventory `class` values are ignored for this invocation
 
 ### Requirement: CLI-6 Eval output formats
 
-`crunch system eval` MUST accept exactly two `--format` values: `json` and
+`mantle system eval` MUST accept exactly two `--format` values: `json` and
 `nickel`. The default stdout payload format is `json`.
 ID: systemconfig.cli.surface.cli6
 
@@ -165,9 +165,9 @@ begins.
 
 The eval-specific `--format` flag controls stdout serialization of the same
 `SystemPipelineResult` envelope described by CLI-1. The global `--json` flag
-controls stderr diagnostic encoding only. Therefore `crunch system eval --json
+controls stderr diagnostic encoding only. Therefore `mantle system eval --json
 --format json` produces JSON on both streams for different purposes, and
-`crunch system eval --json --format nickel` is a valid combination once Nickel
+`mantle system eval --json --format nickel` is a valid combination once Nickel
 stdout output exists.
 
 `--format nickel` MAY be deferred to a follow-on change. If deferred, the CLI
@@ -178,7 +178,7 @@ the ERR-3 stderr diagnostic contract.
 #### Scenario: Deferred Nickel output stays explicit
 ID: systemconfig.cli.surface.cli6.scenario
 
-- GIVEN `crunch system eval --json <inventory.ncl> --format nickel`
+- GIVEN `mantle system eval --json <inventory.ncl> --format nickel`
 - AND Nickel output has not been implemented yet
 - WHEN the command runs
 - THEN stdout remains empty
@@ -188,7 +188,7 @@ ID: systemconfig.cli.surface.cli6.scenario
 #### Scenario: Unsupported eval format is rejected before evaluation
 ID: systemconfig.cli.surface.cli6.invalidscenario
 
-- GIVEN `crunch system eval <inventory.ncl> --format yaml`
+- GIVEN `mantle system eval <inventory.ncl> --format yaml`
 - WHEN the command parses CLI arguments
 - THEN stdout remains empty
 - AND the command exits non-zero with a CLI diagnostic before evaluation begins

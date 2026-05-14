@@ -2,17 +2,17 @@
 
 ## Purpose
 
-Defines how crunch downloads external resources (URLs, tarballs, git
+Defines how mantle downloads external resources (URLs, tarballs, git
 repos) and stores them as fixed-output derivations. Fetchers bridge
 the gap between the network and the hermetic build sandbox.
 ## Requirements
 ### Requirement: fetchurl — download a file by URL
 
-The Nickel stdlib MUST provide `crunch.fetchurl` that accepts a URL
+The Nickel stdlib MUST provide `mantle.fetchurl` that accepts a URL
 and a content hash, and produces a fixed-output derivation record.
 
 ```nickel
-let src = crunch.fetchurl {
+let src = mantle.fetchurl {
   url = "https://example.com/foo-1.0.tar.gz",
   hash = "sha256-XXXX...",
 } in
@@ -29,36 +29,36 @@ The output store path MUST be computed from the declared hash
 
 #### Scenario: Fetch a single file
 
-- GIVEN a `.ncl` file with `crunch.fetchurl { url = "https://...", hash = "sha256-..." }`
-- WHEN `crunch build` runs
+- GIVEN a `.ncl` file with `mantle.fetchurl { url = "https://...", hash = "sha256-..." }`
+- WHEN `mantle build` runs
 - THEN the file is downloaded, hash-verified, and stored at the FOD output path
 
 #### Scenario: Cached fetch is skipped
 
 - GIVEN the FOD output path already exists in the store
-- WHEN `crunch build` runs again
+- WHEN `mantle build` runs again
 - THEN no download occurs (standard FOD caching)
 
 #### Scenario: Name defaults to URL basename
 
-- GIVEN `crunch.fetchurl { url = "https://example.com/foo-1.0.tar.gz", hash = "..." }`
+- GIVEN `mantle.fetchurl { url = "https://example.com/foo-1.0.tar.gz", hash = "..." }`
 - WHEN the derivation is constructed
 - THEN `name` is `"foo-1.0.tar.gz"`
 
 #### Scenario: Explicit name override
 
-- GIVEN `crunch.fetchurl { url = "https://...", hash = "...", name = "source" }`
+- GIVEN `mantle.fetchurl { url = "https://...", hash = "...", name = "source" }`
 - WHEN the derivation is constructed
 - THEN `name` is `"source"`
 
 ### Requirement: fetchTarball — download and unpack
 
-The Nickel stdlib MUST provide `crunch.fetchTarball` that downloads a
+The Nickel stdlib MUST provide `mantle.fetchTarball` that downloads a
 tarball, decompresses it, extracts the contents, strips the top-level
 directory component, and stores the result.
 
 ```nickel
-let src = crunch.fetchTarball {
+let src = mantle.fetchTarball {
   url = "https://github.com/user/repo/archive/v1.0.tar.gz",
   hash = "sha256-XXXX...",
 } in
@@ -76,8 +76,8 @@ bzip2 (`.bz2`, `.tbz2`), zstd (`.zst`, `.zstd`), and uncompressed `.tar`.
 
 #### Scenario: Fetch and unpack a tarball
 
-- GIVEN a `.ncl` file with `crunch.fetchTarball { url = "https://...tar.gz", hash = "..." }`
-- WHEN `crunch build` runs
+- GIVEN a `.ncl` file with `mantle.fetchTarball { url = "https://...tar.gz", hash = "..." }`
+- WHEN `mantle build` runs
 - THEN the tarball is downloaded, decompressed, extracted with top-level
   dir stripped, and the unpacked tree is stored
 
@@ -90,17 +90,17 @@ bzip2 (`.bz2`, `.tbz2`), zstd (`.zst`, `.zstd`), and uncompressed `.tar`.
 #### Scenario: Unsupported compression detected
 
 - GIVEN a URL ending in `.tar.lz4` (unsupported)
-- WHEN crunch attempts to fetch
+- WHEN mantle attempts to fetch
 - THEN it falls back to raw read (gzip magic detection), or fails with
   a clear error naming the unsupported format
 
 ### Requirement: fetchGit — clone a git repository
 
-The Nickel stdlib MUST provide `crunch.fetchGit` that materializes a git
+The Nickel stdlib MUST provide `mantle.fetchGit` that materializes a git
 repository at a specific revision and stores the working tree without `.git/`.
 
 ```nickel
-let src = crunch.fetchGit {
+let src = mantle.fetchGit {
   url = "https://github.com/user/repo.git",
   rev = "abc123def456...",
   hash = "sha256-XXXX...",
@@ -125,8 +125,8 @@ The `.git/` directory MUST NOT appear in the output.
 
 #### Scenario: Clone at specific rev without host git discovery
 
-- GIVEN `crunch.fetchGit { url = "...", rev = "abc123...", hash = "..." }`
-- WHEN `crunch build` runs
+- GIVEN `mantle.fetchGit { url = "...", rev = "abc123...", hash = "..." }`
+- WHEN `mantle build` runs
 - THEN the repo is fetched and checked out at the specified revision
 - AND the fetch path does not depend on an arbitrary host `git` found through `PATH` or common host filesystem locations
 - AND the output tree excludes `.git/`
@@ -135,7 +135,7 @@ The `.git/` directory MUST NOT appear in the output.
 
 - GIVEN the host has no `git` on `PATH`, or has a different `git` version than another host
 - WHEN the same `fetchGit` derivation is built on both hosts
-- THEN crunch uses the same crunch-controlled fetch implementation on each host
+- THEN mantle uses the same crunch-controlled fetch implementation on each host
 - AND host `git` availability or version does not change the fetch semantics
 
 #### Scenario: Invalid rev remains a fetch error
@@ -268,7 +268,7 @@ A mismatch MUST:
 
 ### Requirement: Auto-fix hash mismatches
 
-The CLI MUST support `crunch build --fix <file.ncl>`. When a FOD
+The CLI MUST support `mantle build --fix <file.ncl>`. When a FOD
 hash mismatches with `--fix`:
 
 1. Compute the correct hash
@@ -290,14 +290,14 @@ suggested fix (but the file is not modified).
 
 - GIVEN `hello.ncl` with `hash = "sha256-AAAA..."` and actual is
   `sha256-BBBB...`
-- WHEN `crunch build --fix hello.ncl` runs
+- WHEN `mantle build --fix hello.ncl` runs
 - THEN `hello.ncl` is updated: `sha256-AAAA...` → `sha256-BBBB...`
-- AND crunch exits with an error: "re-run to build with the corrected hash"
+- AND mantle exits with an error: "re-run to build with the corrected hash"
 
 #### Scenario: Auto-fix without --fix just reports
 
 - GIVEN the same mismatch
-- WHEN `crunch build hello.ncl` (no `--fix`) runs
+- WHEN `mantle build hello.ncl` (no `--fix`) runs
 - THEN the error includes the correct hash but the file is NOT modified
 
 ### Requirement: Hash algorithms
@@ -384,13 +384,13 @@ not at build time.
 
 #### Scenario: Empty URL rejected
 
-- GIVEN `crunch.fetchurl { url = "", hash = "sha256-..." }`
+- GIVEN `mantle.fetchurl { url = "", hash = "sha256-..." }`
 - WHEN evaluated
 - THEN Nickel reports a contract violation for empty URL
 
 #### Scenario: Invalid hash format rejected
 
-- GIVEN `crunch.fetchurl { url = "...", hash = "not-a-hash" }`
+- GIVEN `mantle.fetchurl { url = "...", hash = "not-a-hash" }`
 - WHEN evaluated
 - THEN Nickel reports a contract violation for invalid hash format
 
@@ -411,40 +411,40 @@ entry.
 
 - GIVEN a tarball entry whose stripped path contains `..`, such as
   `pkg/../../escape`
-- WHEN crunch extracts the tarball
+- WHEN mantle extracts the tarball
 - THEN extraction fails with a clear containment error
-- AND crunch does not write the escaped path outside the requested output tree
+- AND mantle does not write the escaped path outside the requested output tree
 
 #### Scenario: Absolute symlink target is rejected
 
 - GIVEN a tarball symlink entry such as `pkg/link -> /etc/passwd`
-- WHEN crunch extracts the tarball
+- WHEN mantle extracts the tarball
 - THEN extraction fails with a clear containment error
-- AND crunch does not materialize a link that points outside the requested
+- AND mantle does not materialize a link that points outside the requested
   output tree
 
 #### Scenario: Later write through escaped symlink parent is rejected
 
 - GIVEN a tarball that first creates `pkg/out` as a symlink to `../../escape`
 - AND a later tarball entry writes `pkg/out/file.txt`
-- WHEN crunch extracts the tarball
+- WHEN mantle extracts the tarball
 - THEN extraction fails with a clear containment error
-- AND crunch does not write `file.txt` outside the requested output tree
+- AND mantle does not write `file.txt` outside the requested output tree
 
 #### Scenario: Hardlink target escape is rejected
 
 - GIVEN a tarball hardlink entry whose effective target resolves outside the
   requested output tree
-- WHEN crunch extracts the tarball
+- WHEN mantle extracts the tarball
 - THEN extraction fails with a clear containment error
-- AND crunch does not materialize the hardlink target outside the requested
+- AND mantle does not materialize the hardlink target outside the requested
   output tree
 
 #### Scenario: Valid in-tree link remains allowed
 
 - GIVEN a tarball symlink or hardlink entry whose effective target stays within
   the requested output tree
-- WHEN crunch extracts the tarball
+- WHEN mantle extracts the tarball
 - THEN extraction succeeds
 - AND the in-tree link behavior is preserved
 

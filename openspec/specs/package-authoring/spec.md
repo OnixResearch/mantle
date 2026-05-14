@@ -3,7 +3,7 @@
 ## Purpose
 
 Defines requirements for the builder-layer Nickel interfaces and generated
-project inputs that package authors use to describe Crunch packages.
+project inputs that package authors use to describe Mantle packages.
 
 ## Requirements
 
@@ -44,12 +44,12 @@ version claims, supplier, homepage, license, and source aliases.
 
 - GIVEN a package definition with optional provenance claims metadata
 - WHEN the package is converted into a derivation and built
-- THEN crunch records those claims in the final artifact attestation
+- THEN mantle records those claims in the final artifact attestation
 - AND changing only those claim fields does not change the derivation hash by default
 
 #### Scenario: Core derivation contract stays minimal
 
-- GIVEN the core crunch derivation contract in `lib/`
+- GIVEN the core mantle derivation contract in `lib/`
 - WHEN it is inspected after provenance support is added
 - THEN the core contract still defines build-engine fields only
 - AND builder-level provenance claims are added in the package-authoring layer instead

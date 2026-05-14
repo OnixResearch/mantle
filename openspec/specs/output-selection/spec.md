@@ -16,7 +16,7 @@ build sandbox.
 #### Scenario: Select dev output
 
 - GIVEN a multi-output derivation `libfoo` with outputs `["out", "dev", "lib"]`
-- WHEN a consuming derivation includes `crunch.select libfoo "dev"` in its inputs
+- WHEN a consuming derivation includes `mantle.select libfoo "dev"` in its inputs
 - THEN `input_derivations` maps `libfoo`'s drv path to `{"dev"}`
 - AND only `libfoo`'s `dev` output path is mounted in the sandbox
 
@@ -47,19 +47,19 @@ the same dependency appears multiple times in `inputs`.
 #### Scenario: Two selections from same dep
 
 - GIVEN a derivation `libfoo` with outputs `["out", "dev", "lib"]`
-- WHEN a consumer's inputs include both `crunch.select libfoo "dev"` and `crunch.select libfoo "lib"`
+- WHEN a consumer's inputs include both `mantle.select libfoo "dev"` and `mantle.select libfoo "lib"`
 - THEN `input_derivations` maps `libfoo` to `{"dev", "lib"}`
 
 ### Requirement: Select Helper Function
 
-The stdlib MUST provide a function `crunch.select` that takes a
+The stdlib MUST provide a function `mantle.select` that takes a
 derivation record and an output name string, returning a structured
 record suitable for use in the `inputs` array.
 
 #### Scenario: Helper produces correct structure
 
-- GIVEN `let pkg = { name = "foo", builder = "/bin/sh", outputs = ["out", "dev"], ... } | crunch.Derivation`
-- WHEN evaluating `crunch.select pkg "dev"`
+- GIVEN `let pkg = { name = "foo", builder = "/bin/sh", outputs = ["out", "dev"], ... } | mantle.Derivation`
+- WHEN evaluating `mantle.select pkg "dev"`
 - THEN the result is `{ drv = pkg, output = "dev" }`
 
 ### Requirement: Input Contract Extension
@@ -71,6 +71,6 @@ The Nickel `Input` contract MUST accept three forms:
 
 #### Scenario: Mixed inputs array
 
-- GIVEN inputs `[seed.bash, dep_pkg, crunch.select dep_pkg "dev"]`
+- GIVEN inputs `[seed.bash, dep_pkg, mantle.select dep_pkg "dev"]`
 - WHEN the array is validated against `Array Input`
 - THEN all three entries pass validation

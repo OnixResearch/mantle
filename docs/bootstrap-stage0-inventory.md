@@ -12,7 +12,7 @@ Today the repo has three proof modes:
   supervision while common host helpers are absent from the proof PATH
 
 Neither mode by itself proves a full-source bootstrap root or reproducible
-release artifacts. A later `crunch release create` bundle can package the proof
+release artifacts. A later `mantle release create` bundle can package the proof
 bundle, release binary, source archive containing tracked worktree files plus
 verified vendored Cargo inputs, this inventory, and an optional canonical
 reproducibility report for bundle-local checks. Only a verified report whose
@@ -23,9 +23,9 @@ does not widen the underlying bootstrap claim.
 ## Contract boundary
 
 For the protected no-host-tools first-bootstrap path, the protected phase starts
-at stage0 `crunch self-build --no-host-tools --stage0-inventory <file>` entry
+at stage0 `mantle self-build --no-host-tools --stage0-inventory <file>` entry
 before source staging, fetch, sandbox, or build work. It ends only after the
-exact crunch-built `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl` outputs are
+exact mantle-built `bootstrap/bwrap.ncl` and `bootstrap/busybox.ncl` outputs are
 built, exported to disk, executable-checked, BLAKE3-hashed, selected as the
 later-stage sandbox entry and shell, and recorded in `protected-exec-audit.json`.
 
@@ -35,7 +35,7 @@ Every protected-phase dependency must fit one of these buckets:
   bootstrap starts.
 - **Pinned fetched artifact**: downloaded from an explicit URL with a checked
   hash.
-- **Crunch-built output**: produced later in the bootstrap chain.
+- **Mantle-built output**: produced later in the bootstrap chain.
 
 Anything outside those buckets is a hidden trust edge.
 
@@ -55,7 +55,7 @@ absolute paths and digests. `executable_entries` and `source_entries` share thes
 fields: `schema_version`, `id`, `role`, `phase`, `digest`,
 `provenance_category`, `provenance`, `allowed_reason`, `owner`, and `required`.
 Executable entries add `executable_path`; source entries add `urls` and
-`extraction_rules`. Crunch-owned fingerprints use `digest.algorithm = "blake3"`.
+`extraction_rules`. Mantle-owned fingerprints use `digest.algorithm = "blake3"`.
 Non-BLAKE3 hashes are accepted only for interoperability and require an explicit
 `interoperability_reason`.
 
@@ -72,21 +72,21 @@ extracted trees must match the declared digest.
 
 | Item | Used by | Why it is trusted today | Notes |
 |---|---|---|---|
-| Linux host | `crunch bootstrap --fetch`, `crunch self-build`, `./scripts/prove-self-hosting.sh` | bwrap build service and current proof run on Linux only | non-Linux first bootstrap not in scope yet |
-| Checkout source tree | `crunch self-build`, `./scripts/prove-self-hosting.sh` | stage0 still starts from the current repo checkout before crunch can rebuild itself | source staging now copies a fixed allowlist of top-level entries with Rust filesystem calls |
-| Source-tree `vendor-deps/` directory + `.cargo/vendor-config.toml` | `crunch self-build`, `./scripts/prove-self-hosting.sh` | stage0 reuses the repo's vendored Cargo inputs instead of running host `cargo vendor` | staging validates `Cargo.lock` registry/git packages against `vendor-deps/`, verifies Cargo's `.cargo-checksum.json` file digests, and checks Cargo-format SHA-256 package checksums where Cargo.lock provides them |
-| Host `bwrap` | default `crunch self-build`, default/non-Nix `./scripts/prove-self-hosting.sh` | first sandboxed build needs a working bubblewrap before crunch has built its own | not accepted by no-host-tools mode unless it is explicitly declared as the `sandbox-entry` seed with a matching BLAKE3 digest |
-| Static `SNIX_BUILD_SANDBOX_SHELL` | default `crunch self-build`, default/non-Nix `./scripts/prove-self-hosting.sh` | first sandbox stage needs a static shell that also exposes busybox applets | no-host-tools mode uses the declared `sandbox-shell` seed and fails closed on digest drift |
-| Host Rust nightly + `cargo` + `clang` + `mold` + `pkg-config` + OpenSSL dev files | `./scripts/prove-self-hosting.sh` | stage0 helper builds the checkout test binary and prepares the proof env | proof-only prerequisites, not required by `crunch bootstrap --fetch` |
+| Linux host | `mantle bootstrap --fetch`, `mantle self-build`, `./scripts/prove-self-hosting.sh` | bwrap build service and current proof run on Linux only | non-Linux first bootstrap not in scope yet |
+| Checkout source tree | `mantle self-build`, `./scripts/prove-self-hosting.sh` | stage0 still starts from the current repo checkout before mantle can rebuild itself | source staging now copies a fixed allowlist of top-level entries with Rust filesystem calls |
+| Source-tree `vendor-deps/` directory + `.cargo/vendor-config.toml` | `mantle self-build`, `./scripts/prove-self-hosting.sh` | stage0 reuses the repo's vendored Cargo inputs instead of running host `cargo vendor` | staging validates `Cargo.lock` registry/git packages against `vendor-deps/`, verifies Cargo's `.cargo-checksum.json` file digests, and checks Cargo-format SHA-256 package checksums where Cargo.lock provides them |
+| Host `bwrap` | default `mantle self-build`, default/non-Nix `./scripts/prove-self-hosting.sh` | first sandboxed build needs a working bubblewrap before mantle has built its own | not accepted by no-host-tools mode unless it is explicitly declared as the `sandbox-entry` seed with a matching BLAKE3 digest |
+| Static `SNIX_BUILD_SANDBOX_SHELL` | default `mantle self-build`, default/non-Nix `./scripts/prove-self-hosting.sh` | first sandbox stage needs a static shell that also exposes busybox applets | no-host-tools mode uses the declared `sandbox-shell` seed and fails closed on digest drift |
+| Host Rust nightly + `cargo` + `clang` + `mold` + `pkg-config` + OpenSSL dev files | `./scripts/prove-self-hosting.sh` | stage0 helper builds the checkout test binary and prepares the proof env | proof-only prerequisites, not required by `mantle bootstrap --fetch` |
 | About 4 GiB free in the selected proof scratch filesystem (`target/self-hosting-proof/work/` by default, or `CRUNCH_PROOF_SCRATCH_DIR`) | `./scripts/prove-self-hosting.sh` | proof stores two full bootstrap chains plus audit bundles | capacity requirement, not a trust root, but still a stage0 prerequisite |
 
 ### Pinned fetched artifacts
 
 | Item | Used by | Why it is trusted today | Notes |
 |---|---|---|---|
-| musl.cc native tarball `https://musl.cc/x86_64-linux-musl-native.tgz` | `crunch bootstrap --fetch`, `crunch self-build`, `./scripts/prove-self-hosting.sh` | fetched by crunch with recursive hash `sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=` and reduced to the normalized `musl-seed-toolchain` provider | still a trusted binary bootstrap seed, but smaller than the full raw tarball surface; inspect `<seed>/share/crunch-bootstrap/provider.json` for provenance and dropped payload |
+| musl.cc native tarball `https://musl.cc/x86_64-linux-musl-native.tgz` | `mantle bootstrap --fetch`, `mantle self-build`, `./scripts/prove-self-hosting.sh` | fetched by mantle with recursive hash `sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=` and reduced to the normalized `musl-seed-toolchain` provider | still a trusted binary bootstrap seed, but smaller than the full raw tarball surface; inspect `<seed>/share/mantle-bootstrap/provider.json` for provenance and dropped payload |
 
-### Crunch-built outputs
+### Mantle-built outputs
 
 | Output | First producer | Later role |
 |---|---|---|
@@ -97,8 +97,8 @@ extracted trees must match the declared digest.
 | `gcc` | `bootstrap/gcc.ncl` | source-built compiler for later C and Rust work |
 | `busybox` | `bootstrap/busybox.ncl` | static shell and applets for later sandbox stages |
 | `bwrap` | `bootstrap/bwrap.ncl` | replaces host `bwrap` after first bootstrap stage |
-| `rust` | `bootstrap/rust.ncl` | toolchain used to compile crunch itself |
-| `crunch` | `crunch self-build` derivation | rebuilt stage1 and stage2 proof outputs |
+| `rust` | `bootstrap/rust.ncl` | toolchain used to compile mantle itself |
+| `mantle` | `mantle self-build` derivation | rebuilt stage1 and stage2 proof outputs |
 
 ## Host-convenience discovery only
 
@@ -115,10 +115,10 @@ now fails fast and requires an explicit `SNIX_BUILD_SANDBOX_SHELL`.
 
 What the checked-in self-hosting proof demonstrates today:
 
-- stage0 builds stage1 and records the staged `*-crunch-src` tree
+- stage0 builds stage1 and records the staged `*-mantle-src` tree
 - stage1 rebuilds stage2 from that same staged source tree
-- stage1 and stage2 crunch binaries must match byte-for-byte
-- the stage0 and stage2 crunch-built `busybox` and `bwrap` outputs must match
+- stage1 and stage2 mantle binaries must match byte-for-byte
+- the stage0 and stage2 mantle-built `busybox` and `bwrap` outputs must match
 - in `--non-nix-host` mode, the stage0 command path completes with
   `nix-build`, `nix-store`, `nix-shell`, and `nix` absent from `PATH`
 - in `--no-host-tools` mode, stage0 receives `--no-host-tools
@@ -132,8 +132,8 @@ What the checked-in self-hosting proof demonstrates today:
   stage0 inventory digest when no-host-tools mode is active, blocked host
   command set, fallback-event markers, protected transition records, and final
   result
-- `crunch release create` can copy a full proof bundle plus this inventory into
-  a release-evidence bundle, and `crunch release verify` can later re-check
+- `mantle release create` can copy a full proof bundle plus this inventory into
+  a release-evidence bundle, and `mantle release verify` can later re-check
   bundle-local integrity and proof-context using bundle-local contents only
 - a prerequisite-only `./scripts/prove-self-hosting.sh --check` result is not
   release proof evidence and does not satisfy the release-bundle proof slot
@@ -147,7 +147,7 @@ target. It requires:
 - Complete StageX lineage metadata in the self-build proof: seed, lineage
   manifest, stage graph, normalized provider, staged source, stage1/stage2
   binary, bootstrap tool, and protected-exec audit digests
-- All Crunch-owned digests lowercase BLAKE3 hex
+- All Mantle-owned digests lowercase BLAKE3 hex
 - No undeclared host compiler, build tool, archive tool, Nix command, or
   legacy provider execution observed by the protected-exec supervisor
 - A verified byte-identical reproducibility report
@@ -157,7 +157,7 @@ target. It requires:
 This profile rejects seed-assisted, source-root, self-proof-only, and
 prerequisite-only evidence. External witness agreement alone does not
 satisfy it. Verify with:
-`crunch release verify <bundle-dir> --require-stagex-no-quorum`
+`mantle release verify <bundle-dir> --require-stagex-no-quorum`
 
 Remaining environmental assumptions:
 
@@ -183,11 +183,11 @@ changes:
 | Trust root | Why it remains | Path to elimination |
 |---|---|---|
 | Host Linux kernel | bwrap sandbox and FUSE mounts require kernel interfaces | Out of scope for application-level bootstrap |
-| Host `bwrap` (first stage only) | First sandbox needs a working bubblewrap before crunch builds its own | `--no-host-tools` mode with declared seed narrows this to a single digest-checked executable |
+| Host `bwrap` (first stage only) | First sandbox needs a working bubblewrap before mantle builds its own | `--no-host-tools` mode with declared seed narrows this to a single digest-checked executable |
 | Static `SNIX_BUILD_SANDBOX_SHELL` (first stage only) | First sandbox stage needs a static shell | Same as bwrap: declared seed with digest |
 | Stage0 Rust compiler | Fetched stable binary, not hex0-bootstrapped | Requires a Rust-from-C bootstrap chain (future work) |
 | Checkout source tree | stage0 starts from the current repo checkout | Source staging copies a fixed allowlist and validates vendored inputs |
-| Host Rust/clang/mold/pkg-config/OpenSSL (proof-only) | Proof helper builds the test binary | Not required by `crunch bootstrap --fetch` or `crunch self-build` |
+| Host Rust/clang/mold/pkg-config/OpenSSL (proof-only) | Proof helper builds the test binary | Not required by `mantle bootstrap --fetch` or `mantle self-build` |
 | Network transport for bootstrap fetches | Downloads use HTTPS but transport is trusted | Content-addressed hashes verify integrity post-fetch |
 
 ### Status promotion rules
@@ -195,7 +195,7 @@ changes:
 Bootstrap maturity status reads proof fields from `SelfBuildReport`:
 - `provider_mode` must be `source-root` or `stagex-lineage` for full-source claims
 - `stagex_metadata` must include lineage manifest digest, stage graph digest,
-  normalized provider digest, and all crunch-built tool digests
+  normalized provider digest, and all mantle-built tool digests
 - Stage transcript index must cover all stages from `stage0-posix` through `seed-full`
 - Placeholder, deferred, or archived partial-scaffolding evidence is always rejected
 - Missing proof fields or transcripts block promotion and name the missing item
@@ -204,7 +204,7 @@ What it does not demonstrate yet:
 
 - a full-source bootstrap root smaller than the current reduced musl.cc-derived seed provider
 - independent rebuild agreement by itself; that status is derived later by
-  `crunch attest release-verify --json` from accepted witness sidecars,
+  `mantle attest release-verify --json` from accepted witness sidecars,
   verifier-local policy, revocations, and trusted keys
 - more than packaged integrity, proof-context evidence, any separately verified
   reproducibility report, and any separately satisfied independent-agreement

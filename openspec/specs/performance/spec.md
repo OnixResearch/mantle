@@ -5,7 +5,7 @@ TBD - created by archiving change add-performance-benchmark-suite. Update Purpos
 ## Requirements
 ### Requirement: Checked-in representative benchmark suite
 
-The repo MUST provide a checked-in benchmark suite for representative crunch
+The repo MUST provide a checked-in benchmark suite for representative mantle
 workloads.
 
 The initial suite MUST cover at least:
@@ -25,7 +25,7 @@ access, and MUST be small enough for ordinary local checks.
 
 - GIVEN a developer working from the repo checkout
 - WHEN they invoke the documented benchmark entry point
-- THEN crunch runs the checked-in workload matrix
+- THEN mantle runs the checked-in workload matrix
 - AND the run does not depend on unpublished one-off commands
 
 #### Scenario: Local checks can run a benchmark smoke path
@@ -69,7 +69,7 @@ and any relevant hermeticity or warm-cache mode used by the workload.
 ### Requirement: Phase-separated metrics follow architecture boundaries
 
 The benchmark harness MUST record phase-separated metrics rather than only a
-single total duration when a workload exposes honest crunch phase boundaries.
+single total duration when a workload exposes honest mantle phase boundaries.
 
 At minimum the suite MUST be able to distinguish evaluation, conversion,
 store lookup or persistence where observable, substitution or fetch planning,
@@ -121,7 +121,7 @@ records more than one named phase metric in a single workload result.
 That workflow benchmark MUST use only checked-in fixtures or deterministic local
 state.
 
-Its phase metrics MUST correspond to real crunch workflow boundaries rather than
+Its phase metrics MUST correspond to real mantle workflow boundaries rather than
 invented subdivisions.
 
 #### Scenario: Multi-phase workflow result records more than one boundary
@@ -236,7 +236,7 @@ other caller-visible overhead exists.
 
 `explicit_top_level_root_force_count` and
 `explicit_nonselected_root_force_count` MUST count only top-level root values
-that crunch explicitly forces through the lazy API. The harness MUST NOT infer
+that mantle explicitly forces through the lazy API. The harness MUST NOT infer
 or guess hidden internal Nickel thunk activity and report it as those metrics.
 
 The shared wide package-set fixture MUST be large enough, or repeated-sampled
@@ -255,9 +255,9 @@ on the reference host before autoresearch begins.
 #### Scenario: Non-selected root force count stays explicit
 
 - GIVEN a lazy selected-root benchmark run on a multi-root fixture
-- WHEN crunch forces only one requested root
+- WHEN mantle forces only one requested root
 - THEN `explicit_nonselected_root_force_count` reports how many top-level roots
-  other than the selected one crunch explicitly forced
+  other than the selected one mantle explicitly forced
 - AND the metric is omitted or fails loudly if the harness cannot measure that
   count honestly
 

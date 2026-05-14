@@ -16,7 +16,7 @@ schema `crunch-benchmark-bundle-v1`.
 |---|---|---|---|
 | `eval-fetch-git` | evaluation | `examples/fetch-git.ncl` | Exercises Nickel evaluation and derivation extraction on a checked-in fetcher derivation without introducing build execution. |
 | `convert-multi-output` | conversion | `examples/multi-output.ncl` | Exercises glue-layer conversion, store-path construction, and multi-output lowering on a checked-in derivation. |
-| `substitution-plan-delta-suite` | substitution | `crates/crunch-delta/src/fixtures.rs::bench_suite()` | Exercises substitution planning against the fixed crunch-delta benchmark suite with no network or mutable store dependency. |
+| `substitution-plan-delta-suite` | substitution | `crates/crunch-delta/src/fixtures.rs::bench_suite()` | Exercises substitution planning against the fixed mantle-delta benchmark suite with no network or mutable store dependency. |
 | `build-graph-package-set` | build-graph | `examples/package-set.ncl` | Exercises repeated conversion of a checked-in multi-root package set with shared inputs, which is a cheap proxy for build-graph preparation. |
 | `workflow-package-set-eval-build-graph` | workflow | `examples/package-set.ncl` | Exercises one honest multi-phase workflow result by timing package-set evaluation and the follow-up build-graph lowering in the same workload entry. |
 | `store-persist-lookup-blob` | store | `examples/benchmark_support.rs::benchmark_store_aware_workload` | Exercises a fresh local temp store per sample, timing one signed output persistence phase and the follow-up reopened-store lookup phase on deterministic local bytes. |
@@ -39,8 +39,8 @@ schema `crunch-benchmark-bundle-v1`.
 - `benchmark_compare` also accepts `--json` when you want machine-readable comparison output.
 - `--absolute-threshold-ns` highlights changes at or above a fixed nanosecond delta. `--percent-threshold` highlights changes at or above a percentage delta.
 - All three entry points support `-h` / `--help` for their exact flag list.
-- Evaluation and substitution workloads record the default logical store prefix `/crunch/store`.
-- Conversion and build-graph workloads record `/nix/store` because their checked-in seed inputs are absolute `/nix/store/...` paths; using `/crunch/store` there would make `crunch_glue::convert()` reject those seed inputs as invalid store paths.
+- Evaluation and substitution workloads record the default logical store prefix `/mantle/store`.
+- Conversion and build-graph workloads record `/nix/store` because their checked-in seed inputs are absolute `/nix/store/...` paths; using `/mantle/store` there would make `crunch_glue::convert()` reject those seed inputs as invalid store paths.
 
 ## Local-first workflow
 

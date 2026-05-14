@@ -1,6 +1,6 @@
 # System-config example
 
-This directory is the smallest end-to-end `crunch system` fixture checked into
+This directory is the smallest end-to-end `mantle system` fixture checked into
 the repo.
 
 ## Files
@@ -63,19 +63,19 @@ Use these optional fields when needed:
 Evaluate the full fixture to derivations:
 
 ```bash
-crunch system eval examples/system-config/inventory.ncl
+mantle system eval examples/system-config/inventory.ncl
 ```
 
 Stop after merged fragments:
 
 ```bash
-crunch system eval examples/system-config/inventory.ncl --stop-after fragments
+mantle system eval examples/system-config/inventory.ncl --stop-after fragments
 ```
 
 Build the assembled machine derivations:
 
 ```bash
-crunch system build examples/system-config/inventory.ncl
+mantle system build examples/system-config/inventory.ncl
 ```
 
 The inventory omits `--modules` because the CLI defaults to the sibling
@@ -86,7 +86,7 @@ The inventory omits `--modules` because the CLI defaults to the sibling
 Partial success:
 
 ```bash
-crunch --json system eval examples/system-config/inventory-partial-failure.ncl
+mantle --json system eval examples/system-config/inventory-partial-failure.ncl
 ```
 
 That inventory gives one `sshd` instance a string `port`, so one machine fails
@@ -95,7 +95,7 @@ settings validation while the sibling machine still produces a result.
 Contract failure:
 
 ```bash
-crunch system eval examples/system-config/inventory.ncl \
+mantle system eval examples/system-config/inventory.ncl \
   --modules examples/system-config/bad-modules \
   --machine server1
 ```

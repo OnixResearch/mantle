@@ -23,7 +23,7 @@ machine-code concerns.
 r[compiled-eval.backend-boundary.default]
 
 - GIVEN the current tree without a default shipped compiled evaluator backend
-- WHEN a user runs `crunch eval` or `crunch build`
+- WHEN a user runs `mantle eval` or `mantle build`
 - THEN evaluation flows through the existing interpreter/export path
 - AND `crunch-glue`, `crunch-build`, and `crunch-store` do not require
   Cranelift or LLVM
@@ -43,7 +43,7 @@ r[compiled-eval.backend-boundary.swap]
 The project MUST treat compiled evaluation backends as future optimization work
 r[compiled-eval.profiling-gate]
 that starts only after measurement shows Nickel evaluation is a meaningful
-bottleneck on real crunch workloads.
+bottleneck on real mantle workloads.
 
 Repo docs and main specs MUST keep the interpreter/export path labeled as the
 shipped runtime until a compiled backend exists in the runtime path.
@@ -54,7 +54,7 @@ r[compiled-eval.profiling-gate.no-evidence]
 - GIVEN no benchmark or profiling evidence that evaluation dominates runtime
 - WHEN planning architecture work
 - THEN Cranelift and LLVM remain optional future work
-- AND crunch does not add them as current required dependencies
+- AND mantle does not add them as current required dependencies
 
 #### Scenario: Evidence opens the door to an experiment
 r[compiled-eval.profiling-gate.evidence]

@@ -86,11 +86,11 @@ ordinary validation pass.
   run than the ordinary edit-time gate
 
 ### Requirement: Bootstrap Validate Success Evidence Regression [r[bootstrap-validate-evidence-regression]]
-Crunch MUST regression-test the successful `crunch bootstrap validate` evidence path so runtime-validation evidence bundles remain stable.
+Mantle MUST regression-test the successful `mantle bootstrap validate` evidence path so runtime-validation evidence bundles remain stable.
 
 #### Scenario: Successful validation writes complete evidence [r[bootstrap-validate-evidence-regression.1]]
 - GIVEN a minimal derivation that can build in a temporary store
-- WHEN `crunch bootstrap validate` runs with `--evidence-dir`
+- WHEN `mantle bootstrap validate` runs with `--evidence-dir`
 - THEN the command exits successfully and writes doctor, build log, JSON summary, and Markdown summary evidence with `passed` status
 
 #### Scenario: Failure coverage remains intact [r[bootstrap-validate-evidence-regression.2]]
@@ -99,7 +99,7 @@ Crunch MUST regression-test the successful `crunch bootstrap validate` evidence 
 - THEN failure-path evidence assertions still pass
 
 ### Requirement: Bootstrap Blocker Inventory Gate [r[bootstrap-blocker-inventory-gate]]
-Crunch MUST provide a deterministic inventory of bootstrap-critical placeholders, TODOs, and deferred work before claiming bootstrap completion.
+Mantle MUST provide a deterministic inventory of bootstrap-critical placeholders, TODOs, and deferred work before claiming bootstrap completion.
 
 #### Scenario: Known placeholders are categorized [r[bootstrap-blocker-inventory-gate.1]]
 - GIVEN bootstrap-critical derivations contain intentional bridge placeholders

@@ -7,7 +7,7 @@ policy-facing operator workflows.
 ## Requirements
 ### Requirement: Social trust policy MUST stay external to technical artifact digests
 
-Crunch MUST define trusted-role, quorum, independence, and revocation policy
+Mantle MUST define trusted-role, quorum, independence, and revocation policy
 outside the canonical digest material for release attestations and witness
 attestations.
 
@@ -20,7 +20,7 @@ attestations.
 
 ### Requirement: Verifier MUST support witness-role and quorum policy
 
-Crunch MUST support policy rules for which witnesses count toward decentralized
+Mantle MUST support policy rules for which witnesses count toward decentralized
 release verification and how many matching witnesses are required.
 
 #### Scenario: Insufficient quorum fails policy even after technical agreement
@@ -41,7 +41,7 @@ release verification and how many matching witnesses are required.
 
 ### Requirement: Verifier MUST support witness-independence policy
 
-Crunch MUST support policy rules that reject witness sets lacking required
+Mantle MUST support policy rules that reject witness sets lacking required
 independence across actors, keys, organizations, or equivalent configured
 witness domains.
 
@@ -55,7 +55,7 @@ witness domains.
 
 ### Requirement: Social policy MUST define revocation and dispute handling
 
-Crunch MUST define how revocations and disputes affect the policy status of
+Mantle MUST define how revocations and disputes affect the policy status of
 previously published witness material. The first phase MUST use file-based
 revocation and dispute input, not an external service dependency. The file-
 based input MUST be a verifier-local policy artifact that can name revoked
@@ -81,7 +81,7 @@ witness keys and revoked witness-attestation digests.
 
 ### Requirement: CLI MUST scaffold verifier-local release policy artifacts
 
-Crunch MUST provide `crunch attest policy-init <verification-dir>` to write the
+Mantle MUST provide `mantle attest policy-init <verification-dir>` to write the
 first-phase `policy.json` and `revocations.json` files for a verification
 directory without requiring the operator to hand-author JSON.
 ID: release.verification.social.policy.scaffold.cli
@@ -92,7 +92,7 @@ The command MUST:
 - support at least `self-proof-only` and `single-witness` profiles,
 - require explicit trusted release signer names for all profiles,
 - require explicit trusted witness identities for witness-count profiles, and
-- write deterministic JSON that `crunch attest release-verify` can consume
+- write deterministic JSON that `mantle attest release-verify` can consume
   directly.
 
 #### Scenario: Self-proof-only profile initializes zero-witness policy
@@ -123,7 +123,7 @@ The command MUST:
 
 ### Requirement: Policy defines independent rebuild agreement thresholds
 
-Crunch MUST let verifier-local policy define the witness count and independence domains required for independent rebuild agreement.
+Mantle MUST let verifier-local policy define the witness count and independence domains required for independent rebuild agreement.
 ID: release.verification.social.independent.agreement.policy
 
 The policy MUST support at least witness identity, signer key name, and host-class independence selectors. Policy evaluation MUST reject witness sets that meet the count threshold only by duplicating the same configured independence domain.

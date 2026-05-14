@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how crunch fetches pre-built outputs from remote Nix binary
+Defines how mantle fetches pre-built outputs from remote Nix binary
 caches, avoiding local builds when cached results are available.
 ## Requirements
 ### Requirement: Remote Cache Fallback
@@ -109,32 +109,32 @@ delta-capable transfer path in addition to ordinary full-artifact fetch.
 A delta-capable HTTP cache MUST expose its delta negotiation and streaming
 endpoints under the same cache authority used for ordinary substitution.
 
-When both sides support delta transfer, crunch MUST prefer the delta path if
+When both sides support delta transfer, mantle MUST prefer the delta path if
 receiver-local reuse can reduce transferred bytes. If capability negotiation
-fails or reuse is not available, crunch MUST fall back to ordinary substitution
+fails or reuse is not available, mantle MUST fall back to ordinary substitution
 behavior.
 
 #### Scenario: Delta-capable cache hit reuses local content
 
 - GIVEN a trusted remote cache that supports delta transfer
 - AND the receiver already has reusable blob chunks for the requested output
-- WHEN crunch requests that output from the cache
-- THEN crunch may fetch only the missing content instead of the whole artifact
+- WHEN mantle requests that output from the cache
+- THEN mantle may fetch only the missing content instead of the whole artifact
 - AND a successful result is reported as a normal substitution cache hit
 
 #### Scenario: Delta-capable HTTP cache uses the existing authority
 
 - GIVEN a trusted HTTP cache that supports both ordinary substitution and delta
   transfer
-- WHEN crunch negotiates a delta-capable fetch from that cache
+- WHEN mantle negotiates a delta-capable fetch from that cache
 - THEN the delta negotiation and stream requests go to the same cache authority
   as the ordinary substitution request
 
 #### Scenario: Legacy cache falls back to full-artifact fetch
 
 - GIVEN a trusted remote cache that does not support delta transfer
-- WHEN crunch requests that output from the cache
-- THEN crunch uses the existing full-artifact substitution path
+- WHEN mantle requests that output from the cache
+- THEN mantle uses the existing full-artifact substitution path
 - AND the request does not fail merely because delta support is absent
 
 ### Requirement: Store push to directory
@@ -224,7 +224,7 @@ This method MUST stream the NAR without buffering the full archive in memory.
 
 ### Requirement: CLI store push subcommand
 
-The CLI MUST provide `crunch store push` for exporting build results to a
+The CLI MUST provide `mantle store push` for exporting build results to a
 binary cache directory.
 
 Required arguments:
@@ -240,28 +240,28 @@ GC operations.
 #### Scenario: Push named paths to directory
 
 - GIVEN a successful build of `hello` and `world`
-- WHEN `crunch store push --to /srv/cache hello world` runs
+- WHEN `mantle store push --to /srv/cache hello world` runs
 - THEN both paths are exported to `/srv/cache/`
 - AND the command prints a summary of pushed paths and bytes
 
 #### Scenario: Push all paths
 
 - GIVEN a local store with five signed paths
-- WHEN `crunch store push --all --to /srv/cache` runs
+- WHEN `mantle store push --all --to /srv/cache` runs
 - THEN all five paths are exported
 
 #### Scenario: Push with no signed paths warns
 
 - GIVEN a local store with only unsigned PathInfo entries
 - AND `--trust-unsigned` is not passed
-- WHEN `crunch store push --all --to /srv/cache` runs
+- WHEN `mantle store push --all --to /srv/cache` runs
 - THEN the command prints a warning that no paths were pushed
 - AND it exits with code 0
 
 #### Scenario: Push to nonexistent directory
 
 - GIVEN `--to /nonexistent/dir`
-- WHEN `crunch store push --all --to /nonexistent/dir` runs
+- WHEN `mantle store push --all --to /nonexistent/dir` runs
 - THEN the command creates the directory and its `nar/` subdirectory
 - AND proceeds with the push
 
@@ -269,11 +269,11 @@ GC operations.
 
 The push operation MUST write a `nix-cache-info` file in the target directory
 if one does not already exist. The file MUST contain at least `StoreDir` set
-to the store prefix used by this crunch instance.
+to the store prefix used by this mantle instance.
 
 #### Scenario: nix-cache-info reflects store prefix
 
-- GIVEN crunch running with default store prefix `/crunch/store`
+- GIVEN mantle running with default store prefix `/crunch/store`
 - WHEN paths are pushed to an empty directory
 - THEN `nix-cache-info` contains `StoreDir: /crunch/store`
 
@@ -307,7 +307,7 @@ skipped-missing-nar, skipped-parse-error, and total bytes ingested.
 
 #### Scenario: Pull a single signed path from a pushed cache
 
-- GIVEN a cache directory produced by `crunch store push` with one signed path
+- GIVEN a cache directory produced by `mantle store push` with one signed path
 - AND the local store has no PathInfo for that path
 - AND the narinfo signature matches a trusted public key
 - WHEN `import_paths_from_cache_dir(handle, source, options)` is called
@@ -382,7 +382,7 @@ skipped-missing-nar, skipped-parse-error, and total bytes ingested.
 
 ### Requirement: CLI store pull subcommand
 
-The CLI `crunch store pull` `--from` argument MUST accept both local directory
+The CLI `mantle store pull` `--from` argument MUST accept both local directory
 ID: binary.cache.cli.storepull
 paths and `http://` or `https://` URLs.
 
@@ -406,7 +406,7 @@ ID: binary.cache.cli.storepull.httpurl
 
 - GIVEN `--from https://cache.example.com`
 - AND store path arguments are provided
-- WHEN `crunch store pull` runs
+- WHEN `mantle store pull` runs
 - THEN paths are fetched over HTTP
 
 #### Scenario: Pull --all from HTTP is rejected
@@ -414,7 +414,7 @@ ID: binary.cache.cli.storepull.httpallrejected
 
 - GIVEN `--from https://cache.example.com`
 - AND `--all` is passed
-- WHEN `crunch store pull` runs
+- WHEN `mantle store pull` runs
 - THEN the command fails with an error message explaining that --all is not
   supported for HTTP caches
 
@@ -424,7 +424,7 @@ ID: binary.cache.cli.storepull.httprequirespaths
 - GIVEN `--from https://cache.example.com`
 - AND no store path arguments are provided
 - AND `--all` is not passed
-- WHEN `crunch store pull` runs
+- WHEN `mantle store pull` runs
 - THEN the command fails before any HTTP request is issued
 - AND the error explains that HTTP pull requires explicit store path selectors
 
@@ -432,7 +432,7 @@ ID: binary.cache.cli.storepull.httprequirespaths
 ID: binary.cache.cli.storepull.unsupportedurlscheme
 
 - GIVEN `--from file://cache.example.com`
-- WHEN `crunch store pull` runs
+- WHEN `mantle store pull` runs
 - THEN the command fails before local-path dispatch or any HTTP request
 - AND the error explains that only `http://` and `https://` URLs are supported
 
@@ -440,7 +440,7 @@ ID: binary.cache.cli.storepull.unsupportedurlscheme
 ID: binary.cache.cli.storepull.userinforejected
 
 - GIVEN `--from https://user@cache.example.com`
-- WHEN `crunch store pull` runs
+- WHEN `mantle store pull` runs
 - THEN the command fails before any HTTP request is issued
 - AND the error explains that HTTP pull URLs must not include credentials
 
@@ -449,7 +449,7 @@ ID: binary.cache.cli.storepull.httpfreshstateroundtrip
 
 - GIVEN a pushed on-disk cache served over local HTTP
 - AND a fresh local store/state directory plus the source verifying key
-- WHEN `crunch store pull --from http://127.0.0.1:PORT <logical-path>` runs
+- WHEN `mantle store pull --from http://127.0.0.1:PORT <logical-path>` runs
 - THEN the requested path is imported into the fresh store
 - AND the output exists on disk after the command succeeds
 

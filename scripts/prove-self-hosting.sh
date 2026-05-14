@@ -4,7 +4,7 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 readonly DEFAULT_TOOLCHAIN="nightly"
-readonly PROOF_COMMAND=(cargo test -p crunch --test self_hosting -- --ignored --nocapture)
+readonly PROOF_COMMAND=(cargo test -p mantle --test self_hosting -- --ignored --nocapture)
 readonly MIN_PROOF_SCRATCH_FREE_KIB=4194304
 readonly MIN_PROOF_SCRATCH_FREE_MIB=4096
 readonly DEFAULT_BUNDLE_ROOT="$REPO_ROOT/target/self-hosting-proof"
@@ -519,7 +519,7 @@ configure_non_nix_path() {
     die "PATH is empty before non-Nix-host scrubbing"
   fi
 
-  proof_path_dir="$tmp_dir/crunch-proof-path-$$"
+  proof_path_dir="$tmp_dir/mantle-proof-path-$$"
   rm -rf -- "$proof_path_dir"
   mkdir -p -- "$proof_path_dir"
 
@@ -656,7 +656,7 @@ resolve_proof_cargo() {
 }
 
 proof_command_display() {
-  printf '%s test -p crunch --test self_hosting -- --ignored --nocapture\n' "$proof_cargo"
+  printf '%s test -p mantle --test self_hosting -- --ignored --nocapture\n' "$proof_cargo"
 }
 
 show_check_summary() {
@@ -760,7 +760,7 @@ generate_stage0_inventory_if_requested() {
 
   note "generating no-host-tools stage0 inventory: $stage0_inventory"
   note "stage0 inventory seed policy: explicit CRUNCH_STAGE0_SEED_* paths only; no PATH or /nix/store discovery"
-  "$proof_cargo" run -p crunch -- stage0-inventory --output "$stage0_inventory"
+  "$proof_cargo" run -p mantle -- stage0-inventory --output "$stage0_inventory"
   [[ -f "$stage0_inventory" ]] || die "stage0 inventory generation did not create: $stage0_inventory"
 }
 
@@ -823,7 +823,7 @@ main() {
   fi
   show_scratch_summary "$bundle_dir"
 
-  if "$proof_cargo" test -p crunch --test self_hosting -- --ignored --nocapture; then
+  if "$proof_cargo" test -p mantle --test self_hosting -- --ignored --nocapture; then
     proof_status=0
   else
     proof_status=$?

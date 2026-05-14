@@ -1,12 +1,12 @@
 # Build a C hello world program with either bootstrap seed mode.
 #
 # Usage:
-#   1. Generate seed: crunch bootstrap -o seed.ncl
-#      or: crunch bootstrap --fetch --store /tmp/crunch-store -o seed.ncl
+#   1. Generate seed: mantle bootstrap -o seed.ncl
+#      or: mantle bootstrap --fetch --store /tmp/mantle-store -o seed.ncl
 #   2. Build from a directory containing both files:
-#      crunch build hello-world.ncl -I . --store /tmp/crunch-store
+#      mantle build hello-world.ncl -I . --store /tmp/mantle-store
 
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 let seed = import "seed.ncl" in
 
 {
@@ -32,7 +32,7 @@ let seed = import "seed.ncl" in
       $BB cat > hello.c << 'EOF'
       #include <stdio.h>
       int main() {
-          printf("Hello from crunch!\n");
+          printf("Hello from mantle!\n");
           return 0;
       }
       EOF
@@ -41,4 +41,4 @@ let seed = import "seed.ncl" in
     "%,
   ],
   inputs = [seed.gcc],
-} | crunch.Derivation
+} | mantle.Derivation

@@ -3,7 +3,7 @@
 ## Purpose
 
 Defines features that are experimental or opt-in in Nix but built in as
-defaults in crunch. We have no backwards compatibility constraint and no
+defaults in mantle. We have no backwards compatibility constraint and no
 reason to gate good ideas behind feature flags.
 
 ## Context
@@ -14,7 +14,7 @@ There are three levels of hashing in the system:
    snix-castore uses BLAKE3 (`B3Digest`). We inherit this.
 
 2. **Derivation level** — how derivation paths and output paths are computed.
-   Nix uses SHA-256. crunch uses BLAKE3. This means crunch-built store paths
+   Nix uses SHA-256. mantle uses BLAKE3. This means mantle-built store paths
    differ from Nix-built store paths for the same derivation parameters.
    This is intentional — we don't need Nix compatibility.
 
@@ -31,7 +31,7 @@ There are three levels of hashing in the system:
 
 ### Requirement: BLAKE3 as default derivation hash
 
-crunch MUST use BLAKE3 for derivation-level hashing. Specifically:
+mantle MUST use BLAKE3 for derivation-level hashing. Specifically:
 
 - `hash_derivation_modulo`: BLAKE3 hash of the ATerm representation
   (replacing `Sha256::digest(aterm)` with `blake3::hash(aterm)` in vendored
@@ -44,18 +44,18 @@ crunch MUST use BLAKE3 for derivation-level hashing. Specifically:
 The store path format MUST remain: `/nix/store/<nixbase32(hash[0:20])>-<name>`.
 Only the hash function changes (SHA-256 → BLAKE3). Path length is unchanged.
 
-#### Scenario: Crunch store paths differ from Nix
+#### Scenario: Mantle store paths differ from Nix
 
 - GIVEN the same derivation parameters (name, builder, system, etc.)
-- WHEN crunch computes the output path
+- WHEN mantle computes the output path
 - THEN the path differs from what Nix would produce (different hash function)
 
 #### Scenario: Seed paths are unaffected
 
 - GIVEN seed tool paths from an existing Nix store (`/nix/store/xxx-bash-5.2`)
-- WHEN used as `Input::Source` in a crunch derivation
+- WHEN used as `Input::Source` in a mantle derivation
 - THEN they are referenced by their original Nix-produced paths as-is.
-  crunch does not re-hash source inputs.
+  mantle does not re-hash source inputs.
 
 ### Requirement: BLAKE3 consistency across all levels
 
@@ -75,7 +75,7 @@ uses BLAKE3.
 #### Scenario: Fixed-output derivation keeps declared content hash
 
 - GIVEN a fixed-output derivation declares `sha256` for upstream content
-- WHEN crunch computes both the FOD output hash and the derivation path
+- WHEN mantle computes both the FOD output hash and the derivation path
 - THEN the upstream content is verified with the declared `sha256` hash
 - AND the derivation path fingerprint still uses BLAKE3
 
@@ -109,12 +109,12 @@ output path is computed from the declared hash. This is already handled by
 #### Scenario: Regular v0 output path is known before build
 
 - GIVEN a non-fixed-output v0 derivation
-- WHEN crunch computes the derivation output paths
+- WHEN mantle computes the derivation output paths
 - THEN each output path is derived from the ATerm hash before the builder runs
 
 ### Requirement: Content-addressed derivations as default
 
-crunch SHOULD implement content-addressed derivations as the default output addressing mode, and the architecture MUST support both content-addressed and input-addressed modes from the start.
+mantle SHOULD implement content-addressed derivations as the default output addressing mode, and the architecture MUST support both content-addressed and input-addressed modes from the start.
 When a build completes, the output path is determined by the content of the
 output (BLAKE3 hash of the NAR), not by the derivation inputs.
 
@@ -157,7 +157,7 @@ pipeline stabilizes. The architecture MUST support both from the start.
 
 ### Requirement: Dynamic derivations as default
 
-crunch SHOULD support dynamic derivations, meaning builds that produce `.drv` files as outputs, and the build orchestration MUST remain able to accept derivations discovered at build time.
+mantle SHOULD support dynamic derivations, meaning builds that produce `.drv` files as outputs, and the build orchestration MUST remain able to accept derivations discovered at build time.
 Those produced `.drv` files are then built in turn. This enables meta-build
 scenarios and is needed for self-hosting.
 
@@ -176,12 +176,12 @@ discovered at build time.
 
 - GIVEN a derivation whose build script writes a `.drv` file to `$out`
 - WHEN the build completes
-- THEN crunch detects the `.drv`, builds it, and the final output is
+- THEN mantle detects the `.drv`, builds it, and the final output is
   available
 
 ### Requirement: cgroup isolation as default
 
-crunch SHOULD run builds inside cgroups on Linux; v0 MUST be allowed to defer cgroup support because it is not required for correctness.
+mantle SHOULD run builds inside cgroups on Linux; v0 MUST be allowed to defer cgroup support because it is not required for correctness.
 When cgroup support is available, this enables:
 
 - Resource usage tracking per build (CPU, memory, I/O)
@@ -197,11 +197,11 @@ SHOULD be added to the bwrap builder as well.
 
 - GIVEN Linux cgroup support is enabled for builds
 - WHEN a build runs through the sandbox
-- THEN crunch can attribute CPU, memory, and I/O usage to that build
+- THEN mantle can attribute CPU, memory, and I/O usage to that build
 
 ### Requirement: Git-native content addressing
 
-crunch SHOULD support git-native content addressing for source trees, and source-tree addressing MUST remain extensible enough to preserve git tree identity.
+mantle SHOULD support git-native content addressing for source trees, and source-tree addressing MUST remain extensible enough to preserve git tree identity.
 When a source input is a git repository, the tree hash from git can be
 used directly as the content address instead of re-hashing through NAR.
 
@@ -214,16 +214,16 @@ variant in addition to `Source` and `Derivation`.
 #### Scenario: Git tree identity can be preserved
 
 - GIVEN a git source input with a known tree hash
-- WHEN crunch materializes the source tree
+- WHEN mantle materializes the source tree
 - THEN the source-addressing model can record that git tree identity without
   requiring a NAR-only identity
 
 ### Requirement: Verified fetches as default
 
-When crunch fetches git repositories, signature verification SHOULD be enabled by default, and fetcher design MUST support that policy when a signing key is provided.
+When mantle fetches git repositories, signature verification SHOULD be enabled by default, and fetcher design MUST support that policy when a signing key is provided.
 This means:
 
-- `fetchGit` (or crunch's equivalent) verifies commit signatures when
+- `fetchGit` (or mantle's equivalent) verifies commit signatures when
   a signing key is provided
 - Unsigned fetches require explicit opt-out, not opt-in for verification
 
@@ -258,13 +258,13 @@ undeclared inputs.
 #### Scenario: Sandbox weakening is unavailable
 
 - GIVEN a user starts a build
-- WHEN crunch selects the platform sandbox
+- WHEN mantle selects the platform sandbox
 - THEN it enables the strongest available isolation for that platform
 - AND no CLI option weakens that isolation boundary
 
 ### Requirement: Parallel builds (from Determinate Nix)
 
-crunch SHOULD build independent derivations in the dependency graph concurrently, and the architecture MUST support parallelism from the start.
+mantle SHOULD build independent derivations in the dependency graph concurrently, and the architecture MUST support parallelism from the start.
 The `BuildService` trait is already async and supports concurrent `do_build`
 calls.
 
@@ -283,7 +283,7 @@ support parallelism from the start.
 
 ### Requirement: Managed garbage collection (from Determinate Nix)
 
-crunch SHOULD include automatic garbage collection; manual `crunch store gc` MUST remain sufficient for v0 if automatic GC is deferred.
+mantle SHOULD include automatic garbage collection; manual `mantle store gc` MUST remain sufficient for v0 if automatic GC is deferred.
 Long-term garbage-collection control can:
 
 - Run in the background (or before builds when disk is low)
@@ -292,21 +292,21 @@ Long-term garbage-collection control can:
 - Enter urgent mode if disk falls below a critical threshold
 
 Users SHOULD NOT need to manually run a GC command for normal operation.
-A `crunch store gc` command MAY be provided for manual control.
+A `mantle store gc` command MAY be provided for manual control.
 
-**Note:** v0 MAY defer automatic GC. A manual `crunch store gc` command
+**Note:** v0 MAY defer automatic GC. A manual `mantle store gc` command
 is sufficient for v0.
 
 #### Scenario: Manual GC keeps free space policy explicit
 
 - GIVEN automatic GC is not yet enabled
-- WHEN an operator runs `crunch store gc`
-- THEN crunch deletes only unreferenced store paths according to the configured
+- WHEN an operator runs `mantle store gc`
+- THEN mantle deletes only unreferenced store paths according to the configured
   retention policy
 
 ### Requirement: Auto-fix FOD hash mismatches (from Determinate Nix)
 
-crunch MUST report and optionally fix declared hash mismatches when a
+mantle MUST report and optionally fix declared hash mismatches when a
 fixed-output derivation build completes with a different output hash:
 
 1. Report the expected hash and the actual hash
@@ -321,14 +321,14 @@ rebuild.
 - GIVEN a FOD with `hash = "sha256-AAAA..."` but the actual content
   hashes to `sha256-BBBB...`
 - WHEN the build fails
-- THEN crunch prints: `expected: sha256-AAAA...` / `got: sha256-BBBB...` /
+- THEN mantle prints: `expected: sha256-AAAA...` / `got: sha256-BBBB...` /
   `update hello.ncl:7 to: hash = "sha256-BBBB..."`
 
 #### Scenario: Auto-fix
 
 - GIVEN the same mismatch
-- WHEN `crunch build --fix hello.ncl` is run
-- THEN crunch updates the hash in `hello.ncl` and exits, instructing
+- WHEN `mantle build --fix hello.ncl` is run
+- THEN mantle updates the hash in `hello.ncl` and exits, instructing
   the user to re-run (the derivation path changed)
 
 ### Requirement: Hash algorithm in Nickel contracts
@@ -345,22 +345,22 @@ algorithm, not an experimental addition.
 
 ### Requirement: Independence from Nix
 
-crunch MUST NOT depend on Nix experimental features being available in
-any Nix installation. crunch operates independently. The features listed
-here are design decisions for crunch, informed by but not dependent on
+mantle MUST NOT depend on Nix experimental features being available in
+any Nix installation. mantle operates independently. The features listed
+here are design decisions for mantle, informed by but not dependent on
 Nix's experimental feature process.
 
-#### Scenario: Missing Nix experimental flags do not affect crunch
+#### Scenario: Missing Nix experimental flags do not affect mantle
 
 - GIVEN a host Nix installation has no experimental features enabled
-- WHEN crunch evaluates or builds its own Nickel-based inputs
-- THEN crunch behavior is unchanged because it does not depend on those flags
+- WHEN mantle evaluates or builds its own Nickel-based inputs
+- THEN mantle behavior is unchanged because it does not depend on those flags
 
 ## Summary
 
 ### From Nix experimental features
 
-| Feature | crunch status |
+| Feature | mantle status |
 |---|---|
 | `blake3-hashes` | **Default.** BLAKE3 everywhere. |
 | `ca-derivations` | **Default.** Content-addressed outputs. (v0 may start input-addressed.) |
@@ -380,16 +380,16 @@ Nix's experimental feature process.
 
 ### From Lix
 
-| Feature | crunch status |
+| Feature | mantle status |
 |---|---|
 | Enforced syscall filtering + no-new-privileges | **Default.** Unconditional in sandbox. No opt-out. Security is not optional. |
-| Custom subcommands (`lix-custom-sub-commands`) | **Deferred.** Plugin subcommands (`crunch foo` → `crunch-foo`) are useful but not v0. |
+| Custom subcommands (`lix-custom-sub-commands`) | **Deferred.** Plugin subcommands (`mantle foo` → `crunch-foo`) are useful but not v0. |
 | Better error values/positions | **Inherited.** Nickel and serde both have good error reporting. |
 | REPL improvements | **N/A.** Nickel has its own REPL. |
 
 ### From Determinate Nix
 
-| Feature | crunch status |
+| Feature | mantle status |
 |---|---|
 | Parallel builds | **Default.** Independent derivations in the DAG SHOULD build concurrently. `BuildService` is async. (v0 may start sequential.) |
 | Managed garbage collection | **Default.** Automatic GC with disk space thresholds. No manual `nix-collect-garbage`. |

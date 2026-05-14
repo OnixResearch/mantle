@@ -1,7 +1,7 @@
 # Build a statically linked C hello world.
 # Static linking avoids the ld.so interpreter path issue.
 
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 let seed = import "seed.ncl" in
 
 {
@@ -27,7 +27,7 @@ let seed = import "seed.ncl" in
       $BB cat > hello.c << 'EOF'
       #include <stdio.h>
       int main() {
-          printf("Hello from crunch (static)!\n");
+          printf("Hello from mantle (static)!\n");
           return 0;
       }
       EOF
@@ -36,4 +36,4 @@ let seed = import "seed.ncl" in
     "%,
   ],
   inputs = [seed.gcc],
-} | crunch.Derivation
+} | mantle.Derivation

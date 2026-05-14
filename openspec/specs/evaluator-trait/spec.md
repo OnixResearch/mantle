@@ -72,9 +72,9 @@ ID: systemconfig.evaluator.trait.trait4
 
 Imports resolving outside those directories MUST fail with
 `EvalError::ImportDenied`. The default allowlist depends on what is being
-evaluated: module evaluation uses the module directory plus crunch's embedded
+evaluated: module evaluation uses the module directory plus mantle's embedded
 stdlib directory, while inventory evaluation uses the inventory file directory
-plus crunch's embedded stdlib directory and MUST NOT implicitly add the module
+plus mantle's embedded stdlib directory and MUST NOT implicitly add the module
 directory.
 
 #### Scenario: Import outside the allowlist is rejected
@@ -140,7 +140,7 @@ methods MUST accept or return `ValueId` handles instead of raw `NickelValue`
 values wherever a request crosses the thread boundary. `ValidatedModule`
 values that live on the async side MUST hold `ValueId` handles rather than raw
 `NickelValue` references. The evaluator thread is created once per
-`crunch system` invocation and is shut down after all module work completes.
+`mantle system` invocation and is shut down after all module work completes.
 
 #### Scenario: ValidatedModule stores handles, not raw Nickel values
 ID: systemconfig.evaluator.trait.trait7.scenario

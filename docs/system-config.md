@@ -1,8 +1,8 @@
 # System configuration
 
-`crunch system` evaluates Nickel service modules against an inventory, merges
+`mantle system` evaluates Nickel service modules against an inventory, merges
 per-machine fragments, and optionally assembles those merged configs into normal
-crunch derivations.
+mantle derivations.
 
 The phase-1 path is intentionally narrow:
 
@@ -30,7 +30,7 @@ examples/system-config/
     └── sshd.ncl
 ```
 
-If `--modules` is omitted, `crunch system eval` and `crunch system build`
+If `--modules` is omitted, `mantle system eval` and `mantle system build`
 default to `./modules/` relative to the inventory path.
 
 ## Inventory schema
@@ -148,7 +148,7 @@ namespace.
 ### Evaluate
 
 ```bash
-crunch system eval <inventory.ncl>
+mantle system eval <inventory.ncl>
 ```
 
 This runs inventory validation, module loading, evaluator ordering, fragment
@@ -177,11 +177,11 @@ Notes:
 ### Build
 
 ```bash
-crunch system build <inventory.ncl>
+mantle system build <inventory.ncl>
 ```
 
 This runs the same pipeline through assembler selection, then submits the
-assembled derivations to crunch's normal build pipeline.
+assembled derivations to mantle's normal build pipeline.
 
 Useful flags:
 
@@ -208,9 +208,9 @@ patterns:
 Try it:
 
 ```bash
-crunch system eval examples/system-config/inventory.ncl
-crunch system eval examples/system-config/inventory.ncl --stop-after fragments
-crunch system build examples/system-config/inventory.ncl
+mantle system eval examples/system-config/inventory.ncl
+mantle system eval examples/system-config/inventory.ncl --stop-after fragments
+mantle system build examples/system-config/inventory.ncl
 ```
 
 ## Backend model

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how crunch avoids platform lock-in. The core (evaluation, derivation
+Defines how mantle avoids platform lock-in. The core (evaluation, derivation
 construction, store) MUST be OS-agnostic. Platform-specific code (sandbox,
 filesystem) MUST be behind trait abstractions so new platforms can be added
 without modifying the core.
@@ -36,7 +36,7 @@ snix-build           (platform-specific build execution behind BuildService)
 
 #### Scenario: Non-Linux host keeps portable core but not build execution
 
-- GIVEN crunch compiled on a non-Linux host
+- GIVEN mantle compiled on a non-Linux host
 - WHEN a user evaluates Nickel or runs project-management commands
 - THEN the pure core behavior still works
 - AND a build attempt is handled by the platform-specific build boundary
@@ -47,7 +47,7 @@ The store path prefix MUST be configurable. The default SHOULD be
 `/crunch/store` (not `/nix/store`) to avoid conflicts with existing Nix
 installations and to work on platforms where `/nix` is awkward.
 
-The prefix MUST be set at crunch initialization time and embedded in all
+The prefix MUST be set at mantle initialization time and embedded in all
 store path computations. Changing the prefix invalidates all existing
 store paths (they are derived from the prefix).
 
@@ -56,7 +56,7 @@ MUST be replaced with a configurable value.
 
 #### Scenario: Custom store prefix
 
-- GIVEN `crunch --store /opt/crunch/store build hello.ncl`
+- GIVEN `mantle --store /opt/crunch/store build hello.ncl`
 - WHEN the derivation's output path is computed
 - THEN it starts with `/opt/crunch/store/` instead of `/nix/store/`
 
@@ -69,7 +69,7 @@ MUST be replaced with a configurable value.
 #### Scenario: Seed paths with different prefix
 
 - GIVEN seed paths from a Nix store at `/nix/store/...-bash-5.2`
-- WHEN referenced as `Input::Source` with crunch using `/crunch/store`
+- WHEN referenced as `Input::Source` with mantle using `/crunch/store`
 - THEN the seed paths are used as-is (their prefix is not rewritten).
   The sandbox mounts them at their original location.
 
@@ -95,14 +95,14 @@ the spec to OS-specific mounts.
 
 v0 build execution MUST use the native Linux bubblewrap path.
 
-On non-Linux hosts, `crunch build` and other build-entry commands MUST fail with
+On non-Linux hosts, `mantle build` and other build-entry commands MUST fail with
 an explicit error that building is only supported on Linux and requires bwrap.
 
 #### Scenario: Non-Linux build fails clearly
 
 - GIVEN a non-Linux host
-- WHEN `crunch build hello.ncl` is attempted
-- THEN crunch returns a clear error explaining that building is only supported on Linux and requires bwrap
+- WHEN `mantle build hello.ncl` is attempted
+- THEN mantle returns a clear error explaining that building is only supported on Linux and requires bwrap
 
 ### Requirement: Future backends stay labeled as future work
 
@@ -134,7 +134,7 @@ Current runtime status:
 | Implementation | Status | Notes |
 |---|---|---|
 | `BubblewrapBuildService` | shipped | Current Linux build path |
-| other backends behind `BuildService` | future work | Do not describe them as available until crunch wires and ships them |
+| other backends behind `BuildService` | future work | Do not describe them as available until mantle wires and ships them |
 
 #### Scenario: Current implementation table is honest
 
@@ -182,7 +182,7 @@ let System = [|
 
 #### Scenario: Adding a new target extends the system enum only
 
-- GIVEN crunch adds support for a new host target such as `x86_64-redox`
+- GIVEN mantle adds support for a new host target such as `x86_64-redox`
 - WHEN the Nickel stdlib target contract is updated
 - THEN support is added by extending the `System` enum
 - AND the record contract structure does not need OS-specific rewrites
@@ -201,7 +201,7 @@ No changes to evaluation, derivation construction, or the CLI.
 
 #### Scenario: New platform support stays outside eval and CLI core
 
-- GIVEN crunch adds support for a non-Linux host such as BSD or Redox
+- GIVEN mantle adds support for a non-Linux host such as BSD or Redox
 - WHEN that platform work is implemented
 - THEN the new work is confined to the sandbox/runtime portability boundary
 - AND evaluation, derivation construction, and CLI command structure remain unchanged
@@ -218,7 +218,7 @@ optimizations, but they MUST stay optional layers above the portable forcing
 core.
 
 If a subprocess backend is shipped, it MUST NOT require a resident service and
-MUST NOT make library callers or non-process targets spawn another `crunch`
+MUST NOT make library callers or non-process targets spawn another `mantle`
 binary in order to use the eval core.
 
 #### Scenario: Portable eval core works without host process helpers
@@ -241,7 +241,7 @@ binary in order to use the eval core.
 
 ### Requirement: Adopted portable core compiles without std
 
-The adopted portable crunch core MUST treat `#![no_std]` plus `alloc` as the
+The adopted portable mantle core MUST treat `#![no_std]` plus `alloc` as the
 required compilation floor.
 
 ID: portability.nostd.core.compiles.without.std

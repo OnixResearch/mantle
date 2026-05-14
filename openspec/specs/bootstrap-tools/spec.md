@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how crunch bootstraps its own sandbox runtime (bwrap) and sandbox
+Defines how mantle bootstraps its own sandbox runtime (bwrap) and sandbox
 shell (busybox-static) from source, removing the last external binary
 dependencies.
 
@@ -47,7 +47,7 @@ it compiles bwrap's C sources directly with gcc.
 
 - GIVEN no local bwrap source
 - WHEN the build runs
-- THEN bwrap source is fetched via `crunch.fetchTarball` from a
+- THEN bwrap source is fetched via `mantle.fetchTarball` from a
   pinned release URL with a verified hash
 
 ### Requirement: Self-build uses crunch-built tools
@@ -66,17 +66,17 @@ preflight alone is not enough; the full proof path MUST still get through the
 stage0 `busybox.ncl` bootstrap without falling back to an unusable `/bin/sh`
 inside bwrap.
 
-#### Scenario: Self-build with crunch tools
+#### Scenario: Self-build with mantle tools
 
-- GIVEN `crunch self-build` runs and the bootstrap chain completes
-- WHEN the final crunch compilation derivation is built
+- GIVEN `mantle self-build` runs and the bootstrap chain completes
+- WHEN the final mantle compilation derivation is built
 - THEN the sandbox shell is the crunch-built busybox
 - THEN the sandbox runtime is the crunch-built bwrap
 
 #### Scenario: First-ever bootstrap
 
-- GIVEN a bare machine with no prior crunch state
-- WHEN `crunch self-build` runs for the first time
+- GIVEN a bare machine with no prior mantle state
+- WHEN `mantle self-build` runs for the first time
 - THEN an external bwrap MUST be on PATH (chicken-and-egg)
 - THEN after completion, subsequent self-builds use the crunch-built bwrap
 
@@ -101,7 +101,7 @@ inside bwrap.
 #### Scenario: Stage0 busybox bootstrap keeps a usable shell
 
 - GIVEN `./scripts/prove-self-hosting.sh --check` succeeds on the host
-- AND the self-hosting proof starts stage0 from a checkout-built `crunch`
+- AND the self-hosting proof starts stage0 from a checkout-built `mantle`
 - WHEN stage0 builds `bootstrap/busybox.ncl`
 - THEN the sandbox shell path used by bwrap is executable inside the sandbox
 - AND the build does not fail with `bwrap: execvp /bin/sh: No such file or directory`
@@ -124,7 +124,7 @@ could not find crunch-built tools.
 
 #### Scenario: bwrap and busybox on disk after self-build
 
-- GIVEN `crunch self-build` completes
+- GIVEN `mantle self-build` completes
 - WHEN the output store is scanned
 - THEN `*-bwrap/bin/bwrap` exists on disk
 - AND `*-busybox/bin/busybox` exists on disk
@@ -133,10 +133,10 @@ could not find crunch-built tools.
 ### Requirement: SNIX_BUILD_SANDBOX_SHELL accepts crunch-built path
 
 The `SNIX_BUILD_SANDBOX_SHELL` environment variable MUST accept a path
-under the crunch store (e.g., `/crunch/store/xxx-busybox/bin/busybox`)
+under the mantle store (e.g., `/crunch/store/xxx-busybox/bin/busybox`)
 in addition to `/nix/store` paths.
 
-#### Scenario: Sandbox shell from crunch store
+#### Scenario: Sandbox shell from mantle store
 
 - GIVEN `SNIX_BUILD_SANDBOX_SHELL=/crunch/store/xxx-busybox/bin/busybox`
 - WHEN a derivation is built

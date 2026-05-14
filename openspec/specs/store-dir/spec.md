@@ -26,8 +26,8 @@ Affected call sites:
 #### Scenario: Non-default store dir produces different paths
 
 - GIVEN a derivation with name "hello", builder "/bin/sh"
-- WHEN converted with `store_dir = "/opt/crunch"`
-- THEN the drv path starts with `/opt/crunch/` and differs from
+- WHEN converted with `store_dir = "/opt/mantle"`
+- THEN the drv path starts with `/opt/mantle/` and differs from
   the `/nix/store/` path for the same derivation
 
 #### Scenario: Default store dir matches current behavior
@@ -44,7 +44,7 @@ serializing paths for lookup keys. `get_by_drv_path` and
 
 #### Scenario: Lookup with custom prefix
 
-- GIVEN a KnownPaths with `store_dir = "/opt/crunch"`
+- GIVEN a KnownPaths with `store_dir = "/opt/mantle"`
 - WHEN a derivation is inserted and looked up by its absolute
   drv path
 - THEN the lookup succeeds using the `/opt/crunch/...` path
@@ -79,10 +79,10 @@ the leading `/`).
 
 #### Scenario: NIX_STORE in sandbox
 
-- GIVEN `store_dir = "/opt/crunch"`
+- GIVEN `store_dir = "/opt/mantle"`
 - WHEN a BuildRequest is constructed
-- THEN `NIX_STORE` is `/opt/crunch` in the sandbox env
-- AND `inputs_dir` is `opt/crunch`
+- THEN `NIX_STORE` is `/opt/mantle` in the sandbox env
+- AND `inputs_dir` is `opt/mantle`
 
 ### Requirement: Output path display uses store_dir
 
@@ -92,9 +92,9 @@ use `to_absolute_path_with_prefix(store_dir)`.
 
 #### Scenario: Build output with custom store
 
-- GIVEN `crunch build --store /opt/crunch hello.ncl`
+- GIVEN `mantle build --store /opt/mantle hello.ncl`
 - WHEN the build succeeds
-- THEN stdout shows `/opt/crunch/<hash>-hello`
+- THEN stdout shows `/opt/mantle/<hash>-hello`
 
 ### Requirement: nix-compat path computation with store_dir
 

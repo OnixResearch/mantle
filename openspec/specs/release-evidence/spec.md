@@ -9,7 +9,7 @@ reproducibility guarantees.
 ## Requirements
 ### Requirement: Release evidence bundle format
 
-Crunch MUST define a release evidence bundle format driven by a manifest.
+Mantle MUST define a release evidence bundle format driven by a manifest.
 
 A valid bundle MUST contain at least:
 - a top-level manifest,
@@ -28,7 +28,7 @@ prerequisite-inventory digest.
 
 #### Scenario: Bundle manifest names required release evidence
 
-- GIVEN a release evidence bundle produced by crunch
+- GIVEN a release evidence bundle produced by mantle
 - WHEN the manifest is inspected
 - THEN it names the release identifier and required evidence artifact digests
 - AND another tool can determine which bundled files are mandatory for
@@ -38,7 +38,7 @@ prerequisite-inventory digest.
 
 - GIVEN local tracked worktree content differs from `HEAD`
 - AND `vendor-deps/` is present, verified against `Cargo.lock`, and ignored by Git
-- WHEN crunch creates a release evidence bundle
+- WHEN mantle creates a release evidence bundle
 - THEN the bundled staged-source archive reflects the current tracked worktree
 - AND it includes the verified vendored Cargo inputs needed by self-build
 - AND it does not silently fall back to a stale `HEAD` archive
@@ -114,7 +114,7 @@ integrity and proof-context evidence, not as automatic proof of full-source
 bootstrap or global reproducibility.
 
 README release-evidence wording and bootstrap-facing docs MUST use the same
-bounded claim language for what `crunch release verify` proves.
+bounded claim language for what `mantle release verify` proves.
 
 Bootstrap-facing docs MUST also keep their trust-boundary inventory aligned
 with the current proof modes and the current reduced seed/provider description
@@ -131,7 +131,7 @@ used by the repo.
 
 - GIVEN a reader compares the README release section with
   `docs/bootstrap-stage0-inventory.md`
-- WHEN they read what `crunch release verify` proves today
+- WHEN they read what `mantle release verify` proves today
 - THEN both docs describe bundle-local integrity and proof-context checks
 - AND neither doc claims independent rebuild agreement or a stronger bootstrap
   proof than the current evidence supports
@@ -177,7 +177,7 @@ The checked-in CLI workflow MUST let an operator:
 #### Scenario: Checked-in witness rebuild runner produces publishable witness material
 
 - GIVEN an exported witness request directory from a release-evidence bundle
-  that passes `crunch release verify`
+  that passes `mantle release verify`
 - WHEN the witness operator runs `./scripts/rebuild-witness-request.sh` with
   signing key and witness metadata
 - THEN the runner verifies the bundled release-evidence request before rebuild
@@ -189,12 +189,12 @@ The checked-in CLI workflow MUST let an operator:
 #### Scenario: Single matching witness promotes a self-hosting release
 
 - GIVEN a release-evidence bundle with a full proof artifact that passes
-  `crunch release verify`
+  `mantle release verify`
 - AND an operator scaffolds single-witness policy material for one trusted
   release signer and one trusted witness identity
 - AND a witness rebuilder runs `./scripts/rebuild-witness-request.sh` and
   produces matching witness sidecars
-- WHEN `crunch attest release-verify` runs with the trusted public keys after
+- WHEN `mantle attest release-verify` runs with the trusted public keys after
   witness import
 - THEN the technical class is `external-witness-match`
 - AND the policy status is `satisfied`
@@ -221,13 +221,13 @@ ID: release.evidence.workflow.witnessed.keyexchange
 - GIVEN a contributor follows the documented witnessed self-hosting workflow
 - WHEN they reach the `release-verify` step
 - THEN the docs show how the release signer and witness rebuilder run
-  `crunch attest key-show` for their signing keys
+  `mantle attest key-show` for their signing keys
 - AND the docs use those exported values in the `--trusted-public-key`
   examples instead of only placeholder text
 
 ### Requirement: Witnessed release workflow MUST export a portable request directory
 
-Crunch MUST provide a checked-in way to export one verified release-evidence
+Mantle MUST provide a checked-in way to export one verified release-evidence
 bundle plus the signed release-attestation seed into a portable request
 directory for a second environment.
 ID: release.evidence.workflow.witnessed.request-export
@@ -241,9 +241,9 @@ The exported request directory MUST:
 
 #### Scenario: Publisher exports a witness request from verified artifacts
 
-- GIVEN a release-evidence bundle that passes `crunch release verify`
+- GIVEN a release-evidence bundle that passes `mantle release verify`
 - AND a verification directory containing a signed `release-attestation.json`
-- WHEN the operator runs `crunch release witness-export`
+- WHEN the operator runs `mantle release witness-export`
 - THEN the command writes a portable request directory with the verified bundle
 - AND it copies `release-attestation.json` plus `release-attestation.json.sig`
 - AND it does not copy any signing key file into the request directory
@@ -252,7 +252,7 @@ The exported request directory MUST:
 
 - GIVEN a release-evidence bundle whose release identifier differs from the
   supplied verification directory's signed release attestation
-- WHEN the operator runs `crunch release witness-export`
+- WHEN the operator runs `mantle release witness-export`
 - THEN the command exits non-zero
 - AND it names the release-identifier mismatch
 
@@ -268,7 +268,7 @@ ID: release.evidence.workflow.witnessed.crossmachine.docs
 
 - GIVEN a contributor follows the witnessed-self-hosting workflow docs
 - WHEN they reach the second-environment handoff step
-- THEN the docs show `crunch release witness-export`
+- THEN the docs show `mantle release witness-export`
 - AND the docs show `./scripts/rebuild-witness-request.sh` in the witness
   environment
 - AND the docs describe the request directory as public verification material
@@ -277,7 +277,7 @@ ID: release.evidence.workflow.witnessed.crossmachine.docs
 
 ### Requirement: Canonical reproducible release report
 
-Crunch MUST define a canonical reproducible release report that records byte-for-byte comparison evidence for every published release artifact.
+Mantle MUST define a canonical reproducible release report that records byte-for-byte comparison evidence for every published release artifact.
 ID: release.evidence.reproducible.report
 
 The report MUST bind the release identifier, source archive digest, proof bundle digest, rebuild command identity, artifact names, byte lengths, BLAKE3 digests, and comparison result. The report identity MUST be the BLAKE3 digest of canonical compact JSON bytes.
@@ -299,7 +299,7 @@ The report MUST bind the release identifier, source archive digest, proof bundle
 
 ### Requirement: CLI rebuilds and compares release artifacts
 
-Crunch MUST provide a release reproducibility workflow that rebuilds published artifacts into a separate output area and compares the rebuilt bytes against the bundled release artifacts.
+Mantle MUST provide a release reproducibility workflow that rebuilds published artifacts into a separate output area and compares the rebuilt bytes against the bundled release artifacts.
 ID: release.evidence.reproducible.cli
 
 The workflow MUST fail closed on missing artifacts, output-name drift, byte-length drift, digest drift, non-canonical report encoding, or proof-linkage mismatch. A successful prerequisite check MUST NOT count as a reproducible release check.
@@ -323,7 +323,7 @@ The workflow MUST fail closed on missing artifacts, output-name drift, byte-leng
 
 ### Requirement: Reproducible release claim is evidence-gated
 
-Crunch MUST reserve the bit-for-bit reproducible release claim for release evidence that includes a verified reproducibility report whose artifact set matches the published release artifact set.
+Mantle MUST reserve the bit-for-bit reproducible release claim for release evidence that includes a verified reproducibility report whose artifact set matches the published release artifact set.
 ID: release.evidence.reproducible.claim.gate
 
 Docs, manifests, and verifier output MUST keep ordinary bundle-local integrity separate from reproducible-release evidence. A release MUST NOT be labeled bit-for-bit reproducible when only self-proof or prerequisite evidence is present.
@@ -346,7 +346,7 @@ Docs, manifests, and verifier output MUST keep ordinary bundle-local integrity s
 
 ### Requirement: Release evidence may carry independent agreement evidence
 
-Crunch MUST allow release evidence or verification directories to carry an independent rebuild agreement report without making that report mandatory for bundle-local integrity verification.
+Mantle MUST allow release evidence or verification directories to carry an independent rebuild agreement report without making that report mandatory for bundle-local integrity verification.
 ID: release.evidence.independent.agreement.attachment
 
 Bundle verification MUST continue to distinguish basic bundle integrity, self-proof validity, matching external witnesses, and independent rebuild agreement. Missing agreement evidence MUST NOT invalidate a basic release-evidence bundle, but any present agreement report MUST verify against the release attestation and witness material it names. A release-evidence bundle MAY store the report at `independent-agreement/agreement-report.json`; a verification directory MAY store it at `agreement-report.json`. Discovery MUST reject any additional agreement-report filename for the same release to avoid ambiguous attachments.
@@ -370,10 +370,10 @@ Bundle verification MUST continue to distinguish basic bundle integrity, self-pr
 
 ### Requirement: StageX-class verified release profile excludes quorum
 
-Crunch MUST define a StageX-class verified release profile that requires full-source lineage proof and byte-identical rebuild evidence while explicitly excluding social quorum from the profile decision.
+Mantle MUST define a StageX-class verified release profile that requires full-source lineage proof and byte-identical rebuild evidence while explicitly excluding social quorum from the profile decision.
 ID: release.evidence.stagex.profile.noquorum
 
-The profile MUST be available through `crunch release verify <bundle-dir>
+The profile MUST be available through `mantle release verify <bundle-dir>
 --require-stagex-no-quorum` and JSON field `stagex_no_quorum`. The profile MUST
 require a verified release-evidence bundle, a full self-build proof whose
 provider kind is StageX-class lineage, a canonical reproducibility report whose
@@ -391,7 +391,7 @@ A later quorum change MAY layer social policy on top of this profile.
 - AND its proof bundle records StageX-class lineage provider evidence
 - AND its reproducibility report verifies byte-identical artifacts for the
   complete published artifact set
-- WHEN `crunch release verify <bundle-dir> --require-stagex-no-quorum --json`
+- WHEN `mantle release verify <bundle-dir> --require-stagex-no-quorum --json`
   runs
 - THEN `stagex_no_quorum.status` is `satisfied`
 - AND `stagex_no_quorum.class` is `stagex-verified-no-quorum`
@@ -425,7 +425,7 @@ A later quorum change MAY layer social policy on top of this profile.
 
 ### Requirement: StageX-class profile rejects weaker bootstrap evidence
 
-Crunch MUST reject seed-assisted, host-tool-trusted, legacy fetched-provider, self-proof-only, or prerequisite-only evidence for the StageX-class verified release profile.
+Mantle MUST reject seed-assisted, host-tool-trusted, legacy fetched-provider, self-proof-only, or prerequisite-only evidence for the StageX-class verified release profile.
 ID: release.evidence.stagex.profile.rejects.weaker
 
 The verifier MUST distinguish StageX-class lineage proof from existing

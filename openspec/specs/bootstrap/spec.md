@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Defines crunch bootstrap requirements for source lineage, provider contracts,
+Defines mantle bootstrap requirements for source lineage, provider contracts,
 self-build proof evidence, seed-chain replacement, and intermediate tool
 derivations.
 ## Requirements
 ### Requirement: Full-source bootstrap root manifest
 
-Crunch MUST define a versioned full-source bootstrap root manifest that names every source artifact, patch, digest, extraction rule, and expected provider output needed before the normalized seed contract is available.
+Mantle MUST define a versioned full-source bootstrap root manifest that names every source artifact, patch, digest, extraction rule, and expected provider output needed before the normalized seed contract is available.
 ID: bootstrap.fullsource.root.manifest
 
 The manifest MUST use BLAKE3 for crunch-owned artifact digests unless an upstream archive format or interoperability check requires another algorithm. Any non-BLAKE3 digest MUST name the reason. The manifest MUST fail validation if an artifact, patch, output, network trust root, or trust note is missing a digest or provenance field. Any remaining tiny seed or bootstrap assumption MUST be represented as a trust note with digest, provenance, scope, and rationale; undeclared non-source inputs MUST fail validation.
@@ -73,15 +73,15 @@ The manifest MUST use BLAKE3 for crunch-owned artifact digests unless an upstrea
 
 ### Requirement: Source-built provider satisfies normalized seed contract
 
-Crunch MUST support a source-built bootstrap provider that satisfies the existing normalized `bootstrap/seed.ncl` contract without deriving from the current musl.cc binary toolchain tarball.
+Mantle MUST support a source-built bootstrap provider that satisfies the existing normalized `bootstrap/seed.ncl` contract without deriving from the current musl.cc binary toolchain tarball.
 ID: bootstrap.fullsource.provider.contract
 
-The source-built provider MUST expose the same contract fields later bootstrap stages consume today: target-prefixed tool paths, headers, libraries, retained-tool metadata, reduction metadata, and provider notes. Later bootstrap derivations MUST keep depending on the normalized contract instead of provider-specific raw layouts. `crunch bootstrap --source-root <manifest>` MUST select the source-built provider; the existing `crunch bootstrap --fetch` path MUST remain the seed-assisted legacy provider; specifying both MUST fail before provider work starts.
+The source-built provider MUST expose the same contract fields later bootstrap stages consume today: target-prefixed tool paths, headers, libraries, retained-tool metadata, reduction metadata, and provider notes. Later bootstrap derivations MUST keep depending on the normalized contract instead of provider-specific raw layouts. `mantle bootstrap --source-root <manifest>` MUST select the source-built provider; the existing `mantle bootstrap --fetch` path MUST remain the seed-assisted legacy provider; specifying both MUST fail before provider work starts.
 
 #### Scenario: Source-built provider feeds make
 
 - GIVEN a valid full-source root manifest and a source-built provider output
-- WHEN `crunch build bootstrap/make.ncl` consumes that provider through
+- WHEN `mantle build bootstrap/make.ncl` consumes that provider through
   `bootstrap/seed.ncl`
 - THEN `make` builds successfully
 - AND no later bootstrap derivation reads provider-specific raw paths
@@ -102,7 +102,7 @@ The source-built provider MUST expose the same contract fields later bootstrap s
 
 ### Requirement: Full-source bootstrap claim requires evidence
 
-Crunch MUST withhold the full-source bootstrap claim until the source-root manifest validates for the full-source profile, the lineage manifest validates for the StageX-class profile, every named live-bootstrap placeholder is replaced, source-built stage transcripts exist, and self-build proof completes with the selected source-built provider.
+Mantle MUST withhold the full-source bootstrap claim until the source-root manifest validates for the full-source profile, the lineage manifest validates for the StageX-class profile, every named live-bootstrap placeholder is replaced, source-built stage transcripts exist, and self-build proof completes with the selected source-built provider.
 ID: bootstrap.fullsource.claim.evidence
 
 The claim evidence MUST include provider kind (`source-root` for the full-source profile or StageX-class lineage serialized as `stagex-lineage` for the StageX-class profile), manifest digest, provider output digest, proof bundle digest, stage-by-stage build transcripts through `bootstrap/seed-full.ncl`, `bootstrap/selftest.ncl` and `bootstrap/integration-test.ncl` transcripts, proof metadata bound to the selected source-built provider, explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`, and a docs update that separates remaining trusted roots from eliminated binary-provider trust. A prerequisite-only check, placeholder derivation, deferred task, archived partial-scaffolding change, unfinished successor task, legacy-provider fallback, host-bwrap fallback, or checkout/source-discovery fallback MUST NOT count as full-source bootstrap evidence.
@@ -123,7 +123,7 @@ The claim evidence MUST include provider kind (`source-root` for the full-source
 
 ### Requirement: StageX-class bootstrap lineage root
 
-Crunch MUST define a StageX-class bootstrap lineage whose trusted bootstrap root is an auditable seed plus source artifacts, not a prebuilt compiler, prebuilt build tool, Nix store path, or musl.cc-derived binary provider.
+Mantle MUST define a StageX-class bootstrap lineage whose trusted bootstrap root is an auditable seed plus source artifacts, not a prebuilt compiler, prebuilt build tool, Nix store path, or musl.cc-derived binary provider.
 ID: bootstrap.stagex.lineage.root
 
 The lineage MUST name every source artifact, generated artifact, patch,
@@ -138,7 +138,7 @@ The `hex0-seed` class is limited to a hand-audited byte seed whose checked-in
 hex0 source can rebuild the first hex0 compiler before any general compiler or
 shell is trusted. The default `audit_seed_max_bytes` budget is 4096 bytes; any
 larger seed or new seed class requires a separate OpenSpec change and ADR before
-it can satisfy this profile. Crunch-owned fingerprints MUST use BLAKE3 unless an
+it can satisfy this profile. Mantle-owned fingerprints MUST use BLAKE3 unless an
 upstream interoperability check requires another algorithm and records the
 reason. Host kernel, CPU, firmware, container runtime, and filesystem behavior
 MAY remain environmental assumptions, but they MUST be recorded outside the
@@ -196,7 +196,7 @@ source lineage so they do not masquerade as source-built inputs.
 
 ### Requirement: Stage0 lineage produces normalized seed provider
 
-Crunch MUST materialize the normalized seed provider through the declared StageX-class lineage before later bootstrap derivations consume `bootstrap/seed.ncl`.
+Mantle MUST materialize the normalized seed provider through the declared StageX-class lineage before later bootstrap derivations consume `bootstrap/seed.ncl`.
 ID: bootstrap.stagex.lineage.provider
 
 The provider output MUST satisfy the existing normalized seed contract fields
@@ -211,7 +211,7 @@ fallback evidence, but it MUST NOT satisfy this requirement.
 
 - GIVEN a valid StageX-class lineage manifest
 - AND the lineage materializes a normalized provider output
-- WHEN `crunch build bootstrap/make.ncl` consumes the provider through
+- WHEN `mantle build bootstrap/make.ncl` consumes the provider through
   `bootstrap/seed.ncl`
 - THEN `make` builds successfully
 - AND no later bootstrap derivation reads provider-specific raw paths
@@ -233,10 +233,10 @@ fallback evidence, but it MUST NOT satisfy this requirement.
 
 ### Requirement: StageX-class self-build proof binds lineage evidence
 
-Crunch MUST require the full StageX-class evidence tuple before this live-bootstrap source-chain change can satisfy any StageX-class bootstrap claim.
+Mantle MUST require the full StageX-class evidence tuple before this live-bootstrap source-chain change can satisfy any StageX-class bootstrap claim.
 ID: bootstrap.stagex.selfbuild.proof
 
-The proof metadata MUST bind selected provider kind, audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary digests, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, canonical reproducibility report digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`. The proof MUST fail closed when any named live-bootstrap placeholder remains, when the legacy provider is selected for a StageX claim, when host-bwrap or checkout/source-discovery fallback appears, or when forbidden host executables run during the protected stage. The bootstrap parity report MUST require a checked provider-kind linkage receipt for `crunch.self-build`; the receipt MUST use the schema `crunch-self-build-provider-kind-linkage-v1` and MUST prove that `proof_identity.selected_provider_kind`, `proof_linkage.selected_provider_kind`, and `prerequisites.provider_kind` are identical closed provider-kind values. The bootstrap parity report MUST also require a checked StageX lineage provider receipt for `seed-full.stagex-lineage`; scaffold receipts MUST be explicitly marked `lineage_receipt_status = scaffold-only`, MUST serialize `provider_kind = stagex-lineage`, MUST record digest-shaped audited seed, lineage manifest, stage graph, and normalized provider fields, and MUST record no fallback events.
+The proof metadata MUST bind selected provider kind, audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 mantle binary digests, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, canonical reproducibility report digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`. The proof MUST fail closed when any named live-bootstrap placeholder remains, when the legacy provider is selected for a StageX claim, when host-bwrap or checkout/source-discovery fallback appears, or when forbidden host executables run during the protected stage. The bootstrap parity report MUST require a checked provider-kind linkage receipt for `mantle.self-build`; the receipt MUST use the schema `crunch-self-build-provider-kind-linkage-v1` and MUST prove that `proof_identity.selected_provider_kind`, `proof_linkage.selected_provider_kind`, and `prerequisites.provider_kind` are identical closed provider-kind values. The bootstrap parity report MUST also require a checked StageX lineage provider receipt for `seed-full.stagex-lineage`; scaffold receipts MUST be explicitly marked `lineage_receipt_status = scaffold-only`, MUST serialize `provider_kind = stagex-lineage`, MUST record digest-shaped audited seed, lineage manifest, stage graph, and normalized provider fields, and MUST record no fallback events.
 
 #### Scenario: StageX proof records complete evidence tuple
 
@@ -264,15 +264,15 @@ The proof metadata MUST bind selected provider kind, audited seed digest, lineag
 
 - GIVEN `bootstrap/crunch.ncl` exists
 - BUT `bootstrap/evidence/crunch-self-build-provider-kind-linkage.json` is absent
-- WHEN `crunch bootstrap parity-report --require guix` or `--require stagex` runs
-- THEN `crunch.self-build` remains a blocker
+- WHEN `mantle bootstrap parity-report --require guix` or `--require stagex` runs
+- THEN `mantle.self-build` remains a blocker
 - AND the row notes identify the missing provider-kind linkage receipt
 
 #### Scenario: Parity accepts matching provider-kind linkage receipt as partial evidence [r[bootstrap.stagex.selfbuild.proof.parity-matching-receipt]]
 
 - GIVEN a checked self-build provider-kind linkage receipt records the same closed provider kind in proof identity, proof linkage, and prerequisites
 - WHEN the parity report loads that evidence
-- THEN the `crunch.self-build` row may report evidence-backed `partial`
+- THEN the `mantle.self-build` row may report evidence-backed `partial`
 - AND it MUST NOT report `complete` until the full self-build proof and axis-specific evidence are present
 
 #### Scenario: Parity rejects missing StageX lineage receipt [r[bootstrap.stagex.selfbuild.proof.stagex-lineage-missing-receipt]]
@@ -303,9 +303,9 @@ source for AMD64.
 - WHEN `bootstrap/seeds/AMD64/hex0-seed` is read
 - THEN it is at most 512 bytes and matches the stage0-posix hex0 AMD64 binary
 
-### Requirement: Stage0-posix as crunch derivation
+### Requirement: Stage0-posix as mantle derivation
 
-The stage0-posix bootstrap (phases 0-28) MUST run as a single crunch derivation
+The stage0-posix bootstrap (phases 0-28) MUST run as a single mantle derivation
 that takes only the hex0 seed and the stage0-posix source tarball as inputs.
 The derivation MUST produce mescc-tools (M1, hex2, kaem, blood-elf), M2-Planet,
 and mescc-tools-extra (catm, cp, chmod, mkdir, untar, ungz, unbz2, unxz,
@@ -314,19 +314,19 @@ sha256sum).
 #### Scenario: Stage0-posix builds from hex0
 
 - GIVEN the hex0 seed and stage0-posix source pinned by hash
-- WHEN `crunch build bootstrap/stage0-posix.ncl` runs
+- WHEN `mantle build bootstrap/stage0-posix.ncl` runs
 - THEN the output contains working M2-Planet, hex2, M1, and kaem binaries
 
 ### Requirement: GNU mes from stage0-posix output
 
-GNU mes MUST be built as a crunch derivation using only M2-Planet and
+GNU mes MUST be built as a mantle derivation using only M2-Planet and
 mescc-tools from the stage0-posix output. The mes output MUST include both
 the Scheme interpreter and the mes C compiler (`mescc`).
 
 #### Scenario: Mes compiles a C program
 
 - GIVEN the stage0-posix output
-- WHEN `crunch build bootstrap/mes.ncl` runs
+- WHEN `mantle build bootstrap/mes.ncl` runs
 - THEN mes can compile a trivial C program to a working executable
 
 ### Requirement: Tinycc from mes
@@ -338,7 +338,7 @@ MUST be capable of building early GCC.
 #### Scenario: Tinycc self-hosts
 
 - GIVEN the mes output
-- WHEN `crunch build bootstrap/tinycc.ncl` runs
+- WHEN `mantle build bootstrap/tinycc.ncl` runs
 - THEN tinycc 0.9.27 can compile C programs including early GCC prerequisites
 
 ### Requirement: GCC version ladder
@@ -461,14 +461,14 @@ and provider metadata in `share/crunch-bootstrap/provider.json`.
 #### Scenario: Self-build produces identical binary
 
 - GIVEN the from-source seed
-- WHEN `crunch self-build` runs
+- WHEN `mantle self-build` runs
 - THEN stage1 and stage2 binaries are byte-identical
 
 ### Requirement: Source tarballs pinned by hash
 
 Every source tarball fetched during the bootstrap chain MUST be pinned by a
 content hash in its `.ncl` file. The hash MUST use the same algorithm as
-`crunch.fetchTarball` (currently SHA-256 for Nix compatibility).
+`mantle.fetchTarball` (currently SHA-256 for Nix compatibility).
 
 #### Scenario: Tampered source detected
 
@@ -532,7 +532,7 @@ gcc-4.0.4 can use as its assembler and linker.
 - THEN a valid ELF object file is produced
 
 ### Requirement: Live-bootstrap part stage0-posix seed tools is independently tracked
-Crunch MUST track the live-bootstrap part `bootstrap-seeds through mescc-tools-extra` as an independent bootstrap change bound to `bootstrap/stage0-posix.ncl`.
+Mantle MUST track the live-bootstrap part `bootstrap-seeds through mescc-tools-extra` as an independent bootstrap change bound to `bootstrap/stage0-posix.ncl`.
 ID: bootstrap.part.stage0.posix
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/stage0-posix.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -542,7 +542,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/stage0-posix.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/stage0-posix.ncl`
-- AND it records a successful `crunch build bootstrap/stage0-posix.ncl` transcript
+- AND it records a successful `mantle build bootstrap/stage0-posix.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -553,7 +553,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 ### Requirement: Live-bootstrap part mes 0.27 is independently tracked
-Crunch MUST track the live-bootstrap part `mes 0.27` as an independent bootstrap change bound to `bootstrap/mes.ncl`.
+Mantle MUST track the live-bootstrap part `mes 0.27` as an independent bootstrap change bound to `bootstrap/mes.ncl`.
 ID: bootstrap.part.mes.0.27
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/mes.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -563,7 +563,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/mes.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/mes.ncl`
-- AND it records a successful `crunch build bootstrap/mes.ncl` transcript
+- AND it records a successful `mantle build bootstrap/mes.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -574,7 +574,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 ### Requirement: Tinycc Mes self-compile blocker is resolved
-Crunch MUST resolve the `BufferedFile`/first-self-compile blocker before `live-part-tinycc-0-9-26` can claim successful build evidence.
+Mantle MUST resolve the `BufferedFile`/first-self-compile blocker before `live-part-tinycc-0-9-26` can claim successful build evidence.
 ID: bootstrap.part.tinycc.0.9.26.selfcompile
 
 #### Scenario: Full tinycc output contract is required evidence
@@ -582,13 +582,13 @@ ID: bootstrap.part.tinycc.0.9.26.selfcompile
 - GIVEN `bootstrap/tinycc-mes.ncl` builds `tcc-mes`
 - WHEN the blocker is marked resolved
 - THEN the evidence MUST show `tcc-mes` compiles at least `tcc-boot0` without segfaulting
-- AND `crunch build bootstrap/tinycc-mes.ncl` MUST finish successfully
+- AND `mantle build bootstrap/tinycc-mes.ncl` MUST finish successfully
 - AND the produced output MUST include executable `bin/tcc` and `bin/tcc-0.9.26`
 - AND the produced compiler MUST compile a trivial C program
 - AND `tcc-mes -version` alone MUST NOT be accepted as the smoke boundary
 
 ### Requirement: Live-bootstrap part tinycc 0.9.26 is independently tracked
-Crunch MUST track the live-bootstrap part `tinycc 0.9.26` as an independent bootstrap change bound to `bootstrap/tinycc-mes.ncl`.
+Mantle MUST track the live-bootstrap part `tinycc 0.9.26` as an independent bootstrap change bound to `bootstrap/tinycc-mes.ncl`.
 ID: bootstrap.part.tinycc.0.9.26
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/tinycc-mes.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -598,7 +598,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/tinycc-mes.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/tinycc-mes.ncl`
-- AND it records a successful `crunch build bootstrap/tinycc-mes.ncl` transcript
+- AND it records a successful `mantle build bootstrap/tinycc-mes.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -609,7 +609,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 ### Requirement: Live-bootstrap part tinycc 0.9.27 is independently tracked
-Crunch MUST track the live-bootstrap part `tinycc 0.9.27` as an independent bootstrap change bound to `bootstrap/tinycc.ncl`.
+Mantle MUST track the live-bootstrap part `tinycc 0.9.27` as an independent bootstrap change bound to `bootstrap/tinycc.ncl`.
 ID: bootstrap.part.tinycc.0.9.27
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/tinycc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -619,7 +619,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/tinycc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/tinycc.ncl`
-- AND it records a successful `crunch build bootstrap/tinycc.ncl` transcript
+- AND it records a successful `mantle build bootstrap/tinycc.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -630,10 +630,10 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 ### Requirement: TinyCC 0.9.27 compiles trivial C on amd64
-Crunch MUST build `bootstrap/tinycc.ncl` into a TinyCC 0.9.27 output that can compile a trivial C source file to an object on amd64.
+Mantle MUST build `bootstrap/tinycc.ncl` into a TinyCC 0.9.27 output that can compile a trivial C source file to an object on amd64.
 ID: bootstrap.part.tinycc.0.9.27.amd64.compile
 
-The output MUST include `bin/tcc`, report `tcc version 0.9.27 (x86_64 Linux)`, complete `tcc -c hello.c -o hello.o` within the bounded smoke timeout, and produce a non-empty object file. The compiler MUST reject malformed C with a controlled nonzero exit rather than a hang, timeout, or segmentation fault. Completion evidence MUST include a source-pin audit transcript, successful `crunch build bootstrap/tinycc.ncl` transcript, version smoke transcript, positive object-compile transcript, malformed-input negative transcript, and host-leakage scan transcript.
+The output MUST include `bin/tcc`, report `tcc version 0.9.27 (x86_64 Linux)`, complete `tcc -c hello.c -o hello.o` within the bounded smoke timeout, and produce a non-empty object file. The compiler MUST reject malformed C with a controlled nonzero exit rather than a hang, timeout, or segmentation fault. Completion evidence MUST include a source-pin audit transcript, successful `mantle build bootstrap/tinycc.ncl` transcript, version smoke transcript, positive object-compile transcript, malformed-input negative transcript, and host-leakage scan transcript.
 
 #### Scenario: Trivial object compile succeeds
 
@@ -651,7 +651,7 @@ The output MUST include `bin/tcc`, report `tcc version 0.9.27 (x86_64 Linux)`, c
 - AND the exit status is not signal-derived
 
 ### Requirement: Mes-built TinyCC emits x86_64 immediate shifts correctly
-Crunch MUST build the Mes-hosted TinyCC 0.9.26 predecessor so x86_64 constant shift expressions emit nonzero immediate shift counts.
+Mantle MUST build the Mes-hosted TinyCC 0.9.26 predecessor so x86_64 constant shift expressions emit nonzero immediate shift counts.
 ID: bootstrap.part.tinycc.0.9.26.shift-immediates
 
 The predecessor compiler MUST compile a shift reproducer containing `x >> 8` and `x << 3` to an object whose disassembly contains `shr $0x8` and `shl $0x3` (or equivalent nonzero immediate encodings). The rebuilt TinyCC 0.9.27 MUST then compile both a trivial C source and GNU make 3.82 `getopt.c` to non-empty objects, and malformed C MUST fail with a controlled nonzero status rather than a timeout or signal. Evidence MUST include source-pin audit, build transcript, shift disassembly transcript, object compile transcripts, malformed-input transcript, and host-leakage scan.
@@ -675,8 +675,8 @@ The predecessor compiler MUST compile a shift reproducer containing `x >> 8` and
 The amd64 bootstrap TinyCC 0.9.27 output MUST support statically linking a trivial object with its declared Mes runtime inputs.
 
 #### Scenario: Trivial static executable links and runs [r[bootstrap.compiler.tinycc.0.9.27.amd64.static-link.scenario.hello]]
-- GIVEN the Crunch-built `bootstrap/tinycc.ncl` output on amd64
-- WHEN `tcc -c hello.c` and `tcc -static -o hello hello.o` run in a Crunch diagnostic derivation
+- GIVEN the Mantle-built `bootstrap/tinycc.ncl` output on amd64
+- WHEN `tcc -c hello.c` and `tcc -static -o hello hello.o` run in a Mantle diagnostic derivation
 - THEN the link exits successfully
 - AND executing `./hello` exits 0
 - AND no host compiler, host libc, or undeclared runtime object is used
@@ -696,53 +696,53 @@ The TinyCC link repair MUST hand control back to the Make 3.82 runtime-validatio
 
 ### Requirement: i386 live-bootstrap path spike [r[bootstrap.i386-live-bootstrap-spike]]
 
-Crunch MUST provide decision evidence before pivoting Make 3.82 runtime validation from the current amd64 TinyCC/Mes repair path to an i386-first live-bootstrap path.
+Mantle MUST provide decision evidence before pivoting Make 3.82 runtime validation from the current amd64 TinyCC/Mes repair path to an i386-first live-bootstrap path.
 
 #### Scenario: Reference audit is not runtime proof [r[bootstrap.i386-live-bootstrap-spike.reference-audit]]
 
 - GIVEN a StageX or upstream live-bootstrap reference sequence that builds on `linux/386`
-- WHEN Crunch records that sequence as evidence
-- THEN Crunch MUST classify it as reference evidence only until a Crunch-local proof target runs.
+- WHEN Mantle records that sequence as evidence
+- THEN Mantle MUST classify it as reference evidence only until a Mantle-local proof target runs.
 
 #### Scenario: Pivot decision has explicit criteria [r[bootstrap.i386-live-bootstrap-spike.decision]]
 
 - GIVEN the amd64 Make 3.82 path remains blocked by runtime segfaults
 - WHEN the i386 proof target is evaluated
-- THEN Crunch MUST record whether to pivot, continue amd64 repair, or carry both paths with explicit scope boundaries.
+- THEN Mantle MUST record whether to pivot, continue amd64 repair, or carry both paths with explicit scope boundaries.
 
 <!-- synced from openspec change: repair-i386-tinycc26-emission -->
 
 ### Requirement: i386 TinyCC 0.9.26 emission diagnostics [r[bootstrap.i386-tinycc26-emission.diagnostics]]
 
-Crunch MUST isolate the i386 TinyCC 0.9.26 output-generation blocker before using the i386 path as evidence for Make 3.82 runtime validation.
+Mantle MUST isolate the i386 TinyCC 0.9.26 output-generation blocker before using the i386 path as evidence for Make 3.82 runtime validation.
 
 #### Scenario: Emission stages are separated [r[bootstrap.i386-tinycc26-emission.diagnostics.stages]]
 
-- GIVEN a x86_64-hosted/i386-targeting TinyCC 0.9.26 built by Crunch
-- WHEN Crunch evaluates the i386 emission proof
+- GIVEN a x86_64-hosted/i386-targeting TinyCC 0.9.26 built by Mantle
+- WHEN Mantle evaluates the i386 emission proof
 - THEN it MUST record version, assemble-only, link-from-assembly, link-from-object, and run-output results separately.
 
 #### Scenario: Diagnostic failure does not imply production pivot [r[bootstrap.i386-tinycc26-emission.diagnostics.no-production-pivot]]
 
 - GIVEN any i386 emission stage fails or segfaults
 - WHEN the diagnostic evidence is recorded
-- THEN Crunch MUST keep production Make 3.82 validation blocked rather than claiming the i386 path is production-ready.
+- THEN Mantle MUST keep production Make 3.82 validation blocked rather than claiming the i386 path is production-ready.
 
 ### Requirement: i386 TinyCC 0.9.26 repair decision [r[bootstrap.i386-tinycc26-emission.decision]]
 
-Crunch MUST record the next repair target after the diagnostic stage identifies where `tcc26-i386` fails.
+Mantle MUST record the next repair target after the diagnostic stage identifies where `tcc26-i386` fails.
 
 #### Scenario: Next repair target is evidence-backed [r[bootstrap.i386-tinycc26-emission.decision.target]]
 
 - GIVEN diagnostic transcript evidence for each emission stage
 - WHEN choosing the next implementation slice
-- THEN Crunch MUST identify whether the next target is assembly parsing, object emission, static linking, ELF materialization, or runtime execution.
+- THEN Mantle MUST identify whether the next target is assembly parsing, object emission, static linking, ELF materialization, or runtime execution.
 
 <!-- ADDED Requirements -->
 
 ### Requirement: Binutils-TCC chain implementation
 
-Crunch MUST build `bootstrap/binutils-tcc.ncl` from chain-internal TinyCC-era and post-musl derivations without using host compiler, host libc, host shell tools, or the legacy musl.cc provider. The binutils-tcc stage MUST NOT satisfy live-bootstrap or Guix parity until reproducible evidence proves the produced assembler/linker/archive tools and records absence of host fallback.
+Mantle MUST build `bootstrap/binutils-tcc.ncl` from chain-internal TinyCC-era and post-musl derivations without using host compiler, host libc, host shell tools, or the legacy musl.cc provider. The binutils-tcc stage MUST NOT satisfy live-bootstrap or Guix parity until reproducible evidence proves the produced assembler/linker/archive tools and records absence of host fallback.
 ID: bootstrap.binutils.tcc.chain
 
 The chain MUST implement the scoped ladder groups named by the proposal: early tcc-hosted utilities (`bzip2`, `coreutils-5.0`, `oyacc`, `bash-2.05b`), first musl/tcc rebuilds, post-musl text/parser tools (`grep`, rebuilt `sed`, rebuilt `bzip2`, `m4`, Heirloom devtools, `flex`, `bison`), diffutils/coreutils/gawk, Perl/autoconf/automake/libtool, and binutils 2.30. The chain MUST pin every source, carried patch, and generated artifact with URL or repository path, digest, and provenance at the first consuming derivation. Validation transcripts MUST record command, provider selection, exit status, output path, fallback status/event marker, and placeholder rejection result. Validation MUST prove post-musl `m4`, `flex`, `bison`, and `grep` link against musl, and MUST prove binutils 2.30 can assemble a trivial ELF object for the gcc-4.0.4 transition.
@@ -756,7 +756,7 @@ The chain MUST implement the scoped ladder groups named by the proposal: early t
 
 #### Scenario: Placeholder is replaced with evidence [r[bootstrap.binutils.tcc.chain.evidence-promotion]]
 
-- GIVEN `crunch bootstrap parity-report` evaluates the `binutils.tcc` row
+- GIVEN `mantle bootstrap parity-report` evaluates the `binutils.tcc` row
 - WHEN the row is considered for live-bootstrap or Guix parity
 - THEN it remains `placeholder` or `partial` unless a checked transcript proves `as`, `ld`, `ar`, `ranlib`, `nm`, and `objcopy` from `bootstrap/binutils-tcc.ncl`
 - AND the transcript records the build command, output path, provider kind, fallback markers, and smoke command exit statuses
@@ -779,7 +779,7 @@ The chain MUST implement the scoped ladder groups named by the proposal: early t
 
 ### Requirement: GCC 4.0.4 transition stage
 
-Crunch MUST build `bootstrap/gcc-4.0.ncl` as gcc 4.0.4 C and C++ compiler outputs using only the chain-internal TinyCC/musl/binutils 2.30 inputs.
+Mantle MUST build `bootstrap/gcc-4.0.ncl` as gcc 4.0.4 C and C++ compiler outputs using only the chain-internal TinyCC/musl/binutils 2.30 inputs.
 ID: bootstrap.gcc40.transition
 
 The stage MUST pin gcc 4.0.4 C/C++ source inputs and every carried patch or generated artifact with URL/path, digest, provenance, and first-consuming derivation metadata. Validation MUST prove the output compiles C and C++ smoke programs and MUST reject host compiler, host libc, host shell, Nix, or legacy-provider fallback by scanning sandbox command transcripts and proof markers.
@@ -803,7 +803,7 @@ The stage MUST pin gcc 4.0.4 C/C++ source inputs and every carried patch or gene
 
 ### Requirement: GCC 4.7.4 transition stage
 
-Crunch MUST build `bootstrap/gcc-4.7.ncl` as gcc 4.7.4 C and C++ compiler outputs using only chain-internal gcc-4.0.4-era inputs.
+Mantle MUST build `bootstrap/gcc-4.7.ncl` as gcc 4.7.4 C and C++ compiler outputs using only chain-internal gcc-4.0.4-era inputs.
 ID: bootstrap.gcc47.transition
 
 The stage MUST pin gcc 4.7.4 and support artifacts with URL/path, digest, provenance, and first-consuming derivation metadata. Validation MUST prove the output compiles C, C++, and minimal C++11 smoke programs, and MUST reject host compiler, host libc, host shell, Nix, or legacy-provider fallback by scanning sandbox command transcripts and proof markers.
@@ -826,7 +826,7 @@ The stage MUST pin gcc 4.7.4 and support artifacts with URL/path, digest, proven
 
 ### Requirement: Source-built bootstrap chain implementation
 
-Crunch MUST implement the live-bootstrap stage chain through a source-built provider that satisfies the normalized seed contract without using the legacy musl.cc binary provider.
+Mantle MUST implement the live-bootstrap stage chain through a source-built provider that satisfies the normalized seed contract without using the legacy musl.cc binary provider.
 ID: bootstrap.source.chain.implementation
 
 The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl` placeholder derivations before they can satisfy bootstrap completion status. Stage validation MUST record command transcripts for the ordered inventory (`bootstrap/stage0-posix.ncl`, `bootstrap/mes.ncl`, `bootstrap/tinycc.ncl`, `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl`), `bootstrap/selftest.ncl`, `bootstrap/integration-test.ncl`, and final self-build proof. Validation MUST fail closed when a stage emits placeholder text, exits through a deferred task, or falls back to the legacy provider. The final provider MUST expose the normalized seed contract fields consumed by later bootstrap derivations.
@@ -848,7 +848,7 @@ The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `b
 #### Scenario: Final proof binds provider evidence
 
 - GIVEN `bootstrap/seed-full.ncl` satisfies the normalized provider contract
-- WHEN `crunch self-build` completes with the source-built provider
+- WHEN `mantle self-build` completes with the source-built provider
 - THEN proof metadata records provider kind, manifest digest, provider output digest, proof bundle digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`
 - AND docs separate remaining trust roots from eliminated binary-provider trust
 
@@ -863,7 +863,7 @@ The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `b
 
 ### Requirement: Full-source bootstrap claim requires evidence
 
-Crunch MUST withhold the full-source bootstrap claim until the source-root manifest validates for the full-source profile, the lineage manifest validates for the StageX-class profile, every named live-bootstrap placeholder is replaced, source-built stage transcripts exist, and self-build proof completes with the selected source-built provider.
+Mantle MUST withhold the full-source bootstrap claim until the source-root manifest validates for the full-source profile, the lineage manifest validates for the StageX-class profile, every named live-bootstrap placeholder is replaced, source-built stage transcripts exist, and self-build proof completes with the selected source-built provider.
 ID: bootstrap.fullsource.claim.evidence
 
 The claim evidence MUST include provider kind (`source-root` for the full-source profile or StageX-class lineage serialized as `stagex-lineage` for the StageX-class profile), manifest digest, provider output digest, proof bundle digest, stage-by-stage build transcripts through `bootstrap/seed-full.ncl`, `bootstrap/selftest.ncl` and `bootstrap/integration-test.ncl` transcripts, proof metadata bound to the selected source-built provider, explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`, and a docs update that separates remaining trusted roots from eliminated binary-provider trust. A prerequisite-only check, placeholder derivation, deferred task, archived partial-scaffolding change, unfinished successor task, legacy-provider fallback, host-bwrap fallback, or checkout/source-discovery fallback MUST NOT count as full-source bootstrap evidence.
@@ -884,10 +884,10 @@ The claim evidence MUST include provider kind (`source-root` for the full-source
 
 ### Requirement: StageX-class self-build proof binds lineage evidence
 
-Crunch MUST require the full StageX-class evidence tuple before this live-bootstrap source-chain change can satisfy any StageX-class bootstrap claim.
+Mantle MUST require the full StageX-class evidence tuple before this live-bootstrap source-chain change can satisfy any StageX-class bootstrap claim.
 ID: bootstrap.stagex.selfbuild.proof
 
-The proof metadata MUST bind selected provider kind, audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 crunch binary digests, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, canonical reproducibility report digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`. The proof MUST fail closed when any named live-bootstrap placeholder remains, when the legacy provider is selected for a StageX claim, when host-bwrap or checkout/source-discovery fallback appears, or when forbidden host executables run during the protected stage. The bootstrap parity report MUST require a checked provider-kind linkage receipt for `crunch.self-build`; the receipt MUST use the schema `crunch-self-build-provider-kind-linkage-v1` and MUST prove that `proof_identity.selected_provider_kind`, `proof_linkage.selected_provider_kind`, and `prerequisites.provider_kind` are identical closed provider-kind values. The bootstrap parity report MUST also require a checked StageX lineage provider receipt for `seed-full.stagex-lineage`; scaffold receipts MUST be explicitly marked `lineage_receipt_status = scaffold-only`, MUST serialize `provider_kind = stagex-lineage`, MUST record digest-shaped audited seed, lineage manifest, stage graph, and normalized provider fields, and MUST record no fallback events.
+The proof metadata MUST bind selected provider kind, audited seed digest, lineage manifest digest, stage graph digest, normalized provider digest, staged source digest, stage1 and stage2 mantle binary digests, bootstrap-tool digests, protected execution audit digest when used, final proof bundle digest, canonical reproducibility report digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`. The proof MUST fail closed when any named live-bootstrap placeholder remains, when the legacy provider is selected for a StageX claim, when host-bwrap or checkout/source-discovery fallback appears, or when forbidden host executables run during the protected stage. The bootstrap parity report MUST require a checked provider-kind linkage receipt for `mantle.self-build`; the receipt MUST use the schema `crunch-self-build-provider-kind-linkage-v1` and MUST prove that `proof_identity.selected_provider_kind`, `proof_linkage.selected_provider_kind`, and `prerequisites.provider_kind` are identical closed provider-kind values. The bootstrap parity report MUST also require a checked StageX lineage provider receipt for `seed-full.stagex-lineage`; scaffold receipts MUST be explicitly marked `lineage_receipt_status = scaffold-only`, MUST serialize `provider_kind = stagex-lineage`, MUST record digest-shaped audited seed, lineage manifest, stage graph, and normalized provider fields, and MUST record no fallback events.
 
 #### Scenario: StageX proof records complete evidence tuple
 
@@ -915,15 +915,15 @@ The proof metadata MUST bind selected provider kind, audited seed digest, lineag
 
 - GIVEN `bootstrap/crunch.ncl` exists
 - BUT `bootstrap/evidence/crunch-self-build-provider-kind-linkage.json` is absent
-- WHEN `crunch bootstrap parity-report --require guix` or `--require stagex` runs
-- THEN `crunch.self-build` remains a blocker
+- WHEN `mantle bootstrap parity-report --require guix` or `--require stagex` runs
+- THEN `mantle.self-build` remains a blocker
 - AND the row notes identify the missing provider-kind linkage receipt
 
 #### Scenario: Parity accepts matching provider-kind linkage receipt as partial evidence [r[bootstrap.stagex.selfbuild.proof.parity-matching-receipt]]
 
 - GIVEN a checked self-build provider-kind linkage receipt records the same closed provider kind in proof identity, proof linkage, and prerequisites
 - WHEN the parity report loads that evidence
-- THEN the `crunch.self-build` row may report evidence-backed `partial`
+- THEN the `mantle.self-build` row may report evidence-backed `partial`
 - AND it MUST NOT report `complete` until the full self-build proof and axis-specific evidence are present
 
 #### Scenario: Parity rejects missing StageX lineage receipt [r[bootstrap.stagex.selfbuild.proof.stagex-lineage-missing-receipt]]
@@ -942,7 +942,7 @@ The proof metadata MUST bind selected provider kind, audited seed digest, lineag
 - AND it MUST NOT report `complete` or unblock StageX parity until real audited lineage and self-build proof evidence exist
 
 ### Requirement: Live-bootstrap part grep 2.4 is independently tracked
-Crunch MUST track the live-bootstrap part `grep 2.4` as an independent bootstrap change bound to `bootstrap/grep-2.4-musl.ncl`.
+Mantle MUST track the live-bootstrap part `grep 2.4` as an independent bootstrap change bound to `bootstrap/grep-2.4-musl.ncl`.
 ID: bootstrap.part.grep.2.4
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/grep-2.4-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -952,7 +952,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/grep-2.4-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/grep-2.4-musl.ncl`
-- AND it records a successful `crunch build bootstrap/grep-2.4-musl.ncl` transcript
+- AND it records a successful `mantle build bootstrap/grep-2.4-musl.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -966,7 +966,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 <!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part make 3.82 is independently tracked
-Crunch MUST track the live-bootstrap part `make 3.82` as an independent bootstrap change bound to `bootstrap/make-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `make 3.82` as an independent bootstrap change bound to `bootstrap/make-tcc.ncl`.
 ID: bootstrap.part.make.3.82
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/make-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -976,7 +976,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/make-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/make-tcc.ncl`
-- AND it records a successful `crunch build bootstrap/make-tcc.ncl` transcript
+- AND it records a successful `mantle build bootstrap/make-tcc.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -990,7 +990,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 <!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part musl 1.1.24 (tcc) is independently tracked
-Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/musl-1.1.24-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/musl-1.1.24-tcc.ncl`.
 ID: bootstrap.part.musl.1.1.24.tcc
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/musl-1.1.24-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1000,7 +1000,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/musl-1.1.24-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/musl-1.1.24-tcc.ncl`
-- AND it records a successful `crunch build bootstrap/musl-1.1.24-tcc.ncl` transcript
+- AND it records a successful `mantle build bootstrap/musl-1.1.24-tcc.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -1014,7 +1014,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 <!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part musl 1.1.24 (tcc-musl) is independently tracked
-Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/musl-1.1.24-tcc-musl.ncl`.
+Mantle MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/musl-1.1.24-tcc-musl.ncl`.
 ID: bootstrap.part.musl.1.1.24.tcc.musl
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/musl-1.1.24-tcc-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1024,7 +1024,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/musl-1.1.24-tcc-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/musl-1.1.24-tcc-musl.ncl`
-- AND it records a successful `crunch build bootstrap/musl-1.1.24-tcc-musl.ncl` transcript
+- AND it records a successful `mantle build bootstrap/musl-1.1.24-tcc-musl.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -1038,7 +1038,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 <!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part patch 2.5.9 is independently tracked
-Crunch MUST track the live-bootstrap part `patch 2.5.9` as an independent bootstrap change bound to `bootstrap/patch-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `patch 2.5.9` as an independent bootstrap change bound to `bootstrap/patch-tcc.ncl`.
 ID: bootstrap.part.patch.2.5.9
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/patch-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1048,7 +1048,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/patch-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/patch-tcc.ncl`
-- AND it records a successful `crunch build bootstrap/patch-tcc.ncl` transcript
+- AND it records a successful `mantle build bootstrap/patch-tcc.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -1062,7 +1062,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 <!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part tcc linked to musl is independently tracked
-Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl.ncl`.
+Mantle MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl.ncl`.
 ID: bootstrap.part.tcc.musl
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/tcc-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1072,7 +1072,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/tcc-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/tcc-musl.ncl`
-- AND it records a successful `crunch build bootstrap/tcc-musl.ncl` transcript
+- AND it records a successful `mantle build bootstrap/tcc-musl.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -1086,7 +1086,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 <!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part tcc musl prep is independently tracked
-Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl-prep.ncl`.
+Mantle MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl-prep.ncl`.
 ID: bootstrap.part.tcc.musl.prep
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/tcc-musl-prep.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1096,7 +1096,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/tcc-musl-prep.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/tcc-musl-prep.ncl`
-- AND it records a successful `crunch build bootstrap/tcc-musl-prep.ncl` transcript
+- AND it records a successful `mantle build bootstrap/tcc-musl-prep.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -1110,7 +1110,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 <!-- ADDED Requirements -->
 
 ### Requirement: Live-bootstrap part tcc musl v2 is independently tracked
-Crunch MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl-v2.ncl`.
+Mantle MUST track the live-bootstrap part `musl 1.1.24 and musl_target` as an independent bootstrap change bound to `bootstrap/tcc-musl-v2.ncl`.
 ID: bootstrap.part.tcc.musl.v2
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/tcc-musl-v2.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1120,7 +1120,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/tcc-musl-v2.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/tcc-musl-v2.ncl`
-- AND it records a successful `crunch build bootstrap/tcc-musl-v2.ncl` transcript
+- AND it records a successful `mantle build bootstrap/tcc-musl-v2.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -1134,7 +1134,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 <!-- ADDED Requirements -->
 
 ### Requirement: First GNU make pass is amd64 executable [r[bootstrap.part.make.3.82.amd64.execution]]
-Crunch MUST build `bootstrap/make-tcc.ncl` into a `make 3.82` output that executes basic Makefiles on amd64.
+Mantle MUST build `bootstrap/make-tcc.ncl` into a `make 3.82` output that executes basic Makefiles on amd64.
 
 The output MUST include `bin/make`, report `GNU Make 3.82`, execute a simple Makefile target successfully, and reject a missing target with a controlled nonzero exit rather than a signal or segmentation fault. Source-level repair completion evidence MUST include a source-pin audit transcript and either direct successful runtime transcripts or an active runtime-validation successor that records the long-build, smoke, and host-leakage proof still required before downstream completion claims.
 
@@ -1164,13 +1164,13 @@ The output MUST include `bin/make`, report `GNU Make 3.82`, execute a simple Mak
 <!-- ADDED Requirements -->
 
 ### Requirement: Make 3.82 amd64 runtime validation completes [r[bootstrap.part.make.3.82.amd64.runtime-validation]]
-Crunch MUST preserve runtime proof for the repaired `bootstrap/make-tcc.ncl` output before the first GNU make amd64 repair is treated as complete.
+Mantle MUST preserve runtime proof for the repaired `bootstrap/make-tcc.ncl` output before the first GNU make amd64 repair is treated as complete.
 
 The proof MUST include a long-budget build transcript, the produced output path or concrete failure diagnostics, version smoke evidence for `GNU Make 3.82`, a simple Makefile positive smoke, a missing-target negative smoke that fails without a signal/segfault, and a host-leakage scan over the derivation, transcript, and output.
 
 #### Scenario: Long build produces make output [r[bootstrap.part.make.3.82.amd64.runtime-validation.scenario.build-output]]
 - GIVEN the parent repair source state
-- WHEN `crunch build bootstrap/make-tcc.ncl` runs with the documented bootstrap environment and a long validation budget
+- WHEN `mantle build bootstrap/make-tcc.ncl` runs with the documented bootstrap environment and a long validation budget
 - THEN the transcript is preserved
 - AND either a make output path is recorded or concrete failure diagnostics are recorded
 
@@ -1190,7 +1190,7 @@ The proof MUST include a long-budget build transcript, the produced output path 
 
 ### Requirement: i386 TinyCC 0.9.26 object emission repair [r[bootstrap.i386-tinycc26-object-emission.repair]]
 
-Crunch MUST repair the i386 TinyCC 0.9.26 proof so the generated x86_64-hosted/i386-targeting compiler can emit object files without segfaulting.
+Mantle MUST repair the i386 TinyCC 0.9.26 proof so the generated x86_64-hosted/i386-targeting compiler can emit object files without segfaulting.
 
 #### Scenario: Object emission succeeds [r[bootstrap.i386-tinycc26-object-emission.repair.object]]
 
@@ -1200,19 +1200,19 @@ Crunch MUST repair the i386 TinyCC 0.9.26 proof so the generated x86_64-hosted/i
 
 ### Requirement: i386 TinyCC 0.9.26 runtime proof [r[bootstrap.i386-tinycc26-object-emission.runtime-proof]]
 
-Crunch MUST prove the repaired i386 TinyCC 0.9.26 path can produce and execute a no-libc i386 ELF before using it as a basis for later i386 bootstrap stages.
+Mantle MUST prove the repaired i386 TinyCC 0.9.26 path can produce and execute a no-libc i386 ELF before using it as a basis for later i386 bootstrap stages.
 
 #### Scenario: i386 exit42 runs [r[bootstrap.i386-tinycc26-object-emission.runtime-proof.exit42]]
 
 - GIVEN `tcc26-i386` can emit objects
 - WHEN it links the no-libc `_start` smoke executable
-- THEN the produced i386 ELF MUST execute inside Crunch's sandbox with exit code 42.
+- THEN the produced i386 ELF MUST execute inside Mantle's sandbox with exit code 42.
 
 <!-- synced from openspec change: spike-i386-tcc27-make-pass1 -->
 
 ### Requirement: i386 TinyCC 0.9.27 Make pass1 spike [r[bootstrap.i386-tcc27-make-pass1.spike]]
 
-Crunch MUST provide a bounded sibling proof for the i386 live-bootstrap sequence from TinyCC 0.9.26 through TinyCC 0.9.27 to GNU Make 3.82 pass1 before changing production bootstrap routing.
+Mantle MUST provide a bounded sibling proof for the i386 live-bootstrap sequence from TinyCC 0.9.26 through TinyCC 0.9.27 to GNU Make 3.82 pass1 before changing production bootstrap routing.
 
 #### Scenario: First blocker is recorded [r[bootstrap.i386-tcc27-make-pass1.spike.blocker]]
 
@@ -1224,23 +1224,23 @@ Crunch MUST provide a bounded sibling proof for the i386 live-bootstrap sequence
 
 - GIVEN the sibling proof produces a `make` binary
 - WHEN the proof claims success
-- THEN `make --version` and a trivial Makefile execution MUST both pass inside Crunch's sandbox.
+- THEN `make --version` and a trivial Makefile execution MUST both pass inside Mantle's sandbox.
 
 <!-- synced from openspec change: spike-i386-mes-runtime-layout -->
 
 ### Requirement: i386 Mes runtime/header layout spike [r[bootstrap.i386-mes-runtime-layout.spike]]
 
-Crunch MUST keep the i386 Mes runtime/header layout investigation as a bounded sibling diagnostic before changing production Make/TinyCC bootstrap routing.
+Mantle MUST keep the i386 Mes runtime/header layout investigation as a bounded sibling diagnostic before changing production Make/TinyCC bootstrap routing.
 
 #### Scenario: Layout proof records first blocker [r[bootstrap.i386-mes-runtime-layout.evidence]]
 
 - GIVEN the proven `tcc26-i386` predecessor
-- WHEN Crunch builds the i386 Mes runtime/header layout spike
+- WHEN Mantle builds the i386 Mes runtime/header layout spike
 - THEN the output MUST include logs and a summary naming the first blocked step or the next successful handoff boundary.
 
 ### Requirement: i386 TinyCC 0.9.27 handoff blocker [r[bootstrap.i386-mes-runtime-layout.blocker]]
 
-Crunch MUST distinguish Mes header/CRT layout progress from complete runtime library availability before attempting the TinyCC 0.9.27 -> Make 3.82 handoff.
+Mantle MUST distinguish Mes header/CRT layout progress from complete runtime library availability before attempting the TinyCC 0.9.27 -> Make 3.82 handoff.
 
 #### Scenario: Runtime library blocker is explicit [r[bootstrap.i386-mes-runtime-layout.blocker.runtime-library]]
 
@@ -1252,7 +1252,7 @@ Crunch MUST distinguish Mes header/CRT layout progress from complete runtime lib
 
 ### Requirement: i386 Mes libtcc1 compile flags [r[bootstrap.i386-mes-libtcc1-flags.repair]]
 
-Crunch MUST compile the i386 Mes `libtcc1.c` proof with flags that avoid unsupported broad float and long-long helper emission in the `tcc26-i386` predecessor.
+Mantle MUST compile the i386 Mes `libtcc1.c` proof with flags that avoid unsupported broad float and long-long helper emission in the `tcc26-i386` predecessor.
 
 #### Scenario: Real libtcc1 archive is created [r[bootstrap.i386-mes-libtcc1-flags.evidence]]
 
@@ -1262,7 +1262,7 @@ Crunch MUST compile the i386 Mes `libtcc1.c` proof with flags that avoid unsuppo
 
 ### Requirement: Post-libtcc1 TinyCC 0.9.27 blocker [r[bootstrap.i386-mes-libtcc1-flags.next-blocker]]
 
-Crunch MUST record the next TinyCC handoff blocker after real i386 `libtcc1.a` creation.
+Mantle MUST record the next TinyCC handoff blocker after real i386 `libtcc1.a` creation.
 
 #### Scenario: Next blocked step is explicit [r[bootstrap.i386-mes-libtcc1-flags.next-blocker.explicit]]
 
@@ -1274,7 +1274,7 @@ Crunch MUST record the next TinyCC handoff blocker after real i386 `libtcc1.a` c
 
 ### Requirement: i386 TinyCC 0.9.27 source diagnostics [r[bootstrap.i386-tcc27-source-diagnostics.narrowing]]
 
-Crunch MUST keep the i386 TinyCC 0.9.27 handoff diagnostic narrow enough to distinguish predecessor compiler source-emission failures from Mes runtime-library failures.
+Mantle MUST keep the i386 TinyCC 0.9.27 handoff diagnostic narrow enough to distinguish predecessor compiler source-emission failures from Mes runtime-library failures.
 
 #### Scenario: Focused diagnostic matrix is preserved [r[bootstrap.i386-tcc27-source-diagnostics.evidence]]
 
@@ -1284,7 +1284,7 @@ Crunch MUST keep the i386 TinyCC 0.9.27 handoff diagnostic narrow enough to dist
 
 ### Requirement: i386 TinyCC 0.9.27 pass1 parity patches [r[bootstrap.i386-tcc27-source-diagnostics.pass1-parity]]
 
-Crunch MUST keep the sibling tcc27 pass1 probe aligned with live-bootstrap pass1 source edits and flags when narrowing the handoff blocker.
+Mantle MUST keep the sibling tcc27 pass1 probe aligned with live-bootstrap pass1 source edits and flags when narrowing the handoff blocker.
 
 #### Scenario: Missing pass1 edit and unrelated flags are corrected [r[bootstrap.i386-tcc27-source-diagnostics.pass1-parity.flags]]
 
@@ -1331,7 +1331,7 @@ The system MUST keep patch 2.5.9 runtime proof incomplete until prerequisite mak
 - **THEN** the evidence records output path, smoke results, fallback status, and leakage-scan results
 
 ### Requirement: Live-bootstrap part bzip2 1.0.8 (tcc) is independently tracked [r[bootstrap.part.bzip2.1.0.8.tcc]]
-Crunch MUST track the live-bootstrap part `bzip2 1.0.8` as an independent bootstrap change bound to `bootstrap/bzip2-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `bzip2 1.0.8` as an independent bootstrap change bound to `bootstrap/bzip2-tcc.ncl`.
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/bzip2-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
 
@@ -1340,7 +1340,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/bzip2-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/bzip2-tcc.ncl`
-- AND it records a successful `crunch build bootstrap/bzip2-tcc.ncl` transcript
+- AND it records a successful `mantle build bootstrap/bzip2-tcc.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local [r[bootstrap.part.bzip2.1.0.8.tcc.downstream-local]]
@@ -1381,7 +1381,7 @@ The system MUST keep the rebuilt musl pass runtime proof incomplete until prereq
 
 #### Scenario: Source-level hardening is not runtime proof [r[bootstrap.part.musl.1.1.24.tcc.musl.runtime-validation.source-hardening]]
 - **GIVEN** `bootstrap/musl-1.1.24-tcc-musl.ncl` fails closed on missing startup objects
-- **WHEN** the derivation has not been built successfully in Crunch
+- **WHEN** the derivation has not been built successfully in Mantle
 - **THEN** runtime validation remains incomplete
 
 #### Scenario: Rebuilt musl contract is proven [r[bootstrap.part.musl.1.1.24.tcc.musl.runtime-validation.output-contract]]
@@ -1403,7 +1403,7 @@ The system MUST keep the final musl TinyCC runtime proof incomplete until prereq
 - **THEN** the evidence records output path, smoke results, fallback status, and leakage-scan results
 
 ### Requirement: Live-bootstrap part sed 4.0.9 (tcc) is independently tracked
-Crunch MUST track the live-bootstrap part `sed 4.0.9` as an independent bootstrap change bound to `bootstrap/sed-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `sed 4.0.9` as an independent bootstrap change bound to `bootstrap/sed-tcc.ncl`.
 ID: bootstrap.part.sed.4.0.9.tcc
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/sed-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1413,7 +1413,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/sed-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/sed-tcc.ncl`
-- AND it records a successful `crunch build bootstrap/sed-tcc.ncl` transcript
+- AND it records a successful `mantle build bootstrap/sed-tcc.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local
@@ -1424,7 +1424,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 ### Requirement: Live-bootstrap part bzip2 1.0.8 (musl) is independently tracked [r[bootstrap.part.bzip2.1.0.8.musl]]
-Crunch MUST track the live-bootstrap part `bzip2 1.0.8` as an independent bootstrap change bound to `bootstrap/bzip2-1.0.8-musl.ncl`.
+Mantle MUST track the live-bootstrap part `bzip2 1.0.8` as an independent bootstrap change bound to `bootstrap/bzip2-1.0.8-musl.ncl`.
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/bzip2-1.0.8-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
 
@@ -1433,7 +1433,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/bzip2-1.0.8-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/bzip2-1.0.8-musl.ncl`
-- AND it records a successful `crunch build bootstrap/bzip2-1.0.8-musl.ncl` transcript
+- AND it records a successful `mantle build bootstrap/bzip2-1.0.8-musl.ncl` transcript
 - AND it records a smoke check for the produced output contract
 
 #### Scenario: Downstream blockers stay local [r[bootstrap.part.bzip2.1.0.8.musl.downstream-local]]
@@ -1500,7 +1500,7 @@ The system MUST keep the first musl pass runtime proof incomplete until prerequi
 
 #### Scenario: Source-level hardening is not runtime proof [r[bootstrap.part.musl.1.1.24.tcc.runtime-validation.source-hardening]]
 - **GIVEN** `bootstrap/musl-1.1.24-tcc.ncl` fails closed on missing startup objects
-- **WHEN** the derivation has not been built successfully in Crunch
+- **WHEN** the derivation has not been built successfully in Mantle
 - **THEN** runtime validation remains incomplete
 
 #### Scenario: First musl contract is proven [r[bootstrap.part.musl.1.1.24.tcc.runtime-validation.output-contract]]
@@ -1512,7 +1512,7 @@ The system MUST keep the first musl pass runtime proof incomplete until prerequi
 The system MUST keep grep 2.4 runtime proof incomplete until a completed build transcript, output contract smoke test, and leakage scan are recorded.
 
 #### Scenario: Long-running prerequisite build [r[bootstrap.part.grep.2.4.runtime-validation.long-build]]
-- **GIVEN** Crunch needs to build prerequisite bootstrap inputs for `bootstrap/grep-2.4-musl.ncl`
+- **GIVEN** Mantle needs to build prerequisite bootstrap inputs for `bootstrap/grep-2.4-musl.ncl`
 - **WHEN** the validation run exceeds a short drain timeout
 - **THEN** the runtime proof remains in this follow-up change rather than being silently treated as complete
 
@@ -1522,7 +1522,7 @@ The system MUST keep grep 2.4 runtime proof incomplete until a completed build t
 - **THEN** `grep`, `egrep`, and `fgrep` are present and usable without undeclared host fallback
 
 ### Requirement: Live-bootstrap part mpc 1.2.1 is independently tracked
-Crunch MUST track the live-bootstrap implemented part `mpc-1.2.1` as an independent bootstrap change bound to `bootstrap/mpc-1.2.1.ncl`, while recording that upstream `parts.rst` currently labels the corresponding narrative heading `mpc 3.2.1`.
+Mantle MUST track the live-bootstrap implemented part `mpc-1.2.1` as an independent bootstrap change bound to `bootstrap/mpc-1.2.1.ncl`, while recording that upstream `parts.rst` currently labels the corresponding narrative heading `mpc 3.2.1`.
 ID: bootstrap.part.mpc.1.2.1
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/mpc-1.2.1.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1532,7 +1532,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/mpc-1.2.1.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/mpc-1.2.1.ncl`
-- AND it records a successful `crunch build bootstrap/mpc-1.2.1.ncl` transcript when declared prerequisite providers exist
+- AND it records a successful `mantle build bootstrap/mpc-1.2.1.ncl` transcript when declared prerequisite providers exist
 - AND if declared prerequisite providers are absent, it records fail-closed blocker evidence without substituting host or legacy providers
 - AND it records a smoke check for the produced output contract when an output exists
 
@@ -1544,7 +1544,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 ### Requirement: Live-bootstrap part autoconf 2.61 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.61` as an independent bootstrap change bound to `bootstrap/autoconf-2.61.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.61` as an independent bootstrap change bound to `bootstrap/autoconf-2.61.ncl`.
 ID: bootstrap.part.autoconf.2.61
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.61.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1554,7 +1554,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.61.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.61.ncl`
-- AND it records a successful `crunch build bootstrap/autoconf-2.61.ncl` transcript when declared prerequisite providers exist
+- AND it records a successful `mantle build bootstrap/autoconf-2.61.ncl` transcript when declared prerequisite providers exist
 - AND if declared prerequisite providers are absent or unvalidated, it records fail-closed blocker evidence without substituting host or legacy providers
 - AND it records a smoke check for the produced output contract when an output exists
 
@@ -1566,7 +1566,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 ### Requirement: Live-bootstrap part autoconf 2.52 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.52` as an independent bootstrap change bound to `bootstrap/autoconf-2.52.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.52` as an independent bootstrap change bound to `bootstrap/autoconf-2.52.ncl`.
 ID: bootstrap.part.autoconf.2.52
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.52.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence.
@@ -1576,7 +1576,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.52.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.52.ncl`
-- AND it records a successful `crunch build bootstrap/autoconf-2.52.ncl` transcript when declared prerequisite providers exist
+- AND it records a successful `mantle build bootstrap/autoconf-2.52.ncl` transcript when declared prerequisite providers exist
 - AND if declared prerequisite providers are absent, blocked, or unvalidated, it records fail-closed blocker evidence without substituting host or legacy providers
 - AND it records a smoke check for the produced output contract when an output exists
 
@@ -1588,7 +1588,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the downstream failure
 
 ### Requirement: Live-bootstrap part autoconf 2.53 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.53` as an independent bootstrap change bound to `bootstrap/autoconf-2.53.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.53` as an independent bootstrap change bound to `bootstrap/autoconf-2.53.ncl`.
 ID: bootstrap.part.autoconf.2.53
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.53.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1598,7 +1598,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.53.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.53.ncl`
-- AND it records either a successful `crunch build bootstrap/autoconf-2.53.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/autoconf-2.53.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided tools, or legacy compiler outputs for bootstrap proof
 
@@ -1610,7 +1610,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part autoconf 2.54 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.54` as an independent bootstrap change bound to `bootstrap/autoconf-2.54.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.54` as an independent bootstrap change bound to `bootstrap/autoconf-2.54.ncl`.
 ID: bootstrap.part.autoconf.2.54
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.54.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1620,7 +1620,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.54.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.54.ncl`
-- AND it records either a successful `crunch build bootstrap/autoconf-2.54.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/autoconf-2.54.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided tools, or legacy compiler outputs for bootstrap proof
 
@@ -1632,7 +1632,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part autoconf 2.55 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.55` as an independent bootstrap change bound to `bootstrap/autoconf-2.55.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.55` as an independent bootstrap change bound to `bootstrap/autoconf-2.55.ncl`.
 ID: bootstrap.part.autoconf.2.55
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.55.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1642,7 +1642,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.55.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.55.ncl`
-- AND it records either a successful `crunch build bootstrap/autoconf-2.55.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/autoconf-2.55.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided tools, or legacy compiler outputs for bootstrap proof
 
@@ -1654,7 +1654,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part autoconf 2.57 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.57` as an independent bootstrap change bound to `bootstrap/autoconf-2.57.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.57` as an independent bootstrap change bound to `bootstrap/autoconf-2.57.ncl`.
 ID: bootstrap.part.autoconf.2.57
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.57.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1664,7 +1664,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.57.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.57.ncl`
-- AND it records either a successful `crunch build bootstrap/autoconf-2.57.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/autoconf-2.57.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided tools, or legacy compiler outputs for bootstrap proof
 
@@ -1676,7 +1676,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part autoconf 2.59 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.59` as an independent bootstrap change bound to `bootstrap/autoconf-2.59.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.59` as an independent bootstrap change bound to `bootstrap/autoconf-2.59.ncl`.
 ID: bootstrap.part.autoconf.2.59
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.59.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1686,7 +1686,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.59.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.59.ncl`
-- AND it records either a successful `crunch build bootstrap/autoconf-2.59.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/autoconf-2.59.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided tools, or legacy compiler outputs for bootstrap proof
 
@@ -1698,7 +1698,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part autoconf 2.64 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.64` as an independent bootstrap change bound to `bootstrap/autoconf-2.64.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.64` as an independent bootstrap change bound to `bootstrap/autoconf-2.64.ncl`.
 ID: bootstrap.part.autoconf.2.64
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.64.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1708,7 +1708,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.64.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.64.ncl`
-- AND it records either a successful `crunch build bootstrap/autoconf-2.64.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/autoconf-2.64.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided tools, or legacy compiler outputs for bootstrap proof
 
@@ -1720,7 +1720,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part autoconf 2.69 is independently tracked
-Crunch MUST track the live-bootstrap part `autoconf 2.69` as an independent bootstrap change bound to `bootstrap/autoconf-2.69.ncl`.
+Mantle MUST track the live-bootstrap part `autoconf 2.69` as an independent bootstrap change bound to `bootstrap/autoconf-2.69.ncl`.
 ID: bootstrap.part.autoconf.2.69
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/autoconf-2.69.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1730,7 +1730,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/autoconf-2.69.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/autoconf-2.69.ncl`
-- AND it records either a successful `crunch build bootstrap/autoconf-2.69.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/autoconf-2.69.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided tools, or legacy compiler outputs for bootstrap proof
 
@@ -1742,7 +1742,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part automake 1.10.3 is independently tracked
-Crunch MUST track the live-bootstrap part `automake 1.10.3` as an independent bootstrap change bound to `bootstrap/automake-1.10.3.ncl`.
+Mantle MUST track the live-bootstrap part `automake 1.10.3` as an independent bootstrap change bound to `bootstrap/automake-1.10.3.ncl`.
 ID: bootstrap.part.automake.1.10.3
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.10.3.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1752,7 +1752,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/automake-1.10.3.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/automake-1.10.3.ncl`
-- AND it records either a successful `crunch build bootstrap/automake-1.10.3.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/automake-1.10.3.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Automake, or legacy compiler outputs for bootstrap proof
 
@@ -1764,7 +1764,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part automake 1.11.2 is independently tracked
-Crunch MUST track the live-bootstrap part `automake 1.11.2` as an independent bootstrap change bound to `bootstrap/automake-1.11.2.ncl`.
+Mantle MUST track the live-bootstrap part `automake 1.11.2` as an independent bootstrap change bound to `bootstrap/automake-1.11.2.ncl`.
 ID: bootstrap.part.automake.1.11.2
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.11.2.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1774,7 +1774,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/automake-1.11.2.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/automake-1.11.2.ncl`
-- AND it records either a successful `crunch build bootstrap/automake-1.11.2.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/automake-1.11.2.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Automake, or legacy compiler outputs for bootstrap proof
 
@@ -1786,7 +1786,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part automake 1.15.1 is independently tracked
-Crunch MUST track the live-bootstrap part `automake 1.15.1` as an independent bootstrap change bound to `bootstrap/automake-1.15.1.ncl`.
+Mantle MUST track the live-bootstrap part `automake 1.15.1` as an independent bootstrap change bound to `bootstrap/automake-1.15.1.ncl`.
 ID: bootstrap.part.automake.1.15.1
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.15.1.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1796,7 +1796,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/automake-1.15.1.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/automake-1.15.1.ncl`
-- AND it records either a successful `crunch build bootstrap/automake-1.15.1.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/automake-1.15.1.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Automake, or legacy compiler outputs for bootstrap proof
 
@@ -1808,7 +1808,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part automake 1.6.3 is independently tracked
-Crunch MUST track the live-bootstrap part `automake 1.6.3` as an independent bootstrap change bound to `bootstrap/automake-1.6.3.ncl`.
+Mantle MUST track the live-bootstrap part `automake 1.6.3` as an independent bootstrap change bound to `bootstrap/automake-1.6.3.ncl`.
 ID: bootstrap.part.automake.1.6.3
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.6.3.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1818,7 +1818,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/automake-1.6.3.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/automake-1.6.3.ncl`
-- AND it records either a successful `crunch build bootstrap/automake-1.6.3.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/automake-1.6.3.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Automake, or legacy compiler outputs for bootstrap proof
 
@@ -1830,7 +1830,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part automake 1.7 is independently tracked
-Crunch MUST track the live-bootstrap part `automake 1.7` as an independent bootstrap change bound to `bootstrap/automake-1.7.ncl`.
+Mantle MUST track the live-bootstrap part `automake 1.7` as an independent bootstrap change bound to `bootstrap/automake-1.7.ncl`.
 ID: bootstrap.part.automake.1.7
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.7.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1840,7 +1840,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/automake-1.7.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/automake-1.7.ncl`
-- AND it records either a successful `crunch build bootstrap/automake-1.7.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/automake-1.7.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Automake, or legacy compiler outputs for bootstrap proof
 
@@ -1852,7 +1852,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part automake 1.7.8 is independently tracked
-Crunch MUST track the live-bootstrap part `automake 1.7.8` as an independent bootstrap change bound to `bootstrap/automake-1.7.8.ncl`.
+Mantle MUST track the live-bootstrap part `automake 1.7.8` as an independent bootstrap change bound to `bootstrap/automake-1.7.8.ncl`.
 ID: bootstrap.part.automake.1.7.8
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.7.8.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1862,7 +1862,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/automake-1.7.8.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/automake-1.7.8.ncl`
-- AND it records either a successful `crunch build bootstrap/automake-1.7.8.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/automake-1.7.8.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Automake, or legacy compiler outputs for bootstrap proof
 
@@ -1874,7 +1874,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part automake 1.8.5 is independently tracked
-Crunch MUST track the live-bootstrap part `automake 1.8.5` as an independent bootstrap change bound to `bootstrap/automake-1.8.5.ncl`.
+Mantle MUST track the live-bootstrap part `automake 1.8.5` as an independent bootstrap change bound to `bootstrap/automake-1.8.5.ncl`.
 ID: bootstrap.part.automake.1.8.5
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.8.5.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1884,7 +1884,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/automake-1.8.5.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/automake-1.8.5.ncl`
-- AND it records either a successful `crunch build bootstrap/automake-1.8.5.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/automake-1.8.5.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Automake, or legacy compiler outputs for bootstrap proof
 
@@ -1896,7 +1896,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part automake 1.9.6 is independently tracked
-Crunch MUST track the live-bootstrap part `automake 1.9.6` as an independent bootstrap change bound to `bootstrap/automake-1.9.6.ncl`.
+Mantle MUST track the live-bootstrap part `automake 1.9.6` as an independent bootstrap change bound to `bootstrap/automake-1.9.6.ncl`.
 ID: bootstrap.part.automake.1.9.6
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/automake-1.9.6.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1906,7 +1906,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/automake-1.9.6.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/automake-1.9.6.ncl`
-- AND it records either a successful `crunch build bootstrap/automake-1.9.6.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/automake-1.9.6.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Automake, or legacy compiler outputs for bootstrap proof
 
@@ -1918,7 +1918,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part bash 2.05b is independently tracked
-Crunch MUST track the live-bootstrap part `bash 2.05b` as an independent bootstrap change bound to `bootstrap/bash-2.05b-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `bash 2.05b` as an independent bootstrap change bound to `bootstrap/bash-2.05b-tcc.ncl`.
 ID: bootstrap.part.bash.2.05b
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/bash-2.05b-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1928,7 +1928,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/bash-2.05b-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/bash-2.05b-tcc.ncl`
-- AND it records either a successful `crunch build bootstrap/bash-2.05b-tcc.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/bash-2.05b-tcc.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided Bash, or legacy compiler outputs for bootstrap proof
 
@@ -1940,7 +1940,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part binutils 2.30 is independently tracked
-Crunch MUST track the live-bootstrap part `binutils 2.30` as an independent bootstrap change bound to `bootstrap/binutils-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `binutils 2.30` as an independent bootstrap change bound to `bootstrap/binutils-tcc.ncl`.
 ID: bootstrap.part.binutils.2.30
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/binutils-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1950,7 +1950,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/binutils-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/binutils-tcc.ncl`
-- AND it records either a successful `crunch build bootstrap/binutils-tcc.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/binutils-tcc.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host binutils, Nix-provided binutils, or legacy compiler outputs for bootstrap proof
 
@@ -1962,7 +1962,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part binutils 2.41 is independently tracked
-Crunch MUST track the live-bootstrap part `binutils 2.41` as an independent bootstrap change bound to `bootstrap/binutils-full.ncl`.
+Mantle MUST track the live-bootstrap part `binutils 2.41` as an independent bootstrap change bound to `bootstrap/binutils-full.ncl`.
 ID: bootstrap.part.binutils.2.41
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/binutils-full.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1972,7 +1972,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/binutils-full.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/binutils-full.ncl`
-- AND it records either a successful `crunch build bootstrap/binutils-full.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/binutils-full.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host binutils, Nix-provided binutils, or legacy compiler outputs for bootstrap proof
 
@@ -1984,7 +1984,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part bison 3.4.1 is independently tracked
-Crunch MUST track the live-bootstrap part `bison 3.4.1` as an independent bootstrap change bound to `bootstrap/bison-3.4.1-musl.ncl`.
+Mantle MUST track the live-bootstrap part `bison 3.4.1` as an independent bootstrap change bound to `bootstrap/bison-3.4.1-musl.ncl`.
 ID: bootstrap.part.bison.3.4.1
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/bison-3.4.1-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -1994,7 +1994,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/bison-3.4.1-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/bison-3.4.1-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/bison-3.4.1-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/bison-3.4.1-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host Bison, Nix-provided Bison, host GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2006,7 +2006,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part coreutils 5.0 (musl) is independently tracked
-Crunch MUST track the live-bootstrap part `coreutils 5.0` as an independent bootstrap change bound to `bootstrap/coreutils-5.0-musl.ncl`.
+Mantle MUST track the live-bootstrap part `coreutils 5.0` as an independent bootstrap change bound to `bootstrap/coreutils-5.0-musl.ncl`.
 ID: bootstrap.part.coreutils.5.0.musl
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/coreutils-5.0-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -2016,7 +2016,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/coreutils-5.0-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/coreutils-5.0-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/coreutils-5.0-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/coreutils-5.0-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host coreutils, Nix-provided coreutils, host GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2028,7 +2028,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part coreutils 5.0 (tcc) is independently tracked
-Crunch MUST track the live-bootstrap part `coreutils 5.0` as an independent bootstrap change bound to `bootstrap/coreutils-5.0-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `coreutils 5.0` as an independent bootstrap change bound to `bootstrap/coreutils-5.0-tcc.ncl`.
 ID: bootstrap.part.coreutils.5.0.tcc
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/coreutils-5.0-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -2038,7 +2038,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/coreutils-5.0-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/coreutils-5.0-tcc.ncl`
-- AND it records either a successful `crunch build bootstrap/coreutils-5.0-tcc.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/coreutils-5.0-tcc.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host coreutils, Nix-provided coreutils, host GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2050,7 +2050,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part coreutils 6.10 is independently tracked
-Crunch MUST track the live-bootstrap part `coreutils 6.10` as an independent bootstrap change bound to `bootstrap/coreutils-6.10-musl.ncl`.
+Mantle MUST track the live-bootstrap part `coreutils 6.10` as an independent bootstrap change bound to `bootstrap/coreutils-6.10-musl.ncl`.
 ID: bootstrap.part.coreutils.6.10
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/coreutils-6.10-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -2060,7 +2060,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/coreutils-6.10-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/coreutils-6.10-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/coreutils-6.10-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/coreutils-6.10-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host coreutils, Nix-provided coreutils, host GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2072,7 +2072,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part diffutils 2.7 is independently tracked
-Crunch MUST track the live-bootstrap part `diffutils 2.7` as an independent bootstrap change bound to `bootstrap/diffutils-2.7-musl.ncl`.
+Mantle MUST track the live-bootstrap part `diffutils 2.7` as an independent bootstrap change bound to `bootstrap/diffutils-2.7-musl.ncl`.
 ID: bootstrap.part.diffutils.2.7
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/diffutils-2.7-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -2082,7 +2082,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/diffutils-2.7-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/diffutils-2.7-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/diffutils-2.7-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/diffutils-2.7-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host diffutils, Nix-provided diffutils, host GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2094,7 +2094,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part flex 2.5.11 is independently tracked
-Crunch MUST track the live-bootstrap part `flex 2.5.11` as an independent bootstrap change bound to `bootstrap/flex-2.5.11-musl.ncl`.
+Mantle MUST track the live-bootstrap part `flex 2.5.11` as an independent bootstrap change bound to `bootstrap/flex-2.5.11-musl.ncl`.
 ID: bootstrap.part.flex.2.5.11
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/flex-2.5.11-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -2104,7 +2104,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/flex-2.5.11-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/flex-2.5.11-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/flex-2.5.11-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/flex-2.5.11-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host flex, Nix-provided flex, host GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2116,7 +2116,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part flex 2.6.4 is independently tracked
-Crunch MUST track the live-bootstrap part `flex 2.6.4` as an independent bootstrap change bound to `bootstrap/flex-2.6.4-musl.ncl`.
+Mantle MUST track the live-bootstrap part `flex 2.6.4` as an independent bootstrap change bound to `bootstrap/flex-2.6.4-musl.ncl`.
 ID: bootstrap.part.flex.2.6.4
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/flex-2.6.4-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -2126,7 +2126,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/flex-2.6.4-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/flex-2.6.4-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/flex-2.6.4-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/flex-2.6.4-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host flex, Nix-provided flex, host GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2138,7 +2138,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part gawk 3.0.4 is independently tracked
-Crunch MUST track the live-bootstrap part `gawk 3.0.4` as an independent bootstrap change bound to `bootstrap/gawk-3.0.4-musl.ncl`.
+Mantle MUST track the live-bootstrap part `gawk 3.0.4` as an independent bootstrap change bound to `bootstrap/gawk-3.0.4-musl.ncl`.
 ID: bootstrap.part.gawk.3.0.4
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gawk-3.0.4-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, or chain-promotion success.
@@ -2148,7 +2148,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/gawk-3.0.4-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/gawk-3.0.4-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/gawk-3.0.4-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/gawk-3.0.4-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host awk/gawk, Nix-provided awk/gawk, host GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2160,7 +2160,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part gcc 10.5.0 is independently tracked
-Crunch MUST track the live-bootstrap part `gcc 10.5.0` as an independent bootstrap change bound to `bootstrap/gcc-10.ncl`.
+Mantle MUST track the live-bootstrap part `gcc 10.5.0` as an independent bootstrap change bound to `bootstrap/gcc-10.ncl`.
 ID: bootstrap.part.gcc.10.5.0
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gcc-10.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, final-provider, or chain-promotion success.
@@ -2170,7 +2170,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/gcc-10.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/gcc-10.ncl`
-- AND it records either a successful `crunch build bootstrap/gcc-10.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/gcc-10.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2182,7 +2182,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part gcc 4.0.4 is independently tracked
-Crunch MUST track the live-bootstrap part `gcc 4.0.4` as an independent bootstrap change bound to `bootstrap/gcc-4.0.ncl`.
+Mantle MUST track the live-bootstrap part `gcc 4.0.4` as an independent bootstrap change bound to `bootstrap/gcc-4.0.ncl`.
 ID: bootstrap.part.gcc.4.0.4
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gcc-4.0.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, compiler-provider, or chain-promotion success.
@@ -2192,7 +2192,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/gcc-4.0.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/gcc-4.0.ncl`
-- AND it records either a successful `crunch build bootstrap/gcc-4.0.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/gcc-4.0.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided GCC, or legacy compiler outputs for bootstrap proof
 
@@ -2204,7 +2204,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part gcc 4.7.4 is independently tracked
-Crunch MUST track the live-bootstrap part `gcc 4.7.4` as an independent bootstrap change bound to `bootstrap/gcc-4.7.ncl`.
+Mantle MUST track the live-bootstrap part `gcc 4.7.4` as an independent bootstrap change bound to `bootstrap/gcc-4.7.ncl`.
 ID: bootstrap.part.gcc.4.7.4
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gcc-4.7.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, compiler-provider, or chain-promotion success.
@@ -2214,14 +2214,14 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/gcc-4.7.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/gcc-4.7.ncl`
-- AND it records either a successful `crunch build bootstrap/gcc-4.7.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/gcc-4.7.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GCC, Nix-provided GCC, or legacy compiler outputs for bootstrap proof
 
 #### Scenario: Parity report requires checked C++ provider contract
 
 - GIVEN `bootstrap/evidence/gcc-4.7-cxx-provider-contract.json` records the expected C/C++ configure, build, install, and smoke markers
-- WHEN `crunch bootstrap parity-report` evaluates the `gcc.4.7` row
+- WHEN `mantle bootstrap parity-report` evaluates the `gcc.4.7` row
 - THEN the row remains `partial` until native/full GCC 4.7 correctness is proven
 - AND the row does not report an evidence failure while every required marker is present in `bootstrap/gcc-4.7.ncl`
 - AND marker drift or a missing receipt is reported as an evidence failure
@@ -2234,7 +2234,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part gmp 6.2.1 is independently tracked
-Crunch MUST track the live-bootstrap part `gmp 6.2.1` as an independent bootstrap change bound to `bootstrap/gmp-6.2.1.ncl`.
+Mantle MUST track the live-bootstrap part `gmp 6.2.1` as an independent bootstrap change bound to `bootstrap/gmp-6.2.1.ncl`.
 ID: bootstrap.part.gmp.6.2.1
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gmp-6.2.1.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, library-provider, or chain-promotion success.
@@ -2244,7 +2244,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/gmp-6.2.1.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/gmp-6.2.1.ncl`
-- AND it records either a successful `crunch build bootstrap/gmp-6.2.1.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/gmp-6.2.1.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host GMP, Nix-provided GMP, or legacy library outputs for bootstrap proof
 
@@ -2256,7 +2256,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part gzip 1.2.4 is independently tracked
-Crunch MUST track the live-bootstrap part `gzip 1.2.4` as an independent bootstrap change bound to `bootstrap/gzip-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `gzip 1.2.4` as an independent bootstrap change bound to `bootstrap/gzip-tcc.ncl`.
 ID: bootstrap.part.gzip.1.2.4
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/gzip-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. The change MUST record that upstream `parts.rst` labels the section `gzip 1.2.5` while the implemented step/source is `gzip 1.2.4`. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2266,7 +2266,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/gzip-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/gzip-tcc.ncl`
-- AND it records either a successful `crunch build bootstrap/gzip-tcc.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/gzip-tcc.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host gzip, Nix-provided gzip, or legacy tool outputs for bootstrap proof
 
@@ -2278,7 +2278,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part heirloom devtools is independently tracked
-Crunch MUST track the live-bootstrap part `heirloom devtools` as an independent bootstrap change bound to `bootstrap/heirloom-devtools.ncl`.
+Mantle MUST track the live-bootstrap part `heirloom devtools` as an independent bootstrap change bound to `bootstrap/heirloom-devtools.ncl`.
 ID: bootstrap.part.heirloom.devtools
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/heirloom-devtools.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2288,7 +2288,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/heirloom-devtools.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/heirloom-devtools.ncl`
-- AND it records either a successful `crunch build bootstrap/heirloom-devtools.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/heirloom-devtools.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host yacc/lex, Nix-provided yacc/lex, or legacy tool outputs for bootstrap proof
 
@@ -2300,7 +2300,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part libtool 2.2.4 is independently tracked
-Crunch MUST track the live-bootstrap part `libtool 2.2.4` as an independent bootstrap change bound to `bootstrap/libtool-2.2.4.ncl`.
+Mantle MUST track the live-bootstrap part `libtool 2.2.4` as an independent bootstrap change bound to `bootstrap/libtool-2.2.4.ncl`.
 ID: bootstrap.part.libtool.2.2.4
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/libtool-2.2.4.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2310,7 +2310,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/libtool-2.2.4.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/libtool-2.2.4.ncl`
-- AND it records either a successful `crunch build bootstrap/libtool-2.2.4.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/libtool-2.2.4.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host libtool, Nix-provided libtool, or legacy tool outputs for bootstrap proof
 
@@ -2322,7 +2322,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part m4 1.4.7 is independently tracked
-Crunch MUST track the live-bootstrap part `m4 1.4.7` as an independent bootstrap change bound to `bootstrap/m4-1.4.7-musl.ncl`.
+Mantle MUST track the live-bootstrap part `m4 1.4.7` as an independent bootstrap change bound to `bootstrap/m4-1.4.7-musl.ncl`.
 ID: bootstrap.part.m4.1.4.7
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/m4-1.4.7-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, or if the current derivation intentionally uses a bootstrap bridge instead of a full direct GNU m4 binary, the part MUST record gate evidence and MUST NOT claim full toolchain promotion success.
@@ -2332,7 +2332,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/m4-1.4.7-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/m4-1.4.7-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/m4-1.4.7-musl.ncl` transcript or explicit prerequisite/runtime-gated build evidence
+- AND it records either a successful `mantle build bootstrap/m4-1.4.7-musl.ncl` transcript or explicit prerequisite/runtime-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no full direct-build output path exists yet
 - AND it does not substitute host m4, Nix-provided m4, or legacy tool outputs for bootstrap proof
 
@@ -2344,7 +2344,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor, direct-build, or downstream runtime failure
 
 ### Requirement: Live-bootstrap part mpfr 4.1.0 is independently tracked
-Crunch MUST track the live-bootstrap part `mpfr 4.1.0` as an independent bootstrap change bound to `bootstrap/mpfr-4.1.0.ncl`.
+Mantle MUST track the live-bootstrap part `mpfr 4.1.0` as an independent bootstrap change bound to `bootstrap/mpfr-4.1.0.ncl`.
 ID: bootstrap.part.mpfr.4.1.0
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/mpfr-4.1.0.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2354,7 +2354,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/mpfr-4.1.0.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/mpfr-4.1.0.ncl`
-- AND it records either a successful `crunch build bootstrap/mpfr-4.1.0.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/mpfr-4.1.0.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host MPFR/GMP/GCC, Nix-provided libraries, or legacy tool outputs for bootstrap proof
 
@@ -2366,7 +2366,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part musl 1.2.5 full is independently tracked
-Crunch MUST track the live-bootstrap part `musl 1.2.5` as an independent bootstrap change bound to `bootstrap/musl-full.ncl`.
+Mantle MUST track the live-bootstrap part `musl 1.2.5` as an independent bootstrap change bound to `bootstrap/musl-full.ncl`.
 ID: bootstrap.part.musl.1.2.5.full
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/musl-full.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2376,7 +2376,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/musl-full.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/musl-full.ncl`
-- AND it records either a successful `crunch build bootstrap/musl-full.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/musl-full.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host musl/GCC, Nix-provided libc objects, or legacy tool outputs for bootstrap proof
 
@@ -2388,7 +2388,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part oyacc 6.6 is independently tracked
-Crunch MUST track the live-bootstrap part `oyacc 6.6` as an independent bootstrap change bound to `bootstrap/oyacc-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `oyacc 6.6` as an independent bootstrap change bound to `bootstrap/oyacc-tcc.ncl`.
 ID: bootstrap.part.oyacc.6.6
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/oyacc-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2398,7 +2398,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/oyacc-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/oyacc-tcc.ncl`
-- AND it records either a successful `crunch build bootstrap/oyacc-tcc.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/oyacc-tcc.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host yacc, Nix-provided yacc, or legacy parser-generator outputs for bootstrap proof
 
@@ -2410,7 +2410,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part perl 5.000 is independently tracked
-Crunch MUST track the live-bootstrap part `perl 5.000` as an independent bootstrap change bound to `bootstrap/perl-5.000-musl.ncl`.
+Mantle MUST track the live-bootstrap part `perl 5.000` as an independent bootstrap change bound to `bootstrap/perl-5.000-musl.ncl`.
 ID: bootstrap.part.perl.5.000
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.000-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2420,7 +2420,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/perl-5.000-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/perl-5.000-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/perl-5.000-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/perl-5.000-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host Perl, Nix-provided Perl, or legacy interpreter outputs for bootstrap proof
 
@@ -2432,7 +2432,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part perl 5.003 is independently tracked
-Crunch MUST track the live-bootstrap part `perl 5.003` as an independent bootstrap change bound to `bootstrap/perl-5.003-musl.ncl`.
+Mantle MUST track the live-bootstrap part `perl 5.003` as an independent bootstrap change bound to `bootstrap/perl-5.003-musl.ncl`.
 ID: bootstrap.part.perl.5.003
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.003-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2442,7 +2442,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/perl-5.003-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/perl-5.003-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/perl-5.003-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/perl-5.003-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host Perl, Nix-provided Perl, or legacy interpreter outputs for bootstrap proof
 
@@ -2454,7 +2454,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part perl 5.004_05 is independently tracked
-Crunch MUST track the live-bootstrap part `perl 5.004_05` as an independent bootstrap change bound to `bootstrap/perl-5.004_05-musl.ncl`.
+Mantle MUST track the live-bootstrap part `perl 5.004_05` as an independent bootstrap change bound to `bootstrap/perl-5.004_05-musl.ncl`.
 ID: bootstrap.part.perl.5.004.05
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.004_05-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2464,7 +2464,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/perl-5.004_05-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/perl-5.004_05-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/perl-5.004_05-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/perl-5.004_05-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host Perl, Nix-provided Perl, or legacy interpreter outputs for bootstrap proof
 
@@ -2476,7 +2476,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part perl 5.005_03 is independently tracked
-Crunch MUST track the live-bootstrap part `perl 5.005_03` as an independent bootstrap change bound to `bootstrap/perl-5.005_03-musl.ncl`.
+Mantle MUST track the live-bootstrap part `perl 5.005_03` as an independent bootstrap change bound to `bootstrap/perl-5.005_03-musl.ncl`.
 ID: bootstrap.part.perl.5.005.03
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.005_03-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2486,7 +2486,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/perl-5.005_03-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/perl-5.005_03-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/perl-5.005_03-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/perl-5.005_03-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host Perl, Nix-provided Perl, or legacy interpreter outputs for bootstrap proof
 
@@ -2498,7 +2498,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part perl 5.6.2 is independently tracked
-Crunch MUST track the live-bootstrap part `perl 5.6.2` as an independent bootstrap change bound to `bootstrap/perl-5.6.2-musl.ncl`.
+Mantle MUST track the live-bootstrap part `perl 5.6.2` as an independent bootstrap change bound to `bootstrap/perl-5.6.2-musl.ncl`.
 ID: bootstrap.part.perl.5.6.2
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/perl-5.6.2-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2508,7 +2508,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/perl-5.6.2-musl.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/perl-5.6.2-musl.ncl`
-- AND it records either a successful `crunch build bootstrap/perl-5.6.2-musl.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/perl-5.6.2-musl.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host Perl, Nix-provided Perl, or legacy interpreter outputs for bootstrap proof
 
@@ -2520,7 +2520,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part sed 4.0.9 (musl) is independently tracked
-Crunch MUST track the live-bootstrap part `sed 4.0.9` as an independent bootstrap change bound to `bootstrap/sed-4.0.9-musl.ncl`.
+Mantle MUST track the live-bootstrap part `sed 4.0.9` as an independent bootstrap change bound to `bootstrap/sed-4.0.9-musl.ncl`.
 ID: bootstrap.part.sed.4.0.9.musl
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/sed-4.0.9-musl.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. Because this derivation currently preserves an explicit `sed-tcc` bridge while the TinyCC/musl source compile boundary is blocked, the part MUST record bridge/gate evidence and MUST NOT claim musl source-build, leakage-clean, tool-provider, or chain-promotion success.
@@ -2542,7 +2542,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the compile-boundary or downstream runtime failure
 
 ### Requirement: Live-bootstrap part source-built full seed normalization is independently tracked
-Crunch MUST track the live-bootstrap part `gcc 10.5.0 through binutils 2.41` as an independent bootstrap change bound to `bootstrap/seed-full.ncl`.
+Mantle MUST track the live-bootstrap part `gcc 10.5.0 through binutils 2.41` as an independent bootstrap change bound to `bootstrap/seed-full.ncl`.
 ID: bootstrap.part.seed.full
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/seed-full.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor toolchains are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim full-source seed promotion, leakage-clean runtime proof, or end-to-end source-built success.
@@ -2553,7 +2553,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/seed-full.ncl`
 - AND it records the normalized seed output contract and source-chain audit evidence
-- AND it records either a successful `crunch build bootstrap/seed-full.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/seed-full.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it does not promote the full-source seed until GCC 10.5.0, musl 1.2.5, and binutils 2.41 predecessor proofs are trusted
 
 #### Scenario: Downstream blockers stay local
@@ -2564,7 +2564,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - AND a separate part change tracks the predecessor or downstream runtime failure
 
 ### Requirement: Live-bootstrap part tar 1.12 is independently tracked
-Crunch MUST track the live-bootstrap part `tar 1.12` as an independent bootstrap change bound to `bootstrap/tar-tcc.ncl`.
+Mantle MUST track the live-bootstrap part `tar 1.12` as an independent bootstrap change bound to `bootstrap/tar-tcc.ncl`.
 ID: bootstrap.part.tar.1.12
 
 The part scope MUST include only the source pins, patches, derivation logic, output contract, and evidence needed for `bootstrap/tar-tcc.ncl` and direct predecessor compatibility. Broader chain validation MAY depend on this part, but MUST NOT replace this part's own build and smoke evidence. If declared predecessor outputs are unavailable or unvalidated, the part MUST record prerequisite-gated evidence and MUST NOT claim build, smoke, leakage-clean, tool-provider, or chain-promotion success.
@@ -2574,7 +2574,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 - GIVEN implementation work touches `bootstrap/tar-tcc.ncl`
 - WHEN the part is marked complete
 - THEN the change records source-pin audit evidence for `bootstrap/tar-tcc.ncl`
-- AND it records either a successful `crunch build bootstrap/tar-tcc.ncl` transcript or explicit prerequisite-gated build evidence
+- AND it records either a successful `mantle build bootstrap/tar-tcc.ncl` transcript or explicit prerequisite-gated build evidence
 - AND it records either a smoke check for the produced output contract or explicit evidence that no output path exists yet
 - AND it does not substitute host tar, Nix-provided tar, or legacy archive tools for bootstrap proof
 
@@ -2587,7 +2587,7 @@ The part scope MUST include only the source pins, patches, derivation logic, out
 
 ### Requirement: Bootstrap blocker inventory is deterministic [r[bootstrap.blocker-inventory.deterministic]]
 
-Crunch MUST provide a checked-in bootstrap blocker inventory gate that deterministically derives remaining full-source bootstrap blockers from repository-controlled sources.
+Mantle MUST provide a checked-in bootstrap blocker inventory gate that deterministically derives remaining full-source bootstrap blockers from repository-controlled sources.
 
 The inventory MUST classify at least bridge outputs, placeholder or normalization-only providers, legacy-provider fallback, host-tool fallback, prerequisite-gated evidence, and known compiler/runtime crash boundaries. Each finding MUST include a stable marker class, source path, line or artifact locator when available, and a short explanation of the blocked promotion claim.
 
@@ -2615,7 +2615,7 @@ The inventory MUST classify at least bridge outputs, placeholder or normalizatio
 
 ### Requirement: Full-source promotion claims fail closed while blockers remain [r[bootstrap.blocker-inventory.promotion-drift]]
 
-Crunch MUST fail a bootstrap readiness or promotion check when repository-controlled status text, manifests, reports, or seed-provider metadata claim full-source bootstrap readiness while configured blocker markers remain present.
+Mantle MUST fail a bootstrap readiness or promotion check when repository-controlled status text, manifests, reports, or seed-provider metadata claim full-source bootstrap readiness while configured blocker markers remain present.
 
 The failure MUST name the conflicting promotion claim and at least one remaining blocker class. It MUST NOT require running the heavyweight self-hosting proof to reject an inconsistent readiness claim.
 
@@ -2648,7 +2648,7 @@ The blocker inventory gate MUST document how marker classes are added, updated, 
 - AND the promotion-drift negative fixture still fails for any remaining blocker class
 
 ### Requirement: GCC 4.0 Correctness Promotion Plan [r[gcc40-correctness-roadmap]]
-Crunch MUST track GCC 4.0 correctness promotion separately from pass1 graph completion, with verifiable milestones for replacing stubs and adding semantic smokes.
+Mantle MUST track GCC 4.0 correctness promotion separately from pass1 graph completion, with verifiable milestones for replacing stubs and adding semantic smokes.
 
 #### Scenario: Graph completion caveat remains explicit [r[gcc40-correctness-roadmap.1]]
 - GIVEN the GCC 4.0 artifact builds successfully
@@ -2661,7 +2661,7 @@ Crunch MUST track GCC 4.0 correctness promotion separately from pass1 graph comp
 - THEN the task proves a specific semantic or executable behavior rather than broad completion
 
 ### Requirement: GCC 4.0 Libgcc Member Semantics [r[gcc40-libgcc-semantic-member]]
-Crunch MUST be able to promote individual GCC 4.0 `libgcc.a` members from placeholder bodies to verified semantics without requiring a full native GCC rewrite in the same change.
+Mantle MUST be able to promote individual GCC 4.0 `libgcc.a` members from placeholder bodies to verified semantics without requiring a full native GCC rewrite in the same change.
 
 #### Scenario: One member has non-placeholder semantics [r[gcc40-libgcc-semantic-member.1]]
 - GIVEN the GCC 4.0 bootstrap artifact is built
@@ -2674,7 +2674,7 @@ Crunch MUST be able to promote individual GCC 4.0 `libgcc.a` members from placeh
 - THEN expected member names and symbols remain visible
 
 ### Requirement: GCC 4.0 Muldi3 Libgcc Semantics [r[gcc40-libgcc-muldi3-semantics]]
-Crunch MUST be able to promote `_muldi3` from a placeholder body to verified signed 64-bit multiplication semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
+Mantle MUST be able to promote `_muldi3` from a placeholder body to verified signed 64-bit multiplication semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
 
 #### Scenario: Muldi3 has non-placeholder semantics [r[gcc40-libgcc-muldi3-semantics.1]]
 - GIVEN the GCC 4.0 bootstrap artifact is built
@@ -2689,7 +2689,7 @@ Crunch MUST be able to promote `_muldi3` from a placeholder body to verified sig
 - AND the archive continues to use the deterministic hand-written ar(5) member list
 
 ### Requirement: GCC 4.0 Lshrdi3 Libgcc Semantics [r[gcc40-libgcc-lshrdi3-semantics]]
-Crunch MUST be able to promote `_lshrdi3` from a placeholder body to verified unsigned 64-bit logical-right-shift semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
+Mantle MUST be able to promote `_lshrdi3` from a placeholder body to verified unsigned 64-bit logical-right-shift semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
 
 #### Scenario: Lshrdi3 has non-placeholder semantics [r[gcc40-libgcc-lshrdi3-semantics.1]]
 - GIVEN the GCC 4.0 bootstrap artifact is built
@@ -2704,7 +2704,7 @@ Crunch MUST be able to promote `_lshrdi3` from a placeholder body to verified un
 - AND the archive continues to use the deterministic hand-written ar(5) member list
 
 ### Requirement: GCC 4.0 Ashldi3 Libgcc Semantics [r[gcc40-libgcc-ashldi3-semantics]]
-Crunch MUST be able to promote `_ashldi3` from a placeholder body to verified 64-bit left-shift semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
+Mantle MUST be able to promote `_ashldi3` from a placeholder body to verified 64-bit left-shift semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
 
 #### Scenario: Ashldi3 has non-placeholder semantics [r[gcc40-libgcc-ashldi3-semantics.1]]
 - GIVEN the GCC 4.0 bootstrap artifact is built
@@ -2719,7 +2719,7 @@ Crunch MUST be able to promote `_ashldi3` from a placeholder body to verified 64
 - AND the archive continues to use the deterministic hand-written ar(5) member list
 
 ### Requirement: GCC 4.0 Ashrdi3 Libgcc Semantics [r[gcc40-libgcc-ashrdi3-semantics]]
-Crunch MUST be able to promote `_ashrdi3` from a placeholder body to verified signed 64-bit arithmetic-right-shift semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
+Mantle MUST be able to promote `_ashrdi3` from a placeholder body to verified signed 64-bit arithmetic-right-shift semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
 
 #### Scenario: Ashrdi3 has non-placeholder semantics [r[gcc40-libgcc-ashrdi3-semantics.1]]
 - GIVEN the GCC 4.0 bootstrap artifact is built
@@ -2734,7 +2734,7 @@ Crunch MUST be able to promote `_ashrdi3` from a placeholder body to verified si
 - AND the archive continues to use the deterministic hand-written ar(5) member list
 
 ### Requirement: GCC 4.0 Cmpdi2 Libgcc Semantics [r[gcc40-libgcc-cmpdi2-semantics]]
-Crunch MUST be able to promote `_cmpdi2` from a placeholder body to verified signed 64-bit comparison semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
+Mantle MUST be able to promote `_cmpdi2` from a placeholder body to verified signed 64-bit comparison semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
 
 #### Scenario: Cmpdi2 has non-placeholder semantics [r[gcc40-libgcc-cmpdi2-semantics.1]]
 - GIVEN the GCC 4.0 bootstrap artifact is built
@@ -2749,7 +2749,7 @@ Crunch MUST be able to promote `_cmpdi2` from a placeholder body to verified sig
 - AND the archive continues to use the deterministic hand-written ar(5) member list
 
 ### Requirement: GCC 4.0 Ucmpdi2 Libgcc Semantics [r[gcc40-libgcc-ucmpdi2-semantics]]
-Crunch MUST be able to promote `_ucmpdi2` from a placeholder body to verified unsigned 64-bit comparison semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
+Mantle MUST be able to promote `_ucmpdi2` from a placeholder body to verified unsigned 64-bit comparison semantics without broadening the GCC 4.0 pass1 bridge into a full native GCC rewrite.
 
 #### Scenario: Ucmpdi2 has non-placeholder semantics [r[gcc40-libgcc-ucmpdi2-semantics.1]]
 - GIVEN the GCC 4.0 bootstrap artifact is built
@@ -2765,10 +2765,10 @@ Crunch MUST be able to promote `_ucmpdi2` from a placeholder body to verified un
 
 ### Requirement: Whole-bootstrap parity map
 
-Crunch MUST maintain a canonical whole-bootstrap parity map that covers the complete bootstrap ladder required to claim parity with the reference source-bootstrap ecosystems being used as inputs: live-bootstrap for the concrete seed-to-modern-toolchain stage order, Guix for full-source bootstrap claim semantics and trust-root disclosure, and StageX for the no-quorum audited-seed lineage profile.
+Mantle MUST maintain a canonical whole-bootstrap parity map that covers the complete bootstrap ladder required to claim parity with the reference source-bootstrap ecosystems being used as inputs: live-bootstrap for the concrete seed-to-modern-toolchain stage order, Guix for full-source bootstrap claim semantics and trust-root disclosure, and StageX for the no-quorum audited-seed lineage profile.
 ID: bootstrap.parity.map
 
-The map MUST enumerate every planned or implemented bootstrap stage from the audited seed through the normalized seed provider and final self-build proof, including stage0/hex0 material, M0/M1/hex2/kaem-style transition tools, Mes, TinyCC, musl, make, patch, grep, sed, bzip2, gzip, tar, coreutils, diffutils, gawk, bison, flex, m4, libtool, autoconf/automake versions, Perl versions, GMP, MPFR, MPC, binutils generations, GCC 4.0, GCC 4.7, GCC 10, full musl/binutils handoff, seed-full, selftest, integration-test, and the Crunch self-build stages. Each entry MUST name the reference source lineage (`live-bootstrap`, `guix`, `stagex`, or a documented Crunch-specific bridge), source artifact identity, patch set, provider inputs and outputs, implementation derivation, placeholder status, runtime-smoke evidence, proof transcript path or digest, and known deviations.
+The map MUST enumerate every planned or implemented bootstrap stage from the audited seed through the normalized seed provider and final self-build proof, including stage0/hex0 material, M0/M1/hex2/kaem-style transition tools, Mes, TinyCC, musl, make, patch, grep, sed, bzip2, gzip, tar, coreutils, diffutils, gawk, bison, flex, m4, libtool, autoconf/automake versions, Perl versions, GMP, MPFR, MPC, binutils generations, GCC 4.0, GCC 4.7, GCC 10, full musl/binutils handoff, seed-full, selftest, integration-test, and the Mantle self-build stages. Each entry MUST name the reference source lineage (`live-bootstrap`, `guix`, `stagex`, or a documented Mantle-specific bridge), source artifact identity, patch set, provider inputs and outputs, implementation derivation, placeholder status, runtime-smoke evidence, proof transcript path or digest, and known deviations.
 
 #### Scenario: Parity map names all reference axes
 
@@ -2817,7 +2817,7 @@ The parity report MUST fail closed for `binutils.tcc` when the derivation contai
 #### Scenario: Require checked evidence for promotion [r[bootstrap.parity.binutils-tcc-evidence.require-checked]]
 
 - GIVEN `bootstrap/binutils-tcc.ncl` exists but no checked binutils tool transcript is present
-- WHEN `crunch bootstrap parity-report --require live-bootstrap` or `--require guix` runs
+- WHEN `mantle bootstrap parity-report --require live-bootstrap` or `--require guix` runs
 - THEN the command fails and identifies `binutils.tcc` as a blocker
 
 #### Scenario: Promote only after tool smokes [r[bootstrap.parity.binutils-tcc-evidence.tool-smokes]]
@@ -2837,17 +2837,17 @@ The parity report MUST fail closed for `binutils.tcc` when the derivation contai
 
 ### Requirement: Bootstrap parity claim gating
 
-Crunch MUST fail closed on any operator-facing claim that Crunch has reached full live-bootstrap, Guix full-source bootstrap, or StageX no-quorum parity unless the parity map and gap report show every required stage complete with the required provider/proof evidence.
+Mantle MUST fail closed on any operator-facing claim that Mantle has reached full live-bootstrap, Guix full-source bootstrap, or StageX no-quorum parity unless the parity map and gap report show every required stage complete with the required provider/proof evidence.
 ID: bootstrap.parity.claim-gating
 
-A parity claim MUST be scoped to the exact axis satisfied. Live-bootstrap parity MUST require the complete mapped stage ladder or accepted Crunch-specific replacements. Guix full-source parity MUST require source-built inputs, trust-root documentation, and final source proof comparable to Guix's full-source bootstrap claim semantics. StageX parity MUST require the audited hex0 seed lineage, no prebuilt compiler/tool root, protected execution audit when used, and `stagex-lineage` self-build proof.
+A parity claim MUST be scoped to the exact axis satisfied. Live-bootstrap parity MUST require the complete mapped stage ladder or accepted Mantle-specific replacements. Guix full-source parity MUST require source-built inputs, trust-root documentation, and final source proof comparable to Guix's full-source bootstrap claim semantics. StageX parity MUST require the audited hex0 seed lineage, no prebuilt compiler/tool root, protected execution audit when used, and `stagex-lineage` self-build proof.
 
 GCC 4.0 MUST remain evidence-backed partial unless native compiler correctness is proven, and its checked evidence MUST include a native-frontier receipt that names remaining non-native blockers. The libiberty demangle frontier MUST expose a checked bounded-demangle semantic marker for the supported Itanium zero-argument function slice rather than a disabled-demangle marker.
 
 #### Scenario: GCC 4.0 native frontier remains partial
 - GIVEN `bootstrap/evidence/gcc-4.0-native-boundary.json` has `status=boundary-only`
 - AND it contains a non-empty `native_frontier.blockers` array with derivation markers for remaining non-native GCC 4.0 seams
-- WHEN `crunch bootstrap parity-report` evaluates `gcc.4.0`
+- WHEN `mantle bootstrap parity-report` evaluates `gcc.4.0`
 - THEN the row remains `partial`
 - AND the evidence check passes only if each frontier marker is present in `bootstrap/gcc-4.0.ncl`
 - AND the report does not mark live-bootstrap or Guix parity complete for GCC 4.0
@@ -2864,7 +2864,7 @@ GCC 4.0 MUST remain evidence-backed partial unless native compiler correctness i
 
 ### Requirement: Bootstrap parity report gates provider rows by axis-specific evidence
 
-Crunch MUST report normalized seed provider parity with enough granularity to avoid treating Guix source-root provider evidence as StageX-class lineage evidence.
+Mantle MUST report normalized seed provider parity with enough granularity to avoid treating Guix source-root provider evidence as StageX-class lineage evidence.
 ID: bootstrap.parity.provider.axis.evidence
 
 The parity report MUST keep the `seed-full` row scoped to Guix/source-root provider contract evidence. It MUST report StageX-class normalized seed provider evidence as a separate row that remains blocked until lineage proof evidence is present. Completing the Guix `seed-full` row MUST NOT cause `--require stagex` to pass while StageX lineage, self-build, or other StageX blockers remain unresolved.
@@ -2872,21 +2872,21 @@ The parity report MUST keep the `seed-full` row scoped to Guix/source-root provi
 #### Scenario: Guix seed-full contract completes without StageX overclaim
 
 - GIVEN `bootstrap/seed-full.ncl` exposes a normalized provider contract without legacy fetched-provider metadata
-- WHEN `crunch bootstrap parity-report --json` runs
+- WHEN `mantle bootstrap parity-report --json` runs
 - THEN the `seed-full` row reports complete source-root provider evidence for the Guix axis
 - AND a separate StageX seed-provider row remains blocking the StageX axis
-- AND `crunch bootstrap parity-report --require stagex` exits non-zero while that StageX row is blocked
+- AND `mantle bootstrap parity-report --require stagex` exits non-zero while that StageX row is blocked
 
 #### Scenario: Legacy seed-full metadata remains blocked
 
 - GIVEN the seed-full derivation contains legacy fetched-provider raw metadata or omits normalized provider metadata
-- WHEN `crunch bootstrap parity-report --json` runs
+- WHEN `mantle bootstrap parity-report --json` runs
 - THEN the Guix `seed-full` row blocks parity
 - AND the diagnostic notes the missing or legacy provider contract evidence
 
 ### Requirement: Scalable Clankers Root Vendor Closure
 
-Crunch MUST represent the root `clankers` Cargo source and vendor closure as a fixed, reproducible input without requiring a monolithic large artifact to be committed to git.
+Mantle MUST represent the root `clankers` Cargo source and vendor closure as a fixed, reproducible input without requiring a monolithic large artifact to be committed to git.
 
 #### Scenario: root closure is larger than small-rung package artifacts
 - **GIVEN** offline `cargo vendor --locked --offline --versioned-dirs` for `/home/brittonr/git/clankers`
@@ -2896,11 +2896,11 @@ Crunch MUST represent the root `clankers` Cargo source and vendor closure as a f
 
 ### Requirement: Root Clankers Binary Build Evidence
 
-Crunch MUST build the root `clankers` binary from the fixed source/vendor closure with offline Cargo and record the output binary and smoke result.
+Mantle MUST build the root `clankers` binary from the fixed source/vendor closure with offline Cargo and record the output binary and smoke result.
 
 #### Scenario: root binary builds without network
 - **GIVEN** the scalable source/vendor closure representation exists
-- **WHEN** Crunch builds `packages/clankers/clankers.ncl`
+- **WHEN** Mantle builds `packages/clankers/clankers.ncl`
 - **THEN** Cargo runs with `--locked --offline`
 - **AND** `CARGO_HOME` is sandbox-local
 - **AND** `CARGO_TARGET_DIR` is deterministic
@@ -2909,7 +2909,7 @@ Crunch MUST build the root `clankers` binary from the fixed source/vendor closur
 
 ### Requirement: External Rust workspace builds use fixed offline source closures
 
-Crunch MUST support an external Rust workspace build pattern where every workspace source, path dependency, git dependency, registry crate, and tool input is represented by an explicit fixed source closure before derivation execution.
+Mantle MUST support an external Rust workspace build pattern where every workspace source, path dependency, git dependency, registry crate, and tool input is represented by an explicit fixed source closure before derivation execution.
 ID: bootstrap.external-rust-workspace.offline-source-closure
 
 The build MUST run Cargo with network disabled, a writable sandbox-local `CARGO_HOME`, a deterministic `CARGO_TARGET_DIR`, and a checked `.cargo/config.toml` or equivalent source replacement that points only at fixed inputs. Host checkout-relative paths MAY be used only to construct the fixed source closure outside the derivation; derivation execution MUST NOT read undeclared sibling checkouts, live git remotes, or ambient Cargo caches.
@@ -2918,7 +2918,7 @@ The build MUST run Cargo with network disabled, a writable sandbox-local `CARGO_
 
 - GIVEN a fixed source closure for an external Rust workspace
 - AND the closure includes registry crates, git dependencies, path dependencies, and workspace sources required by a selected package
-- WHEN Crunch builds the package derivation with `CARGO_NET_OFFLINE=true` and `cargo build --locked --offline -p <package>`
+- WHEN Mantle builds the package derivation with `CARGO_NET_OFFLINE=true` and `cargo build --locked --offline -p <package>`
 - THEN Cargo does not access the network or ambient Cargo caches
 - AND the selected package builds successfully from declared inputs only
 
@@ -2932,22 +2932,22 @@ The build MUST run Cargo with network disabled, a writable sandbox-local `CARGO_
 #### Scenario: Ambient sibling checkout is not accepted as derivation input
 
 - GIVEN a workspace package has a path dependency such as `../subwayrat` or `../ratcore`
-- WHEN the Crunch derivation executes
+- WHEN the Mantle derivation executes
 - THEN it reads the dependency from a declared fixed input
 - AND it does not read the live sibling checkout path from the host filesystem
 
 ### Requirement: Clankers build ladder starts with low-dependency crates
 
-Crunch MUST build `../../clankers/` through an ordered Clankers build ladder that proves small workspace packages before attempting the root `clankers` binary.
+Mantle MUST build `../../clankers/` through an ordered Clankers build ladder that proves small workspace packages before attempting the root `clankers` binary.
 ID: bootstrap.external-rust-workspace.clankers-ladder
 
 The first rung MUST target a low-dependency package such as `clanker-message`, using `bootstrap/rust.ncl`, a fixed Clankers source closure, and offline Cargo. Each later rung MUST add only the source closure entries and native build tools required by that rung. The root `clankers` binary success claim MUST require an installed binary under `$out/bin/clankers` plus a non-network smoke check such as `clankers --help` or `clankers --version`. Full NixOS VM checks, plugin bundle builds, source-built Rust proof, and optional heavyweight runtime integrations are separate follow-up claims unless they are required for the root binary to compile.
 
 #### Scenario: First rung builds clanker-message
 
-- GIVEN a Crunch derivation for the Clankers `clanker-message` package
+- GIVEN a Mantle derivation for the Clankers `clanker-message` package
 - AND a fixed source/vendor closure sufficient for that package
-- WHEN `crunch build` runs the derivation with `cargo build --locked --offline -p clanker-message`
+- WHEN `mantle build` runs the derivation with `cargo build --locked --offline -p clanker-message`
 - THEN the derivation succeeds
 - AND the output records the package name, Cargo command, source closure digest, vendor closure digest, and built artifact path
 
@@ -2955,7 +2955,7 @@ The first rung MUST target a low-dependency package such as `clanker-message`, u
 
 - GIVEN a later Clankers rung fails because a package build script requires a native tool such as `cmake`, `go`, `pkg-config`, a C compiler, or onnxruntime headers/libraries
 - WHEN the next derivation revision addresses the failure
-- THEN it adds the smallest explicit Crunch input required by that build script
+- THEN it adds the smallest explicit Mantle input required by that build script
 - AND earlier rungs remain buildable without that new input unless Cargo's dependency graph requires it
 
 #### Scenario: Root clankers binary claim requires executable smoke
@@ -2967,10 +2967,10 @@ The first rung MUST target a low-dependency package such as `clanker-message`, u
 
 ### Requirement: External fixed bundle proofs expose BLAKE3 final proof hashes
 
-Crunch MUST record a BLAKE3 final proof hash for external fixed bundle proofs even when the fetcher or upstream tooling requires SHA-256 compatibility hashes.
+Mantle MUST record a BLAKE3 final proof hash for external fixed bundle proofs even when the fetcher or upstream tooling requires SHA-256 compatibility hashes.
 ID: bootstrap.external-fixed-bundle.final-proof-blake3
 
-The final proof hash MUST be a Crunch-owned BLAKE3 digest over canonical proof metadata that binds the fixed source bundle identity, compatibility hashes, build recipe, output artifact identity, and smoke evidence. SHA-256 SRI values MAY remain as fetcher or Cargo compatibility hashes, but they MUST NOT be the only recorded proof digest.
+The final proof hash MUST be a Mantle-owned BLAKE3 digest over canonical proof metadata that binds the fixed source bundle identity, compatibility hashes, build recipe, output artifact identity, and smoke evidence. SHA-256 SRI values MAY remain as fetcher or Cargo compatibility hashes, but they MUST NOT be the only recorded proof digest.
 
 #### Scenario: Clankers root proof carries BLAKE3 digest
 
@@ -2982,7 +2982,7 @@ The final proof hash MUST be a Crunch-owned BLAKE3 digest over canonical proof m
 
 ### Requirement: Clankers root rebuild reproducibility proof
 
-Crunch MUST record whether the pinned Clankers root derivation rebuilds to the same output binary BLAKE3 digest in fresh Crunch stores.
+Mantle MUST record whether the pinned Clankers root derivation rebuilds to the same output binary BLAKE3 digest in fresh Mantle stores.
 ID: bootstrap.external-fixed-bundle.clankers-rebuild-reproducibility
 
 The proof MUST run `packages/clankers/clankers.ncl` from committed source/bundle metadata, compute BLAKE3 for rebuilt `$out/bin/clankers`, compare at least two fresh `--state-dir`/`--store` rebuilds, and record a machine-readable receipt with commands, store paths, rebuilt digests, previous mismatch evidence when applicable, and verdict. A mismatch MUST be recorded as a failed reproducibility proof rather than silently updating the final proof hash.
@@ -2991,7 +2991,7 @@ The proof MUST run `packages/clankers/clankers.ncl` from committed source/bundle
 
 - GIVEN the committed Clankers root bundle and derivation
 - AND the proof records stable binary BLAKE3 `2a0fb9daba5445529141aa734de798b5748e65d18e86db5b6f4a776d1700c2ef`
-- WHEN Crunch rebuilds `packages/clankers/clankers.ncl` in two fresh stores
+- WHEN Mantle rebuilds `packages/clankers/clankers.ncl` in two fresh stores
 - THEN both rebuilt `$out/bin/clankers` BLAKE3 values equal the stable binary BLAKE3
 - AND the receipt records verdict `match`
 
@@ -3004,7 +3004,7 @@ The proof MUST run `packages/clankers/clankers.ncl` from committed source/bundle
 
 ### Requirement: Clankers root Cargo paths are reproducibility-stabilized
 
-Crunch MUST normalize or eliminate nondeterministic Cargo build-script output paths from the Clankers root output proof before claiming the Clankers root binary is byte-reproducible.
+Mantle MUST normalize or eliminate nondeterministic Cargo build-script output paths from the Clankers root output proof before claiming the Clankers root binary is byte-reproducible.
 ID: bootstrap.external-fixed-bundle.clankers-cargo-path-stability
 
 The Clankers derivation MUST pass deterministic Rust path-remapping controls for sandbox-local build roots, run fresh-store rebuilds after the controls are applied, compare rebuilt output binary BLAKE3 digests, and record either a matching stable digest or a fail-closed mismatch receipt. A successful stability proof MUST update final proof metadata to the stable binary digest produced by the remapped derivation.
@@ -3012,7 +3012,7 @@ The Clankers derivation MUST pass deterministic Rust path-remapping controls for
 #### Scenario: Fresh remapped rebuilds match
 
 - GIVEN the Clankers derivation applies deterministic Rust path remapping
-- WHEN two fresh-store Crunch rebuilds complete
+- WHEN two fresh-store Mantle rebuilds complete
 - THEN both rebuilt `$out/bin/clankers` files have the same BLAKE3 digest
 - AND proof metadata records that digest as the stable binary proof input
 

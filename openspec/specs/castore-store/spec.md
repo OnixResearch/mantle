@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how crunch uses the snix castore as its primary store, removing
+Defines how mantle uses the snix castore as its primary store, removing
 the requirement for a writable filesystem store directory.
 
 ## Requirements
@@ -44,14 +44,14 @@ outputs MUST remain in the castore only.
 #### Scenario: Intermediate dep stays in castore
 
 - GIVEN derivation `app` depends on `libfoo`
-- AND the user runs `crunch build app.ncl`
+- AND the user runs `mantle build app.ncl`
 - WHEN `libfoo` builds successfully
 - THEN `libfoo`'s output is in the castore (blob + PathInfo)
 - AND `libfoo`'s output is NOT written to `output_dir`
 
 #### Scenario: Root derivation exported to disk
 
-- GIVEN the user runs `crunch build app.ncl`
+- GIVEN the user runs `mantle build app.ncl`
 - WHEN `app` builds successfully
 - THEN `app`'s output is written to `output_dir`
 - AND `app`'s output is in the castore

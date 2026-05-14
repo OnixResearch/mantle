@@ -5,12 +5,12 @@
 #   $dev/include/hello.h — the header
 #   $man/share/man/man1  — the man page
 #
-# crunch build examples/multi-output.ncl
+# mantle build examples/multi-output.ncl
 #
 # The builder receives $outputs="out dev man" and each output path
 # as $out, $dev, $man.
 
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 let seed = import "seed.ncl" in
 
 {
@@ -44,4 +44,4 @@ let seed = import "seed.ncl" in
   "%],
   inputs = [seed.bash, seed.coreutils],
   addressing_mode = 'input-addressed,
-} | crunch.Derivation
+} | mantle.Derivation

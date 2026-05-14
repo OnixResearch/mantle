@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how crunch evaluates Nickel source files and extracts derivation
+Defines how mantle evaluates Nickel source files and extracts derivation
 descriptions from the result. The evaluation relies on Nickel's contract
 system, merge semantics, and export pipeline — not custom parsing.
 ## Requirements
@@ -21,7 +21,7 @@ program state across at least two operations:
 
 Build and planning execution MUST use the lazy discovery path before any
 per-root forcing. Whole-program export-ready deep evaluation MAY still be used
-for operator-visible `crunch eval` output or other callers that explicitly need
+for operator-visible `mantle eval` output or other callers that explicitly need
 whole-program export semantics.
 
 The multi-root forcing path MUST preserve the caller's requested label order in
@@ -81,20 +81,20 @@ in derivation descriptions (missing fields, wrong types, invalid enum
 variants) MUST be caught by Nickel contracts during evaluation, before the
 Rust glue layer runs.
 
-The crunch stdlib's `Derivation` contract is an open record contract
+The mantle stdlib's `Derivation` contract is an open record contract
 (see nickel-stdlib spec). Missing required fields and type mismatches
 are Nickel contract violations. Extra fields pass through and are
 ignored by the Rust glue layer.
 
 #### Scenario: Missing required field
 
-- GIVEN `{ builder = "/bin/sh" } | crunch.Derivation`
+- GIVEN `{ builder = "/bin/sh" } | mantle.Derivation`
 - WHEN evaluated
 - THEN Nickel reports a contract violation for missing `name`
 
 #### Scenario: Wrong field type
 
-- GIVEN `{ name = 42, builder = "/bin/sh" } | crunch.Derivation`
+- GIVEN `{ name = 42, builder = "/bin/sh" } | mantle.Derivation`
 - WHEN evaluated
 - THEN Nickel reports a contract violation: `name` expected `String`, got `Number`
 
@@ -117,7 +117,7 @@ reaches the glue layer.
   ```nickel
   let base = { system | default = 'x86_64-linux, outputs | default = ["out"] } in
   let specifics = { name = "hello", builder = "/bin/sh" } in
-  base & specifics | crunch.Derivation
+  base & specifics | mantle.Derivation
   ```
 - WHEN evaluated
 - THEN the result is a single flat JSON object with all fields resolved
@@ -145,7 +145,7 @@ a single derivation. Otherwise, treat each field as a named derivation.
 #### Scenario: Single derivation
 
 - GIVEN a `.ncl` file evaluating to `{ name = "hello", builder = "...", ... }`
-- WHEN processed by crunch
+- WHEN processed by mantle
 - THEN one derivation is built
 
 #### Scenario: Package set
@@ -157,7 +157,7 @@ a single derivation. Otherwise, treat each field as a named derivation.
     world = { name = "world", builder = "...", inputs = [hello], ... },
   }
   ```
-- WHEN processed by crunch
+- WHEN processed by mantle
 - THEN both derivations are built in dependency order
 
 ### Requirement: Recursive records for self-referencing derivations
@@ -187,7 +187,7 @@ This is evaluated before export — the glue layer sees `env.APP_NAME = "myapp"`
 
 crunch-eval MUST configure Nickel's import resolution to find:
 
-1. The crunch stdlib (shipped with the binary or via `--import-path`)
+1. The mantle stdlib (shipped with the binary or via `--import-path`)
 2. Files relative to the evaluated `.ncl` file's directory
 3. JSON/YAML/TOML files (Nickel auto-converts these on import)
 
@@ -195,7 +195,7 @@ crunch-eval MUST configure Nickel's import resolution to find:
 
 - GIVEN `hello.ncl` containing `let seed = import "seed.ncl" in ...`
   and `seed.ncl` in the same directory
-- WHEN `crunch build hello.ncl` is run
+- WHEN `mantle build hello.ncl` is run
 - THEN the import resolves relative to `hello.ncl`'s directory
 
 ### Requirement: Explicit input declarations

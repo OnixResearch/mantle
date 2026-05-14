@@ -1,4 +1,4 @@
-# crunch examples
+# mantle examples
 
 Small gallery for `examples/`.
 
@@ -12,27 +12,27 @@ Small gallery for `examples/`.
 | `fetch-tarball.ncl` | fixed-output tarball fetch |
 | `fetch-git.ncl` | fixed-output git checkout |
 | `fetch-crate-crc64.ncl` | fetch published `crc64` crate source from crates.io |
-| `build-crate-crc64.ncl` | build published `crc64` crate with crunch bootstrap Rust toolchain and shared reduced seed provider |
+| `build-crate-crc64.ncl` | build published `crc64` crate with mantle bootstrap Rust toolchain and shared reduced seed provider |
 | `bootstrap-no-nix.ncl` | zero-Nix bootstrap with the shared reduced seed provider |
-| `project/` | project-aware `crunch build .#name` example |
+| `project/` | project-aware `mantle build .#name` example |
 
 Useful commands:
 
 ```bash
 # Evaluate only
-crunch eval examples/fetch-crate-crc64.ncl
+mantle eval examples/fetch-crate-crc64.ncl
 
 # Build into a writable temp store
-mkdir -p /tmp/crunch-examples-store /tmp/crunch-examples-state
+mkdir -p /tmp/mantle-examples-store /tmp/mantle-examples-state
 
 # Fetch a real crate source tarball
-crunch build examples/fetch-crate-crc64.ncl \
-  --store /tmp/crunch-examples-store \
-  --state-dir /tmp/crunch-examples-state
+mantle build examples/fetch-crate-crc64.ncl \
+  --store /tmp/mantle-examples-store \
+  --state-dir /tmp/mantle-examples-state
 
 # Build a real Rust crate from crates.io
-crunch build examples/build-crate-crc64.ncl \
-  --store /tmp/crunch-examples-store \
-  --state-dir /tmp/crunch-examples-state \
+mantle build examples/build-crate-crc64.ncl \
+  --store /tmp/mantle-examples-store \
+  --state-dir /tmp/mantle-examples-state \
   --no-substitute
 ```

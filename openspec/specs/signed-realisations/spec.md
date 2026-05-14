@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how crunch signs build outputs and verifies signatures on all
+Defines how mantle signs build outputs and verifies signatures on all
 cache hits, providing integrity guarantees for binary caches, remote
 builders, and local store consistency.
 
@@ -30,20 +30,20 @@ The system MUST generate a new ed25519 keypair, write it to
 `$CRUNCH_CONFIG_DIR/signing-key` with 0600 permissions, and use it when no
 signing key is configured via `--signing-key` and no key exists at that path.
 
-The key name MUST be `crunch-<hostname>-1`.
+The key name MUST be `mantle-<hostname>-1`.
 
 #### Scenario: First run auto-generates key
 
 - GIVEN no `--signing-key` flag
 - AND `$CRUNCH_CONFIG_DIR/signing-key` does not exist
-- WHEN `crunch build` is invoked
+- WHEN `mantle build` is invoked
 - THEN a new keypair is written to `$CRUNCH_CONFIG_DIR/signing-key`
 - AND the build proceeds with that key
 
 #### Scenario: Explicit key overrides auto-generation
 
 - GIVEN `--signing-key /path/to/my-key`
-- WHEN `crunch build` is invoked
+- WHEN `mantle build` is invoked
 - THEN the provided key is used
 - AND no auto-generation occurs
 
@@ -67,7 +67,7 @@ Trusted public keys MUST use the Nix format:
 
 - GIVEN a file containing invalid base64 or wrong byte count
 - WHEN `--signing-key` points to this file
-- THEN crunch exits with a clear error before any build starts
+- THEN mantle exits with a clear error before any build starts
 
 ### Requirement: Verify signatures on all cache hits
 
@@ -159,52 +159,52 @@ trusted public keys.
 
 ### Requirement: Re-sign existing PathInfo
 
-`crunch store sign <path>` MUST load the PathInfo from redb, compute
+`mantle store sign <path>` MUST load the PathInfo from redb, compute
 a new signature using the provided signing key, append it to
 `signatures`, and persist it back.
 
 If the PathInfo already has a signature from the same key name, the
 system MUST replace it rather than duplicate.
 
-`crunch store sign --all` MUST iterate all PathInfo entries in redb and
+`mantle store sign --all` MUST iterate all PathInfo entries in redb and
 sign each unsigned one. Existing signed entries MUST be left unchanged.
 This is the migration path for existing unsigned stores.
 
 #### Scenario: Bulk sign unsigned store
 
 - GIVEN 50 unsigned PathInfo entries in redb
-- WHEN `crunch store sign --all --signing-key <key>` is run
+- WHEN `mantle store sign --all --signing-key <key>` is run
 - THEN all 50 entries gain a signature
 - AND subsequent `check_cache` hits verify successfully
 
 #### Scenario: Re-sign with same key
 
 - GIVEN a PathInfo already signed by `my-key-1`
-- WHEN `crunch store sign ... --signing-key <my-key-1-keypair>`
+- WHEN `mantle store sign ... --signing-key <my-key-1-keypair>`
 - THEN the PathInfo still has exactly one signature from `my-key-1`
 
 #### Scenario: Bulk sign skips already-signed entries
 
 - GIVEN a PathInfo already signed by `backup-cache-1`
-- WHEN `crunch store sign --all --signing-key <my-key-1-keypair>` is run
+- WHEN `mantle store sign --all --signing-key <my-key-1-keypair>` is run
 - THEN that PathInfo keeps exactly one signature from `backup-cache-1`
 - AND only unsigned entries gain new signatures
 
 ### Requirement: Signature reporting in store commands
 
-`crunch store info <path>` MUST display the signature count and
-signer names. `crunch store verify` MUST report whether each path
+`mantle store info <path>` MUST display the signature count and
+signer names. `mantle store verify` MUST report whether each path
 has valid signatures against the configured trusted keys.
 
 #### Scenario: Store info shows signatures
 
 - GIVEN a PathInfo with signatures from `my-cache-1` and `backup-1`
-- WHEN `crunch store info <path>` is run
+- WHEN `mantle store info <path>` is run
 - THEN the output includes both signer names
 
 #### Scenario: Store verify reports untrusted
 
 - GIVEN a PathInfo signed by `unknown-key-1`
 - AND trusted keys do not include `unknown-key-1`
-- WHEN `crunch store verify <path>` is run
+- WHEN `mantle store verify <path>` is run
 - THEN the report indicates "0 trusted signatures (1 untrusted: unknown-key-1)"

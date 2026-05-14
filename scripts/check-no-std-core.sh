@@ -131,12 +131,12 @@ note "[6/12] shell activation boundary tests"
 run_cargo_step test -p crunch-shell adapter_preserves_path_order_and_appends_bin
 run_cargo_step test -p crunch-shell non_utf8_with_path_is_rejected
 note "[7/12] release boundary tests"
-run_cargo_step test -p crunch --bin crunch create_and_verify_release_bundle_round_trip
-run_cargo_step test -p crunch --bin crunch load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact
-run_cargo_step test -p crunch --test release_cli release_verify_rejects_manifest_schema_mismatch
-run_cargo_step test -p crunch --test release_cli release_verify_rejects_missing_workflow_provenance
-run_cargo_step test -p crunch --test release_cli release_verify_rejects_claim_boundary_violation
-run_cargo_step test -p crunch --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch
+run_cargo_step test -p mantle --bin mantle create_and_verify_release_bundle_round_trip
+run_cargo_step test -p mantle --bin mantle load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact
+run_cargo_step test -p mantle --test release_cli release_verify_rejects_manifest_schema_mismatch
+run_cargo_step test -p mantle --test release_cli release_verify_rejects_missing_workflow_provenance
+run_cargo_step test -p mantle --test release_cli release_verify_rejects_claim_boundary_violation
+run_cargo_step test -p mantle --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch
 note "[8/12] dependency boundary"
 run_step ./scripts/check-no-std-core-deps.sh
 note "[9/12] purity"

@@ -91,13 +91,13 @@ The `inputs` array MUST support two kinds of entries:
    Added to `nix_compat::Derivation.input_derivations`.
 2. **Source inputs** — pre-existing store paths (e.g., seed toolchain paths).
    Added to `nix_compat::Derivation.input_sources`. Must already exist in
-   the store; crunch does not build them.
+   the store; mantle does not build them.
 
 In Nickel, this is expressed naturally:
 
 ```nickel
 let seed = import "seed.ncl" in
-let libfoo = { name = "libfoo", builder = "...", ... } | crunch.Derivation in
+let libfoo = { name = "libfoo", builder = "...", ... } | mantle.Derivation in
 {
   name = "myapp",
   builder = "%{seed.bash}/bin/bash",
@@ -214,7 +214,7 @@ derivations that depend on this one.
 #### Scenario: Paths differ from Nix
 
 - GIVEN the same derivation parameters
-- WHEN crunch computes the path
+- WHEN mantle computes the path
 - THEN it differs from what Nix would produce (BLAKE3 vs SHA-256)
 
 ### Requirement: KnownPaths tracking

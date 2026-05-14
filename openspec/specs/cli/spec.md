@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines crunch's project-management command surface and operator-facing CLI
+Defines mantle's project-management command surface and operator-facing CLI
 behavior for refresh and stale reporting.
 ## Requirements
 ### Requirement: Project-management commands
@@ -11,12 +11,12 @@ The CLI MUST provide project-management commands in addition to the existing
 engine-oriented commands.
 
 Required commands:
-- `crunch init`
-- `crunch check`
-- `crunch show`
-- `crunch refresh`
-- `crunch list-stale`
-- `crunch upgrade`
+- `mantle init`
+- `mantle check`
+- `mantle show`
+- `mantle refresh`
+- `mantle list-stale`
+- `mantle upgrade`
 
 These commands operate on the project manifest, lockfile, and generated input
 files. They MUST delegate to the project-management layer rather than embed
@@ -24,8 +24,8 @@ that logic directly in `src/main.rs`.
 
 #### Scenario: Init scaffolds project files
 
-- GIVEN a directory without crunch project files
-- WHEN `crunch init` runs
+- GIVEN a directory without mantle project files
+- WHEN `mantle init` runs
 - THEN it creates `crunch-project.ncl`
 - AND it creates `crunch.lock`
 - AND it creates or documents the generated `.crunch/` directory layout
@@ -33,14 +33,14 @@ that logic directly in `src/main.rs`.
 #### Scenario: Check validates project state
 
 - GIVEN a project with `crunch-project.ncl`, `crunch.lock`, and `.crunch/inputs.ncl`
-- WHEN `crunch check` runs
+- WHEN `mantle check` runs
 - THEN it validates the manifest and lockfile
 - AND it reports drift or schema errors with a non-zero exit code
 
 #### Scenario: Refresh updates selected inputs
 
 - GIVEN a project with multiple named inputs
-- WHEN `crunch refresh foo bar` runs
+- WHEN `mantle refresh foo bar` runs
 - THEN only those named inputs are refreshed
 - AND `crunch.lock` and `.crunch/inputs.ncl` are rewritten if their resolved
   state changes
@@ -48,14 +48,14 @@ that logic directly in `src/main.rs`.
 #### Scenario: Show renders resolved input state
 
 - GIVEN a valid project manifest and lockfile
-- WHEN `crunch show` runs
+- WHEN `mantle show` runs
 - THEN it prints a human-readable view of the resolved inputs, including
   frozen state, mirrors, patches, and locked revisions or hashes
 
 #### Scenario: Upgrade migrates project files
 
 - GIVEN a project using an older supported schema version
-- WHEN `crunch upgrade` runs
+- WHEN `mantle upgrade` runs
 - THEN the project manifest and lockfile are migrated to the current version
 
 ### Requirement: Refresh and stale commands report resolver failures distinctly
@@ -63,17 +63,17 @@ that logic directly in `src/main.rs`.
 The CLI MUST distinguish successful refresh/stale results from resolver
 failures.
 
-`crunch refresh` MUST report per-input failures and exit non-zero when any
+`mantle refresh` MUST report per-input failures and exit non-zero when any
 selected input cannot be resolved or hashed, even if other inputs were updated
 successfully.
 
-`crunch list-stale` MUST report stale inputs and failed checks separately. It
+`mantle list-stale` MUST report stale inputs and failed checks separately. It
 MUST NOT print `all inputs up to date` when any check failed.
 
 #### Scenario: Partial refresh reports updates and failures together
 
 - GIVEN a manifest with one reachable input and one unreachable input
-- WHEN `crunch refresh` runs
+- WHEN `mantle refresh` runs
 - THEN it reports the successful update for the reachable input
 - AND it reports the failed resolution for the unreachable input
 - AND it exits non-zero
@@ -82,7 +82,7 @@ MUST NOT print `all inputs up to date` when any check failed.
 #### Scenario: Stale check failure is not reported as clean
 
 - GIVEN one input is stale and another input cannot be checked
-- WHEN `crunch list-stale` runs
+- WHEN `mantle list-stale` runs
 - THEN it reports the stale input
 - AND it separately reports the failed check
 - AND it exits non-zero
@@ -96,8 +96,8 @@ and safety or integrity controls accurately.
 At minimum it MUST stay aligned with:
 - the default logical store prefix `/crunch/store`
 - the `--nix-compat` shorthand for `/nix/store`
-- planning and diagnostics entry points such as `crunch doctor` and
-  `crunch build --plan`
+- planning and diagnostics entry points such as `mantle doctor` and
+  `mantle build --plan`
 - the project-management commands (`init`, `check`, `show`, `refresh`,
   `list-stale`, `upgrade`)
 - dev-shell entry points (`shell` and `develop`)
@@ -150,7 +150,7 @@ At minimum it MUST stay aligned with:
 
 #### Scenario: Command coverage can be checked against help output
 
-- GIVEN the current top-level `crunch --help` command list
+- GIVEN the current top-level `mantle --help` command list
 - WHEN a reviewer compares it with the README command summary and any
   README-linked focused workflow docs
 - THEN every shipped top-level operator command family appears in that doc set
@@ -170,24 +170,24 @@ At minimum the CLI MUST provide commands to:
 #### Scenario: Operator inspects artifact attestation
 
 - GIVEN a built store path
-- WHEN `crunch attest show <path>` runs
+- WHEN `mantle attest show <path>` runs
 - THEN the CLI renders the native artifact attestation for that logical store path
 
 #### Scenario: Operator verifies closure attestation
 
-- GIVEN a rooted closure attestation already persisted by crunch
-- WHEN `crunch attest verify <path>` runs for that root
-- THEN crunch recomputes the canonical closure digest
+- GIVEN a rooted closure attestation already persisted by mantle
+- WHEN `mantle attest verify <path>` runs for that root
+- THEN mantle recomputes the canonical closure digest
 - AND it reports whether the persisted digest matches the recomputed digest
 
 ### Requirement: Build reporting includes attestation references
 
-`crunch build` and `crunch --json build` MUST report where the generated
+`mantle build` and `mantle --json build` MUST report where the generated
 attestations can be found or retrieved.
 
 #### Scenario: JSON build report includes attestation references
 
-- GIVEN a successful `crunch --json build`
+- GIVEN a successful `mantle --json build`
 - WHEN the JSON report is emitted
 - THEN each successful outcome includes a reference to its persisted artifact attestation
 - AND the report schema distinguishes those references from ordinary build outputs
@@ -197,27 +197,27 @@ attestations can be found or retrieved.
 The CLI MUST let operators request strict hermetic execution for build-entry
 commands.
 
-At minimum `crunch build` and `crunch self-build` MUST accept a
+At minimum `mantle build` and `mantle self-build` MUST accept a
 `--strict-hermetic` flag and pass that selection unchanged into the pipeline or
 self-build orchestration.
 
 #### Scenario: Strict build selects strict profile
 
 - GIVEN a Nickel file that can be built normally
-- WHEN `crunch build --strict-hermetic hello.ncl` runs
+- WHEN `mantle build --strict-hermetic hello.ncl` runs
 - THEN the pipeline executes with hermeticity mode `strict`
 - AND later strict-mode blockers are treated as build errors instead of warnings
 
 #### Scenario: Self-build selects strict profile
 
 - GIVEN a self-build invocation
-- WHEN `crunch self-build --strict-hermetic --store /tmp/store` runs
+- WHEN `mantle self-build --strict-hermetic --store /tmp/store` runs
 - THEN the self-build flow records hermeticity mode `strict`
 - AND later proof-oriented checks can act on that mode selection
 
 ### Requirement: Build reporting exposes hermeticity audit facts
 
-`crunch build` and `crunch --json build` MUST report the selected hermeticity
+`mantle build` and `mantle --json build` MUST report the selected hermeticity
 mode and any hermeticity audit events recorded during the run.
 
 Human-readable output MUST summarize degraded execution facts before reporting a
@@ -227,14 +227,14 @@ machine-readable shape.
 #### Scenario: Clean strict run reports no degraded facts
 
 - GIVEN a successful strict build with no degraded conditions
-- WHEN `crunch --json build --strict-hermetic hello.ncl` runs
+- WHEN `mantle --json build --strict-hermetic hello.ncl` runs
 - THEN the JSON report records hermeticity mode `strict`
 - AND the hermeticity audit-event list is empty
 
 #### Scenario: Practical run reports degraded facts
 
 - GIVEN a successful practical build that recorded a degraded execution fact
-- WHEN `crunch --json build hello.ncl` runs
+- WHEN `mantle --json build hello.ncl` runs
 - THEN the JSON report records hermeticity mode `practical`
 - AND the report includes the recorded hermeticity audit event
 - AND the human-readable output warns that the run used degraded hermeticity
@@ -245,9 +245,9 @@ The CLI MUST provide a first-class shell command for development
 environments.
 
 Required behavior:
-- `crunch shell` enters or executes inside a shell environment resolved from
+- `mantle shell` enters or executes inside a shell environment resolved from
   `crunch.ncl` `devShells`
-- `crunch develop` remains as an alias to the same implementation
+- `mantle develop` remains as an alias to the same implementation
 - `--command <argv...>` executes a single command in the activated shell
   environment and exits
 - `--run <script>` passes a script string to `$SHELL -c` inside the activated
@@ -263,14 +263,14 @@ command, or run script.
 #### Scenario: Sidecar env vars reach command mode
 
 - GIVEN a project whose default dev shell publishes env vars in its shell sidecar
-- WHEN `crunch shell --command env` runs in that project
+- WHEN `mantle shell --command env` runs in that project
 - THEN the command sees those env vars
 - AND it sees `CRUNCH_SHELL` pointing at the built shell output path
 
 #### Scenario: Alias dispatches to the same handler
 
 - GIVEN the same project and no special flags
-- WHEN `crunch develop --help` is compared with `crunch shell --help`
+- WHEN `mantle develop --help` is compared with `mantle shell --help`
 - THEN `develop` is documented as an alias for `shell`
 - AND both commands expose the same development-shell behavior
 
@@ -284,7 +284,7 @@ command, or run script.
 #### Scenario: Missing sidecar fails clearly
 
 - GIVEN a devShell target whose build output does not contain `.crunch-shell.json`
-- WHEN `crunch shell --command true` runs for that target
+- WHEN `mantle shell --command true` runs for that target
 - THEN the command exits non-zero
 - AND the error names `.crunch-shell.json`
 - AND the error suggests using `mkShell`
@@ -293,23 +293,23 @@ command, or run script.
 
 - GIVEN a `--with <path>` argument pointing at a directory whose `bin/`
   subdirectory contains a tool
-- WHEN `crunch shell --command <tool>` runs
+- WHEN `mantle shell --command <tool>` runs
 - THEN the command finds that tool via the activated PATH
 - AND the tool runs successfully
 
 #### Scenario: Failing hook is fatal in strict mode
 
 - GIVEN a shell sidecar hook that exits non-zero
-- WHEN `crunch shell --strict-hooks --command true` runs
-- THEN `crunch shell` exits with the hook's exit code
+- WHEN `mantle shell --strict-hooks --command true` runs
+- THEN `mantle shell` exits with the hook's exit code
 - AND the command after the hook does not run
 
 ### Requirement: Run command surface
 
-The CLI MUST provide `crunch run` as a build-and-execute command for a single
+The CLI MUST provide `mantle run` as a build-and-execute command for a single
 package output.
 
-`crunch run` MUST support these targets:
+`mantle run` MUST support these targets:
 
 - no target: build and run the current `crunch.ncl` package project's default package
 - a bare name: build and run that package from the current `crunch.ncl` package project
@@ -317,9 +317,9 @@ package output.
 - an explicit Nickel file path: build and run that expression when it yields exactly one runnable derivation
 
 For this requirement, `crunch.ncl` is the package/build project file consumed by
-`crunch build`, `crunch shell`, `crunch develop`, and `crunch run`. It is
+`mantle build`, `mantle shell`, `mantle develop`, and `mantle run`. It is
 distinct from the `crunch-project.ncl` dependency-management manifest used by
-`crunch init`, `crunch refresh`, and related project-management commands.
+`mantle init`, `mantle refresh`, and related project-management commands.
 
 Target resolution MUST parse project selectors before filesystem probing, so a
 selector-shaped target such as `.#foo.ncl` remains a selector instead of a file
@@ -339,42 +339,42 @@ or to a singleton record containing one derivation. Records containing multiple
 derivations MUST be rejected for `run`; users must select one derivation through
 a project selector or a single-derivation file.
 
-When the selected derivation has multiple outputs, `crunch run` MUST select the
+When the selected derivation has multiple outputs, `mantle run` MUST select the
 `out` output if present; otherwise it MUST select the first output name in
 sorted order. Binary discovery then runs inside that selected output.
 
 #### Scenario: Missing package project fails clearly
 
 - GIVEN the current directory has no `crunch.ncl` package project
-- WHEN `crunch run hello` runs
+- WHEN `mantle run hello` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error mentions `crunch.ncl`
 
 #### Scenario: Missing default package fails clearly
 
 - GIVEN a project whose `crunch.ncl` has no runnable default package
-- WHEN bare `crunch run` runs
+- WHEN bare `mantle run` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error identifies the missing default package selection
 
 #### Scenario: Unknown package target fails clearly
 
 - GIVEN a project whose `crunch.ncl` does not declare `packages.missing`
-- WHEN `crunch run missing` runs
+- WHEN `mantle run missing` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error identifies `missing` as the rejected target
 
 #### Scenario: Nonexistent explicit file fails clearly
 
 - GIVEN `./missing.ncl` does not exist
-- WHEN `crunch run ./missing.ncl` runs
+- WHEN `mantle run ./missing.ncl` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error identifies `./missing.ncl` as the rejected target
 
 #### Scenario: Explicit file multi-record is rejected
 
 - GIVEN `many.ncl` evaluates to a record containing multiple derivations
-- WHEN `crunch run ./many.ncl` runs
+- WHEN `mantle run ./many.ncl` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error identifies `./many.ncl` as not runnable by `run`
 
@@ -384,86 +384,86 @@ store/state flags `--store`, `--state-dir`, `--store-prefix`, and
 `--nix-compat`. These flags MUST feed the normal build pipeline, store,
 signing, substitution, and store-prefix settings for the build step.
 
-`crunch run` MUST use the practical hermeticity mode until a later change adds
+`mantle run` MUST use the practical hermeticity mode until a later change adds
 an explicit `--strict-hermetic` run contract.
 
 The executed child process MUST inherit standard input, standard output,
-standard error, environment, and current working directory from `crunch run`.
-Arguments after `--` MUST be passed to the child unchanged. `crunch run` MUST
+standard error, environment, and current working directory from `mantle run`.
+Arguments after `--` MUST be passed to the child unchanged. `mantle run` MUST
 exit with the child's exit status code; if the child terminates without an exit
-code, `crunch run` MUST exit non-zero.
+code, `mantle run` MUST exit non-zero.
 
-`crunch run` MUST NOT create, modify, or switch crunch profile generations.
+`mantle run` MUST NOT create, modify, or switch mantle profile generations.
 
 #### Scenario: Project default package runs
 
 - GIVEN a project whose `crunch.ncl` declares `default.package = "hello"`
-- WHEN `crunch run --no-substitute` runs in that project
-- THEN crunch builds the `hello` package through the normal build pipeline
+- WHEN `mantle run --no-substitute` runs in that project
+- THEN mantle builds the `hello` package through the normal build pipeline
 - AND executes the selected binary from the built output
 
 #### Scenario: Bare project package name runs
 
 - GIVEN a project whose `crunch.ncl` declares `packages.tool`
-- WHEN `crunch run tool` runs in that project
-- THEN crunch builds `packages.tool`
+- WHEN `mantle run tool` runs in that project
+- THEN mantle builds `packages.tool`
 - AND executes the selected binary from that output
 
 #### Scenario: Project selector runs
 
 - GIVEN a project whose `crunch.ncl` declares `packages.tool`
-- WHEN `crunch run .#tool -- --help` runs in that project
-- THEN crunch builds `packages.tool`
+- WHEN `mantle run .#tool -- --help` runs in that project
+- THEN mantle builds `packages.tool`
 - AND passes `--help` unchanged to the selected binary
 
 #### Scenario: Explicit file target runs
 
 - GIVEN a Nickel file that evaluates to one derivation whose output contains
   `bin/tool`
-- WHEN `crunch run ./tool.ncl -- --version` runs
-- THEN crunch builds `./tool.ncl` through the normal build pipeline
+- WHEN `mantle run ./tool.ncl -- --version` runs
+- THEN mantle builds `./tool.ncl` through the normal build pipeline
 - AND runs `bin/tool` with `--version`
 
 #### Scenario: Same-named path does not shadow bare package
 
 - GIVEN a project whose `crunch.ncl` declares `packages.hello`
 - AND the current directory also contains a filesystem entry named `hello`
-- WHEN `crunch run hello` runs
-- THEN crunch treats `hello` as a project package name
+- WHEN `mantle run hello` runs
+- THEN mantle treats `hello` as a project package name
 - AND does not treat `hello` as an explicit file target
 
 #### Scenario: Selector suffix does not become file target
 
 - GIVEN a project whose `crunch.ncl` declares a selector target named `foo.ncl`
 - AND filesystem probing could find a path-like entry for `foo.ncl`
-- WHEN `crunch run .#foo.ncl` runs
-- THEN crunch treats `.#foo.ncl` as a selector
+- WHEN `mantle run .#foo.ncl` runs
+- THEN mantle treats `.#foo.ncl` as a selector
 - AND does not treat it as an explicit file target
 
 #### Scenario: Multi-output derivation selects out
 
 - GIVEN a selected derivation with outputs named `dev`, `doc`, and `out`
-- WHEN `crunch run .#multi` runs
-- THEN crunch selects the `out` output before binary discovery
+- WHEN `mantle run .#multi` runs
+- THEN mantle selects the `out` output before binary discovery
 
 #### Scenario: Child status propagates
 
 - GIVEN a package binary that exits with status `7`
-- WHEN `crunch run .#failing` runs
-- THEN `crunch run` exits with status `7`
+- WHEN `mantle run .#failing` runs
+- THEN `mantle run` exits with status `7`
 
 #### Scenario: Child inherits execution context
 
 - GIVEN a package binary that prints an inherited environment variable and its current directory
-- WHEN `crunch run .#env-printer` runs with that environment variable set
+- WHEN `mantle run .#env-printer` runs with that environment variable set
 - THEN the child sees the variable value
-- AND the child current directory is the `crunch run` current directory
-- AND child stdout/stderr are visible through `crunch run` stdout/stderr
+- AND the child current directory is the `mantle run` current directory
+- AND child stdout/stderr are visible through `mantle run` stdout/stderr
 
 #### Scenario: Build flags are forwarded
 
 - GIVEN a runnable explicit file target that requires an import path and writes to a caller-supplied store
-- WHEN `crunch run --store <store> --state-dir <state> --import-path <path> --jobs 1 --no-substitute --signing-key <key> --trust-unsigned ./tool.ncl` runs
+- WHEN `mantle run --store <store> --state-dir <state> --import-path <path> --jobs 1 --no-substitute --signing-key <key> --trust-unsigned ./tool.ncl` runs
 - THEN the build uses the supplied import path
 - AND the selected output is materialized under `<store>`
 - AND state and signing material are read or written under `<state>` and `<key>`
@@ -472,20 +472,20 @@ code, `crunch run` MUST exit non-zero.
 #### Scenario: Store prefix flags are forwarded
 
 - GIVEN a runnable explicit file target
-- WHEN `crunch --store-prefix /example/store run --store <store> ./tool.ncl` runs
+- WHEN `mantle --store-prefix /example/store run --store <store> ./tool.ncl` runs
 - THEN the build uses `/example/store` as the logical store prefix
-- WHEN `crunch --nix-compat run --store <store> ./tool.ncl` runs
+- WHEN `mantle --nix-compat run --store <store> ./tool.ncl` runs
 - THEN the build uses `/nix/store` as the logical store prefix
 
 #### Scenario: Run does not mutate profiles
 
 - GIVEN a package that builds and runs successfully
-- WHEN `crunch run .#tool` completes
-- THEN no crunch profile generation is created, removed, or switched
+- WHEN `mantle run .#tool` completes
+- THEN no mantle profile generation is created, removed, or switched
 
 ### Requirement: Run binary selection
 
-`crunch run` MUST select the executable under the built output's `bin/`
+`mantle run` MUST select the executable under the built output's `bin/`
 directory deterministically.
 
 If `--bin <name>` is supplied, `<name>` MUST be one `bin/` entry name. It MUST
@@ -505,58 +505,58 @@ fail with a clear error.
 #### Scenario: Explicit binary is selected
 
 - GIVEN a built output containing `bin/alpha` and `bin/beta`
-- WHEN `crunch run .#multi --bin beta` runs
-- THEN crunch executes `bin/beta`
+- WHEN `mantle run .#multi --bin beta` runs
+- THEN mantle executes `bin/beta`
 - AND does not execute `bin/alpha`
 
 #### Scenario: Missing binary fails clearly
 
 - GIVEN a built output containing `bin/alpha`
-- WHEN `crunch run .#multi --bin missing` runs
+- WHEN `mantle run .#multi --bin missing` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error mentions `bin/missing`
 
 #### Scenario: Path-like binary name is rejected
 
 - GIVEN any runnable package
-- WHEN `crunch run .#tool --bin ../tool` runs
+- WHEN `mantle run .#tool --bin ../tool` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error mentions the rejected `--bin` value
 
 #### Scenario: Non-executable binary fails clearly
 
 - GIVEN a built output containing a non-executable regular file `bin/tool`
-- WHEN `crunch run .#multi --bin tool` runs
+- WHEN `mantle run .#multi --bin tool` runs
 - THEN the command exits non-zero before launching a package binary
 - AND the error mentions `bin/tool`
 
 #### Scenario: Default binary selection is sorted
 
 - GIVEN a built output containing executable files `bin/zeta` and `bin/alpha`
-- WHEN `crunch run .#multi` runs without `--bin`
-- THEN crunch executes `bin/alpha`
+- WHEN `mantle run .#multi` runs without `--bin`
+- THEN mantle executes `bin/alpha`
 
 #### Scenario: Default binary selection skips non-executables
 
 - GIVEN a built output containing non-executable `bin/aaa` and executable `bin/bbb`
-- WHEN `crunch run .#multi` runs without `--bin`
-- THEN crunch executes `bin/bbb`
+- WHEN `mantle run .#multi` runs without `--bin`
+- THEN mantle executes `bin/bbb`
 
 ### Requirement: README run command coverage
 
-The top-level README command summary MUST document `crunch run`, including its
+The top-level README command summary MUST document `mantle run`, including its
 project-selector/file-target purpose, `--bin` selection, and `--` argument
 passthrough, or link to focused CLI documentation that does so.
 
 #### Scenario: README lists run command
 
-- GIVEN the shipped top-level CLI includes `crunch run`
+- GIVEN the shipped top-level CLI includes `mantle run`
 - WHEN a reader checks the README command summary
 - THEN `run` is listed with enough information to build and execute a package
 
 #### Scenario: Help lists run options
 
-- GIVEN the shipped top-level CLI includes `crunch run`
-- WHEN `crunch run --help` is displayed
+- GIVEN the shipped top-level CLI includes `mantle run`
+- WHEN `mantle run --help` is displayed
 - THEN help text includes target usage, `--bin`, and `--` argument passthrough
 

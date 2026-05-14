@@ -164,7 +164,7 @@ For each source input that needs closure resolution:
 
 - GIVEN a practical build that depends on the same source input
 - WHEN closure resolution runs
-- THEN crunch mounts only the declared path
+- THEN mantle mounts only the declared path
 - AND the build result records a degraded closure audit event
 
 ### Requirement: Cycle-safe closure walking
@@ -219,13 +219,13 @@ falling back to in-memory state.
 
 - GIVEN the persistent `PathInfo` database cannot be opened
 - WHEN a practical build starts
-- THEN crunch may continue with in-memory `PathInfo`
+- THEN mantle may continue with in-memory `PathInfo`
 - AND the build result records a degraded pathinfo audit event
 
 #### Scenario: Strict mode rejects in-memory fallback
 
 - GIVEN the persistent `PathInfo` database cannot be opened
 - WHEN a strict build starts
-- THEN crunch fails before building
+- THEN mantle fails before building
 - AND the error says strict mode does not permit in-memory `PathInfo` fallback
 

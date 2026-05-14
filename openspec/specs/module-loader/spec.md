@@ -55,7 +55,7 @@ fragment collector as described by FRAG-3. Modules failing structural
 validation MUST produce a loader error that names the file and the missing or
 malformed field.
 
-The system-module structural contract MUST ship in crunch's embedded Nickel
+The system-module structural contract MUST ship in mantle's embedded Nickel
 stdlib as a Nickel contract, and loader validation MUST apply that contract at
 the Nickel boundary before any Rust-side field extraction logic runs.
 

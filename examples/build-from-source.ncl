@@ -7,10 +7,10 @@
 #   - make install into $out
 #
 # Usage:
-#   1. Generate seed: crunch bootstrap -o examples/seed.ncl
-#   2. Build: crunch build examples/build-from-source.ncl -I examples -I builders
+#   1. Generate seed: mantle bootstrap -o examples/seed.ncl
+#   2. Build: mantle build examples/build-from-source.ncl -I examples -I builders
 
-let crunch = import "lib.ncl" in
+let mantle = import "lib.ncl" in
 let builders = import "builders/lib.ncl" in
 let seed = import "seed.ncl" in
 let stdenv = builders.mkStdenv seed in
@@ -44,7 +44,7 @@ stdenv.mkDerivation {
     #include "greet.h"
     int main(int argc, char *argv[]) {
         if (argc > 1 && strcmp(argv[1], "--version") == 0) {
-            printf("greet 1.0 (built by crunch)\n");
+            printf("greet 1.0 (built by mantle)\n");
             return 0;
         }
         const char *name = argc > 1 ? argv[1] : "world";

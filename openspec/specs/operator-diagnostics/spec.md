@@ -9,15 +9,15 @@ preview, failure reporting, and persisted diagnostic artifacts.
 
 ### Requirement: Doctor preflight command
 
-The CLI MUST provide a `crunch doctor` command for no-mutate preflight checks.
+The CLI MUST provide a `mantle doctor` command for no-mutate preflight checks.
 
-`crunch doctor` MUST report whether the current host can satisfy the selected
-crunch workflow prerequisites without starting a build or mutating store state.
+`mantle doctor` MUST report whether the current host can satisfy the selected
+mantle workflow prerequisites without starting a build or mutating store state.
 
 #### Scenario: Doctor reports missing prerequisite clearly
 
 - GIVEN the host is missing a required build prerequisite such as `bwrap`
-- WHEN `crunch doctor` runs for a build-capable workflow
+- WHEN `mantle doctor` runs for a build-capable workflow
 - THEN the command exits non-zero
 - AND it names the missing prerequisite
 - AND it does not start a build or mutate store state
@@ -25,7 +25,7 @@ crunch workflow prerequisites without starting a build or mutating store state.
 #### Scenario: Doctor reports usable environment
 
 - GIVEN the host satisfies the selected workflow prerequisites
-- WHEN `crunch doctor` runs
+- WHEN `mantle doctor` runs
 - THEN the command reports success
 - AND the report identifies the checked workflow profile
 
@@ -42,7 +42,7 @@ preflight failure.
 
 - GIVEN a build input with multiple roots in different states
 - WHEN the operator runs the build-plan preview
-- THEN crunch reports a planned action for each root
+- THEN mantle reports a planned action for each root
 - AND it does not start sandboxed builds or substitution downloads
 
 ### Requirement: Build failures emit typed diagnostics
@@ -59,7 +59,7 @@ Human-readable output and JSON output MUST expose the same facts.
 #### Scenario: JSON failure identifies root and log path
 
 - GIVEN a build that fails after writing a saved log
-- WHEN crunch emits the JSON failure report
+- WHEN mantle emits the JSON failure report
 - THEN the report includes the failing root
 - AND it includes the failing phase and error class
 - AND it includes the saved log path
@@ -67,14 +67,14 @@ Human-readable output and JSON output MUST expose the same facts.
 #### Scenario: Human failure summary matches JSON facts
 
 - GIVEN the same build failure
-- WHEN crunch prints the human-readable failure summary
+- WHEN mantle prints the human-readable failure summary
 - THEN it names the same failing root and phase as the JSON report
 - AND it points the operator at the same saved log path when one exists
 
 #### Scenario: Pre-build failure omits log path cleanly
 
 - GIVEN a failure that occurs before any saved build log is written
-- WHEN crunch emits the human or JSON failure report
+- WHEN mantle emits the human or JSON failure report
 - THEN the failing root, phase, and error class are still reported
 - AND the saved log path field is omitted
 
@@ -83,24 +83,24 @@ Human-readable output and JSON output MUST expose the same facts.
 Operator-facing diagnostic persistence failures MUST be surfaced explicitly
 instead of being silently ignored.
 
-When crunch cannot persist a build log or another operator-facing diagnostic
+When mantle cannot persist a build log or another operator-facing diagnostic
 artifact, it MUST either return a typed error or emit an explicit warning or
 structured diagnostic event that names the failed operation.
 
-Crunch MUST NOT report a saved-log path for an artifact that was not actually
+Mantle MUST NOT report a saved-log path for an artifact that was not actually
 written.
 
 #### Scenario: Build log write failure is reported without a fake saved path
 
-- GIVEN a build or failure path where crunch attempts to persist a build log
+- GIVEN a build or failure path where mantle attempts to persist a build log
 - AND the target log directory is unwritable or the write fails
-- WHEN crunch reports the result to the operator
+- WHEN mantle reports the result to the operator
 - THEN the operator-visible output reports the log-write failure explicitly
 - AND no fake saved-log path is emitted
 
 #### Scenario: Successful persistence still reports the real saved path
 
 - GIVEN a build or failure path where the log write succeeds
-- WHEN crunch reports the result to the operator
+- WHEN mantle reports the result to the operator
 - THEN it may emit the saved-log path
 - AND that path names an artifact that actually exists on disk

@@ -15,7 +15,7 @@ This applies to both derivation inputs and the top-level derivation.
 #### Scenario: Already-built derivation
 
 - GIVEN derivation A was previously built and its PathInfo exists in the store
-- WHEN `crunch build` processes A again (directly or as an input)
+- WHEN `mantle build` processes A again (directly or as an input)
 - THEN no sandbox is invoked; the existing output is reused
 
 #### Scenario: Input already built
@@ -78,7 +78,7 @@ On Linux, this uses bwrap for sandboxing. The sandbox MUST:
 #### Scenario: Builder runs with only declared inputs mounted
 
 - GIVEN a derivation with explicit source inputs and built input derivations
-- WHEN crunch dispatches the sandboxed build
+- WHEN mantle dispatches the sandboxed build
 - THEN the build service mounts only those declared inputs into the sandbox
 - AND the builder runs with the declared args and environment variables
 
@@ -95,7 +95,7 @@ After a successful build, the system MUST:
 #### Scenario: Successful build persists output metadata before reporting success
 
 - GIVEN a derivation output that completed successfully
-- WHEN crunch finalizes that output
+- WHEN mantle finalizes that output
 - THEN it computes the output NAR hash and size
 - AND it records runtime references and persists the resulting `PathInfo`
 
@@ -111,8 +111,8 @@ Build stdout and stderr MUST be captured and:
 #### Scenario: Build failure
 
 - GIVEN a derivation whose build script exits non-zero
-- WHEN `crunch build` runs it
-- THEN the build log (stdout + stderr) is printed, and crunch exits
+- WHEN `mantle build` runs it
+- THEN the build log (stdout + stderr) is printed, and mantle exits
   with code 1
 
 #### Scenario: Successful build with verbose
@@ -134,7 +134,7 @@ The system MUST handle store initialization:
 #### Scenario: First run
 
 - GIVEN no store exists
-- WHEN `crunch build` is run for the first time
+- WHEN `mantle build` is run for the first time
 - THEN the store directory is created (or an error explains what
   permissions are needed)
 
@@ -211,13 +211,13 @@ successful outcome to the caller.
 #### Scenario: Successful build reports only after attestation persistence
 
 - GIVEN a derivation whose outputs have been built and hashed successfully
-- WHEN crunch finalizes the build result
+- WHEN mantle finalizes the build result
 - THEN it computes and persists artifact attestations for the successful outputs
 - AND only then returns those outputs as successful build outcomes
 
 ### Requirement: Provenance generation uses native build facts
 
-The build pipeline MUST derive observed provenance facts from crunch's own
+The build pipeline MUST derive observed provenance facts from mantle's own
 native build and store data instead of rescanning exported filesystem trees as
 a separate source of truth.
 
@@ -228,8 +228,8 @@ references as the observed-facts inputs to provenance generation.
 #### Scenario: Intermediate output without exported disk path still gets provenance
 
 - GIVEN an intermediate output that exists in castore and `PathInfo` but is not exported to the host filesystem
-- WHEN crunch needs its artifact attestation for closure assembly
-- THEN crunch derives the observed facts from native build/store data
+- WHEN mantle needs its artifact attestation for closure assembly
+- THEN mantle derives the observed facts from native build/store data
 - AND provenance generation does not require rescanning a host-visible output directory
 
 ### Requirement: Build pipeline carries explicit hermeticity mode
@@ -298,14 +298,14 @@ explicitly allowed inputs such as `SOURCE_DATE_EPOCH`.
 #### Scenario: Host umask does not leak into the build
 
 - GIVEN the host process starts with a restrictive or permissive umask
-- WHEN crunch dispatches a sandboxed build
-- THEN crunch sets the configured build umask before the builder runs
+- WHEN mantle dispatches a sandboxed build
+- THEN mantle sets the configured build umask before the builder runs
 - AND output permissions are determined by the build envelope, not the host shell state
 
 ### Requirement: Determinism regression coverage
 
 The repo MUST provide automated regression coverage that reruns representative
-builds while perturbing ambient host state and checks that crunch either
+builds while perturbing ambient host state and checks that mantle either
 produces identical results or fails for an explicit strict-mode blocker.
 
 At minimum the regression matrix MUST vary `HOME`, `PATH`, `USER`, `TZ`,
@@ -544,14 +544,14 @@ service names and protocol pairs: `tcpmux` `1/tcp`, `echo` `7/tcp` and
 - GIVEN a fixed-output derivation with network access
 - WHEN the build executes inside the sandbox
 - THEN `/etc/resolv.conf` contains exactly the fixed, deterministic
-  nameserver configuration owned by crunch (not the host's resolv.conf)
+  nameserver configuration owned by mantle (not the host's resolv.conf)
 
 #### Scenario: FOD build sees synthetic services
 
 - GIVEN a fixed-output derivation with network access
 - WHEN the build executes inside the sandbox
 - THEN `/etc/services` contains exactly the fixed, deterministic service
-  table owned by crunch (not the host's services database)
+  table owned by mantle (not the host's services database)
 
 #### Scenario: Non-FOD build has no resolv.conf
 

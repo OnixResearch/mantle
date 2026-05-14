@@ -4,14 +4,14 @@ This page complements the top-level README.
 
 Current operator-facing command families:
 
-- `crunch doctor`
-- `crunch build` / `crunch build --plan`
-- `crunch shell` / `crunch develop`
-- `crunch run`
-- `crunch attest`
-- `crunch release`
+- `mantle doctor`
+- `mantle build` / `mantle build --plan`
+- `mantle shell` / `mantle develop`
+- `mantle run`
+- `mantle attest`
+- `mantle release`
 
-Use `crunch --help` for the full command list. Use this page for the common
+Use `mantle --help` for the full command list. Use this page for the common
 operator loops.
 
 ## Validation tiers
@@ -30,7 +30,7 @@ It runs three ordinary edit-time checks in order:
 
 ```bash
 cargo fmt --check \
-  -p crunch \
+  -p mantle \
   -p crunch-attestation \
   -p crunch-build \
   -p crunch-delta \
@@ -46,7 +46,7 @@ cargo test --workspace --lib --tests
 
 Notes:
 
-- The root `-p crunch` rustfmt leg covers the root package's `src/`,
+- The root `-p mantle` rustfmt leg covers the root package's `src/`,
   `examples/`, and `tests/`, including `tests/benchmark_harness.rs`.
 - `./scripts/check-first-party-clippy.sh` excludes vendored workspace members
   `fuse-backend-rs`, `nix-compat`, `nix-compat-derive`, `snix-build`,
@@ -99,7 +99,7 @@ cargo test -p crunch-pipeline --test integration_build \
 ### Vendored maintenance lane
 
 Workspace-wide vendored upkeep stays outside the first-party gate. Do not treat
-vendored clippy debt as an ordinary edit blocker for tracked crunch code.
+vendored clippy debt as an ordinary edit blocker for tracked mantle code.
 
 If you bypass the checked-in wrappers and run direct compile-heavy `cargo`
 commands, keep `TMPDIR` and `CARGO_TARGET_DIR` on disk-backed scratch and use
@@ -112,17 +112,17 @@ Start with the no-mutate preflight:
 
 ```bash
 # Default build host checks
-crunch doctor
+mantle doctor
 
 # Extra nightly-toolchain checks for self-build hosts
-crunch doctor --profile self-build
+mantle doctor --profile self-build
 ```
 
-Then preview what crunch would do per root:
+Then preview what mantle would do per root:
 
 ```bash
-crunch build --plan .#hello
-crunch --json build --plan .#hello
+mantle build --plan .#hello
+mantle --json build --plan .#hello
 ```
 
 Plan output uses four action labels:
@@ -130,14 +130,14 @@ Plan output uses four action labels:
 - `cached` - all outputs are already accepted locally
 - `substitute` - cache metadata says a remote hit is available
 - `build` - no accepted hit exists, but local build preflight passed
-- `preflight-error` - crunch cannot take the local build path yet
+- `preflight-error` - mantle cannot take the local build path yet
 
 When you want degraded hermetic behavior to fail instead of warn, opt into
 strict mode on the build-entry commands that expose it:
 
 ```bash
-crunch build --strict-hermetic .#hello
-crunch self-build --strict-hermetic --store /tmp/crunch-store -j 4 --no-substitute
+mantle build --strict-hermetic .#hello
+mantle self-build --strict-hermetic --store /tmp/crunch-store -j 4 --no-substitute
 ```
 
 Structured build reports surface the same operator facts in stable fields:
@@ -152,76 +152,76 @@ path for the artifact attestation.
 
 ## Enter a dev shell or run a package
 
-`crunch shell` resolves a `devShells` target from `crunch.ncl`, builds it, then
+`mantle shell` resolves a `devShells` target from `crunch.ncl`, builds it, then
 reads `$out/.crunch-shell.json` to construct the runtime environment.
-`crunch develop` is the deprecated alias for the same implementation.
+`mantle develop` is the deprecated alias for the same implementation.
 
 ```bash
 # Run one command inside the resolved shell
-crunch shell --command env
+mantle shell --command env
 
 # Run a script through $SHELL -c inside the shell environment
-crunch shell --run 'echo "$CRUNCH_SHELL"'
+mantle shell --run 'echo "$CRUNCH_SHELL"'
 
 # Add extra PATH entries from another output or directory
-crunch shell --with /path/to/extra-tools --command my-tool
+mantle shell --with /path/to/extra-tools --command my-tool
 
 # Skip or enforce shell hooks
-crunch shell --no-hook --command true
-crunch shell --strict-hooks --command true
+mantle shell --no-hook --command true
+mantle shell --strict-hooks --command true
 
 # Deprecated alias
-crunch develop
+mantle develop
 ```
 
 Notes:
 
 - The built shell output must contain `.crunch-shell.json`. If it does not,
-  crunch fails clearly and points back at `mkShell`.
+  mantle fails clearly and points back at `mkShell`.
 - `CRUNCH_SHELL` is always set to the built shell output path.
 - `--command` and `--run` are mutually exclusive.
 
-`crunch run` is the package-side entry point. It builds a package target from
+`mantle run` is the package-side entry point. It builds a package target from
 `crunch.ncl` and executes the first program under `bin/`.
 
 ```bash
 # Run the default package from crunch.ncl
-crunch run
+mantle run
 
 # Run a named package
-crunch run .#hello
+mantle run .#hello
 
 # Pass arguments through after --
-crunch run .#hello -- --help
+mantle run .#hello -- --help
 ```
 
-If the selected package output does not contain `bin/`, `crunch run` fails
+If the selected package output does not contain `bin/`, `mantle run` fails
 instead of guessing.
 
 ## Inspect and verify attestations
 
 Successful builds, accepted cache hits, and remote substitutions persist native
-artifact attestations under the crunch state directory. Use `crunch attest` to
+artifact attestations under the mantle state directory. Use `mantle attest` to
 inspect those sidecars and the closure or project views derived from them.
 
 ```bash
 # Show one artifact attestation
-crunch attest show /nix/store/<hash>-hello
+mantle attest show /nix/store/<hash>-hello
 
 # Assemble one runtime closure attestation from rooted outputs
-crunch attest closure /nix/store/<hash>-hello
+mantle attest closure /nix/store/<hash>-hello
 
 # Verify persisted sidecars against canonical reconstruction
-crunch attest verify artifact /nix/store/<hash>-hello
-crunch attest verify closure /nix/store/<hash>-hello
+mantle attest verify artifact /nix/store/<hash>-hello
+mantle attest verify closure /nix/store/<hash>-hello
 
 # Compare two native attestation documents or artifact selectors
-crunch attest diff /nix/store/<hash>-a /nix/store/<hash>-b
+mantle attest diff /nix/store/<hash>-a /nix/store/<hash>-b
 
 # Render or verify a project attestation
-crunch attest project /nix/store/<hash>-root
-crunch attest verify project --file saved-project-envelope.json /nix/store/<hash>-root
-crunch attest verify project --digest <canonical-hex> /nix/store/<hash>-root
+mantle attest project /nix/store/<hash>-root
+mantle attest verify project --file saved-project-envelope.json /nix/store/<hash>-root
+mantle attest verify project --digest <canonical-hex> /nix/store/<hash>-root
 ```
 
 Selector rules:
@@ -243,21 +243,21 @@ Release evidence starts from a full proof run, not from
 
 # Package release evidence from tracked worktree files, witness workflow driver,
 # stage0 inventory, self-hosting test files, and verified vendored Cargo inputs
-crunch release create \
-  --release-id crunch-<version> \
-  --binary target/self-hosting-proof/run-.../binaries/stage2-crunch \
+mantle release create \
+  --release-id mantle-<version> \
+  --binary target/self-hosting-proof/run-.../binaries/stage2-mantle \
   --proof-bundle target/self-hosting-proof/run-...
 
 # Rebuild published artifacts into an isolated output area and compare bytes
-crunch release reproduce target/release-evidence/<release-id> \
+mantle release reproduce target/release-evidence/<release-id> \
   --rebuild-output-dir target/release-rebuild/<release-id> \
   --rebuild-command ./scripts/rebuild-release-artifacts.sh
 
 # Re-check a saved bundle using only bundle-local contents
-crunch release verify target/release-evidence/<release-id>
+mantle release verify target/release-evidence/<release-id>
 
 # Require a verified bit-for-bit reproducibility report
-crunch release verify target/release-evidence/<release-id> --require-reproducible
+mantle release verify target/release-evidence/<release-id> --require-reproducible
 ```
 
 Repeat `--binary` when one release bundle should carry multiple executables.
@@ -265,7 +265,7 @@ The checked-in proof bundle keeps durable copies of stage1 and stage2 under
 `binaries/`, so the packaged release binary can be the proven stage2 output
 rather than a scratch-store path that disappears when the proof exits.
 
-`crunch release verify` proves bundle-local integrity and proof-context by
+`mantle release verify` proves bundle-local integrity and proof-context by
 itself. It checks that required bundled artifacts exist, that the manifest stays
 canonical, that recorded digests still match, and that the nested proof bundle
 is a full proof artifact. Reproducibility is reported separately as `absent`,
@@ -280,7 +280,7 @@ independent rebuild agreement.
 Once a release bundle verifies locally, sign it into a verification directory:
 
 ```bash
-crunch release attest target/release-evidence/<release-id>
+mantle release attest target/release-evidence/<release-id>
 ```
 
 That writes `target/release-verification/<release-id>/release-attestation.json`
@@ -291,15 +291,15 @@ verifier-local social policy files, and export a portable witness-request
 directory:
 
 ```bash
-RELEASE_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/release.key)
+RELEASE_TRUSTED_KEY=$(mantle attest key-show --signing-key /path/to/release.key)
 RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"
 
-crunch attest policy-init target/release-verification/<release-id> \
+mantle attest policy-init target/release-verification/<release-id> \
   --profile single-witness \
   --trusted-release-signer "$RELEASE_SIGNER_NAME" \
   --trusted-witness-identity <witness-identity>
 
-crunch release witness-export target/release-evidence/<release-id> \
+mantle release witness-export target/release-evidence/<release-id> \
   --verification-dir target/release-verification/<release-id> \
   --request-dir target/release-witness-requests/<release-id>
 ```
@@ -307,14 +307,14 @@ crunch release witness-export target/release-evidence/<release-id> \
 Use `--profile self-proof-only` when the verification directory should stay at a
 self-proof-only policy with `min_matching_witnesses = 0`. Use
 `--profile single-witness` when one matching witness should be enough to satisfy
-policy. `crunch attest key-show` prints the exact `name:base64` verifier token
+policy. `mantle attest key-show` prints the exact `name:base64` verifier token
 accepted by `--trusted-public-key`; omit `--signing-key` to read the default
 configured signing key instead. The signer name for `--trusted-release-signer`
 is the token prefix before the colon, so a shell workflow can derive it with
 `RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"` when the release key was
-auto-generated in a per-operator `CRUNCH_CONFIG_DIR`. `crunch attest
+auto-generated in a per-operator `CRUNCH_CONFIG_DIR`. `mantle attest
 policy-init` writes `policy.json` plus an explicit empty `revocations.json`,
-and it refuses to overwrite either file unless `--force` is present. `crunch
+and it refuses to overwrite either file unless `--force` is present. `mantle
 release witness-export` copies only public verification material into the
 request directory: the verified release-evidence bundle, the signed release
 attestation, and request metadata. It does not copy signing keys or
@@ -331,14 +331,14 @@ second environment:
   --toolchain rust-1.91.1 \
   --host-class nixos-25.05 \
   --signing-key /path/to/witness.key
-WITNESS_TRUSTED_KEY=$(crunch attest key-show --signing-key /path/to/witness.key)
+WITNESS_TRUSTED_KEY=$(mantle attest key-show --signing-key /path/to/witness.key)
 ```
 
 The wrapper is the operator-facing shell. It resolves `bwrap`, picks an
 absolute static `SNIX_BUILD_SANDBOX_SHELL`, derives a controlled scratch root
 (`target/release-witness-requests/<release-id>.work/` by default or
 `$CRUNCH_WITNESS_SCRATCH_DIR`), rewrites `TMPDIR` and `CARGO_TARGET_DIR` under
-that root, and then calls the machine-readable core command `crunch release
+that root, and then calls the machine-readable core command `mantle release
 witness-rebuild <request-dir> ...`. The replay preserves the release bundle's
 recorded proof mode, including `--non-nix-host` for non-Nix-host proofs. Use
 `--check` when you want prerequisite and request-validation preflight only;
@@ -350,29 +350,29 @@ not back inside the exported request tree.
 Inspect the discovered material with:
 
 ```bash
-crunch attest release-show target/release-verification/<release-id>
-crunch attest witness-show target/release-verification/<release-id>
+mantle attest release-show target/release-verification/<release-id>
+mantle attest witness-show target/release-verification/<release-id>
 ```
 
 Then import the returned witness sidecars and verify technical status plus
 social policy against trusted key material:
 
 ```bash
-crunch attest witness-import target/release-verification/<release-id> \
+mantle attest witness-import target/release-verification/<release-id> \
   target/release-witness-requests/<release-id>.work/release-verification/<release-id>
-crunch attest release-verify target/release-verification/<release-id> \
+mantle attest release-verify target/release-verification/<release-id> \
   --trusted-public-key "$RELEASE_TRUSTED_KEY" \
   --trusted-public-key "$WITNESS_TRUSTED_KEY"
 ```
 
 The scratch verification directory also carries `witness-rebuild-audit/meta.json`
 plus captured workflow stdout/stderr so the witness can hand back both the
-signed sidecars and a replay transcript. `crunch attest witness-import` fails
+signed sidecars and a replay transcript. `mantle attest witness-import` fails
 closed on missing signatures, release-digest mismatches, and conflicting
 existing witness identities before copying anything into the publisher
 verification directory.
 
-`crunch attest release-verify --json` reports bundle-local technical validity,
+`mantle attest release-verify --json` reports bundle-local technical validity,
 social policy sufficiency, and independent rebuild agreement as separate
 fields. The independent agreement fields are `independent_agreement_status`,
 `independent_agreement_class`, `independent_agreement_report_digest`,

@@ -5,7 +5,7 @@
 
 //! Audit bootstrap .ncl files for source-pin completeness.
 //!
-//! Validates that every `crunch.fetchTarball` and `crunch.fetchGit` block has
+//! Validates that every `mantle.fetchTarball` and `mantle.fetchGit` block has
 //! all required fields (url, hash, name; plus rev for fetchGit) and that hash
 //! values use valid SRI format (e.g. `sha256-<base64>`).
 
@@ -71,9 +71,15 @@ fn extract_fetch_blocks(path: &Path) -> Vec<FetchBlock> {
         let line = lines[i];
         let trimmed = line.trim();
 
-        let fetch_kind = if trimmed.contains("crunch.fetchTarball") || trimmed.contains("fetchTarball {") {
+        let fetch_kind = if trimmed.contains("mantle.fetchTarball")
+            || trimmed.contains("crunch.fetchTarball")
+            || trimmed.contains("fetchTarball {")
+        {
             Some(FetchKind::Tarball)
-        } else if trimmed.contains("crunch.fetchGit") || trimmed.contains("fetchGit {") {
+        } else if trimmed.contains("mantle.fetchGit")
+            || trimmed.contains("crunch.fetchGit")
+            || trimmed.contains("fetchGit {")
+        {
             Some(FetchKind::Git)
         } else {
             None
@@ -124,10 +130,7 @@ fn parse_field(line: &str) -> Option<(String, String)> {
         return None;
     }
 
-    let val = raw_val
-        .trim_matches('"')
-        .trim_matches(',')
-        .to_string();
+    let val = raw_val.trim_matches('"').trim_matches(',').to_string();
 
     if val.is_empty() {
         return None;
@@ -162,10 +165,7 @@ fn validate_block(block: &FetchBlock) -> Vec<Issue> {
                     file: block.file.clone(),
                     line: block.line,
                     kind: format!("bad-hash-format/{label}"),
-                    message: format!(
-                        "{label} hash is not SRI format: '{}'",
-                        &val[..val.len().min(40)]
-                    ),
+                    message: format!("{label} hash is not SRI format: '{}'", &val[..val.len().min(40)]),
                 });
             }
 
@@ -176,10 +176,7 @@ fn validate_block(block: &FetchBlock) -> Vec<Issue> {
                         file: block.file.clone(),
                         line: block.line,
                         kind: format!("bad-hash-length/{label}"),
-                        message: format!(
-                            "{label} sha256 base64 length {} looks wrong (expected ~44)",
-                            b64.len()
-                        ),
+                        message: format!("{label} sha256 base64 length {} looks wrong (expected ~44)", b64.len()),
                     });
                 }
             }

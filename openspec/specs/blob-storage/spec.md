@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines requirements for the blob service used in production crunch builds.
+Defines requirements for the blob service used in production mantle builds.
 Replaces the implicit "everything in RAM" model with persistent, disk-backed
 blob storage.
 
@@ -22,24 +22,24 @@ not in process memory.
 #### Scenario: Blob survives process restart
 
 - GIVEN a previously-built derivation with PathInfo in redb and blobs on disk
-- WHEN a new crunch process starts and checks the cache
+- WHEN a new mantle process starts and checks the cache
 - THEN `castore_has_content` returns true without rebuilding
 
 ### Requirement: Blob Storage Location
 
 The blob storage directory MUST be `{state_dir}/blobs/` where `state_dir`
-is `~/.local/state/crunch/` (the same directory containing `pathinfo.redb`).
+is `~/.local/state/mantle/` (the same directory containing `pathinfo.redb`).
 
 #### Scenario: Default location
 
 - GIVEN no explicit configuration
-- WHEN crunch initializes the blob service
+- WHEN mantle initializes the blob service
 - THEN blobs are stored under `~/.local/state/crunch/blobs/`
 
 #### Scenario: Directory auto-creation
 
 - GIVEN the blob storage directory does not exist
-- WHEN crunch initializes the blob service
+- WHEN mantle initializes the blob service
 - THEN the directory is created automatically
 
 ### Requirement: Bounded Memory Usage
@@ -70,7 +70,7 @@ file content across different builds MUST be stored once.
 ### Requirement: Test Isolation
 
 Unit and integration tests in `crunch-build` MUST continue using
-`MemoryBlobService`. Tests MUST NOT write to `~/.local/state/crunch/`.
+`MemoryBlobService`. Tests MUST NOT write to `~/.local/state/mantle/`.
 
 #### Scenario: Test blob service is in-memory
 
@@ -80,12 +80,12 @@ Unit and integration tests in `crunch-build` MUST continue using
 
 ### Requirement: Bootstrap Blob Persistence
 
-The `crunch bootstrap --fetch` command MUST use the same persistent blob
-service as `crunch build`, so fetched tarballs are cached across bootstrap
+The `mantle bootstrap --fetch` command MUST use the same persistent blob
+service as `mantle build`, so fetched tarballs are cached across bootstrap
 and build invocations.
 
 #### Scenario: Bootstrap fetch reuses blobs
 
-- GIVEN `crunch bootstrap --fetch` has fetched a tarball
-- WHEN `crunch build` runs a derivation using the same tarball content
+- GIVEN `mantle bootstrap --fetch` has fetched a tarball
+- WHEN `mantle build` runs a derivation using the same tarball content
 - THEN the blob data is already present (cache hit), no re-download
