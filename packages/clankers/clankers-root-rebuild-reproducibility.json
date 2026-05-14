@@ -1,0 +1,34 @@
+{
+  "schema": "crunch.clankers.rebuild_reproducibility.v1",
+  "package": "clankers",
+  "package_version": "0.1.0",
+  "completed_utc": "2026-05-14T15:17:10Z",
+  "derivation": "packages/clankers/clankers.ncl",
+  "command": "CRUNCH_NO_FUSE=1 nix-shell -p bubblewrap --run './target/debug/crunch build packages/clankers/clankers.ncl --store .crunch-drain/clankers-root-repro-1778771058/store -j 4 --trust-unsigned'",
+  "run_dir": ".crunch-drain/clankers-root-repro-1778771058",
+  "exit_status": 0,
+  "original": {
+    "path": ".crunch-drain/clankers-root-fast-1778743330/store/gkya22mimz0ihj77kc4c17caxnr8qdrc-clankers-0.1.0/bin/clankers",
+    "binary_blake3": "e1e8e1c36e0979a2534bcb8c394d4c360068985b0700b0e73ee32f1bd23917ff"
+  },
+  "rebuilt": {
+    "path": ".crunch-drain/clankers-root-repro-1778771058/store/xphfrsbmwr23rixlkbqs0bp93lfmkr41-clankers-0.1.0/bin/clankers",
+    "binary_blake3": "82e569fcb115baf84efba01930b30085f0556d6ec9c3bc7c5ef45379e6aa5863",
+    "file_summary": "105 MiB static-pie ELF, stripped",
+    "smoke_command": "$out/bin/clankers --help",
+    "smoke_exit": 0,
+    "help_prefix": "clankers \u2014 a Rust terminal coding agent"
+  },
+  "verdict": "mismatch",
+  "expected_binary_blake3": "e1e8e1c36e0979a2534bcb8c394d4c360068985b0700b0e73ee32f1bd23917ff",
+  "first_difference": {
+    "byte_offset": 86156127,
+    "observed_context": "embedded Cargo build-script output path differs",
+    "old_snippet": "/tmp/cargo-target/x86_64-unknown-linux-musl/release/build/cranelift-codegen-6a22cb1602628387/out/inst_builder.rs",
+    "rebuilt_snippet": "/tmp/cargo-target/x86_64-unknown-linux-musl/release/build/cranelift-codegen-459ff1534d3e4b0b/out/inst_builder.rs"
+  },
+  "notes": [
+    "Mismatch is recorded fail-closed; final proof hash was not updated.",
+    "Nix was used only as an outer host convenience for bubblewrap and b3sum."
+  ]
+}
