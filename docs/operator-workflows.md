@@ -257,6 +257,8 @@ mantle release reproduce target/release-evidence/<release-id> \
 
 # Smoke the generated deterministic proof path and save a rail receipt/log
 cargo -Zscript scripts/release-determinism-smoke.rs
+cargo -Zscript scripts/check-release-determinism-smoke-receipt.rs \
+  target/release-determinism-smoke/latest/receipt.json
 
 # Re-check a saved bundle using only bundle-local contents
 mantle release verify target/release-evidence/<release-id>
