@@ -147,3 +147,33 @@ fn bootstrap_parity_report_exposes_real_self_build_proof_details_without_unblock
             .contains(&Value::String("crunch.self-build".to_string()))
     );
 }
+
+#[test]
+fn bootstrap_parity_report_exposes_full_musl_binutils_contract_without_unblocking_axes() {
+    let repo = env!("CARGO_MANIFEST_DIR");
+
+    let output = crunch()
+        .arg("--json")
+        .arg("bootstrap")
+        .arg("parity-report")
+        .current_dir(repo)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let report: Value = serde_json::from_slice(&output).unwrap();
+    let row = row_by_id(&report, "full-musl-binutils");
+    assert_eq!(row["status"], "partial");
+    assert_eq!(row["provider_kind"], "unknown");
+    assert!(row["notes"].as_str().unwrap().contains("checked receipt"));
+    assert!(!row["notes"].as_str().unwrap().contains("evidence check failed"));
+
+    let live = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "live-bootstrap").unwrap();
+    let guix = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "guix").unwrap();
+    assert_eq!(live["complete"], false);
+    assert_eq!(guix["complete"], false);
+    assert!(live["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
+    assert!(guix["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
+}

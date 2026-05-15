@@ -179,6 +179,7 @@ enum EvidenceCheck {
     Gcc40PlaceholderInventory,
     Gcc47CxxProviderContract,
     Gcc10ProviderContract,
+    FullMuslBinutilsProviderContract,
 }
 
 const BINUTILS_TCC_TOOL_TRANSCRIPT: &str = "bootstrap/evidence/binutils-tcc-tool-smoke.json";
@@ -190,6 +191,7 @@ const GCC40_PLACEHOLDER_INVENTORY: &str = "bootstrap/evidence/gcc-4.0-placeholde
 const GCC40_NATIVE_BOUNDARY_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-boundary.json";
 const GCC47_CXX_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-4.7-cxx-provider-contract.json";
 const GCC10_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-10-provider-contract.json";
+const FULL_MUSL_BINUTILS_PROVIDER_CONTRACT: &str = "bootstrap/evidence/full-musl-binutils-provider-contract.json";
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
@@ -408,7 +410,92 @@ fn validate_stage_evidence(
             path.ok_or_else(|| "GCC 10 provider contract requires a derivation path".to_string())?,
         )
         .map(|()| EvidenceValidation::empty()),
+        EvidenceCheck::FullMuslBinutilsProviderContract => {
+            validate_full_musl_binutils_provider_contract(project_root).map(|()| EvidenceValidation::empty())
+        }
     }
+}
+
+fn validate_full_musl_binutils_provider_contract(project_root: &Path) -> Result<(), String> {
+    let receipt_path = project_root.join(FULL_MUSL_BINUTILS_PROVIDER_CONTRACT);
+    let receipt_content = fs::read_to_string(&receipt_path).map_err(|err| {
+        format!(
+            "full musl/binutils provider contract missing `{}` ({err}); expected checked contract-only receipt for bootstrap/musl-full.ncl and bootstrap/binutils-full.ncl",
+            FULL_MUSL_BINUTILS_PROVIDER_CONTRACT
+        )
+    })?;
+    let receipt: serde_json::Value = serde_json::from_str(&receipt_content)
+        .map_err(|err| format!("full musl/binutils provider contract is not valid JSON: {err}"))?;
+
+    require_provider_contract_string(
+        &receipt,
+        "full musl/binutils provider contract",
+        "schema",
+        "mantle-full-musl-binutils-provider-contract-v1",
+    )?;
+    require_provider_contract_string(
+        &receipt,
+        "full musl/binutils provider contract",
+        "musl_derivation",
+        "bootstrap/musl-full.ncl",
+    )?;
+    require_provider_contract_string(
+        &receipt,
+        "full musl/binutils provider contract",
+        "binutils_derivation",
+        "bootstrap/binutils-full.ncl",
+    )?;
+    require_provider_contract_string(&receipt, "full musl/binutils provider contract", "status", "contract-only")?;
+    require_provider_contract_string(
+        &receipt,
+        "full musl/binutils provider contract",
+        "parity_effect",
+        "evidence-backed partial; does not prove full musl/binutils correctness",
+    )?;
+
+    validate_contract_markers(
+        &receipt,
+        "musl_required_markers",
+        "full musl/binutils provider contract musl",
+        &project_root.join("bootstrap/musl-full.ncl"),
+        "bootstrap/musl-full.ncl",
+    )?;
+    validate_contract_markers(
+        &receipt,
+        "binutils_required_markers",
+        "full musl/binutils provider contract binutils",
+        &project_root.join("bootstrap/binutils-full.ncl"),
+        "bootstrap/binutils-full.ncl",
+    )?;
+    Ok(())
+}
+
+fn validate_contract_markers(
+    receipt: &serde_json::Value,
+    field: &str,
+    label: &str,
+    derivation_path: &Path,
+    derivation_label: &str,
+) -> Result<(), String> {
+    let derivation_content = fs::read_to_string(derivation_path)
+        .map_err(|err| format!("read {label} derivation {}: {err}", derivation_path.display()))?;
+    let markers = receipt
+        .get(field)
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| format!("{label} missing array field `{field}`"))?;
+    if markers.is_empty() {
+        return Err(format!("{label} `{field}` must not be empty"));
+    }
+    for marker in markers {
+        let marker = marker.as_str().ok_or_else(|| format!("{label} marker must be a string"))?;
+        if marker.trim().is_empty() {
+            return Err(format!("{label} marker must not be empty"));
+        }
+        if !derivation_content.contains(marker) {
+            return Err(format!("{label} marker not found in {derivation_label}: `{marker}`"));
+        }
+    }
+    Ok(())
 }
 
 fn validate_gcc10_provider_contract(project_root: &Path, derivation_path: &Path) -> Result<(), String> {
@@ -1659,9 +1746,9 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             expected_complete: false,
             graph_evidence: "binutils-full plus musl-full derivations present",
             semantic_evidence: "full toolchain smokes required",
-            proof_evidence: "source-root proof required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
+            proof_evidence: "source-root proof and checked full musl/binutils provider contract required",
+            notes: "checked receipt at bootstrap/evidence/full-musl-binutils-provider-contract.json validates the musl 1.2.5 and binutils 2.41 configure/build/install/smoke contract; row remains partial until full toolchain correctness and source-root proof are proven",
+            evidence_check: EvidenceCheck::FullMuslBinutilsProviderContract,
         },
         StageSpec {
             id: "seed-full",
@@ -1804,6 +1891,22 @@ mod tests {
             proof_evidence: "source transcript and checked C++ provider contract required",
             notes: "checked receipt at bootstrap/evidence/gcc-4.7-cxx-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 4.7 correctness is proven",
             evidence_check: EvidenceCheck::Gcc47CxxProviderContract,
+        }
+    }
+
+    fn full_musl_binutils_spec() -> StageSpec {
+        StageSpec {
+            id: "full-musl-binutils",
+            title: "Full musl/binutils handoff",
+            axes: LIVE_GUIX,
+            lineage: "guix",
+            derivation: Some("binutils-full.ncl"),
+            expected_complete: false,
+            graph_evidence: "binutils-full plus musl-full derivations present",
+            semantic_evidence: "full toolchain smokes required",
+            proof_evidence: "source-root proof and checked full musl/binutils provider contract required",
+            notes: "checked receipt at bootstrap/evidence/full-musl-binutils-provider-contract.json validates the musl 1.2.5 and binutils 2.41 configure/build/install/smoke contract; row remains partial until full toolchain correctness and source-root proof are proven",
+            evidence_check: EvidenceCheck::FullMuslBinutilsProviderContract,
         }
     }
 
@@ -2083,6 +2186,73 @@ mod tests {
 
     fn valid_gcc47_cxx_contract_content() -> String {
         valid_gcc47_cxx_contract_markers().join("\n")
+    }
+
+    fn write_full_musl_binutils_provider_contract(root: &Path, musl_markers: &[&str], binutils_markers: &[&str]) {
+        let path = root.join(FULL_MUSL_BINUTILS_PROVIDER_CONTRACT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let rendered_musl_markers = musl_markers
+            .iter()
+            .map(|marker| format!("    {}", serde_json::to_string(marker).unwrap()))
+            .collect::<Vec<_>>()
+            .join(",\n");
+        let rendered_binutils_markers = binutils_markers
+            .iter()
+            .map(|marker| format!("    {}", serde_json::to_string(marker).unwrap()))
+            .collect::<Vec<_>>()
+            .join(",\n");
+        fs::write(
+            path,
+            format!(
+                r#"{{
+  "schema": "mantle-full-musl-binutils-provider-contract-v1",
+  "musl_derivation": "bootstrap/musl-full.ncl",
+  "binutils_derivation": "bootstrap/binutils-full.ncl",
+  "status": "contract-only",
+  "musl_required_markers": [
+{}
+  ],
+  "binutils_required_markers": [
+{}
+  ],
+  "parity_effect": "evidence-backed partial; does not prove full musl/binutils correctness"
+}}
+"#,
+                rendered_musl_markers, rendered_binutils_markers
+            ),
+        )
+        .unwrap();
+    }
+
+    fn valid_full_musl_contract_markers() -> Vec<&'static str> {
+        vec![
+            "./configure \\",
+            "--host=x86_64-unknown-linux-musl",
+            "CC=\"$GCC/bin/gcc\"",
+            "make -j1 2>&1",
+            "make -j1 install 2>&1",
+            "ERROR: libc.a not built",
+            "ERROR: stdio.h not installed",
+            "ERROR: crt1.o not installed",
+            "ERROR: dynamic linker symlink missing",
+            "musl-1.2.5 build complete",
+        ]
+    }
+
+    fn valid_full_binutils_contract_markers() -> Vec<&'static str> {
+        vec![
+            "binutils-2.41/configure",
+            "--with-sysroot=\"$MUSL\"",
+            "CC=\"$GCC/bin/gcc\"",
+            "CXX=\"$GCC/bin/g++\"",
+            "make -j1 MAKEINFO=true 2>&1",
+            "make -j1 install MAKEINFO=true 2>&1",
+            "ERROR: $tool not found",
+            "binutils241-smoke.s",
+            "\"$AS\" -o /tmp/binutils241-smoke.o",
+            "\"$LD\" -o /tmp/binutils241-smoke-bin",
+            "binutils-2.41 build complete",
+        ]
     }
 
     fn write_gcc10_provider_contract(root: &Path, markers: &[&str]) {
@@ -2376,6 +2546,79 @@ mod tests {
         assert_eq!(row.status, StageStatus::Partial);
         assert!(row.notes.contains("GCC 4.7 C++ provider contract marker not found"));
         assert!(row.notes.contains("CC=\"$GCC4/bin/gcc\""));
+    }
+
+    #[test]
+    fn full_musl_binutils_provider_contract_matching_receipt_reports_partial() {
+        let dir = tempdir().unwrap();
+        let musl_markers = valid_full_musl_contract_markers();
+        let binutils_markers = valid_full_binutils_contract_markers();
+        write_stage(dir.path(), "musl-full.ncl", &musl_markers.join("\n"));
+        write_stage(dir.path(), "binutils-full.ncl", &binutils_markers.join("\n"));
+        write_full_musl_binutils_provider_contract(dir.path(), &musl_markers, &binutils_markers);
+
+        let row = evaluate_stage(dir.path(), &full_musl_binutils_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn full_musl_binutils_provider_contract_missing_receipt_reports_partial_with_failure() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "musl-full.ncl", &valid_full_musl_contract_markers().join("\n"));
+        write_stage(dir.path(), "binutils-full.ncl", &valid_full_binutils_contract_markers().join("\n"));
+
+        let row = evaluate_stage(dir.path(), &full_musl_binutils_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.notes.contains("evidence check failed"));
+        assert!(row.notes.contains("full musl/binutils provider contract missing"));
+    }
+
+    #[test]
+    fn full_musl_binutils_provider_contract_musl_marker_drift_fails_closed() {
+        let dir = tempdir().unwrap();
+        let musl_markers = valid_full_musl_contract_markers();
+        let binutils_markers = valid_full_binutils_contract_markers();
+        write_stage(dir.path(), "musl-full.ncl", "--host=x86_64-unknown-linux-musl\n");
+        write_stage(dir.path(), "binutils-full.ncl", &binutils_markers.join("\n"));
+        write_full_musl_binutils_provider_contract(dir.path(), &musl_markers, &binutils_markers);
+
+        let row = evaluate_stage(dir.path(), &full_musl_binutils_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.notes.contains("full musl/binutils provider contract musl marker not found"));
+        assert!(row.notes.contains("bootstrap/musl-full.ncl"));
+    }
+
+    #[test]
+    fn full_musl_binutils_provider_contract_binutils_marker_drift_fails_closed() {
+        let dir = tempdir().unwrap();
+        let musl_markers = valid_full_musl_contract_markers();
+        let binutils_markers = valid_full_binutils_contract_markers();
+        write_stage(dir.path(), "musl-full.ncl", &musl_markers.join("\n"));
+        write_stage(dir.path(), "binutils-full.ncl", "binutils-2.41/configure\n");
+        write_full_musl_binutils_provider_contract(dir.path(), &musl_markers, &binutils_markers);
+
+        let row = evaluate_stage(dir.path(), &full_musl_binutils_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.notes.contains("full musl/binutils provider contract binutils marker not found"));
+        assert!(row.notes.contains("bootstrap/binutils-full.ncl"));
+    }
+
+    #[test]
+    fn full_musl_binutils_real_derivations_report_provider_contract_backed_partial() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+        let row = evaluate_stage(root, &full_musl_binutils_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.status.blocks_parity());
+        assert!(row.notes.contains("checked receipt"));
+        assert!(!row.notes.contains("evidence check failed"));
     }
 
     #[test]
