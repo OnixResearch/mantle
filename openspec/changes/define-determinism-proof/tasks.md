@@ -2,7 +2,7 @@
 
 - [x] [serial] Define deterministic-build proof receipt types, canonical serialization, closed verdict enum, and BLAKE3 digest set comparison.
 - [x] [depends:schema] Wire strict-mode proof attempts so practical/impure runs cannot be promoted to deterministic claims.
-- [ ] [depends:schema] Add clean-store repeated build orchestration that prevents reusing the derivation-under-test output.
+- [x] [depends:schema] Add clean-store repeated build orchestration that prevents reusing the derivation-under-test output.
 - [x] [depends:schema] Add ambient host perturbation matrix coverage for environment, cwd, temp dirs, and umask.
 
 ## Phase 2: Release integration and docs

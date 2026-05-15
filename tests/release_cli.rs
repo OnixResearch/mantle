@@ -840,6 +840,64 @@ fn release_reproduce_writes_matched_report_from_isolated_rebuild_output() {
 
 #[cfg(unix)]
 #[test]
+fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("fake-deterministic-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("deterministic-main-output");
+    let proof_dir = temp.path().join("deterministic-proof-work");
+    let report_path = temp.path().join("deterministic-report.json");
+    let relative_path = &manifest.binaries[0].relative_path;
+    write_rebuild_script(
+        &rebuild_script,
+        &format!(
+            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$MANTLE_REPRODUCE_BUNDLE_DIR/{relative_path}\" \"$MANTLE_REPRODUCE_OUTPUT_DIR/{relative_path}\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then mkdir -p \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\"; printf '%s\\n' \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt\"; fi\n"
+        ),
+    );
+
+    let assert = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--report-path")
+        .arg(&report_path)
+        .arg("--deterministic-proof-runs")
+        .arg("2")
+        .arg("--deterministic-proof-dir")
+        .arg(&proof_dir)
+        .assert()
+        .success();
+
+    let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
+    let proof_path = proof_dir.join("deterministic-build-proof.json");
+    assert_eq!(stdout["deterministic_proof_path"], proof_path.display().to_string());
+    assert!(stdout["deterministic_proof_digest_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
+    assert!(proof_path.is_file());
+    assert!(proof_dir.join("run-000/store/store-marker.txt").is_file());
+    assert!(proof_dir.join("run-001/store/store-marker.txt").is_file());
+    assert!(rebuild_output_dir.join(relative_path).is_file());
+
+    let proof = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&proof_path).unwrap()).unwrap();
+    assert_eq!(proof["schema"], "mantle-deterministic-build-proof-v1");
+    assert_eq!(proof["derivation_identity"], format!("release:{}", manifest.release_id));
+    assert_eq!(proof["hermeticity_mode"], "strict");
+    assert_eq!(proof["physical_store_isolation"], "fresh-store-per-run");
+    let runs = proof["runs"].as_array().unwrap();
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0]["run_id"], "run-000");
+    assert_eq!(runs[1]["run_id"], "run-001");
+    assert_ne!(runs[0]["output_store_paths"][0], runs[1]["output_store_paths"][0]);
+    assert_eq!(runs[0]["output_digests"][0]["name"], *relative_path);
+    assert_eq!(runs[0]["output_digests"], runs[1]["output_digests"]);
+}
+
+#[cfg(unix)]
+#[test]
 fn release_reproduce_fails_when_rebuilt_artifact_is_missing() {
     let (temp, bundle_dir, _manifest) = make_valid_bundle();
     let rebuild_script = temp.path().join("missing-rebuild.sh");

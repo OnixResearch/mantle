@@ -947,6 +947,20 @@ mantle release reproduce target/release-evidence/<release-id> \
   --rebuild-command ./scripts/rebuild-release-artifacts.sh
 ```
 
+For a stronger deterministic-build proof attempt, ask `release reproduce` to run
+at least two additional clean proof runs. Each proof run gets its own output tree
+and fresh store directory, exposed to the rebuild recipe as
+`MANTLE_DETERMINISTIC_PROOF_STORE_DIR`; the proof directory must be separate from
+and not nested with the main rebuild output directory.
+
+```bash
+mantle release reproduce target/release-evidence/<release-id> \
+  --rebuild-output-dir /tmp/mantle-rebuild-out \
+  --rebuild-command ./scripts/rebuild-release-artifacts.sh \
+  --deterministic-proof-runs 2 \
+  --deterministic-proof-dir /tmp/mantle-deterministic-proof
+```
+
 The report records a closed proof-class ladder:
 
 - `bundle-consistent`: bundle-local digest/linkage checks only.

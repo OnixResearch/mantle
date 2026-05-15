@@ -69,6 +69,8 @@ pub(crate) fn cmd_release(
             rebuild_args,
             workflow_version,
             report_path,
+            deterministic_proof_runs,
+            deterministic_proof_dir,
         } => cmd_release_reproduce(
             current_dir,
             json,
@@ -78,6 +80,8 @@ pub(crate) fn cmd_release(
             rebuild_args,
             workflow_version,
             report_path,
+            deterministic_proof_runs,
+            deterministic_proof_dir,
         ),
         crate::ReleaseAction::Attest {
             bundle_dir,
@@ -333,6 +337,8 @@ fn cmd_release_reproduce(
     rebuild_args: Vec<std::ffi::OsString>,
     workflow_version: String,
     report_path: Option<PathBuf>,
+    deterministic_proof_runs: u32,
+    deterministic_proof_dir: Option<PathBuf>,
 ) -> Result<(), RunError> {
     let normalized_workflow_version =
         normalize_workflow_value(&workflow_version, DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION);
@@ -343,6 +349,8 @@ fn cmd_release_reproduce(
         rebuild_args,
         workflow_version: normalized_workflow_version,
         report_path: report_path.map(|path| resolve_input_path(current_dir, path)),
+        deterministic_proof_runs,
+        deterministic_proof_dir: deterministic_proof_dir.map(|path| resolve_input_path(current_dir, path)),
     };
     let summary = reproduce_release_artifacts(&request)?;
     if json {
@@ -353,6 +361,8 @@ fn cmd_release_reproduce(
             "matched_count": summary.matched_count,
             "mismatched_count": summary.mismatched_count,
             "missing_count": summary.missing_count,
+            "deterministic_proof_path": summary.deterministic_proof_path.as_ref().map(|path| path.display().to_string()),
+            "deterministic_proof_digest_blake3": summary.deterministic_proof_digest_blake3,
         });
         println!(
             "{}",
@@ -368,6 +378,12 @@ fn cmd_release_reproduce(
     println!("matched artifacts: {}", summary.matched_count);
     println!("mismatched artifacts: {}", summary.mismatched_count);
     println!("missing artifacts: {}", summary.missing_count);
+    if let Some(path) = &summary.deterministic_proof_path {
+        println!("deterministic proof: {}", path.display());
+    }
+    if let Some(digest) = &summary.deterministic_proof_digest_blake3 {
+        println!("deterministic proof digest: {digest}");
+    }
     Ok(())
 }
 

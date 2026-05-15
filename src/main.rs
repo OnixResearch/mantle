@@ -555,6 +555,15 @@ pub enum ReleaseAction {
         /// Output path for the canonical reproducibility report
         #[arg(long)]
         report_path: Option<PathBuf>,
+
+        /// Run a repeated clean-store deterministic proof attempt after the main rebuild (0
+        /// disables)
+        #[arg(long, default_value_t = 0)]
+        deterministic_proof_runs: u32,
+
+        /// Empty directory for repeated deterministic proof run work areas
+        #[arg(long)]
+        deterministic_proof_dir: Option<PathBuf>,
     },
     /// Create and sign a release attestation for a verified release bundle
     Attest {

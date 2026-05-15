@@ -291,6 +291,7 @@ fn classify_deterministic_build_proof(
     {
         reasons.push(format!("unsupported physical store isolation {}", receipt.physical_store_isolation));
     }
+    reasons.extend(reused_output_store_path_reasons(&receipt.runs));
     for run in &receipt.runs {
         for event in &run.hermeticity_audit_events {
             if PROOF_BLOCKING_AUDIT_EVENTS.iter().any(|blocking| blocking == event) {
@@ -306,6 +307,22 @@ fn classify_deterministic_build_proof(
     } else {
         (DeterministicBuildProofVerdict::Mismatch, vec!["BLAKE3 output digest set mismatch".to_string()])
     }
+}
+
+fn reused_output_store_path_reasons(runs: &[DeterministicBuildRunReceipt]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut reasons = Vec::new();
+    for run in runs {
+        if run.output_store_paths.is_empty() {
+            reasons.push(format!("run {} has no clean output store identity", run.run_id));
+        }
+        for path in &run.output_store_paths {
+            if !seen.insert(path.clone()) {
+                reasons.push(format!("reused derivation-under-test output store identity {path}"));
+            }
+        }
+    }
+    reasons
 }
 
 fn digest_sets_match(runs: &[DeterministicBuildRunReceipt]) -> bool {
@@ -347,7 +364,7 @@ mod tests {
         DeterministicBuildRunReceipt {
             run_id: id.to_string(),
             perturbation_case: case.to_string(),
-            output_store_paths: vec![format!("/mantle/store/{seed:02x}-demo")],
+            output_store_paths: vec![format!("/mantle/store/{seed:02x}-{id}-demo")],
             output_digests: vec![DeterministicOutputDigest {
                 name: "out".to_string(),
                 digest_blake3: digest(seed),
@@ -423,6 +440,35 @@ mod tests {
         receipt.blocking_reasons = reasons;
         let canonical = canonical_deterministic_build_proof_receipt(receipt).unwrap();
         assert_eq!(canonical.verdict, DeterministicBuildProofVerdict::ImpureMode);
+    }
+
+    #[test]
+    fn deterministic_receipt_blocks_reused_output_store_identity() {
+        let mut reused = run("run-b", "case-b", 1);
+        reused.output_store_paths = vec!["/mantle/store/reused-demo".to_string()];
+        let mut first = run("run-a", "case-a", 1);
+        first.output_store_paths = vec!["/mantle/store/reused-demo".to_string()];
+        let receipt = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
+            runs: vec![first, reused],
+            ..DeterministicBuildProofReceiptInit {
+                derivation_identity: "/mantle/store/demo.drv".to_string(),
+                hermeticity_mode: "strict".to_string(),
+                workflow_version: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
+                toolchain_provider_identity: "toolchain=gcc10-provider-contract".to_string(),
+                logical_store_prefix: "/mantle/store".to_string(),
+                physical_store_isolation: "fresh-store-per-run".to_string(),
+                normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
+                ambient_host_perturbations: perturbations(),
+                runs: Vec::new(),
+            }
+        });
+        assert_eq!(receipt.verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert!(
+            receipt
+                .blocking_reasons
+                .iter()
+                .any(|reason| reason.contains("reused derivation-under-test output store identity"))
+        );
     }
 
     #[test]
