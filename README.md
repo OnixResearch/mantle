@@ -1003,10 +1003,19 @@ stage2 mantle binary, produce two clean deterministic proof rebuilds under real
 Use `--proof-bundle target/self-hosting-proof/run-...` to reuse an existing full
 self-hosting proof bundle. The script writes the release bundle,
 `deterministic-build-proof.json`, sandbox evidence, and verify receipt under
-`target/release-evidence/`. Its successful claim is bounded to the packaged
-stage2 artifact rebuilding twice from the recorded inputs under recorded
-`mantle-proof-sandbox-v1:*` profiles with matching BLAKE3 digest sets; it does
-not claim full bootstrap reproducibility.
+`target/release-evidence/`. It validates those outputs with the checked-in real
+proof receipt checker before returning success. Re-check a saved run with:
+
+```bash
+cargo -Zscript scripts/check-real-release-determinism-receipt.rs \
+  target/release-evidence/<release-id>
+```
+
+Pass `--proof-dir` or `--verify-receipt` if the proof or verify JSON was moved
+away from the default sibling paths. The successful claim is bounded to the
+packaged stage2 artifact rebuilding twice from the recorded inputs under
+recorded `mantle-proof-sandbox-v1:*` profiles with matching BLAKE3 digest sets;
+it does not claim full bootstrap reproducibility.
 
 The report records a closed proof-class ladder:
 

@@ -173,61 +173,10 @@ validate_receipts() {
   local deterministic_proof_dir="${2:?proof dir is required}"
   local verify_json="${3:?verify json is required}"
 
-  python3 - "$release_bundle" "$deterministic_proof_dir" "$verify_json" <<'PY'
-import json
-import pathlib
-import sys
-
-bundle = pathlib.Path(sys.argv[1])
-proof_dir = pathlib.Path(sys.argv[2])
-verify_path = pathlib.Path(sys.argv[3])
-proof_path = proof_dir / "deterministic-build-proof.json"
-sandbox_path = proof_dir / "deterministic-sandbox-isolation-evidence.json"
-
-proof = json.loads(proof_path.read_text())
-verify = json.loads(verify_path.read_text())
-manifest = json.loads((bundle / "manifest.json").read_text())
-
-if proof.get("schema") != "mantle-deterministic-proof-receipt-v1":
-    raise SystemExit(f"unexpected proof schema: {proof.get('schema')}")
-if proof.get("workflow_version") != "mantle-deterministic-proof-receipt-v1":
-    raise SystemExit(f"unexpected workflow version: {proof.get('workflow_version')}")
-if proof.get("verdict") != "self-rebuild-match":
-    raise SystemExit(f"unexpected proof verdict: {proof.get('verdict')}")
-if proof.get("selected_provider_kind") != manifest.get("proof_linkage", {}).get("selected_provider_kind"):
-    raise SystemExit("provider kind mismatch between proof receipt and release manifest")
-
-runs = proof.get("runs", [])
-if len(runs) != 2:
-    raise SystemExit(f"expected exactly two deterministic proof runs, got {len(runs)}")
-profiles = proof.get("sandbox_profile_identities", [])
-if len(profiles) != 2 or any(not p.startswith("mantle-proof-sandbox-v1:") for p in profiles):
-    raise SystemExit(f"unsupported sandbox profile identities: {profiles!r}")
-if any(run.get("sandbox_profile_identity") not in profiles for run in runs):
-    raise SystemExit("run sandbox identity missing from top-level sandbox profiles")
-
-artifact_sets = [run.get("output_digests") for run in runs]
-if not artifact_sets[0] or artifact_sets[0] != artifact_sets[1]:
-    raise SystemExit("deterministic proof run artifact digest sets do not match")
-
-status = verify.get("deterministic_release", {}).get("status")
-if status != "eligible" or not verify.get("deterministic_release", {}).get("eligible"):
-    raise SystemExit(f"deterministic release not eligible: {status}")
-if pathlib.Path(verify["deterministic_release"]["proof_path"]) != proof_path:
-    raise SystemExit("verify receipt references an unexpected proof path")
-if pathlib.Path(verify["deterministic_release"]["sandbox_isolation_evidence_path"]) != sandbox_path:
-    raise SystemExit("verify receipt references an unexpected sandbox evidence path")
-
-print("real release determinism proof valid")
-print(f"  release: {manifest['release_id']}")
-print(f"  provider: {proof['selected_provider_kind']}")
-print(f"  source BLAKE3: {proof['source_blake3']}")
-print(f"  proof bundle BLAKE3: {proof['vendor_blake3']}")
-print(f"  artifact digests: {artifact_sets[0]}")
-print(f"  proof: {proof_path}")
-print(f"  sandbox evidence: {sandbox_path}")
-print(f"  verify: {verify_path}")
-PY
+  print_command cargo -Zscript scripts/check-real-release-determinism-receipt.rs "$release_bundle" --proof-dir "$deterministic_proof_dir" --verify-receipt "$verify_json"
+  cargo -Zscript scripts/check-real-release-determinism-receipt.rs "$release_bundle" \
+    --proof-dir "$deterministic_proof_dir" \
+    --verify-receipt "$verify_json"
 }
 
 main() {
