@@ -105,11 +105,22 @@
           SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           MANTLE_FAKE_BWRAP_HOST_PATH = pkgs.lib.makeBinPath [ pkgs.coreutils ];
         };
+
+        releaseNixWitnessQuality = craneLib.cargoNextest {
+          pname = "crunch-release-nix-witness-quality";
+          inherit src cargoArtifacts buildInputs;
+          nativeBuildInputs = nativeBuildInputs ++ [ pkgs.git ];
+          cargoNextestExtraArgs = "--test release_cli release_nix_witness";
+          partitions = 1;
+          partitionType = "count";
+          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+        };
       in
       {
         packages = {
           default = crunch;
           crunch = crunch;
+          release-nix-witness-quality = releaseNixWitnessQuality;
         };
 
         apps = {
@@ -122,6 +133,7 @@
         checks = {
           inherit crunch;
           release-determinism-quality = releaseDeterminismQuality;
+          release-nix-witness-quality = releaseNixWitnessQuality;
 
           tigerstyle =
             (tigerstyle.lib.mkConsumerCheck {

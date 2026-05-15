@@ -242,13 +242,19 @@ cargo test -p crunch-pipeline --test integration_build \
   pipeline_determinism_probe_ -- --ignored --nocapture
 ./scripts/prove-self-hosting.sh --check
 ./scripts/check-release-determinism-quality.sh
+./scripts/check-release-nix-witness-quality.sh
 nix build .#checks.x86_64-linux.release-determinism-quality --no-link -L
+nix build .#checks.x86_64-linux.release-nix-witness-quality --no-link -L
 ```
 
 The release determinism quality rail runs the generated deterministic proof
 smoke and validates its receipt/log BLAKE3 in one checked-in entry point. The
 flake check is the Nix/CI-callable heavy gate for the same underlying generated
-proof regression. `bootstrap parity-report` consumes the checked compact
+proof regression. The Nix witness rail exercises the bounded `mantle release
+nix-witness` CLI path and is exposed as both
+`packages.<system>.release-nix-witness-quality` and
+`checks.<system>.release-nix-witness-quality`, keeping it opt-in rather than part
+of ordinary developer builds. `bootstrap parity-report` consumes the checked compact
 self-build descriptor in `bootstrap/evidence/real-self-build-proof-parity.json`
 and surfaces bounded `crunch.self-build` proof details without marking Guix or
 StageX parity complete. The determinism probe is an ignored integration rail,
