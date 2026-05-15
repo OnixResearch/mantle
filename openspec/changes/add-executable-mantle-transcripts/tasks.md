@@ -1,8 +1,8 @@
 ## Phase 1: Format
 
-- [ ] [serial] Specify transcript block types, expected-error semantics, hidden setup, and output normalization.
-- [ ] [parallel] Add fixture transcripts for a trivial CLI workflow and an expected failure.
-- [ ] [parallel] Define isolated store/state defaults and in-place opt-in marker.
+- [x] [serial] Specify transcript block types, expected-error semantics, hidden setup, and output normalization. ✅ 1m 30s (started: 2026-05-15T21:13:55Z → completed: 2026-05-15T21:15:25Z)
+- [x] [parallel] Add fixture transcripts for a trivial CLI workflow and an expected failure. ✅ 1m 30s (started: 2026-05-15T21:13:55Z → completed: 2026-05-15T21:15:25Z)
+- [x] [parallel] Define isolated store/state defaults and in-place opt-in marker. ✅ 1m 30s (started: 2026-05-15T21:13:55Z → completed: 2026-05-15T21:15:25Z)
 
 ## Phase 2: Runner and gates
 
