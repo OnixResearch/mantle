@@ -5,7 +5,7 @@
 
 ## Phase 2: Future Implementation
 
-- [ ] [serial] Add `mantle-nix-cross-builder-witness-v1` receipt data model and canonical BLAKE3 digest helper.
+- [x] [serial] Add `mantle-nix-cross-builder-witness-v1` receipt data model and canonical BLAKE3 digest helper.
 - [ ] [depends:receipt-model] Add release build/CLI wiring to build or locate both Mantle self-built and Nix-built selected artifacts under the recorded policy.
 - [ ] [depends:release-wiring] Add positive and negative tests for bit-exact match, digest mismatch, missing Mantle proof, and bounded output wording.
 - [ ] [depends:tests] Expose the heavy check as a release-only flake package/check while keeping ordinary developer builds fast.
