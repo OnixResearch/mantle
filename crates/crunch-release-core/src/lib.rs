@@ -1,10 +1,21 @@
 #![no_std]
 extern crate alloc;
 
+mod determinism;
 mod error;
 mod manifest;
 mod reproducibility;
 
+pub use determinism::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
+pub use determinism::DeterministicBuildProofReceipt;
+pub use determinism::DeterministicBuildProofReceiptInit;
+pub use determinism::DeterministicBuildProofVerdict;
+pub use determinism::DeterministicBuildRunReceipt;
+pub use determinism::DeterministicOutputDigest;
+pub use determinism::canonical_deterministic_build_proof_receipt;
+pub use determinism::deterministic_build_proof_receipt_canonical_bytes;
+pub use determinism::deterministic_build_proof_receipt_digest_blake3;
+pub use determinism::deterministic_release_claim_eligible;
 pub use error::ReleaseEvidenceError;
 pub use manifest::BLAKE3_HEX_LENGTH_CHARS;
 pub use manifest::BundledArtifact;

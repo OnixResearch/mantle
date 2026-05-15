@@ -967,6 +967,17 @@ Evidence marked `hermeticity-mode=impure` is also rejected for rebuild-match
 proof classes by default, because explicit impure mode permits ambient host inputs
 outside the declared proof boundary.
 
+A stronger deterministic-release claim is separate from `self-rebuild-match`.
+Mantle models it with `mantle-deterministic-build-proof-v1` receipts whose
+closed verdicts include `deterministic-match`, `mismatch`, `missing-evidence`,
+`impure-mode`, and `unsupported-workflow`. A deterministic receipt requires
+strict hermetic mode, at least two clean proof runs, fresh store/namespace
+isolation for the derivation under test, a recorded ambient host perturbation
+matrix (`HOME`, `PATH`, `USER`, `LOGNAME`, `TZ`, `LANG`, `LC_ALL`, temp dirs,
+cwd, umask, and environment noise), typed hermeticity audit events, and matching
+per-output BLAKE3 digest sets. This is still scoped release-artifact evidence; it
+does not claim global Nix-like determinism for all Mantle builds.
+
 Later verification is bundle-local:
 
 ```bash
