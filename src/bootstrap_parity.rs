@@ -142,6 +142,7 @@ enum EvidenceCheck {
     StagexLineageProviderReceipt,
     Gcc40PlaceholderInventory,
     Gcc47CxxProviderContract,
+    Gcc10ProviderContract,
 }
 
 const BINUTILS_TCC_TOOL_TRANSCRIPT: &str = "bootstrap/evidence/binutils-tcc-tool-smoke.json";
@@ -151,6 +152,7 @@ const STAGEX_LINEAGE_PROVIDER_RECEIPT: &str = "bootstrap/evidence/stagex-lineage
 const GCC40_PLACEHOLDER_INVENTORY: &str = "bootstrap/evidence/gcc-4.0-placeholder-inventory.json";
 const GCC40_NATIVE_BOUNDARY_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-boundary.json";
 const GCC47_CXX_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-4.7-cxx-provider-contract.json";
+const GCC10_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-10-provider-contract.json";
 const BINUTILS_TCC_REQUIRED_TOOLS: &[&str] = &["as", "ld", "ar", "ranlib", "nm", "objcopy"];
 
 pub fn cmd_bootstrap_parity_report(project_root: &Path, require: &[ParityAxis], json: bool) -> Result<(), RunError> {
@@ -327,7 +329,21 @@ fn validate_stage_evidence(project_root: &Path, path: Option<&Path>, check: Evid
             project_root,
             path.ok_or_else(|| "GCC 4.7 C++ provider contract requires a derivation path".to_string())?,
         ),
+        EvidenceCheck::Gcc10ProviderContract => validate_gcc10_provider_contract(
+            project_root,
+            path.ok_or_else(|| "GCC 10 provider contract requires a derivation path".to_string())?,
+        ),
     }
+}
+
+fn validate_gcc10_provider_contract(project_root: &Path, derivation_path: &Path) -> Result<(), String> {
+    validate_provider_contract(project_root, derivation_path, ProviderContractSpec {
+        receipt_path: GCC10_PROVIDER_CONTRACT,
+        label: "GCC 10 provider contract",
+        schema: "mantle-gcc10-provider-contract-v1",
+        derivation: "bootstrap/gcc-10.ncl",
+        parity_effect: "evidence-backed partial; does not prove native/full GCC 10 correctness",
+    })
 }
 
 fn validate_gcc47_cxx_provider_contract(project_root: &Path, derivation_path: &Path) -> Result<(), String> {
@@ -367,6 +383,70 @@ fn validate_gcc47_cxx_provider_contract(project_root: &Path, derivation_path: &P
         if !derivation_content.contains(marker) {
             return Err(format!("GCC 4.7 C++ provider contract marker not found in bootstrap/gcc-4.7.ncl: `{marker}`"));
         }
+    }
+    Ok(())
+}
+
+struct ProviderContractSpec {
+    receipt_path: &'static str,
+    label: &'static str,
+    schema: &'static str,
+    derivation: &'static str,
+    parity_effect: &'static str,
+}
+
+fn validate_provider_contract(
+    project_root: &Path,
+    derivation_path: &Path,
+    spec: ProviderContractSpec,
+) -> Result<(), String> {
+    let receipt_path = project_root.join(spec.receipt_path);
+    let receipt_content = fs::read_to_string(&receipt_path).map_err(|err| {
+        format!(
+            "{} missing `{}` ({err}); expected checked contract-only receipt for {}",
+            spec.label, spec.receipt_path, spec.derivation
+        )
+    })?;
+    let receipt: serde_json::Value =
+        serde_json::from_str(&receipt_content).map_err(|err| format!("{} is not valid JSON: {err}", spec.label))?;
+    require_provider_contract_string(&receipt, spec.label, "schema", spec.schema)?;
+    require_provider_contract_string(&receipt, spec.label, "derivation", spec.derivation)?;
+    require_provider_contract_string(&receipt, spec.label, "status", "contract-only")?;
+    require_provider_contract_string(&receipt, spec.label, "parity_effect", spec.parity_effect)?;
+
+    let derivation_content = fs::read_to_string(derivation_path)
+        .map_err(|err| format!("read {} derivation {}: {err}", spec.label, derivation_path.display()))?;
+    let markers = receipt
+        .get("required_markers")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| format!("{} missing array field `required_markers`", spec.label))?;
+    if markers.is_empty() {
+        return Err(format!("{} `required_markers` must not be empty", spec.label));
+    }
+    for marker in markers {
+        let marker = marker.as_str().ok_or_else(|| format!("{} marker must be a string", spec.label))?;
+        if marker.trim().is_empty() {
+            return Err(format!("{} marker must not be empty", spec.label));
+        }
+        if !derivation_content.contains(marker) {
+            return Err(format!("{} marker not found in {}: `{marker}`", spec.label, spec.derivation));
+        }
+    }
+    Ok(())
+}
+
+fn require_provider_contract_string(
+    value: &serde_json::Value,
+    label: &str,
+    field: &str,
+    expected: &str,
+) -> Result<(), String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("{label} missing string field `{field}`"))?;
+    if actual != expected {
+        return Err(format!("{label} `{field}` is `{actual}`, expected `{expected}`"));
     }
     Ok(())
 }
@@ -1260,10 +1340,10 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             derivation: Some("gcc-10.ncl"),
             expected_complete: false,
             graph_evidence: "derivation present",
-            semantic_evidence: "native correctness evidence required",
-            proof_evidence: "source transcript required",
-            notes: "",
-            evidence_check: EvidenceCheck::None,
+            semantic_evidence: "checked C/C++/C++11 provider contract only; native correctness evidence required",
+            proof_evidence: "source transcript and checked GCC 10 provider contract required",
+            notes: "checked receipt at bootstrap/evidence/gcc-10-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 10 correctness is proven",
+            evidence_check: EvidenceCheck::Gcc10ProviderContract,
         },
         StageSpec {
             id: "full-musl-binutils",
@@ -1419,6 +1499,22 @@ mod tests {
             proof_evidence: "source transcript and checked C++ provider contract required",
             notes: "checked receipt at bootstrap/evidence/gcc-4.7-cxx-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 4.7 correctness is proven",
             evidence_check: EvidenceCheck::Gcc47CxxProviderContract,
+        }
+    }
+
+    fn gcc10_spec() -> StageSpec {
+        StageSpec {
+            id: "gcc.10",
+            title: "GCC 10",
+            axes: LIVE_GUIX,
+            lineage: "live-bootstrap",
+            derivation: Some("gcc-10.ncl"),
+            expected_complete: false,
+            graph_evidence: "derivation present",
+            semantic_evidence: "checked C/C++/C++11 provider contract only; native correctness evidence required",
+            proof_evidence: "source transcript and checked GCC 10 provider contract required",
+            notes: "checked receipt at bootstrap/evidence/gcc-10-provider-contract.json validates the C/C++ configure/build/install/smoke contract; row remains partial until native/full GCC 10 correctness is proven",
+            evidence_check: EvidenceCheck::Gcc10ProviderContract,
         }
     }
 
@@ -1626,6 +1722,55 @@ mod tests {
 
     fn valid_gcc47_cxx_contract_content() -> String {
         valid_gcc47_cxx_contract_markers().join("\n")
+    }
+
+    fn write_gcc10_provider_contract(root: &Path, markers: &[&str]) {
+        let path = root.join(GCC10_PROVIDER_CONTRACT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let rendered_markers = markers
+            .iter()
+            .map(|marker| format!("    {}", serde_json::to_string(marker).unwrap()))
+            .collect::<Vec<_>>()
+            .join(",\n");
+        fs::write(
+            path,
+            format!(
+                r#"{{
+  "schema": "mantle-gcc10-provider-contract-v1",
+  "derivation": "bootstrap/gcc-10.ncl",
+  "status": "contract-only",
+  "required_markers": [
+{}
+  ],
+  "parity_effect": "evidence-backed partial; does not prove native/full GCC 10 correctness"
+}}
+"#,
+                rendered_markers
+            ),
+        )
+        .unwrap();
+    }
+
+    fn valid_gcc10_contract_markers() -> Vec<&'static str> {
+        vec![
+            "--enable-languages=c,c++",
+            "CC=\"$GCC47/bin/gcc\"",
+            "CXX=\"$GCC47/bin/g++\"",
+            "make -j1 all-gcc MAKEINFO=true",
+            "make -j1 all-target-libgcc MAKEINFO=true",
+            "make -j1 install-gcc MAKEINFO=true",
+            "make -j1 install-target-libgcc MAKEINFO=true",
+            "test -x \"$out/bin/cc\"",
+            "test -x \"$out/bin/c++\"",
+            "find \"$out\" -name libgcc.a -type f",
+            "ERROR: C smoke test failed",
+            "ERROR: C++ smoke test failed",
+            "gcc-10.5.0 build complete",
+        ]
+    }
+
+    fn valid_gcc10_contract_content() -> String {
+        valid_gcc10_contract_markers().join("\n")
     }
 
     fn write_gcc40_placeholder_inventory(root: &Path, content: &str) {
@@ -1870,6 +2015,58 @@ mod tests {
         assert_eq!(row.status, StageStatus::Partial);
         assert!(row.notes.contains("GCC 4.7 C++ provider contract marker not found"));
         assert!(row.notes.contains("CC=\"$GCC4/bin/gcc\""));
+    }
+
+    #[test]
+    fn gcc10_provider_contract_matching_receipt_reports_partial() {
+        let dir = tempdir().unwrap();
+        let markers = valid_gcc10_contract_markers();
+        write_stage(dir.path(), "gcc-10.ncl", &valid_gcc10_contract_content());
+        write_gcc10_provider_contract(dir.path(), &markers);
+
+        let row = evaluate_stage(dir.path(), &gcc10_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.status.blocks_parity());
+        assert!(!row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn gcc10_provider_contract_missing_receipt_reports_partial_with_failure() {
+        let dir = tempdir().unwrap();
+        write_stage(dir.path(), "gcc-10.ncl", &valid_gcc10_contract_content());
+
+        let row = evaluate_stage(dir.path(), &gcc10_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.notes.contains("evidence check failed"));
+        assert!(row.notes.contains("GCC 10 provider contract missing"));
+    }
+
+    #[test]
+    fn gcc10_provider_contract_marker_drift_fails_closed() {
+        let dir = tempdir().unwrap();
+        let markers = valid_gcc10_contract_markers();
+        write_stage(dir.path(), "gcc-10.ncl", "--enable-languages=c,c++\n");
+        write_gcc10_provider_contract(dir.path(), &markers);
+
+        let row = evaluate_stage(dir.path(), &gcc10_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.notes.contains("GCC 10 provider contract marker not found"));
+        assert!(row.notes.contains("CC=\"$GCC47/bin/gcc\""));
+    }
+
+    #[test]
+    fn gcc10_real_derivation_reports_provider_contract_backed_partial() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+        let row = evaluate_stage(root, &gcc10_spec());
+
+        assert_eq!(row.status, StageStatus::Partial);
+        assert!(row.status.blocks_parity());
+        assert!(row.notes.contains("checked receipt"));
+        assert!(!row.notes.contains("evidence check failed"));
     }
 
     #[test]

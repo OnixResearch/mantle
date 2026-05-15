@@ -1,0 +1,21 @@
+{
+  "schema": "mantle-gcc10-provider-contract-v1",
+  "derivation": "bootstrap/gcc-10.ncl",
+  "status": "contract-only",
+  "required_markers": [
+    "--enable-languages=c,c++",
+    "CC=\"$GCC47/bin/gcc\"",
+    "CXX=\"$GCC47/bin/g++\"",
+    "make -j1 all-gcc MAKEINFO=true",
+    "make -j1 all-target-libgcc MAKEINFO=true",
+    "make -j1 install-gcc MAKEINFO=true",
+    "make -j1 install-target-libgcc MAKEINFO=true",
+    "test -x \"$out/bin/cc\"",
+    "test -x \"$out/bin/c++\"",
+    "find \"$out\" -name libgcc.a -type f",
+    "ERROR: C smoke test failed",
+    "ERROR: C++ smoke test failed",
+    "gcc-10.5.0 build complete"
+  ],
+  "parity_effect": "evidence-backed partial; does not prove native/full GCC 10 correctness"
+}
