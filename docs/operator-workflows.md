@@ -255,6 +255,9 @@ mantle release reproduce target/release-evidence/<release-id> \
   --rebuild-output-dir target/release-rebuild/<release-id> \
   --rebuild-command ./scripts/rebuild-release-artifacts.sh
 
+# Smoke the generated deterministic proof path and save a rail receipt/log
+cargo -Zscript scripts/release-determinism-smoke.rs
+
 # Re-check a saved bundle using only bundle-local contents
 mantle release verify target/release-evidence/<release-id>
 

@@ -965,6 +965,20 @@ mantle release reproduce target/release-evidence/<release-id> \
   --deterministic-proof-dir /tmp/mantle-deterministic-proof
 ```
 
+For a repo-maintained smoke rail that exercises the generated-proof path and
+writes an operator receipt, run:
+
+```bash
+cargo -Zscript scripts/release-determinism-smoke.rs
+```
+
+The smoke rail runs the checked-in CLI regression that creates release evidence,
+generates a `mantle-deterministic-proof-receipt-v1` receipt from two clean proof
+stores, and verifies it with `mantle release verify
+--require-deterministic-release`. It writes `receipt.json` and `test.log` under
+`target/release-determinism-smoke/latest/` by default. The receipt is smoke
+evidence for the rail and does not replace a release-specific proof receipt.
+
 The report records a closed proof-class ladder:
 
 - `bundle-consistent`: bundle-local digest/linkage checks only.
