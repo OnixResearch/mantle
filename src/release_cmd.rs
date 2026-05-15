@@ -16,6 +16,8 @@ use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
 use crate::release_evidence::ReleaseBundleCreateRequest;
 use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
+use crate::release_nix_witness::ReleaseNixWitnessRequest;
+use crate::release_nix_witness::write_release_nix_cross_builder_witness;
 use crate::release_reproducibility::DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION;
 use crate::release_reproducibility::ReleaseReproduceRequest;
 use crate::release_reproducibility::ReproducibilityStatus;
@@ -100,6 +102,37 @@ pub(crate) fn cmd_release(
             report_path,
             deterministic_proof_runs,
             deterministic_proof_dir,
+        ),
+        crate::ReleaseAction::NixWitness {
+            bundle_dir,
+            nix_output_dir,
+            deterministic_proof,
+            receipt_path,
+            rust_toolchain_identity,
+            target_triple,
+            build_flags,
+            linker_identity,
+            strip_debug_policy,
+            source_date_epoch_policy,
+            nix_derivation_identity,
+            nix_output_identity,
+            require_match,
+        } => cmd_release_nix_witness(
+            current_dir,
+            json,
+            bundle_dir,
+            nix_output_dir,
+            deterministic_proof,
+            receipt_path,
+            rust_toolchain_identity,
+            target_triple,
+            build_flags,
+            linker_identity,
+            strip_debug_policy,
+            source_date_epoch_policy,
+            nix_derivation_identity,
+            nix_output_identity,
+            require_match,
         ),
         crate::ReleaseAction::Attest {
             bundle_dir,
@@ -634,6 +667,72 @@ fn cmd_release_reproduce(
             println!("deterministic proof blockers: {}", blockers.join("; "));
         }
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cmd_release_nix_witness(
+    current_dir: &Path,
+    json: bool,
+    bundle_dir: PathBuf,
+    nix_output_dir: PathBuf,
+    deterministic_proof: PathBuf,
+    receipt_path: Option<PathBuf>,
+    rust_toolchain_identity: String,
+    target_triple: String,
+    build_flags: Vec<String>,
+    linker_identity: Option<String>,
+    strip_debug_policy: String,
+    source_date_epoch_policy: String,
+    nix_derivation_identity: String,
+    nix_output_identity: String,
+    require_match: bool,
+) -> Result<(), RunError> {
+    let request = ReleaseNixWitnessRequest {
+        bundle_dir: resolve_input_path(current_dir, bundle_dir),
+        nix_output_dir: resolve_input_path(current_dir, nix_output_dir),
+        deterministic_proof_path: resolve_input_path(current_dir, deterministic_proof),
+        output_path: receipt_path.map(|path| resolve_input_path(current_dir, path)),
+        rust_toolchain_identity,
+        target_triple,
+        build_flags,
+        linker_identity,
+        strip_debug_policy,
+        source_date_epoch_policy,
+        nix_derivation_identity,
+        nix_output_identity,
+        require_match,
+    };
+    let summary = write_release_nix_cross_builder_witness(&request)?;
+    if json {
+        let rendered = serde_json::json!({
+            "kind": "mantle-nix-cross-builder-witness-run-v1",
+            "release_id": summary.release_id,
+            "receipt_path": summary.receipt_path.display().to_string(),
+            "receipt_digest_blake3": summary.receipt_digest_blake3,
+            "comparison_verdict": summary.verdict_label(),
+            "proof_class": summary.proof_class,
+            "mantle_artifact_count": summary.mantle_artifact_count,
+            "nix_artifact_count": summary.nix_artifact_count,
+            "bounded_claim": "Nix-built selected release artifacts matched Mantle artifacts only when comparison_verdict is nix-witness-match; this does not replace self-rebuild-match or prove global reproducibility.",
+        });
+        println!(
+            "{}",
+            serde_json::to_string(&rendered)
+                .map_err(|err| RunError::Internal(format!("serializing nix witness output: {err}")))?
+        );
+        return Ok(());
+    }
+    println!("nix cross-builder witness: {}", summary.verdict_label());
+    println!("release id: {}", summary.release_id);
+    println!("receipt: {}", summary.receipt_path.display());
+    println!("receipt digest: {}", summary.receipt_digest_blake3);
+    if let Some(proof_class) = &summary.proof_class {
+        println!("proof class: {proof_class}");
+    }
+    println!(
+        "bounded claim: Nix-built selected release artifacts matched Mantle artifacts only when verdict is nix-witness-match; this does not replace self-rebuild-match or prove global reproducibility."
+    );
     Ok(())
 }
 

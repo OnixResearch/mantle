@@ -37,6 +37,8 @@ use crunch_release_core::DeterministicOutputDigest;
 use crunch_release_core::DeterministicProofUnit;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
+use crunch_release_core::NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS;
+use crunch_release_core::NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
 use crunch_release_core::ReleaseReproducibilityReport;
 use crunch_release_core::SUPPORTED_SANDBOX_PROFILE_FAMILY;
@@ -787,6 +789,157 @@ fn write_deterministic_verify_artifacts(
     let evidence_digest = blake3::hash(&evidence_bytes).to_hex().to_string();
     write_file(&evidence_path, &evidence_bytes);
     (proof_path, evidence_path, proof_digest, evidence_digest)
+}
+
+fn run_nix_witness_args(
+    bundle_dir: &Path,
+    nix_output_dir: &Path,
+    deterministic_proof: &Path,
+    receipt_path: &Path,
+) -> Command {
+    let mut cmd = crunch();
+    cmd.arg("--json")
+        .arg("release")
+        .arg("nix-witness")
+        .arg(bundle_dir)
+        .arg("--nix-output-dir")
+        .arg(nix_output_dir)
+        .arg("--deterministic-proof")
+        .arg(deterministic_proof)
+        .arg("--receipt-path")
+        .arg(receipt_path)
+        .arg("--rust-toolchain-identity")
+        .arg("rust-nightly-1.91.1")
+        .arg("--target-triple")
+        .arg("x86_64-unknown-linux-musl")
+        .arg("--build-flag")
+        .arg("-Ctarget-feature=+crt-static")
+        .arg("--linker-identity")
+        .arg("clang+mold")
+        .arg("--strip-debug-policy")
+        .arg("strip")
+        .arg("--source-date-epoch-policy")
+        .arg("release-manifest")
+        .arg("--nix-derivation-identity")
+        .arg("/nix/store/demo-mantle.drv")
+        .arg("--nix-output-identity")
+        .arg("/nix/store/demo-mantle");
+    cmd
+}
+
+fn populate_nix_output_from_bundle(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest, nix_output_dir: &Path) {
+    for artifact in &manifest.binaries {
+        let bytes = std::fs::read(bundle_dir.join(&artifact.relative_path)).unwrap();
+        write_file(&nix_output_dir.join(&artifact.relative_path), &bytes);
+    }
+}
+
+#[test]
+fn release_nix_witness_writes_match_receipt_from_located_nix_artifacts() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (proof_path, _, proof_digest, _) = write_deterministic_verify_artifacts(&temp.path().join("proof"), &manifest);
+    let nix_output_dir = temp.path().join("nix-output");
+    let receipt_path = temp.path().join("nix-witness.json");
+    populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
+
+    let assert = run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+        .current_dir(temp.path())
+        .assert()
+        .success();
+    let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
+    let receipt = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&receipt_path).unwrap()).unwrap();
+
+    assert_eq!(stdout["kind"], "mantle-nix-cross-builder-witness-run-v1");
+    assert_eq!(stdout["comparison_verdict"], "nix-witness-match");
+    assert_eq!(stdout["proof_class"], NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS);
+    assert_eq!(stdout["receipt_path"], receipt_path.display().to_string());
+    assert!(stdout["bounded_claim"].as_str().unwrap().contains("does not replace self-rebuild-match"));
+    assert_eq!(receipt["schema"], NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA);
+    assert_eq!(receipt["proof_class"], NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS);
+    assert_eq!(receipt["comparison_verdict"], "nix-witness-match");
+    assert_eq!(receipt["mantle_deterministic_proof_receipt_digest_blake3"], proof_digest);
+    assert_eq!(receipt["source_tree_digest_blake3"], manifest.source_archive.digest_blake3);
+    assert_eq!(receipt["vendor_input_digest_blake3"], manifest.proof_bundle.digest_blake3);
+    assert_eq!(receipt["build_policy"]["build_flags"][0], "-Ctarget-feature=+crt-static");
+    assert!(receipt["receipt_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
+}
+
+#[test]
+fn release_nix_witness_writes_mismatch_receipt_without_promoting_proof_class() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (proof_path, _, _, _) = write_deterministic_verify_artifacts(&temp.path().join("proof"), &manifest);
+    let nix_output_dir = temp.path().join("nix-output");
+    let receipt_path = temp.path().join("nix-witness-mismatch.json");
+    populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
+    write_file(&nix_output_dir.join(&manifest.binaries[0].relative_path), b"nix-drift");
+
+    let assert = run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+        .current_dir(temp.path())
+        .assert()
+        .success();
+    let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
+    let receipt = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&receipt_path).unwrap()).unwrap();
+
+    assert_eq!(stdout["comparison_verdict"], "cross-builder-mismatch");
+    assert_eq!(stdout["proof_class"], serde_json::Value::Null);
+    assert_eq!(receipt["comparison_verdict"], "cross-builder-mismatch");
+    assert!(receipt.get("proof_class").is_none());
+}
+
+#[test]
+fn release_nix_witness_require_match_fails_closed_on_digest_mismatch() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (proof_path, _, _, _) = write_deterministic_verify_artifacts(&temp.path().join("proof"), &manifest);
+    let nix_output_dir = temp.path().join("nix-output");
+    let receipt_path = temp.path().join("nix-witness-mismatch-required.json");
+    populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
+    write_file(&nix_output_dir.join(&manifest.binaries[0].relative_path), b"nix-drift");
+
+    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+        .arg("--require-match")
+        .current_dir(temp.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("nix cross-builder witness required but verdict is cross-builder-mismatch"));
+    assert!(receipt_path.is_file(), "mismatch receipt should still be written for diagnosis");
+}
+
+#[test]
+fn release_nix_witness_rejects_deterministic_proof_source_drift() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (proof_path, _, _, _) = write_deterministic_verify_artifacts(&temp.path().join("proof"), &manifest);
+    let nix_output_dir = temp.path().join("nix-output");
+    let receipt_path = temp.path().join("nix-witness-source-drift.json");
+    populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
+    let mut proof: DeterministicBuildProofReceipt =
+        serde_json::from_slice(&std::fs::read(&proof_path).unwrap()).unwrap();
+    proof.source_blake3 = sample_digest(41);
+    let proof_bytes = deterministic_build_proof_receipt_canonical_bytes(proof).unwrap();
+    write_file(&proof_path, &proof_bytes);
+
+    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+        .current_dir(temp.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "deterministic proof source digest does not match release bundle source digest",
+        ));
+    assert!(!receipt_path.exists());
+}
+
+#[test]
+fn release_nix_witness_rejects_missing_mantle_deterministic_proof() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let nix_output_dir = temp.path().join("nix-output");
+    let receipt_path = temp.path().join("nix-witness-missing-proof.json");
+    populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
+
+    run_nix_witness_args(&bundle_dir, &nix_output_dir, &temp.path().join("missing-proof.json"), &receipt_path)
+        .current_dir(temp.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("deterministic proof artifact does not exist"));
+    assert!(!receipt_path.exists());
 }
 
 #[test]

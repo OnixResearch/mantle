@@ -24,6 +24,7 @@ mod protected_exec_seccomp;
 mod release_attestation;
 mod release_cmd;
 mod release_evidence;
+mod release_nix_witness;
 mod release_reproducibility;
 mod release_source;
 mod self_build;
@@ -576,6 +577,62 @@ pub enum ReleaseAction {
         /// Empty directory for repeated deterministic proof run work areas
         #[arg(long)]
         deterministic_proof_dir: Option<PathBuf>,
+    },
+    /// Compare release bundle artifacts against located Nix-built artifacts and emit a Nix witness
+    /// receipt
+    NixWitness {
+        /// Bundle directory whose release artifacts are the Mantle side of the comparison
+        bundle_dir: PathBuf,
+
+        /// Directory containing Nix-built artifacts at the same relative paths as the release
+        /// bundle binaries
+        #[arg(long)]
+        nix_output_dir: PathBuf,
+
+        /// Canonical deterministic build proof artifact proving the Mantle side first
+        #[arg(long)]
+        deterministic_proof: PathBuf,
+
+        /// Output path for the canonical Nix cross-builder witness receipt
+        #[arg(long)]
+        receipt_path: Option<PathBuf>,
+
+        /// Rust toolchain identity shared by the recorded policy
+        #[arg(long)]
+        rust_toolchain_identity: String,
+
+        /// Target triple shared by the recorded policy
+        #[arg(long)]
+        target_triple: String,
+
+        /// Ordered build flag/RUSTFLAGS entry recorded in the policy (repeatable, order-sensitive)
+        #[arg(long = "build-flag", allow_hyphen_values = true)]
+        build_flags: Vec<String>,
+
+        /// Linker identity recorded in the policy, when known
+        #[arg(long)]
+        linker_identity: Option<String>,
+
+        /// Strip/debug normalization policy
+        #[arg(long, default_value = "recorded-release-policy")]
+        strip_debug_policy: String,
+
+        /// SOURCE_DATE_EPOCH normalization policy
+        #[arg(long, default_value = "recorded-release-policy")]
+        source_date_epoch_policy: String,
+
+        /// Nix derivation identity used for the cross-builder comparison
+        #[arg(long)]
+        nix_derivation_identity: String,
+
+        /// Nix output/store identity used for the cross-builder comparison
+        #[arg(long)]
+        nix_output_identity: String,
+
+        /// Fail if the Nix-built artifact digest set does not exactly match the Mantle release
+        /// artifacts
+        #[arg(long)]
+        require_match: bool,
     },
     /// Create and sign a release attestation for a verified release bundle
     Attest {
