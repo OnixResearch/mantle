@@ -29,6 +29,7 @@ const REQUIRED_PERTURBATIONS: &[&str] = &[
     "env-noise",
 ];
 const PROOF_BLOCKING_AUDIT_EVENTS: &[&str] = &["host-tool-fallback", "host-state-leak", "impure-mode-selected"];
+const SUPPORTED_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1:";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -52,6 +53,7 @@ pub struct DeterministicBuildRunReceipt {
     pub run_id: String,
     pub perturbation_case: String,
     pub output_store_paths: Vec<String>,
+    pub sandbox_profile_identity: String,
     pub output_digests: Vec<DeterministicOutputDigest>,
     pub substituted_dependency_identities: Vec<String>,
     pub hermeticity_audit_events: Vec<String>,
@@ -68,6 +70,7 @@ pub struct DeterministicBuildProofReceipt {
     pub physical_store_isolation: String,
     pub normalized_execution_envelope: Vec<String>,
     pub ambient_host_perturbations: Vec<String>,
+    pub sandbox_profile_identities: Vec<String>,
     pub runs: Vec<DeterministicBuildRunReceipt>,
     pub verdict: DeterministicBuildProofVerdict,
     pub blocking_reasons: Vec<String>,
@@ -83,6 +86,7 @@ pub struct DeterministicBuildProofReceiptInit {
     pub physical_store_isolation: String,
     pub normalized_execution_envelope: Vec<String>,
     pub ambient_host_perturbations: Vec<String>,
+    pub sandbox_profile_identities: Vec<String>,
     pub runs: Vec<DeterministicBuildRunReceipt>,
 }
 
@@ -98,6 +102,7 @@ impl DeterministicBuildProofReceipt {
             physical_store_isolation: init.physical_store_isolation,
             normalized_execution_envelope: init.normalized_execution_envelope,
             ambient_host_perturbations: init.ambient_host_perturbations,
+            sandbox_profile_identities: init.sandbox_profile_identities,
             runs: init.runs,
             verdict: DeterministicBuildProofVerdict::NotAttempted,
             blocking_reasons: Vec::new(),
@@ -116,6 +121,7 @@ pub fn canonical_deterministic_build_proof_receipt(
     receipt.schema = DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string();
     receipt.normalized_execution_envelope.sort();
     receipt.ambient_host_perturbations.sort();
+    receipt.sandbox_profile_identities.sort();
     receipt.blocking_reasons.sort();
     for run in &mut receipt.runs {
         run.output_store_paths.sort();
@@ -203,6 +209,7 @@ fn validate_receipt_header(receipt: &DeterministicBuildProofReceipt) -> Result<(
 fn validate_receipt_evidence(receipt: &DeterministicBuildProofReceipt) -> Result<(), ReleaseEvidenceError> {
     validate_string_set(&receipt.normalized_execution_envelope, "normalized_execution_envelope")?;
     validate_string_set(&receipt.ambient_host_perturbations, "ambient_host_perturbations")?;
+    validate_string_set(&receipt.sandbox_profile_identities, "sandbox_profile_identities")?;
     validate_string_set(&receipt.blocking_reasons, "blocking_reasons")?;
     let mut run_ids = BTreeSet::new();
     for run in &receipt.runs {
@@ -215,7 +222,11 @@ fn validate_receipt_evidence(receipt: &DeterministicBuildProofReceipt) -> Result
 }
 
 fn validate_run(run: &DeterministicBuildRunReceipt) -> Result<(), ReleaseEvidenceError> {
-    for (field, value) in [("run_id", &run.run_id), ("perturbation_case", &run.perturbation_case)] {
+    for (field, value) in [
+        ("run_id", &run.run_id),
+        ("perturbation_case", &run.perturbation_case),
+        ("sandbox_profile_identity", &run.sandbox_profile_identity),
+    ] {
         if value.trim().is_empty() {
             return Err(validation_error(format!("deterministic build proof receipt run {field} must not be empty")));
         }
@@ -291,8 +302,22 @@ fn classify_deterministic_build_proof(
     {
         reasons.push(format!("unsupported physical store isolation {}", receipt.physical_store_isolation));
     }
+    if receipt.sandbox_profile_identities.is_empty() {
+        reasons.push("missing deterministic proof sandbox profile identity".to_string());
+    }
+    for profile in &receipt.sandbox_profile_identities {
+        if !profile.starts_with(SUPPORTED_SANDBOX_PROFILE_PREFIX) {
+            reasons.push(format!("unsupported deterministic proof sandbox profile {profile}"));
+        }
+    }
     reasons.extend(reused_output_store_path_reasons(&receipt.runs));
     for run in &receipt.runs {
+        if !receipt.sandbox_profile_identities.iter().any(|profile| profile == &run.sandbox_profile_identity) {
+            reasons.push(format!(
+                "run {} uses unlisted sandbox profile identity {}",
+                run.run_id, run.sandbox_profile_identity
+            ));
+        }
         for event in &run.hermeticity_audit_events {
             if PROOF_BLOCKING_AUDIT_EVENTS.iter().any(|blocking| blocking == event) {
                 reasons.push(format!("proof-blocking audit event {event}"));
@@ -365,6 +390,7 @@ mod tests {
             run_id: id.to_string(),
             perturbation_case: case.to_string(),
             output_store_paths: vec![format!("/mantle/store/{seed:02x}-{id}-demo")],
+            sandbox_profile_identity: "mantle-proof-sandbox-v1:demo".to_string(),
             output_digests: vec![DeterministicOutputDigest {
                 name: "out".to_string(),
                 digest_blake3: digest(seed),
@@ -388,6 +414,7 @@ mod tests {
             physical_store_isolation: "fresh-store-per-run".to_string(),
             normalized_execution_envelope: vec!["sandbox=bwrap".to_string(), "network=none".to_string()],
             ambient_host_perturbations: perturbations(),
+            sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
             runs: vec![run("run-b", "case-b", 1), run("run-a", "case-a", 1)],
         })
     }
@@ -423,6 +450,7 @@ mod tests {
                 physical_store_isolation: "fresh-store-per-run".to_string(),
                 normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
                 ambient_host_perturbations: perturbations(),
+                sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
                 runs: Vec::new(),
             }
         });
@@ -459,6 +487,7 @@ mod tests {
                 physical_store_isolation: "fresh-store-per-run".to_string(),
                 normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
                 ambient_host_perturbations: perturbations(),
+                sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
                 runs: Vec::new(),
             }
         });
@@ -469,6 +498,17 @@ mod tests {
                 .iter()
                 .any(|reason| reason.contains("reused derivation-under-test output store identity"))
         );
+    }
+
+    #[test]
+    fn deterministic_receipt_rejects_unsupported_sandbox_profile() {
+        let mut receipt = receipt();
+        receipt.sandbox_profile_identities = vec!["direct-host:demo".to_string()];
+        receipt.runs[0].sandbox_profile_identity = "direct-host:demo".to_string();
+        receipt.runs[1].sandbox_profile_identity = "direct-host:demo".to_string();
+        let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+        assert_eq!(verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert!(reasons.iter().any(|reason| reason.contains("unsupported deterministic proof sandbox profile")));
     }
 
     #[test]

@@ -41,6 +41,37 @@ const DETERMINISTIC_PROOF_STORE_DIR_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_STOR
 const DEFAULT_REPORT_RELATIVE_PATH: &str = "reproducibility/reproducibility-report.json";
 const HASH_BUFFER_BYTES: usize = 8192;
 const MAX_REBUILD_OUTPUT_ENTRIES: u32 = 4096;
+const PROOF_SANDBOX_BWRAP_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_BWRAP";
+const PROOF_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProofSandboxProfile {
+    identity: String,
+    executor: PathBuf,
+    executor_version: String,
+    network_policy: String,
+    command_identity: String,
+    bundle_dir: PathBuf,
+    output_dir: PathBuf,
+    store_dir: PathBuf,
+}
+
+impl ProofSandboxProfile {
+    fn canonical_facts(&self) -> Vec<String> {
+        vec![
+            format!("profile={PROOF_SANDBOX_PROFILE_PREFIX}"),
+            format!("executor=bwrap"),
+            format!("executor_path={}", self.executor.display()),
+            format!("executor_version={}", self.executor_version),
+            format!("network={}", self.network_policy),
+            format!("bundle_ro={}", self.bundle_dir.display()),
+            format!("recipe_ro={}", self.command_identity),
+            format!("output_rw={}", self.output_dir.display()),
+            format!("store_rw={}", self.store_dir.display()),
+            "env_allowlist=MANTLE_REPRODUCE_BUNDLE_DIR,MANTLE_REPRODUCE_OUTPUT_DIR,MANTLE_REPRODUCE_RELEASE_ID,MANTLE_DETERMINISTIC_PROOF_STORE_DIR".to_string(),
+        ]
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct ReleaseReproduceRequest {
@@ -109,7 +140,7 @@ pub(crate) fn reproduce_release_artifacts(
     validate_request(request)?;
     let manifest = verify_release_evidence_bundle(&request.bundle_dir)?;
     prepare_rebuild_output_dir(&request.rebuild_output_dir)?;
-    run_rebuild_command(request, &manifest.release_id, &request.rebuild_output_dir, None)?;
+    run_rebuild_command(request, &manifest.release_id, &request.rebuild_output_dir, None, None)?;
     let unexpected_outputs = collect_unexpected_rebuilt_outputs(&manifest.binaries, &request.rebuild_output_dir)?;
     let report = build_reproducibility_report(&manifest, request)?;
     let counts = count_report_results(&report.artifacts);
@@ -242,16 +273,22 @@ fn run_rebuild_command(
     release_id: &str,
     output_dir: &Path,
     deterministic_store_dir: Option<&Path>,
+    sandbox_profile: Option<&ProofSandboxProfile>,
 ) -> Result<(), RunError> {
-    let mut command = ProcessCommand::new(&request.rebuild_command);
-    command
-        .args(&request.rebuild_args)
-        .env(REPRODUCE_BUNDLE_DIR_ENV, &request.bundle_dir)
-        .env(REPRODUCE_OUTPUT_DIR_ENV, output_dir)
-        .env(REPRODUCE_RELEASE_ID_ENV, release_id);
-    if let Some(store_dir) = deterministic_store_dir {
-        command.env(DETERMINISTIC_PROOF_STORE_DIR_ENV, store_dir);
-    }
+    let mut command = if let Some(profile) = sandbox_profile {
+        sandboxed_rebuild_command(request, release_id, output_dir, deterministic_store_dir, profile)?
+    } else {
+        let mut command = ProcessCommand::new(&request.rebuild_command);
+        command
+            .args(&request.rebuild_args)
+            .env(REPRODUCE_BUNDLE_DIR_ENV, &request.bundle_dir)
+            .env(REPRODUCE_OUTPUT_DIR_ENV, output_dir)
+            .env(REPRODUCE_RELEASE_ID_ENV, release_id);
+        if let Some(store_dir) = deterministic_store_dir {
+            command.env(DETERMINISTIC_PROOF_STORE_DIR_ENV, store_dir);
+        }
+        command
+    };
     let output = command.output().map_err(|err| {
         RunError::Internal(format!(
             "running release reproducibility command {}: {err}",
@@ -294,7 +331,8 @@ fn maybe_run_deterministic_proof(
         let store_dir = run_root.join("store");
         prepare_rebuild_output_dir(&output_dir)?;
         prepare_rebuild_output_dir(&store_dir)?;
-        run_rebuild_command(request, &manifest.release_id, &output_dir, Some(&store_dir))?;
+        let sandbox_profile = proof_sandbox_profile(request, &manifest.release_id, &output_dir, &store_dir)?;
+        run_rebuild_command(request, &manifest.release_id, &output_dir, Some(&store_dir), Some(&sandbox_profile))?;
         let unexpected_outputs = collect_unexpected_rebuilt_outputs(&manifest.binaries, &output_dir)?;
         let comparisons = compare_manifest_artifacts(&manifest.binaries, &output_dir)?;
         let proof_report = ReleaseReproducibilityReport::new(ReleaseReproducibilityReportInit {
@@ -316,8 +354,14 @@ fn maybe_run_deterministic_proof(
             artifacts: comparisons.clone(),
         });
         fail_if_reproduction_drifted(&proof_report, &unexpected_outputs, report_path)?;
-        runs.push(deterministic_run_receipt(&run_id, run_index, &store_dir, &comparisons)?);
+        runs.push(deterministic_run_receipt(&run_id, run_index, &store_dir, &sandbox_profile.identity, &comparisons)?);
     }
+    let sandbox_profile_identities = runs
+        .iter()
+        .map(|run| run.sandbox_profile_identity.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
     let receipt = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
         derivation_identity: format!("release:{}", manifest.release_id),
         hermeticity_mode: "strict".to_string(),
@@ -325,14 +369,162 @@ fn maybe_run_deterministic_proof(
         toolchain_provider_identity: workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?,
         logical_store_prefix: "/mantle/store".to_string(),
         physical_store_isolation: "fresh-store-per-run".to_string(),
-        normalized_execution_envelope: reproducibility_environment_assumptions(),
+        normalized_execution_envelope: deterministic_execution_envelope(&sandbox_profile_identities),
         ambient_host_perturbations: deterministic_ambient_host_perturbations(),
+        sandbox_profile_identities,
         runs,
     });
     let digest_blake3 = deterministic_build_proof_receipt_digest_blake3(receipt.clone()).map_err(core_error)?;
     let path = proof_root.join("deterministic-build-proof.json");
     write_deterministic_proof_receipt(&path, receipt)?;
     Ok(Some(DeterministicProofOutput { path, digest_blake3 }))
+}
+
+fn proof_sandbox_profile(
+    request: &ReleaseReproduceRequest,
+    _release_id: &str,
+    output_dir: &Path,
+    store_dir: &Path,
+) -> Result<ProofSandboxProfile, RunError> {
+    let executor = resolve_bwrap_executor()?;
+    let executor_version = bwrap_version(&executor)?;
+    let command_identity = workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?;
+    let mut profile = ProofSandboxProfile {
+        identity: String::new(),
+        executor,
+        executor_version,
+        network_policy: "none".to_string(),
+        command_identity,
+        bundle_dir: absolutize_existing_path(&request.bundle_dir, "release evidence bundle")?,
+        output_dir: absolutize_path(output_dir)?,
+        store_dir: absolutize_path(store_dir)?,
+    };
+    let canonical = profile.canonical_facts().join("\n");
+    let digest = blake3::hash(canonical.as_bytes()).to_hex().to_string();
+    profile.identity = format!("{PROOF_SANDBOX_PROFILE_PREFIX}:{digest}");
+    Ok(profile)
+}
+
+fn sandboxed_rebuild_command(
+    request: &ReleaseReproduceRequest,
+    release_id: &str,
+    output_dir: &Path,
+    deterministic_store_dir: Option<&Path>,
+    profile: &ProofSandboxProfile,
+) -> Result<ProcessCommand, RunError> {
+    let store_dir = deterministic_store_dir.ok_or_else(|| {
+        RunError::Internal("deterministic proof sandbox requires a proof store directory".to_string())
+    })?;
+    let command_path = absolutize_existing_path(&request.rebuild_command, "release reproducibility command")?;
+    let mut command = ProcessCommand::new(&profile.executor);
+    command
+        .arg("--unshare-all")
+        .arg("--die-with-parent")
+        .arg("--new-session")
+        .arg("--clearenv")
+        .arg("--ro-bind")
+        .arg(&profile.bundle_dir)
+        .arg(&profile.bundle_dir)
+        .arg("--ro-bind")
+        .arg(&command_path)
+        .arg(&command_path)
+        .arg("--bind")
+        .arg(output_dir)
+        .arg(output_dir)
+        .arg("--bind")
+        .arg(store_dir)
+        .arg(store_dir)
+        .arg("--tmpfs")
+        .arg("/tmp")
+        .arg("--setenv")
+        .arg(REPRODUCE_BUNDLE_DIR_ENV)
+        .arg(&profile.bundle_dir)
+        .arg("--setenv")
+        .arg(REPRODUCE_OUTPUT_DIR_ENV)
+        .arg(output_dir)
+        .arg("--setenv")
+        .arg(REPRODUCE_RELEASE_ID_ENV)
+        .arg(release_id)
+        .arg("--setenv")
+        .arg(DETERMINISTIC_PROOF_STORE_DIR_ENV)
+        .arg(store_dir)
+        .arg("--setenv")
+        .arg("HOME")
+        .arg("/tmp")
+        .arg("--setenv")
+        .arg("PATH")
+        .arg("/run/current-system/sw/bin:/usr/bin:/bin")
+        .arg("--setenv")
+        .arg("LANG")
+        .arg("C.UTF-8")
+        .arg("--setenv")
+        .arg("LC_ALL")
+        .arg("C.UTF-8")
+        .arg("--setenv")
+        .arg("TZ")
+        .arg("UTC")
+        .arg("--chdir")
+        .arg("/tmp")
+        .arg(&command_path)
+        .args(&request.rebuild_args);
+    Ok(command)
+}
+
+fn resolve_bwrap_executor() -> Result<PathBuf, RunError> {
+    if let Some(path) = std::env::var_os(PROOF_SANDBOX_BWRAP_ENV) {
+        let path = PathBuf::from(path);
+        if path.is_file() {
+            return Ok(path);
+        }
+        return Err(RunError::Internal(format!(
+            "deterministic proof sandbox execution is unavailable: {} does not name a bwrap executable",
+            path.display()
+        )));
+    }
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let candidate = dir.join("bwrap");
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+    Err(RunError::Internal(
+        "deterministic proof sandbox execution is unavailable: bwrap not found; set MANTLE_DETERMINISTIC_PROOF_BWRAP or install bubblewrap".to_string(),
+    ))
+}
+
+fn bwrap_version(executor: &Path) -> Result<String, RunError> {
+    let output = ProcessCommand::new(executor).arg("--version").output().map_err(|err| {
+        RunError::Internal(format!("checking deterministic proof sandbox executor {}: {err}", executor.display()))
+    })?;
+    if !output.status.success() {
+        return Err(RunError::Internal(format!(
+            "deterministic proof sandbox executor {} did not report a version",
+            executor.display()
+        )));
+    }
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if version.is_empty() {
+        Ok("bwrap-version-unknown".to_string())
+    } else {
+        Ok(version)
+    }
+}
+
+fn absolutize_existing_path(path: &Path, label: &str) -> Result<PathBuf, RunError> {
+    path.canonicalize()
+        .map_err(|err| RunError::Internal(format!("resolving {label} {}: {err}", path.display())))
+}
+
+fn absolutize_path(path: &Path) -> Result<PathBuf, RunError> {
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .map_err(|err| RunError::Internal(format!("resolving current directory: {err}")))
+    }
 }
 
 fn deterministic_proof_root(request: &ReleaseReproduceRequest) -> PathBuf {
@@ -362,6 +554,7 @@ fn deterministic_run_receipt(
     run_id: &str,
     run_index: u32,
     store_dir: &Path,
+    sandbox_profile_identity: &str,
     comparisons: &[ReproducibilityArtifactComparison],
 ) -> Result<DeterministicBuildRunReceipt, RunError> {
     let mut output_digests = Vec::with_capacity(comparisons.len());
@@ -381,6 +574,7 @@ fn deterministic_run_receipt(
         run_id: run_id.to_string(),
         perturbation_case: deterministic_perturbation_case(run_index),
         output_store_paths: vec![store_dir.display().to_string()],
+        sandbox_profile_identity: sandbox_profile_identity.to_string(),
         output_digests,
         substituted_dependency_identities: Vec::new(),
         hermeticity_audit_events: Vec::new(),
@@ -393,6 +587,16 @@ fn deterministic_perturbation_case(run_index: u32) -> String {
         1 => "host-env-noise".to_string(),
         other => format!("host-env-noise-{other}"),
     }
+}
+
+fn deterministic_execution_envelope(sandbox_profile_identities: &[String]) -> Vec<String> {
+    let mut envelope = reproducibility_environment_assumptions();
+    envelope.push("sandbox=bwrap".to_string());
+    envelope.push("network=none".to_string());
+    for identity in sandbox_profile_identities {
+        envelope.push(format!("sandbox-profile={identity}"));
+    }
+    envelope
 }
 
 fn deterministic_ambient_host_perturbations() -> Vec<String> {
@@ -812,10 +1016,17 @@ mod tests {
         };
         let comparison = compare_artifact(&artifact, Some(observed));
 
-        let run =
-            deterministic_run_receipt("run-000", 0, Path::new("/tmp/proof/run-000/store"), &[comparison]).unwrap();
+        let run = deterministic_run_receipt(
+            "run-000",
+            0,
+            Path::new("/tmp/proof/run-000/store"),
+            "mantle-proof-sandbox-v1:test",
+            &[comparison],
+        )
+        .unwrap();
 
         assert_eq!(run.output_store_paths, vec!["/tmp/proof/run-000/store".to_string()]);
+        assert_eq!(run.sandbox_profile_identity, "mantle-proof-sandbox-v1:test");
         assert_eq!(run.output_digests[0].digest_blake3, sample_digest(1));
         assert_eq!(run.perturbation_case, "baseline-clean-env");
     }

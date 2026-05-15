@@ -610,6 +610,30 @@ fn write_rebuild_script(script_path: &Path, body: &str) {
 }
 
 #[cfg(unix)]
+fn write_fake_bwrap(script_path: &Path) {
+    write_rebuild_script(
+        script_path,
+        r#"
+if [ "${1:-}" = "--version" ]; then
+  printf 'bwrap 1.0-test\n'
+  exit 0
+fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --unshare-all|--die-with-parent|--new-session|--clearenv) shift ;;
+    --ro-bind|--bind) shift 3 ;;
+    --tmpfs|--dev|--proc|--chdir)
+      if [ "$1" = "--chdir" ]; then cd "$2"; fi
+      shift 2 ;;
+    --setenv) export "$2=$3"; shift 3 ;;
+    *) exec "$@" ;;
+  esac
+done
+"#,
+    );
+}
+
+#[cfg(unix)]
 fn write_matched_default_reproducibility_report(
     temp: &TempDir,
     bundle_dir: &Path,
@@ -844,6 +868,8 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     let (temp, bundle_dir, manifest) = make_valid_bundle();
     let rebuild_script = temp.path().join("fake-deterministic-rebuild.sh");
     let rebuild_output_dir = temp.path().join("deterministic-main-output");
+    let fake_bwrap = temp.path().join("fake-bwrap.sh");
+    write_fake_bwrap(&fake_bwrap);
     let proof_dir = temp.path().join("deterministic-proof-work");
     let report_path = temp.path().join("deterministic-report.json");
     let relative_path = &manifest.binaries[0].relative_path;
@@ -870,6 +896,7 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
         .arg("2")
         .arg("--deterministic-proof-dir")
         .arg(&proof_dir)
+        .env("MANTLE_DETERMINISTIC_PROOF_BWRAP", &fake_bwrap)
         .assert()
         .success();
 
@@ -887,13 +914,47 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert_eq!(proof["derivation_identity"], format!("release:{}", manifest.release_id));
     assert_eq!(proof["hermeticity_mode"], "strict");
     assert_eq!(proof["physical_store_isolation"], "fresh-store-per-run");
+    assert!(proof["sandbox_profile_identities"][0].as_str().unwrap().starts_with("mantle-proof-sandbox-v1:"));
     let runs = proof["runs"].as_array().unwrap();
     assert_eq!(runs.len(), 2);
     assert_eq!(runs[0]["run_id"], "run-000");
     assert_eq!(runs[1]["run_id"], "run-001");
     assert_ne!(runs[0]["output_store_paths"][0], runs[1]["output_store_paths"][0]);
+    assert!(runs[0]["sandbox_profile_identity"].as_str().unwrap().starts_with("mantle-proof-sandbox-v1:"));
+    assert!(runs[1]["sandbox_profile_identity"].as_str().unwrap().starts_with("mantle-proof-sandbox-v1:"));
     assert_eq!(runs[0]["output_digests"][0]["name"], *relative_path);
     assert_eq!(runs[0]["output_digests"], runs[1]["output_digests"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn release_reproduce_fails_closed_without_deterministic_proof_sandbox() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("fake-deterministic-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("deterministic-main-output-missing-sandbox");
+    let proof_dir = temp.path().join("deterministic-proof-missing-sandbox");
+    write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--deterministic-proof-runs")
+        .arg("2")
+        .arg("--deterministic-proof-dir")
+        .arg(&proof_dir)
+        .env("MANTLE_DETERMINISTIC_PROOF_BWRAP", temp.path().join("missing-bwrap"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("deterministic proof sandbox execution is unavailable"));
+
+    assert!(!proof_dir.join("deterministic-build-proof.json").exists());
 }
 
 #[cfg(unix)]

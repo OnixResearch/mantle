@@ -948,10 +948,14 @@ mantle release reproduce target/release-evidence/<release-id> \
 ```
 
 For a stronger deterministic-build proof attempt, ask `release reproduce` to run
-at least two additional clean proof runs. Each proof run gets its own output tree
-and fresh store directory, exposed to the rebuild recipe as
-`MANTLE_DETERMINISTIC_PROOF_STORE_DIR`; the proof directory must be separate from
-and not nested with the main rebuild output directory.
+at least two additional clean proof runs. Each proof run is executed through a
+recorded proof sandbox envelope instead of a direct host process. The envelope
+uses `bwrap` when available, denies network by default, binds the release bundle
+and rebuild recipe read-only, and exposes only the per-run output tree plus a
+fresh store directory (`MANTLE_DETERMINISTIC_PROOF_STORE_DIR`) as writable proof
+state. The proof directory must be separate from and not nested with the main
+rebuild output directory. If the sandbox executor is unavailable or unsupported,
+deterministic proof mode fails closed before writing a proof receipt.
 
 ```bash
 mantle release reproduce target/release-evidence/<release-id> \
@@ -989,8 +993,11 @@ strict hermetic mode, at least two clean proof runs, fresh store/namespace
 isolation for the derivation under test, a recorded ambient host perturbation
 matrix (`HOME`, `PATH`, `USER`, `LOGNAME`, `TZ`, `LANG`, `LC_ALL`, temp dirs,
 cwd, umask, and environment noise), typed hermeticity audit events, and matching
-per-output BLAKE3 digest sets. This is still scoped release-artifact evidence; it
-does not claim global Nix-like determinism for all Mantle builds.
+per-output BLAKE3 digest sets. Each run must also name a supported canonical
+sandbox profile identity (`mantle-proof-sandbox-v1:<blake3>`); receipts without
+that profile evidence, or with a direct-host/unsupported profile, stay at
+`missing-evidence`. This is still scoped release-artifact evidence; it does not
+claim global Nix-like determinism for all Mantle builds.
 
 Later verification is bundle-local:
 
