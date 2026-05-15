@@ -530,6 +530,18 @@ pub enum ReleaseAction {
         /// Require StageX-class lineage proof with no-quorum profile
         #[arg(long)]
         require_stagex_no_quorum: bool,
+
+        /// Canonical deterministic build proof artifact from `release reproduce`
+        #[arg(long)]
+        deterministic_proof: Option<PathBuf>,
+
+        /// Canonical deterministic sandbox isolation evidence artifact from `release reproduce`
+        #[arg(long)]
+        deterministic_sandbox_isolation_evidence: Option<PathBuf>,
+
+        /// Fail unless deterministic proof artifacts prove release-artifact determinism
+        #[arg(long)]
+        require_deterministic_release: bool,
     },
     /// Rebuild and compare published release artifacts, then write a reproducibility report
     Reproduce {

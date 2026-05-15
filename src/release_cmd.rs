@@ -1,6 +1,12 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use crunch_release_core::DeterministicBuildProofReceipt;
+use crunch_release_core::DeterministicSandboxIsolationEvidence;
+use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
+use crunch_release_core::deterministic_release_claim_eligible;
+use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
+
 use crate::errors::RunError;
 use crate::release_attestation::create_release_attestation;
 use crate::release_attestation::create_witness_attestation;
@@ -61,7 +67,19 @@ pub(crate) fn cmd_release(
             bundle_dir,
             require_reproducible,
             require_stagex_no_quorum,
-        } => cmd_release_verify(json, bundle_dir, require_reproducible, require_stagex_no_quorum),
+            deterministic_proof,
+            deterministic_sandbox_isolation_evidence,
+            require_deterministic_release,
+        } => cmd_release_verify(
+            current_dir,
+            json,
+            bundle_dir,
+            require_reproducible,
+            require_stagex_no_quorum,
+            deterministic_proof,
+            deterministic_sandbox_isolation_evidence,
+            require_deterministic_release,
+        ),
         crate::ReleaseAction::Reproduce {
             bundle_dir,
             rebuild_output_dir,
@@ -166,31 +184,50 @@ fn cmd_release_create(
 }
 
 fn cmd_release_verify(
+    current_dir: &Path,
     json: bool,
     bundle_dir: PathBuf,
     require_reproducible: bool,
     require_stagex_no_quorum: bool,
+    deterministic_proof: Option<PathBuf>,
+    deterministic_sandbox_isolation_evidence: Option<PathBuf>,
+    require_deterministic_release: bool,
 ) -> Result<(), RunError> {
-    let manifest = verify_release_evidence_bundle(&bundle_dir)?;
-    let reproducibility = load_bundle_reproducibility_report(&bundle_dir, &manifest)?;
+    let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
+    let deterministic_request = DeterministicVerifyRequest::new(
+        current_dir,
+        deterministic_proof,
+        deterministic_sandbox_isolation_evidence,
+        require_deterministic_release,
+    );
+    let manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
+    let reproducibility = load_bundle_reproducibility_report(&resolved_bundle_dir, &manifest)?;
     let reproducibility_status = reproducibility_status(reproducibility.as_ref());
+    let deterministic_result = evaluate_deterministic_release_claim(&manifest, deterministic_request)?;
 
     let stagex_result = if require_stagex_no_quorum {
-        Some(evaluate_stagex_profile(&manifest, &bundle_dir, reproducibility.as_ref()))
+        Some(evaluate_stagex_profile(&manifest, &resolved_bundle_dir, reproducibility.as_ref()))
     } else {
         None
     };
 
     if json {
-        print_release_verify_json(&manifest, reproducibility.as_ref(), reproducibility_status, stagex_result.as_ref())?;
+        print_release_verify_json(
+            &manifest,
+            reproducibility.as_ref(),
+            reproducibility_status,
+            stagex_result.as_ref(),
+            &deterministic_result,
+        )?;
     } else {
-        println!("release evidence verified: {}", bundle_dir.display());
+        println!("release evidence verified: {}", resolved_bundle_dir.display());
         println!("release id: {}", manifest.release_id);
         println!("binaries: {}", manifest.binaries.len());
         println!("source digest: {}", manifest.source_archive.digest_blake3);
         println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
         print_reproducibility_summary(reproducibility.as_ref());
+        print_deterministic_release_summary(&deterministic_result);
         if let Some(ref result) = stagex_result {
             println!("stagex no-quorum profile: {}", result.status);
             if !result.failure_reasons.is_empty() {
@@ -206,6 +243,13 @@ fn cmd_release_verify(
             reproducibility_status.as_str()
         )));
     }
+    if require_deterministic_release && !deterministic_result.eligible {
+        return Err(RunError::Internal(format!(
+            "deterministic release evidence required but status is {}: {}",
+            deterministic_result.status,
+            deterministic_result.blockers.join("; ")
+        )));
+    }
     if let Some(ref result) = stagex_result {
         if !result.status.is_satisfied() {
             return Err(RunError::Internal(format!(
@@ -217,11 +261,155 @@ fn cmd_release_verify(
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DeterministicVerifyRequest {
+    proof_path: Option<PathBuf>,
+    isolation_evidence_path: Option<PathBuf>,
+    required: bool,
+}
+
+impl DeterministicVerifyRequest {
+    fn new(
+        current_dir: &Path,
+        proof_path: Option<PathBuf>,
+        isolation_evidence_path: Option<PathBuf>,
+        required: bool,
+    ) -> Self {
+        Self {
+            proof_path: proof_path.map(|path| resolve_input_path(current_dir, path)),
+            isolation_evidence_path: isolation_evidence_path.map(|path| resolve_input_path(current_dir, path)),
+            required,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DeterministicReleaseVerifyResult {
+    status: &'static str,
+    eligible: bool,
+    proof_path: Option<PathBuf>,
+    proof_digest_blake3: Option<String>,
+    isolation_evidence_path: Option<PathBuf>,
+    isolation_evidence_digest_blake3: Option<String>,
+    blockers: Vec<String>,
+}
+
+impl DeterministicReleaseVerifyResult {
+    fn absent(blockers: Vec<String>) -> Self {
+        Self {
+            status: "absent",
+            eligible: false,
+            proof_path: None,
+            proof_digest_blake3: None,
+            isolation_evidence_path: None,
+            isolation_evidence_digest_blake3: None,
+            blockers,
+        }
+    }
+}
+
+fn evaluate_deterministic_release_claim(
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    request: DeterministicVerifyRequest,
+) -> Result<DeterministicReleaseVerifyResult, RunError> {
+    if request.proof_path.is_none() && request.isolation_evidence_path.is_none() {
+        let blockers = if request.required {
+            vec![
+                "missing deterministic proof artifact".to_string(),
+                "missing deterministic sandbox isolation evidence".to_string(),
+            ]
+        } else {
+            Vec::new()
+        };
+        return Ok(DeterministicReleaseVerifyResult::absent(blockers));
+    }
+
+    let Some(proof_path) = request.proof_path else {
+        return Ok(DeterministicReleaseVerifyResult::absent(vec!["missing deterministic proof artifact".to_string()]));
+    };
+    let Some(isolation_evidence_path) = request.isolation_evidence_path else {
+        return Ok(DeterministicReleaseVerifyResult::absent(vec![
+            "missing deterministic sandbox isolation evidence".to_string(),
+        ]));
+    };
+
+    let proof = load_canonical_deterministic_proof(&proof_path)?;
+    let isolation_evidence = load_canonical_deterministic_isolation_evidence(&isolation_evidence_path)?;
+    let release_digest_set =
+        manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect::<Vec<_>>();
+    let eligible =
+        deterministic_release_claim_eligible(&release_digest_set, &[proof.value], Some(&isolation_evidence.value))
+            .map_err(|err| RunError::Internal(format!("deterministic release claim validation failed: {err}")))?;
+    let blockers = if eligible {
+        Vec::new()
+    } else {
+        vec!["deterministic proof artifacts do not prove the release artifact digest set".to_string()]
+    };
+    Ok(DeterministicReleaseVerifyResult {
+        status: if eligible { "eligible" } else { "blocked" },
+        eligible,
+        proof_path: Some(proof_path),
+        proof_digest_blake3: Some(proof.digest_blake3),
+        isolation_evidence_path: Some(isolation_evidence_path),
+        isolation_evidence_digest_blake3: Some(isolation_evidence.digest_blake3),
+        blockers,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VerifiedDeterministicArtifact<T> {
+    value: T,
+    digest_blake3: String,
+}
+
+fn load_canonical_deterministic_proof(
+    path: &Path,
+) -> Result<VerifiedDeterministicArtifact<DeterministicBuildProofReceipt>, RunError> {
+    let bytes = std::fs::read(path).map_err(|err| RunError::Internal(format!("reading {}: {err}", path.display())))?;
+    let receipt: DeterministicBuildProofReceipt = serde_json::from_slice(&bytes)
+        .map_err(|err| RunError::Internal(format!("parsing {}: {err}", path.display())))?;
+    let canonical = deterministic_build_proof_receipt_canonical_bytes(receipt.clone()).map_err(|err| {
+        RunError::Internal(format!("validating deterministic proof artifact {}: {err}", path.display()))
+    })?;
+    if bytes != canonical {
+        return Err(RunError::Internal(format!(
+            "deterministic proof artifact is not canonical compact JSON: {}",
+            path.display()
+        )));
+    }
+    Ok(VerifiedDeterministicArtifact {
+        value: receipt,
+        digest_blake3: blake3::hash(&canonical).to_hex().to_string(),
+    })
+}
+
+fn load_canonical_deterministic_isolation_evidence(
+    path: &Path,
+) -> Result<VerifiedDeterministicArtifact<DeterministicSandboxIsolationEvidence>, RunError> {
+    let bytes = std::fs::read(path).map_err(|err| RunError::Internal(format!("reading {}: {err}", path.display())))?;
+    let evidence: DeterministicSandboxIsolationEvidence = serde_json::from_slice(&bytes)
+        .map_err(|err| RunError::Internal(format!("parsing {}: {err}", path.display())))?;
+    let canonical = deterministic_sandbox_isolation_evidence_canonical_bytes(evidence.clone()).map_err(|err| {
+        RunError::Internal(format!("validating deterministic sandbox isolation evidence {}: {err}", path.display()))
+    })?;
+    if bytes != canonical {
+        return Err(RunError::Internal(format!(
+            "deterministic sandbox isolation evidence is not canonical compact JSON: {}",
+            path.display()
+        )));
+    }
+    Ok(VerifiedDeterministicArtifact {
+        value: evidence,
+        digest_blake3: blake3::hash(&canonical).to_hex().to_string(),
+    })
+}
+
 fn print_release_verify_json(
     manifest: &crate::release_evidence::ReleaseEvidenceManifest,
     reproducibility: Option<&VerifiedReproducibilityReport>,
     status: ReproducibilityStatus,
     stagex_result: Option<&crunch_bootstrap_core::StagexNoQuorumResult>,
+    deterministic_result: &DeterministicReleaseVerifyResult,
 ) -> Result<(), RunError> {
     let report_json = reproducibility.map(|report| {
         serde_json::json!({
@@ -229,12 +417,25 @@ fn print_release_verify_json(
             "digest_blake3": report.digest_blake3,
         })
     });
+    let deterministic_json = serde_json::json!({
+        "status": deterministic_result.status,
+        "eligible": deterministic_result.eligible,
+        "proof_path": deterministic_result.proof_path.as_ref().map(|path| path.display().to_string()),
+        "proof_digest_blake3": deterministic_result.proof_digest_blake3,
+        "sandbox_isolation_evidence_path": deterministic_result
+            .isolation_evidence_path
+            .as_ref()
+            .map(|path| path.display().to_string()),
+        "sandbox_isolation_evidence_digest_blake3": deterministic_result.isolation_evidence_digest_blake3,
+        "blockers": deterministic_result.blockers,
+    });
     let mut rendered = serde_json::json!({
         "kind": "mantle-release-verify-v1",
         "release_id": manifest.release_id,
         "manifest": manifest,
         "reproducibility_status": status.as_str(),
         "reproducibility_report": report_json,
+        "deterministic_release": deterministic_json,
     });
     if let Some(result) = stagex_result {
         rendered["stagex_no_quorum"] = serde_json::to_value(result)
@@ -262,6 +463,25 @@ fn print_reproducibility_summary(reproducibility: Option<&VerifiedReproducibilit
         None => {
             println!("reproducibility: {}", ReproducibilityStatus::Absent.as_str());
         }
+    }
+}
+
+fn print_deterministic_release_summary(result: &DeterministicReleaseVerifyResult) {
+    println!("deterministic release: {}", result.status);
+    if let Some(path) = &result.proof_path {
+        println!("deterministic proof: {}", path.display());
+    }
+    if let Some(digest) = &result.proof_digest_blake3 {
+        println!("deterministic proof digest: {digest}");
+    }
+    if let Some(path) = &result.isolation_evidence_path {
+        println!("deterministic sandbox isolation evidence: {}", path.display());
+    }
+    if let Some(digest) = &result.isolation_evidence_digest_blake3 {
+        println!("deterministic sandbox isolation evidence digest: {digest}");
+    }
+    for blocker in &result.blockers {
+        println!("  deterministic blocker: {blocker}");
     }
 }
 

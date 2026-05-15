@@ -28,7 +28,19 @@ use crunch_attestation::encode_detached_signature;
 use crunch_attestation::independent_agreement_report_canonical_bytes;
 use crunch_build::KeyPair;
 use crunch_build::load_keypair;
+use crunch_release_core::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
+use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA;
+use crunch_release_core::DeterministicBuildProofReceipt;
+use crunch_release_core::DeterministicBuildProofReceiptInit;
+use crunch_release_core::DeterministicBuildRunReceipt;
+use crunch_release_core::DeterministicOutputDigest;
+use crunch_release_core::DeterministicSandboxIsolationEvidence;
+use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
+use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
 use crunch_release_core::ReleaseReproducibilityReport;
+use crunch_release_core::SUPPORTED_SANDBOX_PROFILE_FAMILY;
+use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
+use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use predicates::prelude::*;
 use serde::Deserialize;
@@ -687,6 +699,78 @@ fn write_canonical_reproducibility_report(report_path: &Path, report: ReleaseRep
     write_file(report_path, &bytes);
 }
 
+fn write_deterministic_verify_artifacts(
+    dir: &Path,
+    manifest: &ReleaseEvidenceManifest,
+) -> (PathBuf, PathBuf, String, String) {
+    let proof_path = dir.join("deterministic-build-proof.json");
+    let evidence_path = dir.join("deterministic-sandbox-isolation-evidence.json");
+    let profile = format!("{SUPPORTED_SANDBOX_PROFILE_FAMILY}:test-profile");
+    let output_digest = manifest.binaries[0].digest_blake3.clone();
+    let output_name = manifest.binaries[0].relative_path.clone();
+    let run = |run_id: &str, perturbation_case: &str, store: &str| DeterministicBuildRunReceipt {
+        run_id: run_id.to_string(),
+        perturbation_case: perturbation_case.to_string(),
+        output_store_paths: vec![store.to_string()],
+        sandbox_profile_identity: profile.clone(),
+        output_digests: vec![DeterministicOutputDigest {
+            name: output_name.clone(),
+            digest_blake3: output_digest.clone(),
+        }],
+        substituted_dependency_identities: Vec::new(),
+        hermeticity_audit_events: Vec::new(),
+    };
+    let proof = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
+        derivation_identity: format!("release:{}", manifest.release_id),
+        hermeticity_mode: "strict".to_string(),
+        workflow_version: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
+        toolchain_provider_identity: "test-provider".to_string(),
+        logical_store_prefix: "/mantle/store".to_string(),
+        physical_store_isolation: "fresh-store-per-run".to_string(),
+        normalized_execution_envelope: vec![
+            "bundle-read-only".to_string(),
+            "network=none".to_string(),
+            "output-dir-empty".to_string(),
+            "sandbox=bwrap".to_string(),
+            format!("sandbox-profile={profile}"),
+        ],
+        ambient_host_perturbations: vec![
+            "HOME".to_string(),
+            "PATH".to_string(),
+            "USER".to_string(),
+            "LOGNAME".to_string(),
+            "TZ".to_string(),
+            "LANG".to_string(),
+            "LC_ALL".to_string(),
+            "TMPDIR".to_string(),
+            "cwd".to_string(),
+            "umask".to_string(),
+            "env-noise".to_string(),
+        ],
+        sandbox_profile_identities: vec![profile.clone()],
+        runs: vec![
+            run("run-000", "baseline-clean-env", "/tmp/store-a"),
+            run("run-001", "host-env-noise", "/tmp/store-b"),
+        ],
+    });
+    let proof_bytes = deterministic_build_proof_receipt_canonical_bytes(proof).unwrap();
+    let proof_digest = blake3::hash(&proof_bytes).to_hex().to_string();
+    write_file(&proof_path, &proof_bytes);
+
+    let evidence = DeterministicSandboxIsolationEvidence {
+        schema: DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA.to_string(),
+        profile_family: SUPPORTED_SANDBOX_PROFILE_FAMILY.to_string(),
+        evidence_version: "mantle-release-reproducibility-v1".to_string(),
+        status: DeterministicSandboxIsolationEvidenceStatus::Passed,
+        checks: REQUIRED_ISOLATION_CHECKS.iter().map(|check| (*check).to_string()).collect(),
+        evidence_digest_blake3: sample_digest(8),
+    };
+    let evidence_bytes = deterministic_sandbox_isolation_evidence_canonical_bytes(evidence).unwrap();
+    let evidence_digest = blake3::hash(&evidence_bytes).to_hex().to_string();
+    write_file(&evidence_path, &evidence_bytes);
+    (proof_path, evidence_path, proof_digest, evidence_digest)
+}
+
 #[test]
 fn release_create_fails_when_proof_bundle_is_missing() {
     let temp = tempfile::tempdir().unwrap();
@@ -840,6 +924,77 @@ fn release_verify_succeeds_using_bundle_local_contents_only() {
             "stage2 digest: {}",
             manifest.proof_linkage.stage2_binary_digest_blake3
         )));
+}
+
+#[test]
+fn release_verify_reports_required_deterministic_release_from_artifacts() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let proof_dir = temp.path().join("deterministic-proof-artifacts");
+    let (proof_path, evidence_path, proof_digest, evidence_digest) =
+        write_deterministic_verify_artifacts(&proof_dir, &manifest);
+
+    let assert = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--deterministic-proof")
+        .arg(&proof_path)
+        .arg("--deterministic-sandbox-isolation-evidence")
+        .arg(&evidence_path)
+        .arg("--require-deterministic-release")
+        .assert()
+        .success();
+    let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
+    assert_eq!(stdout["deterministic_release"]["status"], "eligible");
+    assert_eq!(stdout["deterministic_release"]["eligible"], true);
+    assert_eq!(stdout["deterministic_release"]["proof_digest_blake3"], proof_digest);
+    assert_eq!(stdout["deterministic_release"]["sandbox_isolation_evidence_digest_blake3"], evidence_digest);
+}
+
+#[test]
+fn release_verify_require_deterministic_release_rejects_missing_isolation_evidence() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let proof_dir = temp.path().join("deterministic-proof-artifacts");
+    let (proof_path, _evidence_path, _proof_digest, _evidence_digest) =
+        write_deterministic_verify_artifacts(&proof_dir, &manifest);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--deterministic-proof")
+        .arg(&proof_path)
+        .arg("--require-deterministic-release")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("missing deterministic sandbox isolation evidence"));
+}
+
+#[test]
+fn release_verify_rejects_noncanonical_deterministic_isolation_evidence() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let proof_dir = temp.path().join("deterministic-proof-artifacts");
+    let (proof_path, evidence_path, _proof_digest, _evidence_digest) =
+        write_deterministic_verify_artifacts(&proof_dir, &manifest);
+    let pretty_evidence: serde_json::Value = serde_json::from_slice(&std::fs::read(&evidence_path).unwrap()).unwrap();
+    write_file(&evidence_path, serde_json::to_string_pretty(&pretty_evidence).unwrap().as_bytes());
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--deterministic-proof")
+        .arg(&proof_path)
+        .arg("--deterministic-sandbox-isolation-evidence")
+        .arg(&evidence_path)
+        .arg("--require-deterministic-release")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("deterministic sandbox isolation evidence is not canonical compact JSON"));
 }
 
 #[cfg(unix)]
