@@ -1002,9 +1002,10 @@ stage2 mantle binary, produce two clean deterministic proof rebuilds under real
 
 Use `--proof-bundle target/self-hosting-proof/run-...` to reuse an existing full
 self-hosting proof bundle. The script writes the release bundle,
-`deterministic-build-proof.json`, sandbox evidence, and verify receipt under
-`target/release-evidence/`. It validates those outputs with the checked-in real
-proof receipt checker before returning success. Re-check a saved run with:
+`deterministic-build-proof.json`, sandbox evidence, verify receipt, and portable
+`<release-id>-determinism-summary.{json,md}` under `target/release-evidence/`.
+It validates the proof outputs with the checked-in real proof receipt checker
+before writing the summary. Re-check a saved run with:
 
 ```bash
 cargo -Zscript scripts/check-real-release-determinism-receipt.rs \
@@ -1012,10 +1013,22 @@ cargo -Zscript scripts/check-real-release-determinism-receipt.rs \
 ```
 
 Pass `--proof-dir` or `--verify-receipt` if the proof or verify JSON was moved
-away from the default sibling paths. The successful claim is bounded to the
-packaged stage2 artifact rebuilding twice from the recorded inputs under
-recorded `mantle-proof-sandbox-v1:*` profiles with matching BLAKE3 digest sets;
-it does not claim full bootstrap reproducibility.
+away from the default sibling paths. To write portable JSON and Markdown summary
+artifacts for archival or review, run:
+
+```bash
+cargo -Zscript scripts/summarize-real-release-determinism.rs \
+  target/release-evidence/<release-id>
+```
+
+That first runs the real proof receipt checker, then writes
+`target/release-evidence/<release-id>-determinism-summary.{json,md}` with the
+release id, provider kind, source/vendor BLAKE3, artifact digest set,
+proof/sandbox/verify BLAKE3 evidence, `self-rebuild-match`, `eligible`, and
+explicit non-claims. The successful claim is bounded to the packaged stage2
+artifact rebuilding twice from the recorded inputs under recorded
+`mantle-proof-sandbox-v1:*` profiles with matching BLAKE3 digest sets; it does
+not claim full bootstrap reproducibility.
 
 The report records a closed proof-class ladder:
 

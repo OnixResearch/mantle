@@ -278,6 +278,10 @@ cargo -Zscript scripts/check-release-determinism-smoke-receipt.rs \
 cargo -Zscript scripts/check-real-release-determinism-receipt.rs \
   target/release-evidence/<release-id>
 
+# Write portable JSON/Markdown summary artifacts for archival/review
+cargo -Zscript scripts/summarize-real-release-determinism.rs \
+  target/release-evidence/<release-id>
+
 # Re-check a saved bundle using only bundle-local contents
 mantle release verify target/release-evidence/<release-id>
 

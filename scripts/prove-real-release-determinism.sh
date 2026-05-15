@@ -25,6 +25,7 @@ Run the real release determinism rail:
   2. package its stage2 mantle binary as release evidence
   3. run two clean deterministic proof rebuilds under real bwrap
   4. verify the generated proof with --require-deterministic-release
+  5. write portable JSON/Markdown determinism summaries
 
 Options:
   --release-id ID          release id (default: real-self-hosting-stage2-<UTC>)
@@ -179,6 +180,18 @@ validate_receipts() {
     --verify-receipt "$verify_json"
 }
 
+write_summary() {
+  local release_bundle="${1:?release bundle is required}"
+  local deterministic_proof_dir="${2:?proof dir is required}"
+  local verify_json="${3:?verify json is required}"
+
+  print_command cargo -Zscript scripts/summarize-real-release-determinism.rs "$release_bundle" --proof-dir "$deterministic_proof_dir" --verify-receipt "$verify_json" --output-dir "$output_root"
+  cargo -Zscript scripts/summarize-real-release-determinism.rs "$release_bundle" \
+    --proof-dir "$deterministic_proof_dir" \
+    --verify-receipt "$verify_json" \
+    --output-dir "$output_root"
+}
+
 main() {
   parse_args "$@"
   require_repo_root
@@ -200,6 +213,8 @@ main() {
   note "release bundle: $release_bundle"
   note "deterministic proof dir: $deterministic_proof_dir"
   note "verify receipt: $verify_json"
+  note "summary json: $output_root/$release_id-determinism-summary.json"
+  note "summary markdown: $output_root/$release_id-determinism-summary.md"
   note "bwrap: $bwrap"
   note "busybox: $busybox"
 
@@ -213,7 +228,9 @@ main() {
   fi
 
   if [[ "$force" == "1" ]]; then
-    rm -rf -- "$release_bundle" "$deterministic_proof_dir" "$rebuild_output_dir" "$verify_json"
+    rm -rf -- "$release_bundle" "$deterministic_proof_dir" "$rebuild_output_dir" "$verify_json" \
+      "$output_root/$release_id-determinism-summary.json" \
+      "$output_root/$release_id-determinism-summary.md"
     if [[ "$skip_self_hosting" != "1" ]]; then
       rm -rf -- "$proof_bundle_dir"
     fi
@@ -257,6 +274,7 @@ main() {
     --require-deterministic-release >"$verify_json"
 
   validate_receipts "$release_bundle" "$deterministic_proof_dir" "$verify_json"
+  write_summary "$release_bundle" "$deterministic_proof_dir" "$verify_json"
 }
 
 main "$@"
