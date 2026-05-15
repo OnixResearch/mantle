@@ -14,7 +14,14 @@ use crate::manifest::validate_blake3_hex;
 use crate::manifest::validation_error;
 
 pub const DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA: &str = "mantle-deterministic-build-proof-v1";
+pub const DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA: &str = "mantle-deterministic-sandbox-isolation-evidence-v1";
 const REQUIRED_RUN_COUNT: usize = 2;
+const SUPPORTED_SANDBOX_PROFILE_FAMILY: &str = "mantle-proof-sandbox-v1";
+const REQUIRED_ISOLATION_CHECKS: &[&str] = &[
+    "denies-undeclared-host-access",
+    "denies-host-network-by-default",
+    "denies-main-output-and-proof-store-reuse",
+];
 const REQUIRED_PERTURBATIONS: &[&str] = &[
     "HOME",
     "PATH",
@@ -40,6 +47,24 @@ pub enum DeterministicBuildProofVerdict {
     MissingEvidence,
     ImpureMode,
     UnsupportedWorkflow,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DeterministicSandboxIsolationEvidenceStatus {
+    Passed,
+    Failed,
+    Bypassed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeterministicSandboxIsolationEvidence {
+    pub schema: String,
+    pub profile_family: String,
+    pub evidence_version: String,
+    pub status: DeterministicSandboxIsolationEvidenceStatus,
+    pub checks: Vec<String>,
+    pub evidence_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -163,10 +188,53 @@ pub fn deterministic_build_proof_receipt_digest_blake3(
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
+pub fn validate_deterministic_sandbox_isolation_evidence(
+    evidence: &DeterministicSandboxIsolationEvidence,
+) -> Result<(), ReleaseEvidenceError> {
+    if evidence.schema != DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA {
+        return Err(validation_error(format!(
+            "deterministic sandbox isolation evidence schema must be {DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA}, got {}",
+            evidence.schema
+        )));
+    }
+    if evidence.profile_family != SUPPORTED_SANDBOX_PROFILE_FAMILY {
+        return Err(validation_error(format!(
+            "deterministic sandbox isolation evidence profile_family must be {SUPPORTED_SANDBOX_PROFILE_FAMILY}, got {}",
+            evidence.profile_family
+        )));
+    }
+    if evidence.evidence_version.trim().is_empty() {
+        return Err(validation_error(
+            "deterministic sandbox isolation evidence evidence_version must not be empty".to_string(),
+        ));
+    }
+    if evidence.status != DeterministicSandboxIsolationEvidenceStatus::Passed {
+        return Err(validation_error(format!(
+            "deterministic sandbox isolation evidence status must be passed, got {:?}",
+            evidence.status
+        )));
+    }
+    validate_string_set(&evidence.checks, "isolation_evidence.checks")?;
+    for required in REQUIRED_ISOLATION_CHECKS {
+        if !evidence.checks.iter().any(|actual| actual == required) {
+            return Err(validation_error(format!(
+                "deterministic sandbox isolation evidence missing required check {required}"
+            )));
+        }
+    }
+    validate_blake3_hex(&evidence.evidence_digest_blake3, "deterministic sandbox isolation evidence digest_blake3")?;
+    Ok(())
+}
+
 pub fn deterministic_release_claim_eligible(
     release_digest_set: &[String],
     receipts: &[DeterministicBuildProofReceipt],
+    isolation_evidence: Option<&DeterministicSandboxIsolationEvidence>,
 ) -> Result<bool, ReleaseEvidenceError> {
+    let Some(isolation_evidence) = isolation_evidence else {
+        return Ok(false);
+    };
+    validate_deterministic_sandbox_isolation_evidence(isolation_evidence)?;
     let mut release_digests = canonical_digest_set(release_digest_set, "release_digest_set")?;
     release_digests.sort();
     let mut receipt_digests = Vec::new();
@@ -419,6 +487,17 @@ mod tests {
         })
     }
 
+    fn isolation_evidence() -> DeterministicSandboxIsolationEvidence {
+        DeterministicSandboxIsolationEvidence {
+            schema: DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA.to_string(),
+            profile_family: SUPPORTED_SANDBOX_PROFILE_FAMILY.to_string(),
+            evidence_version: "mantle-deterministic-proof-sandbox-isolation-v1".to_string(),
+            status: DeterministicSandboxIsolationEvidenceStatus::Passed,
+            checks: REQUIRED_ISOLATION_CHECKS.iter().map(|check| check.to_string()).collect(),
+            evidence_digest_blake3: digest(15),
+        }
+    }
+
     #[test]
     fn deterministic_receipt_canonical_bytes_are_stable() {
         let mut first = receipt();
@@ -514,7 +593,37 @@ mod tests {
     #[test]
     fn deterministic_release_claim_requires_exact_digest_set() {
         let receipt = receipt();
-        assert!(deterministic_release_claim_eligible(&[digest(1)], &[receipt]).unwrap());
-        assert!(!deterministic_release_claim_eligible(&[digest(2)], &[self::receipt()]).unwrap());
+        let evidence = isolation_evidence();
+        assert!(deterministic_release_claim_eligible(&[digest(1)], &[receipt], Some(&evidence)).unwrap());
+        assert!(!deterministic_release_claim_eligible(&[digest(2)], &[self::receipt()], Some(&evidence)).unwrap());
+    }
+
+    #[test]
+    fn deterministic_release_claim_requires_isolation_evidence() {
+        assert!(!deterministic_release_claim_eligible(&[digest(1)], &[receipt()], None).unwrap());
+    }
+
+    #[test]
+    fn deterministic_release_claim_rejects_failed_isolation_evidence() {
+        let mut evidence = isolation_evidence();
+        evidence.status = DeterministicSandboxIsolationEvidenceStatus::Failed;
+        let err = deterministic_release_claim_eligible(&[digest(1)], &[receipt()], Some(&evidence)).unwrap_err();
+        assert!(err.to_string().contains("status must be passed"));
+    }
+
+    #[test]
+    fn deterministic_release_claim_rejects_profile_family_mismatch() {
+        let mut evidence = isolation_evidence();
+        evidence.profile_family = "mantle-proof-sandbox-v2".to_string();
+        let err = deterministic_release_claim_eligible(&[digest(1)], &[receipt()], Some(&evidence)).unwrap_err();
+        assert!(err.to_string().contains("profile_family"));
+    }
+
+    #[test]
+    fn deterministic_release_claim_rejects_missing_isolation_check() {
+        let mut evidence = isolation_evidence();
+        evidence.checks.retain(|check| check != "denies-host-network-by-default");
+        let err = deterministic_release_claim_eligible(&[digest(1)], &[receipt()], Some(&evidence)).unwrap_err();
+        assert!(err.to_string().contains("missing required check denies-host-network-by-default"));
     }
 }

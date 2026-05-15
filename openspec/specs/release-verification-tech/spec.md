@@ -572,11 +572,13 @@ allowlist, working-directory policy, rebuild recipe identity, logical store
 prefix, and physical proof-store/output locations.
 
 Deterministic-release eligibility MUST also require maintained
-isolation-regression evidence for the supported sandbox profile family. A
-supported-looking sandbox profile identity MUST NOT be treated as sufficient if
-Mantle's proof-run executor path can be configured or regressed to expose
-undeclared host paths, host networking, the main rebuild output, or reused proof
-stores without failing closed.
+isolation-regression evidence for the supported sandbox profile family. This
+evidence MUST be represented as a typed receipt with schema/version identity,
+profile-family binding, passing status, and explicit checks proving the profile
+family denies undeclared host access, denies host networking by default, and
+prevents main-output/proof-store reuse. A supported-looking sandbox profile
+identity MUST NOT be treated as sufficient if the isolation evidence is missing,
+malformed, failing, bypassed, or bound to a different profile family.
 
 A deterministic-release claim MUST remain scoped to the named release artifacts,
 workflow identity, derivation identities, toolchain/provider identities, sandbox
@@ -590,6 +592,8 @@ unless separate evidence proves those broader claims.
 - AND each required artifact has a deterministic-build proof receipt with verdict
   `deterministic-match`
 - AND every receipt records a supported sandbox profile identity
+- AND maintained isolation-regression evidence passes for the supported profile
+  family
 - AND the receipt BLAKE3 digest set equals the release artifact digest set
 - WHEN release verification evaluates deterministic claim eligibility
 - THEN it may report a deterministic-release claim scoped to those artifacts and
@@ -610,12 +614,33 @@ unless separate evidence proves those broader claims.
 
 - GIVEN a deterministic-build proof receipt records a supported
   `mantle-proof-sandbox-v1:` profile identity
-- AND Mantle's maintained regression evidence shows that profile family denies
-  undeclared host access, host networking by default, and main-output/proof-store
-  reuse
+- AND Mantle's maintained typed isolation-regression evidence shows that profile
+  family denies undeclared host access, host networking by default, and
+  main-output/proof-store reuse
 - WHEN release verification evaluates deterministic claim eligibility
 - THEN the supported profile identity may contribute to deterministic-release
   eligibility
+
+#### Scenario: Missing isolation evidence blocks deterministic promotion
+
+- GIVEN deterministic proof output digests match the release artifacts
+- BUT no deterministic sandbox isolation evidence receipt is available for the
+  supported profile family
+- WHEN release verification evaluates deterministic claim eligibility
+- THEN the release remains at the strongest lower satisfied proof class
+- AND the report identifies missing deterministic proof sandbox isolation
+  evidence as the blocker
+
+#### Scenario: Isolation evidence profile mismatch blocks deterministic promotion
+
+- GIVEN deterministic proof output digests match the release artifacts
+- AND the deterministic sandbox isolation evidence receipt is passing
+- BUT the evidence is bound to a profile family that does not match the proof
+  receipt's supported sandbox profile family
+- WHEN release verification evaluates deterministic claim eligibility
+- THEN the release remains at the strongest lower satisfied proof class
+- AND the report identifies unsupported deterministic proof sandbox isolation
+  evidence as the blocker
 
 #### Scenario: Isolation regression failure blocks deterministic promotion
 
@@ -634,4 +659,3 @@ unless separate evidence proves those broader claims.
 - THEN it states the claim scope as release-artifact determinism under the
   recorded workflow, sandbox profile, and proof matrix
 - AND it does not call the whole build system Nix-like deterministic by default
-
