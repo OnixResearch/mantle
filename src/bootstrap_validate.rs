@@ -34,6 +34,7 @@ pub(crate) struct BootstrapValidateOptions {
     pub(crate) resume: bool,
     pub(crate) jobs: Option<u32>,
     pub(crate) strict_hermetic: bool,
+    pub(crate) impure: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -237,6 +238,9 @@ fn run_build_child(
         .arg("--no-substitute");
     if opts.strict_hermetic {
         command.arg("--strict-hermetic");
+    }
+    if opts.impure {
+        command.arg("--impure");
     }
     if let Some(jobs) = opts.jobs {
         command.arg("--jobs").arg(jobs.to_string());

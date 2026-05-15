@@ -2,6 +2,7 @@
 pub enum HermeticityMode {
     Practical,
     Strict,
+    Impure,
 }
 
 impl HermeticityMode {
@@ -9,11 +10,16 @@ impl HermeticityMode {
         match self {
             Self::Practical => "practical",
             Self::Strict => "strict",
+            Self::Impure => "impure",
         }
     }
 
     pub fn is_strict(self) -> bool {
         matches!(self, Self::Strict)
+    }
+
+    pub fn is_impure(self) -> bool {
+        matches!(self, Self::Impure)
     }
 }
 
@@ -30,6 +36,7 @@ pub enum HermeticityAuditKind {
     ClosureResolutionDegraded,
     EnvironmentOverride,
     FetchToolFallback,
+    ImpureModeSelected,
 }
 
 impl HermeticityAuditKind {
@@ -40,6 +47,7 @@ impl HermeticityAuditKind {
             Self::ClosureResolutionDegraded => "closure-resolution-degraded",
             Self::EnvironmentOverride => "environment-override",
             Self::FetchToolFallback => "fetch-tool-fallback",
+            Self::ImpureModeSelected => "impure-mode-selected",
         }
     }
 }
@@ -87,8 +95,11 @@ mod tests {
     fn hermeticity_mode_display_uses_stable_strings() {
         assert_eq!(HermeticityMode::Practical.as_str(), "practical");
         assert_eq!(HermeticityMode::Strict.to_string(), "strict");
+        assert_eq!(HermeticityMode::Impure.as_str(), "impure");
         assert!(HermeticityMode::Strict.is_strict());
         assert!(!HermeticityMode::Practical.is_strict());
+        assert!(HermeticityMode::Impure.is_impure());
+        assert!(!HermeticityMode::Strict.is_impure());
     }
 
     #[test]

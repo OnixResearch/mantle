@@ -426,6 +426,7 @@ impl SelfBuildReport {
                 hermeticity_mode = match val {
                     "practical" => Some(crunch_pipeline::HermeticityMode::Practical),
                     "strict" => Some(crunch_pipeline::HermeticityMode::Strict),
+                    "impure" => Some(crunch_pipeline::HermeticityMode::Impure),
                     _ => None,
                 };
             } else if let Some(val) = rest.strip_prefix("invoking-binary=") {

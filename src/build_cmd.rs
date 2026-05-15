@@ -507,6 +507,17 @@ mod tests {
     }
 
     #[test]
+    fn format_hermeticity_summary_reports_explicit_impure_mode() {
+        let events = vec![HermeticityAuditEvent::new(
+            HermeticityAuditKind::ImpureModeSelected,
+            "explicit --impure mode permits ambient host dependencies",
+        )];
+        let lines = format_hermeticity_summary(HermeticityMode::Impure, &events);
+        assert_eq!(lines[0], "WARNING: degraded hermeticity: impure (1 audit event)");
+        assert_eq!(lines[1], "  - impure-mode-selected: explicit --impure mode permits ambient host dependencies");
+    }
+
+    #[test]
     fn format_hermeticity_summary_reports_degraded_events() {
         let events = vec![HermeticityAuditEvent::new(
             HermeticityAuditKind::HostToolFallback,

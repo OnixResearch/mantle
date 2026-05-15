@@ -471,7 +471,7 @@ mod tests {
             verbose: false,
             max_jobs: 1,
             substituter_url: None,
-            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Impure,
             keypair: signing_key,
             trusted_keys: Vec::new(),
             trust_unsigned: false,
@@ -517,8 +517,11 @@ mod tests {
             failed: Vec::new(),
             fod_mismatches: Vec::new(),
             root_labels: HashMap::from([(drv_key_for(&config.store_dir, &drv_path), "demo".to_string())]),
-            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
-            hermeticity_audit_events: Vec::new(),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Impure,
+            hermeticity_audit_events: vec![crunch_pipeline::HermeticityAuditEvent::new(
+                crunch_pipeline::HermeticityAuditKind::ImpureModeSelected,
+                "explicit --impure mode permits ambient host dependencies",
+            )],
         };
 
         let diagnostic_failures = vec![crate::build_log::DiagnosticPersistenceFailure::write_build_log(
@@ -537,8 +540,11 @@ mod tests {
                 "output_dir": config.output_dir.display().to_string(),
                 "state_dir": config.state_dir.display().to_string(),
                 "store_dir": config.store_dir.clone(),
-                "hermeticity_mode": "practical",
-                "hermeticity_audit_events": [],
+                "hermeticity_mode": "impure",
+                "hermeticity_audit_events": [{
+                    "kind": "impure-mode-selected",
+                    "detail": "explicit --impure mode permits ambient host dependencies",
+                }],
                 "diagnostic_persistence_failures": [{
                     "operation": "write-build-log",
                     "artifact": "build-log",

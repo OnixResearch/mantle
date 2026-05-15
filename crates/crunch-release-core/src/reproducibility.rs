@@ -238,6 +238,11 @@ fn validate_report_evidence(report: &ReleaseReproducibilityReport) -> Result<(),
     validate_non_empty_string_set(&report.clean_rebuild_store_identities, "clean_rebuild_store_identities")?;
     validate_digest_set(&report.evidence_artifact_digests_blake3, "evidence_artifact_digests_blake3")?;
     if is_rebuild_claim(report.proof_class) {
+        if has_impure_assumption(&report.environment_assumptions) {
+            return Err(validation_error(
+                "release reproducibility report rebuild proof classes reject impure hermeticity evidence".to_string(),
+            ));
+        }
         if report.clean_rebuild_store_identities.is_empty() {
             return Err(validation_error(
                 "release reproducibility report rebuild proof classes require clean_rebuild_store_identities"
@@ -252,6 +257,10 @@ fn validate_report_evidence(report: &ReleaseReproducibilityReport) -> Result<(),
         }
     }
     Ok(())
+}
+
+fn has_impure_assumption(values: &[String]) -> bool {
+    values.iter().any(|value| value == "hermeticity-mode=impure" || value == "impure-mode-selected")
 }
 
 fn validate_non_empty_string_set(values: &[String], field_name: &str) -> Result<(), ReleaseEvidenceError> {
@@ -659,6 +668,16 @@ mod tests {
         let canonical = validate_release_reproducibility_report_linkage(report, expected).unwrap();
 
         assert_eq!(canonical.release_id, "crunch-0.1.0-rc1");
+    }
+
+    #[test]
+    fn reproducibility_report_rejects_impure_rebuild_claim() {
+        let mut report = sample_report();
+        report.environment_assumptions.push("hermeticity-mode=impure".to_string());
+
+        let err = canonical_release_reproducibility_report(report).unwrap_err();
+
+        assert!(err.to_string().contains("reject impure hermeticity evidence"));
     }
 
     #[test]

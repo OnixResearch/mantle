@@ -139,10 +139,14 @@ write outputs elsewhere, or `--nix-compat` to switch the logical
 prefix to `/nix/store` for interop testing. See
 [Store Paths and Prefixes](#store-paths-and-prefixes) for details.
 
-Pass `--strict-hermetic` to `mantle build` or `mantle self-build` when
-degraded hermetic behavior should fail instead of warn. Human and JSON
+Pass `--strict-hermetic` to `mantle build`, `mantle self-build`, or
+`mantle bootstrap validate` when degraded hermetic behavior should fail instead
+of warn. Pass the explicit Nix-style `--impure` escape hatch only for diagnostic
+or compatibility work that intentionally permits ambient host dependencies;
+`--impure` is mutually exclusive with `--strict-hermetic`. Human and JSON
 reports both surface `hermeticity_mode` and any
-`hermeticity_audit_events` recorded during the run.
+`hermeticity_audit_events` recorded during the run, including the typed
+`impure-mode-selected` event for impure runs.
 
 ## Operator workflows
 
@@ -959,6 +963,9 @@ BLAKE3 comparisons, clean rebuild store/output identities, replayable workflow
 identity, environment assumptions, and BLAKE3 digests for the evidence artifacts
 used to make the claim. A failed or missing comparison is represented as a failed
 report with a weaker class; it is never promoted to a rebuild-match class.
+Evidence marked `hermeticity-mode=impure` is also rejected for rebuild-match
+proof classes by default, because explicit impure mode permits ambient host inputs
+outside the declared proof boundary.
 
 Later verification is bundle-local:
 

@@ -140,7 +140,8 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
         }
         Err(e) => return Err(Error::Internal(format!("opening store: {e}"))),
     };
-    let hermeticity_audit_events = map_store_audit_events(store.startup_audit_events());
+    let mut hermeticity_audit_events = mode_audit_events(config.hermeticity_mode);
+    hermeticity_audit_events.extend(map_store_audit_events(store.startup_audit_events()));
 
     #[cfg(target_os = "linux")]
     {
@@ -234,6 +235,16 @@ async fn build_linux(
 
 fn map_store_audit_events(store_events: &[crunch_store::StoreAuditEvent]) -> Vec<HermeticityAuditEvent> {
     store_events.iter().cloned().map(HermeticityAuditEvent::from).collect()
+}
+
+fn mode_audit_events(mode: HermeticityMode) -> Vec<HermeticityAuditEvent> {
+    if !mode.is_impure() {
+        return Vec::new();
+    }
+    vec![HermeticityAuditEvent::new(
+        HermeticityAuditKind::ImpureModeSelected,
+        "explicit --impure mode permits ambient host dependencies; output is not reproducibility-proof eligible",
+    )]
 }
 
 fn store_fallback_mode(mode: HermeticityMode) -> crunch_store::StoreFallbackMode {

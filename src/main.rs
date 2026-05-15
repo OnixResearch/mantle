@@ -155,8 +155,12 @@ enum Command {
         trust_unsigned: bool,
 
         /// Reject degraded hermetic behavior once strict-mode blockers exist.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "impure")]
         strict_hermetic: bool,
+
+        /// Permit ambient host dependencies; outputs are not proof-eligible.
+        #[arg(long, conflicts_with = "strict_hermetic")]
+        impure: bool,
     },
 
     /// Run no-mutate operator preflight checks for a workflow profile
@@ -299,8 +303,12 @@ enum Command {
         trust_unsigned: bool,
 
         /// Reject degraded hermetic behavior once strict-mode blockers exist.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "impure")]
         strict_hermetic: bool,
+
+        /// Permit ambient host dependencies; outputs are not proof-eligible.
+        #[arg(long, conflicts_with = "strict_hermetic")]
+        impure: bool,
 
         /// Validate a full-source root manifest and bind self-build proof to source-root provider.
         #[arg(long)]
@@ -469,8 +477,12 @@ enum BootstrapAction {
         jobs: Option<u32>,
 
         /// Reject degraded hermetic behavior once strict-mode blockers exist.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "impure")]
         strict_hermetic: bool,
+
+        /// Permit ambient host dependencies; outputs are not proof-eligible.
+        #[arg(long, conflicts_with = "strict_hermetic")]
+        impure: bool,
     },
 }
 
@@ -1124,6 +1136,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             trusted_public_keys,
             trust_unsigned,
             strict_hermetic,
+            impure,
         } => run_build_command(
             ctx,
             file.as_ref(),
@@ -1137,12 +1150,22 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             trusted_public_keys,
             *trust_unsigned,
             *strict_hermetic,
+            *impure,
         ),
         _ => unreachable!("build helper called with non-build command"),
     }
 }
 
 #[allow(clippy::too_many_arguments)]
+fn select_hermeticity_mode(strict_hermetic: bool, impure: bool) -> Result<crunch_pipeline::HermeticityMode, RunError> {
+    match (strict_hermetic, impure) {
+        (true, true) => Err(RunError::Internal("--strict-hermetic and --impure are mutually exclusive".to_string())),
+        (true, false) => Ok(crunch_pipeline::HermeticityMode::Strict),
+        (false, true) => Ok(crunch_pipeline::HermeticityMode::Impure),
+        (false, false) => Ok(crunch_pipeline::HermeticityMode::Practical),
+    }
+}
+
 fn run_build_command(
     ctx: &RunContext,
     file: Option<&PathBuf>,
@@ -1156,14 +1179,11 @@ fn run_build_command(
     trusted_public_keys: &[String],
     trust_unsigned: bool,
     strict_hermetic: bool,
+    impure: bool,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
     let substituter_url = (!no_substitute).then_some(substituters);
-    let hermeticity_mode = if strict_hermetic {
-        crunch_pipeline::HermeticityMode::Strict
-    } else {
-        crunch_pipeline::HermeticityMode::Practical
-    };
+    let hermeticity_mode = select_hermeticity_mode(strict_hermetic, impure)?;
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
     let target = project_build::parse_build_target(file.map(PathBuf::as_path));
     match target {
@@ -1326,6 +1346,7 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             resume,
             jobs,
             strict_hermetic,
+            impure,
         } => bootstrap_validate::cmd_bootstrap_validate(ctx, bootstrap_validate::BootstrapValidateOptions {
             target: target.clone(),
             import_paths: import_paths.clone(),
@@ -1334,6 +1355,7 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             resume: *resume,
             jobs: *jobs,
             strict_hermetic: *strict_hermetic,
+            impure: *impure,
         }),
     }
 }
@@ -1561,6 +1583,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             trusted_public_keys,
             trust_unsigned,
             strict_hermetic,
+            impure,
             source_root,
             no_host_tools,
             stage0_inventory,
@@ -1576,6 +1599,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             trusted_public_keys,
             *trust_unsigned,
             *strict_hermetic,
+            *impure,
             source_root.as_deref(),
             *no_host_tools,
             stage0_inventory.as_deref(),
@@ -1597,6 +1621,7 @@ fn run_self_build_command(
     trusted_public_keys: &[String],
     trust_unsigned: bool,
     strict_hermetic: bool,
+    impure: bool,
     source_root: Option<&std::path::Path>,
     no_host_tools: bool,
     stage0_inventory: Option<&std::path::Path>,
@@ -1605,11 +1630,7 @@ fn run_self_build_command(
     bootstrap_busybox_path: Option<&std::path::Path>,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-    let hermeticity_mode = if strict_hermetic {
-        crunch_pipeline::HermeticityMode::Strict
-    } else {
-        crunch_pipeline::HermeticityMode::Practical
-    };
+    let hermeticity_mode = select_hermeticity_mode(strict_hermetic, impure)?;
     if let Some(manifest_path) = source_root {
         let checked = validate_source_root_manifest_file(manifest_path)?;
         return Err(RunError::Build(format!(
@@ -2181,6 +2202,31 @@ mod tests {
     fn nix_compat_overrides_store_prefix_to_nix_store() {
         let args = args_with_store_prefix("/mantle/store", true);
         assert_eq!(resolve_store_prefix(&args), "/nix/store");
+    }
+
+    #[test]
+    fn hermeticity_mode_selector_covers_all_modes() {
+        assert_eq!(select_hermeticity_mode(false, false).unwrap(), crunch_pipeline::HermeticityMode::Practical);
+        assert_eq!(select_hermeticity_mode(true, false).unwrap(), crunch_pipeline::HermeticityMode::Strict);
+        assert_eq!(select_hermeticity_mode(false, true).unwrap(), crunch_pipeline::HermeticityMode::Impure);
+        let err = select_hermeticity_mode(true, true).unwrap_err().to_string();
+        assert!(err.contains("--strict-hermetic and --impure are mutually exclusive"));
+    }
+
+    #[test]
+    fn build_cli_rejects_strict_hermetic_with_impure() {
+        let err = Args::try_parse_from(["mantle", "build", "demo.ncl", "--strict-hermetic", "--impure"]).unwrap_err();
+        assert!(err.to_string().contains("cannot be used with"));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_impure_mode() {
+        let args = Args::parse_from(["mantle", "self-build", "--impure"]);
+        assert!(matches!(args.command, Command::SelfBuild {
+            impure: true,
+            strict_hermetic: false,
+            ..
+        }));
     }
 
     #[cfg(unix)]
