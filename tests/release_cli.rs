@@ -1178,6 +1178,90 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
 
 #[cfg(unix)]
 #[test]
+fn release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("fake-e2e-deterministic-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("e2e-deterministic-main-output");
+    let fake_bwrap = temp.path().join("fake-bwrap.sh");
+    write_fake_bwrap(&fake_bwrap);
+    let proof_dir = temp.path().join("e2e-deterministic-proof-work");
+    let report_path = temp.path().join("e2e-deterministic-report.json");
+    let relative_path = &manifest.binaries[0].relative_path;
+    write_rebuild_script(
+        &rebuild_script,
+        &format!(
+            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$MANTLE_REPRODUCE_BUNDLE_DIR/{relative_path}\" \"$MANTLE_REPRODUCE_OUTPUT_DIR/{relative_path}\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then mkdir -p \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\"; printf '%s\\n' \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt\"; fi\n"
+        ),
+    );
+
+    let reproduce_assert = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--report-path")
+        .arg(&report_path)
+        .arg("--deterministic-proof-runs")
+        .arg("2")
+        .arg("--deterministic-proof-dir")
+        .arg(&proof_dir)
+        .env("MANTLE_DETERMINISTIC_PROOF_BWRAP", &fake_bwrap)
+        .env("MANTLE_FAKE_BWRAP_FORBIDDEN_BIND", &rebuild_output_dir)
+        .assert()
+        .success();
+    let reproduce_stdout = serde_json::from_slice::<serde_json::Value>(&reproduce_assert.get_output().stdout).unwrap();
+    let proof_path = proof_dir.join("deterministic-build-proof.json");
+    let isolation_evidence_path = proof_dir.join("deterministic-sandbox-isolation-evidence.json");
+    assert_eq!(reproduce_stdout["deterministic_proof_path"], proof_path.display().to_string());
+    assert_eq!(
+        reproduce_stdout["deterministic_sandbox_isolation_evidence_path"],
+        isolation_evidence_path.display().to_string()
+    );
+
+    let proof = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&proof_path).unwrap()).unwrap();
+    let runs = proof["runs"].as_array().unwrap();
+    assert_eq!(proof["schema"], "mantle-deterministic-proof-receipt-v1");
+    assert_eq!(proof["verdict"], "self-rebuild-match");
+    assert_eq!(runs.len(), 2);
+    assert_ne!(runs[0]["output_store_paths"][0], runs[1]["output_store_paths"][0]);
+    assert_ne!(runs[0]["output_root_identity"], runs[1]["output_root_identity"]);
+    assert_eq!(runs[0]["output_digests"], runs[1]["output_digests"]);
+    assert!(proof_dir.join("run-000/store/store-marker.txt").is_file());
+    assert!(proof_dir.join("run-001/store/store-marker.txt").is_file());
+
+    let verify_assert = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--deterministic-proof")
+        .arg(&proof_path)
+        .arg("--deterministic-sandbox-isolation-evidence")
+        .arg(&isolation_evidence_path)
+        .arg("--require-deterministic-release")
+        .assert()
+        .success();
+    let verify_stdout = serde_json::from_slice::<serde_json::Value>(&verify_assert.get_output().stdout).unwrap();
+    assert_eq!(verify_stdout["deterministic_release"]["status"], "eligible");
+    assert_eq!(verify_stdout["deterministic_release"]["eligible"], true);
+    assert_eq!(
+        verify_stdout["deterministic_release"]["proof_digest_blake3"],
+        reproduce_stdout["deterministic_proof_digest_blake3"]
+    );
+    assert_eq!(
+        verify_stdout["deterministic_release"]["sandbox_isolation_evidence_digest_blake3"],
+        reproduce_stdout["deterministic_sandbox_isolation_evidence_digest_blake3"]
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn release_reproduce_denies_host_only_deterministic_proof_recipe() {
     let (temp, bundle_dir, manifest) = make_valid_bundle();
     let rebuild_script = temp.path().join("host-only-deterministic-rebuild.sh");
