@@ -571,6 +571,13 @@ and version, network policy, read-only and writable bind set, environment
 allowlist, working-directory policy, rebuild recipe identity, logical store
 prefix, and physical proof-store/output locations.
 
+Deterministic-release eligibility MUST also require maintained
+isolation-regression evidence for the supported sandbox profile family. A
+supported-looking sandbox profile identity MUST NOT be treated as sufficient if
+Mantle's proof-run executor path can be configured or regressed to expose
+undeclared host paths, host networking, the main rebuild output, or reused proof
+stores without failing closed.
+
 A deterministic-release claim MUST remain scoped to the named release artifacts,
 workflow identity, derivation identities, toolchain/provider identities, sandbox
 profile identity, and recorded proof matrix. It MUST NOT claim global Mantle
@@ -598,6 +605,27 @@ unless separate evidence proves those broader claims.
 - THEN the release remains at the strongest lower satisfied proof class
 - AND the report identifies unsupported deterministic proof sandbox evidence as
   the blocker
+
+#### Scenario: Supported profile requires isolation-negative evidence
+
+- GIVEN a deterministic-build proof receipt records a supported
+  `mantle-proof-sandbox-v1:` profile identity
+- AND Mantle's maintained regression evidence shows that profile family denies
+  undeclared host access, host networking by default, and main-output/proof-store
+  reuse
+- WHEN release verification evaluates deterministic claim eligibility
+- THEN the supported profile identity may contribute to deterministic-release
+  eligibility
+
+#### Scenario: Isolation regression failure blocks deterministic promotion
+
+- GIVEN deterministic proof output digests match the release artifacts
+- BUT the sandbox isolation regression for that profile family fails or is
+  bypassed
+- WHEN release verification evaluates deterministic claim eligibility
+- THEN the release remains at the strongest lower satisfied proof class
+- AND the report identifies unsupported deterministic proof sandbox isolation
+  evidence as the blocker
 
 #### Scenario: Deterministic release claim remains bounded
 
