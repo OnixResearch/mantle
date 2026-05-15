@@ -86,8 +86,11 @@ Keep these checks separate from the ordinary gate:
 cargo test -p crunch-pipeline --test integration_build \
   pipeline_determinism_probe_ -- --ignored --nocapture
 ./scripts/prove-self-hosting.sh --check
+./scripts/check-release-determinism-quality.sh
 ```
 
+- The release determinism quality rail runs the generated deterministic proof
+  smoke and validates its receipt/log BLAKE3 in one checked-in entry point.
 - The determinism probe is an ignored integration rail, not part of every edit.
 - `./scripts/prove-self-hosting.sh --check` is only self-hosting preflight.
 - The full ignored proof remains a separate heavier run:
