@@ -167,8 +167,13 @@ fn print_usage() {
 }
 
 fn repo_root() -> Result<PathBuf, String> {
-    let root = command_text(Path::new("."), "git", &["rev-parse", "--show-toplevel"])?;
-    Ok(PathBuf::from(root.trim()))
+    if let Ok(root) = env::var("CRUNCH_RELEASE_DETERMINISM_REPO_ROOT") {
+        return Ok(PathBuf::from(root));
+    }
+    match command_text(Path::new("."), "git", &["rev-parse", "--show-toplevel"]) {
+        Ok(root) => Ok(PathBuf::from(root.trim())),
+        Err(_) => env::current_dir().map_err(|err| format!("resolve current directory: {err}")),
+    }
 }
 
 fn command_text(cwd: &Path, program: &str, args: &[&str]) -> Result<String, String> {

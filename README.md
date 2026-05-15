@@ -242,13 +242,15 @@ cargo test -p crunch-pipeline --test integration_build \
   pipeline_determinism_probe_ -- --ignored --nocapture
 ./scripts/prove-self-hosting.sh --check
 ./scripts/check-release-determinism-quality.sh
+nix build .#checks.x86_64-linux.release-determinism-quality --no-link -L
 ```
 
 The release determinism quality rail runs the generated deterministic proof
 smoke and validates its receipt/log BLAKE3 in one checked-in entry point. The
-determinism probe is an ignored integration rail, not part of every edit.
-`./scripts/prove-self-hosting.sh --check` is only self-hosting preflight. The
-full ignored proof run stays heavier:
+flake check is the Nix/CI-callable heavy gate for the same underlying generated
+proof regression. The determinism probe is an ignored integration rail, not part
+of every edit. `./scripts/prove-self-hosting.sh --check` is only self-hosting
+preflight. The full ignored proof run stays heavier:
 
 ```bash
 ./scripts/prove-self-hosting.sh

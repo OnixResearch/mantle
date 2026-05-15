@@ -660,6 +660,7 @@ while [ "$#" -gt 0 ]; do
         printf 'fake bwrap denied undeclared host path: %s\n' "$MANTLE_FAKE_BWRAP_FORBIDDEN_HOST_PATH" >&2
         exit 125
       fi
+      if [ -n "${MANTLE_FAKE_BWRAP_HOST_PATH:-}" ]; then export PATH="$MANTLE_FAKE_BWRAP_HOST_PATH"; fi
       exec "$@"
       ;;
   esac
