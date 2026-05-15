@@ -10,4 +10,4 @@
 - [x] [depends:schema] Teach release verification to consume deterministic proof receipts for all required artifacts without broadening claim scope.
 - [x] [depends:schema] Update README/operator docs to distinguish self-rebuild match, deterministic-release claim, and global/Nix-like determinism.
 - [x] [depends:schema] Add positive and negative regression tests for deterministic-match, mismatch, missing evidence, host leakage, and impure-mode verdicts.
-- [ ] [depends:verification] Validate and archive this OpenSpec after implementation lands.
+- [x] [depends:verification] Validate and archive this OpenSpec after implementation lands.
