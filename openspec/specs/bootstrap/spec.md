@@ -829,37 +829,30 @@ The stage MUST pin gcc 4.7.4 and support artifacts with URL/path, digest, proven
 Mantle MUST implement the live-bootstrap stage chain through a source-built provider that satisfies the normalized seed contract without using the legacy musl.cc binary provider.
 ID: bootstrap.source.chain.implementation
 
-The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl` placeholder derivations before they can satisfy bootstrap completion status. Stage validation MUST record command transcripts for the ordered inventory (`bootstrap/stage0-posix.ncl`, `bootstrap/mes.ncl`, `bootstrap/tinycc.ncl`, `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl`), `bootstrap/selftest.ncl`, `bootstrap/integration-test.ncl`, and final self-build proof. Validation MUST fail closed when a stage emits placeholder text, exits through a deferred task, or falls back to the legacy provider. The final provider MUST expose the normalized seed contract fields consumed by later bootstrap derivations.
+The chain MUST replace `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl` placeholder derivations before they can satisfy bootstrap completion status. Stage validation MUST record command transcripts for the ordered inventory (`bootstrap/stage0-posix.ncl`, `bootstrap/mes.ncl`, `bootstrap/tinycc.ncl`, `bootstrap/binutils-tcc.ncl`, `bootstrap/gcc-4.0.ncl`, `bootstrap/gcc-4.7.ncl`, `bootstrap/gcc-10.ncl`, `bootstrap/musl-full.ncl`, `bootstrap/binutils-full.ncl`, and `bootstrap/seed-full.ncl`), `bootstrap/selftest.ncl`, `bootstrap/integration-test.ncl`, and final self-build proof. Validation MUST fail closed when a stage emits placeholder text, exits through a deferred task, or falls back to the legacy provider. The final provider MUST expose the normalized seed contract fields consumed by later bootstrap derivations. The bootstrap parity report MUST require checked provider-contract evidence before treating `gcc.10` as evidence-backed partial; that receipt MUST be contract-only, MUST name `bootstrap/gcc-10.ncl`, MUST validate required configure/build/install/smoke markers in the derivation, and MUST NOT make the row complete without full native/source-chain correctness evidence.
 
-#### Scenario: Stage placeholder is rejected
+#### Scenario: GCC 10 provider-contract receipt is missing [r[bootstrap.source.chain.implementation.gcc10-missing-receipt]]
 
-- GIVEN a bootstrap stage emits `ERROR: ... is a placeholder`
-- WHEN source-chain validation evaluates completion status
-- THEN the stage is reported incomplete
-- AND full-source bootstrap status remains blocked
+- GIVEN `bootstrap/gcc-10.ncl` exists
+- BUT `bootstrap/evidence/gcc-10-provider-contract.json` is absent
+- WHEN the bootstrap parity report evaluates `gcc.10`
+- THEN the row remains a live-bootstrap and Guix blocker
+- AND the row notes identify the missing provider-contract receipt
 
-#### Scenario: Stage chain validates in order
+#### Scenario: GCC 10 provider-contract receipt is evidence-backed partial [r[bootstrap.source.chain.implementation.gcc10-contract-partial]]
 
-- GIVEN each source-chain derivation has been implemented
-- WHEN validation runs the ordered stage inventory from `bootstrap/stage0-posix.ncl` through `bootstrap/seed-full.ncl`
-- THEN every stage transcript records the command, provider selection, exit status, output path, and stage-local fallback status
-- AND later stages consume only the normalized provider contract
+- GIVEN `bootstrap/evidence/gcc-10-provider-contract.json` has the expected schema, derivation, `contract-only` status, required derivation markers, and explicit partial parity effect
+- AND every required marker appears in `bootstrap/gcc-10.ncl`
+- WHEN the bootstrap parity report evaluates `gcc.10`
+- THEN the row may report evidence-backed `partial`
+- AND it MUST NOT report `complete` or unblock live-bootstrap or Guix parity until native/full GCC 10 correctness and source transcripts exist
 
-#### Scenario: Final proof binds provider evidence
+#### Scenario: GCC 10 provider-contract marker drift fails closed [r[bootstrap.source.chain.implementation.gcc10-marker-drift]]
 
-- GIVEN `bootstrap/seed-full.ncl` satisfies the normalized provider contract
-- WHEN `mantle self-build` completes with the source-built provider
-- THEN proof metadata records provider kind, manifest digest, provider output digest, proof bundle digest, and explicit `self-build-proof: fallback-event=<kind>` markers or `self-build-proof: fallback-event=none`
-- AND docs separate remaining trust roots from eliminated binary-provider trust
-
-#### Scenario: Final bootstrap tests use source-built provider
-
-- GIVEN the source-built provider satisfies the normalized seed contract
-- WHEN `bootstrap/selftest.ncl` and `bootstrap/integration-test.ncl` are built
-- THEN both transcripts record source-built provider selection
-- AND neither transcript uses the legacy musl.cc provider
-
-<!-- MODIFIED Requirements -->
+- GIVEN the GCC 10 provider-contract receipt requires a marker that no longer appears in `bootstrap/gcc-10.ncl`
+- WHEN the bootstrap parity report evaluates `gcc.10`
+- THEN the row remains a blocker
+- AND the row notes identify the missing marker
 
 ### Requirement: Full-source bootstrap claim requires evidence
 
