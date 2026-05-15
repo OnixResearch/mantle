@@ -10,5 +10,5 @@
   - Evidence: release docs name the proof classes, BLAKE3 output comparisons, replayable recipes, and environment assumptions.
 - [x] [depends:verification] Run targeted tests, formatting, OpenSpec validation, and any release-verification docs/example checks.
   - Evidence: final transcript names each passing check and any deferred long-running proof separately.
-- [ ] [depends:archive] Sync/archive this OpenSpec change after the verified implementation lands.
+- [x] [depends:archive] Sync/archive this OpenSpec change after the verified implementation lands.
   - Evidence: delta synced to `openspec/specs/release-verification-tech/spec.md` and archived with the implementation commit.
