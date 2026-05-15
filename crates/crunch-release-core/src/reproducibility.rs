@@ -31,6 +31,24 @@ pub enum ReproducibilityComparisonResult {
     MissingRebuiltArtifact,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReproducibilityProofClass {
+    BundleConsistent,
+    SelfProofValid,
+    SelfRebuildMatch,
+    ExternalWitnessMatch,
+    PolicySatisfied,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReproducibilityComparisonVerdict {
+    NotEvaluated,
+    Matched,
+    Failed,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReproducibilityArtifactComparison {
     pub name: String,
@@ -45,18 +63,28 @@ pub struct ReproducibilityArtifactComparison {
 pub struct ReleaseReproducibilityReport {
     pub schema: String,
     pub release_id: String,
+    pub proof_class: ReproducibilityProofClass,
+    pub comparison_verdict: ReproducibilityComparisonVerdict,
     pub source_archive_digest_blake3: String,
     pub proof_bundle_digest_blake3: String,
     pub rebuild_workflow: RebuildWorkflowIdentity,
+    pub environment_assumptions: Vec<String>,
+    pub clean_rebuild_store_identities: Vec<String>,
+    pub evidence_artifact_digests_blake3: Vec<String>,
     pub artifacts: Vec<ReproducibilityArtifactComparison>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseReproducibilityReportInit {
     pub release_id: String,
+    pub proof_class: ReproducibilityProofClass,
+    pub comparison_verdict: ReproducibilityComparisonVerdict,
     pub source_archive_digest_blake3: String,
     pub proof_bundle_digest_blake3: String,
     pub rebuild_workflow: RebuildWorkflowIdentity,
+    pub environment_assumptions: Vec<String>,
+    pub clean_rebuild_store_identities: Vec<String>,
+    pub evidence_artifact_digests_blake3: Vec<String>,
     pub artifacts: Vec<ReproducibilityArtifactComparison>,
 }
 
@@ -72,9 +100,14 @@ impl ReleaseReproducibilityReport {
         Self {
             schema: RELEASE_REPRODUCIBILITY_REPORT_SCHEMA.to_string(),
             release_id: init.release_id,
+            proof_class: init.proof_class,
+            comparison_verdict: init.comparison_verdict,
             source_archive_digest_blake3: init.source_archive_digest_blake3,
             proof_bundle_digest_blake3: init.proof_bundle_digest_blake3,
             rebuild_workflow: init.rebuild_workflow,
+            environment_assumptions: init.environment_assumptions,
+            clean_rebuild_store_identities: init.clean_rebuild_store_identities,
+            evidence_artifact_digests_blake3: init.evidence_artifact_digests_blake3,
             artifacts: init.artifacts,
         }
     }
@@ -85,8 +118,13 @@ pub fn canonical_release_reproducibility_report(
 ) -> Result<ReleaseReproducibilityReport, ReleaseEvidenceError> {
     validate_report_header(&report)?;
     report.schema = RELEASE_REPRODUCIBILITY_REPORT_SCHEMA.to_string();
+    report.environment_assumptions.sort();
+    report.clean_rebuild_store_identities.sort();
+    report.evidence_artifact_digests_blake3.sort();
     report.artifacts.sort_by(|left, right| left.name.cmp(&right.name));
+    validate_report_evidence(&report)?;
     validate_report_artifacts(&report.artifacts)?;
+    validate_report_verdict(&report)?;
     Ok(report)
 }
 
@@ -193,6 +231,113 @@ fn validate_report_header(report: &ReleaseReproducibilityReport) -> Result<(), R
         ));
     }
     Ok(())
+}
+
+fn validate_report_evidence(report: &ReleaseReproducibilityReport) -> Result<(), ReleaseEvidenceError> {
+    validate_non_empty_string_set(&report.environment_assumptions, "environment_assumptions")?;
+    validate_non_empty_string_set(&report.clean_rebuild_store_identities, "clean_rebuild_store_identities")?;
+    validate_digest_set(&report.evidence_artifact_digests_blake3, "evidence_artifact_digests_blake3")?;
+    if is_rebuild_claim(report.proof_class) {
+        if report.clean_rebuild_store_identities.is_empty() {
+            return Err(validation_error(
+                "release reproducibility report rebuild proof classes require clean_rebuild_store_identities"
+                    .to_string(),
+            ));
+        }
+        if report.evidence_artifact_digests_blake3.is_empty() {
+            return Err(validation_error(
+                "release reproducibility report rebuild proof classes require evidence_artifact_digests_blake3"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_non_empty_string_set(values: &[String], field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    let mut seen = BTreeSet::new();
+    for value in values {
+        if value.trim().is_empty() {
+            return Err(validation_error(format!(
+                "release reproducibility report {field_name} entries must not be empty"
+            )));
+        }
+        if !seen.insert(value) {
+            return Err(validation_error(format!(
+                "release reproducibility report {field_name} contains duplicate {value}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_digest_set(values: &[String], field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    let mut seen = BTreeSet::new();
+    for value in values {
+        validate_blake3_hex(value, field_name)?;
+        if !seen.insert(value) {
+            return Err(validation_error(format!(
+                "release reproducibility report {field_name} contains duplicate {value}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_report_verdict(report: &ReleaseReproducibilityReport) -> Result<(), ReleaseEvidenceError> {
+    let all_artifacts_matched =
+        report.artifacts.iter().all(|artifact| artifact.result == ReproducibilityComparisonResult::Matched);
+    let any_artifact_failed = report.artifacts.iter().any(|artifact| {
+        matches!(
+            artifact.result,
+            ReproducibilityComparisonResult::Mismatched | ReproducibilityComparisonResult::MissingRebuiltArtifact
+        )
+    });
+    match report.comparison_verdict {
+        ReproducibilityComparisonVerdict::Matched => {
+            if !all_artifacts_matched {
+                return Err(validation_error(
+                    "release reproducibility report matched verdict requires all artifacts to match".to_string(),
+                ));
+            }
+        }
+        ReproducibilityComparisonVerdict::Failed => {
+            if !any_artifact_failed {
+                return Err(validation_error(
+                    "release reproducibility report failed verdict requires a mismatched or missing artifact"
+                        .to_string(),
+                ));
+            }
+            if is_rebuild_claim(report.proof_class) {
+                return Err(validation_error(
+                    "release reproducibility report failed verdict cannot claim a rebuild-match proof class"
+                        .to_string(),
+                ));
+            }
+        }
+        ReproducibilityComparisonVerdict::NotEvaluated => {
+            if is_rebuild_claim(report.proof_class) {
+                return Err(validation_error(
+                    "release reproducibility report rebuild proof classes require a matched verdict".to_string(),
+                ));
+            }
+        }
+    }
+    if is_rebuild_claim(report.proof_class) && report.comparison_verdict != ReproducibilityComparisonVerdict::Matched {
+        return Err(validation_error(
+            "release reproducibility report rebuild proof classes require comparison_verdict=matched".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_rebuild_claim(proof_class: ReproducibilityProofClass) -> bool {
+    matches!(
+        proof_class,
+        ReproducibilityProofClass::SelfRebuildMatch
+            | ReproducibilityProofClass::ExternalWitnessMatch
+            | ReproducibilityProofClass::PolicySatisfied
+    )
 }
 
 fn validate_report_artifacts(artifacts: &[ReproducibilityArtifactComparison]) -> Result<(), ReleaseEvidenceError> {
@@ -380,9 +525,14 @@ mod tests {
     fn sample_report() -> ReleaseReproducibilityReport {
         ReleaseReproducibilityReport::new(ReleaseReproducibilityReportInit {
             release_id: "crunch-0.1.0-rc1".to_string(),
+            proof_class: ReproducibilityProofClass::SelfRebuildMatch,
+            comparison_verdict: ReproducibilityComparisonVerdict::Matched,
             source_archive_digest_blake3: sample_digest(1),
             proof_bundle_digest_blake3: sample_digest(2),
             rebuild_workflow: sample_workflow(),
+            environment_assumptions: vec!["arch=x86_64".to_string(), "os=linux".to_string()],
+            clean_rebuild_store_identities: vec!["/tmp/clean-rebuild-store".to_string()],
+            evidence_artifact_digests_blake3: vec![sample_digest(1), sample_digest(2)],
             artifacts: vec![
                 matched_artifact("crunch-aarch64-linux", 3),
                 matched_artifact("crunch-x86_64-linux", 4),
@@ -448,6 +598,8 @@ mod tests {
         let mut report = sample_report();
         report.artifacts[0].result = ReproducibilityComparisonResult::Mismatched;
         report.artifacts[0].observed_digest_blake3 = Some(sample_digest(5));
+        report.proof_class = ReproducibilityProofClass::SelfProofValid;
+        report.comparison_verdict = ReproducibilityComparisonVerdict::Failed;
 
         let canonical = canonical_release_reproducibility_report(report).unwrap();
 
@@ -460,6 +612,8 @@ mod tests {
         report.artifacts[0].result = ReproducibilityComparisonResult::MissingRebuiltArtifact;
         report.artifacts[0].observed_size_bytes = None;
         report.artifacts[0].observed_digest_blake3 = None;
+        report.proof_class = ReproducibilityProofClass::SelfProofValid;
+        report.comparison_verdict = ReproducibilityComparisonVerdict::Failed;
 
         let canonical = canonical_release_reproducibility_report(report).unwrap();
 
@@ -505,5 +659,27 @@ mod tests {
         let canonical = validate_release_reproducibility_report_linkage(report, expected).unwrap();
 
         assert_eq!(canonical.release_id, "crunch-0.1.0-rc1");
+    }
+
+    #[test]
+    fn reproducibility_report_rejects_failed_verdict_with_rebuild_claim() {
+        let mut report = sample_report();
+        report.artifacts[0].result = ReproducibilityComparisonResult::Mismatched;
+        report.artifacts[0].observed_digest_blake3 = Some(sample_digest(5));
+        report.comparison_verdict = ReproducibilityComparisonVerdict::Failed;
+
+        let err = canonical_release_reproducibility_report(report).unwrap_err();
+
+        assert!(err.to_string().contains("failed verdict cannot claim"));
+    }
+
+    #[test]
+    fn reproducibility_report_rejects_rebuild_class_without_clean_store_identity() {
+        let mut report = sample_report();
+        report.clean_rebuild_store_identities.clear();
+
+        let err = canonical_release_reproducibility_report(report).unwrap_err();
+
+        assert!(err.to_string().contains("require clean_rebuild_store_identities"));
     }
 }

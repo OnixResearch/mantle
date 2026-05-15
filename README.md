@@ -932,6 +932,34 @@ default. The top-level `manifest.json` records BLAKE3 digests for the source
 archive, bundled binary or binaries, proof-bundle directory, prerequisite
 inventory, and the proof-linkage facts copied from the full self-hosting proof.
 
+To produce the canonical byte-for-byte reproducibility report, run an explicitly
+supported rebuild recipe into a clean output directory. The current supported
+recipe identity is `mantle-release-reproducibility-v1`; unknown
+`--workflow-version` values fail closed before execution.
+
+```bash
+mantle release reproduce target/release-evidence/<release-id> \
+  --rebuild-output-dir /tmp/mantle-rebuild-out \
+  --rebuild-command ./scripts/rebuild-release-artifacts.sh
+```
+
+The report records a closed proof-class ladder:
+
+- `bundle-consistent`: bundle-local digest/linkage checks only.
+- `self-proof-valid`: the self-proof and report are valid, but the rebuild did
+  not match or did not supply enough material for a rebuild-match claim.
+- `self-rebuild-match`: a clean local rebuild produced the same named artifact
+  set, sizes, and BLAKE3 digests.
+- `external-witness-match`: an accepted external witness rebuild matched the
+  published BLAKE3 artifact set.
+- `policy-satisfied`: the configured witness/quorum policy was satisfied.
+
+Rebuild-match classes require `comparison_verdict=matched`, matching per-artifact
+BLAKE3 comparisons, clean rebuild store/output identities, replayable workflow
+identity, environment assumptions, and BLAKE3 digests for the evidence artifacts
+used to make the claim. A failed or missing comparison is represented as a failed
+report with a weaker class; it is never promoted to a rebuild-match class.
+
 Later verification is bundle-local:
 
 ```bash

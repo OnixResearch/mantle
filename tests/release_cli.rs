@@ -828,6 +828,11 @@ fn release_reproduce_writes_matched_report_from_isolated_rebuild_output() {
     assert_eq!(stdout["missing_count"], 0);
     assert_eq!(report["schema"], "crunch-release-reproducibility-report-v1");
     assert_eq!(report["release_id"], manifest.release_id);
+    assert_eq!(report["proof_class"], "self-rebuild-match");
+    assert_eq!(report["comparison_verdict"], "matched");
+    assert_eq!(report["clean_rebuild_store_identities"][0], rebuild_output_dir.display().to_string());
+    assert!(report["environment_assumptions"].as_array().unwrap().len() >= 2);
+    assert_eq!(report["evidence_artifact_digests_blake3"].as_array().unwrap().len(), 2);
     assert_eq!(report["artifacts"][0]["name"], manifest.binaries[0].relative_path);
     assert_eq!(report["artifacts"][0]["result"], "matched");
     assert!(rebuild_output_dir.join(&manifest.binaries[0].relative_path).is_file());
@@ -858,7 +863,33 @@ fn release_reproduce_fails_when_rebuilt_artifact_is_missing() {
         .stderr(predicate::str::contains("missing rebuilt artifact"));
 
     let report = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&report_path).unwrap()).unwrap();
+    assert_eq!(report["proof_class"], "self-proof-valid");
+    assert_eq!(report["comparison_verdict"], "failed");
     assert_eq!(report["artifacts"][0]["result"], "missing-rebuilt-artifact");
+}
+
+#[cfg(unix)]
+#[test]
+fn release_reproduce_rejects_unknown_workflow_version() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("fake-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("unknown-workflow-output");
+    write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--workflow-version")
+        .arg("unreviewed-recipe-v99")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unsupported release reproducibility workflow version"));
 }
 
 #[cfg(unix)]

@@ -28,6 +28,8 @@ pub use reproducibility::ReleaseReproducibilityReportInit;
 pub use reproducibility::ReleaseReproducibilityReportLinkage;
 pub use reproducibility::ReproducibilityArtifactComparison;
 pub use reproducibility::ReproducibilityComparisonResult;
+pub use reproducibility::ReproducibilityComparisonVerdict;
+pub use reproducibility::ReproducibilityProofClass;
 pub use reproducibility::canonical_release_reproducibility_report;
 pub use reproducibility::release_reproducibility_report_canonical_bytes;
 pub use reproducibility::release_reproducibility_report_digest_blake3;

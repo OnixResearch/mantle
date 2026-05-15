@@ -15,6 +15,8 @@ use crunch_release_core::ReleaseReproducibilityReportInit;
 use crunch_release_core::ReleaseReproducibilityReportLinkage;
 use crunch_release_core::ReproducibilityArtifactComparison;
 use crunch_release_core::ReproducibilityComparisonResult;
+use crunch_release_core::ReproducibilityComparisonVerdict;
+use crunch_release_core::ReproducibilityProofClass;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use crunch_release_core::release_reproducibility_report_digest_blake3;
 use crunch_release_core::validate_release_reproducibility_report_artifact_names;
@@ -184,6 +186,12 @@ fn validate_request(request: &ReleaseReproduceRequest) -> Result<(), RunError> {
     if request.workflow_version.trim().is_empty() {
         return Err(RunError::Internal("release reproducibility workflow version must not be empty".to_string()));
     }
+    if request.workflow_version != DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION {
+        return Err(RunError::Internal(format!(
+            "unsupported release reproducibility workflow version '{}': expected '{}'",
+            request.workflow_version, DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION
+        )));
+    }
     Ok(())
 }
 
@@ -238,16 +246,42 @@ fn build_reproducibility_report(
     request: &ReleaseReproduceRequest,
 ) -> Result<ReleaseReproducibilityReport, RunError> {
     let comparisons = compare_manifest_artifacts(&manifest.binaries, &request.rebuild_output_dir)?;
+    let counts = count_report_results(&comparisons);
+    let matched = counts.mismatched_count == 0 && counts.missing_count == 0;
     Ok(ReleaseReproducibilityReport::new(ReleaseReproducibilityReportInit {
         release_id: manifest.release_id.clone(),
+        proof_class: if matched {
+            ReproducibilityProofClass::SelfRebuildMatch
+        } else {
+            ReproducibilityProofClass::SelfProofValid
+        },
+        comparison_verdict: if matched {
+            ReproducibilityComparisonVerdict::Matched
+        } else {
+            ReproducibilityComparisonVerdict::Failed
+        },
         source_archive_digest_blake3: manifest.source_archive.digest_blake3.clone(),
         proof_bundle_digest_blake3: manifest.proof_bundle.digest_blake3.clone(),
         rebuild_workflow: RebuildWorkflowIdentity {
             command: workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?,
             version: request.workflow_version.clone(),
         },
+        environment_assumptions: reproducibility_environment_assumptions(),
+        clean_rebuild_store_identities: vec![request.rebuild_output_dir.display().to_string()],
+        evidence_artifact_digests_blake3: vec![
+            manifest.source_archive.digest_blake3.clone(),
+            manifest.proof_bundle.digest_blake3.clone(),
+        ],
         artifacts: comparisons,
     }))
+}
+
+fn reproducibility_environment_assumptions() -> Vec<String> {
+    vec![
+        format!("os={}", std::env::consts::OS),
+        format!("arch={}", std::env::consts::ARCH),
+        "rebuild-output-dir-prevalidated-empty".to_string(),
+    ]
 }
 
 fn compare_manifest_artifacts(
