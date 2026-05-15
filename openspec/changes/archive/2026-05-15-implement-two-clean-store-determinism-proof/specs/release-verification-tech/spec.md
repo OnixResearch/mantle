@@ -1,6 +1,6 @@
 ## MODIFIED Requirements
 
-### Requirement: Release verification consumes two-clean-store proof receipts without overclaiming
+### Requirement: Release verification consumes deterministic proof receipts without overclaiming
 
 Release verification MUST treat deterministic proof receipts as bounded local rebuild evidence only. A receipt may support proof class `self-rebuild-match` only when it validates as `mantle-deterministic-proof-receipt-v1`, records the selected proof unit and exact inputs, records at least rebuild A and rebuild B from distinct clean proof stores, records supported sandbox profile evidence for every run, and the canonical BLAKE3 artifact digest sets for rebuild A and rebuild B match.
 

@@ -559,124 +559,70 @@ practical, or strict evidence.
 
 ### Requirement: Release verification consumes deterministic proof receipts without overclaiming
 
-Release verification MUST promote a release artifact beyond `self-rebuild-match`
-to a stronger deterministic-release claim only when it is backed by
-deterministic build proof receipts whose verdicts are `deterministic-match` for
-every required artifact output in the release digest set and whose deterministic
-proof runs were executed through a supported sandbox envelope.
+Release verification MUST treat deterministic proof receipts as bounded local rebuild evidence only. A receipt may support proof class `self-rebuild-match` only when it validates as `mantle-deterministic-proof-receipt-v1`, records the selected proof unit and exact inputs, records at least rebuild A and rebuild B from distinct clean proof stores, records supported sandbox profile evidence for every run, and the canonical BLAKE3 artifact digest sets for rebuild A and rebuild B match.
 
-The deterministic proof receipt MUST record a canonical sandbox profile identity
-for every proof run. The profile identity MUST cover the sandbox executor kind
-and version, network policy, read-only and writable bind set, environment
-allowlist, working-directory policy, rebuild recipe identity, logical store
-prefix, and physical proof-store/output locations.
+A deterministic proof receipt MUST record:
 
-Deterministic-release eligibility MUST also require maintained
-isolation-regression evidence for the supported sandbox profile family. This
-evidence MUST be represented as a canonical typed artifact with schema
-`mantle-deterministic-sandbox-isolation-evidence-v1`, profile-family binding
-`mantle-proof-sandbox-v1`, passing status, explicit checks proving the profile
-family denies undeclared host access, denies host networking by default, and
-prevents main-output/proof-store reuse, and a BLAKE3 digest over canonical
-profile/evidence material that is not self-referential. A supported-looking
-sandbox profile identity MUST NOT be treated as sufficient if the isolation
-evidence is missing, malformed, failing, bypassed, or bound to a different
-profile family.
+- workflow identity and workflow version;
+- selected proof-unit target and output selection;
+- selected provider kind;
+- source tree BLAKE3 and vendor/input bundle BLAKE3;
+- toolchain/stage roots and logical store prefix;
+- sandbox profile identity with supported prefix `mantle-proof-sandbox-v1:`;
+- rebuild A and rebuild B artifact digest sets using BLAKE3;
+- per-run clean-store/output-root identities and anti-reuse evidence;
+- closed verdict and receipt BLAKE3.
 
-A deterministic-release claim MUST remain scoped to the named release artifacts,
-workflow identity, derivation identities, toolchain/provider identities, sandbox
-profile identity, and recorded proof matrix. It MUST NOT claim global Mantle
-determinism, all-package reproducibility, or full-source bootstrap determinism
-unless separate evidence proves those broader claims.
+Release verification MUST fail closed and MUST NOT report `self-rebuild-match` when the receipt has an unsupported workflow version, missing required input digest, non-BLAKE3 final proof identity, mismatched provider kind, missing/unsupported/direct-host sandbox evidence, reused proof store/output root, impure/practical-mode audit evidence, malformed receipt fields, or differing rebuild A/B artifact digest sets.
 
-#### Scenario: Release has sandboxed deterministic proof for every artifact
+The human-facing claim MUST remain bounded to the selected artifact and recorded assumptions, using language equivalent to: “this artifact rebuilt twice from these recorded inputs under this sandbox and matched.” It MUST NOT claim full-source bootstrap reproducibility, cross-platform determinism, global Mantle determinism, or policy/social witness sufficiency unless separate evidence proves those broader claims.
 
-- GIVEN a release evidence bundle with required artifact digests
-- AND each required artifact has a deterministic-build proof receipt with verdict
-  `deterministic-match`
-- AND every receipt records a supported sandbox profile identity
-- AND maintained isolation-regression evidence passes for the supported profile
-  family
-- AND the receipt BLAKE3 digest set equals the release artifact digest set
-- WHEN release verification evaluates deterministic claim eligibility
-- THEN it may report a deterministic-release claim scoped to those artifacts and
-  the recorded sandbox profile
+#### Scenario: Two clean sandboxed rebuilds match
 
-#### Scenario: Deterministic proof receipt lacks supported sandbox evidence
+- GIVEN a deterministic proof receipt for one selected release artifact
+- AND the receipt records workflow/version, selected provider kind, source/vendor BLAKE3, toolchain/stage roots, and sandbox profile identity `mantle-proof-sandbox-v1:*`
+- AND rebuild A and rebuild B used distinct fresh proof stores/output roots
+- AND both rebuild artifact digest sets use canonical BLAKE3 identities
+- WHEN release verification validates the receipt
+- AND rebuild A and rebuild B artifact digest sets match
+- THEN verification may report proof class `self-rebuild-match`
+- AND the report scopes the claim to the selected artifact and recorded sandbox/input identities
 
-- GIVEN a deterministic-build proof receipt whose output digests match the
-  release artifacts
-- BUT the receipt lacks a sandbox profile identity or records an unsupported,
-  bypassed, or direct-host executor profile
-- WHEN release verification evaluates deterministic claim eligibility
-- THEN the release remains at the strongest lower satisfied proof class
-- AND the report identifies unsupported deterministic proof sandbox evidence as
-  the blocker
+#### Scenario: Reused proof store blocks self-rebuild match
 
-#### Scenario: Supported profile requires isolation-negative evidence
+- GIVEN a deterministic proof receipt whose rebuild A/B artifact digest sets match
+- BUT two proof runs share a proof store/output root or one run used the main reproduce output or default store for the proof-unit output
+- WHEN release verification evaluates the receipt
+- THEN it rejects `self-rebuild-match`
+- AND the report identifies reused proof-run storage as the blocker
 
-- GIVEN a deterministic-build proof receipt records a supported
-  `mantle-proof-sandbox-v1:` profile identity
-- AND Mantle's maintained typed isolation-regression evidence shows that profile
-  family denies undeclared host access, host networking by default, and
-  main-output/proof-store reuse
-- WHEN release verification evaluates deterministic claim eligibility
-- THEN the supported profile identity may contribute to deterministic-release
-  eligibility
+#### Scenario: Missing sandbox evidence blocks self-rebuild match
 
-#### Scenario: Deterministic reproduce emits isolation evidence
+- GIVEN a deterministic proof receipt whose rebuild A/B artifact digest sets match
+- BUT a proof run lacks sandbox profile evidence or records direct-host/unsupported evidence
+- WHEN release verification evaluates the receipt
+- THEN it rejects `self-rebuild-match`
+- AND the report identifies unsupported deterministic proof sandbox evidence as the blocker
 
-- GIVEN a release evidence bundle and a reproducible rebuild command
-- WHEN `mantle release reproduce` runs with at least two deterministic proof runs
-  under the supported proof sandbox profile
-- THEN it writes `deterministic-sandbox-isolation-evidence.json` beside
-  `deterministic-build-proof.json`
-- AND the CLI reports the evidence path and BLAKE3 digest
-- AND the evidence validates under the release verifier contract
+#### Scenario: Provider kind mismatch blocks self-rebuild match
 
-#### Scenario: Evidence binds the proof sandbox family
+- GIVEN a deterministic proof receipt with selected provider kind `source-root`
+- BUT proof linkage, prerequisites, or rebuild-run evidence records a different provider kind
+- WHEN release verification validates the receipt
+- THEN validation fails closed
+- AND the report identifies provider kind mismatch as the blocker
 
-- GIVEN deterministic proof receipts with sandbox profile identities in the
-  `mantle-proof-sandbox-v1` family
-- WHEN the release workflow generates sandbox isolation evidence
-- THEN the evidence profile family is `mantle-proof-sandbox-v1`
-- AND its digest material includes the concrete generated profile identities
+#### Scenario: Unsupported workflow version blocks self-rebuild match
 
-#### Scenario: Missing isolation evidence blocks deterministic promotion
+- GIVEN a deterministic proof receipt with an unknown workflow version
+- WHEN release verification validates the receipt
+- THEN validation fails closed
+- AND the receipt cannot contribute to `self-rebuild-match`
 
-- GIVEN deterministic proof output digests match the release artifacts
-- BUT no deterministic sandbox isolation evidence receipt is available for the
-  supported profile family
-- WHEN release verification evaluates deterministic claim eligibility
-- THEN the release remains at the strongest lower satisfied proof class
-- AND the report identifies missing deterministic proof sandbox isolation
-  evidence as the blocker
+#### Scenario: Digest mismatch blocks self-rebuild match
 
-#### Scenario: Isolation evidence profile mismatch blocks deterministic promotion
-
-- GIVEN deterministic proof output digests match the release artifacts
-- AND the deterministic sandbox isolation evidence receipt is passing
-- BUT the evidence is bound to a profile family that does not match the proof
-  receipt's supported sandbox profile family
-- WHEN release verification evaluates deterministic claim eligibility
-- THEN the release remains at the strongest lower satisfied proof class
-- AND the report identifies unsupported deterministic proof sandbox isolation
-  evidence as the blocker
-
-#### Scenario: Isolation regression failure blocks deterministic promotion
-
-- GIVEN deterministic proof output digests match the release artifacts
-- BUT the sandbox isolation regression for that profile family fails or is
-  bypassed
-- WHEN release verification evaluates deterministic claim eligibility
-- THEN the release remains at the strongest lower satisfied proof class
-- AND the report identifies unsupported deterministic proof sandbox isolation
-  evidence as the blocker
-
-#### Scenario: Deterministic release claim remains bounded
-
-- GIVEN a release artifact has a valid deterministic-build proof receipt
-- WHEN Mantle renders human-readable release verification output
-- THEN it states the claim scope as release-artifact determinism under the
-  recorded workflow, sandbox profile, and proof matrix
-- AND it does not call the whole build system Nix-like deterministic by default
+- GIVEN rebuild A and rebuild B completed under supported sandbox evidence
+- BUT a selected artifact output has different BLAKE3 digests between the runs
+- WHEN release verification finalizes the receipt
+- THEN the verdict is a non-promoting mismatch
+- AND Mantle MUST NOT claim `self-rebuild-match`
