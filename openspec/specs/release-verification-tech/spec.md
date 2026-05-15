@@ -573,12 +573,15 @@ prefix, and physical proof-store/output locations.
 
 Deterministic-release eligibility MUST also require maintained
 isolation-regression evidence for the supported sandbox profile family. This
-evidence MUST be represented as a typed receipt with schema/version identity,
-profile-family binding, passing status, and explicit checks proving the profile
+evidence MUST be represented as a canonical typed artifact with schema
+`mantle-deterministic-sandbox-isolation-evidence-v1`, profile-family binding
+`mantle-proof-sandbox-v1`, passing status, explicit checks proving the profile
 family denies undeclared host access, denies host networking by default, and
-prevents main-output/proof-store reuse. A supported-looking sandbox profile
-identity MUST NOT be treated as sufficient if the isolation evidence is missing,
-malformed, failing, bypassed, or bound to a different profile family.
+prevents main-output/proof-store reuse, and a BLAKE3 digest over canonical
+profile/evidence material that is not self-referential. A supported-looking
+sandbox profile identity MUST NOT be treated as sufficient if the isolation
+evidence is missing, malformed, failing, bypassed, or bound to a different
+profile family.
 
 A deterministic-release claim MUST remain scoped to the named release artifacts,
 workflow identity, derivation identities, toolchain/provider identities, sandbox
@@ -620,6 +623,24 @@ unless separate evidence proves those broader claims.
 - WHEN release verification evaluates deterministic claim eligibility
 - THEN the supported profile identity may contribute to deterministic-release
   eligibility
+
+#### Scenario: Deterministic reproduce emits isolation evidence
+
+- GIVEN a release evidence bundle and a reproducible rebuild command
+- WHEN `mantle release reproduce` runs with at least two deterministic proof runs
+  under the supported proof sandbox profile
+- THEN it writes `deterministic-sandbox-isolation-evidence.json` beside
+  `deterministic-build-proof.json`
+- AND the CLI reports the evidence path and BLAKE3 digest
+- AND the evidence validates under the release verifier contract
+
+#### Scenario: Evidence binds the proof sandbox family
+
+- GIVEN deterministic proof receipts with sandbox profile identities in the
+  `mantle-proof-sandbox-v1` family
+- WHEN the release workflow generates sandbox isolation evidence
+- THEN the evidence profile family is `mantle-proof-sandbox-v1`
+- AND its digest material includes the concrete generated profile identities
 
 #### Scenario: Missing isolation evidence blocks deterministic promotion
 

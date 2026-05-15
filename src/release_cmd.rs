@@ -363,6 +363,8 @@ fn cmd_release_reproduce(
             "missing_count": summary.missing_count,
             "deterministic_proof_path": summary.deterministic_proof_path.as_ref().map(|path| path.display().to_string()),
             "deterministic_proof_digest_blake3": summary.deterministic_proof_digest_blake3,
+            "deterministic_sandbox_isolation_evidence_path": summary.deterministic_sandbox_isolation_evidence_path.as_ref().map(|path| path.display().to_string()),
+            "deterministic_sandbox_isolation_evidence_digest_blake3": summary.deterministic_sandbox_isolation_evidence_digest_blake3,
         });
         println!(
             "{}",
@@ -383,6 +385,12 @@ fn cmd_release_reproduce(
     }
     if let Some(digest) = &summary.deterministic_proof_digest_blake3 {
         println!("deterministic proof digest: {digest}");
+    }
+    if let Some(path) = &summary.deterministic_sandbox_isolation_evidence_path {
+        println!("deterministic sandbox isolation evidence: {}", path.display());
+    }
+    if let Some(digest) = &summary.deterministic_sandbox_isolation_evidence_digest_blake3 {
+        println!("deterministic sandbox isolation evidence digest: {digest}");
     }
     Ok(())
 }

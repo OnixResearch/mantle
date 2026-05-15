@@ -16,8 +16,8 @@ use crate::manifest::validation_error;
 pub const DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA: &str = "mantle-deterministic-build-proof-v1";
 pub const DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA: &str = "mantle-deterministic-sandbox-isolation-evidence-v1";
 const REQUIRED_RUN_COUNT: usize = 2;
-const SUPPORTED_SANDBOX_PROFILE_FAMILY: &str = "mantle-proof-sandbox-v1";
-const REQUIRED_ISOLATION_CHECKS: &[&str] = &[
+pub const SUPPORTED_SANDBOX_PROFILE_FAMILY: &str = "mantle-proof-sandbox-v1";
+pub const REQUIRED_ISOLATION_CHECKS: &[&str] = &[
     "denies-undeclared-host-access",
     "denies-host-network-by-default",
     "denies-main-output-and-proof-store-reuse",
@@ -226,6 +226,23 @@ pub fn validate_deterministic_sandbox_isolation_evidence(
     Ok(())
 }
 
+pub fn deterministic_sandbox_isolation_evidence_canonical_bytes(
+    mut evidence: DeterministicSandboxIsolationEvidence,
+) -> Result<Vec<u8>, ReleaseEvidenceError> {
+    evidence.checks.sort();
+    validate_deterministic_sandbox_isolation_evidence(&evidence)?;
+    serde_json::to_vec(&evidence).map_err(|err| {
+        ReleaseEvidenceError::Parse(format!("serializing deterministic sandbox isolation evidence: {err}"))
+    })
+}
+
+pub fn deterministic_sandbox_isolation_evidence_digest_blake3(
+    evidence: DeterministicSandboxIsolationEvidence,
+) -> Result<String, ReleaseEvidenceError> {
+    let bytes = deterministic_sandbox_isolation_evidence_canonical_bytes(evidence)?;
+    Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
 pub fn deterministic_release_claim_eligible(
     release_digest_set: &[String],
     receipts: &[DeterministicBuildProofReceipt],
@@ -240,6 +257,21 @@ pub fn deterministic_release_claim_eligible(
     let mut receipt_digests = Vec::new();
     for receipt in receipts {
         let receipt = canonical_deterministic_build_proof_receipt(receipt.clone())?;
+        for profile in &receipt.sandbox_profile_identities {
+            if !profile.starts_with(SUPPORTED_SANDBOX_PROFILE_PREFIX) {
+                return Err(validation_error(format!(
+                    "deterministic build proof receipt sandbox profile {profile} must use supported family {SUPPORTED_SANDBOX_PROFILE_FAMILY}"
+                )));
+            }
+        }
+        for run in &receipt.runs {
+            if !run.sandbox_profile_identity.starts_with(SUPPORTED_SANDBOX_PROFILE_PREFIX) {
+                return Err(validation_error(format!(
+                    "deterministic build proof run {} sandbox profile {} must use supported family {SUPPORTED_SANDBOX_PROFILE_FAMILY}",
+                    run.run_id, run.sandbox_profile_identity
+                )));
+            }
+        }
         if receipt.verdict != DeterministicBuildProofVerdict::DeterministicMatch {
             return Ok(false);
         }
@@ -588,6 +620,21 @@ mod tests {
         let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
         assert_eq!(verdict, DeterministicBuildProofVerdict::MissingEvidence);
         assert!(reasons.iter().any(|reason| reason.contains("unsupported deterministic proof sandbox profile")));
+    }
+
+    #[test]
+    fn deterministic_sandbox_isolation_evidence_canonical_bytes_sort_checks() {
+        let mut first = isolation_evidence();
+        first.checks.reverse();
+        let second = isolation_evidence();
+        assert_eq!(
+            deterministic_sandbox_isolation_evidence_canonical_bytes(first).unwrap(),
+            deterministic_sandbox_isolation_evidence_canonical_bytes(second).unwrap()
+        );
+        assert_eq!(
+            deterministic_sandbox_isolation_evidence_digest_blake3(isolation_evidence()).unwrap().len(),
+            BLAKE3_HEX_LENGTH_CHARS
+        );
     }
 
     #[test]

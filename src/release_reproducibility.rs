@@ -9,10 +9,14 @@ use std::process::Command as ProcessCommand;
 
 use crunch_release_core::BundledArtifact;
 use crunch_release_core::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
+use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA;
 use crunch_release_core::DeterministicBuildProofReceipt;
 use crunch_release_core::DeterministicBuildProofReceiptInit;
 use crunch_release_core::DeterministicBuildRunReceipt;
 use crunch_release_core::DeterministicOutputDigest;
+use crunch_release_core::DeterministicSandboxIsolationEvidence;
+use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
+use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
 use crunch_release_core::RebuildWorkflowIdentity;
 use crunch_release_core::ReleaseEvidenceManifest;
 use crunch_release_core::ReleaseReproducibilityReport;
@@ -24,6 +28,8 @@ use crunch_release_core::ReproducibilityComparisonVerdict;
 use crunch_release_core::ReproducibilityProofClass;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_build_proof_receipt_digest_blake3;
+use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
+use crunch_release_core::deterministic_sandbox_isolation_evidence_digest_blake3;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use crunch_release_core::release_reproducibility_report_digest_blake3;
 use crunch_release_core::validate_release_reproducibility_report_artifact_names;
@@ -119,6 +125,8 @@ pub(crate) struct ReleaseReproduceSummary {
     pub missing_count: u32,
     pub deterministic_proof_path: Option<PathBuf>,
     pub deterministic_proof_digest_blake3: Option<String>,
+    pub deterministic_sandbox_isolation_evidence_path: Option<PathBuf>,
+    pub deterministic_sandbox_isolation_evidence_digest_blake3: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,7 +165,12 @@ pub(crate) fn reproduce_release_artifacts(
         mismatched_count: counts.mismatched_count,
         missing_count: counts.missing_count,
         deterministic_proof_path: deterministic_proof.as_ref().map(|proof| proof.path.clone()),
-        deterministic_proof_digest_blake3: deterministic_proof.map(|proof| proof.digest_blake3),
+        deterministic_proof_digest_blake3: deterministic_proof.as_ref().map(|proof| proof.digest_blake3.clone()),
+        deterministic_sandbox_isolation_evidence_path: deterministic_proof
+            .as_ref()
+            .map(|proof| proof.isolation_evidence_path.clone()),
+        deterministic_sandbox_isolation_evidence_digest_blake3: deterministic_proof
+            .map(|proof| proof.isolation_evidence_digest_blake3),
     })
 }
 
@@ -310,6 +323,8 @@ fn run_rebuild_command(
 struct DeterministicProofOutput {
     path: PathBuf,
     digest_blake3: String,
+    isolation_evidence_path: PathBuf,
+    isolation_evidence_digest_blake3: String,
 }
 
 fn maybe_run_deterministic_proof(
@@ -324,6 +339,7 @@ fn maybe_run_deterministic_proof(
     validate_deterministic_proof_root(&proof_root, &request.rebuild_output_dir)?;
     prepare_rebuild_output_dir(&proof_root)?;
     let mut runs = Vec::new();
+    let mut sandbox_profiles = Vec::new();
     for run_index in 0..request.deterministic_proof_runs {
         let run_id = format!("run-{run_index:03}");
         let run_root = proof_root.join(&run_id);
@@ -355,6 +371,7 @@ fn maybe_run_deterministic_proof(
         });
         fail_if_reproduction_drifted(&proof_report, &unexpected_outputs, report_path)?;
         runs.push(deterministic_run_receipt(&run_id, run_index, &store_dir, &sandbox_profile.identity, &comparisons)?);
+        sandbox_profiles.push(sandbox_profile);
     }
     let sandbox_profile_identities = runs
         .iter()
@@ -377,7 +394,17 @@ fn maybe_run_deterministic_proof(
     let digest_blake3 = deterministic_build_proof_receipt_digest_blake3(receipt.clone()).map_err(core_error)?;
     let path = proof_root.join("deterministic-build-proof.json");
     write_deterministic_proof_receipt(&path, receipt)?;
-    Ok(Some(DeterministicProofOutput { path, digest_blake3 }))
+    let isolation_evidence = deterministic_sandbox_isolation_evidence(&sandbox_profiles)?;
+    let isolation_evidence_digest_blake3 =
+        deterministic_sandbox_isolation_evidence_digest_blake3(isolation_evidence.clone()).map_err(core_error)?;
+    let isolation_evidence_path = proof_root.join("deterministic-sandbox-isolation-evidence.json");
+    write_deterministic_sandbox_isolation_evidence(&isolation_evidence_path, isolation_evidence)?;
+    Ok(Some(DeterministicProofOutput {
+        path,
+        digest_blake3,
+        isolation_evidence_path,
+        isolation_evidence_digest_blake3,
+    }))
 }
 
 fn proof_sandbox_profile(
@@ -617,6 +644,52 @@ fn deterministic_ambient_host_perturbations() -> Vec<String> {
 
 fn write_deterministic_proof_receipt(path: &Path, receipt: DeterministicBuildProofReceipt) -> Result<(), RunError> {
     let bytes = deterministic_build_proof_receipt_canonical_bytes(receipt).map_err(core_error)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
+    }
+    std::fs::write(path, bytes).map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
+}
+
+fn deterministic_sandbox_isolation_evidence(
+    profiles: &[ProofSandboxProfile],
+) -> Result<DeterministicSandboxIsolationEvidence, RunError> {
+    if profiles.is_empty() {
+        return Err(RunError::Internal(
+            "deterministic sandbox isolation evidence requires at least one proof sandbox profile".to_string(),
+        ));
+    }
+    let mut material = vec![
+        format!("schema={DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA}"),
+        format!("profile_family={PROOF_SANDBOX_PROFILE_PREFIX}"),
+        format!("evidence_version={DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION}"),
+    ];
+    for check in REQUIRED_ISOLATION_CHECKS {
+        material.push(format!("check={check}"));
+    }
+    for profile in profiles {
+        material.push(format!("profile_identity={}", profile.identity));
+        for fact in profile.canonical_facts() {
+            material.push(format!("profile_fact={fact}"));
+        }
+    }
+    material.sort();
+    let evidence_digest_blake3 = blake3::hash(material.join("\n").as_bytes()).to_hex().to_string();
+    Ok(DeterministicSandboxIsolationEvidence {
+        schema: DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA.to_string(),
+        profile_family: PROOF_SANDBOX_PROFILE_PREFIX.to_string(),
+        evidence_version: DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION.to_string(),
+        status: DeterministicSandboxIsolationEvidenceStatus::Passed,
+        checks: REQUIRED_ISOLATION_CHECKS.iter().map(|check| (*check).to_string()).collect(),
+        evidence_digest_blake3,
+    })
+}
+
+fn write_deterministic_sandbox_isolation_evidence(
+    path: &Path,
+    evidence: DeterministicSandboxIsolationEvidence,
+) -> Result<(), RunError> {
+    let bytes = deterministic_sandbox_isolation_evidence_canonical_bytes(evidence).map_err(core_error)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;

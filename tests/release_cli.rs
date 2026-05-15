@@ -927,14 +927,38 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
 
     let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
     let proof_path = proof_dir.join("deterministic-build-proof.json");
+    let isolation_evidence_path = proof_dir.join("deterministic-sandbox-isolation-evidence.json");
     assert_eq!(stdout["deterministic_proof_path"], proof_path.display().to_string());
+    assert_eq!(
+        stdout["deterministic_sandbox_isolation_evidence_path"],
+        isolation_evidence_path.display().to_string()
+    );
     assert!(stdout["deterministic_proof_digest_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
+    assert!(stdout["deterministic_sandbox_isolation_evidence_digest_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
     assert!(proof_path.is_file());
+    assert!(isolation_evidence_path.is_file());
     assert!(proof_dir.join("run-000/store/store-marker.txt").is_file());
     assert!(proof_dir.join("run-001/store/store-marker.txt").is_file());
     assert!(rebuild_output_dir.join(relative_path).is_file());
 
     let proof = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&proof_path).unwrap()).unwrap();
+    let isolation_evidence_bytes = std::fs::read(&isolation_evidence_path).unwrap();
+    let isolation_evidence = serde_json::from_slice::<serde_json::Value>(&isolation_evidence_bytes).unwrap();
+    let isolation_evidence_file_digest = blake3::hash(&isolation_evidence_bytes).to_hex().to_string();
+    assert_eq!(stdout["deterministic_sandbox_isolation_evidence_digest_blake3"], isolation_evidence_file_digest);
+    assert_eq!(isolation_evidence["schema"], "mantle-deterministic-sandbox-isolation-evidence-v1");
+    assert_eq!(isolation_evidence["profile_family"], "mantle-proof-sandbox-v1");
+    assert_eq!(isolation_evidence["evidence_version"], "mantle-release-reproducibility-v1");
+    assert_eq!(isolation_evidence["status"], "passed");
+    assert!(isolation_evidence["evidence_digest_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
+    assert_eq!(
+        isolation_evidence["checks"],
+        serde_json::json!([
+            "denies-host-network-by-default",
+            "denies-main-output-and-proof-store-reuse",
+            "denies-undeclared-host-access"
+        ])
+    );
     assert_eq!(proof["schema"], "mantle-deterministic-build-proof-v1");
     assert_eq!(proof["derivation_identity"], format!("release:{}", manifest.release_id));
     assert_eq!(proof["hermeticity_mode"], "strict");
