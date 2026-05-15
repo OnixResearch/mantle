@@ -115,7 +115,43 @@ pub struct ParityRow {
     pub graph_evidence: &'static str,
     pub semantic_evidence: &'static str,
     pub proof_evidence: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof_details: Option<ParityProofDetails>,
     pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ParityProofDetails {
+    pub schema: String,
+    pub release_id: String,
+    pub selected_provider_kind: ProviderKind,
+    pub evidence_digest_blake3: String,
+    pub deterministic_proof_digest_blake3: String,
+    pub sandbox_evidence_digest_blake3: String,
+    pub verify_receipt_digest_blake3: String,
+    pub summary_json_digest_blake3: String,
+    pub summary_markdown_digest_blake3: String,
+    pub verdict: String,
+    pub verify_status: String,
+    pub sandbox_profile_identity: String,
+    pub bounded_claim: String,
+}
+
+#[derive(Debug, Clone)]
+struct EvidenceValidation {
+    proof_details: Option<ParityProofDetails>,
+}
+
+impl EvidenceValidation {
+    fn empty() -> Self {
+        Self { proof_details: None }
+    }
+
+    fn with_proof(details: ParityProofDetails) -> Self {
+        Self {
+            proof_details: Some(details),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -138,7 +174,7 @@ enum EvidenceCheck {
     None,
     SeedFullSourceRootContract,
     BinutilsTccToolTranscript,
-    SelfBuildProviderKindLinkage,
+    RealSelfBuildProof,
     StagexLineageProviderReceipt,
     Gcc40PlaceholderInventory,
     Gcc47CxxProviderContract,
@@ -148,6 +184,7 @@ enum EvidenceCheck {
 const BINUTILS_TCC_TOOL_TRANSCRIPT: &str = "bootstrap/evidence/binutils-tcc-tool-smoke.json";
 const SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT: &str =
     "bootstrap/evidence/crunch-self-build-provider-kind-linkage.json";
+const REAL_SELF_BUILD_PROOF_PARITY_RECEIPT: &str = "bootstrap/evidence/real-self-build-proof-parity.json";
 const STAGEX_LINEAGE_PROVIDER_RECEIPT: &str = "bootstrap/evidence/stagex-lineage-provider-receipt.json";
 const GCC40_PLACEHOLDER_INVENTORY: &str = "bootstrap/evidence/gcc-4.0-placeholder-inventory.json";
 const GCC40_NATIVE_BOUNDARY_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-boundary.json";
@@ -240,7 +277,9 @@ fn summarize_axis(axis: ParityAxis, rows: &[ParityRow]) -> AxisSummary {
 fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
     let path = spec.derivation.map(|derivation| project_root.join(BOOTSTRAP_DIR).join(derivation));
     let file_state = path.as_ref().map(|p| inspect_derivation(p));
-    let evidence_failure = validate_stage_evidence(project_root, path.as_deref(), spec.evidence_check).err();
+    let evidence_result = validate_stage_evidence(project_root, path.as_deref(), spec.evidence_check);
+    let evidence_failure = evidence_result.as_ref().err().map(String::as_str);
+    let proof_details = evidence_result.as_ref().ok().and_then(|validation| validation.proof_details.clone());
     let status = match (spec.expected_complete, file_state) {
         (false, None) if spec.evidence_check != EvidenceCheck::None && evidence_failure.is_none() => {
             StageStatus::Partial
@@ -260,8 +299,8 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
         (true, Some(FileState::Unreadable)) => StageStatus::Blocked,
         (false, Some(FileState::Unreadable)) => StageStatus::Blocked,
     };
-    let provider_kind = provider_kind_for(spec, status);
-    let notes = row_notes(spec, status, path.as_deref(), evidence_failure.as_deref());
+    let provider_kind = provider_kind_for(spec, status, proof_details.as_ref());
+    let notes = row_notes(spec, status, path.as_deref(), evidence_failure, proof_details.as_ref());
     ParityRow {
         id: spec.id,
         title: spec.title,
@@ -273,11 +312,19 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
         graph_evidence: spec.graph_evidence,
         semantic_evidence: spec.semantic_evidence,
         proof_evidence: spec.proof_evidence,
+        proof_details,
         notes,
     }
 }
 
-fn provider_kind_for(spec: &StageSpec, status: StageStatus) -> ProviderKind {
+fn provider_kind_for(
+    spec: &StageSpec,
+    status: StageStatus,
+    proof_details: Option<&ParityProofDetails>,
+) -> ProviderKind {
+    if let ("crunch.self-build", Some(details)) = (spec.id, proof_details) {
+        return details.selected_provider_kind;
+    }
     if status.blocks_parity() {
         return ProviderKind::Unknown;
     }
@@ -290,7 +337,13 @@ fn provider_kind_for(spec: &StageSpec, status: StageStatus) -> ProviderKind {
     }
 }
 
-fn row_notes(spec: &StageSpec, status: StageStatus, path: Option<&Path>, evidence_failure: Option<&str>) -> String {
+fn row_notes(
+    spec: &StageSpec,
+    status: StageStatus,
+    path: Option<&Path>,
+    evidence_failure: Option<&str>,
+    proof_details: Option<&ParityProofDetails>,
+) -> String {
     let mut notes = Vec::new();
     if !spec.notes.is_empty() {
         notes.push(spec.notes.to_string());
@@ -306,33 +359,55 @@ fn row_notes(spec: &StageSpec, status: StageStatus, path: Option<&Path>, evidenc
         }
         _ => {}
     }
+    if let Some(details) = proof_details {
+        notes.push(format!(
+            "real self-build proof evidence accepted for provider_kind={} release_id={} proof_digest={} verify_status={}; bounded claim: {}",
+            details.selected_provider_kind,
+            details.release_id,
+            details.deterministic_proof_digest_blake3,
+            details.verify_status,
+            details.bounded_claim
+        ));
+    }
     if let Some(reason) = evidence_failure {
         notes.push(format!("evidence check failed: {reason}"));
     }
     notes.join("; ")
 }
 
-fn validate_stage_evidence(project_root: &Path, path: Option<&Path>, check: EvidenceCheck) -> Result<(), String> {
+fn validate_stage_evidence(
+    project_root: &Path,
+    path: Option<&Path>,
+    check: EvidenceCheck,
+) -> Result<EvidenceValidation, String> {
     match check {
-        EvidenceCheck::None => Ok(()),
+        EvidenceCheck::None => Ok(EvidenceValidation::empty()),
         EvidenceCheck::SeedFullSourceRootContract => validate_seed_full_source_root_contract(
             path.ok_or_else(|| "seed-full source-root contract requires a derivation path".to_string())?,
-        ),
-        EvidenceCheck::BinutilsTccToolTranscript => validate_binutils_tcc_tool_transcript(project_root),
-        EvidenceCheck::SelfBuildProviderKindLinkage => validate_self_build_provider_kind_linkage(project_root),
-        EvidenceCheck::StagexLineageProviderReceipt => validate_stagex_lineage_provider_receipt(project_root),
+        )
+        .map(|()| EvidenceValidation::empty()),
+        EvidenceCheck::BinutilsTccToolTranscript => {
+            validate_binutils_tcc_tool_transcript(project_root).map(|()| EvidenceValidation::empty())
+        }
+        EvidenceCheck::RealSelfBuildProof => validate_real_self_build_proof_parity_evidence(project_root),
+        EvidenceCheck::StagexLineageProviderReceipt => {
+            validate_stagex_lineage_provider_receipt(project_root).map(|()| EvidenceValidation::empty())
+        }
         EvidenceCheck::Gcc40PlaceholderInventory => validate_gcc40_placeholder_inventory(
             project_root,
             path.ok_or_else(|| "GCC 4.0 placeholder inventory requires a derivation path".to_string())?,
-        ),
+        )
+        .map(|()| EvidenceValidation::empty()),
         EvidenceCheck::Gcc47CxxProviderContract => validate_gcc47_cxx_provider_contract(
             project_root,
             path.ok_or_else(|| "GCC 4.7 C++ provider contract requires a derivation path".to_string())?,
-        ),
+        )
+        .map(|()| EvidenceValidation::empty()),
         EvidenceCheck::Gcc10ProviderContract => validate_gcc10_provider_contract(
             project_root,
             path.ok_or_else(|| "GCC 10 provider contract requires a derivation path".to_string())?,
-        ),
+        )
+        .map(|()| EvidenceValidation::empty()),
     }
 }
 
@@ -754,6 +829,236 @@ fn require_stagex_empty_array(value: &serde_json::Value, field: &str) -> Result<
         .ok_or_else(|| format!("StageX lineage provider receipt missing array field `{field}`"))?;
     if !actual.is_empty() {
         return Err(format!("StageX lineage provider receipt `{field}` must be empty for scaffold-only evidence"));
+    }
+    Ok(())
+}
+
+fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result<EvidenceValidation, String> {
+    validate_self_build_provider_kind_linkage(project_root)?;
+    let path = project_root.join(REAL_SELF_BUILD_PROOF_PARITY_RECEIPT);
+    let content = fs::read_to_string(&path).map_err(|err| {
+        format!(
+            "real self-build proof parity receipt missing `{}` ({err}); expected bounded deterministic proof descriptor",
+            REAL_SELF_BUILD_PROOF_PARITY_RECEIPT
+        )
+    })?;
+    let evidence_digest_blake3 = blake3::hash(content.as_bytes()).to_hex().to_string();
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|err| format!("real self-build proof parity receipt is not valid JSON: {err}"))?;
+
+    require_real_proof_string(&value, "schema", "mantle-real-self-build-proof-parity-evidence-v1")?;
+    let release_id = require_real_proof_non_empty_string(&value, "release_id")?.to_string();
+    let selected_provider_kind = parse_provider_kind(
+        require_real_proof_non_empty_string(&value, "selected_provider_kind")?,
+        "selected_provider_kind",
+    )?;
+    let provider_kind_linkage = require_real_proof_object(&value, "provider_kind_linkage")?;
+    let deterministic_proof = require_real_proof_object(&value, "deterministic_proof")?;
+    let verify_receipt = require_real_proof_object(&value, "verify_receipt")?;
+    let sandbox_evidence = require_real_proof_object(&value, "sandbox_evidence")?;
+    let summary = require_real_proof_object(&value, "summary")?;
+
+    require_real_proof_object_string(provider_kind_linkage, "receipt_path", SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT)?;
+    require_real_proof_object_provider_kind(provider_kind_linkage, "selected_provider_kind", selected_provider_kind)?;
+
+    require_real_proof_object_string(deterministic_proof, "workflow", "mantle-deterministic-proof-receipt-v1")?;
+    require_real_proof_object_string(deterministic_proof, "verdict", "self-rebuild-match")?;
+    require_real_proof_object_provider_kind(deterministic_proof, "selected_provider_kind", selected_provider_kind)?;
+    let deterministic_proof_digest_blake3 =
+        require_real_proof_object_digest(deterministic_proof, "digest_blake3")?.to_string();
+    let source_digest = require_real_proof_object_digest(deterministic_proof, "source_blake3")?;
+    let vendor_digest = require_real_proof_object_digest(deterministic_proof, "vendor_blake3")?;
+
+    let roots = deterministic_proof.get("clean_rebuild_roots").and_then(|v| v.as_array()).ok_or_else(|| {
+        "real self-build proof parity receipt missing array field `deterministic_proof.clean_rebuild_roots`".to_string()
+    })?;
+    if roots.len() != 2 {
+        return Err(format!(
+            "real self-build proof parity receipt `deterministic_proof.clean_rebuild_roots` has length {}, expected 2",
+            roots.len()
+        ));
+    }
+    let first_root = roots[0]
+        .as_str()
+        .ok_or_else(|| "real self-build proof clean rebuild root must be a string".to_string())?;
+    let second_root = roots[1]
+        .as_str()
+        .ok_or_else(|| "real self-build proof clean rebuild root must be a string".to_string())?;
+    if first_root.trim().is_empty() || second_root.trim().is_empty() {
+        return Err("real self-build proof clean rebuild roots must not be empty".to_string());
+    }
+    if first_root == second_root {
+        return Err("real self-build proof clean rebuild roots must be distinct".to_string());
+    }
+    let artifacts = deterministic_proof.get("artifact_digests_blake3").and_then(|v| v.as_array()).ok_or_else(|| {
+        "real self-build proof parity receipt missing array field `deterministic_proof.artifact_digests_blake3`"
+            .to_string()
+    })?;
+    if artifacts.is_empty() {
+        return Err("real self-build proof artifact digest set must not be empty".to_string());
+    }
+    for artifact in artifacts {
+        let digest = artifact
+            .as_str()
+            .ok_or_else(|| "real self-build proof artifact digest must be a string".to_string())?;
+        validate_blake3_digest(digest, "deterministic_proof.artifact_digests_blake3")?;
+    }
+
+    let sandbox_evidence_digest_blake3 =
+        require_real_proof_object_digest(sandbox_evidence, "digest_blake3")?.to_string();
+    let sandbox_profile_identity =
+        require_real_proof_object_non_empty_string(sandbox_evidence, "profile_identity")?.to_string();
+    if !sandbox_profile_identity.starts_with("mantle-proof-sandbox-v1:") {
+        return Err(format!(
+            "real self-build proof sandbox profile `{sandbox_profile_identity}` is unsupported; expected mantle-proof-sandbox-v1:*"
+        ));
+    }
+
+    let verify_receipt_digest_blake3 = require_real_proof_object_digest(verify_receipt, "digest_blake3")?.to_string();
+    require_real_proof_object_string(verify_receipt, "deterministic_release_status", "eligible")?;
+    require_real_proof_object_string(verify_receipt, "proof_digest_blake3", &deterministic_proof_digest_blake3)?;
+    require_real_proof_object_string(
+        verify_receipt,
+        "sandbox_evidence_digest_blake3",
+        &sandbox_evidence_digest_blake3,
+    )?;
+
+    let summary_json_digest_blake3 = require_real_proof_object_digest(summary, "json_digest_blake3")?.to_string();
+    let summary_markdown_digest_blake3 =
+        require_real_proof_object_digest(summary, "markdown_digest_blake3")?.to_string();
+    require_real_proof_object_string(summary, "release_id", &release_id)?;
+    require_real_proof_object_provider_kind(summary, "selected_provider_kind", selected_provider_kind)?;
+    require_real_proof_object_string(summary, "verdict", "self-rebuild-match")?;
+    require_real_proof_object_string(summary, "verify_status", "eligible")?;
+    require_real_proof_object_string(summary, "proof_digest_blake3", &deterministic_proof_digest_blake3)?;
+    require_real_proof_object_string(summary, "sandbox_evidence_digest_blake3", &sandbox_evidence_digest_blake3)?;
+    let bounded_claim = require_real_proof_object_non_empty_string(summary, "bounded_claim")?.to_string();
+    if !bounded_claim.contains("rebuilt twice") || !bounded_claim.contains("recorded inputs") {
+        return Err("real self-build proof bounded claim must state rebuilt-twice recorded-input scope".to_string());
+    }
+    let non_claims = summary
+        .get("non_claims")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "real self-build proof summary missing array field `non_claims`".to_string())?;
+    if !non_claims
+        .iter()
+        .any(|claim| claim.as_str().unwrap_or("").contains("full bootstrap reproducibility"))
+    {
+        return Err("real self-build proof summary non_claims must reject full bootstrap reproducibility".to_string());
+    }
+
+    require_real_proof_string(&value, "source_blake3", source_digest)?;
+    require_real_proof_string(&value, "vendor_blake3", vendor_digest)?;
+
+    Ok(EvidenceValidation::with_proof(ParityProofDetails {
+        schema: "mantle-real-self-build-proof-parity-evidence-v1".to_string(),
+        release_id,
+        selected_provider_kind,
+        evidence_digest_blake3,
+        deterministic_proof_digest_blake3,
+        sandbox_evidence_digest_blake3,
+        verify_receipt_digest_blake3,
+        summary_json_digest_blake3,
+        summary_markdown_digest_blake3,
+        verdict: "self-rebuild-match".to_string(),
+        verify_status: "eligible".to_string(),
+        sandbox_profile_identity,
+        bounded_claim,
+    }))
+}
+
+fn parse_provider_kind(kind: &str, field: &str) -> Result<ProviderKind, String> {
+    match kind {
+        "legacy-fetch" => Ok(ProviderKind::LegacyFetch),
+        "source-root" => Ok(ProviderKind::SourceRoot),
+        "stagex-lineage" => Ok(ProviderKind::StagexLineage),
+        other => Err(format!("real self-build proof parity receipt `{field}` has unknown provider kind `{other}`")),
+    }
+}
+
+fn require_real_proof_string<'a>(value: &'a serde_json::Value, field: &str, expected: &str) -> Result<&'a str, String> {
+    let actual = require_real_proof_non_empty_string(value, field)?;
+    if actual != expected {
+        return Err(format!("real self-build proof parity receipt `{field}` is `{actual}`, expected `{expected}`"));
+    }
+    Ok(actual)
+}
+
+fn require_real_proof_non_empty_string<'a>(value: &'a serde_json::Value, field: &str) -> Result<&'a str, String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("real self-build proof parity receipt missing string field `{field}`"))?;
+    if actual.trim().is_empty() {
+        return Err(format!("real self-build proof parity receipt `{field}` must not be empty"));
+    }
+    Ok(actual)
+}
+
+fn require_real_proof_object<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+) -> Result<&'a serde_json::Map<String, serde_json::Value>, String> {
+    value
+        .get(field)
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| format!("real self-build proof parity receipt missing object field `{field}`"))
+}
+
+fn require_real_proof_object_string<'a>(
+    object: &'a serde_json::Map<String, serde_json::Value>,
+    field: &str,
+    expected: &str,
+) -> Result<&'a str, String> {
+    let actual = require_real_proof_object_non_empty_string(object, field)?;
+    if actual != expected {
+        return Err(format!("real self-build proof parity receipt `{field}` is `{actual}`, expected `{expected}`"));
+    }
+    Ok(actual)
+}
+
+fn require_real_proof_object_non_empty_string<'a>(
+    object: &'a serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<&'a str, String> {
+    let actual = object
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("real self-build proof parity receipt missing string field `{field}`"))?;
+    if actual.trim().is_empty() {
+        return Err(format!("real self-build proof parity receipt `{field}` must not be empty"));
+    }
+    Ok(actual)
+}
+
+fn require_real_proof_object_digest<'a>(
+    object: &'a serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<&'a str, String> {
+    let digest = require_real_proof_object_non_empty_string(object, field)?;
+    validate_blake3_digest(digest, field)?;
+    Ok(digest)
+}
+
+fn require_real_proof_object_provider_kind(
+    object: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+    expected: ProviderKind,
+) -> Result<(), String> {
+    let actual = parse_provider_kind(require_real_proof_object_non_empty_string(object, field)?, field)?;
+    if actual != expected {
+        return Err(format!(
+            "real self-build proof parity receipt provider kind mismatch in `{field}`: {actual}, expected {expected}"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_blake3_digest(digest: &str, field: &str) -> Result<(), String> {
+    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Err(format!(
+            "real self-build proof parity receipt `{field}` must be a 64-character lowercase BLAKE3 digest"
+        ));
     }
     Ok(())
 }
@@ -1421,7 +1726,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             semantic_evidence: "stage1/stage2 binary comparison required",
             proof_evidence: "full proof bundle required",
             notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
-            evidence_check: EvidenceCheck::SelfBuildProviderKindLinkage,
+            evidence_check: EvidenceCheck::RealSelfBuildProof,
         },
     ]
 }
@@ -1530,7 +1835,7 @@ mod tests {
             semantic_evidence: "stage1/stage2 binary comparison required",
             proof_evidence: "full proof bundle required",
             notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
-            evidence_check: EvidenceCheck::SelfBuildProviderKindLinkage,
+            evidence_check: EvidenceCheck::RealSelfBuildProof,
         }
     }
 
@@ -1598,6 +1903,62 @@ mod tests {
             ),
         )
         .unwrap();
+    }
+
+    fn write_real_self_build_proof_parity(root: &Path, extra_mutation: &str) {
+        let path = root.join(REAL_SELF_BUILD_PROOF_PARITY_RECEIPT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut content = r#"{
+  "schema": "mantle-real-self-build-proof-parity-evidence-v1",
+  "release_id": "test-release",
+  "selected_provider_kind": "source-root",
+  "source_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "vendor_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "provider_kind_linkage": {
+    "receipt_path": "bootstrap/evidence/crunch-self-build-provider-kind-linkage.json",
+    "selected_provider_kind": "source-root"
+  },
+  "deterministic_proof": {
+    "workflow": "mantle-deterministic-proof-receipt-v1",
+    "verdict": "self-rebuild-match",
+    "selected_provider_kind": "source-root",
+    "digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "source_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "vendor_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "clean_rebuild_roots": ["/tmp/proof-a", "/tmp/proof-b"],
+    "artifact_digests_blake3": ["dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"]
+  },
+  "sandbox_evidence": {
+    "profile_identity": "mantle-proof-sandbox-v1:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "digest_blake3": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "verify_receipt": {
+    "digest_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
+    "deterministic_release_status": "eligible",
+    "proof_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "sandbox_evidence_digest_blake3": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "summary": {
+    "release_id": "test-release",
+    "selected_provider_kind": "source-root",
+    "json_digest_blake3": "2222222222222222222222222222222222222222222222222222222222222222",
+    "markdown_digest_blake3": "3333333333333333333333333333333333333333333333333333333333333333",
+    "verdict": "self-rebuild-match",
+    "verify_status": "eligible",
+    "proof_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "sandbox_evidence_digest_blake3": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "bounded_claim": "This artifact rebuilt twice from the recorded inputs under the recorded sandbox and matched.",
+    "non_claims": ["full bootstrap reproducibility"]
+  }
+}
+"#
+        .to_string();
+        if !extra_mutation.is_empty() {
+            let parts: Vec<&str> = extra_mutation.splitn(2, "=>").collect();
+            assert_eq!(parts.len(), 2, "mutation must be old=>new");
+            content = content.replace(parts[0], parts[1]);
+        }
+        fs::write(path, content).unwrap();
     }
 
     fn write_binutils_tcc_transcript(root: &Path, extra: &str) {
@@ -2095,6 +2456,7 @@ mod tests {
                 graph_evidence: "graph",
                 semantic_evidence: "semantic",
                 proof_evidence: "proof",
+                proof_details: None,
                 notes: String::new(),
             },
             ParityRow {
@@ -2108,6 +2470,7 @@ mod tests {
                 graph_evidence: "graph",
                 semantic_evidence: "semantic",
                 proof_evidence: "proof",
+                proof_details: None,
                 notes: String::new(),
             },
         ];
@@ -2214,21 +2577,30 @@ mod tests {
 
         assert_eq!(row.status, StageStatus::Partial);
         assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.proof_details.is_none());
         assert!(row.notes.contains("provider-kind linkage receipt missing"));
         assert!(row.notes.contains(SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT));
     }
 
     #[test]
-    fn self_build_provider_kind_linkage_accepts_matching_closed_kind_but_remains_partial() {
+    fn self_build_valid_real_proof_descriptor_is_evidence_backed_partial() {
         let dir = tempdir().unwrap();
         write_stage(dir.path(), "crunch.ncl", "# real crunch derivation body\n");
         write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &self_build_spec());
 
         assert_eq!(row.status, StageStatus::Partial);
-        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert_eq!(row.provider_kind, ProviderKind::SourceRoot);
         assert!(row.status.blocks_parity());
+        let proof = row.proof_details.as_ref().unwrap();
+        assert_eq!(proof.release_id, "test-release");
+        assert_eq!(proof.selected_provider_kind, ProviderKind::SourceRoot);
+        assert_eq!(proof.verdict, "self-rebuild-match");
+        assert_eq!(proof.verify_status, "eligible");
+        assert!(proof.bounded_claim.contains("rebuilt twice"));
+        assert!(row.notes.contains("real self-build proof evidence accepted"));
         assert!(!row.notes.contains("evidence check failed"));
     }
 
@@ -2255,16 +2627,107 @@ mod tests {
     }
 
     #[test]
-    fn self_build_real_derivation_reports_provider_kind_linkage_backed_partial() {
+    fn self_build_real_proof_descriptor_rejects_provider_mismatch() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(
+            dir.path(),
+            "\"provider_kind_linkage\": {\n    \"receipt_path\": \"bootstrap/evidence/crunch-self-build-provider-kind-linkage.json\",\n    \"selected_provider_kind\": \"source-root\"=>\"provider_kind_linkage\": {\n    \"receipt_path\": \"bootstrap/evidence/crunch-self-build-provider-kind-linkage.json\",\n    \"selected_provider_kind\": \"legacy-fetch\"",
+        );
+
+        let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
+
+        assert!(err.contains("provider kind mismatch") || err.contains("provider-kind linkage mismatch"));
+    }
+
+    #[test]
+    fn self_build_real_proof_descriptor_rejects_unsupported_workflow() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(
+            dir.path(),
+            "mantle-deterministic-proof-receipt-v1=>mantle-deterministic-proof-receipt-v2",
+        );
+
+        let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
+
+        assert!(err.contains("workflow"));
+        assert!(err.contains("mantle-deterministic-proof-receipt-v1"));
+    }
+
+    #[test]
+    fn self_build_real_proof_descriptor_rejects_missing_sandbox_evidence() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(dir.path(), "\"profile_identity\"=>\"missing_profile_identity\"");
+
+        let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
+
+        assert!(err.contains("profile_identity"));
+    }
+
+    #[test]
+    fn self_build_real_proof_descriptor_rejects_unsupported_sandbox_profile() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(dir.path(), "mantle-proof-sandbox-v1=>direct-host");
+
+        let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
+
+        assert!(err.contains("unsupported"));
+        assert!(err.contains("mantle-proof-sandbox-v1"));
+    }
+
+    #[test]
+    fn self_build_real_proof_descriptor_rejects_reused_roots() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(dir.path(), "/tmp/proof-b=>/tmp/proof-a");
+
+        let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
+
+        assert!(err.contains("distinct"));
+    }
+
+    #[test]
+    fn self_build_real_proof_descriptor_rejects_ineligible_verify_receipt() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(dir.path(), "eligible=>ineligible");
+
+        let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
+
+        assert!(err.contains("eligible"));
+    }
+
+    #[test]
+    fn self_build_real_proof_descriptor_rejects_malformed_digest_linkage() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(
+            dir.path(),
+            "\"verify_receipt\": {\n    \"digest_blake3\": \"1111111111111111111111111111111111111111111111111111111111111111\",\n    \"deterministic_release_status\": \"eligible\",\n    \"proof_digest_blake3\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"=>\"verify_receipt\": {\n    \"digest_blake3\": \"1111111111111111111111111111111111111111111111111111111111111111\",\n    \"deterministic_release_status\": \"eligible\",\n    \"proof_digest_blake3\": \"abababababababababababababababababababababababababababababababab\"",
+        );
+
+        let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
+
+        assert!(err.contains("proof_digest_blake3"));
+    }
+
+    #[test]
+    fn self_build_real_derivation_reports_real_proof_backed_partial_without_completing_axes() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);
         let row = report.rows.iter().find(|row| row.id == "crunch.self-build").unwrap();
 
         assert_eq!(row.status, StageStatus::Partial);
-        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert_eq!(row.provider_kind, ProviderKind::SourceRoot);
         assert!(row.status.blocks_parity());
+        assert!(row.proof_details.is_some());
         assert!(!row.notes.contains("provider-kind linkage receipt missing"));
         assert!(!row.notes.contains("evidence check failed"));
+        assert!(report.axes.iter().any(|axis| axis.axis == ParityAxis::Guix && !axis.complete));
+        assert!(report.axes.iter().any(|axis| axis.axis == ParityAxis::Stagex && !axis.complete));
     }
 
     #[test]

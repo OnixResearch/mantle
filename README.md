@@ -248,9 +248,12 @@ nix build .#checks.x86_64-linux.release-determinism-quality --no-link -L
 The release determinism quality rail runs the generated deterministic proof
 smoke and validates its receipt/log BLAKE3 in one checked-in entry point. The
 flake check is the Nix/CI-callable heavy gate for the same underlying generated
-proof regression. The determinism probe is an ignored integration rail, not part
-of every edit. `./scripts/prove-self-hosting.sh --check` is only self-hosting
-preflight. The full ignored proof run stays heavier:
+proof regression. `bootstrap parity-report` consumes the checked compact
+self-build descriptor in `bootstrap/evidence/real-self-build-proof-parity.json`
+and surfaces bounded `crunch.self-build` proof details without marking Guix or
+StageX parity complete. The determinism probe is an ignored integration rail,
+not part of every edit. `./scripts/prove-self-hosting.sh --check` is only
+self-hosting preflight. The full ignored proof run stays heavier:
 
 ```bash
 ./scripts/prove-self-hosting.sh

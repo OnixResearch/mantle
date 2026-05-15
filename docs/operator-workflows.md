@@ -282,6 +282,9 @@ cargo -Zscript scripts/check-real-release-determinism-receipt.rs \
 cargo -Zscript scripts/summarize-real-release-determinism.rs \
   target/release-evidence/<release-id>
 
+# Inspect bootstrap parity's checked self-build proof descriptor consumption
+mantle --json bootstrap parity-report
+
 # Re-check a saved bundle using only bundle-local contents
 mantle release verify target/release-evidence/<release-id>
 
@@ -302,7 +305,12 @@ is a full proof artifact. Reproducibility is reported separately as `absent`,
 a verified canonical reproducibility report whose artifact set matches the
 published release artifact set; ordinary bundle-local integrity never implies
 that label. This still does not prove a full-source bootstrap root or
-independent rebuild agreement.
+independent rebuild agreement. `bootstrap parity-report` also consumes the
+checked-in compact descriptor at
+`bootstrap/evidence/real-self-build-proof-parity.json` for the
+`crunch.self-build` row; that descriptor surfaces the bounded proof digest and
+provider kind, but the row remains partial and still blocks Guix/StageX parity
+until the separate source-root/lineage blockers are closed.
 
 ## Sign and verify decentralized release material
 

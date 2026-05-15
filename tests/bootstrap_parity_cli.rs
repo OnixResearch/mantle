@@ -5,6 +5,10 @@ use predicates::prelude::*;
 use serde_json::Value;
 use tempfile::TempDir;
 
+fn row_by_id<'a>(report: &'a Value, id: &str) -> &'a Value {
+    report["rows"].as_array().unwrap().iter().find(|row| row["id"] == id).unwrap()
+}
+
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
 }
@@ -104,4 +108,42 @@ fn bootstrap_parity_report_requires_binutils_tcc_transcript_for_live_bootstrap_a
             "stdout missing transcript path: {stdout}"
         );
     }
+}
+
+#[test]
+fn bootstrap_parity_report_exposes_real_self_build_proof_details_without_unblocking_axes() {
+    let repo = env!("CARGO_MANIFEST_DIR");
+
+    let output = crunch()
+        .arg("--json")
+        .arg("bootstrap")
+        .arg("parity-report")
+        .current_dir(repo)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let report: Value = serde_json::from_slice(&output).unwrap();
+    let row = row_by_id(&report, "crunch.self-build");
+    assert_eq!(row["status"], "partial");
+    assert_eq!(row["provider_kind"], "source-root");
+    assert_eq!(row["proof_details"]["schema"], "mantle-real-self-build-proof-parity-evidence-v1");
+    assert_eq!(row["proof_details"]["verdict"], "self-rebuild-match");
+    assert_eq!(row["proof_details"]["verify_status"], "eligible");
+    assert!(row["proof_details"]["bounded_claim"].as_str().unwrap().contains("rebuilt twice"));
+    assert!(row["notes"].as_str().unwrap().contains("real self-build proof evidence accepted"));
+
+    let guix = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "guix").unwrap();
+    let stagex = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "stagex").unwrap();
+    assert_eq!(guix["complete"], false);
+    assert_eq!(stagex["complete"], false);
+    assert!(guix["blocking_rows"].as_array().unwrap().contains(&Value::String("crunch.self-build".to_string())));
+    assert!(
+        stagex["blocking_rows"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::String("crunch.self-build".to_string()))
+    );
 }
