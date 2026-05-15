@@ -618,15 +618,37 @@ if [ "${1:-}" = "--version" ]; then
   printf 'bwrap 1.0-test\n'
   exit 0
 fi
+if [ -n "${MANTLE_FAKE_BWRAP_TRANSCRIPT:-}" ]; then
+  {
+    printf -- '-- fake-bwrap invocation --\n'
+    for arg in "$@"; do printf '%s\n' "$arg"; done
+  } >> "$MANTLE_FAKE_BWRAP_TRANSCRIPT"
+fi
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --share-net)
+      printf 'fake bwrap denied host network opt-in\n' >&2
+      exit 125
+      ;;
     --unshare-all|--die-with-parent|--new-session|--clearenv) shift ;;
-    --ro-bind|--bind) shift 3 ;;
+    --ro-bind|--bind)
+      if [ -n "${MANTLE_FAKE_BWRAP_FORBIDDEN_BIND:-}" ] && { [ "$2" = "$MANTLE_FAKE_BWRAP_FORBIDDEN_BIND" ] || [ "$3" = "$MANTLE_FAKE_BWRAP_FORBIDDEN_BIND" ]; }; then
+        printf 'fake bwrap denied forbidden bind: %s\n' "$MANTLE_FAKE_BWRAP_FORBIDDEN_BIND" >&2
+        exit 125
+      fi
+      shift 3
+      ;;
     --tmpfs|--dev|--proc|--chdir)
       if [ "$1" = "--chdir" ]; then cd "$2"; fi
       shift 2 ;;
     --setenv) export "$2=$3"; shift 3 ;;
-    *) exec "$@" ;;
+    *)
+      if [ -n "${MANTLE_FAKE_BWRAP_FORBIDDEN_HOST_PATH:-}" ] && [ -f "$1" ] && grep -F -- "$MANTLE_FAKE_BWRAP_FORBIDDEN_HOST_PATH" "$1" >/dev/null 2>&1; then
+        printf 'fake bwrap denied undeclared host path: %s\n' "$MANTLE_FAKE_BWRAP_FORBIDDEN_HOST_PATH" >&2
+        exit 125
+      fi
+      exec "$@"
+      ;;
   esac
 done
 "#,
@@ -870,6 +892,7 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     let rebuild_output_dir = temp.path().join("deterministic-main-output");
     let fake_bwrap = temp.path().join("fake-bwrap.sh");
     write_fake_bwrap(&fake_bwrap);
+    let fake_bwrap_transcript = temp.path().join("fake-bwrap-transcript.txt");
     let proof_dir = temp.path().join("deterministic-proof-work");
     let report_path = temp.path().join("deterministic-report.json");
     let relative_path = &manifest.binaries[0].relative_path;
@@ -897,6 +920,8 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
         .arg("--deterministic-proof-dir")
         .arg(&proof_dir)
         .env("MANTLE_DETERMINISTIC_PROOF_BWRAP", &fake_bwrap)
+        .env("MANTLE_FAKE_BWRAP_TRANSCRIPT", &fake_bwrap_transcript)
+        .env("MANTLE_FAKE_BWRAP_FORBIDDEN_BIND", &rebuild_output_dir)
         .assert()
         .success();
 
@@ -924,6 +949,59 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert!(runs[1]["sandbox_profile_identity"].as_str().unwrap().starts_with("mantle-proof-sandbox-v1:"));
     assert_eq!(runs[0]["output_digests"][0]["name"], *relative_path);
     assert_eq!(runs[0]["output_digests"], runs[1]["output_digests"]);
+
+    let transcript = std::fs::read_to_string(&fake_bwrap_transcript).unwrap();
+    assert!(transcript.contains("--unshare-all"));
+    assert!(transcript.contains("--clearenv"));
+    assert!(!transcript.contains("--share-net"));
+    assert!(!transcript.contains(&rebuild_output_dir.display().to_string()));
+    assert!(transcript.contains(&proof_dir.join("run-000/output").display().to_string()));
+    assert!(transcript.contains(&proof_dir.join("run-000/store").display().to_string()));
+    assert!(transcript.contains(&proof_dir.join("run-001/output").display().to_string()));
+    assert!(transcript.contains(&proof_dir.join("run-001/store").display().to_string()));
+}
+
+#[cfg(unix)]
+#[test]
+fn release_reproduce_denies_host_only_deterministic_proof_recipe() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("host-only-deterministic-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("deterministic-main-output-host-only");
+    let fake_bwrap = temp.path().join("fake-bwrap.sh");
+    write_fake_bwrap(&fake_bwrap);
+    let proof_dir = temp.path().join("deterministic-proof-host-only");
+    let host_secret = temp.path().join("undeclared-host-secret.txt");
+    write_file(&host_secret, b"host-only-secret");
+    let relative_path = &manifest.binaries[0].relative_path;
+    write_rebuild_script(
+        &rebuild_script,
+        &format!(
+            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then\n  cat {host_secret} > \"$MANTLE_REPRODUCE_OUTPUT_DIR/{relative_path}\"\nelse\n  cp \"$MANTLE_REPRODUCE_BUNDLE_DIR/{relative_path}\" \"$MANTLE_REPRODUCE_OUTPUT_DIR/{relative_path}\"\nfi\n",
+            host_secret = host_secret.display(),
+        ),
+    );
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--deterministic-proof-runs")
+        .arg("2")
+        .arg("--deterministic-proof-dir")
+        .arg(&proof_dir)
+        .env("MANTLE_DETERMINISTIC_PROOF_BWRAP", &fake_bwrap)
+        .env("MANTLE_FAKE_BWRAP_FORBIDDEN_HOST_PATH", &host_secret)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("fake bwrap denied undeclared host path"));
+
+    assert!(!proof_dir.join("deterministic-build-proof.json").exists());
 }
 
 #[cfg(unix)]
