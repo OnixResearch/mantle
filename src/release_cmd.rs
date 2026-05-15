@@ -585,6 +585,11 @@ fn cmd_release_reproduce(
             "deterministic_proof_digest_blake3": summary.deterministic_proof_digest_blake3,
             "deterministic_sandbox_isolation_evidence_path": summary.deterministic_sandbox_isolation_evidence_path.as_ref().map(|path| path.display().to_string()),
             "deterministic_sandbox_isolation_evidence_digest_blake3": summary.deterministic_sandbox_isolation_evidence_digest_blake3,
+            "deterministic_proof_unit": summary.deterministic_proof_unit,
+            "deterministic_proof_run_roots": summary.deterministic_proof_run_roots,
+            "deterministic_proof_sandbox_profiles": summary.deterministic_proof_sandbox_profiles,
+            "deterministic_proof_verdict": summary.deterministic_proof_verdict,
+            "deterministic_proof_blockers": summary.deterministic_proof_blockers,
         });
         println!(
             "{}",
@@ -611,6 +616,23 @@ fn cmd_release_reproduce(
     }
     if let Some(digest) = &summary.deterministic_sandbox_isolation_evidence_digest_blake3 {
         println!("deterministic sandbox isolation evidence digest: {digest}");
+    }
+    if let Some(verdict) = &summary.deterministic_proof_verdict {
+        println!("deterministic proof verdict: {verdict}");
+    }
+    if let Some(proof_unit) = &summary.deterministic_proof_unit {
+        println!("deterministic proof unit: {proof_unit}");
+    }
+    if let Some(run_roots) = &summary.deterministic_proof_run_roots {
+        println!("deterministic proof run roots: {run_roots}");
+    }
+    if let Some(profiles) = &summary.deterministic_proof_sandbox_profiles {
+        println!("deterministic proof sandbox profiles: {}", profiles.join(","));
+    }
+    if let Some(blockers) = &summary.deterministic_proof_blockers {
+        if !blockers.is_empty() {
+            println!("deterministic proof blockers: {}", blockers.join("; "));
+        }
     }
     Ok(())
 }

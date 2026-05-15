@@ -13,6 +13,7 @@ pub use determinism::DeterministicBuildProofReceiptInit;
 pub use determinism::DeterministicBuildProofVerdict;
 pub use determinism::DeterministicBuildRunReceipt;
 pub use determinism::DeterministicOutputDigest;
+pub use determinism::DeterministicProofUnit;
 pub use determinism::DeterministicSandboxIsolationEvidence;
 pub use determinism::DeterministicSandboxIsolationEvidenceStatus;
 pub use determinism::REQUIRED_ISOLATION_CHECKS;

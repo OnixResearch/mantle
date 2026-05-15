@@ -34,6 +34,7 @@ use crunch_release_core::DeterministicBuildProofReceipt;
 use crunch_release_core::DeterministicBuildProofReceiptInit;
 use crunch_release_core::DeterministicBuildRunReceipt;
 use crunch_release_core::DeterministicOutputDigest;
+use crunch_release_core::DeterministicProofUnit;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
@@ -712,6 +713,7 @@ fn write_deterministic_verify_artifacts(
         run_id: run_id.to_string(),
         perturbation_case: perturbation_case.to_string(),
         output_store_paths: vec![store.to_string()],
+        output_root_identity: format!("{store}/outputs"),
         sandbox_profile_identity: profile.clone(),
         output_digests: vec![DeterministicOutputDigest {
             name: output_name.clone(),
@@ -721,10 +723,25 @@ fn write_deterministic_verify_artifacts(
         hermeticity_audit_events: Vec::new(),
     };
     let proof = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
+        proof_unit: DeterministicProofUnit {
+            target_artifact_identity: format!("release:{}", manifest.release_id),
+            output_identities: vec![output_name.clone()],
+        },
         derivation_identity: format!("release:{}", manifest.release_id),
         hermeticity_mode: "strict".to_string(),
         workflow_version: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
-        toolchain_provider_identity: "test-provider".to_string(),
+        selected_provider_kind: manifest.proof_linkage.selected_provider_kind.clone(),
+        source_blake3: manifest.source_archive.digest_blake3.clone(),
+        vendor_blake3: manifest.proof_bundle.digest_blake3.clone(),
+        toolchain_provider_identity: format!(
+            "provider-kind={};command=test-provider",
+            manifest.proof_linkage.selected_provider_kind
+        ),
+        toolchain_stage_roots: vec![
+            format!("staged-source={}", manifest.proof_linkage.staged_source),
+            format!("stage2-binary={}", manifest.proof_linkage.stage2_binary_digest_blake3),
+            format!("prerequisite-inventory={}", manifest.proof_linkage.prerequisite_inventory_digest_blake3),
+        ],
         logical_store_prefix: "/mantle/store".to_string(),
         physical_store_isolation: "fresh-store-per-run".to_string(),
         normalized_execution_envelope: vec![
@@ -1089,6 +1106,19 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
         isolation_evidence_path.display().to_string()
     );
     assert!(stdout["deterministic_proof_digest_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
+    assert_eq!(stdout["deterministic_proof_verdict"], "self-rebuild-match");
+    assert_eq!(stdout["deterministic_proof_blockers"], serde_json::json!([]));
+    assert_eq!(
+        stdout["deterministic_proof_unit"]["target_artifact_identity"],
+        format!("release:{}", manifest.release_id)
+    );
+    assert_eq!(stdout["deterministic_proof_run_roots"].as_array().unwrap().len(), 2);
+    assert!(
+        stdout["deterministic_proof_sandbox_profiles"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("mantle-proof-sandbox-v1:")
+    );
     assert!(stdout["deterministic_sandbox_isolation_evidence_digest_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
     assert!(proof_path.is_file());
     assert!(isolation_evidence_path.is_file());
@@ -1114,7 +1144,12 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
             "denies-undeclared-host-access"
         ])
     );
-    assert_eq!(proof["schema"], "mantle-deterministic-build-proof-v1");
+    assert_eq!(proof["schema"], "mantle-deterministic-proof-receipt-v1");
+    assert_eq!(proof["workflow_version"], "mantle-deterministic-proof-receipt-v1");
+    assert_eq!(proof["proof_unit"]["target_artifact_identity"], format!("release:{}", manifest.release_id));
+    assert_eq!(proof["selected_provider_kind"], manifest.proof_linkage.selected_provider_kind);
+    assert_eq!(proof["source_blake3"], manifest.source_archive.digest_blake3);
+    assert_eq!(proof["vendor_blake3"], manifest.proof_bundle.digest_blake3);
     assert_eq!(proof["derivation_identity"], format!("release:{}", manifest.release_id));
     assert_eq!(proof["hermeticity_mode"], "strict");
     assert_eq!(proof["physical_store_isolation"], "fresh-store-per-run");
@@ -1124,6 +1159,7 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert_eq!(runs[0]["run_id"], "run-000");
     assert_eq!(runs[1]["run_id"], "run-001");
     assert_ne!(runs[0]["output_store_paths"][0], runs[1]["output_store_paths"][0]);
+    assert_ne!(runs[0]["output_root_identity"], runs[1]["output_root_identity"]);
     assert!(runs[0]["sandbox_profile_identity"].as_str().unwrap().starts_with("mantle-proof-sandbox-v1:"));
     assert!(runs[1]["sandbox_profile_identity"].as_str().unwrap().starts_with("mantle-proof-sandbox-v1:"));
     assert_eq!(runs[0]["output_digests"][0]["name"], *relative_path);

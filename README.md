@@ -986,18 +986,24 @@ proof classes by default, because explicit impure mode permits ambient host inpu
 outside the declared proof boundary.
 
 A stronger deterministic-release claim is separate from `self-rebuild-match`.
-Mantle models it with `mantle-deterministic-build-proof-v1` receipts whose
-closed verdicts include `deterministic-match`, `mismatch`, `missing-evidence`,
-`impure-mode`, and `unsupported-workflow`. A deterministic receipt requires
-strict hermetic mode, at least two clean proof runs, fresh store/namespace
-isolation for the derivation under test, a recorded ambient host perturbation
-matrix (`HOME`, `PATH`, `USER`, `LOGNAME`, `TZ`, `LANG`, `LC_ALL`, temp dirs,
-cwd, umask, and environment noise), typed hermeticity audit events, and matching
-per-output BLAKE3 digest sets. Each run must also name a supported canonical
-sandbox profile identity (`mantle-proof-sandbox-v1:<blake3>`); receipts without
-that profile evidence, or with a direct-host/unsupported profile, stay at
-`missing-evidence`. This is still scoped release-artifact evidence; it does not
-claim global Nix-like determinism for all Mantle builds.
+Mantle models it with `mantle-deterministic-proof-receipt-v1` receipts whose
+closed verdicts include `self-rebuild-match`, `mismatch`, `missing-evidence`,
+`reused-store`, `impure-mode`, `unsupported-workflow`, `unsupported-sandbox`,
+`provider-kind-mismatch`, and `malformed-receipt`. A deterministic receipt
+records the proof unit before execution: target artifact identity, selected
+provider kind, source/vendor BLAKE3 inputs, toolchain/stage roots, selected
+outputs, logical store prefix, and sandbox profile identity. It requires strict
+hermetic mode, at least two clean proof runs, distinct fresh store and output
+root identities, a recorded ambient host perturbation matrix (`HOME`, `PATH`,
+`USER`, `LOGNAME`, `TZ`, `LANG`, `LC_ALL`, temp dirs, cwd, umask, and
+environment noise), typed hermeticity audit events, and matching per-output
+BLAKE3 digest sets. Each run must also name a supported canonical sandbox
+profile identity (`mantle-proof-sandbox-v1:<blake3>`); receipts without that
+profile evidence, or with a direct-host/unsupported profile, fail closed instead
+of promoting the claim. The bounded claim is only: this artifact rebuilt twice
+from these recorded inputs under this sandbox and matched. It is still scoped
+release-artifact evidence; it does not claim full bootstrap reproducibility or
+global Nix-like determinism for all Mantle builds.
 
 Later verification is bundle-local:
 

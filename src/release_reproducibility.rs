@@ -14,6 +14,7 @@ use crunch_release_core::DeterministicBuildProofReceipt;
 use crunch_release_core::DeterministicBuildProofReceiptInit;
 use crunch_release_core::DeterministicBuildRunReceipt;
 use crunch_release_core::DeterministicOutputDigest;
+use crunch_release_core::DeterministicProofUnit;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
@@ -127,6 +128,11 @@ pub(crate) struct ReleaseReproduceSummary {
     pub deterministic_proof_digest_blake3: Option<String>,
     pub deterministic_sandbox_isolation_evidence_path: Option<PathBuf>,
     pub deterministic_sandbox_isolation_evidence_digest_blake3: Option<String>,
+    pub deterministic_proof_unit: Option<serde_json::Value>,
+    pub deterministic_proof_run_roots: Option<serde_json::Value>,
+    pub deterministic_proof_sandbox_profiles: Option<Vec<String>>,
+    pub deterministic_proof_verdict: Option<String>,
+    pub deterministic_proof_blockers: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +163,33 @@ pub(crate) fn reproduce_release_artifacts(
     write_report(&report_path, report.clone())?;
     fail_if_reproduction_drifted(&report, &unexpected_outputs, &report_path)?;
     let deterministic_proof = maybe_run_deterministic_proof(request, &manifest, &report_path)?;
+    let deterministic_proof_unit = deterministic_proof.as_ref().map(|proof| {
+        serde_json::json!({
+            "target_artifact_identity": proof.receipt.proof_unit.target_artifact_identity.clone(),
+            "output_identities": proof.receipt.proof_unit.output_identities.clone(),
+            "selected_provider_kind": proof.receipt.selected_provider_kind.clone(),
+            "source_blake3": proof.receipt.source_blake3.clone(),
+            "vendor_blake3": proof.receipt.vendor_blake3.clone(),
+            "toolchain_stage_roots": proof.receipt.toolchain_stage_roots.clone(),
+        })
+    });
+    let deterministic_proof_run_roots = deterministic_proof.as_ref().map(|proof| {
+        serde_json::json!(
+            proof
+                .receipt
+                .runs
+                .iter()
+                .map(|run| {
+                    serde_json::json!({
+                        "run_id": run.run_id.clone(),
+                        "output_store_paths": run.output_store_paths.clone(),
+                        "output_root_identity": run.output_root_identity.clone(),
+                        "sandbox_profile_identity": run.sandbox_profile_identity.clone(),
+                    })
+                })
+                .collect::<Vec<_>>()
+        )
+    });
     Ok(ReleaseReproduceSummary {
         release_id: manifest.release_id,
         report_path,
@@ -170,7 +203,19 @@ pub(crate) fn reproduce_release_artifacts(
             .as_ref()
             .map(|proof| proof.isolation_evidence_path.clone()),
         deterministic_sandbox_isolation_evidence_digest_blake3: deterministic_proof
-            .map(|proof| proof.isolation_evidence_digest_blake3),
+            .as_ref()
+            .map(|proof| proof.isolation_evidence_digest_blake3.clone()),
+        deterministic_proof_unit,
+        deterministic_proof_run_roots,
+        deterministic_proof_sandbox_profiles: deterministic_proof
+            .as_ref()
+            .map(|proof| proof.receipt.sandbox_profile_identities.clone()),
+        deterministic_proof_verdict: deterministic_proof.as_ref().and_then(|proof| {
+            serde_json::to_value(proof.receipt.verdict)
+                .ok()
+                .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        }),
+        deterministic_proof_blockers: deterministic_proof.as_ref().map(|proof| proof.receipt.blocking_reasons.clone()),
     })
 }
 
@@ -323,6 +368,7 @@ fn run_rebuild_command(
 struct DeterministicProofOutput {
     path: PathBuf,
     digest_blake3: String,
+    receipt: DeterministicBuildProofReceipt,
     isolation_evidence_path: PathBuf,
     isolation_evidence_digest_blake3: String,
 }
@@ -370,7 +416,14 @@ fn maybe_run_deterministic_proof(
             artifacts: comparisons.clone(),
         });
         fail_if_reproduction_drifted(&proof_report, &unexpected_outputs, report_path)?;
-        runs.push(deterministic_run_receipt(&run_id, run_index, &store_dir, &sandbox_profile.identity, &comparisons)?);
+        runs.push(deterministic_run_receipt(
+            &run_id,
+            run_index,
+            &store_dir,
+            &output_dir,
+            &sandbox_profile.identity,
+            &comparisons,
+        )?);
         sandbox_profiles.push(sandbox_profile);
     }
     let sandbox_profile_identities = runs
@@ -380,10 +433,26 @@ fn maybe_run_deterministic_proof(
         .into_iter()
         .collect::<Vec<_>>();
     let receipt = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
+        proof_unit: DeterministicProofUnit {
+            target_artifact_identity: format!("release:{}", manifest.release_id),
+            output_identities: manifest.binaries.iter().map(|artifact| artifact.relative_path.clone()).collect(),
+        },
         derivation_identity: format!("release:{}", manifest.release_id),
         hermeticity_mode: "strict".to_string(),
         workflow_version: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
-        toolchain_provider_identity: workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?,
+        selected_provider_kind: manifest.proof_linkage.selected_provider_kind.clone(),
+        source_blake3: manifest.source_archive.digest_blake3.clone(),
+        vendor_blake3: manifest.proof_bundle.digest_blake3.clone(),
+        toolchain_provider_identity: format!(
+            "provider-kind={};command={}",
+            manifest.proof_linkage.selected_provider_kind,
+            workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?
+        ),
+        toolchain_stage_roots: vec![
+            format!("staged-source={}", manifest.proof_linkage.staged_source),
+            format!("stage2-binary={}", manifest.proof_linkage.stage2_binary_digest_blake3),
+            format!("prerequisite-inventory={}", manifest.proof_linkage.prerequisite_inventory_digest_blake3),
+        ],
         logical_store_prefix: "/mantle/store".to_string(),
         physical_store_isolation: "fresh-store-per-run".to_string(),
         normalized_execution_envelope: deterministic_execution_envelope(&sandbox_profile_identities),
@@ -393,7 +462,7 @@ fn maybe_run_deterministic_proof(
     });
     let digest_blake3 = deterministic_build_proof_receipt_digest_blake3(receipt.clone()).map_err(core_error)?;
     let path = proof_root.join("deterministic-build-proof.json");
-    write_deterministic_proof_receipt(&path, receipt)?;
+    write_deterministic_proof_receipt(&path, receipt.clone())?;
     let isolation_evidence = deterministic_sandbox_isolation_evidence(&sandbox_profiles)?;
     let isolation_evidence_digest_blake3 =
         deterministic_sandbox_isolation_evidence_digest_blake3(isolation_evidence.clone()).map_err(core_error)?;
@@ -402,6 +471,7 @@ fn maybe_run_deterministic_proof(
     Ok(Some(DeterministicProofOutput {
         path,
         digest_blake3,
+        receipt,
         isolation_evidence_path,
         isolation_evidence_digest_blake3,
     }))
@@ -581,6 +651,7 @@ fn deterministic_run_receipt(
     run_id: &str,
     run_index: u32,
     store_dir: &Path,
+    output_dir: &Path,
     sandbox_profile_identity: &str,
     comparisons: &[ReproducibilityArtifactComparison],
 ) -> Result<DeterministicBuildRunReceipt, RunError> {
@@ -601,6 +672,7 @@ fn deterministic_run_receipt(
         run_id: run_id.to_string(),
         perturbation_case: deterministic_perturbation_case(run_index),
         output_store_paths: vec![store_dir.display().to_string()],
+        output_root_identity: output_dir.display().to_string(),
         sandbox_profile_identity: sandbox_profile_identity.to_string(),
         output_digests,
         substituted_dependency_identities: Vec::new(),
@@ -1093,12 +1165,14 @@ mod tests {
             "run-000",
             0,
             Path::new("/tmp/proof/run-000/store"),
+            Path::new("/tmp/proof/run-000/outputs"),
             "mantle-proof-sandbox-v1:test",
             &[comparison],
         )
         .unwrap();
 
         assert_eq!(run.output_store_paths, vec!["/tmp/proof/run-000/store".to_string()]);
+        assert_eq!(run.output_root_identity, "/tmp/proof/run-000/outputs");
         assert_eq!(run.sandbox_profile_identity, "mantle-proof-sandbox-v1:test");
         assert_eq!(run.output_digests[0].digest_blake3, sample_digest(1));
         assert_eq!(run.perturbation_case, "baseline-clean-env");

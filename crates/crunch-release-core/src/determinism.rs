@@ -13,7 +13,7 @@ use crate::ReleaseEvidenceError;
 use crate::manifest::validate_blake3_hex;
 use crate::manifest::validation_error;
 
-pub const DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA: &str = "mantle-deterministic-build-proof-v1";
+pub const DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA: &str = "mantle-deterministic-proof-receipt-v1";
 pub const DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA: &str = "mantle-deterministic-sandbox-isolation-evidence-v1";
 const REQUIRED_RUN_COUNT: usize = 2;
 pub const SUPPORTED_SANDBOX_PROFILE_FAMILY: &str = "mantle-proof-sandbox-v1";
@@ -42,11 +42,15 @@ const SUPPORTED_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1:";
 #[serde(rename_all = "kebab-case")]
 pub enum DeterministicBuildProofVerdict {
     NotAttempted,
-    DeterministicMatch,
+    SelfRebuildMatch,
     Mismatch,
     MissingEvidence,
+    ReusedStore,
     ImpureMode,
     UnsupportedWorkflow,
+    UnsupportedSandbox,
+    ProviderKindMismatch,
+    MalformedReceipt,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,6 +72,12 @@ pub struct DeterministicSandboxIsolationEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeterministicProofUnit {
+    pub target_artifact_identity: String,
+    pub output_identities: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeterministicOutputDigest {
     pub name: String,
     pub digest_blake3: String,
@@ -78,6 +88,7 @@ pub struct DeterministicBuildRunReceipt {
     pub run_id: String,
     pub perturbation_case: String,
     pub output_store_paths: Vec<String>,
+    pub output_root_identity: String,
     pub sandbox_profile_identity: String,
     pub output_digests: Vec<DeterministicOutputDigest>,
     pub substituted_dependency_identities: Vec<String>,
@@ -87,10 +98,15 @@ pub struct DeterministicBuildRunReceipt {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeterministicBuildProofReceipt {
     pub schema: String,
+    pub proof_unit: DeterministicProofUnit,
     pub derivation_identity: String,
     pub hermeticity_mode: String,
     pub workflow_version: String,
+    pub selected_provider_kind: String,
+    pub source_blake3: String,
+    pub vendor_blake3: String,
     pub toolchain_provider_identity: String,
+    pub toolchain_stage_roots: Vec<String>,
     pub logical_store_prefix: String,
     pub physical_store_isolation: String,
     pub normalized_execution_envelope: Vec<String>,
@@ -99,14 +115,21 @@ pub struct DeterministicBuildProofReceipt {
     pub runs: Vec<DeterministicBuildRunReceipt>,
     pub verdict: DeterministicBuildProofVerdict,
     pub blocking_reasons: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_blake3: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeterministicBuildProofReceiptInit {
+    pub proof_unit: DeterministicProofUnit,
     pub derivation_identity: String,
     pub hermeticity_mode: String,
     pub workflow_version: String,
+    pub selected_provider_kind: String,
+    pub source_blake3: String,
+    pub vendor_blake3: String,
     pub toolchain_provider_identity: String,
+    pub toolchain_stage_roots: Vec<String>,
     pub logical_store_prefix: String,
     pub physical_store_isolation: String,
     pub normalized_execution_envelope: Vec<String>,
@@ -119,10 +142,15 @@ impl DeterministicBuildProofReceipt {
     pub fn new(init: DeterministicBuildProofReceiptInit) -> Self {
         let mut receipt = Self {
             schema: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
+            proof_unit: init.proof_unit,
             derivation_identity: init.derivation_identity,
             hermeticity_mode: init.hermeticity_mode,
             workflow_version: init.workflow_version,
+            selected_provider_kind: init.selected_provider_kind,
+            source_blake3: init.source_blake3,
+            vendor_blake3: init.vendor_blake3,
             toolchain_provider_identity: init.toolchain_provider_identity,
+            toolchain_stage_roots: init.toolchain_stage_roots,
             logical_store_prefix: init.logical_store_prefix,
             physical_store_isolation: init.physical_store_isolation,
             normalized_execution_envelope: init.normalized_execution_envelope,
@@ -131,6 +159,7 @@ impl DeterministicBuildProofReceipt {
             runs: init.runs,
             verdict: DeterministicBuildProofVerdict::NotAttempted,
             blocking_reasons: Vec::new(),
+            receipt_blake3: None,
         };
         let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
         receipt.verdict = verdict;
@@ -142,11 +171,14 @@ impl DeterministicBuildProofReceipt {
 pub fn canonical_deterministic_build_proof_receipt(
     mut receipt: DeterministicBuildProofReceipt,
 ) -> Result<DeterministicBuildProofReceipt, ReleaseEvidenceError> {
+    let provided_receipt_blake3 = receipt.receipt_blake3.take();
     validate_receipt_header(&receipt)?;
     receipt.schema = DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string();
     receipt.normalized_execution_envelope.sort();
     receipt.ambient_host_perturbations.sort();
     receipt.sandbox_profile_identities.sort();
+    receipt.toolchain_stage_roots.sort();
+    receipt.proof_unit.output_identities.sort();
     receipt.blocking_reasons.sort();
     for run in &mut receipt.runs {
         run.output_store_paths.sort();
@@ -170,13 +202,27 @@ pub fn canonical_deterministic_build_proof_receipt(
             "deterministic build proof receipt blocking_reasons do not match classified reasons".to_string(),
         ));
     }
+    if let Some(provided) = provided_receipt_blake3 {
+        let digest = blake3::hash(&serde_json::to_vec(&receipt).map_err(|err| {
+            ReleaseEvidenceError::Parse(format!("serializing deterministic build proof receipt: {err}"))
+        })?)
+        .to_hex()
+        .to_string();
+        if provided != digest {
+            return Err(validation_error(
+                "deterministic build proof receipt receipt_blake3 does not match canonical receipt bytes".to_string(),
+            ));
+        }
+        receipt.receipt_blake3 = Some(provided);
+    }
     Ok(receipt)
 }
 
 pub fn deterministic_build_proof_receipt_canonical_bytes(
     receipt: DeterministicBuildProofReceipt,
 ) -> Result<Vec<u8>, ReleaseEvidenceError> {
-    let canonical = canonical_deterministic_build_proof_receipt(receipt)?;
+    let mut canonical = canonical_deterministic_build_proof_receipt(receipt)?;
+    canonical.receipt_blake3 = None;
     serde_json::to_vec(&canonical)
         .map_err(|err| ReleaseEvidenceError::Parse(format!("serializing deterministic build proof receipt: {err}")))
 }
@@ -184,7 +230,10 @@ pub fn deterministic_build_proof_receipt_canonical_bytes(
 pub fn deterministic_build_proof_receipt_digest_blake3(
     receipt: DeterministicBuildProofReceipt,
 ) -> Result<String, ReleaseEvidenceError> {
-    let bytes = deterministic_build_proof_receipt_canonical_bytes(receipt)?;
+    let mut receipt = canonical_deterministic_build_proof_receipt(receipt)?;
+    receipt.receipt_blake3 = None;
+    let bytes = serde_json::to_vec(&receipt)
+        .map_err(|err| ReleaseEvidenceError::Parse(format!("serializing deterministic build proof receipt: {err}")))?;
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
@@ -272,7 +321,7 @@ pub fn deterministic_release_claim_eligible(
                 )));
             }
         }
-        if receipt.verdict != DeterministicBuildProofVerdict::DeterministicMatch {
+        if receipt.verdict != DeterministicBuildProofVerdict::SelfRebuildMatch {
             return Ok(false);
         }
         for digest in receipt.runs.first().into_iter().flat_map(|run| &run.output_digests) {
@@ -292,9 +341,13 @@ fn validate_receipt_header(receipt: &DeterministicBuildProofReceipt) -> Result<(
         )));
     }
     for (field, value) in [
+        ("proof_unit.target_artifact_identity", &receipt.proof_unit.target_artifact_identity),
         ("derivation_identity", &receipt.derivation_identity),
         ("hermeticity_mode", &receipt.hermeticity_mode),
         ("workflow_version", &receipt.workflow_version),
+        ("selected_provider_kind", &receipt.selected_provider_kind),
+        ("source_blake3", &receipt.source_blake3),
+        ("vendor_blake3", &receipt.vendor_blake3),
         ("toolchain_provider_identity", &receipt.toolchain_provider_identity),
         ("logical_store_prefix", &receipt.logical_store_prefix),
         ("physical_store_isolation", &receipt.physical_store_isolation),
@@ -303,10 +356,14 @@ fn validate_receipt_header(receipt: &DeterministicBuildProofReceipt) -> Result<(
             return Err(validation_error(format!("deterministic build proof receipt {field} must not be empty")));
         }
     }
+    validate_blake3_hex(&receipt.source_blake3, "deterministic build proof receipt source_blake3")?;
+    validate_blake3_hex(&receipt.vendor_blake3, "deterministic build proof receipt vendor_blake3")?;
     Ok(())
 }
 
 fn validate_receipt_evidence(receipt: &DeterministicBuildProofReceipt) -> Result<(), ReleaseEvidenceError> {
+    validate_string_set(&receipt.proof_unit.output_identities, "proof_unit.output_identities")?;
+    validate_string_set(&receipt.toolchain_stage_roots, "toolchain_stage_roots")?;
     validate_string_set(&receipt.normalized_execution_envelope, "normalized_execution_envelope")?;
     validate_string_set(&receipt.ambient_host_perturbations, "ambient_host_perturbations")?;
     validate_string_set(&receipt.sandbox_profile_identities, "sandbox_profile_identities")?;
@@ -325,6 +382,7 @@ fn validate_run(run: &DeterministicBuildRunReceipt) -> Result<(), ReleaseEvidenc
     for (field, value) in [
         ("run_id", &run.run_id),
         ("perturbation_case", &run.perturbation_case),
+        ("output_root_identity", &run.output_root_identity),
         ("sandbox_profile_identity", &run.sandbox_profile_identity),
     ] {
         if value.trim().is_empty() {
@@ -382,6 +440,19 @@ fn classify_deterministic_build_proof(
         reasons.push(format!("unsupported workflow_version {}", receipt.workflow_version));
         return (DeterministicBuildProofVerdict::UnsupportedWorkflow, reasons);
     }
+    if receipt.source_blake3.len() != crate::manifest::BLAKE3_HEX_LENGTH_CHARS
+        || receipt.vendor_blake3.len() != crate::manifest::BLAKE3_HEX_LENGTH_CHARS
+    {
+        reasons.push("malformed source/vendor BLAKE3 input identity".to_string());
+        return (DeterministicBuildProofVerdict::MalformedReceipt, reasons);
+    }
+    if !receipt
+        .toolchain_provider_identity
+        .contains(&format!("provider-kind={}", receipt.selected_provider_kind))
+    {
+        reasons.push("provider kind mismatch between proof unit and provider identity".to_string());
+        return (DeterministicBuildProofVerdict::ProviderKindMismatch, reasons);
+    }
     if receipt.hermeticity_mode == "impure" {
         reasons.push("impure hermeticity mode".to_string());
         return (DeterministicBuildProofVerdict::ImpureMode, reasons);
@@ -425,26 +496,42 @@ fn classify_deterministic_build_proof(
         }
     }
     if !reasons.is_empty() {
+        if reasons.iter().any(|reason| {
+            reason.contains("reused derivation-under-test output store identity")
+                || reason.contains("reused derivation-under-test output root identity")
+        }) {
+            return (DeterministicBuildProofVerdict::ReusedStore, reasons);
+        }
+        if reasons.iter().any(|reason| reason.contains("sandbox")) {
+            return (DeterministicBuildProofVerdict::UnsupportedSandbox, reasons);
+        }
         return (DeterministicBuildProofVerdict::MissingEvidence, reasons);
     }
     if digest_sets_match(&receipt.runs) {
-        (DeterministicBuildProofVerdict::DeterministicMatch, Vec::new())
+        (DeterministicBuildProofVerdict::SelfRebuildMatch, Vec::new())
     } else {
         (DeterministicBuildProofVerdict::Mismatch, vec!["BLAKE3 output digest set mismatch".to_string()])
     }
 }
 
 fn reused_output_store_path_reasons(runs: &[DeterministicBuildRunReceipt]) -> Vec<String> {
-    let mut seen = BTreeSet::new();
+    let mut seen_store_paths = BTreeSet::new();
+    let mut seen_output_roots = BTreeSet::new();
     let mut reasons = Vec::new();
     for run in runs {
         if run.output_store_paths.is_empty() {
             reasons.push(format!("run {} has no clean output store identity", run.run_id));
         }
         for path in &run.output_store_paths {
-            if !seen.insert(path.clone()) {
+            if !seen_store_paths.insert(path.clone()) {
                 reasons.push(format!("reused derivation-under-test output store identity {path}"));
             }
+            if run.output_root_identity == *path {
+                reasons.push(format!("run {} output root reuses proof store identity {path}", run.run_id));
+            }
+        }
+        if !seen_output_roots.insert(run.output_root_identity.clone()) {
+            reasons.push(format!("reused derivation-under-test output root identity {}", run.output_root_identity));
         }
     }
     reasons
@@ -490,6 +577,7 @@ mod tests {
             run_id: id.to_string(),
             perturbation_case: case.to_string(),
             output_store_paths: vec![format!("/mantle/store/{seed:02x}-{id}-demo")],
+            output_root_identity: format!("/tmp/proof/{id}/outputs"),
             sandbox_profile_identity: "mantle-proof-sandbox-v1:demo".to_string(),
             output_digests: vec![DeterministicOutputDigest {
                 name: "out".to_string(),
@@ -506,10 +594,18 @@ mod tests {
 
     fn receipt() -> DeterministicBuildProofReceipt {
         DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
+            proof_unit: DeterministicProofUnit {
+                target_artifact_identity: "release:demo".to_string(),
+                output_identities: vec!["out".to_string()],
+            },
+            selected_provider_kind: "source-root".to_string(),
+            source_blake3: digest(10),
+            vendor_blake3: digest(11),
+            toolchain_stage_roots: vec!["stage-root=/mantle/store/stage".to_string()],
             derivation_identity: "/mantle/store/demo.drv".to_string(),
             hermeticity_mode: "strict".to_string(),
             workflow_version: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
-            toolchain_provider_identity: "toolchain=gcc10-provider-contract".to_string(),
+            toolchain_provider_identity: "provider-kind=source-root;toolchain=gcc10-provider-contract".to_string(),
             logical_store_prefix: "/mantle/store".to_string(),
             physical_store_isolation: "fresh-store-per-run".to_string(),
             normalized_execution_envelope: vec!["sandbox=bwrap".to_string(), "network=none".to_string()],
@@ -545,7 +641,7 @@ mod tests {
     #[test]
     fn deterministic_receipt_accepts_strict_matching_runs() {
         let canonical = canonical_deterministic_build_proof_receipt(receipt()).unwrap();
-        assert_eq!(canonical.verdict, DeterministicBuildProofVerdict::DeterministicMatch);
+        assert_eq!(canonical.verdict, DeterministicBuildProofVerdict::SelfRebuildMatch);
     }
 
     #[test]
@@ -553,10 +649,18 @@ mod tests {
         let mut receipt = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
             runs: vec![run("run-a", "case-a", 1), run("run-b", "case-b", 2)],
             ..DeterministicBuildProofReceiptInit {
+                proof_unit: DeterministicProofUnit {
+                    target_artifact_identity: "release:demo".to_string(),
+                    output_identities: vec!["out".to_string()],
+                },
+                selected_provider_kind: "source-root".to_string(),
+                source_blake3: digest(10),
+                vendor_blake3: digest(11),
+                toolchain_stage_roots: vec!["stage-root=/mantle/store/stage".to_string()],
                 derivation_identity: "/mantle/store/demo.drv".to_string(),
                 hermeticity_mode: "strict".to_string(),
                 workflow_version: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
-                toolchain_provider_identity: "toolchain=gcc10-provider-contract".to_string(),
+                toolchain_provider_identity: "provider-kind=source-root;toolchain=gcc10-provider-contract".to_string(),
                 logical_store_prefix: "/mantle/store".to_string(),
                 physical_store_isolation: "fresh-store-per-run".to_string(),
                 normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
@@ -590,10 +694,18 @@ mod tests {
         let receipt = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
             runs: vec![first, reused],
             ..DeterministicBuildProofReceiptInit {
+                proof_unit: DeterministicProofUnit {
+                    target_artifact_identity: "release:demo".to_string(),
+                    output_identities: vec!["out".to_string()],
+                },
+                selected_provider_kind: "source-root".to_string(),
+                source_blake3: digest(10),
+                vendor_blake3: digest(11),
+                toolchain_stage_roots: vec!["stage-root=/mantle/store/stage".to_string()],
                 derivation_identity: "/mantle/store/demo.drv".to_string(),
                 hermeticity_mode: "strict".to_string(),
                 workflow_version: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
-                toolchain_provider_identity: "toolchain=gcc10-provider-contract".to_string(),
+                toolchain_provider_identity: "provider-kind=source-root;toolchain=gcc10-provider-contract".to_string(),
                 logical_store_prefix: "/mantle/store".to_string(),
                 physical_store_isolation: "fresh-store-per-run".to_string(),
                 normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
@@ -602,12 +714,13 @@ mod tests {
                 runs: Vec::new(),
             }
         });
-        assert_eq!(receipt.verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert_eq!(receipt.verdict, DeterministicBuildProofVerdict::ReusedStore);
         assert!(
             receipt
                 .blocking_reasons
                 .iter()
-                .any(|reason| reason.contains("reused derivation-under-test output store identity"))
+                .any(|reason| reason.contains("reused derivation-under-test output store identity")
+                    || reason.contains("reused derivation-under-test output root identity"))
         );
     }
 
@@ -618,8 +731,26 @@ mod tests {
         receipt.runs[0].sandbox_profile_identity = "direct-host:demo".to_string();
         receipt.runs[1].sandbox_profile_identity = "direct-host:demo".to_string();
         let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
-        assert_eq!(verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert_eq!(verdict, DeterministicBuildProofVerdict::UnsupportedSandbox);
         assert!(reasons.iter().any(|reason| reason.contains("unsupported deterministic proof sandbox profile")));
+    }
+
+    #[test]
+    fn deterministic_receipt_rejects_unsupported_workflow_version() {
+        let mut receipt = receipt();
+        receipt.workflow_version = "mantle-deterministic-proof-receipt-v0".to_string();
+        let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+        assert_eq!(verdict, DeterministicBuildProofVerdict::UnsupportedWorkflow);
+        assert!(reasons.iter().any(|reason| reason.contains("unsupported workflow_version")));
+    }
+
+    #[test]
+    fn deterministic_receipt_rejects_provider_kind_mismatch() {
+        let mut receipt = receipt();
+        receipt.selected_provider_kind = "binary-cache".to_string();
+        let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+        assert_eq!(verdict, DeterministicBuildProofVerdict::ProviderKindMismatch);
+        assert!(reasons.iter().any(|reason| reason.contains("provider kind mismatch")));
     }
 
     #[test]
