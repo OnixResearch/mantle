@@ -50,6 +50,8 @@ const HASH_BUFFER_BYTES: usize = 8192;
 const MAX_REBUILD_OUTPUT_ENTRIES: u32 = 4096;
 const PROOF_SANDBOX_BWRAP_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_BWRAP";
 const PROOF_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1";
+const PROOF_SANDBOX_SYSTEM_TOOLS_DIR: &str = "/run/current-system/sw";
+const PROOF_SANDBOX_PATH: &str = "/run/current-system/sw/bin:/usr/bin:/bin";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProofSandboxProfile {
@@ -519,20 +521,30 @@ fn sandboxed_rebuild_command(
         .arg("--die-with-parent")
         .arg("--new-session")
         .arg("--clearenv")
-        .arg("--ro-bind")
-        .arg(&profile.bundle_dir)
-        .arg(&profile.bundle_dir)
-        .arg("--ro-bind")
-        .arg(&command_path)
-        .arg(&command_path)
-        .arg("--bind")
-        .arg(output_dir)
-        .arg(output_dir)
-        .arg("--bind")
-        .arg(store_dir)
-        .arg(store_dir)
         .arg("--tmpfs")
-        .arg("/tmp")
+        .arg("/tmp");
+    let system_tools_dir = Path::new(PROOF_SANDBOX_SYSTEM_TOOLS_DIR);
+    let mut parent_paths = vec![&profile.bundle_dir, &command_path, output_dir, store_dir];
+    if system_tools_dir.is_dir() {
+        parent_paths.push(system_tools_dir);
+    }
+    append_bwrap_parent_dirs(&mut command, parent_paths);
+    if system_tools_dir.is_dir() {
+        command.arg("--ro-bind").arg(system_tools_dir).arg(system_tools_dir);
+    }
+    command
+        .arg("--ro-bind")
+        .arg(&profile.bundle_dir)
+        .arg(&profile.bundle_dir)
+        .arg("--ro-bind")
+        .arg(&command_path)
+        .arg(&command_path)
+        .arg("--bind")
+        .arg(output_dir)
+        .arg(output_dir)
+        .arg("--bind")
+        .arg(store_dir)
+        .arg(store_dir)
         .arg("--setenv")
         .arg(REPRODUCE_BUNDLE_DIR_ENV)
         .arg(&profile.bundle_dir)
@@ -550,7 +562,7 @@ fn sandboxed_rebuild_command(
         .arg("/tmp")
         .arg("--setenv")
         .arg("PATH")
-        .arg("/run/current-system/sw/bin:/usr/bin:/bin")
+        .arg(PROOF_SANDBOX_PATH)
         .arg("--setenv")
         .arg("LANG")
         .arg("C.UTF-8")
@@ -565,6 +577,21 @@ fn sandboxed_rebuild_command(
         .arg(&command_path)
         .args(&request.rebuild_args);
     Ok(command)
+}
+
+fn append_bwrap_parent_dirs<'a>(command: &mut ProcessCommand, paths: impl IntoIterator<Item = &'a Path>) {
+    let mut parents = BTreeSet::<PathBuf>::new();
+    for path in paths {
+        for ancestor in path.ancestors().skip(1) {
+            if ancestor == Path::new("/") || ancestor.as_os_str().is_empty() {
+                continue;
+            }
+            parents.insert(ancestor.to_path_buf());
+        }
+    }
+    for parent in parents {
+        command.arg("--dir").arg(parent);
+    }
 }
 
 fn resolve_bwrap_executor() -> Result<PathBuf, RunError> {
@@ -1097,6 +1124,25 @@ mod tests {
             size_bytes: EXPECTED_SIZE_BYTES,
             digest_blake3: sample_digest(1),
         }
+    }
+
+    #[test]
+    fn append_bwrap_parent_dirs_creates_ancestors_before_nested_binds() {
+        let mut command = ProcessCommand::new("bwrap");
+
+        append_bwrap_parent_dirs(&mut command, [
+            Path::new("/home/brittonr/.cargo-target/repo-targets/crunch__crunch/release/rebuild.sh"),
+            Path::new("/home/brittonr/.cargo-target/repo-targets/crunch__crunch/proof/run-000/store"),
+        ]);
+
+        let args: Vec<_> = command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        assert!(args.windows(2).any(|pair| pair == ["--dir", "/home"]));
+        assert!(args.windows(2).any(|pair| pair == ["--dir", "/home/brittonr/.cargo-target"]));
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--dir", "/home/brittonr/.cargo-target/repo-targets/crunch__crunch"])
+        );
+        assert!(!args.windows(2).any(|pair| pair == ["--dir", "/"]));
     }
 
     #[test]

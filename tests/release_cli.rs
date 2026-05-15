@@ -651,7 +651,7 @@ while [ "$#" -gt 0 ]; do
       fi
       shift 3
       ;;
-    --tmpfs|--dev|--proc|--chdir)
+    --tmpfs|--dev|--proc|--chdir|--dir)
       if [ "$1" = "--chdir" ]; then cd "$2"; fi
       shift 2 ;;
     --setenv) export "$2=$3"; shift 3 ;;
