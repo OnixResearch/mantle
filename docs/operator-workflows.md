@@ -266,6 +266,14 @@ cargo -Zscript scripts/release-determinism-smoke.rs
 cargo -Zscript scripts/check-release-determinism-smoke-receipt.rs \
   target/release-determinism-smoke/latest/receipt.json
 
+# Run the real release-specific proof rail: full proof bundle -> release bundle
+# -> two clean deterministic proof rebuilds -> verified deterministic receipt
+./scripts/prove-real-release-determinism.sh
+
+# Reuse an existing full self-hosting proof bundle instead of rerunning it
+./scripts/prove-real-release-determinism.sh \
+  --proof-bundle target/self-hosting-proof/run-...
+
 # Re-check a saved bundle using only bundle-local contents
 mantle release verify target/release-evidence/<release-id>
 

@@ -524,7 +524,9 @@ fn sandboxed_rebuild_command(
         .arg("--tmpfs")
         .arg("/tmp");
     let system_tools_dir = Path::new(PROOF_SANDBOX_SYSTEM_TOOLS_DIR);
+    let existing_arg_paths = existing_absolute_rebuild_arg_paths(&request.rebuild_args);
     let mut parent_paths = vec![&profile.bundle_dir, &command_path, output_dir, store_dir];
+    parent_paths.extend(existing_arg_paths.iter().map(PathBuf::as_path));
     if system_tools_dir.is_dir() {
         parent_paths.push(system_tools_dir);
     }
@@ -538,7 +540,11 @@ fn sandboxed_rebuild_command(
         .arg(&profile.bundle_dir)
         .arg("--ro-bind")
         .arg(&command_path)
-        .arg(&command_path)
+        .arg(&command_path);
+    for arg_path in &existing_arg_paths {
+        command.arg("--ro-bind").arg(arg_path).arg(arg_path);
+    }
+    command
         .arg("--bind")
         .arg(output_dir)
         .arg(output_dir)
@@ -577,6 +583,10 @@ fn sandboxed_rebuild_command(
         .arg(&command_path)
         .args(&request.rebuild_args);
     Ok(command)
+}
+
+fn existing_absolute_rebuild_arg_paths(args: &[OsString]) -> Vec<PathBuf> {
+    args.iter().map(PathBuf::from).filter(|path| path.is_absolute() && path.exists()).collect()
 }
 
 fn append_bwrap_parent_dirs<'a>(command: &mut ProcessCommand, paths: impl IntoIterator<Item = &'a Path>) {
@@ -1143,6 +1153,21 @@ mod tests {
                 .any(|pair| pair == ["--dir", "/home/brittonr/.cargo-target/repo-targets/crunch__crunch"])
         );
         assert!(!args.windows(2).any(|pair| pair == ["--dir", "/"]));
+    }
+
+    #[test]
+    fn existing_absolute_rebuild_arg_paths_collects_only_bindable_absolute_paths() {
+        let temp_path = std::env::temp_dir().join(format!("mantle-rebuild-arg-path-{}", std::process::id()));
+        std::fs::write(&temp_path, b"helper").unwrap();
+
+        let paths = existing_absolute_rebuild_arg_paths(&[
+            OsString::from("sh"),
+            temp_path.as_os_str().to_os_string(),
+            OsString::from("/definitely/missing/mantle-helper"),
+        ]);
+
+        assert_eq!(paths, vec![temp_path.clone()]);
+        std::fs::remove_file(temp_path).unwrap();
     }
 
     #[test]

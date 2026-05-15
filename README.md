@@ -992,6 +992,22 @@ cargo -Zscript scripts/check-release-determinism-smoke-receipt.rs \
 The receipt is smoke evidence for the rail and does not replace a
 release-specific proof receipt.
 
+For a real release-specific rail, run the self-hosting proof, package the
+stage2 mantle binary, produce two clean deterministic proof rebuilds under real
+`bwrap`, and verify the generated proof in one command:
+
+```bash
+./scripts/prove-real-release-determinism.sh
+```
+
+Use `--proof-bundle target/self-hosting-proof/run-...` to reuse an existing full
+self-hosting proof bundle. The script writes the release bundle,
+`deterministic-build-proof.json`, sandbox evidence, and verify receipt under
+`target/release-evidence/`. Its successful claim is bounded to the packaged
+stage2 artifact rebuilding twice from the recorded inputs under recorded
+`mantle-proof-sandbox-v1:*` profiles with matching BLAKE3 digest sets; it does
+not claim full bootstrap reproducibility.
+
 The report records a closed proof-class ladder:
 
 - `bundle-consistent`: bundle-local digest/linkage checks only.
