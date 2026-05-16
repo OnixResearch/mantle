@@ -316,6 +316,18 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected binutils-tcc bridge-output suppression with checked evidence".to_string());
     }
+    if evidence.gcc40_placeholder_inventory_checked
+        && suppression_reason(Path::new("bootstrap/evidence/gcc-4.0-placeholder-inventory.json"), MARKERS[0], &evidence)
+            .is_none()
+    {
+        return Err("self-test expected gcc-4.0 placeholder inventory bridge-output suppression".to_string());
+    }
+    if evidence.gcc40_native_boundary_checked
+        && suppression_reason(Path::new("bootstrap/evidence/gcc-4.0-native-boundary.json"), MARKERS[0], &evidence)
+            .is_none()
+    {
+        return Err("self-test expected gcc-4.0 native boundary bridge-output suppression".to_string());
+    }
 
     Ok(())
 }
@@ -323,21 +335,27 @@ fn run_self_tests() -> Result<(), String> {
 #[derive(Debug, Clone, Copy, Default)]
 struct EvidenceState {
     binutils_tcc_tool_smoke_checked: bool,
+    gcc40_placeholder_inventory_checked: bool,
+    gcc40_native_boundary_checked: bool,
 }
 
 impl EvidenceState {
     fn load() -> Self {
         Self {
             binutils_tcc_tool_smoke_checked: checked_binutils_tcc_tool_smoke(),
+            gcc40_placeholder_inventory_checked: checked_gcc40_placeholder_inventory(),
+            gcc40_native_boundary_checked: checked_gcc40_native_boundary(),
         }
     }
 }
 
+fn checked_evidence_file(path: &str, needles: &[&str]) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    needles.iter().all(|needle| content.contains(needle)).then_some(content)
+}
+
 fn checked_binutils_tcc_tool_smoke() -> bool {
-    let Ok(content) = fs::read_to_string("bootstrap/evidence/binutils-tcc-tool-smoke.json") else {
-        return false;
-    };
-    [
+    let Some(content) = checked_evidence_file("bootstrap/evidence/binutils-tcc-tool-smoke.json", &[
         "\"schema\": \"mantle-binutils-tcc-tool-smoke-v1\"",
         "\"derivation\": \"bootstrap/binutils-tcc.ncl\"",
         "\"host_fallback\": false",
@@ -349,10 +367,34 @@ fn checked_binutils_tcc_tool_smoke() -> bool {
         "\"ranlib\"",
         "\"nm\"",
         "\"objcopy\"",
-    ]
-    .iter()
-    .all(|needle| content.contains(needle))
-        && content.matches("\"exit_status\": 0").count() >= 6
+    ]) else {
+        return false;
+    };
+    content.matches("\"exit_status\": 0").count() >= 6
+}
+
+fn checked_gcc40_placeholder_inventory() -> bool {
+    checked_evidence_file("bootstrap/evidence/gcc-4.0-placeholder-inventory.json", &[
+        "\"schema\": \"mantle-gcc40-placeholder-inventory-v1\"",
+        "\"derivation\": \"bootstrap/gcc-4.0.ncl\"",
+        "\"status\": \"inventory-only\"",
+        "\"marker_count\": 4",
+        "\"classification\": \"pass1-generator-or-driver-bridge\"",
+        "\"classification\": \"pass1-driver-boundary\"",
+    ])
+    .is_some()
+}
+
+fn checked_gcc40_native_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/gcc-4.0-native-boundary.json", &[
+        "\"schema\": \"mantle-gcc40-native-boundary-v1\"",
+        "\"derivation\": \"bootstrap/gcc-4.0.ncl\"",
+        "\"status\": \"boundary-only\"",
+        "\"boundary\": \"native-gcc-make-to-pass1-bridge\"",
+        "\"id\": \"cc1-arithmetic-control-flow\"",
+        "\"parity_effect\": \"evidence-backed partial; does not prove native gcc.4.0 correctness\"",
+    ])
+    .is_some()
 }
 
 fn suppression_reason(path: &Path, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
@@ -364,6 +406,18 @@ fn suppression_reason(path: &Path, marker: MarkerClass, evidence: &EvidenceState
         return Some(
             "binutils-tcc has checked source-root tool-smoke evidence and remains partial, not unproved bridge output",
         );
+    }
+    if marker.id == "bridge-output"
+        && path_s.ends_with("bootstrap/evidence/gcc-4.0-placeholder-inventory.json")
+        && evidence.gcc40_placeholder_inventory_checked
+    {
+        return Some("gcc-4.0 placeholder inventory is checked blocker metadata, not an additional bridge blocker");
+    }
+    if marker.id == "bridge-output"
+        && path_s.ends_with("bootstrap/evidence/gcc-4.0-native-boundary.json")
+        && evidence.gcc40_native_boundary_checked
+    {
+        return Some("gcc-4.0 native boundary receipt is checked boundary metadata, not an additional bridge blocker");
     }
     None
 }
