@@ -497,6 +497,22 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected tcc musl handoff bridge receipt metadata suppression".to_string());
     }
+    if evidence.diagnostic_derivation_boundary_inventory_checked
+        && suppression_reason(Path::new("bootstrap/diag-tcc27-warning-format.ncl"), 1, MARKERS[1], &evidence).is_none()
+    {
+        return Err("self-test expected diagnostic derivation boundary suppression".to_string());
+    }
+    if evidence.diagnostic_derivation_boundary_inventory_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/diagnostic-derivation-boundary-inventory.json"),
+            4,
+            MARKERS[0],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected diagnostic derivation inventory receipt metadata suppression".to_string());
+    }
 
     Ok(())
 }
@@ -514,6 +530,7 @@ struct EvidenceState {
     musl_1124_tcc_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_archive_boundary_checked: bool,
     tcc_musl_handoff_bridge_boundaries_checked: bool,
+    diagnostic_derivation_boundary_inventory_checked: bool,
 }
 
 impl EvidenceState {
@@ -530,6 +547,7 @@ impl EvidenceState {
             musl_1124_tcc_musl_bridge_boundary_checked: checked_musl_1124_tcc_musl_bridge_boundary(),
             musl_1124_tcc_archive_boundary_checked: checked_musl_1124_tcc_archive_boundary(),
             tcc_musl_handoff_bridge_boundaries_checked: checked_tcc_musl_handoff_bridge_boundaries(),
+            diagnostic_derivation_boundary_inventory_checked: checked_diagnostic_derivation_boundary_inventory(),
         }
     }
 }
@@ -756,6 +774,46 @@ fn checked_tcc_musl_handoff_bridge_boundaries() -> bool {
         ])
 }
 
+fn checked_diagnostic_derivation_boundary_inventory() -> bool {
+    checked_evidence_file("bootstrap/evidence/diagnostic-derivation-boundary-inventory.json", &[
+        "\"schema\": \"mantle-diagnostic-derivation-boundary-inventory-v1\"",
+        "\"status\": \"inventory-only\"",
+        "\"expected_complete\": false",
+        "\"derivation\": \"bootstrap/diag-tcc27-warning-format.ncl\"",
+        "\"derivation\": \"bootstrap/diag-tcc27-static-runtime.ncl\"",
+        "\"derivation\": \"bootstrap/diag-i386-tinycc26-emission.ncl\"",
+        "\"derivation\": \"bootstrap/diag-musl-startup-boundary.ncl\"",
+        "\"derivation\": \"bootstrap/spike-i386-mes-runtime-layout.ncl\"",
+        "\"derivation\": \"bootstrap/spike-i386-tcc27-make-pass1.ncl\"",
+        "diagnostic metadata classification only",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/diag-tcc27-warning-format.ncl", &[
+            "Diagnostic: reduce TinyCC 0.9.27/Mes warning-format corruption",
+            "literal warning placeholders remain",
+        ])
+        && checked_source_file("bootstrap/diag-tcc27-static-runtime.ncl", &[
+            "Diagnostic: exercise TinyCC 0.9.27/Mes static executable runtime behavior",
+            "segfault class",
+        ])
+        && checked_source_file("bootstrap/diag-i386-tinycc26-emission.ncl", &[
+            "Diagnostic proof: split i386-targeting TinyCC 0.9.26 output generation",
+            "intentionally diagnostic-only",
+        ])
+        && checked_source_file("bootstrap/diag-musl-startup-boundary.ncl", &[
+            "Diagnostic: isolate the predecessor TCC + musl static startup boundary",
+            "diag-musl-startup-run",
+        ])
+        && checked_source_file("bootstrap/spike-i386-mes-runtime-layout.ncl", &[
+            "Spike proof: create an i386 Mes runtime/header layout",
+            "intentionally a sibling diagnostic derivation",
+        ])
+        && checked_source_file("bootstrap/spike-i386-tcc27-make-pass1.ncl", &[
+            "Spike proof: try the i386 live-bootstrap sequence",
+            "intentionally a sibling diagnostic derivation",
+        ])
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -832,6 +890,16 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/tcc-musl-handoff-bridge-boundaries.json")
     {
         return Some("tcc musl handoff bridge-boundary receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.diagnostic_derivation_boundary_inventory_checked && is_diagnostic_derivation_path(&path_s) {
+        return Some(
+            "diagnostic derivation boundary is classified as diagnostic metadata; production bootstrap blockers remain counted",
+        );
+    }
+    if evidence.diagnostic_derivation_boundary_inventory_checked
+        && path_s.ends_with("bootstrap/evidence/diagnostic-derivation-boundary-inventory.json")
+    {
+        return Some("diagnostic derivation boundary inventory receipt is checked metadata, not an additional blocker");
     }
     if evidence.sed409_musl_bridge_boundary_checked
         && path_s.ends_with("bootstrap/sed-4.0.9-musl.ncl")
@@ -912,6 +980,18 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         return Some("musl 1.1.24 tcc archive-boundary receipt is checked metadata, not an additional blocker");
     }
     None
+}
+
+fn is_diagnostic_derivation_path(path: &str) -> bool {
+    matches!(
+        path,
+        "bootstrap/diag-tcc27-warning-format.ncl"
+            | "bootstrap/diag-tcc27-static-runtime.ncl"
+            | "bootstrap/diag-i386-tinycc26-emission.ncl"
+            | "bootstrap/diag-musl-startup-boundary.ncl"
+            | "bootstrap/spike-i386-mes-runtime-layout.ncl"
+            | "bootstrap/spike-i386-tcc27-make-pass1.ncl"
+    )
 }
 
 fn is_tcc_musl_source_normalization_note(path: &str, line: usize) -> bool {

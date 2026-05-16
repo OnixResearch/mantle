@@ -1,0 +1,58 @@
+{
+  "schema": "mantle-diagnostic-derivation-boundary-inventory-v1",
+  "status": "inventory-only",
+  "expected_complete": false,
+  "scope": "diagnostic-only derivations; production bootstrap blockers remain counted in their owning derivations",
+  "diagnostic_derivations": [
+    {
+      "derivation": "bootstrap/diag-tcc27-warning-format.ncl",
+      "purpose_marker": "Diagnostic: reduce TinyCC 0.9.27/Mes warning-format corruption to a tiny C input.",
+      "checked_markers": [
+        "literal warning placeholders remain",
+        "warn.c:3: warning: implicit declaration of function 'missing_warning_symbol'"
+      ]
+    },
+    {
+      "derivation": "bootstrap/diag-tcc27-static-runtime.ncl",
+      "purpose_marker": "Diagnostic: exercise TinyCC 0.9.27/Mes static executable runtime behavior.",
+      "checked_markers": [
+        "segfault class",
+        "diag-tcc27-static-runtime"
+      ]
+    },
+    {
+      "derivation": "bootstrap/diag-i386-tinycc26-emission.ncl",
+      "purpose_marker": "Diagnostic proof: split i386-targeting TinyCC 0.9.26 output generation.",
+      "checked_markers": [
+        "intentionally diagnostic-only",
+        "segfault boundary is visible in the derivation log"
+      ]
+    },
+    {
+      "derivation": "bootstrap/diag-musl-startup-boundary.ncl",
+      "purpose_marker": "Diagnostic: isolate the predecessor TCC + musl static startup boundary.",
+      "checked_markers": [
+        "diag-musl-startup-phase",
+        "diag-musl-startup-run"
+      ]
+    },
+    {
+      "derivation": "bootstrap/spike-i386-mes-runtime-layout.ncl",
+      "purpose_marker": "Spike proof: create an i386 Mes runtime/header layout for tcc26 -> tcc27.",
+      "checked_markers": [
+        "intentionally a sibling diagnostic derivation",
+        "records the first concrete blocker"
+      ]
+    },
+    {
+      "derivation": "bootstrap/spike-i386-tcc27-make-pass1.ncl",
+      "purpose_marker": "Spike proof: try the i386 live-bootstrap sequence tcc-0.9.26 -> tcc-0.9.27 -> make-3.82.",
+      "checked_markers": [
+        "intentionally a sibling diagnostic derivation",
+        "records the first concrete blocker"
+      ]
+    }
+  ],
+  "replacement_condition": "Remove this inventory-only receipt when these diagnostic derivations are promoted into production bootstrap stages or deleted after their owning production blockers are repaired.",
+  "parity_effect": "diagnostic metadata classification only; does not promote or complete any bootstrap stage"
+}
