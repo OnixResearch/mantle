@@ -31,6 +31,7 @@ mod self_build;
 mod shell_cmd;
 mod store_cmd;
 mod system_cmd;
+mod transcript_cmd;
 mod witness_handoff;
 mod witness_rebuild;
 
@@ -169,6 +170,12 @@ enum Command {
         /// Workflow profile to check
         #[arg(long, value_enum, default_value_t = DoctorProfile::Build)]
         profile: DoctorProfile,
+    },
+
+    /// Execute Markdown Mantle transcripts with isolated store/state defaults
+    Transcript {
+        #[command(subcommand)]
+        action: TranscriptAction,
     },
 
     /// Generate a host-tool-free stage0 inventory from explicit seed paths.
@@ -440,6 +447,27 @@ enum Command {
         /// Arguments to pass to the executable (after --)
         #[arg(last = true)]
         run_args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum TranscriptAction {
+    /// Run a Markdown executable transcript
+    Run {
+        /// Transcript markdown file to execute
+        transcript: PathBuf,
+
+        /// Output artifact path for transcript evidence (defaults to `<transcript>.output.json`)
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Mantle binary to execute for visible `mantle` blocks (defaults to current executable)
+        #[arg(long = "mantle-bin")]
+        mantle_bin: Option<PathBuf>,
+
+        /// Permit transcripts marked `in_place: true` to run against caller state
+        #[arg(long)]
+        allow_in_place: bool,
     },
 }
 
@@ -1071,6 +1099,7 @@ fn build_run_context(args: &Args) -> RunContext {
 fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
     match &args.command {
         Command::Doctor { profile } => run_doctor_command(ctx, *profile),
+        Command::Transcript { action } => run_transcript_command(action.clone()),
         Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
         Command::System { action } => run_system_command(ctx, action),
@@ -1092,6 +1121,22 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
+    }
+}
+
+fn run_transcript_command(action: TranscriptAction) -> Result<(), RunError> {
+    match action {
+        TranscriptAction::Run {
+            transcript,
+            output,
+            mantle_bin,
+            allow_in_place,
+        } => transcript_cmd::cmd_transcript_run(transcript_cmd::TranscriptRunOptions {
+            transcript,
+            output,
+            mantle_bin,
+            allow_in_place,
+        }),
     }
 }
 

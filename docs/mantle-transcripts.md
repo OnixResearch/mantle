@@ -17,7 +17,7 @@ Mantle transcript block types. Other Markdown is prose.
 | `expect:json` | JSON-field expectations for the preceding command. | yes |
 | `setup:hide` | Shell setup required before visible commands run. | no |
 | `cleanup:hide` | Shell cleanup that runs after the transcript, even on failure. | no |
-| `transcript:options` | YAML-ish transcript options, such as `in_place: true`. | no |
+| `transcript:options` | JSON transcript options, such as `{"in_place": true}`. | no |
 
 Each `mantle` or `mantle:error` block is one command stanza. Continuation lines
 are allowed, but every command is executed by the runner from the transcript's
@@ -71,9 +71,8 @@ commands are not rendered as user-facing steps. Hidden setup failures are always
 unexpected failures unless the visible stanza that depends on them is skipped by
 the future runner.
 
-`cleanup:hide` blocks run at transcript end and should be best-effort. Cleanup
-failures are reported in the evidence artifact but must not hide an earlier
-command mismatch.
+`cleanup:hide` blocks run at transcript end. Cleanup failures are reported as
+harness failures and must not be rendered as visible operator steps.
 
 ## State defaults and in-place opt-in
 
@@ -87,8 +86,7 @@ The runner must not mutate the operator's default store/state unless the
 transcript explicitly opts in:
 
 ```transcript:options
-in_place: true
-reason: "documents repair of an existing operator store"
+{"in_place": true, "reason": "documents repair of an existing operator store"}
 ```
 
 The initial runner should reject `in_place: true` unless the caller also passes an

@@ -81,6 +81,23 @@ mantle system build examples/system-config/inventory.ncl
 The inventory omits `--modules` because the CLI defaults to the sibling
 `modules/` directory next to the inventory file.
 
+### Checked transcript
+
+The maintained transcript quality rail executes this local walkthrough from this
+example directory, using isolated store and state directories supplied by the
+runner:
+
+```mantle
+mantle system eval inventory.ncl --stop-after fragments --machine server1
+```
+
+```expect
+"server1"
+"kind": "fragments"
+"machine": "server1"
+"port": 8080
+```
+
 ## Negative-path examples
 
 Partial success:

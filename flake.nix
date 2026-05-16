@@ -41,13 +41,18 @@
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
         # Common source filtering. The Rust workspace embeds Nickel stdlib files
-        # from ./lib with include_str!, so keep that directory alongside normal
-        # Cargo sources for Nix-built checks.
+        # from ./lib with include_str!, the executable transcript tests read
+        # checked Markdown fixtures from ./tests/fixtures, and the first checked
+        # operator walkthrough lives with the system-config example. Keep these
+        # directories alongside normal Cargo sources for Nix-built checks.
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
           filter =
             path: type:
-            (craneLib.filterCargoSources path type) || pkgs.lib.hasPrefix "${toString ./lib}/" (toString path);
+            (craneLib.filterCargoSources path type)
+            || pkgs.lib.hasPrefix "${toString ./lib}/" (toString path)
+            || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" (toString path)
+            || pkgs.lib.hasPrefix "${toString ./examples/system-config}/" (toString path);
         };
 
         # Common build inputs
@@ -115,11 +120,21 @@
           partitionType = "count";
           SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
         };
+
+        mantleTranscriptQuality = craneLib.cargoNextest {
+          pname = "mantle-transcript-quality";
+          inherit src cargoArtifacts nativeBuildInputs buildInputs;
+          cargoNextestExtraArgs = "--test transcript_cli";
+          partitions = 1;
+          partitionType = "count";
+          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+        };
       in
       {
         packages = {
           default = crunch;
           crunch = crunch;
+          mantle-transcript-quality = mantleTranscriptQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
         };
 
@@ -132,6 +147,7 @@
 
         checks = {
           inherit crunch;
+          mantle-transcript-quality = mantleTranscriptQuality;
           release-determinism-quality = releaseDeterminismQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
 

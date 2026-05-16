@@ -241,13 +241,20 @@ Keep these heavier checks separate from the ordinary gate:
 cargo test -p crunch-pipeline --test integration_build \
   pipeline_determinism_probe_ -- --ignored --nocapture
 ./scripts/prove-self-hosting.sh --check
+./scripts/check-mantle-transcript-quality.sh
 ./scripts/check-release-determinism-quality.sh
 ./scripts/check-release-nix-witness-quality.sh
+nix build .#checks.x86_64-linux.mantle-transcript-quality --no-link -L
 nix build .#checks.x86_64-linux.release-determinism-quality --no-link -L
 nix build .#checks.x86_64-linux.release-nix-witness-quality --no-link -L
 ```
 
-The release determinism quality rail runs the generated deterministic proof
+The Mantle transcript rail runs the executable-transcript parser/runner tests and
+fast Markdown fixtures, and is exposed as both
+`packages.<system>.mantle-transcript-quality` and
+`checks.<system>.mantle-transcript-quality` so transcript examples get a maintained
+local/CI entrypoint before they graduate into release walkthroughs. The release
+determinism quality rail runs the generated deterministic proof
 smoke and validates its receipt/log BLAKE3 in one checked-in entry point. The
 flake check is the Nix/CI-callable heavy gate for the same underlying generated
 proof regression. The Nix witness rail exercises the bounded `mantle release
