@@ -9,6 +9,7 @@
 //! all required fields (url, hash, name; plus rev for fetchGit) and that hash
 //! values use valid SRI format (e.g. `sha256-<base64>`).
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -64,6 +65,7 @@ fn extract_fetch_blocks(path: &Path) -> Vec<FetchBlock> {
 
     let file = path.display().to_string();
     let lines: Vec<&str> = content.lines().collect();
+    let bindings = extract_string_bindings(&lines);
     let mut blocks = Vec::new();
 
     let mut i = 0;
@@ -93,7 +95,7 @@ fn extract_fetch_blocks(path: &Path) -> Vec<FetchBlock> {
             while j < lines.len() {
                 let bl = lines[j].trim();
 
-                if let Some(field) = parse_field(bl) {
+                if let Some(field) = parse_field(bl, &bindings) {
                     fields.push(field);
                 }
 
@@ -119,7 +121,41 @@ fn extract_fetch_blocks(path: &Path) -> Vec<FetchBlock> {
     blocks
 }
 
-fn parse_field(line: &str) -> Option<(String, String)> {
+fn extract_string_bindings(lines: &[&str]) -> BTreeMap<String, String> {
+    let mut bindings = BTreeMap::new();
+
+    for line in lines {
+        let trimmed = line.trim();
+        if !trimmed.starts_with("let ") {
+            continue;
+        }
+
+        let Some(eq_pos) = trimmed.find('=') else {
+            continue;
+        };
+        let name = trimmed["let ".len()..eq_pos].trim();
+        if name.is_empty() || !name.chars().all(|c| c == '_' || c.is_ascii_alphanumeric()) {
+            continue;
+        }
+
+        let raw_value = trimmed[eq_pos + 1..].trim();
+        let Some(rest) = raw_value.strip_prefix('"') else {
+            continue;
+        };
+        let Some(end_quote) = rest.find('"') else {
+            continue;
+        };
+        let value = &rest[..end_quote];
+        let suffix = rest[end_quote + 1..].trim();
+        if suffix == "in" {
+            bindings.insert(name.to_string(), value.to_string());
+        }
+    }
+
+    bindings
+}
+
+fn parse_field(line: &str, bindings: &BTreeMap<String, String>) -> Option<(String, String)> {
     let trimmed = line.trim().trim_end_matches(',');
 
     let eq_pos = trimmed.find('=')?;
@@ -130,7 +166,8 @@ fn parse_field(line: &str) -> Option<(String, String)> {
         return None;
     }
 
-    let val = raw_val.trim_matches('"').trim_matches(',').to_string();
+    let unquoted = raw_val.trim_matches('"').trim_matches(',');
+    let val = bindings.get(unquoted).map_or_else(|| unquoted.to_string(), Clone::clone);
 
     if val.is_empty() {
         return None;
@@ -204,11 +241,47 @@ fn validate_block(block: &FetchBlock) -> Vec<Issue> {
     issues
 }
 
+fn run_self_test() -> bool {
+    let lines = [
+        "let raw_url = \"https://example.invalid/source.tar.gz\" in",
+        "let raw_hash = \"sha256-ZtQZncMvugqmS7OMvMtdhY5MMtem4KXBhamxWbHUDkY=\" in",
+        "let raw_name = \"source\" in",
+    ];
+    let bindings = extract_string_bindings(&lines);
+    let fields = ["url = raw_url,", "hash = raw_hash,", "name = raw_name,"]
+        .iter()
+        .filter_map(|line| parse_field(line, &bindings))
+        .collect();
+    let block = FetchBlock {
+        file: "<self-test>".to_string(),
+        line: 1,
+        kind: FetchKind::Tarball,
+        fields,
+    };
+    let issues = validate_block(&block);
+    if !issues.is_empty() {
+        eprintln!("source-pin self-test failed: {issues:?}");
+        return false;
+    }
+
+    true
+}
+
 fn main() -> ExitCode {
-    let args: Vec<String> = env::args().skip(1).collect();
+    let mut args: Vec<String> = env::args().skip(1).collect();
+    let self_test = args.iter().any(|arg| arg == "--self-test");
+    args.retain(|arg| arg != "--self-test");
+
+    if self_test && !run_self_test() {
+        return ExitCode::from(1);
+    }
 
     if args.is_empty() {
-        eprintln!("usage: check-bootstrap-source-pins.rs <file.ncl>...");
+        if self_test {
+            println!("source-pin self-test: ok");
+            return ExitCode::SUCCESS;
+        }
+        eprintln!("usage: check-bootstrap-source-pins.rs [--self-test] <file.ncl>...");
         return ExitCode::from(2);
     }
 
