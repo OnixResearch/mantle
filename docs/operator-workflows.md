@@ -164,6 +164,20 @@ Structured build reports surface the same operator facts in stable fields:
 That last block gives both the logical store path and the persisted sidecar
 path for the artifact attestation.
 
+## Remote realization adapter boundary
+
+Remote derivation realization uses a provider-neutral hash-negotiated handshake
+before any transport-specific adapter is selected. The scheduler sends the
+handshake version, realization key, recipe digest, root input digests,
+platform/profile facts, and declared capabilities. A worker either reports an
+unsupported profile/capability denial or returns the exact missing content set
+keyed by digest and kind (`recipe`, `blob`, `directory`, or `proof-input`).
+Transferred content is BLAKE3-verified before execution, and the returned
+receipt binds the negotiated input digest set, declared/observed capabilities,
+worker profile, realization key, and output digests. SSH, REAPI, S3, HTTP, or
+cluster-control details stay inside future adapters and are not part of the core
+scheduler contract.
+
 ## Enter a dev shell or run a package
 
 `mantle shell` resolves a `devShells` target from the compatibility-named

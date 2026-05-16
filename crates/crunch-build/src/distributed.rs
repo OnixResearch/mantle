@@ -385,6 +385,250 @@ where S: snix_build::buildservice::BuildService + Send + Sync
     }
 }
 
+pub const HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION: &str = "mantle-hash-negotiated-remote-realization-v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteContentKind {
+    Recipe,
+    Blob,
+    Directory,
+    ProofInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct RemoteContentIdentity {
+    pub kind: RemoteContentKind,
+    pub digest: String,
+}
+
+impl RemoteContentIdentity {
+    pub fn new(kind: RemoteContentKind, bytes: &[u8]) -> Self {
+        let digest = blake3::hash(bytes);
+        Self {
+            kind,
+            digest: data_encoding::HEXLOWER.encode(digest.as_bytes()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteRealizationHandshakeRequest {
+    pub version: String,
+    pub realization_key: RealizationKey,
+    pub recipe: RemoteContentIdentity,
+    pub root_inputs: Vec<RemoteContentIdentity>,
+    pub platform: PlatformFacts,
+    pub worker_profile: String,
+    pub declared_capabilities: Vec<String>,
+}
+
+impl RemoteRealizationHandshakeRequest {
+    pub fn new(
+        realization_key: RealizationKey,
+        recipe: RemoteContentIdentity,
+        root_inputs: Vec<RemoteContentIdentity>,
+        platform: PlatformFacts,
+        worker_profile: String,
+        declared_capabilities: Vec<String>,
+    ) -> Self {
+        Self {
+            version: HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION.to_string(),
+            realization_key,
+            recipe,
+            root_inputs,
+            platform,
+            worker_profile,
+            declared_capabilities,
+        }
+    }
+
+    pub fn negotiated_inputs(&self) -> Vec<RemoteContentIdentity> {
+        let mut inputs = vec![self.recipe.clone()];
+        inputs.extend(self.root_inputs.clone());
+        inputs.sort();
+        inputs.dedup();
+        inputs
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RemoteRealizationNegotiationResponse {
+    MissingContent { missing: Vec<RemoteContentIdentity> },
+    UnsupportedProfile { worker_profile: String },
+    CapabilityDenied { capability: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteContentTransfer {
+    pub identity: RemoteContentIdentity,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteOutputDigest {
+    pub output_name: String,
+    pub digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteRealizationReceipt {
+    pub version: String,
+    pub realization_key: RealizationKey,
+    pub worker_profile: String,
+    pub negotiated_inputs: Vec<RemoteContentIdentity>,
+    pub declared_capabilities: Vec<String>,
+    pub observed_capabilities: Vec<String>,
+    pub outputs: Vec<RemoteOutputDigest>,
+}
+
+impl RemoteRealizationReceipt {
+    pub fn validate(&self) -> Result<(), RemoteRealizationProtocolError> {
+        if self.version != HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION {
+            return Err(RemoteRealizationProtocolError::UnsupportedVersion {
+                version: self.version.clone(),
+            });
+        }
+        if self.negotiated_inputs.is_empty() || self.outputs.is_empty() {
+            return Err(RemoteRealizationProtocolError::MissingContent);
+        }
+        let mut identities = std::collections::BTreeSet::new();
+        for identity in &self.negotiated_inputs {
+            if identity.digest.is_empty() || !identities.insert(identity) {
+                return Err(RemoteRealizationProtocolError::MissingContent);
+            }
+        }
+        validate_sorted_unique_by(&self.outputs, |output| output.output_name.as_str(), "receipt.outputs")
+            .map_err(|_| RemoteRealizationProtocolError::MissingContent)?;
+        if self.outputs.iter().any(|output| output.digest.is_empty()) {
+            return Err(RemoteRealizationProtocolError::MissingContent);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum RemoteRealizationProtocolError {
+    #[error("unsupported remote realization handshake version {version}")]
+    UnsupportedVersion { version: String },
+    #[error("unsupported remote worker profile {worker_profile}")]
+    UnsupportedProfile { worker_profile: String },
+    #[error("remote realization capability denied: {capability}")]
+    CapabilityDenied { capability: String },
+    #[error("remote realization missing requested content")]
+    MissingContent,
+    #[error("remote realization transfer digest mismatch for {digest}")]
+    DigestMismatch { digest: String },
+}
+
+#[derive(Debug, Clone)]
+pub struct InMemoryRemoteRealizationWorker {
+    worker_profile: String,
+    capabilities: Vec<String>,
+    content: BTreeMap<RemoteContentIdentity, Vec<u8>>,
+}
+
+impl InMemoryRemoteRealizationWorker {
+    pub fn new(worker_profile: impl Into<String>, capabilities: Vec<String>) -> Self {
+        Self {
+            worker_profile: worker_profile.into(),
+            capabilities,
+            content: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert_content(&mut self, kind: RemoteContentKind, bytes: Vec<u8>) -> RemoteContentIdentity {
+        let identity = RemoteContentIdentity::new(kind, &bytes);
+        self.content.insert(identity.clone(), bytes);
+        identity
+    }
+
+    pub fn negotiate(
+        &self,
+        request: &RemoteRealizationHandshakeRequest,
+    ) -> Result<RemoteRealizationNegotiationResponse, RemoteRealizationProtocolError> {
+        self.validate_request_profile_and_capabilities(request)?;
+        let missing = request
+            .negotiated_inputs()
+            .into_iter()
+            .filter(|identity| !self.content.contains_key(identity))
+            .collect();
+        Ok(RemoteRealizationNegotiationResponse::MissingContent { missing })
+    }
+
+    pub fn accept_transfer(&mut self, transfer: RemoteContentTransfer) -> Result<(), RemoteRealizationProtocolError> {
+        let actual = RemoteContentIdentity::new(transfer.identity.kind, &transfer.bytes);
+        if actual.digest != transfer.identity.digest {
+            return Err(RemoteRealizationProtocolError::DigestMismatch {
+                digest: transfer.identity.digest,
+            });
+        }
+        self.content.insert(transfer.identity, transfer.bytes);
+        Ok(())
+    }
+
+    pub fn realize(
+        &self,
+        request: &RemoteRealizationHandshakeRequest,
+    ) -> Result<RemoteRealizationReceipt, RemoteRealizationProtocolError> {
+        self.validate_request_profile_and_capabilities(request)?;
+        let negotiated_inputs = request.negotiated_inputs();
+        if negotiated_inputs.iter().any(|identity| !self.content.contains_key(identity)) {
+            return Err(RemoteRealizationProtocolError::MissingContent);
+        }
+        let mut hasher = blake3::Hasher::new();
+        for identity in &negotiated_inputs {
+            hasher.update(identity.digest.as_bytes());
+        }
+        let output_digest = data_encoding::HEXLOWER.encode(hasher.finalize().as_bytes());
+        let mut declared_capabilities = request.declared_capabilities.clone();
+        declared_capabilities.sort();
+        declared_capabilities.dedup();
+        let mut negotiated_inputs = negotiated_inputs;
+        negotiated_inputs.sort();
+        negotiated_inputs.dedup();
+        let receipt = RemoteRealizationReceipt {
+            version: HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION.to_string(),
+            realization_key: request.realization_key.clone(),
+            worker_profile: self.worker_profile.clone(),
+            negotiated_inputs,
+            declared_capabilities: declared_capabilities.clone(),
+            observed_capabilities: declared_capabilities,
+            outputs: vec![RemoteOutputDigest {
+                output_name: "out".to_string(),
+                digest: output_digest,
+            }],
+        };
+        receipt.validate()?;
+        Ok(receipt)
+    }
+
+    fn validate_request_profile_and_capabilities(
+        &self,
+        request: &RemoteRealizationHandshakeRequest,
+    ) -> Result<(), RemoteRealizationProtocolError> {
+        if request.version != HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION {
+            return Err(RemoteRealizationProtocolError::UnsupportedVersion {
+                version: request.version.clone(),
+            });
+        }
+        if request.worker_profile != self.worker_profile {
+            return Err(RemoteRealizationProtocolError::UnsupportedProfile {
+                worker_profile: request.worker_profile.clone(),
+            });
+        }
+        let worker_capabilities = self.capabilities.iter().collect::<std::collections::BTreeSet<_>>();
+        if let Some(capability) =
+            request.declared_capabilities.iter().find(|capability| !worker_capabilities.contains(capability))
+        {
+            return Err(RemoteRealizationProtocolError::CapabilityDenied {
+                capability: capability.clone(),
+            });
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteWorkerMetadata {
     pub worker_id: String,
@@ -751,6 +995,105 @@ mod tests {
             err,
             ArtifactAdapterError::UnknownSubstitutionOutput { output } if output == "missing"
         ));
+    }
+
+    fn remote_request(
+        recipe: RemoteContentIdentity,
+        root_inputs: Vec<RemoteContentIdentity>,
+    ) -> RemoteRealizationHandshakeRequest {
+        RemoteRealizationHandshakeRequest::new(
+            key(&base_request()),
+            recipe,
+            root_inputs,
+            PlatformFacts {
+                system: "x86_64-linux".to_string(),
+                cpu: "x86_64".to_string(),
+                os: "linux".to_string(),
+            },
+            "fake-worker-v1".to_string(),
+            vec!["sandbox".to_string(), "write-output".to_string()],
+        )
+    }
+
+    fn remote_worker() -> InMemoryRemoteRealizationWorker {
+        InMemoryRemoteRealizationWorker::new("fake-worker-v1", vec!["sandbox".to_string(), "write-output".to_string()])
+    }
+
+    #[test]
+    fn hash_negotiated_remote_realization_all_present_executes_without_transfer() {
+        let mut worker = remote_worker();
+        let recipe = worker.insert_content(RemoteContentKind::Recipe, b"drv recipe".to_vec());
+        let input = worker.insert_content(RemoteContentKind::Directory, b"source tree".to_vec());
+        let request = remote_request(recipe.clone(), vec![input.clone()]);
+
+        assert_eq!(worker.negotiate(&request).unwrap(), RemoteRealizationNegotiationResponse::MissingContent {
+            missing: vec![]
+        });
+        let receipt = worker.realize(&request).unwrap();
+        assert_eq!(receipt.version, HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION);
+        assert_eq!(receipt.realization_key, request.realization_key);
+        assert_eq!(receipt.negotiated_inputs, vec![recipe, input]);
+        assert_eq!(receipt.declared_capabilities, vec!["sandbox".to_string(), "write-output".to_string()]);
+        assert_eq!(receipt.outputs.len(), 1);
+    }
+
+    #[test]
+    fn hash_negotiated_remote_realization_requests_missing_hashes_then_verifies_transfer() {
+        let mut worker = remote_worker();
+        let recipe = worker.insert_content(RemoteContentKind::Recipe, b"drv recipe".to_vec());
+        let input_bytes = b"source tree".to_vec();
+        let input = RemoteContentIdentity::new(RemoteContentKind::Directory, &input_bytes);
+        let request = remote_request(recipe.clone(), vec![input.clone()]);
+
+        assert_eq!(worker.negotiate(&request).unwrap(), RemoteRealizationNegotiationResponse::MissingContent {
+            missing: vec![input.clone()]
+        });
+        assert_eq!(worker.realize(&request).unwrap_err(), RemoteRealizationProtocolError::MissingContent);
+        worker
+            .accept_transfer(RemoteContentTransfer {
+                identity: input.clone(),
+                bytes: input_bytes,
+            })
+            .unwrap();
+        let receipt = worker.realize(&request).unwrap();
+        assert_eq!(receipt.negotiated_inputs, vec![recipe, input]);
+    }
+
+    #[test]
+    fn hash_negotiated_remote_realization_rejects_digest_mismatch_before_execution() {
+        let mut worker = remote_worker();
+        let recipe = worker.insert_content(RemoteContentKind::Recipe, b"drv recipe".to_vec());
+        let input = RemoteContentIdentity::new(RemoteContentKind::Blob, b"expected bytes");
+        let request = remote_request(recipe, vec![input.clone()]);
+
+        assert_eq!(
+            worker
+                .accept_transfer(RemoteContentTransfer {
+                    identity: input.clone(),
+                    bytes: b"tampered bytes".to_vec(),
+                })
+                .unwrap_err(),
+            RemoteRealizationProtocolError::DigestMismatch { digest: input.digest }
+        );
+        assert_eq!(worker.realize(&request).unwrap_err(), RemoteRealizationProtocolError::MissingContent);
+    }
+
+    #[test]
+    fn hash_negotiated_remote_realization_rejects_unsupported_capability_and_profile() {
+        let mut worker = remote_worker();
+        let recipe = worker.insert_content(RemoteContentKind::Recipe, b"drv recipe".to_vec());
+        let input = worker.insert_content(RemoteContentKind::Directory, b"source tree".to_vec());
+        let mut request = remote_request(recipe, vec![input]);
+        request.declared_capabilities.push("network".to_string());
+
+        assert_eq!(worker.negotiate(&request).unwrap_err(), RemoteRealizationProtocolError::CapabilityDenied {
+            capability: "network".to_string()
+        });
+        request.declared_capabilities = vec!["sandbox".to_string()];
+        request.worker_profile = "gpu-worker".to_string();
+        assert_eq!(worker.negotiate(&request).unwrap_err(), RemoteRealizationProtocolError::UnsupportedProfile {
+            worker_profile: "gpu-worker".to_string()
+        });
     }
 
     fn remote_candidate(key: RealizationKey) -> RemoteRealizationCandidate {
