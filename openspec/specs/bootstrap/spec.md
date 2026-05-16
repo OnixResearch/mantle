@@ -362,107 +362,29 @@ MUST be capable of building early GCC.
 
 ### Requirement: GCC version ladder
 
-GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a time. The `__gcc_bcmp` member MUST implement byte-wise comparison semantics: it MUST return `0` for equal byte ranges and a non-zero value for the first differing byte over the requested length. The promotion MUST include a derivation-local smoke that exercises equal and unequal comparisons. GCC 4.0 pass1 driver query semantics MUST also be evidence-backed: `-dumpversion`, `-dumpmachine`, `-print-libgcc-file-name`, and `-print-search-dirs` MUST return deterministic GCC-shaped values tied to the installed artifact, and the derivation MUST verify the queried libgcc path exists. GCC 4.0 pass1 `cc1` object semantics MUST be evidence-backed: the installed `cc1` MUST accept a bounded GCC-shaped `-quiet <input> -o <object>` invocation, emit non-empty object through the validated TinyCC handoff, and be covered by derivation-local smoke. GCC 4.0 native-boundary evidence MUST be checked by a receipt that records the current boundary as `boundary-only`, proves the derivation still contains the native `make -C gcc` attempt, the pass1 bridge handoff diagnostic, and the installed bridge semantics, and keeps `gcc.4.0` partial until native `cc1` and broader compiler correctness are proven. GCC 4.0 generator-header boundary promotions MUST be derivation-checked: the `genconstants`/`genflags` seed path MUST emit guarded empty-machine boundary headers, MUST reject the prior generic stub labels, and MUST NOT mark real native generator correctness complete. GCC 4.0 `gencheck` boundary promotions MUST be derivation-checked: the `gencheck` path MUST emit a guarded disabled-tree-checking boundary header, MUST reject the prior generic `gencheck` stub label, and MUST NOT mark real native `gencheck` correctness complete. GCC 4.0 `genpreds` boundary promotions MUST be derivation-checked: the `genpreds -h` path MUST emit a guarded empty-predicate boundary header, the source path MUST emit a named empty-predicate boundary source, both paths MUST reject the prior generic `genpreds` stub labels, and neither path MUST mark real native `genpreds` correctness complete. GCC 4.0 `genattr` boundary promotions MUST be derivation-checked: the `genattr` path MUST emit a guarded empty-attribute boundary header, MUST retain the disabled `HAVE_ATTR_enabled` contract, MUST reject the prior generic `genattr` stub label, and MUST NOT mark real native `genattr` correctness complete. GCC 4.0 `gengtype` boundary promotions MUST be derivation-checked: the `gengtype` path MUST emit named empty-GTY generated-header and descriptor boundaries, MUST reject the prior generic `gengtype` stub label, and MUST NOT mark real native `gengtype` correctness complete. GCC 4.0 `genemit` boundary promotions MUST be derivation-checked: the `genemit` path MUST emit a named empty-emit source boundary, MUST reject the prior generic `genemit` stub label, and MUST NOT mark real native `genemit` correctness complete. GCC 4.0 `genrecog` boundary promotions MUST be derivation-checked: the `genrecog` path MUST emit a named empty-recognition source boundary, MUST reject the prior generic generated-source stub label, and MUST NOT mark real native `genrecog` correctness complete. GCC 4.0 `genextract` boundary promotions MUST be derivation-checked: the `genextract` path MUST emit a named empty-extraction source boundary, MUST reject the prior generic generated-source stub label, and MUST NOT mark real native `genextract` correctness complete. GCC 4.0 `genpeep` boundary promotions MUST be derivation-checked: the `genpeep` path MUST emit a named empty-peephole source boundary, MUST reject the prior generic generated-source stub label, and MUST NOT mark real native `genpeep` correctness complete. GCC 4.0 `genopinit` boundary promotions MUST be derivation-checked: the `genopinit` path MUST emit a named empty-opinit source boundary, MUST reject the prior generic generated-source stub label, and MUST NOT mark real native `genopinit` correctness complete. GCC 4.0 `genoutput` boundary promotions MUST be derivation-checked: the `genoutput` path MUST emit a named empty-output source boundary, MUST reject the prior generic generated-source stub label, and MUST NOT mark real native `genoutput` correctness complete. GCC 4.0 `genattrtab` boundary promotions MUST be derivation-checked: the `genattrtab` path MUST emit a named empty-attrtab source boundary, MUST reject the prior generic generated-source stub label, and MUST NOT mark real native `genattrtab` correctness complete. These promotions MUST NOT mark `gcc.4.0` complete or unblock live-bootstrap/Guix parity by themselves.
+GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a time. The `__gcc_bcmp` member MUST implement byte-wise comparison semantics: it MUST return `0` for equal byte ranges and a non-zero value for the first differing byte over the requested length. The promotion MUST include a derivation-local smoke that exercises equal and unequal comparisons. GCC 4.0 pass1 driver query semantics MUST also be evidence-backed: `-dumpversion`, `-dumpmachine`, `-print-libgcc-file-name`, and `-print-search-dirs` MUST return deterministic GCC-shaped values tied to the installed artifact. GCC 4.0 installed `cc1` object-output semantics MUST be evidence-backed for the bounded GCC-shaped frontend invocation already accepted by the pass1 bridge. A promoted native `cc1` arithmetic slice MUST prove that the installed frontend handles a bounded C function containing integer arithmetic, comparison, branch, and return semantics without delegating object emission to TinyCC; it MUST record a checked receipt and smoke transcript, and it MUST NOT claim full GCC 4.0 compiler correctness.
 
-#### Scenario: GCC 4.0 gencheck emits checked disabled-tree-checking boundary
+#### Scenario: GCC 4.0 native cc1 arithmetic slice is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-arithmetic]]
 
-- GIVEN the GCC 4.0 pass1 derivation bridges `gencheck` before native generator correctness is complete
-- WHEN `tree-check.h` is emitted
-- THEN it contains the `GCC_TREE_CHECK_H` include guard
-- AND it contains a disabled-tree-checking boundary marker
-- AND it does not contain the prior generic `gencheck` stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
+- GIVEN `bootstrap/gcc-4.0.ncl` installs a `cc1` frontend for GCC 4.0
+- AND a checked native-cc1 arithmetic receipt names the derivation, schema version, bounded input program, smoke command, and no-TinyCC-delegation evidence
+- WHEN the bootstrap parity report evaluates `gcc.4.0`
+- THEN the row may report evidence-backed `partial` with native-cc1 arithmetic slice evidence
+- AND the row MUST continue blocking live-bootstrap and Guix until full native GCC 4.0 compiler and generator correctness evidence exists
 
-#### Scenario: GCC 4.0 genpreds emits checked empty-predicate boundaries
+#### Scenario: GCC 4.0 native cc1 arithmetic slice rejects TinyCC delegation [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-arithmetic-no-tcc]]
 
-- GIVEN the GCC 4.0 pass1 derivation bridges `genpreds` before native generator correctness is complete
-- WHEN `tm-preds.h` and predicate source are emitted
-- THEN the header contains the `GCC_TM_PREDS_H` include guard
-- AND both outputs contain empty-predicate boundary markers
-- AND neither output contains the prior generic `genpreds` stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
+- GIVEN the installed `cc1` still delegates object emission through TinyCC or the receipt cannot prove delegation absence for the bounded smoke
+- WHEN the native-cc1 arithmetic receipt is validated
+- THEN validation fails closed
+- AND the parity row notes the remaining `cc1` delegation frontier
 
-#### Scenario: GCC 4.0 genattr emits a checked empty-attribute boundary
+#### Scenario: GCC 4.0 native cc1 arithmetic receipt drift fails closed [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-arithmetic-drift]]
 
-- GIVEN the GCC 4.0 pass1 derivation bridges `genattr` before native generator correctness is complete
-- WHEN `insn-attr.h` is emitted
-- THEN the header contains the `GCC_INSN_ATTR_H` include guard
-- AND the header contains an empty-attribute boundary marker
-- AND the header disables `HAVE_ATTR_enabled`
-- AND the header does not contain the prior generic `genattr` stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
-
-#### Scenario: GCC 4.0 genemit emits checked empty-emit boundary
-
-- GIVEN the GCC 4.0 pass1 derivation bridges `genemit` before native generator correctness is complete
-- WHEN generated emit source is emitted
-- THEN the source contains a named empty-emit boundary symbol
-- AND the source contains an empty-emit source boundary marker
-- AND the source does not contain the prior generic `genemit` stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
-
-#### Scenario: GCC 4.0 genrecog emits checked empty-recognition boundary
-
-- GIVEN the GCC 4.0 pass1 derivation bridges `genrecog` before native recognizer-generator correctness is complete
-- WHEN generated recognizer source is emitted
-- THEN the source contains a named empty-recognition boundary symbol
-- AND the source contains an empty-recognition source boundary marker
-- AND the source does not contain the prior generic generated-source stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
-
-#### Scenario: GCC 4.0 genextract emits checked empty-extraction boundary
-
-- GIVEN the GCC 4.0 pass1 derivation bridges `genextract` before native extractor-generator correctness is complete
-- WHEN generated extraction source is emitted
-- THEN the source contains a named empty-extraction boundary symbol
-- AND the source contains an empty-extraction source boundary marker
-- AND the source does not contain the prior generic generated-source stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
-
-#### Scenario: GCC 4.0 genpeep emits checked empty-peephole boundary
-
-- GIVEN the GCC 4.0 pass1 derivation bridges `genpeep` before native peephole-generator correctness is complete
-- WHEN generated peephole source is emitted
-- THEN the source contains a named empty-peephole boundary symbol
-- AND the source contains an empty-peephole source boundary marker
-- AND the source does not contain the prior generic generated-source stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
-
-#### Scenario: GCC 4.0 genopinit emits checked empty-opinit boundary
-
-- GIVEN the GCC 4.0 pass1 derivation bridges `genopinit` before native optab-initializer generator correctness is complete
-- WHEN generated optab-initializer source is emitted
-- THEN the source contains a named empty-opinit boundary symbol
-- AND the source contains an empty-opinit source boundary marker
-- AND the source does not contain the prior generic generated-source stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
-
-#### Scenario: GCC 4.0 genoutput emits checked empty-output boundary
-
-- GIVEN the GCC 4.0 pass1 derivation bridges `genoutput` before native instruction-output generator correctness is complete
-- WHEN generated instruction-output source is emitted
-- THEN the source contains a named empty-output boundary symbol
-- AND the source contains an empty-output source boundary marker
-- AND the source does not contain the prior generic generated-source stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
-
-#### Scenario: GCC 4.0 genattrtab emits checked empty-attrtab boundary
-
-- GIVEN the GCC 4.0 pass1 derivation bridges `genattrtab` before native attribute-table generator correctness is complete
-- WHEN generated attribute-table source is emitted
-- THEN the source contains a named empty-attrtab boundary symbol
-- AND the source contains an empty-attrtab source boundary marker
-- AND the source does not contain the prior generic generated-source stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
-
-#### Scenario: GCC 4.0 gengtype emits checked empty-GTY boundaries
-
-- GIVEN the GCC 4.0 pass1 derivation bridges `gengtype` before native generator correctness is complete
-- WHEN representative generated GTY files are emitted
-- THEN a generated header contains an empty-GTY header boundary marker
-- AND `gtype-desc.c` contains an empty-GTY descriptor boundary marker
-- AND neither output contains the prior generic `gengtype` stub label
-- AND the `gcc.4.0` parity row remains partial until real native generator and compiler correctness are proven
+- GIVEN a native-cc1 arithmetic receipt references a missing marker, stale transcript digest, unsupported schema, missing smoke input, or unsupported parity effect
+- WHEN the bootstrap parity report evaluates `gcc.4.0`
+- THEN the row remains a blocker
+- AND the row notes the specific failed native-cc1 evidence check
 
 ### Requirement: Normalized seed contract preserved
 

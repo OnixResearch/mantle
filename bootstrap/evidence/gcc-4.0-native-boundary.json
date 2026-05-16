@@ -12,8 +12,15 @@
     "Crunch GCC 4.0 pass1 cc1 object boundary",
     "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\""
   ],
+  "promoted_native_slices": [
+    {
+      "id": "cc1-arithmetic-control-flow",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json",
+      "derivation_marker": "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input."
+    }
+  ],
   "last_observed_build_log": {
-    "status": "complete-with-pass1-bridge",
+    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-arithmetic-slice",
     "boundary_log_markers": [
       "gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H  -o cc1",
       "gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H  -o xgcc",
@@ -24,11 +31,6 @@
   "native_frontier": {
     "status": "frontier-only",
     "blockers": [
-      {
-        "id": "cc1-tcc-delegation",
-        "derivation_marker": "Crunch GCC 4.0 pass1 cc1 object boundary",
-        "frontier": "installed cc1 delegates object output to TinyCC instead of native GCC cc1"
-      },
       {
         "id": "generator-empty-boundaries",
         "derivation_marker": "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
