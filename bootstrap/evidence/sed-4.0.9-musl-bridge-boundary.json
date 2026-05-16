@@ -1,0 +1,18 @@
+{
+  "schema": "mantle-sed409-musl-bridge-boundary-v1",
+  "derivation": "bootstrap/sed-4.0.9-musl.ncl",
+  "status": "bridge-boundary-only",
+  "boundary": "tcc-musl-v2-sed409-source-compile",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "This TinyCC/musl handoff currently segfaults while compiling the GNU",
+    "sed 4.0.9 getline replacement",
+    "sed-tcc bridge input missing",
+    "sed bridge copy missing",
+    "sed409-musl-bridge-ok"
+  ],
+  "bridge_input": "bootstrap/sed-tcc.ncl",
+  "replacement_condition": "Retire this boundary when bootstrap/sed-4.0.9-musl.ncl compiles GNU sed 4.0.9 sources with tcc-musl-v2 and passes the installed sed smoke without copying sed-tcc output.",
+  "parity_effect": "evidence-backed partial; does not prove sed 4.0.9 musl source-build correctness"
+}

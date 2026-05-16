@@ -379,6 +379,22 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected tcc-musl-prep stage bridge line to remain counted".to_string());
     }
+    if evidence.sed409_musl_bridge_boundary_checked
+        && suppression_reason(Path::new("bootstrap/sed-4.0.9-musl.ncl"), 55, MARKERS[1], &evidence).is_none()
+    {
+        return Err("self-test expected sed 4.0.9 musl bridge boundary suppression".to_string());
+    }
+    if evidence.sed409_musl_bridge_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/sed-4.0.9-musl-bridge-boundary.json"),
+            4,
+            MARKERS[1],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected sed 4.0.9 musl boundary receipt metadata suppression".to_string());
+    }
 
     Ok(())
 }
@@ -389,6 +405,7 @@ struct EvidenceState {
     gcc40_placeholder_inventory_checked: bool,
     gcc40_native_boundary_checked: bool,
     tcc_musl_contracts_checked: bool,
+    sed409_musl_bridge_boundary_checked: bool,
 }
 
 impl EvidenceState {
@@ -398,6 +415,7 @@ impl EvidenceState {
             gcc40_placeholder_inventory_checked: checked_gcc40_placeholder_inventory(),
             gcc40_native_boundary_checked: checked_gcc40_native_boundary(),
             tcc_musl_contracts_checked: checked_tcc_musl_contracts(),
+            sed409_musl_bridge_boundary_checked: checked_sed409_musl_bridge_boundary(),
         }
     }
 }
@@ -476,6 +494,27 @@ fn checked_tcc_musl_contracts() -> bool {
     ])
 }
 
+fn checked_sed409_musl_bridge_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/sed-4.0.9-musl-bridge-boundary.json", &[
+        "\"schema\": \"mantle-sed409-musl-bridge-boundary-v1\"",
+        "\"derivation\": \"bootstrap/sed-4.0.9-musl.ncl\"",
+        "\"status\": \"bridge-boundary-only\"",
+        "\"boundary\": \"tcc-musl-v2-sed409-source-compile\"",
+        "\"expected_complete\": false",
+        "sed-tcc bridge input missing",
+        "sed bridge copy missing",
+        "sed409-musl-bridge-ok",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/sed-4.0.9-musl.ncl", &[
+            "This TinyCC/musl handoff currently segfaults while compiling the GNU",
+            "sed 4.0.9 getline replacement",
+            "sed-tcc bridge input missing",
+            "sed bridge copy missing",
+            "sed409-musl-bridge-ok",
+        ])
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -539,6 +578,19 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         return Some(
             "tcc-musl handoff note documents checked source-normalization coverage; stage-level bridge blockers remain counted",
         );
+    }
+    if evidence.sed409_musl_bridge_boundary_checked
+        && path_s.ends_with("bootstrap/sed-4.0.9-musl.ncl")
+        && matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+    {
+        return Some(
+            "sed 4.0.9 musl bridge boundary is explicitly checked; it remains partial until source compile is repaired",
+        );
+    }
+    if evidence.sed409_musl_bridge_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/sed-4.0.9-musl-bridge-boundary.json")
+    {
+        return Some("sed 4.0.9 musl bridge-boundary receipt is checked metadata, not an additional blocker");
     }
     None
 }
