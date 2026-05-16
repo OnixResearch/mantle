@@ -114,6 +114,15 @@ struct Finding {
 }
 
 #[derive(Debug, Clone)]
+struct Suppression {
+    class_id: &'static str,
+    path: String,
+    line: usize,
+    reason: &'static str,
+    excerpt: String,
+}
+
+#[derive(Debug, Clone)]
 struct PromotionClaim {
     path: String,
     line: usize,
@@ -133,9 +142,10 @@ fn main() -> ExitCode {
     match run() {
         Ok(outcome) => {
             println!(
-                "bootstrap blocker inventory: {} findings across {} classes, {} promotion claims, enforce={}",
+                "bootstrap blocker inventory: {} findings across {} classes, {} evidence-backed suppressions, {} promotion claims, enforce={}",
                 outcome.findings.len(),
                 outcome.by_class.len(),
+                outcome.suppressions.len(),
                 outcome.promotion_claims.len(),
                 outcome.enforce,
             );
@@ -155,6 +165,7 @@ fn main() -> ExitCode {
 
 struct Outcome {
     findings: Vec<Finding>,
+    suppressions: Vec<Suppression>,
     by_class: BTreeMap<&'static str, usize>,
     promotion_claims: Vec<PromotionClaim>,
     enforce: bool,
@@ -176,13 +187,17 @@ fn run() -> Result<Outcome, String> {
 
     let files = collect_files(&paths)?;
     let mut findings = Vec::new();
+    let mut suppressions = Vec::new();
     let mut promotion_claims = Vec::new();
+    let evidence = EvidenceState::load();
 
     for file in files {
-        scan_file(&file, &mut findings, &mut promotion_claims)?;
+        scan_file(&file, &evidence, &mut findings, &mut suppressions, &mut promotion_claims)?;
     }
 
     findings
+        .sort_by(|a, b| (&a.class_id, &a.path, a.line, &a.excerpt).cmp(&(&b.class_id, &b.path, b.line, &b.excerpt)));
+    suppressions
         .sort_by(|a, b| (&a.class_id, &a.path, a.line, &a.excerpt).cmp(&(&b.class_id, &b.path, b.line, &b.excerpt)));
     promotion_claims.sort_by(|a, b| (&a.path, a.line, &a.excerpt).cmp(&(&b.path, b.line, &b.excerpt)));
 
@@ -193,6 +208,7 @@ fn run() -> Result<Outcome, String> {
 
     let outcome = Outcome {
         findings,
+        suppressions,
         by_class,
         promotion_claims,
         enforce: config.enforce,
@@ -294,7 +310,62 @@ fn run_self_tests() -> Result<(), String> {
         }
     }
 
+    let evidence = EvidenceState::load();
+    if evidence.binutils_tcc_tool_smoke_checked
+        && suppression_reason(Path::new("bootstrap/binutils-tcc.ncl"), MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected binutils-tcc bridge-output suppression with checked evidence".to_string());
+    }
+
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct EvidenceState {
+    binutils_tcc_tool_smoke_checked: bool,
+}
+
+impl EvidenceState {
+    fn load() -> Self {
+        Self {
+            binutils_tcc_tool_smoke_checked: checked_binutils_tcc_tool_smoke(),
+        }
+    }
+}
+
+fn checked_binutils_tcc_tool_smoke() -> bool {
+    let Ok(content) = fs::read_to_string("bootstrap/evidence/binutils-tcc-tool-smoke.json") else {
+        return false;
+    };
+    [
+        "\"schema\": \"mantle-binutils-tcc-tool-smoke-v1\"",
+        "\"derivation\": \"bootstrap/binutils-tcc.ncl\"",
+        "\"host_fallback\": false",
+        "\"fallback_markers\": []",
+        "\"provider_kind\": \"source-root\"",
+        "\"as\"",
+        "\"ld\"",
+        "\"ar\"",
+        "\"ranlib\"",
+        "\"nm\"",
+        "\"objcopy\"",
+    ]
+    .iter()
+    .all(|needle| content.contains(needle))
+        && content.matches("\"exit_status\": 0").count() >= 6
+}
+
+fn suppression_reason(path: &Path, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
+    let path_s = path.to_string_lossy();
+    if marker.id == "bridge-output"
+        && path_s.ends_with("bootstrap/binutils-tcc.ncl")
+        && evidence.binutils_tcc_tool_smoke_checked
+    {
+        return Some(
+            "binutils-tcc has checked source-root tool-smoke evidence and remains partial, not unproved bridge output",
+        );
+    }
+    None
 }
 
 fn collect_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
@@ -340,7 +411,9 @@ fn is_scanned_file(path: &Path) -> bool {
 
 fn scan_file(
     path: &Path,
+    evidence: &EvidenceState,
     findings: &mut Vec<Finding>,
+    suppressions: &mut Vec<Suppression>,
     promotion_claims: &mut Vec<PromotionClaim>,
 ) -> Result<(), String> {
     let content = fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
@@ -349,6 +422,16 @@ fn scan_file(
         let lower = line.to_lowercase();
         for marker in MARKERS {
             if marker.matches_line(&lower) {
+                if let Some(reason) = suppression_reason(path, *marker, evidence) {
+                    suppressions.push(Suppression {
+                        class_id: marker.id,
+                        path: path_s.clone(),
+                        line: idx + 1,
+                        reason,
+                        excerpt: compact(line),
+                    });
+                    continue;
+                }
                 findings.push(Finding {
                     class_id: marker.id,
                     path: path_s.clone(),
@@ -379,9 +462,10 @@ fn render_json(outcome: &Outcome) -> String {
     s.push_str(&format!("  \"schema_version\": 1,\n  \"enforce\": {},\n", outcome.enforce));
     s.push_str("  \"summary\": {\n");
     s.push_str(&format!(
-        "    \"finding_count\": {},\n    \"class_count\": {},\n    \"promotion_claim_count\": {}\n  }},\n",
+        "    \"finding_count\": {},\n    \"class_count\": {},\n    \"evidence_suppression_count\": {},\n    \"promotion_claim_count\": {}\n  }},\n",
         outcome.findings.len(),
         outcome.by_class.len(),
+        outcome.suppressions.len(),
         outcome.promotion_claims.len()
     ));
     s.push_str("  \"classes\": [\n");
@@ -393,6 +477,18 @@ fn render_json(outcome: &Outcome) -> String {
             json_escape(marker.description),
             count,
             comma(i, MARKERS.len())
+        ));
+    }
+    s.push_str("  ],\n  \"evidence_suppressions\": [\n");
+    for (i, suppression) in outcome.suppressions.iter().enumerate() {
+        s.push_str(&format!(
+            "    {{\"class\": \"{}\", \"path\": \"{}\", \"line\": {}, \"reason\": \"{}\", \"excerpt\": \"{}\"}}{}\n",
+            json_escape(suppression.class_id),
+            json_escape(&suppression.path),
+            suppression.line,
+            json_escape(suppression.reason),
+            json_escape(&suppression.excerpt),
+            comma(i, outcome.suppressions.len())
         ));
     }
     s.push_str("  ],\n  \"promotion_claims\": [\n");
@@ -423,11 +519,22 @@ fn render_json(outcome: &Outcome) -> String {
 fn render_markdown(outcome: &Outcome) -> String {
     let mut s = String::new();
     s.push_str("# Bootstrap blocker inventory report\n\n");
-    s.push_str(&format!("- Schema version: 1\n- Enforcement mode: {}\n- Findings: {}\n- Marker classes present: {}\n- Promotion claims: {}\n\n", outcome.enforce, outcome.findings.len(), outcome.by_class.len(), outcome.promotion_claims.len()));
+    s.push_str(&format!("- Schema version: 1\n- Enforcement mode: {}\n- Findings: {}\n- Marker classes present: {}\n- Evidence-backed suppressions: {}\n- Promotion claims: {}\n\n", outcome.enforce, outcome.findings.len(), outcome.by_class.len(), outcome.suppressions.len(), outcome.promotion_claims.len()));
     s.push_str("## Marker classes\n\n");
     for marker in MARKERS {
         let count = outcome.by_class.get(marker.id).copied().unwrap_or(0);
         s.push_str(&format!("- `{}`: {} finding(s) — {}\n", marker.id, count, marker.description));
+    }
+    s.push_str("\n## Evidence-backed suppressions\n\n");
+    if outcome.suppressions.is_empty() {
+        s.push_str("No evidence-backed suppressions applied.\n");
+    } else {
+        for suppression in &outcome.suppressions {
+            s.push_str(&format!(
+                "- `{}` {}:{} — {} — `{}`\n",
+                suppression.class_id, suppression.path, suppression.line, suppression.reason, suppression.excerpt
+            ));
+        }
     }
     s.push_str("\n## Promotion claims\n\n");
     if outcome.promotion_claims.is_empty() {
