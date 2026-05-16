@@ -1,0 +1,26 @@
+{
+  "schema": "mantle-m4-147-musl-bridge-boundary-v1",
+  "derivation": "bootstrap/m4-1.4.7-musl.ncl",
+  "status": "bridge-boundary-only",
+  "boundary": "tcc-musl-v2-m4-147-static-link",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "TinyCC/musl-v2 segfaults while compiling the two m4.c wrappers",
+    "TinyCC/musl-v2 handoff still segfaults during static link",
+    "deliberately small bootstrap m4 bridge",
+    "define(FOO,bar)FOO",
+    "dnl ignored"
+  ],
+  "build_smoke": {
+    "command": "crunch build bootstrap/m4-1.4.7-musl.ncl --store .crunch-drain/m4-boundary-store -j 4 --trust-unsigned",
+    "status": "success",
+    "output_contract": [
+      "installed bin/m4 is executable",
+      "define(FOO,bar)FOO expands to bar",
+      "dnl-only input produces no output"
+    ]
+  },
+  "replacement_condition": "Retire this boundary when bootstrap/m4-1.4.7-musl.ncl links a direct GNU m4 1.4.7 binary with tcc-musl-v2 and preserves the m4 output-contract smoke without installing the awk bridge.",
+  "parity_effect": "evidence-backed partial; does not prove GNU m4 1.4.7 musl source-build correctness"
+}

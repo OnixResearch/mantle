@@ -395,6 +395,22 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected sed 4.0.9 musl boundary receipt metadata suppression".to_string());
     }
+    if evidence.m4_147_musl_bridge_boundary_checked
+        && suppression_reason(Path::new("bootstrap/m4-1.4.7-musl.ncl"), 176, MARKERS[1], &evidence).is_none()
+    {
+        return Err("self-test expected m4 1.4.7 musl bridge boundary suppression".to_string());
+    }
+    if evidence.m4_147_musl_bridge_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/m4-1.4.7-musl-bridge-boundary.json"),
+            4,
+            MARKERS[1],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected m4 1.4.7 musl boundary receipt metadata suppression".to_string());
+    }
 
     Ok(())
 }
@@ -406,6 +422,7 @@ struct EvidenceState {
     gcc40_native_boundary_checked: bool,
     tcc_musl_contracts_checked: bool,
     sed409_musl_bridge_boundary_checked: bool,
+    m4_147_musl_bridge_boundary_checked: bool,
 }
 
 impl EvidenceState {
@@ -416,6 +433,7 @@ impl EvidenceState {
             gcc40_native_boundary_checked: checked_gcc40_native_boundary(),
             tcc_musl_contracts_checked: checked_tcc_musl_contracts(),
             sed409_musl_bridge_boundary_checked: checked_sed409_musl_bridge_boundary(),
+            m4_147_musl_bridge_boundary_checked: checked_m4_147_musl_bridge_boundary(),
         }
     }
 }
@@ -515,6 +533,27 @@ fn checked_sed409_musl_bridge_boundary() -> bool {
         ])
 }
 
+fn checked_m4_147_musl_bridge_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/m4-1.4.7-musl-bridge-boundary.json", &[
+        "\"schema\": \"mantle-m4-147-musl-bridge-boundary-v1\"",
+        "\"derivation\": \"bootstrap/m4-1.4.7-musl.ncl\"",
+        "\"status\": \"bridge-boundary-only\"",
+        "\"boundary\": \"tcc-musl-v2-m4-147-static-link\"",
+        "\"expected_complete\": false",
+        "deliberately small bootstrap m4 bridge",
+        "define(FOO,bar)FOO",
+        "dnl ignored",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/m4-1.4.7-musl.ncl", &[
+            "TinyCC/musl-v2 segfaults while compiling the two m4.c wrappers",
+            "TinyCC/musl-v2 handoff still segfaults during static link",
+            "deliberately small bootstrap m4 bridge",
+            "define(FOO,bar)FOO",
+            "dnl ignored",
+        ])
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -591,6 +630,19 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/sed-4.0.9-musl-bridge-boundary.json")
     {
         return Some("sed 4.0.9 musl bridge-boundary receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.m4_147_musl_bridge_boundary_checked
+        && path_s.ends_with("bootstrap/m4-1.4.7-musl.ncl")
+        && matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+    {
+        return Some(
+            "m4 1.4.7 musl bridge boundary is explicitly checked; it remains partial until source link is repaired",
+        );
+    }
+    if evidence.m4_147_musl_bridge_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/m4-1.4.7-musl-bridge-boundary.json")
+    {
+        return Some("m4 1.4.7 musl bridge-boundary receipt is checked metadata, not an additional blocker");
     }
     None
 }
