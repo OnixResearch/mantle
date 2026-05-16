@@ -1,0 +1,26 @@
+{
+  "schema": "mantle-musl-1124-tcc-musl-bridge-boundary-v1",
+  "derivation": "bootstrap/musl-1.1.24-tcc-musl.ncl",
+  "status": "bridge-boundary-only",
+  "boundary": "tcc-musl-second-pass-source-compatibility-bridge",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "first-stage source compatibility bridge",
+    "CRUNCH bridge TinyCC builtin va_list",
+    "Verify the first-musl output contract"
+  ],
+  "build_smoke": {
+    "command": "crunch build bootstrap/musl-1.1.24-tcc-musl.ncl --store .crunch-drain/store -j 4 --trust-unsigned",
+    "status": "success",
+    "output_path": ".crunch-drain/store/7gr49saklr93z8nrn425v3prh138f8jj-musl-1.1.24-tcc-musl",
+    "output_contract": [
+      "installed lib/libc.a exists",
+      "installed include/stdio.h exists",
+      "installed crt1.o or Scrt1.o exists",
+      "libc.a contains musl archive members including confstr.o, sysconf.o, and crypt_sha256.o"
+    ]
+  },
+  "replacement_condition": "Retire this boundary when bootstrap/musl-1.1.24-tcc-musl.ncl no longer needs the source compatibility bridge or TinyCC builtin va_list patch while preserving the recorded libc/header/startup-object output contract.",
+  "parity_effect": "evidence-backed partial; does not prove complete upstream musl 1.1.24 second-pass source correctness"
+}
