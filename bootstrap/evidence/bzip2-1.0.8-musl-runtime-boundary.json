@@ -1,0 +1,28 @@
+{
+  "schema": "mantle-bzip2-108-musl-runtime-boundary-v1",
+  "derivation": "bootstrap/bzip2-1.0.8-musl.ncl",
+  "status": "runtime-boundary-only",
+  "boundary": "tcc-musl-v2-bzip2-108-direct-link-runtime",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "The Mes-linked tcc-musl-v2 bridge can still hit its fragile library",
+    "compile objects, then link with declared musl",
+    "crunch-start.o bzip2.o",
+    "\"$TCC/lib/tcc/libtcc1.a\" \"$MUSL/lib/libc.a\""
+  ],
+  "build_smoke": {
+    "command": "crunch build bootstrap/bzip2-1.0.8-musl.ncl --store .crunch-drain/bzip2-boundary-store -j 4 --trust-unsigned",
+    "status": "success",
+    "output_path": ".crunch-drain/bzip2-boundary-store/bc1ch5ijx9zilf3g1jmib54pifmkzc3d-bzip2-1.0.8-musl",
+    "installed_tools": ["bzip2", "bunzip2", "bzcat", "bzip2recover"]
+  },
+  "runtime_smoke": {
+    "command": "for tool in bzip2 bunzip2 bzcat bzip2recover; do $out/bin/$tool --help >/tmp/$tool.out 2>/tmp/$tool.err; done",
+    "status": "failure",
+    "observed_exit_status": 139,
+    "observed_failure": "segmentation fault before help output for installed bzip2, bunzip2, bzcat, and bzip2recover"
+  },
+  "replacement_condition": "Retire this boundary when bootstrap/bzip2-1.0.8-musl.ncl produces installed bzip2, bunzip2, bzcat, and bzip2recover binaries that pass non-pipeline runtime smoke checks without rc=139 while retaining the direct tcc-musl-v2 object/link source path.",
+  "parity_effect": "evidence-backed partial; does not prove bzip2 1.0.8 musl runtime correctness"
+}

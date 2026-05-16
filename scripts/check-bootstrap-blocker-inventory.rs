@@ -411,6 +411,22 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected m4 1.4.7 musl boundary receipt metadata suppression".to_string());
     }
+    if evidence.bzip2_108_musl_runtime_boundary_checked
+        && suppression_reason(Path::new("bootstrap/bzip2-1.0.8-musl.ncl"), 69, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected bzip2 1.0.8 musl runtime boundary suppression".to_string());
+    }
+    if evidence.bzip2_108_musl_runtime_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/bzip2-1.0.8-musl-runtime-boundary.json"),
+            4,
+            MARKERS[1],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected bzip2 1.0.8 musl runtime receipt metadata suppression".to_string());
+    }
 
     Ok(())
 }
@@ -423,6 +439,7 @@ struct EvidenceState {
     tcc_musl_contracts_checked: bool,
     sed409_musl_bridge_boundary_checked: bool,
     m4_147_musl_bridge_boundary_checked: bool,
+    bzip2_108_musl_runtime_boundary_checked: bool,
 }
 
 impl EvidenceState {
@@ -434,6 +451,7 @@ impl EvidenceState {
             tcc_musl_contracts_checked: checked_tcc_musl_contracts(),
             sed409_musl_bridge_boundary_checked: checked_sed409_musl_bridge_boundary(),
             m4_147_musl_bridge_boundary_checked: checked_m4_147_musl_bridge_boundary(),
+            bzip2_108_musl_runtime_boundary_checked: checked_bzip2_108_musl_runtime_boundary(),
         }
     }
 }
@@ -554,6 +572,26 @@ fn checked_m4_147_musl_bridge_boundary() -> bool {
         ])
 }
 
+fn checked_bzip2_108_musl_runtime_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/bzip2-1.0.8-musl-runtime-boundary.json", &[
+        "\"schema\": \"mantle-bzip2-108-musl-runtime-boundary-v1\"",
+        "\"derivation\": \"bootstrap/bzip2-1.0.8-musl.ncl\"",
+        "\"status\": \"runtime-boundary-only\"",
+        "\"boundary\": \"tcc-musl-v2-bzip2-108-direct-link-runtime\"",
+        "\"expected_complete\": false",
+        "crunch-start.o bzip2.o",
+        "\"observed_exit_status\": 139",
+        "segmentation fault before help output",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/bzip2-1.0.8-musl.ncl", &[
+            "The Mes-linked tcc-musl-v2 bridge can still hit its fragile library",
+            "compile objects, then link with declared musl",
+            "crunch-start.o bzip2.o",
+            "\"$TCC/lib/tcc/libtcc1.a\" \"$MUSL/lib/libc.a\"",
+        ])
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -643,6 +681,19 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/m4-1.4.7-musl-bridge-boundary.json")
     {
         return Some("m4 1.4.7 musl bridge-boundary receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.bzip2_108_musl_runtime_boundary_checked
+        && path_s.ends_with("bootstrap/bzip2-1.0.8-musl.ncl")
+        && matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+    {
+        return Some(
+            "bzip2 1.0.8 musl runtime boundary is explicitly checked; it remains partial until runtime smoke is repaired",
+        );
+    }
+    if evidence.bzip2_108_musl_runtime_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/bzip2-1.0.8-musl-runtime-boundary.json")
+    {
+        return Some("bzip2 1.0.8 musl runtime-boundary receipt is checked metadata, not an additional blocker");
     }
     None
 }
