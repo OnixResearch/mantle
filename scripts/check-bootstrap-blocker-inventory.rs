@@ -352,6 +352,9 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected gcc-4.0 diagnostic boundary duplication suppression".to_string());
     }
+    if suppression_reason(Path::new("openspec/specs/bootstrap/spec.md"), 2547, MARKERS[0], &evidence).is_none() {
+        return Err("self-test expected bootstrap OpenSpec policy text suppression".to_string());
+    }
 
     Ok(())
 }
@@ -463,6 +466,11 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
     {
         return Some(
             "gcc-4.0 c-parse diagnostic duplicates the checked native-boundary receipt; production blockers remain counted",
+        );
+    }
+    if path_s.ends_with("openspec/specs/bootstrap/spec.md") {
+        return Some(
+            "bootstrap OpenSpec text is policy/control-plane metadata; source and evidence blockers remain counted",
         );
     }
     None
