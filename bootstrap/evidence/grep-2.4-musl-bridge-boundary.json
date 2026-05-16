@@ -1,0 +1,28 @@
+{
+  "schema": "mantle-grep-24-musl-bridge-boundary-v1",
+  "derivation": "bootstrap/grep-2.4-musl.ncl",
+  "status": "bridge-boundary-only",
+  "boundary": "tcc-musl-v2-grep-24-driver-compile",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "upstream grep 2.4 driver trips this TinyCC handoff while compiling",
+    "src/grep.c",
+    "small grep-compatible bootstrap bridge",
+    "-q/-v/-i/-n/-e/-E/-F option subset"
+  ],
+  "build_smoke": {
+    "command": "crunch build bootstrap/grep-2.4-musl.ncl --store .crunch-drain/grep-boundary-store -j 4 --trust-unsigned",
+    "status": "success",
+    "output_path": ".crunch-drain/grep-boundary-store/qmibxs5n8cydi6ks419cy7345b8vzm8v-grep-2.4-musl",
+    "output_contract": [
+      "installed bin/grep is executable",
+      "installed bin/egrep is a symlink to grep",
+      "installed bin/fgrep is a symlink to grep",
+      "--version reports GNU grep 2.4",
+      "literal match, quiet match, inverted match, ^ anchored match, egrep, and fgrep smoke cases pass"
+    ]
+  },
+  "replacement_condition": "Retire this boundary when bootstrap/grep-2.4-musl.ncl compiles and installs GNU grep 2.4 from source with tcc-musl-v2 while preserving the recorded grep/egrep/fgrep output-contract smoke.",
+  "parity_effect": "evidence-backed partial; does not prove GNU grep 2.4 musl source-build correctness"
+}

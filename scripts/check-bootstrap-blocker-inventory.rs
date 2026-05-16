@@ -427,6 +427,22 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected bzip2 1.0.8 musl runtime receipt metadata suppression".to_string());
     }
+    if evidence.grep_24_musl_bridge_boundary_checked
+        && suppression_reason(Path::new("bootstrap/grep-2.4-musl.ncl"), 63, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected grep 2.4 musl bridge boundary suppression".to_string());
+    }
+    if evidence.grep_24_musl_bridge_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/grep-2.4-musl-bridge-boundary.json"),
+            4,
+            MARKERS[0],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected grep 2.4 musl bridge receipt metadata suppression".to_string());
+    }
 
     Ok(())
 }
@@ -440,6 +456,7 @@ struct EvidenceState {
     sed409_musl_bridge_boundary_checked: bool,
     m4_147_musl_bridge_boundary_checked: bool,
     bzip2_108_musl_runtime_boundary_checked: bool,
+    grep_24_musl_bridge_boundary_checked: bool,
 }
 
 impl EvidenceState {
@@ -452,6 +469,7 @@ impl EvidenceState {
             sed409_musl_bridge_boundary_checked: checked_sed409_musl_bridge_boundary(),
             m4_147_musl_bridge_boundary_checked: checked_m4_147_musl_bridge_boundary(),
             bzip2_108_musl_runtime_boundary_checked: checked_bzip2_108_musl_runtime_boundary(),
+            grep_24_musl_bridge_boundary_checked: checked_grep_24_musl_bridge_boundary(),
         }
     }
 }
@@ -592,6 +610,26 @@ fn checked_bzip2_108_musl_runtime_boundary() -> bool {
         ])
 }
 
+fn checked_grep_24_musl_bridge_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/grep-2.4-musl-bridge-boundary.json", &[
+        "\"schema\": \"mantle-grep-24-musl-bridge-boundary-v1\"",
+        "\"derivation\": \"bootstrap/grep-2.4-musl.ncl\"",
+        "\"status\": \"bridge-boundary-only\"",
+        "\"boundary\": \"tcc-musl-v2-grep-24-driver-compile\"",
+        "\"expected_complete\": false",
+        "small grep-compatible bootstrap bridge",
+        "\"--version reports GNU grep 2.4\"",
+        "literal match, quiet match, inverted match",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/grep-2.4-musl.ncl", &[
+            "upstream grep 2.4 driver trips this TinyCC handoff while compiling",
+            "src/grep.c",
+            "small grep-compatible bootstrap bridge",
+            "-q/-v/-i/-n/-e/-E/-F option subset",
+        ])
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -694,6 +732,19 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/bzip2-1.0.8-musl-runtime-boundary.json")
     {
         return Some("bzip2 1.0.8 musl runtime-boundary receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.grep_24_musl_bridge_boundary_checked
+        && path_s.ends_with("bootstrap/grep-2.4-musl.ncl")
+        && matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+    {
+        return Some(
+            "grep 2.4 musl bridge boundary is explicitly checked; it remains partial until source compile is repaired",
+        );
+    }
+    if evidence.grep_24_musl_bridge_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/grep-2.4-musl-bridge-boundary.json")
+    {
+        return Some("grep 2.4 musl bridge-boundary receipt is checked metadata, not an additional blocker");
     }
     None
 }
