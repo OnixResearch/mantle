@@ -355,6 +355,20 @@ fn run_self_tests() -> Result<(), String> {
     if suppression_reason(Path::new("openspec/specs/bootstrap/spec.md"), 2547, MARKERS[0], &evidence).is_none() {
         return Err("self-test expected bootstrap OpenSpec policy text suppression".to_string());
     }
+    if suppression_reason(Path::new("bootstrap/BLOCKER-INVENTORY.md"), 18, MARKERS[0], &evidence).is_none() {
+        return Err("self-test expected blocker inventory taxonomy text suppression".to_string());
+    }
+    if evidence.gcc40_placeholder_inventory_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/gcc-4.0-placeholder-inventory.json"),
+            2,
+            MARKERS[4],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected gcc-4.0 placeholder inventory metadata suppression".to_string());
+    }
     if evidence.tcc_musl_contracts_checked
         && suppression_reason(Path::new("bootstrap/tcc-musl-v2.ncl"), 251, MARKERS[1], &evidence).is_none()
     {
@@ -510,6 +524,16 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         return Some(
             "bootstrap OpenSpec text is policy/control-plane metadata; source and evidence blockers remain counted",
         );
+    }
+    if path_s.ends_with("bootstrap/BLOCKER-INVENTORY.md") {
+        return Some(
+            "bootstrap blocker inventory taxonomy is reporting metadata; source and evidence blockers remain counted",
+        );
+    }
+    if path_s.ends_with("bootstrap/evidence/gcc-4.0-placeholder-inventory.json")
+        && evidence.gcc40_placeholder_inventory_checked
+    {
+        return Some("gcc-4.0 placeholder inventory is checked blocker metadata, not an additional blocker");
     }
     if evidence.tcc_musl_contracts_checked && is_tcc_musl_source_normalization_note(&path_s, line) {
         return Some(
