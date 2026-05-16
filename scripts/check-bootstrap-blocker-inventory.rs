@@ -375,6 +375,7 @@ fn run_self_tests() -> Result<(), String> {
         return Err("self-test expected tcc-musl source-normalization note suppression".to_string());
     }
     if evidence.tcc_musl_contracts_checked
+        && !evidence.tcc_musl_handoff_bridge_boundaries_checked
         && suppression_reason(Path::new("bootstrap/tcc-musl-prep.ncl"), 4, MARKERS[0], &evidence).is_some()
     {
         return Err("self-test expected tcc-musl-prep stage bridge line to remain counted".to_string());
@@ -475,6 +476,27 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected musl 1.1.24 tcc archive receipt metadata suppression".to_string());
     }
+    if evidence.tcc_musl_handoff_bridge_boundaries_checked
+        && suppression_reason(Path::new("bootstrap/tcc-musl-prep.ncl"), 4, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected tcc musl prep bridge boundary suppression".to_string());
+    }
+    if evidence.tcc_musl_handoff_bridge_boundaries_checked
+        && suppression_reason(Path::new("bootstrap/tcc-musl-v2.ncl"), 3, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected tcc musl v2 bridge boundary suppression".to_string());
+    }
+    if evidence.tcc_musl_handoff_bridge_boundaries_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/tcc-musl-handoff-bridge-boundaries.json"),
+            4,
+            MARKERS[0],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected tcc musl handoff bridge receipt metadata suppression".to_string());
+    }
 
     Ok(())
 }
@@ -491,6 +513,7 @@ struct EvidenceState {
     grep_24_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_archive_boundary_checked: bool,
+    tcc_musl_handoff_bridge_boundaries_checked: bool,
 }
 
 impl EvidenceState {
@@ -506,6 +529,7 @@ impl EvidenceState {
             grep_24_musl_bridge_boundary_checked: checked_grep_24_musl_bridge_boundary(),
             musl_1124_tcc_musl_bridge_boundary_checked: checked_musl_1124_tcc_musl_bridge_boundary(),
             musl_1124_tcc_archive_boundary_checked: checked_musl_1124_tcc_archive_boundary(),
+            tcc_musl_handoff_bridge_boundaries_checked: checked_tcc_musl_handoff_bridge_boundaries(),
         }
     }
 }
@@ -705,6 +729,33 @@ fn checked_musl_1124_tcc_archive_boundary() -> bool {
         ])
 }
 
+fn checked_tcc_musl_handoff_bridge_boundaries() -> bool {
+    checked_evidence_file("bootstrap/evidence/tcc-musl-handoff-bridge-boundaries.json", &[
+        "\"schema\": \"mantle-tcc-musl-handoff-bridge-boundaries-v1\"",
+        "\"status\": \"bridge-boundary-only\"",
+        "\"derivation\": \"bootstrap/tcc-musl-prep.ncl\"",
+        "\"boundary\": \"mes-linked-tinycc-to-musl-prep-bridge\"",
+        "\"derivation\": \"bootstrap/tcc-musl-v2.ncl\"",
+        "\"boundary\": \"validated-tcc-musl-shape-to-second-pass-musl-bridge\"",
+        "\"expected_complete\": false",
+        "\"binary_blake3\": \"06e030a1d7c7abe979aa2dc283df11618794804d5e9a5ce885b6d79f7f33407f\"",
+        "\"binary_blake3\": \"21807fb8fac564638e6859e25c8b8e2aea62f4dc642ad18690df53123b1dbba6\"",
+        "tcc -v reports 0.9.27",
+        "tcc -c compiles a trivial object",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/tcc-musl-prep.ncl", &[
+            "It is the bridge compiler that builds the first musl",
+            "tcc-musl-prep: compile object",
+            "tcc-musl-prep: link executable",
+        ])
+        && checked_source_file("bootstrap/tcc-musl-v2.ncl", &[
+            "Reuse the validated bridge build shape from tcc-musl",
+            "hosted by the TinyCC 0.9.26 Mes compiler",
+            "tcc-musl: smoke compile",
+        ])
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -768,6 +819,19 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         return Some(
             "tcc-musl handoff note documents checked source-normalization coverage; stage-level bridge blockers remain counted",
         );
+    }
+    if evidence.tcc_musl_handoff_bridge_boundaries_checked
+        && (path_s.ends_with("bootstrap/tcc-musl-prep.ncl") || path_s.ends_with("bootstrap/tcc-musl-v2.ncl"))
+        && matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+    {
+        return Some(
+            "tcc musl handoff bridge boundary is explicitly checked; it remains partial until Mes-linked bridge hosting is retired",
+        );
+    }
+    if evidence.tcc_musl_handoff_bridge_boundaries_checked
+        && path_s.ends_with("bootstrap/evidence/tcc-musl-handoff-bridge-boundaries.json")
+    {
+        return Some("tcc musl handoff bridge-boundary receipt is checked metadata, not an additional blocker");
     }
     if evidence.sed409_musl_bridge_boundary_checked
         && path_s.ends_with("bootstrap/sed-4.0.9-musl.ncl")

@@ -1,0 +1,50 @@
+{
+  "schema": "mantle-tcc-musl-handoff-bridge-boundaries-v1",
+  "status": "bridge-boundary-only",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "derivations": [
+    {
+      "derivation": "bootstrap/tcc-musl-prep.ncl",
+      "boundary": "mes-linked-tinycc-to-musl-prep-bridge",
+      "checked_derivation_markers": [
+        "It is the bridge compiler that builds the first musl",
+        "tcc-musl-prep: compile object",
+        "tcc-musl-prep: link executable"
+      ],
+      "build_smoke": {
+        "command": "crunch build bootstrap/tcc-musl-prep.ncl --store .crunch-drain/store -j 4 --trust-unsigned",
+        "status": "success",
+        "output_path": ".crunch-drain/store/jismcc53v75krvrz1v9vzlwc93d8dd1f-tcc-0.9.27-musl-prep",
+        "binary_blake3": "06e030a1d7c7abe979aa2dc283df11618794804d5e9a5ce885b6d79f7f33407f",
+        "output_contract": [
+          "installed bin/tcc is executable",
+          "tcc -v reports 0.9.27",
+          "tcc -c compiles a trivial object"
+        ]
+      }
+    },
+    {
+      "derivation": "bootstrap/tcc-musl-v2.ncl",
+      "boundary": "validated-tcc-musl-shape-to-second-pass-musl-bridge",
+      "checked_derivation_markers": [
+        "Reuse the validated bridge build shape from tcc-musl",
+        "hosted by the TinyCC 0.9.26 Mes compiler",
+        "tcc-musl: smoke compile"
+      ],
+      "build_smoke": {
+        "command": "crunch build bootstrap/tcc-musl-v2.ncl --store .crunch-drain/store -j 4 --trust-unsigned",
+        "status": "success",
+        "output_path": ".crunch-drain/store/wqcc83kj7r5xlv96dr5cx638nkfv68i8-tcc-0.9.27-musl-v2",
+        "binary_blake3": "21807fb8fac564638e6859e25c8b8e2aea62f4dc642ad18690df53123b1dbba6",
+        "output_contract": [
+          "installed bin/tcc is executable",
+          "tcc -v reports 0.9.27",
+          "tcc -c compiles a trivial object"
+        ]
+      }
+    }
+  ],
+  "replacement_condition": "Retire this receipt when bootstrap/tcc-musl-prep.ncl and bootstrap/tcc-musl-v2.ncl no longer rely on Mes-linked TinyCC bridge hosting while preserving the recorded installed-TinyCC smoke contracts.",
+  "parity_effect": "evidence-backed partial; does not prove TinyCC 0.9.27 musl handoff self-host/source correctness"
+}
