@@ -312,21 +312,31 @@ fn run_self_tests() -> Result<(), String> {
 
     let evidence = EvidenceState::load();
     if evidence.binutils_tcc_tool_smoke_checked
-        && suppression_reason(Path::new("bootstrap/binutils-tcc.ncl"), MARKERS[0], &evidence).is_none()
+        && suppression_reason(Path::new("bootstrap/binutils-tcc.ncl"), 382, MARKERS[0], &evidence).is_none()
     {
         return Err("self-test expected binutils-tcc bridge-output suppression with checked evidence".to_string());
     }
     if evidence.gcc40_placeholder_inventory_checked
-        && suppression_reason(Path::new("bootstrap/evidence/gcc-4.0-placeholder-inventory.json"), MARKERS[0], &evidence)
-            .is_none()
+        && suppression_reason(
+            Path::new("bootstrap/evidence/gcc-4.0-placeholder-inventory.json"),
+            9,
+            MARKERS[0],
+            &evidence,
+        )
+        .is_none()
     {
         return Err("self-test expected gcc-4.0 placeholder inventory bridge-output suppression".to_string());
     }
     if evidence.gcc40_native_boundary_checked
-        && suppression_reason(Path::new("bootstrap/evidence/gcc-4.0-native-boundary.json"), MARKERS[0], &evidence)
+        && suppression_reason(Path::new("bootstrap/evidence/gcc-4.0-native-boundary.json"), 5, MARKERS[0], &evidence)
             .is_none()
     {
         return Err("self-test expected gcc-4.0 native boundary bridge-output suppression".to_string());
+    }
+    if evidence.gcc40_placeholder_inventory_checked
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1255, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected checked gcc-4.0 pass1 marker suppression".to_string());
     }
 
     Ok(())
@@ -397,7 +407,7 @@ fn checked_gcc40_native_boundary() -> bool {
     .is_some()
 }
 
-fn suppression_reason(path: &Path, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
+fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
         && path_s.ends_with("bootstrap/binutils-tcc.ncl")
@@ -406,6 +416,13 @@ fn suppression_reason(path: &Path, marker: MarkerClass, evidence: &EvidenceState
         return Some(
             "binutils-tcc has checked source-root tool-smoke evidence and remains partial, not unproved bridge output",
         );
+    }
+    if marker.id == "bridge-output"
+        && path_s.ends_with("bootstrap/gcc-4.0.ncl")
+        && evidence.gcc40_placeholder_inventory_checked
+        && matches!(line, 1255 | 1428 | 1443 | 1520)
+    {
+        return Some("gcc-4.0 pass1 marker is covered by the checked placeholder inventory receipt");
     }
     if marker.id == "bridge-output"
         && path_s.ends_with("bootstrap/evidence/gcc-4.0-placeholder-inventory.json")
@@ -476,7 +493,7 @@ fn scan_file(
         let lower = line.to_lowercase();
         for marker in MARKERS {
             if marker.matches_line(&lower) {
-                if let Some(reason) = suppression_reason(path, *marker, evidence) {
+                if let Some(reason) = suppression_reason(path, idx + 1, *marker, evidence) {
                     suppressions.push(Suppression {
                         class_id: marker.id,
                         path: path_s.clone(),
