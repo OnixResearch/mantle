@@ -338,6 +338,14 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected checked gcc-4.0 pass1 marker suppression".to_string());
     }
+    if evidence.gcc40_native_boundary_checked
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 101, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected checked gcc-4.0 mechanical bridge identifier suppression".to_string());
+    }
+    if is_gcc40_mechanical_bridge_identifier(1103) {
+        return Err("self-test expected gcc-4.0 prose bridge blocker line to remain unsuppressed".to_string());
+    }
 
     Ok(())
 }
@@ -419,6 +427,13 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
     }
     if marker.id == "bridge-output"
         && path_s.ends_with("bootstrap/gcc-4.0.ncl")
+        && evidence.gcc40_native_boundary_checked
+        && is_gcc40_mechanical_bridge_identifier(line)
+    {
+        return Some("gcc-4.0 mechanical bridge identifier is covered by checked native-boundary metadata");
+    }
+    if marker.id == "bridge-output"
+        && path_s.ends_with("bootstrap/gcc-4.0.ncl")
         && evidence.gcc40_placeholder_inventory_checked
         && matches!(line, 1255 | 1428 | 1443 | 1520)
     {
@@ -437,6 +452,34 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         return Some("gcc-4.0 native boundary receipt is checked boundary metadata, not an additional bridge blocker");
     }
     None
+}
+
+fn is_gcc40_mechanical_bridge_identifier(line: usize) -> bool {
+    matches!(
+        line,
+        101 | 102
+            | 103
+            | 144
+            | 146
+            | 147
+            | 148
+            | 267
+            | 280
+            | 288
+            | 300
+            | 345
+            | 352
+            | 360
+            | 376
+            | 389
+            | 395
+            | 396
+            | 401
+            | 405
+            | 406
+            | 410
+            | 413
+    )
 }
 
 fn collect_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
