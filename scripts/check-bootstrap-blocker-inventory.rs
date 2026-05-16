@@ -355,6 +355,16 @@ fn run_self_tests() -> Result<(), String> {
     if suppression_reason(Path::new("openspec/specs/bootstrap/spec.md"), 2547, MARKERS[0], &evidence).is_none() {
         return Err("self-test expected bootstrap OpenSpec policy text suppression".to_string());
     }
+    if evidence.tcc_musl_contracts_checked
+        && suppression_reason(Path::new("bootstrap/tcc-musl-v2.ncl"), 251, MARKERS[1], &evidence).is_none()
+    {
+        return Err("self-test expected tcc-musl source-normalization note suppression".to_string());
+    }
+    if evidence.tcc_musl_contracts_checked
+        && suppression_reason(Path::new("bootstrap/tcc-musl-prep.ncl"), 4, MARKERS[0], &evidence).is_some()
+    {
+        return Err("self-test expected tcc-musl-prep stage bridge line to remain counted".to_string());
+    }
 
     Ok(())
 }
@@ -364,6 +374,7 @@ struct EvidenceState {
     binutils_tcc_tool_smoke_checked: bool,
     gcc40_placeholder_inventory_checked: bool,
     gcc40_native_boundary_checked: bool,
+    tcc_musl_contracts_checked: bool,
 }
 
 impl EvidenceState {
@@ -372,6 +383,7 @@ impl EvidenceState {
             binutils_tcc_tool_smoke_checked: checked_binutils_tcc_tool_smoke(),
             gcc40_placeholder_inventory_checked: checked_gcc40_placeholder_inventory(),
             gcc40_native_boundary_checked: checked_gcc40_native_boundary(),
+            tcc_musl_contracts_checked: checked_tcc_musl_contracts(),
         }
     }
 }
@@ -424,6 +436,32 @@ fn checked_gcc40_native_boundary() -> bool {
     .is_some()
 }
 
+fn checked_source_file(path: &str, needles: &[&str]) -> bool {
+    checked_evidence_file(path, needles).is_some()
+}
+
+fn checked_tcc_musl_contracts() -> bool {
+    checked_source_file("bootstrap/tcc-musl-prep.ncl", &[
+        "name = \"tcc-0.9.27-musl-prep\"",
+        "tcc-musl-prep: compile object",
+        "tcc-musl-prep: link executable",
+        "test -x \"$out/bin/tcc\"",
+        "\"$out/bin/tcc\" -v",
+    ]) && checked_source_file("bootstrap/tcc-musl.ncl", &[
+        "name = \"tcc-0.9.27-musl\"",
+        "tcc-musl: verify output contract",
+        "tcc-musl: smoke compile",
+        "test \"$smoke_rc\" -eq 0",
+        "test -s smoke.o",
+    ]) && checked_source_file("bootstrap/tcc-musl-v2.ncl", &[
+        "name = \"tcc-0.9.27-musl-v2\"",
+        "tcc-musl: verify output contract",
+        "tcc-musl: smoke compile",
+        "test \"$smoke_rc\" -eq 0",
+        "test -s smoke.o",
+    ])
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -473,7 +511,25 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
             "bootstrap OpenSpec text is policy/control-plane metadata; source and evidence blockers remain counted",
         );
     }
+    if evidence.tcc_musl_contracts_checked && is_tcc_musl_source_normalization_note(&path_s, line) {
+        return Some(
+            "tcc-musl handoff note documents checked source-normalization coverage; stage-level bridge blockers remain counted",
+        );
+    }
     None
+}
+
+fn is_tcc_musl_source_normalization_note(path: &str, line: usize) -> bool {
+    if path.ends_with("bootstrap/tcc-musl-prep.ncl") {
+        return matches!(line, 65 | 77 | 170 | 228 | 276 | 337);
+    }
+    if path.ends_with("bootstrap/tcc-musl.ncl") {
+        return matches!(line, 70 | 82 | 175 | 249 | 297);
+    }
+    if path.ends_with("bootstrap/tcc-musl-v2.ncl") {
+        return matches!(line, 71 | 83 | 176 | 251 | 268 | 280 | 282 | 321);
+    }
+    false
 }
 
 fn is_gcc40_mechanical_bridge_identifier(line: usize) -> bool {
