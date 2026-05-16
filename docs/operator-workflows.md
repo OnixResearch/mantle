@@ -164,6 +164,23 @@ Structured build reports surface the same operator facts in stable fields:
 That last block gives both the logical store path and the persisted sidecar
 path for the artifact attestation.
 
+## Semantic build graph queries
+
+Mantle records semantic graph data with immutable node identities for source trees, recipes, store outputs, sandbox profiles, providers, proof receipts, witness requests, and release evidence. Human names and aliases are metadata records that point at immutable identities; changing an alias must not change the underlying BLAKE3-backed node identity.
+
+Graph-capable tools can persist a `mantle-semantic-build-graph-v1` JSON file under the state directory as `semantic-graph.json`. Operators can query that file directly:
+
+```sh
+mantle graph <output-or-alias>
+mantle why <output-or-alias>
+mantle dependents <identity-or-alias>
+mantle --json why <output-or-alias>
+```
+
+`mantle graph` prints the connected node/edge view for a selected root. `mantle why` reports the producing recipe plus linked source, provider, sandbox, proof receipt, witness request, and release evidence nodes when present. `mantle dependents` reports graph nodes that declare dependency edges to the selected identity.
+
+Missing legacy graph data is fail-closed: queries return a typed `mantle-incomplete-semantic-graph-v1` diagnostic instead of inventing source, recipe, proof, or witness edges. Legacy store entries without graph links remain usable for ordinary cache/build reuse.
+
 ## Remote realization adapter boundary
 
 Remote derivation realization uses a provider-neutral hash-negotiated handshake

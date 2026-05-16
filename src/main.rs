@@ -28,6 +28,8 @@ mod release_nix_witness;
 mod release_reproducibility;
 mod release_source;
 mod self_build;
+#[allow(dead_code)]
+mod semantic_graph;
 mod shell_cmd;
 mod store_cmd;
 mod system_cmd;
@@ -170,6 +172,36 @@ enum Command {
         /// Workflow profile to check
         #[arg(long, value_enum, default_value_t = DoctorProfile::Build)]
         profile: DoctorProfile,
+    },
+
+    /// Show a semantic build graph rooted at an output/proof/source identity or alias
+    Graph {
+        /// Identity or alias to use as the graph root
+        root: String,
+
+        /// Semantic graph JSON file (default: <state-dir>/semantic-graph.json)
+        #[arg(long = "graph-file")]
+        graph_file: Option<PathBuf>,
+    },
+
+    /// Explain why an output/proof identity exists from semantic graph records
+    Why {
+        /// Identity or alias to explain
+        target: String,
+
+        /// Semantic graph JSON file (default: <state-dir>/semantic-graph.json)
+        #[arg(long = "graph-file")]
+        graph_file: Option<PathBuf>,
+    },
+
+    /// List graph dependents of an identity or alias
+    Dependents {
+        /// Identity or alias whose dependents should be listed
+        target: String,
+
+        /// Semantic graph JSON file (default: <state-dir>/semantic-graph.json)
+        #[arg(long = "graph-file")]
+        graph_file: Option<PathBuf>,
     },
 
     /// Execute Markdown Mantle transcripts with isolated store/state defaults
@@ -1099,6 +1131,11 @@ fn build_run_context(args: &Args) -> RunContext {
 fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
     match &args.command {
         Command::Doctor { profile } => run_doctor_command(ctx, *profile),
+        Command::Graph { root, graph_file } => run_semantic_graph_command(ctx, "graph", root, graph_file.as_deref()),
+        Command::Why { target, graph_file } => run_semantic_graph_command(ctx, "why", target, graph_file.as_deref()),
+        Command::Dependents { target, graph_file } => {
+            run_semantic_graph_command(ctx, "dependents", target, graph_file.as_deref())
+        }
         Command::Transcript { action } => run_transcript_command(action.clone()),
         Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
@@ -1121,6 +1158,135 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
+    }
+}
+
+fn run_semantic_graph_command(
+    ctx: &RunContext,
+    query: &str,
+    target: &str,
+    graph_file: Option<&Path>,
+) -> Result<(), RunError> {
+    let path = graph_file
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| ctx.resolved_state_dir.join("semantic-graph.json"));
+    let graph = match semantic_graph::SemanticGraph::load(&path) {
+        Ok(graph) => graph,
+        Err(semantic_graph::SemanticGraphError::Incomplete(diag)) => {
+            if ctx.json {
+                let rendered =
+                    serde_json::to_string_pretty(&diag).map_err(|err| RunError::Internal(err.to_string()))?;
+                println!("{rendered}");
+            } else {
+                eprintln!(
+                    "incomplete semantic graph for {} `{}`: missing {}",
+                    diag.query,
+                    diag.target,
+                    diag.missing.join(", ")
+                );
+            }
+            return Err(RunError::Reported(1));
+        }
+        Err(err) => return Err(RunError::Internal(err.to_string())),
+    };
+
+    let rendered = match query {
+        "graph" => match graph.graph_for_root(target) {
+            Ok(result) => render_graph_result(ctx.json, &result)?,
+            Err(err) => return report_semantic_graph_query_error(ctx, err),
+        },
+        "why" => match graph.why(target) {
+            Ok(result) => render_why_result(ctx.json, &result)?,
+            Err(err) => return report_semantic_graph_query_error(ctx, err),
+        },
+        "dependents" => match graph.dependents(target) {
+            Ok(result) => render_dependents_result(ctx.json, &result)?,
+            Err(err) => return report_semantic_graph_query_error(ctx, err),
+        },
+        _ => return Err(RunError::Internal(format!("unknown semantic graph query `{query}`"))),
+    };
+    println!("{rendered}");
+    Ok(())
+}
+
+fn report_semantic_graph_query_error(
+    ctx: &RunContext,
+    err: semantic_graph::SemanticGraphError,
+) -> Result<(), RunError> {
+    if let semantic_graph::SemanticGraphError::Incomplete(diag) = err {
+        if ctx.json {
+            let rendered = serde_json::to_string_pretty(&diag).map_err(|err| RunError::Internal(err.to_string()))?;
+            println!("{rendered}");
+        } else {
+            eprintln!(
+                "incomplete semantic graph for {} `{}`: missing {}",
+                diag.query,
+                diag.target,
+                diag.missing.join(", ")
+            );
+        }
+        return Err(RunError::Reported(1));
+    }
+    Err(RunError::Internal(err.to_string()))
+}
+
+fn render_graph_result(json: bool, result: &semantic_graph::GraphQueryResult<'_>) -> Result<String, RunError> {
+    if json {
+        return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
+    }
+    let mut out = format!("semantic graph root: {}\n", result.root);
+    out.push_str("nodes:\n");
+    for node in &result.nodes {
+        out.push_str(&format!("  {} [{}]\n", node.id, node.kind));
+    }
+    out.push_str("edges:\n");
+    for edge in &result.edges {
+        out.push_str(&format!("  {} --{}--> {}\n", edge.from, edge.kind, edge.to));
+    }
+    if !result.aliases.is_empty() {
+        out.push_str("aliases:\n");
+        for alias in &result.aliases {
+            out.push_str(&format!("  {} -> {}\n", alias.alias, alias.target));
+        }
+    }
+    Ok(out)
+}
+
+fn render_why_result(json: bool, result: &semantic_graph::WhyResult<'_>) -> Result<String, RunError> {
+    if json {
+        return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
+    }
+    let mut out = format!("why {}\nnode: {} [{}]\n", result.target, result.node.id, result.node.kind);
+    if let Some(recipe) = result.producing_recipe {
+        out.push_str(&format!("produced by: {}\n", recipe.id));
+    }
+    append_node_list(&mut out, "sources", &result.sources);
+    append_node_list(&mut out, "providers", &result.providers);
+    append_node_list(&mut out, "sandboxes", &result.sandboxes);
+    append_node_list(&mut out, "proof receipts", &result.proof_receipts);
+    append_node_list(&mut out, "witness requests", &result.witness_requests);
+    append_node_list(&mut out, "release evidence", &result.release_evidence);
+    Ok(out)
+}
+
+fn render_dependents_result(json: bool, result: &semantic_graph::DependentsResult<'_>) -> Result<String, RunError> {
+    if json {
+        return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
+    }
+    let mut out = format!("dependents of {}:\n", result.target);
+    for dependent in &result.dependents {
+        out.push_str(&format!("  {} [{}]\n", dependent.id, dependent.kind));
+    }
+    Ok(out)
+}
+
+fn append_node_list(out: &mut String, label: &str, nodes: &[&semantic_graph::SemanticNode]) {
+    if nodes.is_empty() {
+        return;
+    }
+    out.push_str(&format!("{label}:\n"));
+    for node in nodes {
+        out.push_str(&format!("  {} [{}]\n", node.id, node.kind));
     }
 }
 
