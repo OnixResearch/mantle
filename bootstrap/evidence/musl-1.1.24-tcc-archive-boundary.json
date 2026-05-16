@@ -1,0 +1,26 @@
+{
+  "schema": "mantle-musl-1124-tcc-archive-boundary-v1",
+  "derivation": "bootstrap/musl-1.1.24-tcc.ncl",
+  "status": "archive-boundary-only",
+  "boundary": "tcc-musl-prep-first-musl-archive-format",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "CRUNCH bridge TinyCC builtin va_list",
+    "Build musl 1.1.24 using the tcc-musl-prep compiler",
+    "This is the first real libc in the chain"
+  ],
+  "build_smoke": {
+    "command": "crunch build bootstrap/musl-1.1.24-tcc.ncl --store .crunch-drain/store -j 4 --trust-unsigned",
+    "status": "success",
+    "output_path": ".crunch-drain/store/sdf8n9sl6fw0iavj19bg4wk4r66q2q8f-musl-1.1.24-tcc",
+    "output_contract": [
+      "installed lib/libc.a exists and has ar magic",
+      "installed include/stdio.h exists",
+      "installed crt1.o or Scrt1.o exists"
+    ],
+    "known_boundary": "host ar reports libc.a as truncated or malformed after the symbol-table member"
+  },
+  "replacement_condition": "Retire this boundary when bootstrap/musl-1.1.24-tcc.ncl produces a standard readable libc.a from the first musl pass without the TinyCC builtin va_list bridge while preserving the recorded header/startup-object output contract.",
+  "parity_effect": "evidence-backed partial; does not prove complete first-pass musl archive correctness"
+}

@@ -444,13 +444,7 @@ fn run_self_tests() -> Result<(), String> {
         return Err("self-test expected grep 2.4 musl bridge receipt metadata suppression".to_string());
     }
     if evidence.musl_1124_tcc_musl_bridge_boundary_checked
-        && suppression_reason(
-            Path::new("bootstrap/musl-1.1.24-tcc-musl.ncl"),
-            3,
-            MARKERS[0],
-            &evidence,
-        )
-        .is_none()
+        && suppression_reason(Path::new("bootstrap/musl-1.1.24-tcc-musl.ncl"), 3, MARKERS[0], &evidence).is_none()
     {
         return Err("self-test expected musl 1.1.24 tcc-musl bridge boundary suppression".to_string());
     }
@@ -464,6 +458,22 @@ fn run_self_tests() -> Result<(), String> {
         .is_none()
     {
         return Err("self-test expected musl 1.1.24 tcc-musl bridge receipt metadata suppression".to_string());
+    }
+    if evidence.musl_1124_tcc_archive_boundary_checked
+        && suppression_reason(Path::new("bootstrap/musl-1.1.24-tcc.ncl"), 74, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected musl 1.1.24 tcc archive boundary suppression".to_string());
+    }
+    if evidence.musl_1124_tcc_archive_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/musl-1.1.24-tcc-archive-boundary.json"),
+            4,
+            MARKERS[0],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected musl 1.1.24 tcc archive receipt metadata suppression".to_string());
     }
 
     Ok(())
@@ -480,6 +490,7 @@ struct EvidenceState {
     bzip2_108_musl_runtime_boundary_checked: bool,
     grep_24_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_musl_bridge_boundary_checked: bool,
+    musl_1124_tcc_archive_boundary_checked: bool,
 }
 
 impl EvidenceState {
@@ -494,6 +505,7 @@ impl EvidenceState {
             bzip2_108_musl_runtime_boundary_checked: checked_bzip2_108_musl_runtime_boundary(),
             grep_24_musl_bridge_boundary_checked: checked_grep_24_musl_bridge_boundary(),
             musl_1124_tcc_musl_bridge_boundary_checked: checked_musl_1124_tcc_musl_bridge_boundary(),
+            musl_1124_tcc_archive_boundary_checked: checked_musl_1124_tcc_archive_boundary(),
         }
     }
 }
@@ -674,6 +686,25 @@ fn checked_musl_1124_tcc_musl_bridge_boundary() -> bool {
         ])
 }
 
+fn checked_musl_1124_tcc_archive_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/musl-1.1.24-tcc-archive-boundary.json", &[
+        "\"schema\": \"mantle-musl-1124-tcc-archive-boundary-v1\"",
+        "\"derivation\": \"bootstrap/musl-1.1.24-tcc.ncl\"",
+        "\"status\": \"archive-boundary-only\"",
+        "\"boundary\": \"tcc-musl-prep-first-musl-archive-format\"",
+        "\"expected_complete\": false",
+        "CRUNCH bridge TinyCC builtin va_list",
+        "installed lib/libc.a exists and has ar magic",
+        "truncated or malformed",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/musl-1.1.24-tcc.ncl", &[
+            "Build musl 1.1.24 using the tcc-musl-prep compiler",
+            "This is the first real libc in the chain",
+            "CRUNCH bridge TinyCC builtin va_list",
+        ])
+}
+
 fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &EvidenceState) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     if marker.id == "bridge-output"
@@ -802,6 +833,19 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/musl-1.1.24-tcc-musl-bridge-boundary.json")
     {
         return Some("musl 1.1.24 tcc-musl bridge-boundary receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.musl_1124_tcc_archive_boundary_checked
+        && path_s.ends_with("bootstrap/musl-1.1.24-tcc.ncl")
+        && matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+    {
+        return Some(
+            "musl 1.1.24 tcc archive boundary is explicitly checked; it remains partial until libc.a is standard-readable and the bridge patch is retired",
+        );
+    }
+    if evidence.musl_1124_tcc_archive_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/musl-1.1.24-tcc-archive-boundary.json")
+    {
+        return Some("musl 1.1.24 tcc archive-boundary receipt is checked metadata, not an additional blocker");
     }
     None
 }
