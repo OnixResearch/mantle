@@ -95,6 +95,12 @@ pub struct AssemblerRegistry {
     assemblers: BTreeMap<String, Box<dyn Assembler>>,
 }
 
+impl Default for AssemblerRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AssemblerRegistry {
     pub fn new() -> Self {
         Self {

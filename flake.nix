@@ -41,7 +41,9 @@
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
         # Common source filtering. The Rust workspace embeds Nickel stdlib files
-        # from ./lib with include_str!, the executable transcript tests read
+        # from ./lib with include_str!, bootstrap tests read checked Nickel
+        # definitions from ./bootstrap, benchmark checks read checked example
+        # workloads from ./examples, the executable transcript tests read
         # checked Markdown fixtures from ./tests/fixtures, and the first checked
         # operator walkthrough lives with the system-config example. Keep these
         # directories alongside normal Cargo sources for Nix-built checks.
@@ -51,8 +53,11 @@
             path: type:
             (craneLib.filterCargoSources path type)
             || pkgs.lib.hasPrefix "${toString ./lib}/" (toString path)
+            || pkgs.lib.hasPrefix "${toString ./bootstrap}/" (toString path)
+            || pkgs.lib.hasPrefix "${toString ./builders}/" (toString path)
+            || pkgs.lib.hasPrefix "${toString ./examples}/" (toString path)
             || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./examples/system-config}/" (toString path);
+            || pkgs.lib.hasPrefix "${toString ./docs}/" (toString path);
         };
 
         # Common build inputs
@@ -60,6 +65,7 @@
           pkg-config
           clang
           mold
+          git
         ];
 
         buildInputs =
@@ -85,6 +91,9 @@
             nativeBuildInputs
             buildInputs
             ;
+          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          GIT = "${pkgs.git}/bin/git";
+          nativeCheckInputs = [ pkgs.git ];
         };
 
         tigerstyleRunner = pkgs.writeShellApplication {
@@ -171,9 +180,13 @@
               ;
             partitions = 1;
             partitionType = "count";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+            GIT = "${pkgs.git}/bin/git";
           };
 
-          # Clippy lints
+          # Clippy lints: keep the flake gate aligned with
+          # scripts/check-first-party-clippy.sh by linting first-party targets
+          # strictly while excluding vendored workspace members.
           clippy = craneLib.cargoClippy {
             inherit
               src
@@ -181,7 +194,8 @@
               nativeBuildInputs
               buildInputs
               ;
-            cargoClippyExtraArgs = "--all-targets -- -D warnings";
+            cargoClippyExtraArgs = "--workspace --lib --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           };
 
           # Format check

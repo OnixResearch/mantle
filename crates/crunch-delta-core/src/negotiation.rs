@@ -10,6 +10,9 @@ pub const PROTOCOL_VERSION_V1: u32 = 1;
 pub const MAX_NEGOTIATION_VERSIONS: u32 = 8;
 pub const MAX_NEGOTIATION_CHUNK_PROFILES: u32 = 8;
 
+const _: () = assert!(MAX_NEGOTIATION_VERSIONS > 0);
+const _: () = assert!(MAX_NEGOTIATION_CHUNK_PROFILES > 0);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ChunkingAlgorithmWire {
     FastCdc,
@@ -147,24 +150,31 @@ pub fn negotiate_protocol(
 }
 
 fn validate_offer(offer: &NegotiationOffer) -> Result<(), NegotiationError> {
-    debug_assert!(MAX_NEGOTIATION_VERSIONS > 0);
-    debug_assert!(MAX_NEGOTIATION_CHUNK_PROFILES > 0);
-
-    let version_count = offer.supported_versions.len() as u32;
+    let version_count = match u32::try_from(offer.supported_versions.len()) {
+        Ok(count) => count,
+        Err(_) => return Err(NegotiationError::TooManyVersions(MAX_NEGOTIATION_VERSIONS.saturating_add(1))),
+    };
     if version_count == 0 {
         return Err(NegotiationError::EmptyVersionSet);
     }
     if version_count > MAX_NEGOTIATION_VERSIONS {
         return Err(NegotiationError::TooManyVersions(version_count));
     }
+    debug_assert!((1..=MAX_NEGOTIATION_VERSIONS).contains(&version_count));
 
-    let profile_count = offer.supported_chunk_profiles.len() as u32;
+    let profile_count = match u32::try_from(offer.supported_chunk_profiles.len()) {
+        Ok(count) => count,
+        Err(_) => {
+            return Err(NegotiationError::TooManyChunkProfiles(MAX_NEGOTIATION_CHUNK_PROFILES.saturating_add(1)));
+        }
+    };
     if profile_count == 0 {
         return Err(NegotiationError::EmptyChunkProfileSet);
     }
     if profile_count > MAX_NEGOTIATION_CHUNK_PROFILES {
         return Err(NegotiationError::TooManyChunkProfiles(profile_count));
     }
+    debug_assert!((1..=MAX_NEGOTIATION_CHUNK_PROFILES).contains(&profile_count));
 
     let mut seen_versions = BTreeSet::<u32>::new();
     for version in &offer.supported_versions {

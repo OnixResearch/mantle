@@ -550,7 +550,7 @@ fn write_provider_metadata(
     metadata_path: &Path,
 ) -> Result<(), RunError> {
     debug_assert!(!provider.provider.id.is_empty());
-    debug_assert!(metadata_path.extension().map_or(false, |ext| ext == "json"));
+    debug_assert!(metadata_path.extension().is_some_and(|ext| ext == "json"));
     let raw_size_bytes = directory_size_bytes(raw_root)?;
     let reduced_size_bytes = directory_size_bytes(stage_root)?;
     if raw_size_bytes == 0 {

@@ -983,9 +983,13 @@ fn store_pull_http_round_trip_imports_path() {
 
 #[test]
 fn build_missing_store_exits_3() {
+    let state_dir = tempfile::tempdir().unwrap();
+
     crunch_cmd()
         .arg("--store")
         .arg("/nonexistent/store/path")
+        .arg("--state-dir")
+        .arg(state_dir.path())
         .arg("build")
         .arg(fixture("simple.ncl"))
         .assert()

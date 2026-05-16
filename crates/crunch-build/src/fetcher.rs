@@ -412,7 +412,6 @@ where
 
 fn should_retry_fetch_error(error: &FetchError, attempt_number: u32) -> bool {
     assert!(attempt_number >= 1, "attempt numbers are one-based");
-    assert!(FETCH_MAX_ATTEMPTS > 1, "retry policy must allow at least one retry");
     if attempt_number >= FETCH_MAX_ATTEMPTS {
         return false;
     }
@@ -670,10 +669,10 @@ fn write_regular_tar_entry<R: Read>(entry: &mut tar::Entry<'_, R>, dest: &Path) 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(mode) = entry.header().mode() {
-            if let Err(e) = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode)) {
-                tracing::debug!(path = ?dest, error = %e, "set_permissions on tar entry failed");
-            }
+        if let Ok(mode) = entry.header().mode()
+            && let Err(e) = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode))
+        {
+            tracing::debug!(path = ?dest, error = %e, "set_permissions on tar entry failed");
         }
     }
     Ok(())

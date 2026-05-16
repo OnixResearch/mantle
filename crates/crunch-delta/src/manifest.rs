@@ -1185,14 +1185,14 @@ mod tests {
         let sender = test_fixture("/crunch/store", vec![test_output(
             "sender",
             test_dir("sender-root", vec![test_blob("sender", 524_288, vec![
-                shared_chunk.clone(),
+                shared_chunk,
                 test_chunk("sender-tail", 262_144),
             ])]),
         )]);
         let receiver_store = test_fixture("/crunch/store", vec![test_output(
             "receiver",
             test_dir("receiver-root", vec![test_blob("receiver", 524_288, vec![
-                shared_chunk.clone(),
+                shared_chunk,
                 test_chunk("receiver-tail", 262_144),
             ])]),
         )]);
@@ -1249,7 +1249,7 @@ mod tests {
         let sender = test_fixture("/crunch/store", vec![test_output(
             "sender",
             test_dir("sender-root-stale", vec![test_blob("sender-stale", 524_288, vec![
-                shared_chunk.clone(),
+                shared_chunk,
                 test_chunk("sender-stale-tail", 262_144),
             ])]),
         )]);

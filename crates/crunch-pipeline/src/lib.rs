@@ -356,9 +356,11 @@ async fn stream_roots_into_worker(
     })
 }
 
+type EvalWorkerResult = Result<(String, CrunchDerivation), (String, String)>;
+
 #[allow(tigerstyle::too_many_parameters)]
 fn spawn_eval_workers(
-    join_set: &mut JoinSet<Result<(String, CrunchDerivation), (String, String)>>,
+    join_set: &mut JoinSet<EvalWorkerResult>,
     worker_input: &crunch_eval::session::IsolatedWorkerInput,
     labels: &[String],
     next_label_index: &mut usize,

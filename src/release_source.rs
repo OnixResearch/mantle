@@ -357,6 +357,12 @@ mod tests {
     }
 
     fn find_git_binary() -> PathBuf {
+        if let Ok(git) = std::env::var("GIT") {
+            let path = PathBuf::from(git);
+            if path.exists() {
+                return path;
+            }
+        }
         for candidate in [
             "/usr/bin/git",
             "/bin/git",

@@ -28,6 +28,8 @@ const INDEPENDENCE_FIELD_WITNESS_IDENTITY: &str = "witness_identity";
 const INDEPENDENCE_FIELD_SIGNER_KEY_NAME: &str = "signer_key_name";
 const INDEPENDENCE_FIELD_REBUILD_HOST_CLASS: &str = "rebuild_environment_summary.host_class";
 
+const _: () = assert!(MAX_REVOCATION_COUNT >= 1, "revocation limit must be positive");
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum IndependenceSelector {
     WitnessIdentity,
@@ -175,7 +177,6 @@ fn filter_active_witnesses(
     witnesses: Vec<ValidatedWitness>,
     revocations: &ReleaseRevocations,
 ) -> (u32, Vec<ValidatedWitness>) {
-    assert!(MAX_REVOCATION_COUNT >= 1, "revocation limit must be positive");
     assert!(
         revocations.revoked_witness_keys.len()
             <= witnesses.len().saturating_add(revocations.revoked_witness_keys.len())
@@ -240,7 +241,7 @@ fn count_matching_witnesses(
     Ok((matching_count, distinct_identities))
 }
 
-fn independence_domain<'a>(witness: &'a ValidatedWitness, selector: IndependenceSelector) -> Result<&'a str, Error> {
+fn independence_domain(witness: &ValidatedWitness, selector: IndependenceSelector) -> Result<&str, Error> {
     let (field, domain) = match selector {
         IndependenceSelector::WitnessIdentity => ("witness_identity", witness.attestation.witness_identity.as_str()),
         IndependenceSelector::SignerKeyName => ("signer_key_name", witness.signer_key_name.as_str()),
@@ -299,7 +300,6 @@ fn validate_policy(policy: &ReleasePolicy) -> Result<IndependenceSelector, Error
 
 fn validate_revocations(revocations: &ReleaseRevocations) -> Result<(), Error> {
     assert!(!RELEASE_REVOCATIONS_SCHEMA.is_empty(), "revocation schema tag must not be empty");
-    assert!(MAX_REVOCATION_COUNT >= 1, "revocation limit must be positive");
     if revocations.schema != RELEASE_REVOCATIONS_SCHEMA {
         return Err(Error::SchemaTagMismatch {
             expected: RELEASE_REVOCATIONS_SCHEMA.to_string(),

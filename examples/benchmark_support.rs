@@ -1620,6 +1620,9 @@ fn collect_host_context() -> HostContext {
 }
 
 fn git_commit(repo_root: &Path) -> Result<String, Error> {
+    if !repo_root.join(".git").exists() {
+        return Ok(std::env::var("MANTLE_BENCHMARK_SOURCE_COMMIT").unwrap_or_else(|_| "nix-source".to_string()));
+    }
     run_command_and_capture("git", &[
         "-C",
         &repo_root.display().to_string(),
@@ -1630,6 +1633,9 @@ fn git_commit(repo_root: &Path) -> Result<String, Error> {
 }
 
 fn git_is_dirty(repo_root: &Path) -> Result<bool, Error> {
+    if !repo_root.join(".git").exists() {
+        return Ok(false);
+    }
     let status = run_command_and_capture_allowing_empty("git", &[
         "-C",
         &repo_root.display().to_string(),

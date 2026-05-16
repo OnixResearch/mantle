@@ -16,6 +16,8 @@ const MAX_BINARY_DIGEST_COUNT: u32 = 256;
 const MAX_ENV_FIELD_LEN: u32 = 256;
 const ED25519_SIGNATURE_BYTES: usize = 64;
 
+const _: () = assert!(MAX_BINARY_DIGEST_COUNT >= 1, "binary digest limit must be positive");
+
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct BinaryDigest {
     pub name: String,
@@ -553,7 +555,6 @@ fn normalize_optional_string_set(
 }
 
 fn normalize_binary_digests(digests: Vec<BinaryDigest>) -> Result<Vec<BinaryDigest>, Error> {
-    assert!(MAX_BINARY_DIGEST_COUNT >= 1, "binary digest limit must be positive");
     let actual = count_with_overflow_marker(digests.len(), MAX_BINARY_DIGEST_COUNT);
     if actual > MAX_BINARY_DIGEST_COUNT {
         return Err(Error::CollectionTooLarge {

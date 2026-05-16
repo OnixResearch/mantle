@@ -688,7 +688,7 @@ pub fn normalized_path_id(path: &Path) -> String {
     let body = path
         .components()
         .filter_map(|component| component.as_os_str().to_str())
-        .filter(|component| *component != "" && *component != "/")
+        .filter(|component| !component.is_empty() && *component != "/")
         .collect::<Vec<_>>()
         .join(PATH_SEPARATOR.encode_utf8(&mut [0; 4]));
     if path.is_absolute() {

@@ -139,10 +139,7 @@ fn usize_limit_from_u32(limit: u32) -> usize {
 }
 
 fn u32_count(count: usize) -> u32 {
-    match u32::try_from(count) {
-        Ok(count_u32) => count_u32,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]

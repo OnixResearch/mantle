@@ -403,13 +403,13 @@ fn validate_artifact_name(name: &str) -> Result<(), ReleaseEvidenceError> {
 }
 
 fn validate_observed_fields(artifact: &ReproducibilityArtifactComparison) -> Result<(), ReleaseEvidenceError> {
-    if let Some(observed_size_bytes) = artifact.observed_size_bytes {
-        if observed_size_bytes == 0 {
-            return Err(validation_error(format!(
-                "release reproducibility report artifact {} observed_size_bytes must be non-zero",
-                artifact.name
-            )));
-        }
+    if let Some(observed_size_bytes) = artifact.observed_size_bytes
+        && observed_size_bytes == 0
+    {
+        return Err(validation_error(format!(
+            "release reproducibility report artifact {} observed_size_bytes must be non-zero",
+            artifact.name
+        )));
     }
     if let Some(observed_digest_blake3) = &artifact.observed_digest_blake3 {
         validate_blake3_hex(observed_digest_blake3, &format!("artifacts.{}.observed_digest_blake3", artifact.name))?;

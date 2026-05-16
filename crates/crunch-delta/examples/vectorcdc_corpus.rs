@@ -126,10 +126,10 @@ fn newest_matching(dir: &Path, prefix: &str, extension: Option<&str>) -> Option<
         if !name.starts_with(prefix) {
             continue;
         }
-        if let Some(expected) = extension {
-            if path.extension().and_then(OsStr::to_str) != Some(expected) {
-                continue;
-            }
+        if let Some(expected) = extension
+            && path.extension().and_then(OsStr::to_str) != Some(expected)
+        {
+            continue;
         }
         let modified = entry.metadata().and_then(|metadata| metadata.modified()).unwrap_or(std::time::UNIX_EPOCH);
         match &best {

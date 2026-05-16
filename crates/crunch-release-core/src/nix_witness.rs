@@ -187,13 +187,13 @@ fn validate_receipt_header(receipt: &NixCrossBuilderWitnessReceipt) -> Result<()
             receipt.schema
         )));
     }
-    if let Some(proof_class) = &receipt.proof_class {
-        if proof_class != NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS {
-            return Err(validation_error(format!(
-                "nix cross-builder witness proof_class must be {NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS}, got {}",
-                proof_class
-            )));
-        }
+    if let Some(proof_class) = &receipt.proof_class
+        && proof_class != NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS
+    {
+        return Err(validation_error(format!(
+            "nix cross-builder witness proof_class must be {NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS}, got {}",
+            proof_class
+        )));
     }
     validate_non_empty(&receipt.release_id, "release_id")?;
     validate_non_empty(&receipt.selected_artifact_identity, "selected_artifact_identity")?;

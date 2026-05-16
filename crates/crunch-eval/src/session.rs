@@ -588,8 +588,11 @@ trait AssignmentExecutor {
         &self,
         worker_input: &IsolatedWorkerInput,
         assignments: &[WorkerAssignment],
-    ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error>;
+    ) -> Result<AssignmentResults<T>, Error>;
 }
+
+type AssignmentResult<T> = Result<Vec<IndexedRoot<T>>, WorkerFailure>;
+type AssignmentResults<T> = Vec<AssignmentResult<T>>;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct InlineExecutor;
@@ -599,7 +602,7 @@ impl AssignmentExecutor for InlineExecutor {
         &self,
         worker_input: &IsolatedWorkerInput,
         assignments: &[WorkerAssignment],
-    ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+    ) -> Result<AssignmentResults<T>, Error> {
         let mut results = Vec::with_capacity(assignments.len());
         for assignment in assignments {
             results.push(force_worker_assignment(worker_input, assignment.clone()));
@@ -616,7 +619,7 @@ impl AssignmentExecutor for ThreadedExecutor {
         &self,
         worker_input: &IsolatedWorkerInput,
         assignments: &[WorkerAssignment],
-    ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+    ) -> Result<AssignmentResults<T>, Error> {
         let worker_pool = bounded_worker_pool(u32_from_usize(assignments.len()))?;
         let mut worker_receivers = Vec::with_capacity(assignments.len());
         for assignment in assignments {
@@ -646,10 +649,7 @@ fn usize_from_u32(value: u32) -> usize {
 }
 
 fn u32_from_usize(value: usize) -> u32 {
-    match u32::try_from(value) {
-        Ok(converted) => converted,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 fn usize_limit_from_u32_max() -> usize {
@@ -694,7 +694,7 @@ fn force_selected_roots_with_executors<T: DeserializeOwned + Send + 'static>(
 
 fn collect_threaded_results<T: Send + 'static>(
     worker_slots: Vec<Arc<WorkerResultSlot>>,
-) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+) -> Result<AssignmentResults<T>, Error> {
     let mut results = Vec::with_capacity(worker_slots.len());
     for worker_slot in worker_slots {
         let worker_result = worker_slot.take()?;
@@ -718,7 +718,7 @@ fn merge_assignment_results<T: Send + 'static>(
             }
         }
     }
-    indexed_results.sort_by(|left, right| left.index.cmp(&right.index));
+    indexed_results.sort_by_key(|indexed_root| indexed_root.index);
     let ordered_results =
         indexed_results.into_iter().map(|indexed_root| (indexed_root.label, indexed_root.value)).collect();
     Ok(ordered_results)
@@ -971,9 +971,7 @@ fn collect_static_record_labels(
 
     let mut labels = Vec::with_capacity(record.fields.len());
     for (index, (key, field)) in record.fields.iter().enumerate() {
-        if field.value.is_none() {
-            return None;
-        }
+        field.value.as_ref()?;
 
         labels.push(RootLabel {
             label: key.label().to_string(),
@@ -1308,7 +1306,7 @@ let crunch = import "lib.ncl" in {
             &self,
             _worker_input: &IsolatedWorkerInput,
             _assignments: &[WorkerAssignment],
-        ) -> Result<Vec<Result<Vec<IndexedRoot<T>>, WorkerFailure>>, Error> {
+        ) -> Result<AssignmentResults<T>, Error> {
             Err(Error::Boundary("synthetic threaded executor unavailable".to_string()))
         }
     }

@@ -94,9 +94,7 @@ pub fn topological_sort(
     Ok(ordered)
 }
 
-fn index_modules<'a>(
-    modules: &'a [ValidatedModule],
-) -> Result<BTreeMap<String, &'a ValidatedModule>, SystemConfigError> {
+fn index_modules(modules: &[ValidatedModule]) -> Result<BTreeMap<String, &ValidatedModule>, SystemConfigError> {
     let mut module_by_name = BTreeMap::new();
     for module in modules {
         let replaced = module_by_name.insert(module.module_name.clone(), module);

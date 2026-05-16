@@ -3,12 +3,13 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-const MAX_MIRRORS: u32 = 64;
+const MAX_MIRRORS: usize = 32;
+
+const _: () = assert!(MAX_MIRRORS >= 1, "mirror limit must be positive");
+const _: () = assert!(MAX_MIRRORS <= 1024, "mirror limit must stay bounded");
 
 pub fn validate_mirrors(mirrors: Vec<String>) -> Vec<String> {
-    assert!(MAX_MIRRORS >= 1, "mirror limit must be positive");
-    assert!(MAX_MIRRORS <= 1024, "mirror limit must stay bounded");
-    let mut issues = Vec::with_capacity(mirrors.len().saturating_mul(2));
+    let mut issues = Vec::new();
 
     if mirrors.len() as u64 > MAX_MIRRORS as u64 {
         issues.push(format!("too many mirrors: {} (max {MAX_MIRRORS})", mirrors.len()));

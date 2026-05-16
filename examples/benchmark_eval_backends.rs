@@ -44,7 +44,7 @@ fn benchmark_policy(policy: RootForceExecutionPolicy) -> Result<u128, Box<dyn st
 
     for _sample_index in 0..REPEAT_COUNT {
         let start = Instant::now();
-        let session = EvaluationSession::open_file(&fixture_path, &import_paths)?;
+        let mut session = EvaluationSession::open_file(&fixture_path, &import_paths)?;
         let roots = session.force_all_roots_with_policy::<CrunchDerivation>(MAX_CONCURRENCY, policy)?;
         assert_eq!(roots.len(), ROOT_COUNT_EXPECTED, "fixture root count must stay stable");
         samples_ns.push(start.elapsed().as_nanos());

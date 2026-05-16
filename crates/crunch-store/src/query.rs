@@ -111,7 +111,7 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
 /// Optionally filters to paths matching `path_filter`. Returns per-path
 /// results (Ok, Missing, or Mismatch).
 pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) -> Result<Vec<VerifyResult>, Error> {
-    assert!(path_filter.map_or(true, |f| !f.is_empty()), "store_verify: use None instead of empty filter");
+    assert!(path_filter.is_none_or(|f| !f.is_empty()), "store_verify: use None instead of empty filter");
 
     #[allow(tigerstyle::explicit_defaults)]
     let bs = MemoryBlobService::default();

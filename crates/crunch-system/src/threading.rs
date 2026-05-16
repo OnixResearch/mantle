@@ -19,9 +19,12 @@ use crate::NickelValue;
 use crate::eval_trait::EvalError;
 use crate::eval_trait::EvalOptions;
 
+const CHANNEL_CAPACITY: usize = 32;
+const DEFAULT_TIMEOUT_MS: u64 = 2_000;
 const VALUE_ID_START: u64 = 1;
-const DEFAULT_TIMEOUT_MS: u64 = 60_000;
-const CHANNEL_CAPACITY: usize = 64;
+
+const _: () = assert!(CHANNEL_CAPACITY > 0, "channel capacity must be positive");
+const _: () = assert!(VALUE_ID_START > 0, "value id start must be positive");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ValueId(pub u64);
@@ -91,7 +94,6 @@ struct OnThreadEvaluator {
 
 impl EvalThread {
     pub fn spawn(import_paths: Vec<PathBuf>) -> EvalThreadHandle {
-        assert!(CHANNEL_CAPACITY > 0, "channel capacity must be positive");
         let (request_tx, mut request_rx) = mpsc::channel::<EvalEnvelope>(CHANNEL_CAPACITY);
         let join_handle = thread::spawn(move || {
             let mut evaluator = OnThreadEvaluator::new(import_paths);
@@ -219,17 +221,15 @@ impl EvalThreadHandle {
             .send(EvalEnvelope { request, response_tx })
             .await
             .map_err(|_| EvalError::NickelError("eval thread is not available".to_string()))?;
-        let result = tokio::time::timeout(timeout, response_rx)
+        tokio::time::timeout(timeout, response_rx)
             .await
             .map_err(|_| EvalError::Timeout)?
-            .map_err(|_| EvalError::NickelError("eval thread dropped response channel".to_string()))?;
-        result
+            .map_err(|_| EvalError::NickelError("eval thread dropped response channel".to_string()))?
     }
 }
 
 impl OnThreadEvaluator {
     fn new(import_paths: Vec<PathBuf>) -> Self {
-        assert!(VALUE_ID_START > 0, "value id start must be positive");
         Self {
             import_paths,
             next_value_id: AtomicU64::new(VALUE_ID_START),

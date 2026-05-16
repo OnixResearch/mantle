@@ -341,7 +341,7 @@ async fn pull_single_http_path(
     options: &PullOptions,
     report: &mut PullReport,
 ) -> Result<(), Error> {
-    let requested_digest: [u8; 20] = (*requested_path.digest()).into();
+    let requested_digest: [u8; 20] = *requested_path.digest();
     let requested_path_text = requested_path.to_string();
     let pathinfo_service = handle.pathinfo_service();
 
@@ -472,7 +472,7 @@ async fn pull_single_http_path(
         .map_err(|e| Error::PathInfoService(format!("persisting imported PathInfo: {e}")))?;
 
     let output_dir_str = handle.output_dir_str();
-    let abs_path = requested_path.to_absolute_path_with_prefix(&output_dir_str);
+    let abs_path = requested_path.to_absolute_path_with_prefix(output_dir_str);
     if !std::path::Path::new(&abs_path).exists() {
         match export_castore_to_disk(&node, &abs_path, &blob_service, &directory_service).await {
             Ok(()) => {}
@@ -508,7 +508,7 @@ async fn scan_narinfo_files(source: &Path) -> Result<Vec<std::path::PathBuf>, Er
         };
 
         let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "narinfo") {
+        if path.extension().is_some_and(|ext| ext == "narinfo") {
             narinfo_files.push(path);
         }
     }
@@ -566,15 +566,15 @@ async fn pull_single_narinfo(
     let store_path_str = store_path.to_string();
 
     // 2. Apply path filter if provided.
-    if let Some(filter) = paths_filter {
-        if !filter.iter().any(|sel| store_path_str.contains(sel.as_str())) {
-            return Ok(());
-        }
+    if let Some(filter) = paths_filter
+        && !filter.iter().any(|sel| store_path_str.contains(sel.as_str()))
+    {
+        return Ok(());
     }
 
     // 3. Skip if already present in local PathInfo.
     if pathinfo_service
-        .get((*store_path.digest()).into())
+        .get(*store_path.digest())
         .await
         .map_err(|e| Error::PathInfoService(format!("checking existing PathInfo: {e}")))?
         .is_some()
@@ -662,7 +662,7 @@ async fn pull_single_narinfo(
 
     // 10. Export castore node to disk.
     let output_dir_str = handle.output_dir_str();
-    let abs_path = store_path.to_absolute_path_with_prefix(&output_dir_str);
+    let abs_path = store_path.to_absolute_path_with_prefix(output_dir_str);
     if !std::path::Path::new(&abs_path).exists() {
         match export_castore_to_disk(&node, &abs_path, blob_service, directory_service).await {
             Ok(()) => {}
@@ -690,6 +690,11 @@ async fn pull_single_narinfo(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::cloned_ref_to_slice_refs,
+    clippy::type_complexity,
+    clippy::useless_conversion
+)]
 mod tests {
     use std::collections::BTreeMap;
     use std::io::Read;
@@ -1063,7 +1068,7 @@ mod tests {
         for entry in std::fs::read_dir(cache_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "narinfo") {
+            if path.extension().is_some_and(|ext| ext == "narinfo") {
                 let route_path = format!("/{}", entry.file_name().to_string_lossy());
                 routes.insert(route_path, HttpResponse::ok_text(std::fs::read_to_string(path).unwrap()));
             }

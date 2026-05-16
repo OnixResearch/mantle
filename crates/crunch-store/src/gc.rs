@@ -596,10 +596,10 @@ async fn rewrite_pathinfo_db(state_dir: &Path, live_pathinfos: &[PathInfo]) -> R
 
     let final_path = state_dir.join("pathinfo.redb");
     let tmp_path = state_dir.join("pathinfo.redb.gc-tmp");
-    if tmp_path.exists() {
-        if let Err(err) = std::fs::remove_file(&tmp_path) {
-            tracing::debug!(path = %tmp_path.display(), err = %err, "stale gc-tmp pathinfo already cleaned");
-        }
+    if tmp_path.exists()
+        && let Err(err) = std::fs::remove_file(&tmp_path)
+    {
+        tracing::debug!(path = %tmp_path.display(), err = %err, "stale gc-tmp pathinfo already cleaned");
     }
     let tmp_service = RedbPathInfoService::new("crunch-gc-pathinfo".to_string(), RedbPathInfoServiceConfig {
         path: Some(tmp_path.clone()),
@@ -631,10 +631,10 @@ async fn rewrite_directory_db<'a>(
 
     let final_path = state_dir.join("directories.redb");
     let tmp_path = state_dir.join("directories.redb.gc-tmp");
-    if tmp_path.exists() {
-        if let Err(err) = std::fs::remove_file(&tmp_path) {
-            tracing::debug!(path = %tmp_path.display(), err = %err, "stale gc-tmp directories already cleaned");
-        }
+    if tmp_path.exists()
+        && let Err(err) = std::fs::remove_file(&tmp_path)
+    {
+        tracing::debug!(path = %tmp_path.display(), err = %err, "stale gc-tmp directories already cleaned");
     }
     let tmp_service = RedbDirectoryService::new("crunch-gc-directories".to_string(), RedbDirectoryServiceConfig {
         path: Some(tmp_path.clone()),

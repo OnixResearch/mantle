@@ -195,6 +195,7 @@ fn temp_path_for(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
+#[allow(clippy::cloned_ref_to_slice_refs, clippy::unnecessary_map_or)]
 mod tests {
     use nix_compat::store_path::StorePath;
     use snix_castore::Node;

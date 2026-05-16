@@ -1117,7 +1117,7 @@ mod tests {
     #[test]
     fn diagnostic_receipts_cover_operator_events_and_redact_secrets() {
         let key = key(&base_request());
-        let diagnostics = vec![
+        let diagnostics = [
             DistributedDiagnostic::CacheHit {
                 key: key.clone(),
                 resolver: "local-cache".to_string(),
