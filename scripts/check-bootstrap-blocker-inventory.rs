@@ -346,6 +346,12 @@ fn run_self_tests() -> Result<(), String> {
     if is_gcc40_mechanical_bridge_identifier(1103) {
         return Err("self-test expected gcc-4.0 prose bridge blocker line to remain unsuppressed".to_string());
     }
+    if evidence.gcc40_native_boundary_checked
+        && suppression_reason(Path::new("bootstrap/diag-gcc40-c-parse-boundary.ncl"), 719, MARKERS[1], &evidence)
+            .is_none()
+    {
+        return Err("self-test expected gcc-4.0 diagnostic boundary duplication suppression".to_string());
+    }
 
     Ok(())
 }
@@ -450,6 +456,14 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && evidence.gcc40_native_boundary_checked
     {
         return Some("gcc-4.0 native boundary receipt is checked boundary metadata, not an additional bridge blocker");
+    }
+    if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+        && path_s.ends_with("bootstrap/diag-gcc40-c-parse-boundary.ncl")
+        && evidence.gcc40_native_boundary_checked
+    {
+        return Some(
+            "gcc-4.0 c-parse diagnostic duplicates the checked native-boundary receipt; production blockers remain counted",
+        );
     }
     None
 }
