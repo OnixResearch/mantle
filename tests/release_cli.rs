@@ -28,6 +28,7 @@ use crunch_attestation::encode_detached_signature;
 use crunch_attestation::independent_agreement_report_canonical_bytes;
 use crunch_build::KeyPair;
 use crunch_build::load_keypair;
+use crunch_release_core::BUILD_EFFECT_POLICY_VERSION;
 use crunch_release_core::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
 use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA;
 use crunch_release_core::DeterministicBuildProofReceipt;
@@ -39,6 +40,7 @@ use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
 use crunch_release_core::NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS;
 use crunch_release_core::NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA;
+use crunch_release_core::PURE_LOCAL_BUILD_EFFECTS;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
 use crunch_release_core::ReleaseReproducibilityReport;
 use crunch_release_core::SUPPORTED_SANDBOX_PROFILE_FAMILY;
@@ -724,6 +726,7 @@ fn write_deterministic_verify_artifacts(
         }],
         substituted_dependency_identities: Vec::new(),
         hermeticity_audit_events: Vec::new(),
+        observed_effects: Some(PURE_LOCAL_BUILD_EFFECTS.to_vec()),
     };
     let proof = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
         proof_unit: DeterministicProofUnit {
@@ -747,6 +750,9 @@ fn write_deterministic_verify_artifacts(
         ],
         logical_store_prefix: "/mantle/store".to_string(),
         physical_store_isolation: "fresh-store-per-run".to_string(),
+        effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
+        declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
+        observed_effects: None,
         normalized_execution_envelope: vec![
             "bundle-read-only".to_string(),
             "network=none".to_string(),

@@ -7,6 +7,8 @@ mod manifest;
 mod nix_witness;
 mod reproducibility;
 
+pub use determinism::BUILD_EFFECT_POLICY_VERSION;
+pub use determinism::BuildEffect;
 pub use determinism::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
 pub use determinism::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA;
 pub use determinism::DeterministicBuildProofReceipt;
@@ -17,6 +19,7 @@ pub use determinism::DeterministicOutputDigest;
 pub use determinism::DeterministicProofUnit;
 pub use determinism::DeterministicSandboxIsolationEvidence;
 pub use determinism::DeterministicSandboxIsolationEvidenceStatus;
+pub use determinism::PURE_LOCAL_BUILD_EFFECTS;
 pub use determinism::REQUIRED_ISOLATION_CHECKS;
 pub use determinism::SUPPORTED_SANDBOX_PROFILE_FAMILY;
 pub use determinism::canonical_deterministic_build_proof_receipt;

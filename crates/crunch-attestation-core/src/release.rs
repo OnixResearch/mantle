@@ -110,6 +110,10 @@ pub struct ReleaseAttestation {
     pub release_evidence_manifest_digest_blake3: AttestationDigest,
     pub proof_bundle_digest_blake3: AttestationDigest,
     pub proof_mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared_effect_claims: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_effect_facts: Option<Vec<String>>,
     pub workflow: Workflow,
     pub binary_digests: Vec<BinaryDigest>,
 }
@@ -120,6 +124,8 @@ pub struct ReleaseAttestationInit {
     pub release_evidence_manifest_digest_blake3: AttestationDigest,
     pub proof_bundle_digest_blake3: AttestationDigest,
     pub proof_mode: String,
+    pub declared_effect_claims: Option<Vec<String>>,
+    pub observed_effect_facts: Option<Vec<String>>,
     pub workflow: Workflow,
     pub binary_digests: Vec<BinaryDigest>,
 }
@@ -132,6 +138,8 @@ impl ReleaseAttestation {
             release_evidence_manifest_digest_blake3: init.release_evidence_manifest_digest_blake3,
             proof_bundle_digest_blake3: init.proof_bundle_digest_blake3,
             proof_mode: init.proof_mode,
+            declared_effect_claims: init.declared_effect_claims,
+            observed_effect_facts: init.observed_effect_facts,
             workflow: init.workflow,
             binary_digests: init.binary_digests,
         }
@@ -160,6 +168,8 @@ pub fn canonical_release_attestation(value: ReleaseAttestation) -> Result<Releas
         value: &value.workflow.version,
     })?;
     let binary_digests = normalize_binary_digests(value.binary_digests)?;
+    let declared_effect_claims = normalize_optional_string_set(value.declared_effect_claims, "declared_effect_claims")?;
+    let observed_effect_facts = normalize_optional_string_set(value.observed_effect_facts, "observed_effect_facts")?;
 
     Ok(ReleaseAttestation {
         schema: RELEASE_ATTESTATION_SCHEMA.to_string(),
@@ -167,6 +177,8 @@ pub fn canonical_release_attestation(value: ReleaseAttestation) -> Result<Releas
         release_evidence_manifest_digest_blake3: value.release_evidence_manifest_digest_blake3,
         proof_bundle_digest_blake3: value.proof_bundle_digest_blake3,
         proof_mode: value.proof_mode,
+        declared_effect_claims,
+        observed_effect_facts,
         workflow: value.workflow,
         binary_digests,
     })
@@ -525,6 +537,21 @@ pub struct TrustTier {
     pub final_class: FinalClass,
 }
 
+fn normalize_optional_string_set(
+    values: Option<Vec<String>>,
+    field: &'static str,
+) -> Result<Option<Vec<String>>, Error> {
+    let Some(mut values) = values else {
+        return Ok(None);
+    };
+    for value in &values {
+        validate_non_empty(NamedField { name: field, value })?;
+    }
+    values.sort();
+    values.dedup();
+    Ok(Some(values))
+}
+
 fn normalize_binary_digests(digests: Vec<BinaryDigest>) -> Result<Vec<BinaryDigest>, Error> {
     assert!(MAX_BINARY_DIGEST_COUNT >= 1, "binary digest limit must be positive");
     let actual = count_with_overflow_marker(digests.len(), MAX_BINARY_DIGEST_COUNT);
@@ -624,6 +651,20 @@ mod tests {
     }
 
     #[test]
+    fn release_attestation_effect_claims_and_facts_affect_digest() {
+        let mut with_effects = sample_release();
+        with_effects.declared_effect_claims = Some(vec!["write-output".to_string(), "read-store".to_string()]);
+        with_effects.observed_effect_facts = Some(vec!["read-store".to_string(), "write-output".to_string()]);
+
+        let canonical = canonical_release_attestation(with_effects.clone()).unwrap();
+        assert_eq!(canonical.declared_effect_claims, Some(vec!["read-store".to_string(), "write-output".to_string()]));
+        assert_ne!(
+            release_attestation_canonical_digest(sample_release()).unwrap(),
+            release_attestation_canonical_digest(with_effects).unwrap()
+        );
+    }
+
+    #[test]
     fn witness_attestation_digest_is_stable_across_serializations() {
         let attestation = sample_witness();
         let bytes_1 = witness_attestation_canonical_bytes(attestation.clone()).unwrap();
@@ -644,6 +685,8 @@ mod tests {
             release_evidence_manifest_digest_blake3: manifest_digest,
             proof_bundle_digest_blake3: proof_digest,
             proof_mode: "fixed-point".to_string(),
+            declared_effect_claims: None,
+            observed_effect_facts: None,
             workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),
@@ -1129,6 +1172,8 @@ mod tests {
             release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
             proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
+            declared_effect_claims: None,
+            observed_effect_facts: None,
             workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),
@@ -1162,6 +1207,8 @@ mod tests {
             release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
             proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
+            declared_effect_claims: None,
+            observed_effect_facts: None,
             workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),

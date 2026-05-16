@@ -825,6 +825,8 @@ mod tests {
             release_evidence_manifest_digest_blake3: AttestationDigest::from_canonical_bytes(b"manifest".to_vec()),
             proof_bundle_digest_blake3: AttestationDigest::from_canonical_bytes(b"proof".to_vec()),
             proof_mode: "fixed-point".to_string(),
+            declared_effect_claims: None,
+            observed_effect_facts: None,
             workflow: Workflow {
                 command: "crunch self-build".to_string(),
                 version: "0.1.0".to_string(),

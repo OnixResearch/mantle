@@ -4,9 +4,7 @@
 
 Defines Mantle's native attestation model, canonical digest rules, and the
 retrieval semantics for artifact, closure, and project provenance records.
-
 ## Requirements
-
 ### Requirement: Native attestation model
 
 The system MUST define a crunch-native attestation model as a first-class
@@ -163,3 +161,15 @@ artifact or closure attestation.
 - THEN it records the project node separately from artifacts A and B
 - AND it records the lockfile-resolved source and patch facts in the project scope
 - AND it records that A and B are the selected built roots for that project attestation
+
+### Requirement: Provenance MUST preserve declared effects and observed effects separately [r[provenance.effect-claims-and-facts]]
+
+Mantle provenance records MUST represent declared build/proof effects as claims and observed build/proof effects as facts. Canonical attestation digests MUST include both sections when present so that changing the declared or observed effect set changes the provenance identity.
+
+#### Scenario: Declared and observed effects are not conflated [r[provenance.effect-claims-and-facts.separate]]
+
+- GIVEN a recipe declares no network effect
+- AND the build audit observes no network effect
+- WHEN Mantle materializes provenance for the output
+- THEN the attestation records the declared effect claims separately from observed effect facts
+- AND downstream queries can compare the two sets without parsing prose

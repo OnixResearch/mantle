@@ -7,6 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
+use crunch_release_core::BUILD_EFFECT_POLICY_VERSION;
 use crunch_release_core::BundledArtifact;
 use crunch_release_core::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
 use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA;
@@ -17,6 +18,7 @@ use crunch_release_core::DeterministicOutputDigest;
 use crunch_release_core::DeterministicProofUnit;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
+use crunch_release_core::PURE_LOCAL_BUILD_EFFECTS;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
 use crunch_release_core::RebuildWorkflowIdentity;
 use crunch_release_core::ReleaseEvidenceManifest;
@@ -457,6 +459,9 @@ fn maybe_run_deterministic_proof(
         ],
         logical_store_prefix: "/mantle/store".to_string(),
         physical_store_isolation: "fresh-store-per-run".to_string(),
+        effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
+        declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
+        observed_effects: None,
         normalized_execution_envelope: deterministic_execution_envelope(&sandbox_profile_identities),
         ambient_host_perturbations: deterministic_ambient_host_perturbations(),
         sandbox_profile_identities,
@@ -714,6 +719,7 @@ fn deterministic_run_receipt(
         output_digests,
         substituted_dependency_identities: Vec::new(),
         hermeticity_audit_events: Vec::new(),
+        observed_effects: Some(PURE_LOCAL_BUILD_EFFECTS.to_vec()),
     })
 }
 

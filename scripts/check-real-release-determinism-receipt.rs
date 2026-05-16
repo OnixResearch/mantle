@@ -30,6 +30,7 @@ use serde_json::json;
 const RELEASE_SCHEMA: &str = "mantle-release-evidence-v1";
 const RELEASE_CLAIM_SCOPE: &str = "packaged-integrity-evidence";
 const PROOF_SCHEMA: &str = "mantle-deterministic-proof-receipt-v1";
+const EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
 const PROOF_VERDICT: &str = "self-rebuild-match";
 const VERIFY_KIND: &str = "mantle-release-verify-v1";
 const SANDBOX_SCHEMA: &str = "mantle-deterministic-sandbox-isolation-evidence-v1";
@@ -221,6 +222,8 @@ fn validate_release_manifest(manifest: &Value) -> Result<(), String> {
 fn validate_deterministic_proof(manifest: &Value, proof: &Value) -> Result<(), String> {
     require_str(proof, "schema", PROOF_SCHEMA)?;
     require_str(proof, "workflow_version", PROOF_SCHEMA)?;
+    require_str(proof, "effect_policy_version", EFFECT_POLICY_VERSION)?;
+    require_effect_set(proof, "declared_effects", &["environment", "read-store", "write-output"])?;
     require_str(proof, "verdict", PROOF_VERDICT)?;
     require_str(proof, "hermeticity_mode", "strict")?;
     require_str(proof, "physical_store_isolation", "fresh-store-per-run")?;
@@ -359,6 +362,7 @@ fn require_distinct_run_roots(runs: &[Value]) -> Result<(), String> {
     let mut roots = Vec::new();
     let mut stores = Vec::new();
     for (idx, run) in runs.iter().enumerate() {
+        require_effect_set(run, "observed_effects", &["environment", "read-store", "write-output"])?;
         let root = field_str(run, "output_root_identity")?;
         if roots.iter().any(|known| known == root) {
             return Err(format!("reused output root identity in proof run {idx}: {root}"));
@@ -504,6 +508,17 @@ fn require_empty_array(value: &Value, field: &str) -> Result<(), String> {
     }
 }
 
+fn require_effect_set(value: &Value, field: &str, expected: &[&str]) -> Result<(), String> {
+    let mut actual = strings_array(value, field)?;
+    actual.sort();
+    let expected = expected.iter().map(|value| value.to_string()).collect::<Vec<_>>();
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!("{field} mismatch: expected {expected:?}, got {actual:?}"))
+    }
+}
+
 fn require_digest(digest: &str, field: &str) -> Result<(), String> {
     if digest.len() == HEX64_LEN && digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         Ok(())
@@ -612,7 +627,8 @@ impl Fixture {
                 "sandbox_profile_identity": profile,
                 "output_digests": [{"name": "binaries/01-stage2-mantle", "digest_blake3": binary_digest}],
                 "substituted_dependency_identities": [],
-                "hermeticity_audit_events": []
+                "hermeticity_audit_events": [],
+                "observed_effects": ["environment", "read-store", "write-output"]
             })
         };
         let proof = json!({
@@ -628,6 +644,8 @@ impl Fixture {
             "toolchain_stage_roots": [format!("prerequisite-inventory={prereq_digest}"), format!("stage2-binary={binary_digest}"), "staged-source=/tmp/staged-source"],
             "logical_store_prefix": "/mantle/store",
             "physical_store_isolation": "fresh-store-per-run",
+            "effect_policy_version": EFFECT_POLICY_VERSION,
+            "declared_effects": ["environment", "read-store", "write-output"],
             "normalized_execution_envelope": ["sandbox=bwrap", format!("sandbox-profile={sandbox_a}"), format!("sandbox-profile={sandbox_b}")],
             "ambient_host_perturbations": ["HOME", "PATH"],
             "sandbox_profile_identities": [sandbox_a, sandbox_b],

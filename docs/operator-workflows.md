@@ -155,6 +155,9 @@ Structured build reports surface the same operator facts in stable fields:
 
 - `hermeticity_mode`
 - `hermeticity_audit_events[]`
+- `effect_policy_version` (`mantle-build-effects-v1` for deterministic proof receipts)
+- `declared_effects[]` and `observed_effects[]`; deterministic release verification
+  fails closed when observed effects are missing or exceed the declared set
 - `failed[]`
 - `outcomes[].outputs[].artifact_attestation`
 

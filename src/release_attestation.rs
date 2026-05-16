@@ -840,6 +840,8 @@ fn build_release_attestation_from_bundle(manifest: &ReleaseEvidenceManifest) -> 
         release_evidence_manifest_digest_blake3,
         proof_bundle_digest_blake3: parse_attestation_digest(&manifest.proof_bundle.digest_blake3, "proof_bundle")?,
         proof_mode: manifest.proof_linkage.proof_mode.clone(),
+        declared_effect_claims: None,
+        observed_effect_facts: None,
         workflow: crunch_attestation::Workflow {
             command: manifest.workflow.command.clone(),
             version: manifest.workflow.version.clone(),

@@ -14,6 +14,7 @@ use crate::manifest::validate_blake3_hex;
 use crate::manifest::validation_error;
 
 pub const DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA: &str = "mantle-deterministic-proof-receipt-v1";
+pub const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
 pub const DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA: &str = "mantle-deterministic-sandbox-isolation-evidence-v1";
 const REQUIRED_RUN_COUNT: usize = 2;
 pub const SUPPORTED_SANDBOX_PROFILE_FAMILY: &str = "mantle-proof-sandbox-v1";
@@ -37,6 +38,26 @@ const REQUIRED_PERTURBATIONS: &[&str] = &[
 ];
 const PROOF_BLOCKING_AUDIT_EVENTS: &[&str] = &["host-tool-fallback", "host-state-leak", "impure-mode-selected"];
 const SUPPORTED_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1:";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildEffect {
+    ReadStore,
+    WriteOutput,
+    Network,
+    Clock,
+    Random,
+    Environment,
+    Secret,
+    HostTool,
+    RemoteBuild,
+}
+
+pub const PURE_LOCAL_BUILD_EFFECTS: &[BuildEffect] = &[
+    BuildEffect::ReadStore,
+    BuildEffect::WriteOutput,
+    BuildEffect::Environment,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -93,6 +114,8 @@ pub struct DeterministicBuildRunReceipt {
     pub output_digests: Vec<DeterministicOutputDigest>,
     pub substituted_dependency_identities: Vec<String>,
     pub hermeticity_audit_events: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_effects: Option<Vec<BuildEffect>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,6 +132,10 @@ pub struct DeterministicBuildProofReceipt {
     pub toolchain_stage_roots: Vec<String>,
     pub logical_store_prefix: String,
     pub physical_store_isolation: String,
+    pub effect_policy_version: String,
+    pub declared_effects: Vec<BuildEffect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_effects: Option<Vec<BuildEffect>>,
     pub normalized_execution_envelope: Vec<String>,
     pub ambient_host_perturbations: Vec<String>,
     pub sandbox_profile_identities: Vec<String>,
@@ -132,6 +159,9 @@ pub struct DeterministicBuildProofReceiptInit {
     pub toolchain_stage_roots: Vec<String>,
     pub logical_store_prefix: String,
     pub physical_store_isolation: String,
+    pub effect_policy_version: String,
+    pub declared_effects: Vec<BuildEffect>,
+    pub observed_effects: Option<Vec<BuildEffect>>,
     pub normalized_execution_envelope: Vec<String>,
     pub ambient_host_perturbations: Vec<String>,
     pub sandbox_profile_identities: Vec<String>,
@@ -153,6 +183,9 @@ impl DeterministicBuildProofReceipt {
             toolchain_stage_roots: init.toolchain_stage_roots,
             logical_store_prefix: init.logical_store_prefix,
             physical_store_isolation: init.physical_store_isolation,
+            effect_policy_version: init.effect_policy_version,
+            declared_effects: init.declared_effects,
+            observed_effects: init.observed_effects,
             normalized_execution_envelope: init.normalized_execution_envelope,
             ambient_host_perturbations: init.ambient_host_perturbations,
             sandbox_profile_identities: init.sandbox_profile_identities,
@@ -174,6 +207,12 @@ pub fn canonical_deterministic_build_proof_receipt(
     let provided_receipt_blake3 = receipt.receipt_blake3.take();
     validate_receipt_header(&receipt)?;
     receipt.schema = DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string();
+    receipt.declared_effects.sort();
+    receipt.declared_effects.dedup();
+    if let Some(observed_effects) = &mut receipt.observed_effects {
+        observed_effects.sort();
+        observed_effects.dedup();
+    }
     receipt.normalized_execution_envelope.sort();
     receipt.ambient_host_perturbations.sort();
     receipt.sandbox_profile_identities.sort();
@@ -184,6 +223,10 @@ pub fn canonical_deterministic_build_proof_receipt(
         run.output_store_paths.sort();
         run.substituted_dependency_identities.sort();
         run.hermeticity_audit_events.sort();
+        if let Some(observed_effects) = &mut run.observed_effects {
+            observed_effects.sort();
+            observed_effects.dedup();
+        }
         run.output_digests.sort_by(|left, right| left.name.cmp(&right.name));
     }
     receipt.runs.sort_by(|left, right| left.run_id.cmp(&right.run_id));
@@ -364,6 +407,7 @@ fn validate_receipt_header(receipt: &DeterministicBuildProofReceipt) -> Result<(
 fn validate_receipt_evidence(receipt: &DeterministicBuildProofReceipt) -> Result<(), ReleaseEvidenceError> {
     validate_string_set(&receipt.proof_unit.output_identities, "proof_unit.output_identities")?;
     validate_string_set(&receipt.toolchain_stage_roots, "toolchain_stage_roots")?;
+    validate_build_effect_policy(receipt)?;
     validate_string_set(&receipt.normalized_execution_envelope, "normalized_execution_envelope")?;
     validate_string_set(&receipt.ambient_host_perturbations, "ambient_host_perturbations")?;
     validate_string_set(&receipt.sandbox_profile_identities, "sandbox_profile_identities")?;
@@ -415,6 +459,81 @@ fn validate_run(run: &DeterministicBuildRunReceipt) -> Result<(), ReleaseEvidenc
     Ok(())
 }
 
+fn validate_build_effect_policy(receipt: &DeterministicBuildProofReceipt) -> Result<(), ReleaseEvidenceError> {
+    if receipt.effect_policy_version != BUILD_EFFECT_POLICY_VERSION {
+        return Err(validation_error(format!(
+            "deterministic build proof receipt effect_policy_version must be {BUILD_EFFECT_POLICY_VERSION}, got {}",
+            receipt.effect_policy_version
+        )));
+    }
+    validate_effect_set(&receipt.declared_effects, "declared_effects")?;
+    if let Some(observed) = &receipt.observed_effects {
+        validate_effect_set(observed, "observed_effects")?;
+    }
+    for run in &receipt.runs {
+        if let Some(observed) = &run.observed_effects {
+            validate_effect_set(observed, "runs.observed_effects")?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_effect_set(values: &[BuildEffect], field: &str) -> Result<(), ReleaseEvidenceError> {
+    let mut seen = BTreeSet::new();
+    for value in values {
+        if !seen.insert(value) {
+            return Err(validation_error(format!(
+                "deterministic build proof receipt {field} contains duplicate build effect {:?}",
+                value
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn receipt_observed_effects(receipt: &DeterministicBuildProofReceipt) -> Option<Vec<BuildEffect>> {
+    if let Some(observed) = &receipt.observed_effects {
+        return Some(observed.clone());
+    }
+    let mut effects = BTreeSet::new();
+    for run in &receipt.runs {
+        let observed = run.observed_effects.as_ref()?;
+        effects.extend(observed.iter().copied());
+        effects.extend(run.hermeticity_audit_events.iter().filter_map(|event| audit_event_effect(event)));
+    }
+    Some(effects.into_iter().collect())
+}
+
+fn audit_event_effect(event: &str) -> Option<BuildEffect> {
+    match event {
+        "network-access" | "host-network-access" => Some(BuildEffect::Network),
+        "clock-access" | "time-access" => Some(BuildEffect::Clock),
+        "random-access" | "entropy-access" => Some(BuildEffect::Random),
+        "environment-access" | "host-env-access" | "host-state-leak" => Some(BuildEffect::Environment),
+        "secret-access" => Some(BuildEffect::Secret),
+        "host-tool-access" | "host-tool-fallback" => Some(BuildEffect::HostTool),
+        "remote-build-dispatch" => Some(BuildEffect::RemoteBuild),
+        "store-read" => Some(BuildEffect::ReadStore),
+        "output-write" => Some(BuildEffect::WriteOutput),
+        _ => None,
+    }
+}
+
+fn undeclared_effect_reasons(receipt: &DeterministicBuildProofReceipt) -> Vec<String> {
+    let Some(observed) = receipt_observed_effects(receipt) else {
+        return vec!["missing deterministic build effect observations".to_string()];
+    };
+    if observed.is_empty() {
+        return vec!["missing deterministic build effect observations".to_string()];
+    }
+    let declared = receipt.declared_effects.iter().copied().collect::<BTreeSet<_>>();
+    observed
+        .into_iter()
+        .filter(|effect| !declared.contains(effect))
+        .map(|effect| format!("undeclared observed build effect {:?}", effect))
+        .collect()
+}
+
 fn validate_string_set(values: &[String], field: &str) -> Result<(), ReleaseEvidenceError> {
     let mut seen = BTreeSet::new();
     for value in values {
@@ -452,6 +571,15 @@ fn classify_deterministic_build_proof(
     {
         reasons.push("provider kind mismatch between proof unit and provider identity".to_string());
         return (DeterministicBuildProofVerdict::ProviderKindMismatch, reasons);
+    }
+    if receipt.effect_policy_version != BUILD_EFFECT_POLICY_VERSION {
+        reasons.push(format!("unsupported build effect policy {}", receipt.effect_policy_version));
+        return (DeterministicBuildProofVerdict::MissingEvidence, reasons);
+    }
+    let effect_reasons = undeclared_effect_reasons(receipt);
+    if !effect_reasons.is_empty() {
+        reasons.extend(effect_reasons);
+        return (DeterministicBuildProofVerdict::MissingEvidence, reasons);
     }
     if receipt.hermeticity_mode == "impure" {
         reasons.push("impure hermeticity mode".to_string());
@@ -585,6 +713,7 @@ mod tests {
             }],
             substituted_dependency_identities: vec!["dep=toolchain-v1".to_string()],
             hermeticity_audit_events: Vec::new(),
+            observed_effects: Some(PURE_LOCAL_BUILD_EFFECTS.to_vec()),
         }
     }
 
@@ -608,6 +737,9 @@ mod tests {
             toolchain_provider_identity: "provider-kind=source-root;toolchain=gcc10-provider-contract".to_string(),
             logical_store_prefix: "/mantle/store".to_string(),
             physical_store_isolation: "fresh-store-per-run".to_string(),
+            effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
+            declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
+            observed_effects: None,
             normalized_execution_envelope: vec!["sandbox=bwrap".to_string(), "network=none".to_string()],
             ambient_host_perturbations: perturbations(),
             sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
@@ -642,6 +774,56 @@ mod tests {
     fn deterministic_receipt_accepts_strict_matching_runs() {
         let canonical = canonical_deterministic_build_proof_receipt(receipt()).unwrap();
         assert_eq!(canonical.verdict, DeterministicBuildProofVerdict::SelfRebuildMatch);
+        assert_eq!(canonical.effect_policy_version, BUILD_EFFECT_POLICY_VERSION);
+        assert_eq!(canonical.declared_effects, PURE_LOCAL_BUILD_EFFECTS);
+    }
+
+    #[test]
+    fn deterministic_receipt_rejects_missing_effect_observations() {
+        for observed_effects in [None, Some(Vec::new())] {
+            let mut receipt = receipt();
+            receipt.runs[0].observed_effects = observed_effects;
+            if let Some(effects) = &mut receipt.runs[1].observed_effects {
+                effects.clear();
+            }
+            let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+            assert_eq!(verdict, DeterministicBuildProofVerdict::MissingEvidence);
+            assert!(
+                reasons.iter().any(|reason| reason.contains("missing deterministic build effect observations")),
+                "{reasons:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn deterministic_receipt_rejects_unsupported_effect_policy() {
+        let mut receipt = receipt();
+        receipt.effect_policy_version = "mantle-build-effects-v0".to_string();
+        let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+        assert_eq!(verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert!(reasons.iter().any(|reason| reason.contains("unsupported build effect policy")));
+    }
+
+    #[test]
+    fn deterministic_receipt_rejects_undeclared_observed_effects() {
+        for (event, expected) in [
+            ("network-access", "Network"),
+            ("clock-access", "Clock"),
+            ("host-env-access", "Environment"),
+            ("host-tool-access", "HostTool"),
+        ] {
+            let mut receipt = receipt();
+            receipt.declared_effects = vec![BuildEffect::ReadStore, BuildEffect::WriteOutput];
+            receipt.runs[0].hermeticity_audit_events.push(event.to_string());
+            let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+            assert_eq!(verdict, DeterministicBuildProofVerdict::MissingEvidence, "{event}");
+            assert!(
+                reasons
+                    .iter()
+                    .any(|reason| reason.contains("undeclared observed build effect") && reason.contains(expected)),
+                "{event}: {reasons:?}"
+            );
+        }
     }
 
     #[test]
@@ -663,6 +845,9 @@ mod tests {
                 toolchain_provider_identity: "provider-kind=source-root;toolchain=gcc10-provider-contract".to_string(),
                 logical_store_prefix: "/mantle/store".to_string(),
                 physical_store_isolation: "fresh-store-per-run".to_string(),
+                effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
+                declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
+                observed_effects: None,
                 normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
                 ambient_host_perturbations: perturbations(),
                 sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
@@ -708,6 +893,9 @@ mod tests {
                 toolchain_provider_identity: "provider-kind=source-root;toolchain=gcc10-provider-contract".to_string(),
                 logical_store_prefix: "/mantle/store".to_string(),
                 physical_store_isolation: "fresh-store-per-run".to_string(),
+                effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
+                declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
+                observed_effects: None,
                 normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
                 ambient_host_perturbations: perturbations(),
                 sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
