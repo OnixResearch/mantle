@@ -32,6 +32,7 @@ mod self_build;
 mod semantic_graph;
 mod shell_cmd;
 mod store_cmd;
+mod structured_refactor;
 mod system_cmd;
 mod transcript_cmd;
 mod witness_handoff;
@@ -202,6 +203,12 @@ enum Command {
         /// Semantic graph JSON file (default: <state-dir>/semantic-graph.json)
         #[arg(long = "graph-file")]
         graph_file: Option<PathBuf>,
+    },
+
+    /// Plan, check, or apply structured refactor/migration sessions
+    Refactor {
+        #[command(subcommand)]
+        action: RefactorAction,
     },
 
     /// Execute Markdown Mantle transcripts with isolated store/state defaults
@@ -479,6 +486,45 @@ enum Command {
         /// Arguments to pass to the executable (after --)
         #[arg(last = true)]
         run_args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum RefactorAction {
+    /// Show available structured refactor sessions
+    List,
+    /// Plan/check a structured refactor session without mutating files
+    Plan {
+        /// Refactor session id
+        session: String,
+        /// Project root to inspect (default: current directory)
+        #[arg(long)]
+        root: Option<PathBuf>,
+        /// Store prefixes to validate, repeatable
+        #[arg(long = "refactor-store-prefix")]
+        store_prefixes: Vec<String>,
+    },
+    /// Alias for plan; exits non-zero when conflicts exist
+    Check {
+        /// Refactor session id
+        session: String,
+        /// Project root to inspect (default: current directory)
+        #[arg(long)]
+        root: Option<PathBuf>,
+        /// Store prefixes to validate, repeatable
+        #[arg(long = "refactor-store-prefix")]
+        store_prefixes: Vec<String>,
+    },
+    /// Explicitly apply a bounded structured refactor session
+    Apply {
+        /// Refactor session id; required to avoid accidental migration
+        session: Option<String>,
+        /// Project root to mutate (default: current directory)
+        #[arg(long)]
+        root: Option<PathBuf>,
+        /// Store prefixes to validate, repeatable
+        #[arg(long = "refactor-store-prefix")]
+        store_prefixes: Vec<String>,
     },
 }
 
@@ -1136,6 +1182,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Dependents { target, graph_file } => {
             run_semantic_graph_command(ctx, "dependents", target, graph_file.as_deref())
         }
+        Command::Refactor { action } => run_refactor_command(ctx, action.clone()),
         Command::Transcript { action } => run_transcript_command(action.clone()),
         Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
@@ -1159,6 +1206,108 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
     }
+}
+
+fn run_refactor_command(ctx: &RunContext, action: RefactorAction) -> Result<(), RunError> {
+    match action {
+        RefactorAction::List => {
+            let session = structured_refactor::crunch_to_mantle_session();
+            if ctx.json {
+                let rendered =
+                    serde_json::to_string_pretty(&vec![session]).map_err(|err| RunError::Internal(err.to_string()))?;
+                println!("{rendered}");
+            } else {
+                println!("{} — {}", session.id, session.risk_summary);
+            }
+            Ok(())
+        }
+        RefactorAction::Plan {
+            session,
+            root,
+            store_prefixes,
+        } => {
+            let root = root.unwrap_or(current_dir_or_error()?);
+            let plan = plan_refactor_session(&session, &root, &store_prefixes)?;
+            print_refactor_plan(ctx, &plan)?;
+            Ok(())
+        }
+        RefactorAction::Check {
+            session,
+            root,
+            store_prefixes,
+        } => {
+            let root = root.unwrap_or(current_dir_or_error()?);
+            let plan = plan_refactor_session(&session, &root, &store_prefixes)?;
+            print_refactor_plan(ctx, &plan)?;
+            if plan.has_conflicts() {
+                return Err(RunError::Reported(1));
+            }
+            Ok(())
+        }
+        RefactorAction::Apply {
+            session,
+            root,
+            store_prefixes,
+        } => {
+            let session = session.ok_or_else(|| {
+                RunError::Internal(
+                    structured_refactor::RefactorError::MissingExplicitSession {
+                        available: vec![structured_refactor::CRUNCH_TO_MANTLE_SESSION_ID],
+                    }
+                    .to_string(),
+                )
+            })?;
+            let root = root.unwrap_or(current_dir_or_error()?);
+            match session.as_str() {
+                structured_refactor::CRUNCH_TO_MANTLE_SESSION_ID => {
+                    let plan = structured_refactor::apply_crunch_to_mantle(&root, &store_prefixes)
+                        .map_err(|err| RunError::Internal(err.to_string()))?;
+                    print_refactor_plan(ctx, &plan)
+                }
+                _ => Err(RunError::Internal(structured_refactor::RefactorError::UnknownSession(session).to_string())),
+            }
+        }
+    }
+}
+
+fn plan_refactor_session(
+    session: &str,
+    root: &Path,
+    store_prefixes: &[String],
+) -> Result<structured_refactor::RefactorPlan, RunError> {
+    match session {
+        structured_refactor::CRUNCH_TO_MANTLE_SESSION_ID => {
+            Ok(structured_refactor::plan_crunch_to_mantle(root, store_prefixes))
+        }
+        _ => Err(RunError::Internal(
+            structured_refactor::RefactorError::UnknownSession(session.to_string()).to_string(),
+        )),
+    }
+}
+
+fn print_refactor_plan(ctx: &RunContext, plan: &structured_refactor::RefactorPlan) -> Result<(), RunError> {
+    if ctx.json {
+        let rendered = serde_json::to_string_pretty(plan).map_err(|err| RunError::Internal(err.to_string()))?;
+        println!("{rendered}");
+        return Ok(());
+    }
+    println!("refactor session: {}", plan.session_id);
+    println!("root: {}", plan.root);
+    println!("dry-run: {}", plan.dry_run);
+    if plan.operations.is_empty() {
+        println!("operations: none");
+    } else {
+        println!("operations:");
+        for operation in &plan.operations {
+            let suffix = if operation.apply_supported { "" } else { " (plan-only)" };
+            println!("  {}: {} -> {}{}", operation.kind, operation.from, operation.to, suffix);
+        }
+    }
+    for diagnostic in &plan.diagnostics {
+        println!("diagnostic {}: {}", diagnostic.code, diagnostic.message);
+        println!("  remediation: {}", diagnostic.remediation);
+    }
+    Ok(())
 }
 
 fn run_semantic_graph_command(

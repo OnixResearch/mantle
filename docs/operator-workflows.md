@@ -164,6 +164,21 @@ Structured build reports surface the same operator facts in stable fields:
 That last block gives both the logical store path and the persisted sidecar
 path for the artifact attestation.
 
+## Structured refactor sessions
+
+Mantle migrations should be represented as structured refactor session records instead of ad hoc text rewrites. The built-in `crunch-to-mantle-project-identity` session records `mantle` as canonical, `crunch` as a retained compatibility alias, `mantle-project.ncl`/`mantle.lock`/`.mantle/` as canonical project surfaces, `crunch-project.ncl`/`crunch.lock`/`.crunch/` as legacy surfaces, `/mantle/store` as the canonical store prefix, and `/crunch/store` as an explicit compatibility prefix.
+
+Operators can inspect and run sessions with:
+
+```sh
+mantle refactor list
+mantle refactor plan crunch-to-mantle-project-identity
+mantle refactor check crunch-to-mantle-project-identity --refactor-store-prefix /mantle/store
+mantle refactor apply crunch-to-mantle-project-identity
+```
+
+`plan` and `check` are no-mutate paths: they report file/path/store-prefix operations and typed conflicts without changing project files, lockfiles, generated directories, or store state. Mixed canonical/legacy files and ambiguous `/mantle/store` plus `/crunch/store` defaults fail with remediation. `apply` requires an explicit session id and only runs bounded file/directory renames that the plan marks apply-supported.
+
 ## Semantic build graph queries
 
 Mantle records semantic graph data with immutable node identities for source trees, recipes, store outputs, sandbox profiles, providers, proof receipts, witness requests, and release evidence. Human names and aliases are metadata records that point at immutable identities; changing an alias must not change the underlying BLAKE3-backed node identity.
