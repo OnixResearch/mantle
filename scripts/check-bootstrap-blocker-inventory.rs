@@ -444,6 +444,17 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected bzip2 tcc archive bypass receipt metadata suppression".to_string());
     }
+    if evidence.bwrap_seed_header_boundary_checked
+        && suppression_reason(Path::new("bootstrap/bwrap.ncl"), 142, MARKERS[3], &evidence).is_none()
+    {
+        return Err("self-test expected bwrap seed header boundary suppression".to_string());
+    }
+    if evidence.bwrap_seed_header_boundary_checked
+        && suppression_reason(Path::new("bootstrap/evidence/bwrap-seed-header-boundary.json"), 4, MARKERS[3], &evidence)
+            .is_none()
+    {
+        return Err("self-test expected bwrap seed header receipt metadata suppression".to_string());
+    }
     if evidence.grep_24_musl_bridge_boundary_checked
         && suppression_reason(Path::new("bootstrap/grep-2.4-musl.ncl"), 63, MARKERS[0], &evidence).is_none()
     {
@@ -543,6 +554,7 @@ struct EvidenceState {
     m4_147_musl_bridge_boundary_checked: bool,
     bzip2_108_musl_runtime_boundary_checked: bool,
     bzip2_tcc_archive_bypass_boundary_checked: bool,
+    bwrap_seed_header_boundary_checked: bool,
     grep_24_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_archive_boundary_checked: bool,
@@ -561,6 +573,7 @@ impl EvidenceState {
             m4_147_musl_bridge_boundary_checked: checked_m4_147_musl_bridge_boundary(),
             bzip2_108_musl_runtime_boundary_checked: checked_bzip2_108_musl_runtime_boundary(),
             bzip2_tcc_archive_bypass_boundary_checked: checked_bzip2_tcc_archive_bypass_boundary(),
+            bwrap_seed_header_boundary_checked: checked_bwrap_seed_header_boundary(),
             grep_24_musl_bridge_boundary_checked: checked_grep_24_musl_bridge_boundary(),
             musl_1124_tcc_musl_bridge_boundary_checked: checked_musl_1124_tcc_musl_bridge_boundary(),
             musl_1124_tcc_archive_boundary_checked: checked_musl_1124_tcc_archive_boundary(),
@@ -724,6 +737,26 @@ fn checked_bzip2_tcc_archive_bypass_boundary() -> bool {
             "The Mes-built TinyCC ar path can segfault after emitting only",
             "tcc: ar: can't open file",
             "tcc -static bzip2.o $BZLIB_OBJS -o bzip2",
+        ])
+}
+
+fn checked_bwrap_seed_header_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/bwrap-seed-header-boundary.json", &[
+        "\"schema\": \"mantle-bwrap-seed-header-boundary-v1\"",
+        "\"derivation\": \"bootstrap/bwrap.ncl\"",
+        "\"status\": \"source-boundary-only\"",
+        "\"boundary\": \"bwrap-kernel-header-seed-sysroot-include\"",
+        "\"expected_complete\": false",
+        "The normalized seed contract puts those headers in the target sysroot.",
+        "does not prove full bwrap source/runtime correctness",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/bwrap.ncl", &[
+            "Find the bootstrap seed toolchain for kernel headers.",
+            "raw kernel headers like <linux/capability.h> and <linux/loop.h>.",
+            "The normalized seed contract puts those headers in the target sysroot.",
+            "SEED_INC=\"-I$SEED_ROOT/%{seed_target}/include\"",
+            "gcc -static -Os -pipe",
         ])
 }
 
@@ -988,6 +1021,16 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/bzip2-tcc-archive-bypass-boundary.json")
     {
         return Some("bzip2 tcc archive-bypass receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.bwrap_seed_header_boundary_checked && path_s.ends_with("bootstrap/bwrap.ncl") {
+        return Some(
+            "bwrap seed-header source boundary is explicitly checked; it remains partial until full bwrap input provenance is promoted",
+        );
+    }
+    if evidence.bwrap_seed_header_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/bwrap-seed-header-boundary.json")
+    {
+        return Some("bwrap seed-header receipt is checked metadata, not an additional blocker");
     }
     if evidence.grep_24_musl_bridge_boundary_checked
         && path_s.ends_with("bootstrap/grep-2.4-musl.ncl")

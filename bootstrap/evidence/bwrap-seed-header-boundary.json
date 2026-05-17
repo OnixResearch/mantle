@@ -1,0 +1,18 @@
+{
+  "schema": "mantle-bwrap-seed-header-boundary-v1",
+  "derivation": "bootstrap/bwrap.ncl",
+  "status": "source-boundary-only",
+  "boundary": "bwrap-kernel-header-seed-sysroot-include",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "Find the bootstrap seed toolchain for kernel headers.",
+    "The rebuilt musl sysroot has libc headers, but bwrap also needs",
+    "raw kernel headers like <linux/capability.h> and <linux/loop.h>.",
+    "The normalized seed contract puts those headers in the target sysroot.",
+    "SEED_INC=\"-I$SEED_ROOT/%{seed_target}/include\"",
+    "gcc -static -Os -pipe"
+  ],
+  "replacement_condition": "Retire this source-boundary receipt when bwrap's kernel-header provider is represented as a first-class non-seed generated provider or when a full source-built bwrap proof covers the kernel-header input contract.",
+  "parity_effect": "evidence-backed partial; does not prove full bwrap source/runtime correctness"
+}
