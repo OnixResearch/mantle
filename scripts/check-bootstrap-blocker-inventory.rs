@@ -428,6 +428,22 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected bzip2 1.0.8 musl runtime receipt metadata suppression".to_string());
     }
+    if evidence.bzip2_tcc_archive_bypass_boundary_checked
+        && suppression_reason(Path::new("bootstrap/bzip2-tcc.ncl"), 73, MARKERS[1], &evidence).is_none()
+    {
+        return Err("self-test expected bzip2 tcc archive bypass boundary suppression".to_string());
+    }
+    if evidence.bzip2_tcc_archive_bypass_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/bzip2-tcc-archive-bypass-boundary.json"),
+            4,
+            MARKERS[1],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected bzip2 tcc archive bypass receipt metadata suppression".to_string());
+    }
     if evidence.grep_24_musl_bridge_boundary_checked
         && suppression_reason(Path::new("bootstrap/grep-2.4-musl.ncl"), 63, MARKERS[0], &evidence).is_none()
     {
@@ -526,6 +542,7 @@ struct EvidenceState {
     sed409_musl_bridge_boundary_checked: bool,
     m4_147_musl_bridge_boundary_checked: bool,
     bzip2_108_musl_runtime_boundary_checked: bool,
+    bzip2_tcc_archive_bypass_boundary_checked: bool,
     grep_24_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_archive_boundary_checked: bool,
@@ -543,6 +560,7 @@ impl EvidenceState {
             sed409_musl_bridge_boundary_checked: checked_sed409_musl_bridge_boundary(),
             m4_147_musl_bridge_boundary_checked: checked_m4_147_musl_bridge_boundary(),
             bzip2_108_musl_runtime_boundary_checked: checked_bzip2_108_musl_runtime_boundary(),
+            bzip2_tcc_archive_bypass_boundary_checked: checked_bzip2_tcc_archive_bypass_boundary(),
             grep_24_musl_bridge_boundary_checked: checked_grep_24_musl_bridge_boundary(),
             musl_1124_tcc_musl_bridge_boundary_checked: checked_musl_1124_tcc_musl_bridge_boundary(),
             musl_1124_tcc_archive_boundary_checked: checked_musl_1124_tcc_archive_boundary(),
@@ -685,6 +703,27 @@ fn checked_bzip2_108_musl_runtime_boundary() -> bool {
             "compile objects, then link with declared musl",
             "crunch-start.o bzip2.o",
             "\"$TCC/lib/tcc/libtcc1.a\" \"$MUSL/lib/libc.a\"",
+        ])
+}
+
+fn checked_bzip2_tcc_archive_bypass_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/bzip2-tcc-archive-bypass-boundary.json", &[
+        "\"schema\": \"mantle-bzip2-tcc-archive-bypass-boundary-v1\"",
+        "\"derivation\": \"bootstrap/bzip2-tcc.ncl\"",
+        "\"status\": \"source-boundary-only\"",
+        "\"boundary\": \"tinycc-0927-mes-ar-bypass-for-bzip2-executables\"",
+        "\"expected_complete\": false",
+        "libbz2.a, so link the objects directly instead of using `tcc -ar`.",
+        "tcc: ar: can't open file",
+        "does not prove bzip2-tcc archive or runtime correctness",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/bzip2-tcc.ncl", &[
+            "Compile library objects. This part installs only executables, not",
+            "libbz2.a, so link the objects directly instead of using `tcc -ar`.",
+            "The Mes-built TinyCC ar path can segfault after emitting only",
+            "tcc: ar: can't open file",
+            "tcc -static bzip2.o $BZLIB_OBJS -o bzip2",
         ])
 }
 
@@ -939,6 +978,16 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/bzip2-1.0.8-musl-runtime-boundary.json")
     {
         return Some("bzip2 1.0.8 musl runtime-boundary receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.bzip2_tcc_archive_bypass_boundary_checked && path_s.ends_with("bootstrap/bzip2-tcc.ncl") {
+        return Some(
+            "bzip2 tcc archive bypass boundary is explicitly checked; it remains partial until TinyCC ar is repaired",
+        );
+    }
+    if evidence.bzip2_tcc_archive_bypass_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/bzip2-tcc-archive-bypass-boundary.json")
+    {
+        return Some("bzip2 tcc archive-bypass receipt is checked metadata, not an additional blocker");
     }
     if evidence.grep_24_musl_bridge_boundary_checked
         && path_s.ends_with("bootstrap/grep-2.4-musl.ncl")

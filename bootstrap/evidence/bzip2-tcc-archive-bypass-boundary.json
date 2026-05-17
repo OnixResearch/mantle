@@ -1,0 +1,25 @@
+{
+  "schema": "mantle-bzip2-tcc-archive-bypass-boundary-v1",
+  "derivation": "bootstrap/bzip2-tcc.ncl",
+  "status": "source-boundary-only",
+  "boundary": "tinycc-0927-mes-ar-bypass-for-bzip2-executables",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "Compile library objects. This part installs only executables, not",
+    "libbz2.a, so link the objects directly instead of using `tcc -ar`.",
+    "The Mes-built TinyCC ar path can segfault after emitting only",
+    "tcc: ar: can't open file",
+    "BZLIB_OBJS=\"blocksort.o huffman.o crctable.o randtable.o compress.o decompress.o bzlib.o\"",
+    "tcc -static bzip2.o $BZLIB_OBJS -o bzip2"
+  ],
+  "verified_checks": [
+    {
+      "command": "cargo run -q -p mantle --bin crunch -- eval bootstrap/bzip2-tcc.ncl >/tmp/bzip2-tcc.eval.json && /bin/sh -n /tmp/bzip2-tcc.eval.sh",
+      "status": "not-rerun-in-this-receipt",
+      "purpose": "shape check for the derivation script; inventory checker separately fails closed on the source markers above"
+    }
+  ],
+  "replacement_condition": "Retire this source-boundary receipt when the TinyCC ar path is repaired and bootstrap/bzip2-tcc.ncl can use a real libbz2.a archive without the Mes-linked TinyCC ar segfault boundary.",
+  "parity_effect": "evidence-backed partial; does not prove bzip2-tcc archive or runtime correctness"
+}
