@@ -562,6 +562,27 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected tinycc 0.9.27 Mes handoff receipt metadata suppression".to_string());
     }
+    if evidence.seed_provider_selection_boundary_checked
+        && suppression_reason(Path::new("bootstrap/seed.ncl"), 4, MARKERS[3], &evidence).is_none()
+    {
+        return Err("self-test expected seed provider selector boundary suppression".to_string());
+    }
+    if evidence.seed_provider_selection_boundary_checked
+        && suppression_reason(Path::new("bootstrap/seed-full.ncl"), 152, MARKERS[2], &evidence).is_none()
+    {
+        return Err("self-test expected seed-full normalization boundary suppression".to_string());
+    }
+    if evidence.seed_provider_selection_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/seed-provider-selection-boundary.json"),
+            4,
+            MARKERS[1],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected seed provider receipt metadata suppression".to_string());
+    }
     if evidence.diagnostic_derivation_boundary_inventory_checked
         && suppression_reason(Path::new("bootstrap/diag-tcc27-warning-format.ncl"), 1, MARKERS[1], &evidence).is_none()
     {
@@ -599,6 +620,7 @@ struct EvidenceState {
     musl_1124_tcc_archive_boundary_checked: bool,
     tcc_musl_handoff_bridge_boundaries_checked: bool,
     tinycc_0927_mes_handoff_boundary_checked: bool,
+    seed_provider_selection_boundary_checked: bool,
     diagnostic_derivation_boundary_inventory_checked: bool,
 }
 
@@ -620,6 +642,7 @@ impl EvidenceState {
             musl_1124_tcc_archive_boundary_checked: checked_musl_1124_tcc_archive_boundary(),
             tcc_musl_handoff_bridge_boundaries_checked: checked_tcc_musl_handoff_bridge_boundaries(),
             tinycc_0927_mes_handoff_boundary_checked: checked_tinycc_0927_mes_handoff_boundary(),
+            seed_provider_selection_boundary_checked: checked_seed_provider_selection_boundary(),
             diagnostic_derivation_boundary_inventory_checked: checked_diagnostic_derivation_boundary_inventory(),
         }
     }
@@ -935,6 +958,34 @@ fn checked_tcc_musl_handoff_bridge_boundaries() -> bool {
         ])
 }
 
+fn checked_seed_provider_selection_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/seed-provider-selection-boundary.json", &[
+        "\"schema\": \"mantle-seed-provider-selection-boundary-v1\"",
+        "\"status\": \"source-boundary-only\"",
+        "\"expected_complete\": false",
+        "\"boundary\": \"legacy-seed-default-selector\"",
+        "\"boundary\": \"full-source-seed-normalization-contract\"",
+        "does not prove full-source seed runtime correctness",
+        "does not promote seed-full as the default provider",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/seed.ncl", &[
+            "Delegates to either the full-source live-bootstrap chain or the legacy",
+            "musl.cc-fetched seed depending on `CRUNCH_LEGACY_SEED`.",
+            "The full-source chain is not yet functional",
+            "TODO: once seed-full.ncl builds successfully, switch the default:",
+            "let legacy = import \"seed-legacy.ncl\" in",
+            "legacy",
+        ])
+        && checked_source_file("bootstrap/seed-full.ncl", &[
+            "Exposes the same normalized seed contract as seed-legacy.ncl but",
+            "Normalization contract only; full trusted runtime proof remains gated by archived predecessor evidence until the source-built chain is rebuilt end-to-end.",
+            "# --- Verify normalized seed contract ---",
+            "full-source-seed-toolchain normalization complete",
+            "Intended source chain starts from a 229-byte hex0 seed; current promotion remains gated by predecessor runtime evidence.",
+        ])
+}
+
 fn checked_diagnostic_derivation_boundary_inventory() -> bool {
     checked_evidence_file("bootstrap/evidence/diagnostic-derivation-boundary-inventory.json", &[
         "\"schema\": \"mantle-diagnostic-derivation-boundary-inventory-v1\"",
@@ -1063,6 +1114,18 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/tinycc-0927-mes-handoff-boundary.json")
     {
         return Some("tinycc 0.9.27 Mes handoff receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.seed_provider_selection_boundary_checked
+        && (path_s.ends_with("bootstrap/seed.ncl") || path_s.ends_with("bootstrap/seed-full.ncl"))
+    {
+        return Some(
+            "seed provider selection/normalization boundary is explicitly checked; it remains partial until full-source seed becomes the default",
+        );
+    }
+    if evidence.seed_provider_selection_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/seed-provider-selection-boundary.json")
+    {
+        return Some("seed provider selection receipt is checked metadata, not an additional blocker");
     }
     if evidence.diagnostic_derivation_boundary_inventory_checked && is_diagnostic_derivation_path(&path_s) {
         return Some(

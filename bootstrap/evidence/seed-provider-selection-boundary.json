@@ -1,0 +1,37 @@
+{
+  "schema": "mantle-seed-provider-selection-boundary-v1",
+  "status": "source-boundary-only",
+  "expected_complete": false,
+  "derivations": [
+    {
+      "derivation": "bootstrap/seed.ncl",
+      "boundary": "legacy-seed-default-selector",
+      "checked_markers": [
+        "Delegates to either the full-source live-bootstrap chain or the legacy",
+        "musl.cc-fetched seed depending on `CRUNCH_LEGACY_SEED`.",
+        "The full-source chain is not yet functional",
+        "TODO: once seed-full.ncl builds successfully, switch the default:",
+        "let legacy = import \"seed-legacy.ncl\" in",
+        "legacy"
+      ]
+    },
+    {
+      "derivation": "bootstrap/seed-full.ncl",
+      "boundary": "full-source-seed-normalization-contract",
+      "checked_markers": [
+        "Exposes the same normalized seed contract as seed-legacy.ncl but",
+        "Normalization contract only; full trusted runtime proof remains gated by archived predecessor evidence until the source-built chain is rebuilt end-to-end.",
+        "# --- Verify normalized seed contract ---",
+        "full-source-seed-toolchain normalization complete",
+        "Intended source chain starts from a 229-byte hex0 seed; current promotion remains gated by predecessor runtime evidence."
+      ]
+    }
+  ],
+  "non_claims": [
+    "does not prove full-source seed runtime correctness",
+    "does not promote seed-full as the default provider",
+    "does not remove the legacy seed fallback",
+    "does not satisfy StageX lineage or end-to-end source-built chain requirements"
+  ],
+  "retirement_condition": "Retire this receipt when seed-full builds end-to-end with checked runtime proof and seed.ncl defaults to the source-built provider without legacy fallback."
+}
