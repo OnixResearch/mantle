@@ -455,6 +455,22 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected bwrap seed header receipt metadata suppression".to_string());
     }
+    if evidence.busybox_static_musl_link_boundary_checked
+        && suppression_reason(Path::new("bootstrap/busybox.ncl"), 110, MARKERS[1], &evidence).is_none()
+    {
+        return Err("self-test expected busybox static musl link boundary suppression".to_string());
+    }
+    if evidence.busybox_static_musl_link_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/busybox-static-musl-link-boundary.json"),
+            4,
+            MARKERS[1],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected busybox static musl link receipt metadata suppression".to_string());
+    }
     if evidence.grep_24_musl_bridge_boundary_checked
         && suppression_reason(Path::new("bootstrap/grep-2.4-musl.ncl"), 63, MARKERS[0], &evidence).is_none()
     {
@@ -555,6 +571,7 @@ struct EvidenceState {
     bzip2_108_musl_runtime_boundary_checked: bool,
     bzip2_tcc_archive_bypass_boundary_checked: bool,
     bwrap_seed_header_boundary_checked: bool,
+    busybox_static_musl_link_boundary_checked: bool,
     grep_24_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_archive_boundary_checked: bool,
@@ -574,6 +591,7 @@ impl EvidenceState {
             bzip2_108_musl_runtime_boundary_checked: checked_bzip2_108_musl_runtime_boundary(),
             bzip2_tcc_archive_bypass_boundary_checked: checked_bzip2_tcc_archive_bypass_boundary(),
             bwrap_seed_header_boundary_checked: checked_bwrap_seed_header_boundary(),
+            busybox_static_musl_link_boundary_checked: checked_busybox_static_musl_link_boundary(),
             grep_24_musl_bridge_boundary_checked: checked_grep_24_musl_bridge_boundary(),
             musl_1124_tcc_musl_bridge_boundary_checked: checked_musl_1124_tcc_musl_bridge_boundary(),
             musl_1124_tcc_archive_boundary_checked: checked_musl_1124_tcc_archive_boundary(),
@@ -757,6 +775,27 @@ fn checked_bwrap_seed_header_boundary() -> bool {
             "The normalized seed contract puts those headers in the target sysroot.",
             "SEED_INC=\"-I$SEED_ROOT/%{seed_target}/include\"",
             "gcc -static -Os -pipe",
+        ])
+}
+
+fn checked_busybox_static_musl_link_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/busybox-static-musl-link-boundary.json", &[
+        "\"schema\": \"mantle-busybox-static-musl-link-boundary-v1\"",
+        "\"derivation\": \"bootstrap/busybox.ncl\"",
+        "\"status\": \"source-boundary-only\"",
+        "\"boundary\": \"busybox-bootstrap-gcc-static-musl-link\"",
+        "\"expected_complete\": false",
+        "The bootstrap GCC targets musl, so -static links against musl libc.",
+        "does not prove full busybox source/runtime correctness",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/busybox.ncl", &[
+            "Set up musl library paths for GCC.",
+            "The bootstrap GCC targets musl, so -static links against musl libc.",
+            "export LIBRARY_PATH=\"$GCC_LIB:${LIBRARY_PATH:-}\"",
+            "export HOSTCC=\"gcc -static\"",
+            "LDFLAGS=\"-static\"",
+            "Busybox build complete: $out/bin/busybox",
         ])
 }
 
@@ -1031,6 +1070,16 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/bwrap-seed-header-boundary.json")
     {
         return Some("bwrap seed-header receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.busybox_static_musl_link_boundary_checked && path_s.ends_with("bootstrap/busybox.ncl") {
+        return Some(
+            "busybox static-musl link boundary is explicitly checked; it remains partial until full busybox runtime proof exists",
+        );
+    }
+    if evidence.busybox_static_musl_link_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/busybox-static-musl-link-boundary.json")
+    {
+        return Some("busybox static-musl link receipt is checked metadata, not an additional blocker");
     }
     if evidence.grep_24_musl_bridge_boundary_checked
         && path_s.ends_with("bootstrap/grep-2.4-musl.ncl")

@@ -1,0 +1,18 @@
+{
+  "schema": "mantle-busybox-static-musl-link-boundary-v1",
+  "derivation": "bootstrap/busybox.ncl",
+  "status": "source-boundary-only",
+  "boundary": "busybox-bootstrap-gcc-static-musl-link",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "checked_derivation_markers": [
+    "Set up musl library paths for GCC.",
+    "The bootstrap GCC targets musl, so -static links against musl libc.",
+    "export LIBRARY_PATH=\"$GCC_LIB:${LIBRARY_PATH:-}\"",
+    "export HOSTCC=\"gcc -static\"",
+    "LDFLAGS=\"-static\"",
+    "echo \"Busybox build complete: $out/bin/busybox\""
+  ],
+  "replacement_condition": "Retire this source-boundary receipt when busybox has a full source-built proof receipt covering the bootstrap GCC/musl static-link contract and installed applet runtime smoke.",
+  "parity_effect": "evidence-backed partial; does not prove full busybox source/runtime correctness"
+}
