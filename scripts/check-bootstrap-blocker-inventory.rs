@@ -540,6 +540,22 @@ fn run_self_tests() -> Result<(), String> {
     {
         return Err("self-test expected tcc musl handoff bridge receipt metadata suppression".to_string());
     }
+    if evidence.tinycc_0927_mes_handoff_boundary_checked
+        && suppression_reason(Path::new("bootstrap/tinycc.ncl"), 4, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected tinycc 0.9.27 Mes handoff bridge boundary suppression".to_string());
+    }
+    if evidence.tinycc_0927_mes_handoff_boundary_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/tinycc-0927-mes-handoff-boundary.json"),
+            4,
+            MARKERS[0],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected tinycc 0.9.27 Mes handoff receipt metadata suppression".to_string());
+    }
     if evidence.diagnostic_derivation_boundary_inventory_checked
         && suppression_reason(Path::new("bootstrap/diag-tcc27-warning-format.ncl"), 1, MARKERS[1], &evidence).is_none()
     {
@@ -576,6 +592,7 @@ struct EvidenceState {
     musl_1124_tcc_musl_bridge_boundary_checked: bool,
     musl_1124_tcc_archive_boundary_checked: bool,
     tcc_musl_handoff_bridge_boundaries_checked: bool,
+    tinycc_0927_mes_handoff_boundary_checked: bool,
     diagnostic_derivation_boundary_inventory_checked: bool,
 }
 
@@ -596,6 +613,7 @@ impl EvidenceState {
             musl_1124_tcc_musl_bridge_boundary_checked: checked_musl_1124_tcc_musl_bridge_boundary(),
             musl_1124_tcc_archive_boundary_checked: checked_musl_1124_tcc_archive_boundary(),
             tcc_musl_handoff_bridge_boundaries_checked: checked_tcc_musl_handoff_bridge_boundaries(),
+            tinycc_0927_mes_handoff_boundary_checked: checked_tinycc_0927_mes_handoff_boundary(),
             diagnostic_derivation_boundary_inventory_checked: checked_diagnostic_derivation_boundary_inventory(),
         }
     }
@@ -673,6 +691,28 @@ fn checked_tcc_musl_contracts() -> bool {
         "test \"$smoke_rc\" -eq 0",
         "test -s smoke.o",
     ])
+}
+
+fn checked_tinycc_0927_mes_handoff_boundary() -> bool {
+    checked_evidence_file("bootstrap/evidence/tinycc-0927-mes-handoff-boundary.json", &[
+        "\"schema\": \"mantle-tinycc-0927-mes-handoff-boundary-v1\"",
+        "\"derivation\": \"bootstrap/tinycc.ncl\"",
+        "\"status\": \"bridge-boundary-only\"",
+        "\"boundary\": \"tinycc-0927-mes-linked-handoff\"",
+        "\"expected_complete\": false",
+        "063c1494190a22b684d7fe0d5ea50d96aa85d5bfc6a77755e9d1e4425076ccc7",
+        "tcc version 0.9.27 (x86_64 Linux)",
+        "does not prove full TinyCC 0.9.27 source correctness",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/tinycc.ncl", &[
+            "This derivation mirrors the live-bootstrap part boundary",
+            "arguments instead of printing literal `%s:%d` placeholders.",
+            "compile objects but segfault in the executable/DLL output path.",
+            "varargs/path diagnostics and can corrupt the final static link.",
+            "\"$out/bin/tcc\" -version",
+            "test -s \"$out/lib/mes/libc.a\"",
+        ])
 }
 
 fn checked_sed409_musl_bridge_boundary() -> bool {
@@ -1001,6 +1041,16 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
         && path_s.ends_with("bootstrap/evidence/tcc-musl-handoff-bridge-boundaries.json")
     {
         return Some("tcc musl handoff bridge-boundary receipt is checked metadata, not an additional blocker");
+    }
+    if evidence.tinycc_0927_mes_handoff_boundary_checked && path_s.ends_with("bootstrap/tinycc.ncl") {
+        return Some(
+            "tinycc 0.9.27 Mes handoff boundary is explicitly checked; it remains partial until full TinyCC source/runtime correctness is proven",
+        );
+    }
+    if evidence.tinycc_0927_mes_handoff_boundary_checked
+        && path_s.ends_with("bootstrap/evidence/tinycc-0927-mes-handoff-boundary.json")
+    {
+        return Some("tinycc 0.9.27 Mes handoff receipt is checked metadata, not an additional blocker");
     }
     if evidence.diagnostic_derivation_boundary_inventory_checked && is_diagnostic_derivation_path(&path_s) {
         return Some(

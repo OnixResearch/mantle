@@ -1,0 +1,39 @@
+{
+  "schema": "mantle-tinycc-0927-mes-handoff-boundary-v1",
+  "derivation": "bootstrap/tinycc.ncl",
+  "status": "bridge-boundary-only",
+  "boundary": "tinycc-0927-mes-linked-handoff",
+  "provider_kind": "source-root",
+  "expected_complete": false,
+  "scope": [
+    "live-bootstrap part boundary from tcc 0.9.26 to TinyCC 0.9.27",
+    "Mes-linked diagnostic formatter repair that prevents literal placeholder diagnostics",
+    "Mes/TCC source-normalization seams needed for object-output usability",
+    "CRT bypass for the Mes-stage bootstrap contract"
+  ],
+  "observed_output": {
+    "store_path": ".crunch-drain/store/j3ymmwc3mhhzv87q6a89b19495j9j1lj-tinycc-0.9.27",
+    "build_status": "cached-success",
+    "binary_blake3": "063c1494190a22b684d7fe0d5ea50d96aa85d5bfc6a77755e9d1e4425076ccc7",
+    "version_stdout": "tcc version 0.9.27 (x86_64 Linux)",
+    "object_compile_smoke": {
+      "command": "$out/bin/tcc -c -I $out/include/mes /tmp/crunch-tinycc-object-smoke.c -o /tmp/crunch-tinycc-object-smoke.o",
+      "exit_status": 0,
+      "output_nonempty": true
+    }
+  },
+  "checked_source_markers": [
+    "This derivation mirrors the live-bootstrap part boundary",
+    "arguments instead of printing literal `%s:%d` placeholders.",
+    "compile objects but segfault in the executable/DLL output path.",
+    "varargs/path diagnostics and can corrupt the final static link.",
+    "\"$out/bin/tcc\" -version",
+    "test -s \"$out/lib/mes/libc.a\""
+  ],
+  "non_claims": [
+    "does not prove full TinyCC 0.9.27 source correctness",
+    "does not prove executable or DLL output path correctness",
+    "does not retire the later musl-oriented handoff"
+  ],
+  "retirement_condition": "Replace with native/full-source TinyCC 0.9.27 correctness evidence that exercises object, executable, archive, and diagnostic paths without Mes-linked bypasses."
+}
