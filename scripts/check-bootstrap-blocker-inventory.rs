@@ -339,9 +339,15 @@ fn run_self_tests() -> Result<(), String> {
         return Err("self-test expected checked gcc-4.0 pass1 marker suppression".to_string());
     }
     if evidence.gcc40_native_boundary_checked
-        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 101, MARKERS[0], &evidence).is_none()
+        && suppression_reason(Path::new("bootstrap/evidence/gcc-4.0-native-boundary.json"), 7, MARKERS[0], &evidence)
+            .is_none()
     {
-        return Err("self-test expected checked gcc-4.0 mechanical bridge identifier suppression".to_string());
+        return Err("self-test expected gcc-4.0 native boundary bridge-output suppression".to_string());
+    }
+    if evidence.gcc40_native_boundary_checked
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1103, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected gcc-4.0 native frontier source-marker suppression".to_string());
     }
     if is_gcc40_mechanical_bridge_identifier(1103) {
         return Err("self-test expected gcc-4.0 prose bridge blocker line to remain unsuppressed".to_string());
@@ -662,6 +668,10 @@ fn checked_gcc40_native_boundary() -> bool {
         "\"status\": \"boundary-only\"",
         "\"boundary\": \"native-gcc-make-to-pass1-bridge\"",
         "\"id\": \"cc1-arithmetic-control-flow\"",
+        "\"status\": \"frontier-only\"",
+        "shell/tool bridge.  Follow the live-bootstrap pass1 shape instead:",
+        "under the c-parse flags deterministically segfaults TinyCC after that",
+        "the validated TinyCC handoff. This remains a bridge until native cc1 builds.",
         "\"parity_effect\": \"evidence-backed partial; does not prove native gcc.4.0 correctness\"",
     ])
     .is_some()
@@ -975,12 +985,12 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
             "binutils-tcc has checked source-root tool-smoke evidence and remains partial, not unproved bridge output",
         );
     }
-    if marker.id == "bridge-output"
+    if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
         && path_s.ends_with("bootstrap/gcc-4.0.ncl")
         && evidence.gcc40_native_boundary_checked
-        && is_gcc40_mechanical_bridge_identifier(line)
+        && (is_gcc40_mechanical_bridge_identifier(line) || is_gcc40_native_frontier_marker(line))
     {
-        return Some("gcc-4.0 mechanical bridge identifier is covered by checked native-boundary metadata");
+        return Some("gcc-4.0 native frontier marker is covered by checked native-boundary metadata");
     }
     if marker.id == "bridge-output"
         && path_s.ends_with("bootstrap/gcc-4.0.ncl")
@@ -995,11 +1005,13 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
     {
         return Some("gcc-4.0 placeholder inventory is checked blocker metadata, not an additional bridge blocker");
     }
-    if marker.id == "bridge-output"
+    if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
         && path_s.ends_with("bootstrap/evidence/gcc-4.0-native-boundary.json")
         && evidence.gcc40_native_boundary_checked
     {
-        return Some("gcc-4.0 native boundary receipt is checked boundary metadata, not an additional bridge blocker");
+        return Some(
+            "gcc-4.0 native boundary receipt is checked boundary metadata, not an additional bridge/crash blocker",
+        );
     }
     if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
         && path_s.ends_with("bootstrap/diag-gcc40-c-parse-boundary.ncl")
@@ -1196,6 +1208,10 @@ fn is_tcc_musl_source_normalization_note(path: &str, line: usize) -> bool {
         return matches!(line, 71 | 83 | 176 | 251 | 268 | 280 | 282 | 321);
     }
     false
+}
+
+fn is_gcc40_native_frontier_marker(line: usize) -> bool {
+    matches!(line, 1103 | 1114 | 1147 | 1158 | 1160 | 1190 | 1192 | 1391 | 1473)
 }
 
 fn is_gcc40_mechanical_bridge_identifier(line: usize) -> bool {

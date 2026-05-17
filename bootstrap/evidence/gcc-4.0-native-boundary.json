@@ -42,5 +42,19 @@
         "frontier": "libiberty demangling has a checked bounded Itanium zero-argument function semantic slice; full native cp-demangle remains pending"
       }
     ]
+  },
+  "source_frontier_markers": {
+    "status": "boundary-only",
+    "checked_derivation_markers": [
+      "shell/tool bridge.  Follow the live-bootstrap pass1 shape instead:",
+      "under the c-parse flags deterministically segfaults TinyCC after that",
+      "rewrites before system.h trigger deterministic TinyCC segfaults.",
+      "the TinyCC/Mes handoff segfaults in missing-header diagnostics;",
+      "emitted by the genconstants/genflags bridge before tm.h can include them.",
+      "through TinyCC/Mes diagnostics and segfault; seed the same inert files",
+      "empty-predicate contract used during the graph-completion bridge.",
+      "the validated TinyCC handoff. This remains a bridge until native cc1 builds."
+    ],
+    "non_claim": "These markers document the checked native frontier/pass1 bridge; they do not prove native GCC 4.0 correctness."
   }
 }
