@@ -135,6 +135,7 @@ struct Config {
     json_path: Option<PathBuf>,
     markdown_path: Option<PathBuf>,
     enforce: bool,
+    require_clean: bool,
     self_test: bool,
 }
 
@@ -149,8 +150,8 @@ fn main() -> ExitCode {
                 outcome.promotion_claims.len(),
                 outcome.enforce,
             );
-            if outcome.enforce && !outcome.promotion_claims.is_empty() && !outcome.findings.is_empty() {
-                eprintln!("FAIL: promotion claim conflicts with remaining bootstrap blockers; see report for details");
+            if let Some(reason) = enforcement_failure_reason(&outcome) {
+                eprintln!("FAIL: {reason}");
                 ExitCode::from(1)
             } else {
                 ExitCode::SUCCESS
@@ -169,6 +170,20 @@ struct Outcome {
     by_class: BTreeMap<&'static str, usize>,
     promotion_claims: Vec<PromotionClaim>,
     enforce: bool,
+    require_clean: bool,
+}
+
+fn enforcement_failure_reason(outcome: &Outcome) -> Option<&'static str> {
+    if !outcome.enforce {
+        return None;
+    }
+    if outcome.require_clean && (!outcome.findings.is_empty() || !outcome.promotion_claims.is_empty()) {
+        return Some("bootstrap blocker inventory is not clean; expected 0 findings and 0 promotion claims");
+    }
+    if !outcome.promotion_claims.is_empty() && !outcome.findings.is_empty() {
+        return Some("promotion claim conflicts with remaining bootstrap blockers; see report for details");
+    }
+    None
 }
 
 fn run() -> Result<Outcome, String> {
@@ -212,6 +227,7 @@ fn run() -> Result<Outcome, String> {
         by_class,
         promotion_claims,
         enforce: config.enforce,
+        require_clean: config.require_clean,
     };
 
     if let Some(path) = &config.json_path {
@@ -234,6 +250,7 @@ fn parse_args() -> Result<Config, String> {
                 config.markdown_path = Some(PathBuf::from(args.next().ok_or("--markdown requires a path")?))
             }
             "--enforce" => config.enforce = true,
+            "--require-clean" => config.require_clean = true,
             "--self-test" => config.self_test = true,
             "--help" | "-h" => return Err(help()),
             _ if arg.starts_with('-') => return Err(format!("unknown option: {arg}\n{}", help())),
@@ -244,11 +261,62 @@ fn parse_args() -> Result<Config, String> {
 }
 
 fn help() -> String {
-    "usage: check-bootstrap-blocker-inventory.rs [--enforce] [--self-test] [--json PATH] [--markdown PATH] [PATH ...]"
+    "usage: check-bootstrap-blocker-inventory.rs [--enforce] [--require-clean] [--self-test] [--json PATH] [--markdown PATH] [PATH ...]"
         .to_string()
 }
 
 fn run_self_tests() -> Result<(), String> {
+    fn empty_outcome(enforce: bool, require_clean: bool) -> Outcome {
+        Outcome {
+            findings: Vec::new(),
+            suppressions: Vec::new(),
+            by_class: BTreeMap::new(),
+            promotion_claims: Vec::new(),
+            enforce,
+            require_clean,
+        }
+    }
+
+    let mut clean_outcome = empty_outcome(true, true);
+    if enforcement_failure_reason(&clean_outcome).is_some() {
+        return Err("self-test expected clean enforced inventory to pass".to_string());
+    }
+    clean_outcome.findings.push(Finding {
+        class_id: "bridge-output",
+        path: "fixture".to_string(),
+        line: 1,
+        excerpt: "bridge smoke".to_string(),
+    });
+    if enforcement_failure_reason(&clean_outcome)
+        != Some("bootstrap blocker inventory is not clean; expected 0 findings and 0 promotion claims")
+    {
+        return Err("self-test expected require-clean to reject blocker findings".to_string());
+    }
+
+    let mut promotion_only = empty_outcome(true, true);
+    promotion_only.promotion_claims.push(PromotionClaim {
+        path: "fixture".to_string(),
+        line: 1,
+        excerpt: "full-source bootstrap status: promoted".to_string(),
+    });
+    if enforcement_failure_reason(&promotion_only)
+        != Some("bootstrap blocker inventory is not clean; expected 0 findings and 0 promotion claims")
+    {
+        return Err("self-test expected require-clean to reject promotion-only claims".to_string());
+    }
+
+    let mut legacy_enforcement = empty_outcome(true, false);
+    legacy_enforcement.findings = clean_outcome.findings.clone();
+    if enforcement_failure_reason(&legacy_enforcement).is_some() {
+        return Err("self-test expected legacy enforcement to allow findings without promotion claims".to_string());
+    }
+    legacy_enforcement.promotion_claims = promotion_only.promotion_claims.clone();
+    if enforcement_failure_reason(&legacy_enforcement)
+        != Some("promotion claim conflicts with remaining bootstrap blockers; see report for details")
+    {
+        return Err("self-test expected legacy enforcement to reject promotion/findings conflict".to_string());
+    }
+
     let fixture_cases: &[(&str, &[&str])] = &[
         ("bridge-output", &[
             "GCC pass1 bridge smoke remains the current proof boundary",
@@ -1396,7 +1464,10 @@ fn compact(line: &str) -> String {
 fn render_json(outcome: &Outcome) -> String {
     let mut s = String::new();
     s.push_str("{\n");
-    s.push_str(&format!("  \"schema_version\": 1,\n  \"enforce\": {},\n", outcome.enforce));
+    s.push_str(&format!(
+        "  \"schema_version\": 1,\n  \"enforce\": {},\n  \"require_clean\": {},\n",
+        outcome.enforce, outcome.require_clean
+    ));
     s.push_str("  \"summary\": {\n");
     s.push_str(&format!(
         "    \"finding_count\": {},\n    \"class_count\": {},\n    \"evidence_suppression_count\": {},\n    \"promotion_claim_count\": {}\n  }},\n",
@@ -1456,7 +1527,7 @@ fn render_json(outcome: &Outcome) -> String {
 fn render_markdown(outcome: &Outcome) -> String {
     let mut s = String::new();
     s.push_str("# Bootstrap blocker inventory report\n\n");
-    s.push_str(&format!("- Schema version: 1\n- Enforcement mode: {}\n- Findings: {}\n- Marker classes present: {}\n- Evidence-backed suppressions: {}\n- Promotion claims: {}\n\n", outcome.enforce, outcome.findings.len(), outcome.by_class.len(), outcome.suppressions.len(), outcome.promotion_claims.len()));
+    s.push_str(&format!("- Schema version: 1\n- Enforcement mode: {}\n- Require clean baseline: {}\n- Findings: {}\n- Marker classes present: {}\n- Evidence-backed suppressions: {}\n- Promotion claims: {}\n\n", outcome.enforce, outcome.require_clean, outcome.findings.len(), outcome.by_class.len(), outcome.suppressions.len(), outcome.promotion_claims.len()));
     s.push_str("## Marker classes\n\n");
     for marker in MARKERS {
         let count = outcome.by_class.get(marker.id).copied().unwrap_or(0);

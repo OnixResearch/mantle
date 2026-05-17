@@ -13,10 +13,11 @@ Usage: ./scripts/check-bootstrap-blocker-inventory.sh [--report-only] [--self-te
 Run the lightweight bootstrap blocker inventory/readiness-drift gate. The gate
 scans repository-controlled bootstrap sources and canonical bootstrap specs,
 then emits JSON and Markdown reports. In the default enforcement mode it fails
-only when a full-source promotion claim is present while blocker markers remain.
+unless the checked baseline stays clean: 0 unsuppressed blocker findings and 0
+promotion claims. Use --report-only for non-gating inventory reports.
 
 Options:
-  --report-only     inventory blockers but do not enforce promotion-drift failure
+  --report-only     inventory blockers but do not enforce clean-baseline failure
   --self-test       run built-in matcher regression tests before scanning
   --json PATH       write JSON report (default: target/bootstrap-blocker-inventory/current.json)
   --markdown PATH   write Markdown report (default: target/bootstrap-blocker-inventory/current.md)
@@ -78,7 +79,7 @@ args=(
 )
 
 if [[ "$enforce" == 1 ]]; then
-  args+=(--enforce)
+  args+=(--enforce --require-clean)
 fi
 if [[ "$self_test" == 1 ]]; then
   args+=(--self-test)

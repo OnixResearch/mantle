@@ -46,7 +46,10 @@
         # workloads from ./examples, the executable transcript tests read
         # checked Markdown fixtures from ./tests/fixtures, and the first checked
         # operator walkthrough lives with the system-config example. Keep these
-        # directories alongside normal Cargo sources for Nix-built checks.
+        # directories alongside normal Cargo sources for Nix-built checks. The
+        # bootstrap blocker inventory gate also needs scripts/ and OpenSpec
+        # bootstrap text so flake checks inspect the same repo-controlled
+        # sources as the local script.
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
           filter =
@@ -57,7 +60,9 @@
             || pkgs.lib.hasPrefix "${toString ./builders}/" (toString path)
             || pkgs.lib.hasPrefix "${toString ./examples}/" (toString path)
             || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" (toString path)
-            || pkgs.lib.hasPrefix "${toString ./docs}/" (toString path);
+            || pkgs.lib.hasPrefix "${toString ./docs}/" (toString path)
+            || pkgs.lib.hasPrefix "${toString ./scripts}/" (toString path)
+            || pkgs.lib.hasPrefix "${toString ./openspec}/" (toString path);
         };
 
         # Common build inputs
@@ -138,6 +143,31 @@
           partitionType = "count";
           SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
         };
+
+        bootstrapBlockerInventory = pkgs.runCommand "bootstrap-blocker-inventory" {
+          nativeBuildInputs = nativeBuildInputs ++ [
+            pkgs.bash
+            pkgs.coreutils
+            rustToolchain
+          ];
+        } ''
+          cp -R ${src} source
+          chmod -R u+w source
+          cd source
+
+          export CRUNCH_NIGHTLY_CARGO="${rustToolchain}/bin/cargo"
+          export CARGO_HOME="$TMPDIR/cargo-home"
+          export RUSTUP_HOME="$TMPDIR/rustup-home"
+
+          bash scripts/check-bootstrap-blocker-inventory.sh \
+            --self-test \
+            --json "$TMPDIR/bootstrap-blocker-inventory.json" \
+            --markdown "$TMPDIR/bootstrap-blocker-inventory.md"
+
+          mkdir -p "$out"
+          cp "$TMPDIR/bootstrap-blocker-inventory.json" "$out/current.json"
+          cp "$TMPDIR/bootstrap-blocker-inventory.md" "$out/current.md"
+        '';
       in
       {
         packages = {
@@ -157,6 +187,7 @@
         checks = {
           inherit crunch;
           mantle-transcript-quality = mantleTranscriptQuality;
+          bootstrap-blocker-inventory = bootstrapBlockerInventory;
           release-determinism-quality = releaseDeterminismQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
 
