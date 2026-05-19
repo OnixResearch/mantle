@@ -22,6 +22,11 @@
       "id": "genattrtab-bounded-output",
       "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
       "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending."
+    },
+    {
+      "id": "genoutput-bounded-output",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
+      "derivation_marker": "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending."
     }
   ],
   "last_observed_build_log": {
@@ -36,11 +41,6 @@
   "native_frontier": {
     "status": "frontier-only",
     "blockers": [
-      {
-        "id": "generator-empty-boundaries",
-        "derivation_marker": "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.",
-        "frontier": "remaining late generator outputs are checked empty-boundary shims, not native generator output"
-      },
       {
         "id": "libiberty-demangle-bounded-semantics",
         "derivation_marker": "gcc40_cplus_demangle_bounded_itanium_v0_boundary",

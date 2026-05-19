@@ -1,19 +1,34 @@
 {
-  "schema": "mantle-gcc40-native-generator-slice-v1",
-  "derivation": "bootstrap/gcc-4.0.ncl",
-  "status": "bounded-native-generator-slice",
-  "selected_generator": "genattrtab",
-  "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.",
-  "bounded_output": {
-    "contract": "genattrtab bounded output must emit deterministic attrtab source with HAVE_ATTR_enabled and gcc40_genattrtab_bounded_output_slice while making no full-generator claim",
-    "output_program_fragment": "#define HAVE_ATTR_enabled 0\nint gcc40_genattrtab_bounded_output_slice(void) { return HAVE_ATTR_enabled; }\n/* Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending. */\n",
-    "transcript": "genattrtab bounded native generator slice\nselected_generator: genattrtab\noutput_contract: bounded attrtab source exposing HAVE_ATTR_enabled and gcc40_genattrtab_bounded_output_slice\nexit_status: 0\nstdout_fragment: int gcc40_genattrtab_bounded_output_slice(void) { return HAVE_ATTR_enabled; }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n",
-    "transcript_digest_blake3": "00b4ac174c69351d12e9b72fc741cb7551bc708e1528b5105676743556175762",
-    "output_digest_blake3": "22bc674b6530944c9377a9d13a3caa6ba40e324ce13ccda8ecfc585b6bdca5c2"
-  },
-  "forbidden_boundary_markers": [
-    "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
-    "gcc40_genattrtab_empty_attrtab_source_boundary"
-  ],
-  "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness"
+    "bounded_outputs": {
+        "genattrtab": {
+            "contract": "genattrtab bounded output must emit deterministic attrtab source with HAVE_ATTR_enabled and gcc40_genattrtab_bounded_output_slice while making no full-generator claim",
+            "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.",
+            "output_digest_blake3": "22bc674b6530944c9377a9d13a3caa6ba40e324ce13ccda8ecfc585b6bdca5c2",
+            "output_program_fragment": "#define HAVE_ATTR_enabled 0\nint gcc40_genattrtab_bounded_output_slice(void) { return HAVE_ATTR_enabled; }\n/* Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending. */\n",
+            "transcript": "genattrtab bounded native generator slice\nselected_generator: genattrtab\noutput_contract: bounded attrtab source exposing HAVE_ATTR_enabled and gcc40_genattrtab_bounded_output_slice\nexit_status: 0\nstdout_fragment: int gcc40_genattrtab_bounded_output_slice(void) { return HAVE_ATTR_enabled; }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n",
+            "transcript_digest_blake3": "00b4ac174c69351d12e9b72fc741cb7551bc708e1528b5105676743556175762"
+        },
+        "genoutput": {
+            "contract": "genoutput bounded output must emit deterministic output source with GCC40_GENOUTPUT_BOUNDED and gcc40_genoutput_bounded_output_slice while making no full-generator claim",
+            "derivation_marker": "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.",
+            "output_digest_blake3": "b26cada2cc9260ac05d25311faec4fbb1fea1e0a67d2dee59b0a77e1bbfb3974",
+            "output_program_fragment": "#define GCC40_GENOUTPUT_BOUNDED 1\nint gcc40_genoutput_bounded_output_slice(void) { return GCC40_GENOUTPUT_BOUNDED; }\n/* Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending. */\n",
+            "transcript": "genoutput bounded native generator slice\nselected_generator: genoutput\noutput_contract: bounded output source exposing GCC40_GENOUTPUT_BOUNDED and gcc40_genoutput_bounded_output_slice\nexit_status: 0\nstdout_fragment: int gcc40_genoutput_bounded_output_slice(void) { return GCC40_GENOUTPUT_BOUNDED; }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n",
+            "transcript_digest_blake3": "e0db2e48b5a679e3e1fbd72d84ee6cb24b16b3f7979feee674ebb9237ab38df5"
+        }
+    },
+    "derivation": "bootstrap/gcc-4.0.ncl",
+    "forbidden_boundary_markers": [
+        "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
+        "gcc40_genattrtab_empty_attrtab_source_boundary",
+        "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.",
+        "gcc40_genoutput_empty_output_source_boundary"
+    ],
+    "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness",
+    "schema": "mantle-gcc40-native-generator-slice-v2",
+    "selected_generators": [
+        "genattrtab",
+        "genoutput"
+    ],
+    "status": "bounded-native-generator-slices"
 }

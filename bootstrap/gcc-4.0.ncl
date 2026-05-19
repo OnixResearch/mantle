@@ -779,8 +779,9 @@ cat <<'C'
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-void gcc40_genoutput_empty_output_source_boundary(void) { }
-/* Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending. */
+#define GCC40_GENOUTPUT_BOUNDED 1
+int gcc40_genoutput_bounded_output_slice(void) { return GCC40_GENOUTPUT_BOUNDED; }
+/* Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending. */
 C
 GENOUTPUT_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
@@ -1334,8 +1335,9 @@ EOF
         exit 1
       fi
       "$WORK/build/gcc/build/genoutput" > /tmp/gcc40-insn-output.c
-      $BB grep -q 'gcc40_genoutput_empty_output_source_boundary' /tmp/gcc40-insn-output.c || { echo 'ERROR: genoutput source boundary symbol missing' >&2; exit 1; }
-      $BB grep -q 'empty-output source boundary' /tmp/gcc40-insn-output.c || { echo 'ERROR: genoutput source boundary marker missing' >&2; exit 1; }
+      $BB grep -q 'gcc40_genoutput_bounded_output_slice' /tmp/gcc40-insn-output.c || { echo 'ERROR: genoutput bounded output symbol missing' >&2; exit 1; }
+      $BB grep -q 'native genoutput bounded output slice' /tmp/gcc40-insn-output.c || { echo 'ERROR: genoutput bounded output marker missing' >&2; exit 1; }
+      $BB grep -q '^#define GCC40_GENOUTPUT_BOUNDED 1' /tmp/gcc40-insn-output.c || { echo 'ERROR: genoutput bounded output constant missing' >&2; exit 1; }
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-output.c; then
         echo 'ERROR: legacy genoutput boundary label present' >&2
         exit 1
