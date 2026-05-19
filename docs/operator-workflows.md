@@ -339,6 +339,9 @@ cargo -Zscript scripts/summarize-real-release-determinism.rs \
 # Inspect bootstrap parity's checked self-build proof descriptor consumption
 mantle --json bootstrap parity-report
 
+# Save and validate a bounded bootstrap parity snapshot receipt under target/
+./scripts/check-bootstrap-parity-snapshot.sh
+
 # Re-check a saved bundle using only bundle-local contents
 mantle release verify target/release-evidence/<release-id>
 
