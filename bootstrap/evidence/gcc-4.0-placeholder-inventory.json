@@ -5,22 +5,22 @@
   "marker_count": 4,
   "markers": [
     {
-      "line": 1255,
+      "line": 1256,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     },
     {
-      "line": 1428,
+      "line": 1430,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     },
     {
-      "line": 1443,
+      "line": 1445,
       "marker": "pass1 bridge",
       "classification": "pass1-driver-boundary"
     },
     {
-      "line": 1520,
+      "line": 1522,
       "marker": "pass1 bridge",
       "classification": "pass1-generator-or-driver-bridge"
     }

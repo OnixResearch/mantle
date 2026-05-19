@@ -190,6 +190,7 @@ const STAGEX_LINEAGE_PROVIDER_RECEIPT: &str = "bootstrap/evidence/stagex-lineage
 const GCC40_PLACEHOLDER_INVENTORY: &str = "bootstrap/evidence/gcc-4.0-placeholder-inventory.json";
 const GCC40_NATIVE_BOUNDARY_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-boundary.json";
 const GCC40_NATIVE_CC1_ARITHMETIC_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json";
+const GCC40_NATIVE_GENERATOR_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-generator-slice.json";
 const GCC47_CXX_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-4.7-cxx-provider-contract.json";
 const GCC10_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-10-provider-contract.json";
 const FULL_MUSL_BINUTILS_PROVIDER_CONTRACT: &str = "bootstrap/evidence/full-musl-binutils-provider-contract.json";
@@ -687,6 +688,7 @@ fn validate_gcc40_placeholder_inventory(project_root: &Path, derivation_path: &P
     }
     validate_gcc40_native_boundary_receipt(project_root, &actual_content)?;
     validate_gcc40_native_cc1_arithmetic_receipt(project_root, &actual_content)?;
+    validate_gcc40_native_generator_receipt(project_root, &actual_content)?;
     Ok(())
 }
 
@@ -835,6 +837,110 @@ fn validate_gcc40_native_cc1_arithmetic_receipt(project_root: &Path, derivation_
     }
 
     Ok(())
+}
+
+fn validate_gcc40_native_generator_receipt(project_root: &Path, derivation_content: &str) -> Result<(), String> {
+    let path = project_root.join(GCC40_NATIVE_GENERATOR_RECEIPT);
+    let content = fs::read_to_string(&path).map_err(|err| {
+        format!(
+            "GCC 4.0 native generator receipt missing `{}` ({err}); expected checked bounded genattrtab receipt",
+            GCC40_NATIVE_GENERATOR_RECEIPT
+        )
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|err| format!("GCC 4.0 native generator receipt is not valid JSON: {err}"))?;
+    require_gcc40_generator_string(&value, "schema", "mantle-gcc40-native-generator-slice-v1")?;
+    require_gcc40_generator_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
+    require_gcc40_generator_string(&value, "status", "bounded-native-generator-slice")?;
+    require_gcc40_generator_string(&value, "selected_generator", "genattrtab")?;
+    require_gcc40_generator_string(
+        &value,
+        "parity_effect",
+        "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness",
+    )?;
+
+    let marker = value
+        .get("derivation_marker")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "GCC 4.0 native generator receipt missing string field `derivation_marker`".to_string())?;
+    require_gcc40_derivation_marker(derivation_content, marker)?;
+
+    let output = value
+        .get("bounded_output")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| "GCC 4.0 native generator receipt missing object field `bounded_output`".to_string())?;
+    let contract = require_gcc40_generator_object_string(output, "contract")?;
+    if !contract.contains("genattrtab") || !contract.contains("bounded") {
+        return Err("GCC 4.0 native generator receipt contract must describe a bounded genattrtab output".to_string());
+    }
+    let fragment = require_gcc40_generator_object_string(output, "output_program_fragment")?;
+    for required in ["gcc40_genattrtab_bounded_output_slice", "HAVE_ATTR_enabled"] {
+        if !fragment.contains(required) {
+            return Err(format!(
+                "GCC 4.0 native generator receipt output fragment missing required bounded fragment `{required}`"
+            ));
+        }
+    }
+    require_gcc40_generator_object_string(output, "output_digest_blake3")?;
+    let transcript = require_gcc40_generator_object_string(output, "transcript")?;
+    let expected_digest = require_gcc40_generator_object_string(output, "transcript_digest_blake3")?;
+    let actual_digest = blake3::hash(transcript.as_bytes()).to_hex().to_string();
+    if expected_digest != actual_digest {
+        return Err(format!(
+            "GCC 4.0 native generator receipt transcript digest is `{expected_digest}`, recomputed `{actual_digest}`"
+        ));
+    }
+
+    let forbidden = value.get("forbidden_boundary_markers").and_then(|v| v.as_array()).ok_or_else(|| {
+        "GCC 4.0 native generator receipt missing array field `forbidden_boundary_markers`".to_string()
+    })?;
+    if forbidden.is_empty() {
+        return Err("GCC 4.0 native generator receipt forbidden boundary marker list must not be empty".to_string());
+    }
+    for forbidden_marker in forbidden {
+        let forbidden_marker = forbidden_marker
+            .as_str()
+            .ok_or_else(|| "GCC 4.0 native generator receipt forbidden boundary markers must be strings".to_string())?;
+        if forbidden_marker.trim().is_empty() {
+            return Err("GCC 4.0 native generator receipt forbidden boundary markers must not be empty".to_string());
+        }
+        if derivation_content.contains(forbidden_marker) {
+            return Err(format!(
+                "GCC 4.0 native generator receipt derivation still contains forbidden empty-boundary marker `{forbidden_marker}`"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn require_gcc40_generator_string<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+    expected: &str,
+) -> Result<&'a str, String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("GCC 4.0 native generator receipt missing string field `{field}`"))?;
+    if actual != expected {
+        return Err(format!("GCC 4.0 native generator receipt `{field}` is `{actual}`, expected `{expected}`"));
+    }
+    Ok(actual)
+}
+
+fn require_gcc40_generator_object_string<'a>(
+    value: &'a serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<&'a str, String> {
+    let actual = value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("GCC 4.0 native generator receipt missing string field `{field}`"))?;
+    if actual.trim().is_empty() {
+        return Err(format!("GCC 4.0 native generator receipt `{field}` must not be empty"));
+    }
+    Ok(actual)
 }
 
 fn require_gcc40_arithmetic_string<'a>(
@@ -1813,8 +1919,8 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
             semantic_evidence: "bounded libgcc/driver/cc1 arithmetic and generator boundary smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, and native-cc1 arithmetic receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 arithmetic receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records one no-TinyCC-delegation arithmetic slice, and generator outputs are only checked empty-machine/disabled-checking boundaries, not native generator correctness",
+            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 arithmetic receipt, and native-generator receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 arithmetic receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records one no-TinyCC-delegation arithmetic slice, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records one bounded genattrtab output slice, and remaining generator outputs are still checked boundary shims, not native generator correctness",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
@@ -1978,8 +2084,8 @@ mod tests {
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
             semantic_evidence: "bounded libgcc/driver/cc1 arithmetic and generator boundary smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, and native-cc1 arithmetic receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 arithmetic receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records one no-TinyCC-delegation arithmetic slice, and generator outputs are only checked empty-machine/disabled-checking boundaries, not native generator correctness",
+            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 arithmetic receipt, and native-generator receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 arithmetic receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records one no-TinyCC-delegation arithmetic slice, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records one bounded genattrtab output slice, and remaining generator outputs are still checked boundary shims, not native generator correctness",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         }
     }
@@ -2221,6 +2327,11 @@ mod tests {
       "id": "cc1-arithmetic-control-flow",
       "receipt": "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json",
       "derivation_marker": "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input."
+    },
+    {
+      "id": "genattrtab-bounded-output",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
+      "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending."
     }
   ],
   "last_observed_build_log": {
@@ -2232,8 +2343,8 @@ mod tests {
     "blockers": [
       {
         "id": "generator-empty-boundaries",
-        "derivation_marker": "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
-        "frontier": "late generator outputs are checked empty-boundary shims, not native generator output"
+        "derivation_marker": "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.",
+        "frontier": "remaining late generator outputs are checked empty-boundary shims, not native generator output"
       },
       {
         "id": "libiberty-demangle-bounded-semantics",
@@ -2277,6 +2388,47 @@ mod tests {
 }}
 "#,
             serde_json::to_string(input_program).unwrap(),
+            serde_json::to_string(transcript).unwrap(),
+            transcript_digest,
+            output_digest
+        );
+        if !mutation.is_empty() {
+            let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
+            assert_eq!(parts.len(), 2, "mutation must be old=>new");
+            content = content.replace(parts[0], parts[1]);
+        }
+        fs::write(path, content).unwrap();
+    }
+
+    fn write_gcc40_native_generator_receipt(root: &Path, mutation: &str) {
+        let path = root.join(GCC40_NATIVE_GENERATOR_RECEIPT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let fragment = "#define HAVE_ATTR_enabled 0\nint gcc40_genattrtab_bounded_output_slice(void) { return HAVE_ATTR_enabled; }\n/* Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending. */\n";
+        let transcript = "genattrtab bounded native generator slice\nselected_generator: genattrtab\noutput_contract: bounded attrtab source exposing HAVE_ATTR_enabled and gcc40_genattrtab_bounded_output_slice\nexit_status: 0\nstdout_fragment: int gcc40_genattrtab_bounded_output_slice(void) { return HAVE_ATTR_enabled; }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n";
+        let transcript_digest = blake3::hash(transcript.as_bytes()).to_hex().to_string();
+        let output_digest = blake3::hash(fragment.as_bytes()).to_hex().to_string();
+        let mut content = format!(
+            r#"{{
+  "schema": "mantle-gcc40-native-generator-slice-v1",
+  "derivation": "bootstrap/gcc-4.0.ncl",
+  "status": "bounded-native-generator-slice",
+  "selected_generator": "genattrtab",
+  "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.",
+  "bounded_output": {{
+    "contract": "genattrtab bounded output must emit deterministic attrtab source with HAVE_ATTR_enabled and gcc40_genattrtab_bounded_output_slice while making no full-generator claim",
+    "output_program_fragment": {},
+    "transcript": {},
+    "transcript_digest_blake3": "{}",
+    "output_digest_blake3": "{}"
+  }},
+  "forbidden_boundary_markers": [
+    "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
+    "gcc40_genattrtab_empty_attrtab_source_boundary"
+  ],
+  "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness"
+}}
+"#,
+            serde_json::to_string(fragment).unwrap(),
             serde_json::to_string(transcript).unwrap(),
             transcript_digest,
             output_digest
@@ -2556,13 +2708,15 @@ mod tests {
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
-            "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.\n",
+            "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
+            "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.\n",
             "gcc40_cplus_demangle_bounded_itanium_v0_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -2631,6 +2785,7 @@ mod tests {
         write_gcc40_placeholder_inventory(dir.path(), content);
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -2653,12 +2808,13 @@ mod tests {
         write_gcc40_placeholder_inventory(dir.path(), content);
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.notes.contains("GCC 4.0 native boundary receipt marker not found"));
-        assert!(row.notes.contains("empty-attrtab source boundary"));
+        assert!(row.notes.contains("empty-output source boundary"));
     }
 
     #[test]
@@ -2671,13 +2827,15 @@ mod tests {
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
-            "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.\n",
+            "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
+            "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.\n",
             "gcc40_cplus_demangle_bounded_itanium_v0_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "b110bc20=>00000000");
+        write_gcc40_native_generator_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -2695,18 +2853,101 @@ mod tests {
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
-            "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.\n",
+            "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
+            "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.\n",
             "gcc40_cplus_demangle_bounded_itanium_v0_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "\"$TCC/bin/tcc\"=>\"cc1 bounded\"");
+        write_gcc40_native_generator_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.notes.contains("forbidden TinyCC delegation marker"));
+    }
+
+
+    #[test]
+    fn gcc40_native_generator_receipt_missing_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = concat!(
+            "make -j1 -C \"$dir\"\n",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Mantle pass1 bridge) 4.0.4\n",
+            "Crunch GCC 4.0 pass1 cc1 object boundary\n",
+            "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
+            "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
+            "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.\n",
+            "gcc40_cplus_demangle_bounded_itanium_v0_boundary\n",
+        );
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("GCC 4.0 native generator receipt missing"));
+    }
+
+    #[test]
+    fn gcc40_native_generator_receipt_digest_drift_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = concat!(
+            "make -j1 -C \"$dir\"\n",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Mantle pass1 bridge) 4.0.4\n",
+            "Crunch GCC 4.0 pass1 cc1 object boundary\n",
+            "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
+            "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
+            "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.\n",
+            "gcc40_cplus_demangle_bounded_itanium_v0_boundary\n",
+        );
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "00b4ac17=>00000000");
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("GCC 4.0 native generator receipt transcript digest"));
+    }
+
+    #[test]
+    fn gcc40_native_generator_receipt_unsupported_schema_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = concat!(
+            "make -j1 -C \"$dir\"\n",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Mantle pass1 bridge) 4.0.4\n",
+            "Crunch GCC 4.0 pass1 cc1 object boundary\n",
+            "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
+            "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
+            "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.\n",
+            "gcc40_cplus_demangle_bounded_itanium_v0_boundary\n",
+        );
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(
+            dir.path(),
+            "mantle-gcc40-native-generator-slice-v1=>mantle-gcc40-native-generator-slice-v0",
+        );
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("expected `mantle-gcc40-native-generator-slice-v1`"));
     }
 
     #[test]
@@ -3454,11 +3695,12 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
 
-        assert!(content.contains("gcc40_genattrtab_empty_attrtab_source_boundary"));
-        assert!(content.contains("empty-attrtab source boundary"));
+        assert!(content.contains("gcc40_genattrtab_bounded_output_slice"));
+        assert!(content.contains("native genattrtab bounded output slice"));
         assert!(content.contains("ERROR: genattrtab boundary executable missing"));
-        assert!(content.contains("ERROR: genattrtab source boundary symbol missing"));
-        assert!(content.contains("ERROR: genattrtab source boundary marker missing"));
+        assert!(content.contains("ERROR: genattrtab bounded output symbol missing"));
+        assert!(content.contains("ERROR: genattrtab bounded output marker missing"));
+        assert!(content.contains("ERROR: genattrtab bounded enabled attribute missing"));
         assert!(content.contains("generated_bootstrap_s[t]ub"));
         assert!(!content.contains("void generated_bootstrap_stub(void) { }"));
     }

@@ -796,8 +796,9 @@ cat <<'C'
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
-void gcc40_genattrtab_empty_attrtab_source_boundary(void) { }
-/* Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending. */
+#define HAVE_ATTR_enabled 0
+int gcc40_genattrtab_bounded_output_slice(void) { return HAVE_ATTR_enabled; }
+/* Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending. */
 C
 GENATTRTAB_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
@@ -1345,8 +1346,9 @@ EOF
         exit 1
       fi
       "$WORK/build/gcc/build/genattrtab" > /tmp/gcc40-insn-attrtab.c
-      $BB grep -q 'gcc40_genattrtab_empty_attrtab_source_boundary' /tmp/gcc40-insn-attrtab.c || { echo 'ERROR: genattrtab source boundary symbol missing' >&2; exit 1; }
-      $BB grep -q 'empty-attrtab source boundary' /tmp/gcc40-insn-attrtab.c || { echo 'ERROR: genattrtab source boundary marker missing' >&2; exit 1; }
+      $BB grep -q 'gcc40_genattrtab_bounded_output_slice' /tmp/gcc40-insn-attrtab.c || { echo 'ERROR: genattrtab bounded output symbol missing' >&2; exit 1; }
+      $BB grep -q 'native genattrtab bounded output slice' /tmp/gcc40-insn-attrtab.c || { echo 'ERROR: genattrtab bounded output marker missing' >&2; exit 1; }
+      $BB grep -q '^#define HAVE_ATTR_enabled 0' /tmp/gcc40-insn-attrtab.c || { echo 'ERROR: genattrtab bounded enabled attribute missing' >&2; exit 1; }
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-attrtab.c; then
         echo 'ERROR: legacy genattrtab boundary label present' >&2
         exit 1

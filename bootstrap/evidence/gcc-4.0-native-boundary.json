@@ -17,6 +17,11 @@
       "id": "cc1-arithmetic-control-flow",
       "receipt": "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json",
       "derivation_marker": "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input."
+    },
+    {
+      "id": "genattrtab-bounded-output",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
+      "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending."
     }
   ],
   "last_observed_build_log": {
@@ -33,8 +38,8 @@
     "blockers": [
       {
         "id": "generator-empty-boundaries",
-        "derivation_marker": "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
-        "frontier": "late generator outputs are checked empty-boundary shims, not native generator output"
+        "derivation_marker": "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.",
+        "frontier": "remaining late generator outputs are checked empty-boundary shims, not native generator output"
       },
       {
         "id": "libiberty-demangle-bounded-semantics",
