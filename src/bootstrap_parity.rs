@@ -809,9 +809,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v5" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v6" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v5`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v6`"
         ));
     }
     for field in [
@@ -842,11 +842,18 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "cparse_undef6_machmode_lines_40 passes",
         "cparse_undef6_tree_lines_28 passes",
         "cparse_undef6_tree_lines_36 fails",
+        "cparse_undef6_machmode_lines_120 passes",
+        "cparse_undef6_tree_lines_80 passes",
+        "cparse_undef6_tree_lines_120 passes",
+        "cparse_undef6_tree_lines_160 passes",
+        "cparse_undef6_tree_lines_220 passes",
+        "cparse_undef6_tree_builtin_empty passes",
         "cparse_undef6_tree_builtin_complex_arith_only passes",
+        "make: *** [c-parse.o] Error 1",
     ] {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v5 fragment `{required_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v6 fragment `{required_fragment}`"
             ));
         }
     }
@@ -855,10 +862,11 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "forcing the copied fd_bad branch false reaches fdopen pre/post markers",
         "autohost_defines_84_system fails while autohost_defines_84_skip84_system",
         "autohost_defines_97_undef_need64_gid_system segfaults",
+        "this narrows the diagnostic frontier to generated-header prefix/balance behavior",
     ] {
         if observed_frontier.contains(stale_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier contains stale pre-v5 frontier fragment `{stale_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier contains stale pre-v6 frontier fragment `{stale_fragment}`"
             ));
         }
     }
@@ -3192,13 +3200,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v5",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v6",
     "prior_frontier": "source-frontier v4 narrowed the c-parse diagnostic to the auto-host.h macro window; six targeted undefines for NEED_64BIT_HOST_WIDE_INT, gid_t, inline, rlim_t, ssize_t, and uid_t advance through the autohost/system.h boundary",
     "attempted_probe": "bounded c-parse generated-header probe from bootstrap/diag-gcc40-c-parse-boundary.ncl using the six-undef autohost configuration and representative insn-modes.h, machmode.h, and tree.h prefix/include probes",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
     "observed_result": "narrowed-stable-blocker",
-    "observed_frontier": "the focused c-parse make attempt reaches the real c-parse.o compile, then six-undef autohost probes pass through autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system, autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system, cparse_config_undef6_system, cparse_undef6_inc_system, cparse_undef6_inc_coretypes, and cparse_undef6_inc_tm; generated-header probes then show cparse_undef6_insn_modes_include_only passes, cparse_undef6_insn_modes_lines_20 fails while cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails while cparse_undef6_machmode_lines_40 passes, cparse_undef6_tree_lines_28 passes while cparse_undef6_tree_lines_36 fails, and cparse_undef6_tree_builtin_complex_arith_only passes; this narrows the diagnostic frontier to generated-header prefix/balance behavior but still does not prove the native GCC 4.0 c-parse/cc1 source build",
-    "retirement_condition": "replace when the diagnostic handoff advances beyond bounded generated-header prefix probes to a real native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
+    "observed_frontier": "the focused c-parse make attempt reaches the real c-parse.o compile and still fails with make: *** [c-parse.o] Error 1 after generated config.h normalization; six-undef autohost probes pass through autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system, autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system, cparse_config_undef6_system, cparse_undef6_inc_system, cparse_undef6_inc_coretypes, and cparse_undef6_inc_tm; generated-header sweep probes show cparse_undef6_insn_modes_include_only passes, cparse_undef6_insn_modes_lines_20 fails while cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails while cparse_undef6_machmode_lines_40 passes and cparse_undef6_machmode_lines_60 passes, cparse_undef6_machmode_lines_80 passes, cparse_undef6_machmode_lines_100 passes, and cparse_undef6_machmode_lines_120 passes; cparse_undef6_tree_lines_28 passes while cparse_undef6_tree_lines_36 fails, but cparse_undef6_tree_lines_80 passes, cparse_undef6_tree_lines_120 passes, cparse_undef6_tree_lines_160 passes, cparse_undef6_tree_lines_166 passes, cparse_undef6_tree_lines_177 passes, cparse_undef6_tree_lines_180 passes, cparse_undef6_tree_lines_207 passes, cparse_undef6_tree_lines_212 passes, and cparse_undef6_tree_lines_220 passes; cparse_undef6_tree_builtin_empty passes and cparse_undef6_tree_builtin_complex_arith_only passes; this narrows the diagnostic frontier to the remaining real c-parse.o/full-header source-build boundary but still does not prove the native GCC 4.0 c-parse/cc1 source build",
+    "retirement_condition": "replace when the diagnostic handoff advances beyond the full generated-header sweep and real c-parse.o failure to a native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
     "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
     "diagnostic_markers": [
       "make_autohost_define_undef6_probe autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system 120 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t",
@@ -3212,8 +3220,22 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
       "make_insn_modes_header_prefix_config_undef6 cparse_undef6_insn_modes_lines_40 40",
       "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_20 20",
       "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_40 40",
+      "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_60 60",
+      "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_80 80",
+      "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_100 100",
+      "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_120 120",
       "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_28 28",
       "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_36 36",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_80 80",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_120 120",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_160 160",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_166 166",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_177 177",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_180 180",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_207 207",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_212 212",
+      "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_220 220",
+      "make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_empty 'enum built_in_function {",
       "make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_arith_only"
     ],
     "non_claim": "diagnostic frontier evidence only; does not prove native GCC 4.0 compiler correctness"
@@ -3250,8 +3272,22 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "make_insn_modes_header_prefix_config_undef6 cparse_undef6_insn_modes_lines_40 40\\n",
             "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_20 20\\n",
             "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_40 40\\n",
+            "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_60 60\\n",
+            "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_80 80\\n",
+            "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_100 100\\n",
+            "make_machmode_header_balanced_config_undef6 cparse_undef6_machmode_lines_120 120\\n",
             "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_28 28\\n",
             "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_36 36\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_80 80\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_120 120\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_160 160\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_166 166\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_177 177\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_180 180\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_207 207\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_212 212\\n",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_220 220\\n",
+            "make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_empty 'enum built_in_function {\\n",
             "make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_complex_arith_only\\n",
         )
         .to_string();
@@ -4199,7 +4235,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v5=>mantle-gcc40-native-cc1-source-frontier-reduction-v3",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v6=>mantle-gcc40-native-cc1-source-frontier-reduction-v5",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4240,13 +4276,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "the focused c-parse make attempt reaches the real c-parse.o compile, then six-undef autohost probes pass through autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system, autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system, cparse_config_undef6_system, cparse_undef6_inc_system, cparse_undef6_inc_coretypes, and cparse_undef6_inc_tm; generated-header probes then show cparse_undef6_insn_modes_include_only passes, cparse_undef6_insn_modes_lines_20 fails while cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails while cparse_undef6_machmode_lines_40 passes, cparse_undef6_tree_lines_28 passes while cparse_undef6_tree_lines_36 fails, and cparse_undef6_tree_builtin_complex_arith_only passes; this narrows the diagnostic frontier to generated-header prefix/balance behavior but still does not prove the native GCC 4.0 c-parse/cc1 source build=>forcing the copied fd_bad branch false reaches fdopen pre/post markers 4/6, the ELF output-format marker 5, tcc_output_file return marker Y, and post-output marker w for both compile_empty and cparse_decl0_trace_valid_var_semicolon rc=0; this retires fd_bad as the recorded diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build",
+            "cparse_undef6_tree_lines_220 passes=>forcing the copied fd_bad branch false reaches fdopen pre/post markers 4/6, the ELF output-format marker 5, tcc_output_file return marker Y, and post-output marker w for both compile_empty and cparse_decl0_trace_valid_var_semicolon rc=0",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("observed_frontier missing required v5 fragment"), "{}", row.notes);
+        assert!(row.notes.contains("observed_frontier missing required v6 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 
@@ -4263,7 +4299,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
         write_gcc40_cparse_diagnostic_derivation(
             dir.path(),
-            "make_insn_modes_header_prefix_config_undef6 cparse_undef6_insn_modes_lines_40 40=>make_insn_modes_header_prefix_config_undef6 missing_insn_modes_lines_40",
+            "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_220 220=>make_tree_header_balanced_config_undef6 missing_tree_lines_220",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());

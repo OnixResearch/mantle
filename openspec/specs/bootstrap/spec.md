@@ -668,6 +668,22 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN the row MUST remain a blocker
 - AND the row notes the specific failed native source-frontier evidence check
 
+#### Scenario: GCC 4.0 native cc1 c-parse full generated-header frontier is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-full-generated-header-frontier]]
+
+- GIVEN `bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json` uses source-frontier schema `mantle-gcc40-native-cc1-source-frontier-reduction-v6`
+- AND the evidence records the focused `c-parse.o` make attempt advancing beyond v5 representative generated-header prefix probes into later `machmode.h`, wider `tree.h`, builtin enum, and real `c-parse.o` make probes
+- AND the evidence names exact diagnostic markers from `bootstrap/diag-gcc40-c-parse-boundary.ncl` for those probes
+- WHEN the bootstrap parity report evaluates the `gcc.4.0` row
+- THEN the source-frontier evidence check passes
+- AND `gcc.4.0` remains evidence-backed `partial` without completing live-bootstrap, Guix, or StageX parity
+
+#### Scenario: GCC 4.0 native cc1 c-parse full generated-header frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-full-generated-header-frontier-drift]]
+
+- GIVEN the source-frontier evidence uses a stale schema, omits the later generated-header sweep diagnostic markers, omits the real `c-parse.o` make failure marker, or references diagnostic markers absent from the diagnostic derivation
+- WHEN the bootstrap parity report evaluates the `gcc.4.0` row
+- THEN the row MUST remain a blocker
+- AND the row notes the specific failed native source-frontier evidence check
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed
