@@ -1,0 +1,20 @@
+{
+  "schema": "mantle-gcc40-native-cc1-build-frontier-v1",
+  "derivation": "bootstrap/gcc-4.0.ncl",
+  "status": "frontier-only",
+  "native_attempt": {
+    "make_marker": "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true",
+    "diagnostic_marker": "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge",
+    "pass1_bridge_marker": "the validated TinyCC handoff. This remains a bridge until native cc1 builds."
+  },
+  "source_frontier_markers": [
+    "under the c-parse flags deterministically segfaults TinyCC after that",
+    "rewrites before system.h trigger deterministic TinyCC segfaults.",
+    "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
+  ],
+  "retirement_condition": {
+    "replacement_evidence": "retire when GCC 4.0 native cc1 source build evidence supersedes the pass1 bridge boundary",
+    "non_claim": "frontier-only receipt; does not prove native GCC 4.0 compiler correctness"
+  },
+  "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness"
+}

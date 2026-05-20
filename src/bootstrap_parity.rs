@@ -192,6 +192,7 @@ const GCC40_NATIVE_BOUNDARY_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-b
 const GCC40_NATIVE_CC1_ARITHMETIC_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json";
 const GCC40_NATIVE_GENERATOR_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-generator-slice.json";
 const GCC40_NATIVE_DEMANGLE_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-demangle-slice.json";
+const GCC40_NATIVE_CC1_BUILD_FRONTIER_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json";
 const GCC47_CXX_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-4.7-cxx-provider-contract.json";
 const GCC10_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-10-provider-contract.json";
 const FULL_MUSL_BINUTILS_PROVIDER_CONTRACT: &str = "bootstrap/evidence/full-musl-binutils-provider-contract.json";
@@ -691,6 +692,7 @@ fn validate_gcc40_placeholder_inventory(project_root: &Path, derivation_path: &P
     validate_gcc40_native_cc1_arithmetic_receipt(project_root, &actual_content)?;
     validate_gcc40_native_generator_receipt(project_root, &actual_content)?;
     validate_gcc40_native_demangle_receipt(project_root, &actual_content)?;
+    validate_gcc40_native_cc1_build_frontier_receipt(project_root, &actual_content)?;
     Ok(())
 }
 
@@ -763,6 +765,53 @@ fn validate_gcc40_native_boundary_receipt(project_root: &Path, derivation_conten
         "parity_effect",
         "evidence-backed partial; does not prove native gcc.4.0 correctness",
     )?;
+    Ok(())
+}
+
+fn validate_gcc40_native_cc1_build_frontier_receipt(
+    project_root: &Path,
+    derivation_content: &str,
+) -> Result<(), String> {
+    let path = project_root.join(GCC40_NATIVE_CC1_BUILD_FRONTIER_RECEIPT);
+    let content = fs::read_to_string(&path).map_err(|err| {
+        format!(
+            "GCC 4.0 native cc1 build-frontier receipt missing `{}` ({err}); expected checked native source-build frontier receipt",
+            GCC40_NATIVE_CC1_BUILD_FRONTIER_RECEIPT
+        )
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|err| format!("GCC 4.0 native cc1 build-frontier receipt is not valid JSON: {err}"))?;
+    require_gcc40_boundary_string(&value, "schema", "mantle-gcc40-native-cc1-build-frontier-v1")?;
+    require_gcc40_boundary_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
+    require_gcc40_boundary_string(&value, "status", "frontier-only")?;
+    require_gcc40_boundary_string(
+        &value,
+        "parity_effect",
+        "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
+    )?;
+    let native_attempt = require_gcc40_boundary_object(&value, "native_attempt")?;
+    for field in ["make_marker", "diagnostic_marker", "pass1_bridge_marker"] {
+        let marker = require_gcc40_boundary_object_string(native_attempt, field)?;
+        require_gcc40_derivation_marker(derivation_content, marker)?;
+    }
+    let source_frontier = value.get("source_frontier_markers").and_then(|v| v.as_array()).ok_or_else(|| {
+        "GCC 4.0 native cc1 build-frontier receipt missing array field `source_frontier_markers`".to_string()
+    })?;
+    if source_frontier.is_empty() {
+        return Err("GCC 4.0 native cc1 build-frontier receipt `source_frontier_markers` must not be empty".to_string());
+    }
+    for marker in source_frontier {
+        let marker = marker
+            .as_str()
+            .ok_or_else(|| "GCC 4.0 native cc1 build-frontier source frontier marker must be a string".to_string())?;
+        require_gcc40_derivation_marker(derivation_content, marker)?;
+    }
+    let retirement = require_gcc40_boundary_object(&value, "retirement_condition")?;
+    let replacement = require_gcc40_boundary_object_string(retirement, "replacement_evidence")?;
+    if replacement.trim().is_empty() {
+        return Err("GCC 4.0 native cc1 build-frontier retirement replacement_evidence must not be empty".to_string());
+    }
+    require_gcc40_boundary_object_string(retirement, "non_claim")?;
     Ok(())
 }
 
@@ -2213,8 +2262,8 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
             semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars and generator boundary smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, and native-generator receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, and local-variable slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, while remaining native generator/compiler correctness is still unproven",
+            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-generator receipt, and native-cc1 build-frontier receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, and local-variable slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers, while remaining native generator/compiler correctness is still unproven",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
@@ -2378,8 +2427,8 @@ mod tests {
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
             semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars and generator boundary smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, and native-generator receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, and local-variable slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, while remaining native generator/compiler correctness is still unproven",
+            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-generator receipt, and native-cc1 build-frontier receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, and local-variable slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers, while remaining native generator/compiler correctness is still unproven",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         }
     }
@@ -2891,6 +2940,39 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         fs::write(path, content).unwrap();
     }
 
+    fn write_gcc40_native_cc1_build_frontier_receipt(root: &Path, mutation: &str) {
+        let path = root.join(GCC40_NATIVE_CC1_BUILD_FRONTIER_RECEIPT);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut content = r#"{
+  "schema": "mantle-gcc40-native-cc1-build-frontier-v1",
+  "derivation": "bootstrap/gcc-4.0.ncl",
+  "status": "frontier-only",
+  "native_attempt": {
+    "make_marker": "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true",
+    "diagnostic_marker": "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge",
+    "pass1_bridge_marker": "the validated TinyCC handoff. This remains a bridge until native cc1 builds."
+  },
+  "source_frontier_markers": [
+    "under the c-parse flags deterministically segfaults TinyCC after that",
+    "rewrites before system.h trigger deterministic TinyCC segfaults.",
+    "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
+  ],
+  "retirement_condition": {
+    "replacement_evidence": "retire when GCC 4.0 native cc1 source build evidence supersedes the pass1 bridge boundary",
+    "non_claim": "frontier-only receipt; does not prove native GCC 4.0 compiler correctness"
+  },
+  "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness"
+}
+"#
+        .to_string();
+        if !mutation.is_empty() {
+            let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
+            assert_eq!(parts.len(), 2, "mutation must be old=>new");
+            content = content.replace(parts[0], parts[1]);
+        }
+        fs::write(path, content).unwrap();
+    }
+
     fn write_gcc47_cxx_provider_contract(root: &Path, markers: &[&str]) {
         let path = root.join(GCC47_CXX_PROVIDER_CONTRACT);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -3164,6 +3246,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3171,6 +3258,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -3241,6 +3329,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -3259,6 +3348,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3266,6 +3360,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -3289,6 +3384,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3296,6 +3396,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "b110bc20=>00000000");
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -3319,6 +3420,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3326,6 +3432,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "logical-boolean-control-flow-v2=>missing-logical-v2");
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -3349,6 +3456,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3356,6 +3468,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "\"$TCC/bin/tcc\"=>\"cc1 bounded\"");
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -3379,6 +3492,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3407,6 +3525,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3436,6 +3559,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3465,6 +3593,11 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
             "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3586,6 +3719,87 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
 
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.notes.contains("does not prove native/full GCC 4.0 demangler correctness"));
+    }
+
+    #[test]
+    fn gcc40_native_cc1_build_frontier_receipt_missing_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = valid_gcc40_native_demangle_content();
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
+        write_gcc40_native_demangle_receipt(dir.path(), "");
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("GCC 4.0 native cc1 build-frontier receipt missing"));
+    }
+
+    #[test]
+    fn gcc40_native_cc1_build_frontier_marker_drift_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = valid_gcc40_native_demangle_content();
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
+        write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(
+            dir.path(),
+            "under the c-parse flags deterministically segfaults TinyCC after that=>missing native source frontier marker",
+        );
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("GCC 4.0 native boundary receipt marker not found"));
+        assert!(row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn gcc40_native_cc1_build_frontier_missing_fields_fail_closed() {
+        let dir = tempdir().unwrap();
+        let content = valid_gcc40_native_demangle_content();
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
+        write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(
+            dir.path(),
+            "\"source_frontier_markers\"=>\"stale_source_frontier_markers\"",
+        );
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn gcc40_native_cc1_build_frontier_parity_overclaim_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = valid_gcc40_native_demangle_content();
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
+        write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(
+            dir.path(),
+            "evidence-backed partial; does not prove native/full GCC 4.0 correctness=>full native GCC 4.0 correctness proven",
+        );
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("does not prove native/full GCC 4.0 correctness"));
     }
 
     #[test]
