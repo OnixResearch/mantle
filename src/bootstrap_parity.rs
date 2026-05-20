@@ -809,9 +809,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v3" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v4" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v3`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v4`"
         ));
     }
     for field in [
@@ -832,16 +832,29 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         ));
     }
     let observed_frontier = require_gcc40_boundary_object_string(reduction, "observed_frontier")?;
-    for required_fragment in ["fdopen", "tcc_output_file return marker Y", "post-output marker w"] {
+    for required_fragment in [
+        "c-parse.o compile",
+        "autohost_defines_84_system fails",
+        "NEED_64BIT_HOST_WIDE_INT",
+        "autohost_defines_97_undef_need64_gid_system segfaults",
+        "autohost_defines_97_undef_need64_gid_inline_system passes",
+        "autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system passes",
+    ] {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v3 fragment `{required_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v4 fragment `{required_fragment}`"
             ));
         }
     }
-    if observed_frontier.contains("remaining runtime frontier is the copied fd_bad branch") {
-        return Err("GCC 4.0 native cc1 source-frontier reduction observed_frontier is stale v2 fd_bad-only evidence"
-            .to_string());
+    for stale_fragment in [
+        "remaining runtime frontier is the copied fd_bad branch",
+        "forcing the copied fd_bad branch false reaches fdopen pre/post markers",
+    ] {
+        if observed_frontier.contains(stale_fragment) {
+            return Err(format!(
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier contains stale pre-v4 frontier fragment `{stale_fragment}`"
+            ));
+        }
     }
     let probe_marker = require_gcc40_boundary_object_string(reduction, "probe_marker")?;
     require_gcc40_derivation_marker(derivation_content, probe_marker)?;
@@ -3173,24 +3186,23 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v3",
-    "prior_frontier": "source-frontier v2 narrowed the TinyCC/Mes c-parse diagnostic seam to native387-disabled compile-only success plus musl-shim decl0 reaching cparse_decl0_trace_valid_var_semicolon, with the copied fd_bad branch as the last recorded runtime frontier",
-    "attempted_probe": "bounded diagnostic fd_bad/fdopen/output-return probe from bootstrap/diag-gcc40-c-parse-boundary.ncl; the copied fd_bad branch is forced false only inside the diagnostic instrumented compiler",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v4",
+    "prior_frontier": "source-frontier v3 retired the copied fd_bad branch by proving the bounded diagnostic compiler reaches fdopen, ELF output-format, tcc_output_file return marker Y, and post-output marker w",
+    "attempted_probe": "bounded c-parse auto-host macro-boundary probe from bootstrap/diag-gcc40-c-parse-boundary.ncl using the generated auto-host.h define window plus targeted undef probes before system.h",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
     "observed_result": "narrowed-stable-blocker",
-    "observed_frontier": "forcing the copied fd_bad branch false reaches fdopen pre/post markers 4/6, the ELF output-format marker 5, tcc_output_file return marker Y, and post-output marker w for both compile_empty and cparse_decl0_trace_valid_var_semicolon rc=0; this retires fd_bad as the recorded diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build",
-    "retirement_condition": "replace when the diagnostic handoff advances beyond bounded fdopen/output-return probes to a real native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
+    "observed_frontier": "the focused c-parse make attempt reaches the real c-parse.o compile, then auto-host define probes show autohost_defines_84_system fails while autohost_defines_84_skip84_system and autohost_defines_84_undef_need64_system pass, identifying NEED_64BIT_HOST_WIDE_INT as a bounded include-recursion/error frontier; autohost_defines_96_undef_need64_gid_system passes, autohost_defines_97_undef_need64_gid_system segfaults when inline is added, autohost_defines_97_undef_need64_gid_inline_system passes after undefining inline, and autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system passes; this narrows the diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build",
+    "retirement_condition": "replace when the diagnostic handoff advances beyond bounded auto-host.h macro-window probes to a real native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
     "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
     "diagnostic_markers": [
-      "compile_decl0_prepart native387_disabled \"$flags_name\" tccgen.c",
-      "compile_decl0_prepart native387_disabled \"$flags_name\" libtcc.c",
-      "run_decl0_build_phase link-object-musl-shims",
-      "make_cparse_plain_exact_with_compiler \"$decl0_tcc\" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'",
-      "sub(/file_type;/, \"file_type, fd_bad;\")",
-      "if (in_wr && $0 ~ /^[[:space:]]*if \\(fd < 0\\)/)",
-      "if (in_wr && $0 ~ /^[[:space:]]*f = fdopen/)",
-      "if (in_wr && $0 ~ /^[[:space:]]*if \\(s1->output_format == TCC_OUTPUT_FORMAT_ELF\\)/)",
-      "if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/)"
+      "print_autohost_define_window",
+      "make_autohost_define_prefix_probe autohost_defines_84_system 84",
+      "make_autohost_define_skip_probe autohost_defines_84_skip84_system 84 84",
+      "make_autohost_define_undef_probe autohost_defines_84_undef_need64_system 84 NEED_64BIT_HOST_WIDE_INT",
+      "make_autohost_define_undef2_probe autohost_defines_96_undef_need64_gid_system 96 NEED_64BIT_HOST_WIDE_INT gid_t",
+      "make_autohost_define_undef2_probe autohost_defines_97_undef_need64_gid_system 97 NEED_64BIT_HOST_WIDE_INT gid_t",
+      "make_autohost_define_undef3_probe autohost_defines_97_undef_need64_gid_inline_system 97 NEED_64BIT_HOST_WIDE_INT gid_t inline",
+      "make_autohost_define_undef6_probe autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t"
     ],
     "non_claim": "diagnostic frontier evidence only; does not prove native GCC 4.0 compiler correctness"
   },
@@ -3215,15 +3227,14 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let path = root.join(GCC40_CPARSE_DIAGNOSTIC_DERIVATION);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         let mut content = concat!(
-            "compile_decl0_prepart native387_disabled \"$flags_name\" tccgen.c\n",
-            "compile_decl0_prepart native387_disabled \"$flags_name\" libtcc.c\n",
-            "run_decl0_build_phase link-object-musl-shims\n",
-            "make_cparse_plain_exact_with_compiler \"$decl0_tcc\" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'\n",
-            "sub(/file_type;/, \"file_type, fd_bad;\")\n",
-            "if (in_wr && $0 ~ /^[[:space:]]*if \\(fd < 0\\)/)\n",
-            "if (in_wr && $0 ~ /^[[:space:]]*f = fdopen/)\n",
-            "if (in_wr && $0 ~ /^[[:space:]]*if \\(s1->output_format == TCC_OUTPUT_FORMAT_ELF\\)/)\n",
-            "if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/)\n",
+            "print_autohost_define_window\n",
+            "make_autohost_define_prefix_probe autohost_defines_84_system 84\n",
+            "make_autohost_define_skip_probe autohost_defines_84_skip84_system 84 84\n",
+            "make_autohost_define_undef_probe autohost_defines_84_undef_need64_system 84 NEED_64BIT_HOST_WIDE_INT\n",
+            "make_autohost_define_undef2_probe autohost_defines_96_undef_need64_gid_system 96 NEED_64BIT_HOST_WIDE_INT gid_t\n",
+            "make_autohost_define_undef2_probe autohost_defines_97_undef_need64_gid_system 97 NEED_64BIT_HOST_WIDE_INT gid_t\n",
+            "make_autohost_define_undef3_probe autohost_defines_97_undef_need64_gid_inline_system 97 NEED_64BIT_HOST_WIDE_INT gid_t inline\n",
+            "make_autohost_define_undef6_probe autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t\n",
         )
         .to_string();
         if !mutation.is_empty() {
@@ -4170,7 +4181,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v3=>mantle-gcc40-native-cc1-source-frontier-reduction-v2",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v4=>mantle-gcc40-native-cc1-source-frontier-reduction-v3",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4200,7 +4211,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn gcc40_native_cc1_source_frontier_stale_fd_bad_frontier_fails_closed() {
+    fn gcc40_native_cc1_source_frontier_stale_fdopen_frontier_fails_closed() {
         let dir = tempdir().unwrap();
         let content = valid_gcc40_native_demangle_content();
         write_stage(dir.path(), "gcc-4.0.ncl", content);
@@ -4211,13 +4222,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "forcing the copied fd_bad branch false reaches fdopen pre/post markers 4/6, the ELF output-format marker 5, tcc_output_file return marker Y, and post-output marker w for both compile_empty and cparse_decl0_trace_valid_var_semicolon rc=0; this retires fd_bad as the recorded diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build=>baseline tccgen.c/libtcc.c compile-only segfaults; disabling native 387 lets tccgen.c/libtcc.c compile; a musl-shim instrumented compiler reaches cparse_decl0_trace_valid_var_semicolon rc=0, then the remaining runtime frontier is the copied fd_bad branch inside tcc_write_elf_file",
+            "the focused c-parse make attempt reaches the real c-parse.o compile, then auto-host define probes show autohost_defines_84_system fails while autohost_defines_84_skip84_system and autohost_defines_84_undef_need64_system pass, identifying NEED_64BIT_HOST_WIDE_INT as a bounded include-recursion/error frontier; autohost_defines_96_undef_need64_gid_system passes, autohost_defines_97_undef_need64_gid_system segfaults when inline is added, autohost_defines_97_undef_need64_gid_inline_system passes after undefining inline, and autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system passes; this narrows the diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build=>forcing the copied fd_bad branch false reaches fdopen pre/post markers 4/6, the ELF output-format marker 5, tcc_output_file return marker Y, and post-output marker w for both compile_empty and cparse_decl0_trace_valid_var_semicolon rc=0; this retires fd_bad as the recorded diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("observed_frontier missing required v3 fragment"), "{}", row.notes);
+        assert!(row.notes.contains("observed_frontier missing required v4 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 
@@ -4234,7 +4245,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
         write_gcc40_cparse_diagnostic_derivation(
             dir.path(),
-            "run_decl0_build_phase link-object-musl-shims=>run_decl0_build_phase missing-musl-shims",
+            "make_autohost_define_undef3_probe autohost_defines_97_undef_need64_gid_inline_system 97 NEED_64BIT_HOST_WIDE_INT gid_t inline=>make_autohost_define_undef3_probe missing_inline_probe",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());

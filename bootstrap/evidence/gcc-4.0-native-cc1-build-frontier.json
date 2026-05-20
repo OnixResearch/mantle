@@ -13,24 +13,23 @@
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v3",
-    "prior_frontier": "source-frontier v2 narrowed the TinyCC/Mes c-parse diagnostic seam to native387-disabled compile-only success plus musl-shim decl0 reaching cparse_decl0_trace_valid_var_semicolon, with the copied fd_bad branch as the last recorded runtime frontier",
-    "attempted_probe": "bounded diagnostic fd_bad/fdopen/output-return probe from bootstrap/diag-gcc40-c-parse-boundary.ncl; the copied fd_bad branch is forced false only inside the diagnostic instrumented compiler",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v4",
+    "prior_frontier": "source-frontier v3 retired the copied fd_bad branch by proving the bounded diagnostic compiler reaches fdopen, ELF output-format, tcc_output_file return marker Y, and post-output marker w",
+    "attempted_probe": "bounded c-parse auto-host macro-boundary probe from bootstrap/diag-gcc40-c-parse-boundary.ncl using the generated auto-host.h define window plus targeted undef probes before system.h",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
     "observed_result": "narrowed-stable-blocker",
-    "observed_frontier": "forcing the copied fd_bad branch false reaches fdopen pre/post markers 4/6, the ELF output-format marker 5, tcc_output_file return marker Y, and post-output marker w for both compile_empty and cparse_decl0_trace_valid_var_semicolon rc=0; this retires fd_bad as the recorded diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build",
-    "retirement_condition": "replace when the diagnostic handoff advances beyond bounded fdopen/output-return probes to a real native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
+    "observed_frontier": "the focused c-parse make attempt reaches the real c-parse.o compile, then auto-host define probes show autohost_defines_84_system fails while autohost_defines_84_skip84_system and autohost_defines_84_undef_need64_system pass, identifying NEED_64BIT_HOST_WIDE_INT as a bounded include-recursion/error frontier; autohost_defines_96_undef_need64_gid_system passes, autohost_defines_97_undef_need64_gid_system segfaults when inline is added, autohost_defines_97_undef_need64_gid_inline_system passes after undefining inline, and autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system passes; this narrows the diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build",
+    "retirement_condition": "replace when the diagnostic handoff advances beyond bounded auto-host.h macro-window probes to a real native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
     "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
     "diagnostic_markers": [
-      "compile_decl0_prepart native387_disabled \"$flags_name\" tccgen.c",
-      "compile_decl0_prepart native387_disabled \"$flags_name\" libtcc.c",
-      "run_decl0_build_phase link-object-musl-shims",
-      "make_cparse_plain_exact_with_compiler \"$decl0_tcc\" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'",
-      "sub(/file_type;/, \"file_type, fd_bad;\")",
-      "if (in_wr && $0 ~ /^[[:space:]]*if \\(fd < 0\\)/)",
-      "if (in_wr && $0 ~ /^[[:space:]]*f = fdopen/)",
-      "if (in_wr && $0 ~ /^[[:space:]]*if \\(s1->output_format == TCC_OUTPUT_FORMAT_ELF\\)/)",
-      "if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/)"
+      "print_autohost_define_window",
+      "make_autohost_define_prefix_probe autohost_defines_84_system 84",
+      "make_autohost_define_skip_probe autohost_defines_84_skip84_system 84 84",
+      "make_autohost_define_undef_probe autohost_defines_84_undef_need64_system 84 NEED_64BIT_HOST_WIDE_INT",
+      "make_autohost_define_undef2_probe autohost_defines_96_undef_need64_gid_system 96 NEED_64BIT_HOST_WIDE_INT gid_t",
+      "make_autohost_define_undef2_probe autohost_defines_97_undef_need64_gid_system 97 NEED_64BIT_HOST_WIDE_INT gid_t",
+      "make_autohost_define_undef3_probe autohost_defines_97_undef_need64_gid_inline_system 97 NEED_64BIT_HOST_WIDE_INT gid_t inline",
+      "make_autohost_define_undef6_probe autohost_defines_100_undef_need64_gid_inline_rlim_ssize_uid_system 100 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t"
     ],
     "non_claim": "diagnostic frontier evidence only; does not prove native GCC 4.0 compiler correctness"
   },
