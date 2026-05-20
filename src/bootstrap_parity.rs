@@ -965,10 +965,10 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native demangle receipt is not valid JSON: {err}"))?;
-    require_gcc40_demangle_string(&value, "schema", "mantle-gcc40-native-demangle-slice-v1")?;
+    require_gcc40_demangle_string(&value, "schema", "mantle-gcc40-native-demangle-slice-v2")?;
     require_gcc40_demangle_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
     require_gcc40_demangle_string(&value, "status", "bounded-native-demangle-slice")?;
-    require_gcc40_demangle_string(&value, "selected_shape", "nested-zero-arg-itanium-v1")?;
+    require_gcc40_demangle_string(&value, "selected_shape", "deep-nested-zero-arg-itanium-v2")?;
     require_gcc40_demangle_string(
         &value,
         "parity_effect",
@@ -979,12 +979,19 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
         .get("bounded_contract")
         .and_then(|v| v.as_object())
         .ok_or_else(|| "GCC 4.0 native demangle receipt missing object field `bounded_contract`".to_string())?;
-    require_gcc40_demangle_named_io(contract, "accepted_inputs", "_ZN3foo3barEv", "foo::bar()")?;
+    require_gcc40_demangle_named_io(contract, "accepted_inputs", "_ZN3foo3bar3bazEv", "foo::bar::baz()")?;
+    require_gcc40_demangle_named_io(contract, "nested_regressions", "_ZN3foo3barEv", "foo::bar()")?;
     require_gcc40_demangle_named_io(contract, "flat_regressions", "_Z3foov", "foo()")?;
     let rejected = contract.get("rejected_inputs").and_then(|v| v.as_array()).ok_or_else(|| {
         "GCC 4.0 native demangle receipt missing array field `bounded_contract.rejected_inputs`".to_string()
     })?;
-    for required in ["_ZN3foo3barEi", "_ZN3fooE", "not_mangled"] {
+    for required in [
+        "_ZN3foo3barEi",
+        "_ZN3foo3bar3bazEi",
+        "_ZN3foo3bar3baz3quxEv",
+        "_ZN3fooE",
+        "not_mangled",
+    ] {
         if !rejected.iter().any(|v| v.as_str() == Some(required)) {
             return Err(format!("GCC 4.0 native demangle receipt rejected inputs missing `{required}`"));
         }
@@ -1008,7 +1015,14 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
         .and_then(|v| v.as_object())
         .ok_or_else(|| "GCC 4.0 native demangle receipt missing object field `smoke`".to_string())?;
     let transcript = require_gcc40_demangle_object_string(smoke, "transcript")?;
-    for required in ["_ZN3foo3barEv", "foo::bar()", "_Z3foov", "full native cp-demangle"] {
+    for required in [
+        "_ZN3foo3bar3bazEv",
+        "foo::bar::baz()",
+        "_ZN3foo3barEv",
+        "foo::bar()",
+        "_Z3foov",
+        "full native cp-demangle",
+    ] {
         if !transcript.contains(required) {
             return Err(format!("GCC 4.0 native demangle receipt transcript missing `{required}`"));
         }
@@ -2524,7 +2538,7 @@ mod tests {
     {
       "id": "libiberty-demangle-nested-name",
       "receipt": "bootstrap/evidence/gcc-4.0-native-demangle-slice.json",
-      "derivation_marker": "gcc40_cplus_demangle_nested_itanium_v1_boundary"
+      "derivation_marker": "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary"
     }
   ],
   "last_observed_build_log": {
@@ -2536,7 +2550,7 @@ mod tests {
     "blockers": [
       {
         "id": "libiberty-demangle-bounded-semantics",
-        "derivation_marker": "gcc40_cplus_demangle_nested_itanium_v1_boundary",
+        "derivation_marker": "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary",
         "frontier": "libiberty demangling has checked bounded flat and nested zero-argument Itanium semantic slices; full native cp-demangle remains pending"
       }
     ]
@@ -2648,22 +2662,23 @@ mod tests {
     fn write_gcc40_native_demangle_receipt(root: &Path, mutation: &str) {
         let path = root.join(GCC40_NATIVE_DEMANGLE_RECEIPT);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let transcript = "demangle bounded native libiberty slice\nselected_shape: nested-zero-arg-itanium-v1\ninput: _ZN3foo3barEv\noutput: foo::bar()\nflat_regression: _Z3foov -> foo()\nnegative: _ZN3foo3barEi -> <null>\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nnon_claim: full native cp-demangle and GCC 4.0 correctness pending\n";
+        let transcript = "demangle bounded native libiberty slice\nselected_shape: deep-nested-zero-arg-itanium-v2\ninput: _ZN3foo3bar3bazEv\noutput: foo::bar::baz()\nnested_regression: _ZN3foo3barEv -> foo::bar()\nflat_regression: _Z3foov -> foo()\nnegative: _ZN3foo3bar3bazEi -> <null>\nnegative: _ZN3foo3bar3baz3quxEv -> <null>\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nnon_claim: full native cp-demangle and GCC 4.0 correctness pending\n";
         let mut content = format!(
             r#"{{
-  "schema": "mantle-gcc40-native-demangle-slice-v1",
+  "schema": "mantle-gcc40-native-demangle-slice-v2",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "bounded-native-demangle-slice",
-  "selected_shape": "nested-zero-arg-itanium-v1",
+  "selected_shape": "deep-nested-zero-arg-itanium-v2",
   "bounded_contract": {{
-    "accepted_inputs": [{{ "mangled": "_ZN3foo3barEv", "demangled": "foo::bar()" }}],
+    "accepted_inputs": [{{ "mangled": "_ZN3foo3bar3bazEv", "demangled": "foo::bar::baz()" }}],
+    "nested_regressions": [{{ "mangled": "_ZN3foo3barEv", "demangled": "foo::bar()" }}],
     "flat_regressions": [{{ "mangled": "_Z3foov", "demangled": "foo()" }}],
-    "rejected_inputs": ["_ZN3foo3barEi", "_ZN3fooE", "not_mangled"],
-    "non_claim": "only flat and two-component nested zero-argument Itanium function names are in scope"
+    "rejected_inputs": ["_ZN3foo3barEi", "_ZN3foo3bar3bazEi", "_ZN3foo3bar3baz3quxEv", "_ZN3fooE", "not_mangled"],
+    "non_claim": "only flat, two-component nested, and selected three-component nested zero-argument Itanium function names are in scope"
   }},
   "source_markers": {{
-    "cplus_demangle_marker": "gcc40_cplus_demangle_nested_itanium_v1_boundary",
-    "cp_demangle_marker": "gcc40_cp_demangle_nested_itanium_v1_boundary"
+    "cplus_demangle_marker": "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary",
+    "cp_demangle_marker": "gcc40_cp_demangle_deep_nested_itanium_v2_boundary"
   }},
   "smoke": {{
     "transcript": {},
@@ -2671,6 +2686,8 @@ mod tests {
     "output_digest_blake3": "{}"
   }},
   "forbidden_stale_markers": [
+    "gcc40_cplus_demangle_nested_itanium_v1_boundary",
+    "gcc40_cp_demangle_nested_itanium_v1_boundary",
     "gcc40_cplus_demangle_bounded_itanium_v0_boundary",
     "gcc40_cp_demangle_bounded_itanium_v0_boundary",
     "libiberty_cp_demangle_bootstrap_stub"
@@ -2680,7 +2697,7 @@ mod tests {
 "#,
             serde_json::to_string(transcript).unwrap(),
             blake3::hash(transcript.as_bytes()).to_hex(),
-            blake3::hash(b"foo::bar()\n").to_hex()
+            blake3::hash(b"foo::bar::baz()\n").to_hex()
         );
         if !mutation.is_empty() {
             let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
@@ -2959,8 +2976,8 @@ mod tests {
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3054,8 +3071,8 @@ mod tests {
             "gcc (Mantle pass1 bridge) 4.0.4\n",
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3082,8 +3099,8 @@ mod tests {
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3110,8 +3127,8 @@ mod tests {
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3138,8 +3155,8 @@ mod tests {
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3164,8 +3181,8 @@ mod tests {
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3191,8 +3208,8 @@ mod tests {
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3218,8 +3235,8 @@ mod tests {
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", content);
         write_gcc40_placeholder_inventory(dir.path(), content);
@@ -3246,8 +3263,8 @@ mod tests {
             "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_nested_itanium_v1_boundary\n",
-            "gcc40_cp_demangle_nested_itanium_v1_boundary\n",
+            "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary\n",
+            "gcc40_cp_demangle_deep_nested_itanium_v2_boundary\n",
         )
     }
 
@@ -3276,7 +3293,7 @@ mod tests {
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(dir.path(), "");
-        write_gcc40_native_demangle_receipt(dir.path(), "bc22626b=>00000000");
+        write_gcc40_native_demangle_receipt(dir.path(), "69707f16=>00000000");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -3293,12 +3310,12 @@ mod tests {
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(dir.path(), "");
-        write_gcc40_native_demangle_receipt(dir.path(), "nested-zero-arg-itanium-v1=>operator-name-itanium-v1");
+        write_gcc40_native_demangle_receipt(dir.path(), "deep-nested-zero-arg-itanium-v2=>operator-name-itanium-v1");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("expected `nested-zero-arg-itanium-v1`"));
+        assert!(row.notes.contains("expected `deep-nested-zero-arg-itanium-v2`"));
     }
 
     #[test]
@@ -3312,13 +3329,13 @@ mod tests {
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(
             dir.path(),
-            "mantle-gcc40-native-demangle-slice-v1=>mantle-gcc40-native-demangle-slice-v0",
+            "mantle-gcc40-native-demangle-slice-v2=>mantle-gcc40-native-demangle-slice-v0",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("expected `mantle-gcc40-native-demangle-slice-v1`"));
+        assert!(row.notes.contains("expected `mantle-gcc40-native-demangle-slice-v2`"));
     }
 
     #[test]
@@ -4102,15 +4119,19 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
 
-        assert!(content.contains("gcc40_cplus_demangle_nested_itanium_v1_boundary"));
-        assert!(content.contains("gcc40_cp_demangle_nested_itanium_v1_boundary"));
+        assert!(content.contains("gcc40_cplus_demangle_deep_nested_itanium_v2_boundary"));
+        assert!(content.contains("gcc40_cp_demangle_deep_nested_itanium_v2_boundary"));
         assert!(content.contains("cplus_demangle bounded nested-name semantic smoke"));
         assert!(content.contains("_Z3foov"));
         assert!(content.contains("foo()"));
         assert!(content.contains("_ZN3foo3barEv"));
         assert!(content.contains("foo::bar()"));
+        assert!(content.contains("_ZN3foo3bar3bazEv"));
+        assert!(content.contains("foo::bar::baz()"));
         assert!(content.contains("_ZN3foo3barEi"));
-        assert!(content.contains("bounded Itanium nested zero-argument function semantic slice"));
+        assert!(content.contains("_ZN3foo3bar3bazEi"));
+        assert!(content.contains("_ZN3foo3bar3baz3quxEv"));
+        assert!(content.contains("bounded Itanium deep nested zero-argument function semantic slice"));
         assert!(!content.contains("gcc40_cp_demangle_disabled_boundary"));
         assert!(!content.contains("libiberty_cp_demangle_bootstrap_stub"));
     }

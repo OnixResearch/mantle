@@ -940,7 +940,7 @@ const struct demangler_engine libiberty_demanglers[] = {
 };
 
 /* Crunch GCC 4.0 bounded Itanium zero-argument function semantic slice. */
-int gcc40_cplus_demangle_nested_itanium_v1_boundary(void) { return 0; }
+int gcc40_cplus_demangle_deep_nested_itanium_v2_boundary(void) { return 0; }
 
 static int gcc40_demangle_is_name_char(char ch) {
   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_';
@@ -968,10 +968,13 @@ static char *gcc40_demangle_itanium_v1_function(const char *mangled) {
   const char *p;
   const char *first;
   const char *second;
+  const char *third;
   unsigned long first_len = 0;
   unsigned long second_len = 0;
+  unsigned long third_len = 0;
   unsigned long i;
   unsigned long pos = 0;
+  int has_third = 0;
   static char out[132];
   if (!mangled || mangled[0] != '_' || mangled[1] != 'Z') return 0;
   p = mangled + 2;
@@ -979,12 +982,21 @@ static char *gcc40_demangle_itanium_v1_function(const char *mangled) {
     p++;
     if (!gcc40_demangle_read_component(&p, &first, &first_len)) return 0;
     if (!gcc40_demangle_read_component(&p, &second, &second_len)) return 0;
+    if (*p != 'E') {
+      if (!gcc40_demangle_read_component(&p, &third, &third_len)) return 0;
+      has_third = 1;
+    }
     if (*p != 'E' || p[1] != 'v' || p[2] != 0) return 0;
-    if (first_len + second_len + 4 > 131) return 0;
+    if (first_len + second_len + third_len + (has_third ? 6 : 4) > 131) return 0;
     for (i = 0; i < first_len; i++) out[pos++] = first[i];
     out[pos++] = ':';
     out[pos++] = ':';
     for (i = 0; i < second_len; i++) out[pos++] = second[i];
+    if (has_third) {
+      out[pos++] = ':';
+      out[pos++] = ':';
+      for (i = 0; i < third_len; i++) out[pos++] = third[i];
+    }
     out[pos++] = '(';
     out[pos++] = ')';
     out[pos] = 0;
@@ -1011,8 +1023,8 @@ enum gnu_v3_ctor_kinds is_gnu_v3_mangled_ctor(const char *name) { (void)name; re
 enum gnu_v3_dtor_kinds is_gnu_v3_mangled_dtor(const char *name) { (void)name; return 0; }
 CPLUS_DEM_EOF
       $BB cat > gcc-4.0.4/libiberty/cp-demangle.c <<'CP_DEMANGLE_EOF'
-/* Crunch GCC 4.0 bounded Itanium nested zero-argument function semantic slice: cplus-dem.c supports flat and nested zero-argument Itanium functions; full native cp-demangle promotion pending. */
-int gcc40_cp_demangle_nested_itanium_v1_boundary(void) { return 0; }
+/* Crunch GCC 4.0 bounded Itanium deep nested zero-argument function semantic slice: cplus-dem.c supports flat, two-component, and selected three-component nested zero-argument Itanium functions; full native cp-demangle promotion pending. */
+int gcc40_cp_demangle_deep_nested_itanium_v2_boundary(void) { return 0; }
 CP_DEMANGLE_EOF
       $BB cat > gcc-4.0.4/libiberty/md5.c <<'MD5_EOF'
 #include "md5.h"
@@ -1261,10 +1273,14 @@ int main(void) {
   if (!a || !same(a, "foo::bar()")) return 3;
   a = cplus_demangle_v3("_ZN3abc3defEv", 0);
   if (!a || !same(a, "abc::def()")) return 4;
-  if (cplus_demangle("_Z3fooi", 0) != 0) return 5;
-  if (cplus_demangle("_ZN3foo3barEi", 0) != 0) return 6;
-  if (cplus_demangle("_ZN3fooE", 0) != 0) return 7;
-  if (cplus_demangle("not_mangled", 0) != 0) return 8;
+  a = cplus_demangle("_ZN3foo3bar3bazEv", 0);
+  if (!a || !same(a, "foo::bar::baz()")) return 5;
+  if (cplus_demangle("_Z3fooi", 0) != 0) return 6;
+  if (cplus_demangle("_ZN3foo3barEi", 0) != 0) return 7;
+  if (cplus_demangle("_ZN3foo3bar3bazEi", 0) != 0) return 8;
+  if (cplus_demangle("_ZN3foo3bar3baz3quxEv", 0) != 0) return 9;
+  if (cplus_demangle("_ZN3fooE", 0) != 0) return 10;
+  if (cplus_demangle("not_mangled", 0) != 0) return 11;
   return 0;
 }
 EOF
