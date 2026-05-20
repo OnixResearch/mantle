@@ -13,13 +13,13 @@
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v6",
-    "prior_frontier": "source-frontier v5 narrowed the c-parse diagnostic to representative generated-header prefix/balance behavior around insn-modes.h, machmode.h, and tree.h after six targeted autohost undefines",
-    "attempted_probe": "bounded c-parse full generated-header sweep from bootstrap/diag-gcc40-c-parse-boundary.ncl using the six-undef autohost configuration, later machmode.h prefixes, wider tree.h prefixes, builtin enum probes, and the real c-parse.o make attempt",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v7",
+    "prior_frontier": "source-frontier v6 narrowed the c-parse diagnostic to the real c-parse.o make failure after generated-header sweep probes and recorded the full-header boundary as frontier-only metadata",
+    "attempted_probe": "bounded c-parse make-error capture from bootstrap/diag-gcc40-c-parse-boundary.ncl that runs the same focused c-parse.o make target, records the captured nonzero rc, and emits a bounded output-tail marker before preserving failure",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
     "observed_result": "narrowed-stable-blocker",
-    "observed_frontier": "the focused c-parse make attempt reaches the real c-parse.o compile and still fails with make: *** [c-parse.o] Error 1 after generated config.h normalization; six-undef autohost probes pass through autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system, autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system, cparse_config_undef6_system, cparse_undef6_inc_system, cparse_undef6_inc_coretypes, and cparse_undef6_inc_tm; generated-header sweep probes show cparse_undef6_insn_modes_include_only passes, cparse_undef6_insn_modes_lines_20 fails while cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails while cparse_undef6_machmode_lines_40 passes and cparse_undef6_machmode_lines_60 passes, cparse_undef6_machmode_lines_80 passes, cparse_undef6_machmode_lines_100 passes, and cparse_undef6_machmode_lines_120 passes; cparse_undef6_tree_lines_28 passes while cparse_undef6_tree_lines_36 fails, but cparse_undef6_tree_lines_80 passes, cparse_undef6_tree_lines_120 passes, cparse_undef6_tree_lines_160 passes, cparse_undef6_tree_lines_166 passes, cparse_undef6_tree_lines_177 passes, cparse_undef6_tree_lines_180 passes, cparse_undef6_tree_lines_207 passes, cparse_undef6_tree_lines_212 passes, and cparse_undef6_tree_lines_220 passes; cparse_undef6_tree_builtin_empty passes and cparse_undef6_tree_builtin_complex_arith_only passes; this narrows the diagnostic frontier to the remaining real c-parse.o/full-header source-build boundary but still does not prove the native GCC 4.0 c-parse/cc1 source build",
-    "retirement_condition": "replace when the diagnostic handoff advances beyond the full generated-header sweep and real c-parse.o failure to a native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
+    "observed_frontier": "the focused c-parse make attempt reaches the real c-parse.o compile and still fails with make: *** [c-parse.o] Error 1 after generated config.h normalization; six-undef autohost probes pass through autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system, autohost_full_undef_need64_gid_inline_rlim_ssize_uid_system, cparse_config_undef6_system, cparse_undef6_inc_system, cparse_undef6_inc_coretypes, and cparse_undef6_inc_tm; generated-header sweep probes show cparse_undef6_insn_modes_include_only passes, cparse_undef6_insn_modes_lines_20 fails while cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails while cparse_undef6_machmode_lines_40 passes and cparse_undef6_machmode_lines_60 passes, cparse_undef6_machmode_lines_80 passes, cparse_undef6_machmode_lines_100 passes, and cparse_undef6_machmode_lines_120 passes; cparse_undef6_tree_lines_28 passes while cparse_undef6_tree_lines_36 fails, but cparse_undef6_tree_lines_80 passes, cparse_undef6_tree_lines_120 passes, cparse_undef6_tree_lines_160 passes, cparse_undef6_tree_lines_166 passes, cparse_undef6_tree_lines_177 passes, cparse_undef6_tree_lines_180 passes, cparse_undef6_tree_lines_207 passes, cparse_undef6_tree_lines_212 passes, and cparse_undef6_tree_lines_220 passes; cparse_undef6_tree_builtin_empty passes and cparse_undef6_tree_builtin_complex_arith_only passes; the diagnostic capture records cparse_make_cparse_o_rc=2, cparse_make_cparse_o_tail, repeated In file included from diagnostics, and make: *** [c-parse.o] Error 1; this narrows the diagnostic frontier to the captured real c-parse.o make-error boundary but still does not prove the native GCC 4.0 c-parse/cc1 source build",
+    "retirement_condition": "replace when the diagnostic handoff advances beyond captured c-parse.o make rc/stderr failure to a native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
     "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
     "diagnostic_markers": [
       "make_autohost_define_undef6_probe autohost_defines_120_undef_need64_gid_inline_rlim_ssize_uid_system 120 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t",
@@ -49,7 +49,12 @@
       "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_207 207",
       "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_212 212",
       "make_tree_header_balanced_config_undef6 cparse_undef6_tree_lines_220 220",
-      "make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_empty 'enum built_in_function {"
+      "make_tree_post180_manual_config_undef6 cparse_undef6_tree_builtin_empty 'enum built_in_function {",
+      "m=/tmp/gcc40-cparse-make.log",
+      "diag-cparse-frontier: cparse_make_cparse_o_rc=$rc",
+      "diag-cparse-frontier: cparse_make_cparse_o_tail",
+      "ERROR: c-parse.o unexpectedly compiled",
+      "exit \"$rc\""
     ],
     "non_claim": "diagnostic frontier evidence only; does not prove native GCC 4.0 compiler correctness"
   },

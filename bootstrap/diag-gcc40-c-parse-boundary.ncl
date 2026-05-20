@@ -2509,6 +2509,8 @@ EOF
           echo "diag: normalized generated config.h to manual include form"
 
           echo "diag: reproduce focused c-parse boundary"
+          m=/tmp/gcc40-cparse-make.log
+          set +e
           make -j1 -C gcc \
             CC=gcc40-cc \
             AR="$BINUTILS/bin/ar" \
@@ -2517,9 +2519,14 @@ EOF
             STMP_FIXINC= \
             MAKEINFO=true \
             c-parse.o \
-            2>&1
-          echo "ERROR: c-parse.o unexpectedly compiled" >&2
-          exit 1
+            > "$m" 2>&1
+          rc=$?
+          set -e
+          echo "diag-cparse-frontier: cparse_make_cparse_o_rc=$rc" >&2
+          echo "diag-cparse-frontier: cparse_make_cparse_o_tail" >&2
+          $BB tail -n 20 "$m" >&2
+          [ "$rc" = 0 ] && { echo "ERROR: c-parse.o unexpectedly compiled" >&2; exit 1; }
+          exit "$rc"
         fi
         make -j1 -C "$dir" \
           CC=gcc40-cc \

@@ -1,0 +1,6 @@
+id: record-gcc40-cparse-make-error-frontier-probe
+status: proposed
+created: 2026-05-20T23:05:00Z
+updated: 2026-05-20T23:05:00Z
+kind: change
+summary: Capture the real GCC 4.0 c-parse.o make failure rc/stderr frontier without promoting gcc.4.0.
