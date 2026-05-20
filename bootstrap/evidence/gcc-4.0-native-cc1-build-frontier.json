@@ -13,13 +13,22 @@
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v1",
-    "prior_frontier": "native gengtype-yacc.c make probe reaches TinyCC/Mes c-parse source boundary before pass1 fallback",
-    "attempted_probe": "bounded gengtype-yacc probe after generated-header seeds",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v2",
+    "prior_frontier": "native gengtype-yacc.c make probe reaches TinyCC/Mes c-parse source boundary before pass1 fallback; prior v1 only recorded unchanged generated-header seed frontier",
+    "attempted_probe": "bounded diagnostic decl0/TinyCC source-frontier probe from bootstrap/diag-gcc40-c-parse-boundary.ncl after moving away from installed-cc1 micro-slices",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
-    "observed_result": "unchanged-stable-blocker",
-    "observed_frontier": "TinyCC/Mes c-parse boundary remains after generated-header seeds; pass1 fallback still required",
-    "retirement_condition": "replace when native cc1 source-build evidence advances beyond the gengtype-yacc/c-parse frontier without pass1 fallback"
+    "observed_result": "narrowed-stable-blocker",
+    "observed_frontier": "baseline tccgen.c/libtcc.c compile-only segfaults; disabling native 387 lets tccgen.c/libtcc.c compile; a musl-shim instrumented compiler reaches cparse_decl0_trace_valid_var_semicolon rc=0, then the remaining runtime frontier is the copied fd_bad branch inside tcc_write_elf_file",
+    "retirement_condition": "replace when native TinyCC/Mes handoff advances past the fd_bad/tcc_write_elf_file branch and can build the native GCC 4.0 c-parse/cc1 source path without pass1 fallback",
+    "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+    "diagnostic_markers": [
+      "compile_decl0_prepart native387_disabled \"$flags_name\" tccgen.c",
+      "compile_decl0_prepart native387_disabled \"$flags_name\" libtcc.c",
+      "run_decl0_build_phase link-object-musl-shims",
+      "make_cparse_plain_exact_with_compiler \"$decl0_tcc\" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'",
+      "sub(/file_type;/, \"file_type, fd_bad;\")"
+    ],
+    "non_claim": "diagnostic frontier evidence only; does not prove native GCC 4.0 compiler correctness"
   },
   "retirement_condition": {
     "replacement_evidence": "retire when GCC 4.0 native cc1 source build evidence supersedes the pass1 bridge boundary",

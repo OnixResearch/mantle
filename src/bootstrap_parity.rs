@@ -193,6 +193,7 @@ const GCC40_NATIVE_CC1_ARITHMETIC_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-na
 const GCC40_NATIVE_GENERATOR_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-generator-slice.json";
 const GCC40_NATIVE_DEMANGLE_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-demangle-slice.json";
 const GCC40_NATIVE_CC1_BUILD_FRONTIER_RECEIPT: &str = "bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json";
+const GCC40_CPARSE_DIAGNOSTIC_DERIVATION: &str = "bootstrap/diag-gcc40-c-parse-boundary.ncl";
 const GCC47_CXX_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-4.7-cxx-provider-contract.json";
 const GCC10_PROVIDER_CONTRACT: &str = "bootstrap/evidence/gcc-10-provider-contract.json";
 const FULL_MUSL_BINUTILS_PROVIDER_CONTRACT: &str = "bootstrap/evidence/full-musl-binutils-provider-contract.json";
@@ -808,9 +809,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v1" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v2" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v1`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v2`"
         ));
     }
     for field in [
@@ -825,13 +826,38 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         }
     }
     let observed_result = require_gcc40_boundary_object_string(reduction, "observed_result")?;
-    if observed_result != "unchanged-stable-blocker" {
+    if observed_result != "narrowed-stable-blocker" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction observed_result is `{observed_result}`, expected `unchanged-stable-blocker`"
+            "GCC 4.0 native cc1 source-frontier reduction observed_result is `{observed_result}`, expected `narrowed-stable-blocker`"
         ));
     }
     let probe_marker = require_gcc40_boundary_object_string(reduction, "probe_marker")?;
     require_gcc40_derivation_marker(derivation_content, probe_marker)?;
+    require_gcc40_boundary_object_string(reduction, "non_claim")?;
+    require_gcc40_boundary_object_string(reduction, "diagnostic_derivation")?;
+    let diagnostic_content = fs::read_to_string(project_root.join(GCC40_CPARSE_DIAGNOSTIC_DERIVATION)).map_err(|err| {
+        format!(
+            "GCC 4.0 native cc1 source-frontier diagnostic derivation missing `{}` ({err}); expected checked c-parse/decl0 diagnostic markers",
+            GCC40_CPARSE_DIAGNOSTIC_DERIVATION
+        )
+    })?;
+    let diagnostic_markers = reduction.get("diagnostic_markers").and_then(|v| v.as_array()).ok_or_else(|| {
+        "GCC 4.0 native cc1 source-frontier reduction missing array field `diagnostic_markers`".to_string()
+    })?;
+    if diagnostic_markers.is_empty() {
+        return Err("GCC 4.0 native cc1 source-frontier reduction `diagnostic_markers` must not be empty".to_string());
+    }
+    for marker in diagnostic_markers {
+        let marker = marker
+            .as_str()
+            .ok_or_else(|| "GCC 4.0 native cc1 source-frontier diagnostic marker must be a string".to_string())?;
+        if !diagnostic_content.contains(marker) {
+            return Err(format!(
+                "GCC 4.0 native cc1 source-frontier diagnostic marker `{marker}` missing from `{}`",
+                GCC40_CPARSE_DIAGNOSTIC_DERIVATION
+            ));
+        }
+    }
 
     let retirement = require_gcc40_boundary_object(&value, "retirement_condition")?;
     let replacement = require_gcc40_boundary_object_string(retirement, "replacement_evidence")?;
@@ -3135,13 +3161,22 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v1",
-    "prior_frontier": "native gengtype-yacc.c make probe reaches TinyCC/Mes c-parse source boundary before pass1 fallback",
-    "attempted_probe": "bounded gengtype-yacc probe after generated-header seeds",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v2",
+    "prior_frontier": "native gengtype-yacc.c make probe reaches TinyCC/Mes c-parse source boundary before pass1 fallback; prior v1 only recorded unchanged generated-header seed frontier",
+    "attempted_probe": "bounded diagnostic decl0/TinyCC source-frontier probe from bootstrap/diag-gcc40-c-parse-boundary.ncl after moving away from installed-cc1 micro-slices",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
-    "observed_result": "unchanged-stable-blocker",
-    "observed_frontier": "TinyCC/Mes c-parse boundary remains after generated-header seeds; pass1 fallback still required",
-    "retirement_condition": "replace when native cc1 source-build evidence advances beyond the gengtype-yacc/c-parse frontier without pass1 fallback"
+    "observed_result": "narrowed-stable-blocker",
+    "observed_frontier": "baseline tccgen.c/libtcc.c compile-only segfaults; disabling native 387 lets tccgen.c/libtcc.c compile; a musl-shim instrumented compiler reaches cparse_decl0_trace_valid_var_semicolon rc=0, then the remaining runtime frontier is the copied fd_bad branch inside tcc_write_elf_file",
+    "retirement_condition": "replace when native TinyCC/Mes handoff advances past the fd_bad/tcc_write_elf_file branch and can build the native GCC 4.0 c-parse/cc1 source path without pass1 fallback",
+    "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+    "diagnostic_markers": [
+      "compile_decl0_prepart native387_disabled \"$flags_name\" tccgen.c",
+      "compile_decl0_prepart native387_disabled \"$flags_name\" libtcc.c",
+      "run_decl0_build_phase link-object-musl-shims",
+      "make_cparse_plain_exact_with_compiler \"$decl0_tcc\" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'",
+      "sub(/file_type;/, \"file_type, fd_bad;\")"
+    ],
+    "non_claim": "diagnostic frontier evidence only; does not prove native GCC 4.0 compiler correctness"
   },
   "retirement_condition": {
     "replacement_evidence": "retire when GCC 4.0 native cc1 source build evidence supersedes the pass1 bridge boundary",
@@ -3150,6 +3185,26 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
   "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness"
 }
 "#
+        .to_string();
+        if !mutation.is_empty() {
+            let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
+            assert_eq!(parts.len(), 2, "mutation must be old=>new");
+            content = content.replace(parts[0], parts[1]);
+        }
+        fs::write(path, content).unwrap();
+        write_gcc40_cparse_diagnostic_derivation(root, "");
+    }
+
+    fn write_gcc40_cparse_diagnostic_derivation(root: &Path, mutation: &str) {
+        let path = root.join(GCC40_CPARSE_DIAGNOSTIC_DERIVATION);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut content = concat!(
+            "compile_decl0_prepart native387_disabled \"$flags_name\" tccgen.c\n",
+            "compile_decl0_prepart native387_disabled \"$flags_name\" libtcc.c\n",
+            "run_decl0_build_phase link-object-musl-shims\n",
+            "make_cparse_plain_exact_with_compiler \"$decl0_tcc\" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'\n",
+            "sub(/file_type;/, \"file_type, fd_bad;\")\n",
+        )
         .to_string();
         if !mutation.is_empty() {
             let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
@@ -4097,7 +4152,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v1=>mantle-gcc40-native-cc1-source-frontier-reduction-v2",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v2=>mantle-gcc40-native-cc1-source-frontier-reduction-v1",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4117,12 +4172,35 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(dir.path(), "");
-        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "unchanged-stable-blocker=>native-cc1-complete");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "narrowed-stable-blocker=>native-cc1-complete");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.notes.contains("source-frontier reduction observed_result"), "{}", row.notes);
+        assert!(row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn gcc40_native_cc1_source_frontier_diagnostic_marker_drift_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = valid_gcc40_native_demangle_content();
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
+        write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
+        write_gcc40_cparse_diagnostic_derivation(
+            dir.path(),
+            "run_decl0_build_phase link-object-musl-shims=>run_decl0_build_phase missing-musl-shims",
+        );
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("source-frontier diagnostic marker"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 

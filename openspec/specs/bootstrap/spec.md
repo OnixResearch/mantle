@@ -633,14 +633,14 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 #### Scenario: GCC 4.0 native cc1 source frontier reduction is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-source-frontier-reduction]]
 
 - GIVEN `bootstrap/gcc-4.0.ncl` contains exact markers for a bounded native `cc1` source-build probe near the current TinyCC/Mes frontier
-- AND checked source-frontier evidence names the prior frontier, attempted command or patch scope, observed frontier result, exact markers, partial-only parity effect, and retirement condition
+- AND checked source-frontier evidence names the prior frontier, attempted command or patch scope, observed frontier result, exact markers, checked diagnostic derivation markers, partial-only parity effect, and retirement condition
 - WHEN the bootstrap parity report evaluates the `gcc.4.0` row
 - THEN the row may report evidence-backed `partial` with updated native source-frontier evidence
 - AND the row MUST continue blocking live-bootstrap, Guix, and StageX until full native GCC 4.0 compiler correctness exists
 
 #### Scenario: GCC 4.0 native cc1 source frontier evidence rejects stale or missing results [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-source-frontier-reduction-drift]]
 
-- GIVEN the source-frontier evidence references missing derivation markers, omits the prior frontier, omits the observed frontier result, uses an unsupported schema/status, or lacks a retirement condition
+- GIVEN the source-frontier evidence references missing derivation markers, omits the prior frontier, omits the observed frontier result, uses an unsupported schema/status, names diagnostic markers absent from the diagnostic derivation, or lacks a retirement condition
 - WHEN the bootstrap parity report evaluates the `gcc.4.0` row
 - THEN the row MUST remain a blocker
 - AND the row notes the specific failed native source-frontier evidence check
