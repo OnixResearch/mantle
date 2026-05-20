@@ -44,6 +44,11 @@
       "derivation_marker": "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input."
     },
     {
+      "id": "cc1-pointer-deref",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json",
+      "derivation_marker": "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input."
+    },
+    {
       "id": "genattrtab-bounded-output",
       "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
       "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending."
@@ -60,7 +65,7 @@
     }
   ],
   "last_observed_build_log": {
-    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-struct-field-slice",
+    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-pointer-deref-slice",
     "boundary_log_markers": [
       "gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H  -o cc1",
       "gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H  -o xgcc",
@@ -72,9 +77,9 @@
     "status": "frontier-only",
     "blockers": [
       {
-        "id": "cc1-bounded-struct-field",
-        "derivation_marker": "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.",
-        "frontier": "installed cc1 has checked bounded arithmetic, logical/control-flow, local-variable, helper-call, array-index, and struct-field no-TinyCC-delegation slices; full native cc1 parsing/codegen correctness remains pending"
+        "id": "cc1-bounded-pointer-deref",
+        "derivation_marker": "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.",
+        "frontier": "installed cc1 has checked bounded arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref no-TinyCC-delegation slices; full native cc1 parsing/codegen correctness remains pending"
       },
       {
         "id": "libiberty-demangle-bounded-semantics",

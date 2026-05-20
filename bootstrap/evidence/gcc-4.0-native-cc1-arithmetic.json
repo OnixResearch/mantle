@@ -1,7 +1,7 @@
 {
   "derivation": "bootstrap/gcc-4.0.ncl",
   "no_tinycc_delegation": {
-    "derivation_marker": "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.",
+    "derivation_marker": "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.",
     "forbidden_markers": [
       "$TCC/bin/tcc",
       "TinyCC handoff",
@@ -12,7 +12,8 @@
       "Mantle GCC 4.0 native cc1 logical slice: no TinyCC delegation for bounded proof input.",
       "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.",
       "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.",
-      "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input."
+      "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.",
+      "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input."
     ]
   },
   "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
@@ -56,16 +57,24 @@
       "slice": "array-index-v5",
       "transcript": "cc1 bounded native array-index slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-array-index.c -dumpbase gcc40-native-cc1-array-index.c -auxbase gcc40-native-cc1-array-index -o /tmp/gcc40-native-cc1-array-index.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-ARRAY-INDEX-SLICE-V5\nno_tinycc_delegation: true\n",
       "transcript_digest_blake3": "0a4a3397ad89a43542224e7c8420b6491434daddf97bab8593919be73d58240a"
+    },
+    {
+      "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-struct-field.c -dumpbase gcc40-native-cc1-struct-field.c -auxbase gcc40-native-cc1-struct-field -o /tmp/gcc40-native-cc1-struct-field.o",
+      "input_program": "struct mantle_gcc40_pair {\n  int left;\n  int right;\n};\n\nint mantle_gcc40_struct_slice(int x) {\n  struct mantle_gcc40_pair pair;\n  pair.left = x;\n  pair.right = x + 3;\n  return pair.left + pair.right;\n}\n",
+      "output_digest_blake3": "a528cc8ea405d954cf434499df1ce967c3ad5715a622b7acce66c8e2655fd63b",
+      "transcript": "cc1 bounded native struct-field slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-struct-field.c -dumpbase gcc40-native-cc1-struct-field.c -auxbase gcc40-native-cc1-struct-field -o /tmp/gcc40-native-cc1-struct-field.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-STRUCT-FIELD-SLICE-V6\nno_tinycc_delegation: true\n",
+      "transcript_digest_blake3": "e433c65a4bea74e86f21944bf6251a3fa58a3dfc8eb48e538265fb5f66363ec6",
+      "slice": "struct-field-v6"
     }
   ],
-  "schema": "mantle-gcc40-native-cc1-arithmetic-v6",
-  "selected_slice": "struct-field-v6",
+  "schema": "mantle-gcc40-native-cc1-arithmetic-v7",
+  "selected_slice": "pointer-deref-v7",
   "smoke": {
-    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-struct-field.c -dumpbase gcc40-native-cc1-struct-field.c -auxbase gcc40-native-cc1-struct-field -o /tmp/gcc40-native-cc1-struct-field.o",
-    "input_program": "struct mantle_gcc40_pair {\n  int left;\n  int right;\n};\n\nint mantle_gcc40_struct_slice(int x) {\n  struct mantle_gcc40_pair pair;\n  pair.left = x;\n  pair.right = x + 3;\n  return pair.left + pair.right;\n}\n",
-    "output_digest_blake3": "a528cc8ea405d954cf434499df1ce967c3ad5715a622b7acce66c8e2655fd63b",
-    "transcript": "cc1 bounded native struct-field slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-struct-field.c -dumpbase gcc40-native-cc1-struct-field.c -auxbase gcc40-native-cc1-struct-field -o /tmp/gcc40-native-cc1-struct-field.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-STRUCT-FIELD-SLICE-V6\nno_tinycc_delegation: true\n",
-    "transcript_digest_blake3": "e433c65a4bea74e86f21944bf6251a3fa58a3dfc8eb48e538265fb5f66363ec6"
+    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-pointer-deref.c -dumpbase gcc40-native-cc1-pointer-deref.c -auxbase gcc40-native-cc1-pointer-deref -o /tmp/gcc40-native-cc1-pointer-deref.o",
+    "input_program": "int mantle_gcc40_pointer_slice(int x) {\n  int value = x;\n  int *slot = &value;\n  *slot = x + 4;\n  return *slot + value;\n}\n",
+    "output_digest_blake3": "50c7a59fca86724a2c994babfdb4090f4aceb18d94f416c1b7b0ead3c057e40c",
+    "transcript": "cc1 bounded native pointer-deref slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-pointer-deref.c -dumpbase gcc40-native-cc1-pointer-deref.c -auxbase gcc40-native-cc1-pointer-deref -o /tmp/gcc40-native-cc1-pointer-deref.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-POINTER-DEREF-SLICE-V7\nno_tinycc_delegation: true\n",
+    "transcript_digest_blake3": "f38cdef6af8711a8ac2e57bb615248c619a2570e032e53a4a874f96505d8ce8e"
   },
   "status": "bounded-native-slice"
 }

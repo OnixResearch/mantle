@@ -586,6 +586,28 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN `gcc.4.0` MUST remain `partial` until full native compiler/generator/demangler correctness evidence is complete
 - AND parity requirements still fail closed on the remaining GCC 4.0 blockers
 
+#### Scenario: GCC 4.0 native cc1 pointer-deref slice is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-pointer-slice]]
+
+- GIVEN `bootstrap/gcc-4.0.ncl` contains a checked no-TinyCC-delegation marker for the selected bounded pointer-deref input
+- AND a checked native-cc1 receipt names schema `mantle-gcc40-native-cc1-arithmetic-v7`, selected slice `pointer-deref-v7`, the derivation, bounded input, transcript, output digest, and preserved arithmetic, logical, local-variable, helper-call, array-index, and struct-field regressions
+- WHEN the bootstrap parity report evaluates the `gcc.4.0` row
+- THEN the row may report evidence-backed `partial` with native `cc1` pointer-deref slice evidence
+- AND the row MUST continue blocking live-bootstrap, Guix, and StageX until full native GCC 4.0 compiler correctness exists
+
+#### Scenario: GCC 4.0 native cc1 pointer-deref slice rejects stale or delegated evidence [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-pointer-slice-drift]]
+
+- GIVEN the native-cc1 receipt references an older schema, omits the selected pointer-deref marker, has digest drift, contains TinyCC delegation markers in the selected transcript, or omits any preserved regression
+- WHEN the bootstrap parity report evaluates the `gcc.4.0` row
+- THEN the row MUST remain a blocker
+- AND the row notes the specific failed native-cc1 evidence check
+
+#### Scenario: GCC 4.0 native cc1 pointer-deref slice cannot complete GCC 4.0 parity [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-pointer-slice-no-overclaim]]
+
+- GIVEN bounded native `cc1` evidence exists for the selected arithmetic, logical/control-flow, local-variable assignment, helper-call, array-index, struct-field, and pointer-deref inputs
+- WHEN live-bootstrap, Guix, or StageX parity is required
+- THEN `gcc.4.0` MUST remain `partial` until full native compiler/generator/demangler correctness evidence is complete
+- AND parity requirements still fail closed on the remaining GCC 4.0 blockers
+
 #### Scenario: GCC 4.0 native cc1 build-frontier receipt is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-build-frontier]]
 
 - GIVEN `bootstrap/gcc-4.0.ncl` contains exact markers for the native `cc1` source-build attempt, the TinyCC/Mes source-boundary diagnostic, and the pass1 bridge fallback

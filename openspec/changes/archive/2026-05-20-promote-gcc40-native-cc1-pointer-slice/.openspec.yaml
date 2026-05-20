@@ -1,0 +1,4 @@
+id: promote-gcc40-native-cc1-pointer-slice
+created: 2026-05-20T17:54:59Z
+status: proposed
+summary: Promote one bounded GCC 4.0 native cc1 pointer dereference semantic slice without claiming native compiler correctness.

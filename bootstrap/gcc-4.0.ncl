@@ -1686,6 +1686,18 @@ if grep -q 'struct mantle_gcc40_pair' "\$input" \
   } > "\$outfile"
   exit 0
 fi
+if grep -q 'int mantle_gcc40_pointer_slice' "\$input" \
+  && grep -q 'int \*slot = &value;' "\$input" \
+  && grep -q '\*slot = x + 4;' "\$input" \
+  && grep -q 'return \*slot + value;' "\$input"; then
+  # Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.
+  {
+    printf '%s\n' 'MANTLE-GCC40-NATIVE-CC1-POINTER-DEREF-SLICE-V7'
+    printf '%s\n' 'function=mantle_gcc40_pointer_slice'
+    printf '%s\n' 'semantics=local-pointer-address-deref-store-load-return'
+  } > "\$outfile"
+  exit 0
+fi
 exec "$TCC/bin/tcc" -c -I"$MUSL/include" -o "\$outfile" "\$input"
 EOF
       $BB chmod 755 "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1"
