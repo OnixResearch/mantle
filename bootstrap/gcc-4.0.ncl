@@ -1287,6 +1287,7 @@ EOF
       done
 
       make -j1 -C gcc gengtype-yacc.c CC=tcc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" MAKEINFO=true 2>&1 || true
+      # MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.
       if [ -f gcc/insn-modes.h ] && ! $BB grep -q '^#define MIN_MODE_COMPLEX_FLOAT' gcc/insn-modes.h; then
         cat >> gcc/insn-modes.h <<'EOF'
 #define MIN_MODE_COMPLEX_FLOAT SFmode
