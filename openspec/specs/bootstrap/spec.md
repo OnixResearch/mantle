@@ -652,17 +652,18 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN `gcc.4.0` MUST remain `partial` until full native compiler/generator/demangler correctness evidence is complete
 - AND parity requirements still fail closed on the remaining GCC 4.0 blockers
 
-#### Scenario: GCC 4.0 native cc1 c-parse autohost frontier is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-autohost-frontier]]
+#### Scenario: GCC 4.0 native cc1 c-parse generated-header frontier is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-generated-header-frontier]]
 
-- GIVEN `bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json` uses source-frontier schema `mantle-gcc40-native-cc1-source-frontier-reduction-v4`
-- AND the evidence records the focused `c-parse.o` make attempt reaching the real c-parse compile plus exact diagnostic markers for the `auto-host.h` define window and targeted `NEED_64BIT_HOST_WIDE_INT`/`gid_t`/`inline` undef probe matrix
+- GIVEN `bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json` uses source-frontier schema `mantle-gcc40-native-cc1-source-frontier-reduction-v5`
+- AND the evidence records the focused `c-parse.o` make attempt advancing beyond the v4 autohost macro seam with six targeted undefines
+- AND the evidence names exact diagnostic markers for representative `insn-modes.h`, `machmode.h`, and `tree.h` generated-header prefix outcomes
 - WHEN the bootstrap parity report evaluates the `gcc.4.0` row
 - THEN the source-frontier evidence check passes
 - AND `gcc.4.0` remains evidence-backed `partial` without completing live-bootstrap, Guix, or StageX parity
 
-#### Scenario: GCC 4.0 native cc1 c-parse autohost frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-autohost-frontier-drift]]
+#### Scenario: GCC 4.0 native cc1 c-parse generated-header frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-generated-header-frontier-drift]]
 
-- GIVEN the source-frontier evidence uses a stale schema, still claims the copied `fd_bad` or fdopen/output-return seam is the active remaining frontier, omits the autohost macro-boundary diagnostic markers, or references diagnostic markers absent from the diagnostic derivation
+- GIVEN the source-frontier evidence uses a stale schema, still claims the copied `fd_bad`, fdopen/output-return, or autohost macro seam is the active remaining frontier, omits the generated-header diagnostic markers, or references diagnostic markers absent from the diagnostic derivation
 - WHEN the bootstrap parity report evaluates the `gcc.4.0` row
 - THEN the row MUST remain a blocker
 - AND the row notes the specific failed native source-frontier evidence check
