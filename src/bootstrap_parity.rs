@@ -809,9 +809,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v2" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v3" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v2`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v3`"
         ));
     }
     for field in [
@@ -830,6 +830,18 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         return Err(format!(
             "GCC 4.0 native cc1 source-frontier reduction observed_result is `{observed_result}`, expected `narrowed-stable-blocker`"
         ));
+    }
+    let observed_frontier = require_gcc40_boundary_object_string(reduction, "observed_frontier")?;
+    for required_fragment in ["fdopen", "tcc_output_file return marker Y", "post-output marker w"] {
+        if !observed_frontier.contains(required_fragment) {
+            return Err(format!(
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v3 fragment `{required_fragment}`"
+            ));
+        }
+    }
+    if observed_frontier.contains("remaining runtime frontier is the copied fd_bad branch") {
+        return Err("GCC 4.0 native cc1 source-frontier reduction observed_frontier is stale v2 fd_bad-only evidence"
+            .to_string());
     }
     let probe_marker = require_gcc40_boundary_object_string(reduction, "probe_marker")?;
     require_gcc40_derivation_marker(derivation_content, probe_marker)?;
@@ -3161,20 +3173,24 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v2",
-    "prior_frontier": "native gengtype-yacc.c make probe reaches TinyCC/Mes c-parse source boundary before pass1 fallback; prior v1 only recorded unchanged generated-header seed frontier",
-    "attempted_probe": "bounded diagnostic decl0/TinyCC source-frontier probe from bootstrap/diag-gcc40-c-parse-boundary.ncl after moving away from installed-cc1 micro-slices",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v3",
+    "prior_frontier": "source-frontier v2 narrowed the TinyCC/Mes c-parse diagnostic seam to native387-disabled compile-only success plus musl-shim decl0 reaching cparse_decl0_trace_valid_var_semicolon, with the copied fd_bad branch as the last recorded runtime frontier",
+    "attempted_probe": "bounded diagnostic fd_bad/fdopen/output-return probe from bootstrap/diag-gcc40-c-parse-boundary.ncl; the copied fd_bad branch is forced false only inside the diagnostic instrumented compiler",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
     "observed_result": "narrowed-stable-blocker",
-    "observed_frontier": "baseline tccgen.c/libtcc.c compile-only segfaults; disabling native 387 lets tccgen.c/libtcc.c compile; a musl-shim instrumented compiler reaches cparse_decl0_trace_valid_var_semicolon rc=0, then the remaining runtime frontier is the copied fd_bad branch inside tcc_write_elf_file",
-    "retirement_condition": "replace when native TinyCC/Mes handoff advances past the fd_bad/tcc_write_elf_file branch and can build the native GCC 4.0 c-parse/cc1 source path without pass1 fallback",
+    "observed_frontier": "forcing the copied fd_bad branch false reaches fdopen pre/post markers 4/6, the ELF output-format marker 5, tcc_output_file return marker Y, and post-output marker w for both compile_empty and cparse_decl0_trace_valid_var_semicolon rc=0; this retires fd_bad as the recorded diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build",
+    "retirement_condition": "replace when the diagnostic handoff advances beyond bounded fdopen/output-return probes to a real native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
     "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
     "diagnostic_markers": [
       "compile_decl0_prepart native387_disabled \"$flags_name\" tccgen.c",
       "compile_decl0_prepart native387_disabled \"$flags_name\" libtcc.c",
       "run_decl0_build_phase link-object-musl-shims",
       "make_cparse_plain_exact_with_compiler \"$decl0_tcc\" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'",
-      "sub(/file_type;/, \"file_type, fd_bad;\")"
+      "sub(/file_type;/, \"file_type, fd_bad;\")",
+      "if (in_wr && $0 ~ /^[[:space:]]*if \\(fd < 0\\)/)",
+      "if (in_wr && $0 ~ /^[[:space:]]*f = fdopen/)",
+      "if (in_wr && $0 ~ /^[[:space:]]*if \\(s1->output_format == TCC_OUTPUT_FORMAT_ELF\\)/)",
+      "if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/)"
     ],
     "non_claim": "diagnostic frontier evidence only; does not prove native GCC 4.0 compiler correctness"
   },
@@ -3204,6 +3220,10 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "run_decl0_build_phase link-object-musl-shims\n",
             "make_cparse_plain_exact_with_compiler \"$decl0_tcc\" cparse_decl0_trace_valid_var_semicolon 'int cparse_decl0_trace_valid_var_probe;'\n",
             "sub(/file_type;/, \"file_type, fd_bad;\")\n",
+            "if (in_wr && $0 ~ /^[[:space:]]*if \\(fd < 0\\)/)\n",
+            "if (in_wr && $0 ~ /^[[:space:]]*f = fdopen/)\n",
+            "if (in_wr && $0 ~ /^[[:space:]]*if \\(s1->output_format == TCC_OUTPUT_FORMAT_ELF\\)/)\n",
+            "if (in_out && $0 ~ /^[[:space:]]*ret = elf_output_file/)\n",
         )
         .to_string();
         if !mutation.is_empty() {
@@ -4093,7 +4113,6 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("GCC 4.0 native boundary receipt marker not found"));
         assert!(row.notes.contains("evidence check failed"));
     }
 
@@ -4136,7 +4155,6 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("GCC 4.0 native boundary receipt marker not found"));
         assert!(row.notes.contains("evidence check failed"));
     }
 
@@ -4152,7 +4170,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v2=>mantle-gcc40-native-cc1-source-frontier-reduction-v1",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v3=>mantle-gcc40-native-cc1-source-frontier-reduction-v2",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4178,6 +4196,28 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
 
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.notes.contains("source-frontier reduction observed_result"), "{}", row.notes);
+        assert!(row.notes.contains("evidence check failed"));
+    }
+
+    #[test]
+    fn gcc40_native_cc1_source_frontier_stale_fd_bad_frontier_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = valid_gcc40_native_demangle_content();
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
+        write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(
+            dir.path(),
+            "forcing the copied fd_bad branch false reaches fdopen pre/post markers 4/6, the ELF output-format marker 5, tcc_output_file return marker Y, and post-output marker w for both compile_empty and cparse_decl0_trace_valid_var_semicolon rc=0; this retires fd_bad as the recorded diagnostic frontier but still does not prove the native GCC 4.0 c-parse/cc1 source build=>baseline tccgen.c/libtcc.c compile-only segfaults; disabling native 387 lets tccgen.c/libtcc.c compile; a musl-shim instrumented compiler reaches cparse_decl0_trace_valid_var_semicolon rc=0, then the remaining runtime frontier is the copied fd_bad branch inside tcc_write_elf_file",
+        );
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(row.notes.contains("observed_frontier missing required v3 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 
@@ -4222,7 +4262,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("does not prove native/full GCC 4.0 correctness"));
+        assert!(row.notes.contains("evidence check failed"));
     }
 
     #[test]
