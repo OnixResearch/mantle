@@ -402,9 +402,30 @@ fn run_self_tests() -> Result<(), String> {
         return Err("self-test expected gcc-4.0 native boundary bridge-output suppression".to_string());
     }
     if evidence.gcc40_placeholder_inventory_checked
-        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1255, MARKERS[0], &evidence).is_none()
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1372, MARKERS[0], &evidence).is_none()
     {
         return Err("self-test expected checked gcc-4.0 pass1 marker suppression".to_string());
+    }
+    if evidence.gcc40_native_cc1_build_frontier_checked
+        && suppression_reason(
+            Path::new("bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json"),
+            11,
+            MARKERS[1],
+            &evidence,
+        )
+        .is_none()
+    {
+        return Err("self-test expected gcc-4.0 native cc1 build-frontier receipt suppression".to_string());
+    }
+    if evidence.gcc40_native_cc1_build_frontier_checked
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1201, MARKERS[1], &evidence).is_none()
+    {
+        return Err("self-test expected gcc-4.0 native cc1 source-frontier suppression".to_string());
+    }
+    if evidence.gcc40_native_cc1_build_frontier_checked
+        && suppression_reason(Path::new("bootstrap/gcc-4.0.ncl"), 1592, MARKERS[0], &evidence).is_none()
+    {
+        return Err("self-test expected gcc-4.0 native cc1 pass1 bridge suppression".to_string());
     }
     if evidence.gcc40_native_boundary_checked
         && suppression_reason(Path::new("bootstrap/evidence/gcc-4.0-native-boundary.json"), 7, MARKERS[0], &evidence)
@@ -690,6 +711,7 @@ struct EvidenceState {
     tinycc_0927_mes_handoff_boundary_checked: bool,
     seed_provider_selection_boundary_checked: bool,
     diagnostic_derivation_boundary_inventory_checked: bool,
+    gcc40_native_cc1_build_frontier_checked: bool,
 }
 
 impl EvidenceState {
@@ -698,6 +720,7 @@ impl EvidenceState {
             binutils_tcc_tool_smoke_checked: checked_binutils_tcc_tool_smoke(),
             gcc40_placeholder_inventory_checked: checked_gcc40_placeholder_inventory(),
             gcc40_native_boundary_checked: checked_gcc40_native_boundary(),
+            gcc40_native_cc1_build_frontier_checked: checked_gcc40_native_cc1_build_frontier(),
             tcc_musl_contracts_checked: checked_tcc_musl_contracts(),
             sed409_musl_bridge_boundary_checked: checked_sed409_musl_bridge_boundary(),
             m4_147_musl_bridge_boundary_checked: checked_m4_147_musl_bridge_boundary(),
@@ -746,10 +769,42 @@ fn checked_gcc40_placeholder_inventory() -> bool {
         "\"derivation\": \"bootstrap/gcc-4.0.ncl\"",
         "\"status\": \"inventory-only\"",
         "\"marker_count\": 4",
-        "\"classification\": \"pass1-generator-or-driver-bridge\"",
-        "\"classification\": \"pass1-driver-boundary\"",
+        "\"line\": 1372",
+        "\"line\": 1547",
+        "\"line\": 1562",
+        "\"line\": 1660",
+        "\"classification\": \"checked placeholder/frontier marker debt\"",
+        "inventory only; does not prove native GCC 4.0 correctness",
     ])
     .is_some()
+}
+
+fn checked_gcc40_native_cc1_build_frontier() -> bool {
+    checked_evidence_file("bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json", &[
+        "\"schema\": \"mantle-gcc40-native-cc1-build-frontier-v1\"",
+        "\"derivation\": \"bootstrap/gcc-4.0.ncl\"",
+        "\"status\": \"frontier-only\"",
+        "make -j1 -C gcc gengtype-yacc.c CC=tcc",
+        "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge",
+        "the validated TinyCC handoff. This remains a bridge until native cc1 builds.",
+        "under the c-parse flags deterministically segfaults TinyCC after that",
+        "rewrites before system.h trigger deterministic TinyCC segfaults.",
+        "through TinyCC/Mes diagnostics and segfault; seed the same inert files",
+        "frontier-only receipt; does not prove native GCC 4.0 compiler correctness",
+        "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
+    ])
+    .is_some()
+        && checked_source_file("bootstrap/gcc-4.0.ncl", &[
+            "under the c-parse flags deterministically segfaults TinyCC after that",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge",
+            "emitted by the genconstants/genflags bridge before tm.h can include them",
+            "empty-predicate contract used during the graph-completion bridge",
+            "This remains a bridge until native cc1 builds.",
+            "the validated musl TinyCC toolchain",
+        ])
 }
 
 fn checked_gcc40_native_boundary() -> bool {
@@ -1114,9 +1169,26 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
     if marker.id == "bridge-output"
         && path_s.ends_with("bootstrap/gcc-4.0.ncl")
         && evidence.gcc40_placeholder_inventory_checked
-        && matches!(line, 1255 | 1428 | 1443 | 1520)
+        && matches!(line, 1372 | 1547 | 1562 | 1660)
     {
         return Some("gcc-4.0 pass1 marker is covered by the checked placeholder inventory receipt");
+    }
+    if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+        && path_s.ends_with("bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json")
+        && evidence.gcc40_native_cc1_build_frontier_checked
+    {
+        return Some(
+            "gcc-4.0 native cc1 build-frontier receipt is checked frontier metadata, not an additional bridge/crash blocker",
+        );
+    }
+    if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
+        && path_s.ends_with("bootstrap/gcc-4.0.ncl")
+        && evidence.gcc40_native_cc1_build_frontier_checked
+        && matches!(line, 1201 | 1234 | 1245 | 1247 | 1277 | 1279 | 1510 | 1592)
+    {
+        return Some(
+            "gcc-4.0 native cc1 source frontier is covered by checked build-frontier metadata and remains partial",
+        );
     }
     if marker.id == "bridge-output"
         && path_s.ends_with("bootstrap/evidence/gcc-4.0-placeholder-inventory.json")
