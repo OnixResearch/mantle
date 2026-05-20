@@ -51,6 +51,15 @@
         "intentionally a sibling diagnostic derivation",
         "records the first concrete blocker"
       ]
+    },
+    {
+      "derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+      "purpose_marker": "Diagnostic: reproduce GCC 4.0.4 c-parse TinyCC boundary.",
+      "checked_markers": [
+        "intentionally stops at c-parse.o",
+        "diag: reproduce focused c-parse boundary",
+        "make_cparse_plain_exact_with_compiler"
+      ]
     }
   ],
   "replacement_condition": "Remove this inventory-only receipt when these diagnostic derivations are promoted into production bootstrap stages or deleted after their owning production blockers are repaired.",

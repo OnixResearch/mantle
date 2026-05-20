@@ -1118,6 +1118,7 @@ fn checked_diagnostic_derivation_boundary_inventory() -> bool {
         "\"derivation\": \"bootstrap/diag-tcc27-static-runtime.ncl\"",
         "\"derivation\": \"bootstrap/diag-i386-tinycc26-emission.ncl\"",
         "\"derivation\": \"bootstrap/diag-musl-startup-boundary.ncl\"",
+        "\"derivation\": \"bootstrap/diag-gcc40-c-parse-boundary.ncl\"",
         "\"derivation\": \"bootstrap/spike-i386-mes-runtime-layout.ncl\"",
         "\"derivation\": \"bootstrap/spike-i386-tcc27-make-pass1.ncl\"",
         "diagnostic metadata classification only",
@@ -1138,6 +1139,12 @@ fn checked_diagnostic_derivation_boundary_inventory() -> bool {
         && checked_source_file("bootstrap/diag-musl-startup-boundary.ncl", &[
             "Diagnostic: isolate the predecessor TCC + musl static startup boundary",
             "diag-musl-startup-run",
+        ])
+        && checked_source_file("bootstrap/diag-gcc40-c-parse-boundary.ncl", &[
+            "Diagnostic: reproduce GCC 4.0.4 c-parse TinyCC boundary",
+            "intentionally stops at c-parse.o",
+            "diag: reproduce focused c-parse boundary",
+            "make_cparse_plain_exact_with_compiler",
         ])
         && checked_source_file("bootstrap/spike-i386-mes-runtime-layout.ncl", &[
             "Spike proof: create an i386 Mes runtime/header layout",
