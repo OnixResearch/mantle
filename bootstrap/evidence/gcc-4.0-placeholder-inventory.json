@@ -5,24 +5,25 @@
   "marker_count": 4,
   "markers": [
     {
-      "line": 1352,
+      "line": 1372,
       "marker": "pass1 bridge",
-      "classification": "test-boundary"
+      "classification": "checked placeholder/frontier marker debt"
     },
     {
-      "line": 1527,
+      "line": 1547,
       "marker": "pass1 bridge",
-      "classification": "test-boundary"
+      "classification": "checked placeholder/frontier marker debt"
     },
     {
-      "line": 1542,
+      "line": 1562,
       "marker": "pass1 bridge",
-      "classification": "test-boundary"
+      "classification": "checked placeholder/frontier marker debt"
     },
     {
-      "line": 1619,
+      "line": 1639,
       "marker": "pass1 bridge",
-      "classification": "test-boundary"
+      "classification": "checked placeholder/frontier marker debt"
     }
-  ]
+  ],
+  "non_claim": "inventory only; does not prove native GCC 4.0 correctness"
 }
