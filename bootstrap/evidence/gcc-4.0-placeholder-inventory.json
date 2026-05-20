@@ -5,22 +5,22 @@
   "marker_count": 4,
   "markers": [
     {
-      "line": 1310,
+      "line": 1333,
       "marker": "pass1 bridge",
       "classification": "test-boundary"
     },
     {
-      "line": 1485,
+      "line": 1508,
       "marker": "pass1 bridge",
       "classification": "test-boundary"
     },
     {
-      "line": 1500,
+      "line": 1523,
       "marker": "pass1 bridge",
       "classification": "test-boundary"
     },
     {
-      "line": 1577,
+      "line": 1600,
       "marker": "pass1 bridge",
       "classification": "test-boundary"
     }

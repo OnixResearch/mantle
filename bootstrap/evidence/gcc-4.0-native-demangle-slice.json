@@ -1,10 +1,28 @@
 {
-  "schema": "mantle-gcc40-native-demangle-slice-v2",
+  "schema": "mantle-gcc40-native-demangle-slice-v3",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "bounded-native-demangle-slice",
-  "selected_shape": "deep-nested-zero-arg-itanium-v2",
+  "selected_shape": "single-int-arg-itanium-v3",
   "bounded_contract": {
     "accepted_inputs": [
+      {
+        "mangled": "_ZN3foo3bar3bazEi",
+        "demangled": "foo::bar::baz(int)"
+      }
+    ],
+    "int_regressions": [
+      {
+        "mangled": "_ZN3foo3barEi",
+        "demangled": "foo::bar(int)"
+      }
+    ],
+    "flat_int_regressions": [
+      {
+        "mangled": "_Z3fooi",
+        "demangled": "foo(int)"
+      }
+    ],
+    "zero_arg_regressions": [
       {
         "mangled": "_ZN3foo3bar3bazEv",
         "demangled": "foo::bar::baz()"
@@ -23,24 +41,26 @@
       }
     ],
     "rejected_inputs": [
-      "_ZN3foo3barEi",
-      "_ZN3foo3bar3bazEi",
+      "_ZN3foo3bar3bazEf",
+      "_ZN3foo3bar3baz3quxEi",
       "_ZN3foo3bar3baz3quxEv",
       "_ZN3fooE",
       "not_mangled"
     ],
-    "non_claim": "only flat, two-component nested, and selected three-component nested zero-argument Itanium function names are in scope"
+    "non_claim": "only flat, two-component nested, and selected three-component nested zero-argument or single-int Itanium function names are in scope"
   },
   "source_markers": {
-    "cplus_demangle_marker": "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary",
-    "cp_demangle_marker": "gcc40_cp_demangle_deep_nested_itanium_v2_boundary"
+    "cplus_demangle_marker": "gcc40_cplus_demangle_int_arg_itanium_v3_boundary",
+    "cp_demangle_marker": "gcc40_cp_demangle_int_arg_itanium_v3_boundary"
   },
   "smoke": {
-    "transcript": "demangle bounded native libiberty slice\nselected_shape: deep-nested-zero-arg-itanium-v2\ninput: _ZN3foo3bar3bazEv\noutput: foo::bar::baz()\nnested_regression: _ZN3foo3barEv -> foo::bar()\nflat_regression: _Z3foov -> foo()\nnegative: _ZN3foo3bar3bazEi -> <null>\nnegative: _ZN3foo3bar3baz3quxEv -> <null>\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nnon_claim: full native cp-demangle and GCC 4.0 correctness pending\n",
-    "transcript_digest_blake3": "69707f1660fc4cc1692e07d170980fa1d2c259d261943564737182098c0b9470",
-    "output_digest_blake3": "6c8a42641623159b67b5e9a4187735f30c2854e6c36e603d5ae0c5c86ed6a7bf"
+    "transcript": "demangle bounded native libiberty slice\nselected_shape: single-int-arg-itanium-v3\ninput: _ZN3foo3bar3bazEi\noutput: foo::bar::baz(int)\nint_regression: _ZN3foo3barEi -> foo::bar(int)\nflat_int_regression: _Z3fooi -> foo(int)\nzero_arg_regression: _ZN3foo3bar3bazEv -> foo::bar::baz()\nnested_zero_arg_regression: _ZN3foo3barEv -> foo::bar()\nflat_zero_arg_regression: _Z3foov -> foo()\nnegative: _ZN3foo3bar3bazEf -> <null>\nnegative: _ZN3foo3bar3baz3quxEi -> <null>\nnegative: _ZN3foo3bar3baz3quxEv -> <null>\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nnon_claim: full native cp-demangle and GCC 4.0 correctness pending\n",
+    "transcript_digest_blake3": "25dfa20a2ee6d42fd5b6192396c80061ade7e863631c0bb3641a842c0d94ee95",
+    "output_digest_blake3": "20899c9175e1129df183604f24521d54e5a74a62a4935c0702fd8bbf2ca2e9b5"
   },
   "forbidden_stale_markers": [
+    "gcc40_cplus_demangle_deep_nested_itanium_v2_boundary",
+    "gcc40_cp_demangle_deep_nested_itanium_v2_boundary",
     "gcc40_cplus_demangle_nested_itanium_v1_boundary",
     "gcc40_cp_demangle_nested_itanium_v1_boundary",
     "gcc40_cplus_demangle_bounded_itanium_v0_boundary",
