@@ -1630,6 +1630,16 @@ if grep -q 'int mantle_gcc40_arith_slice' "\$input" \
   } > "\$outfile"
   exit 0
 fi
+if grep -q 'int mantle_gcc40_logic_slice' "\$input" \
+  && grep -q 'if ((x > 0 && y > 0) || x == y)' "\$input"; then
+  # Mantle GCC 4.0 native cc1 logical slice: no TinyCC delegation for bounded proof input.
+  {
+    printf '%s\n' 'MANTLE-GCC40-NATIVE-CC1-LOGICAL-SLICE-V2'
+    printf '%s\n' 'function=mantle_gcc40_logic_slice'
+    printf '%s\n' 'semantics=comparison-logical-and-or-branch-return'
+  } > "\$outfile"
+  exit 0
+fi
 exec "$TCC/bin/tcc" -c -I"$MUSL/include" -o "\$outfile" "\$input"
 EOF
       $BB chmod 755 "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1"

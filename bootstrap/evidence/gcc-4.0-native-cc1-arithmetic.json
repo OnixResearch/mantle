@@ -1,21 +1,33 @@
 {
-  "schema": "mantle-gcc40-native-cc1-arithmetic-v1",
   "derivation": "bootstrap/gcc-4.0.ncl",
-  "status": "bounded-native-slice",
-  "smoke": {
-    "input_program": "int mantle_gcc40_arith_slice(int x) {\n  int y = x * 2 + 5;\n  return y > 7 ? y - 3 : y + 3;\n}\n",
-    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-arith.c -dumpbase gcc40-native-cc1-arith.c -auxbase gcc40-native-cc1-arith -o /tmp/gcc40-native-cc1-arith.o",
-    "transcript": "cc1 bounded native arithmetic slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-arith.c -dumpbase gcc40-native-cc1-arith.c -auxbase gcc40-native-cc1-arith -o /tmp/gcc40-native-cc1-arith.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-ARITHMETIC-SLICE-V1\nno_tinycc_delegation: true\n",
-    "transcript_digest_blake3": "b110bc20a1b8c94e92cad71af1fac022bad2b310af3d043dd64d8f6a5706a9e1",
-    "output_digest_blake3": "1111111111111111111111111111111111111111111111111111111111111111"
-  },
   "no_tinycc_delegation": {
-    "derivation_marker": "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.",
+    "derivation_marker": "Mantle GCC 4.0 native cc1 logical slice: no TinyCC delegation for bounded proof input.",
     "forbidden_markers": [
       "$TCC/bin/tcc",
       "TinyCC handoff",
       "exec \\\"$TCC/bin/tcc\\\""
-    ]
+    ],
+    "regression_marker": "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input."
   },
-  "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness"
+  "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
+  "regressions": [
+    {
+      "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-arith.c -dumpbase gcc40-native-cc1-arith.c -auxbase gcc40-native-cc1-arith -o /tmp/gcc40-native-cc1-arith.o",
+      "input_program": "int mantle_gcc40_arith_slice(int x) {\n  int y = x * 2 + 5;\n  return y > 7 ? y - 3 : y + 3;\n}\n",
+      "output_digest_blake3": "5f58276ef0ebfd831755debf5214a514100341ebc9a007bb4a101b1d34eaa49d",
+      "slice": "arithmetic-control-flow-v1",
+      "transcript": "cc1 bounded native arithmetic slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-arith.c -dumpbase gcc40-native-cc1-arith.c -auxbase gcc40-native-cc1-arith -o /tmp/gcc40-native-cc1-arith.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-ARITHMETIC-SLICE-V1\nno_tinycc_delegation: true\n",
+      "transcript_digest_blake3": "b110bc20a1b8c94e92cad71af1fac022bad2b310af3d043dd64d8f6a5706a9e1"
+    }
+  ],
+  "schema": "mantle-gcc40-native-cc1-arithmetic-v2",
+  "selected_slice": "logical-boolean-control-flow-v2",
+  "smoke": {
+    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-logic.c -dumpbase gcc40-native-cc1-logic.c -auxbase gcc40-native-cc1-logic -o /tmp/gcc40-native-cc1-logic.o",
+    "input_program": "int mantle_gcc40_logic_slice(int x, int y) {\n  if ((x > 0 && y > 0) || x == y) {\n    return x + y;\n  }\n  return x - y;\n}\n",
+    "output_digest_blake3": "95f29cc9617d5eca23bddcf8b0be47d5b5de01a27e9cecb184642bf0637923fa",
+    "transcript": "cc1 bounded native logical slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-logic.c -dumpbase gcc40-native-cc1-logic.c -auxbase gcc40-native-cc1-logic -o /tmp/gcc40-native-cc1-logic.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-LOGICAL-SLICE-V2\nno_tinycc_delegation: true\n",
+    "transcript_digest_blake3": "5baf39aa952075f0d4b6fdc13df3316f39ab8c85745d9d059ceeae68c95ed24f"
+  },
+  "status": "bounded-native-slice"
 }

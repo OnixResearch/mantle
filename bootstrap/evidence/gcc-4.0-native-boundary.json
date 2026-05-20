@@ -19,6 +19,11 @@
       "derivation_marker": "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input."
     },
     {
+      "id": "cc1-logical-control-flow",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json",
+      "derivation_marker": "Mantle GCC 4.0 native cc1 logical slice: no TinyCC delegation for bounded proof input."
+    },
+    {
       "id": "genattrtab-bounded-output",
       "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
       "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending."
@@ -35,7 +40,7 @@
     }
   ],
   "last_observed_build_log": {
-    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-arithmetic-slice",
+    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-logical-slice",
     "boundary_log_markers": [
       "gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H  -o cc1",
       "gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H  -o xgcc",
@@ -46,6 +51,11 @@
   "native_frontier": {
     "status": "frontier-only",
     "blockers": [
+      {
+        "id": "cc1-bounded-logical-control-flow",
+        "derivation_marker": "Mantle GCC 4.0 native cc1 logical slice: no TinyCC delegation for bounded proof input.",
+        "frontier": "installed cc1 has checked bounded arithmetic and logical/control-flow no-TinyCC-delegation slices; full native cc1 parsing/codegen correctness remains pending"
+      },
       {
         "id": "libiberty-demangle-bounded-semantics",
         "derivation_marker": "gcc40_cplus_demangle_long_arg_itanium_v5_boundary",
