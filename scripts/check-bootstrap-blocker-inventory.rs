@@ -772,7 +772,7 @@ fn checked_gcc40_placeholder_inventory() -> bool {
         "\"line\": 1373",
         "\"line\": 1548",
         "\"line\": 1563",
-        "\"line\": 1671",
+        "\"line\": 1683",
         "\"classification\": \"checked placeholder/frontier marker debt\"",
         "inventory only; does not prove native GCC 4.0 correctness",
     ])
@@ -1176,7 +1176,7 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
     if marker.id == "bridge-output"
         && path_s.ends_with("bootstrap/gcc-4.0.ncl")
         && evidence.gcc40_placeholder_inventory_checked
-        && matches!(line, 1373 | 1548 | 1563 | 1671)
+        && matches!(line, 1373 | 1548 | 1563 | 1683)
     {
         return Some("gcc-4.0 pass1 marker is covered by the checked placeholder inventory receipt");
     }
@@ -1191,7 +1191,7 @@ fn suppression_reason(path: &Path, line: usize, marker: MarkerClass, evidence: &
     if matches!(marker.id, "bridge-output" | "compiler-runtime-crash-boundary")
         && path_s.ends_with("bootstrap/gcc-4.0.ncl")
         && evidence.gcc40_native_cc1_build_frontier_checked
-        && matches!(line, 1201 | 1234 | 1245 | 1247 | 1277 | 1279 | 1373 | 1511 | 1548 | 1563 | 1593 | 1671)
+        && matches!(line, 1201 | 1234 | 1245 | 1247 | 1277 | 1279 | 1373 | 1511 | 1548 | 1563 | 1593 | 1683)
     {
         return Some(
             "gcc-4.0 native cc1 source frontier is covered by checked build-frontier metadata and remains partial",

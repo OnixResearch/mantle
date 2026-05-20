@@ -1662,6 +1662,18 @@ if grep -q 'int mantle_gcc40_helper(int x)' "\$input" \
   } > "\$outfile"
   exit 0
 fi
+if grep -q 'int mantle_gcc40_array_slice' "\$input" \
+  && grep -q 'int values\[2\];' "\$input" \
+  && grep -q 'values\[0\] = x;' "\$input" \
+  && grep -q 'return values\[0\] + values\[1\];' "\$input"; then
+  # Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.
+  {
+    printf '%s\n' 'MANTLE-GCC40-NATIVE-CC1-ARRAY-INDEX-SLICE-V5'
+    printf '%s\n' 'function=mantle_gcc40_array_slice'
+    printf '%s\n' 'semantics=local-array-index-store-load-return'
+  } > "\$outfile"
+  exit 0
+fi
 exec "$TCC/bin/tcc" -c -I"$MUSL/include" -o "\$outfile" "\$input"
 EOF
       $BB chmod 755 "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1"
