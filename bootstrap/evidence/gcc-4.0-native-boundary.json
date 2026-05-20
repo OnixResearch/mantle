@@ -27,6 +27,11 @@
       "id": "genoutput-bounded-output",
       "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
       "derivation_marker": "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending."
+    },
+    {
+      "id": "libiberty-demangle-nested-name",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-demangle-slice.json",
+      "derivation_marker": "gcc40_cplus_demangle_nested_itanium_v1_boundary"
     }
   ],
   "last_observed_build_log": {
@@ -43,8 +48,8 @@
     "blockers": [
       {
         "id": "libiberty-demangle-bounded-semantics",
-        "derivation_marker": "gcc40_cplus_demangle_bounded_itanium_v0_boundary",
-        "frontier": "libiberty demangling has a checked bounded Itanium zero-argument function semantic slice; full native cp-demangle remains pending"
+        "derivation_marker": "gcc40_cplus_demangle_nested_itanium_v1_boundary",
+        "frontier": "libiberty demangling has checked bounded flat and nested zero-argument Itanium semantic slices; full native cp-demangle remains pending"
       }
     ]
   },
