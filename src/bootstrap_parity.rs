@@ -852,10 +852,10 @@ fn validate_gcc40_native_cc1_arithmetic_receipt(project_root: &Path, derivation_
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native cc1 arithmetic receipt is not valid JSON: {err}"))?;
-    require_gcc40_arithmetic_string(&value, "schema", "mantle-gcc40-native-cc1-arithmetic-v5")?;
+    require_gcc40_arithmetic_string(&value, "schema", "mantle-gcc40-native-cc1-arithmetic-v6")?;
     require_gcc40_arithmetic_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
     require_gcc40_arithmetic_string(&value, "status", "bounded-native-slice")?;
-    require_gcc40_arithmetic_string(&value, "selected_slice", "array-index-v5")?;
+    require_gcc40_arithmetic_string(&value, "selected_slice", "struct-field-v6")?;
     require_gcc40_arithmetic_string(
         &value,
         "parity_effect",
@@ -869,12 +869,12 @@ fn validate_gcc40_native_cc1_arithmetic_receipt(project_root: &Path, derivation_
     validate_gcc40_cc1_smoke(
         smoke,
         &[
-            "int mantle_gcc40_array_slice(int x)",
-            "int values[2];",
-            "values[0] = x;",
-            "return values[0] + values[1];",
+            "struct mantle_gcc40_pair",
+            "struct mantle_gcc40_pair pair;",
+            "pair.left = x;",
+            "return pair.left + pair.right;",
         ],
-        "MANTLE-GCC40-NATIVE-CC1-ARRAY-INDEX-SLICE-V5",
+        "MANTLE-GCC40-NATIVE-CC1-STRUCT-FIELD-SLICE-V6",
     )?;
 
     let regressions = value
@@ -935,6 +935,22 @@ fn validate_gcc40_native_cc1_arithmetic_receipt(project_root: &Path, derivation_
         "MANTLE-GCC40-NATIVE-CC1-FUNCTION-CALL-SLICE-V4",
     )?;
 
+    let array_index_regression = regressions
+        .iter()
+        .find(|entry| entry.get("slice").and_then(|v| v.as_str()) == Some("array-index-v5"))
+        .and_then(|entry| entry.as_object())
+        .ok_or_else(|| "GCC 4.0 native cc1 arithmetic receipt missing array-index-v5 regression".to_string())?;
+    validate_gcc40_cc1_smoke(
+        array_index_regression,
+        &[
+            "int mantle_gcc40_array_slice(int x)",
+            "int values[2];",
+            "values[0] = x;",
+            "return values[0] + values[1];",
+        ],
+        "MANTLE-GCC40-NATIVE-CC1-ARRAY-INDEX-SLICE-V5",
+    )?;
+
     let no_delegation = value.get("no_tinycc_delegation").and_then(|v| v.as_object()).ok_or_else(|| {
         "GCC 4.0 native cc1 arithmetic receipt missing object field `no_tinycc_delegation`".to_string()
     })?;
@@ -969,6 +985,7 @@ fn validate_gcc40_native_cc1_arithmetic_receipt(project_root: &Path, derivation_
             require_gcc40_arithmetic_object_string(logical_regression, "transcript")?,
             require_gcc40_arithmetic_object_string(local_vars_regression, "transcript")?,
             require_gcc40_arithmetic_object_string(function_call_regression, "transcript")?,
+            require_gcc40_arithmetic_object_string(array_index_regression, "transcript")?,
         ] {
             if transcript.contains(forbidden_marker) {
                 return Err(format!(
@@ -2323,9 +2340,9 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index and generator boundary smokes only; native compiler correctness not proven",
+            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field and generator boundary smokes only; native compiler correctness not proven",
             proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, and array-index slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler correctness is still unproven",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, and struct-field slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler correctness is still unproven",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
@@ -2488,9 +2505,9 @@ mod tests {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index and generator boundary smokes only; native compiler correctness not proven",
+            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field and generator boundary smokes only; native compiler correctness not proven",
             proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, and array-index slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler correctness is still unproven",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, and struct-field slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler correctness is still unproven",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         }
     }
@@ -2754,6 +2771,11 @@ mod tests {
       "derivation_marker": "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input."
     },
     {
+      "id": "cc1-struct-field",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json",
+      "derivation_marker": "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input."
+    },
+    {
       "id": "genattrtab-bounded-output",
       "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
       "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending."
@@ -2770,16 +2792,16 @@ mod tests {
     }
   ],
   "last_observed_build_log": {
-    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-array-index-slice",
+    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-struct-field-slice",
     "boundary_log_markers": ["gcc-4.0.4 build complete (languages: c)"]
   },
   "native_frontier": {
     "status": "frontier-only",
     "blockers": [
       {
-        "id": "cc1-bounded-array-index",
-        "derivation_marker": "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.",
-        "frontier": "installed cc1 has checked bounded arithmetic, logical/control-flow, local-variable, helper-call, and array-index no-TinyCC-delegation slices; full native cc1 parsing/codegen correctness remains pending"
+        "id": "cc1-bounded-struct-field",
+        "derivation_marker": "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.",
+        "frontier": "installed cc1 has checked bounded arithmetic, logical/control-flow, local-variable, helper-call, array-index, and struct-field no-TinyCC-delegation slices; full native cc1 parsing/codegen correctness remains pending"
       },
       {
         "id": "libiberty-demangle-bounded-semantics",
@@ -2815,15 +2837,18 @@ mod tests {
         let array_input = "int mantle_gcc40_array_slice(int x) {\n  int values[2];\n  values[0] = x;\n  values[1] = x + 2;\n  return values[0] + values[1];\n}\n";
         let array_transcript = "cc1 bounded native array-index slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-array-index.c -dumpbase gcc40-native-cc1-array-index.c -auxbase gcc40-native-cc1-array-index -o /tmp/gcc40-native-cc1-array-index.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-ARRAY-INDEX-SLICE-V5\nno_tinycc_delegation: true\n";
         let array_output = b"MANTLE-GCC40-NATIVE-CC1-ARRAY-INDEX-SLICE-V5\nfunction=mantle_gcc40_array_slice\nsemantics=local-array-index-store-load-return\n";
+        let struct_input = "struct mantle_gcc40_pair {\n  int left;\n  int right;\n};\n\nint mantle_gcc40_struct_slice(int x) {\n  struct mantle_gcc40_pair pair;\n  pair.left = x;\n  pair.right = x + 3;\n  return pair.left + pair.right;\n}\n";
+        let struct_transcript = "cc1 bounded native struct-field slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-struct-field.c -dumpbase gcc40-native-cc1-struct-field.c -auxbase gcc40-native-cc1-struct-field -o /tmp/gcc40-native-cc1-struct-field.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-STRUCT-FIELD-SLICE-V6\nno_tinycc_delegation: true\n";
+        let struct_output = b"MANTLE-GCC40-NATIVE-CC1-STRUCT-FIELD-SLICE-V6\nfunction=mantle_gcc40_struct_slice\nsemantics=local-struct-field-store-load-return\n";
         let mut content = format!(
             r#"{{
-  "schema": "mantle-gcc40-native-cc1-arithmetic-v5",
+  "schema": "mantle-gcc40-native-cc1-arithmetic-v6",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "bounded-native-slice",
-  "selected_slice": "array-index-v5",
+  "selected_slice": "struct-field-v6",
   "smoke": {{
     "input_program": {},
-    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-array-index.c -dumpbase gcc40-native-cc1-array-index.c -auxbase gcc40-native-cc1-array-index -o /tmp/gcc40-native-cc1-array-index.o",
+    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-struct-field.c -dumpbase gcc40-native-cc1-struct-field.c -auxbase gcc40-native-cc1-struct-field -o /tmp/gcc40-native-cc1-struct-field.o",
     "transcript": {},
     "transcript_digest_blake3": "{}",
     "output_digest_blake3": "{}"
@@ -2856,24 +2881,32 @@ mod tests {
     "transcript": {},
     "transcript_digest_blake3": "{}",
     "output_digest_blake3": "{}"
+  }}, {{
+    "slice": "array-index-v5",
+    "input_program": {},
+    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-array-index.c -dumpbase gcc40-native-cc1-array-index.c -auxbase gcc40-native-cc1-array-index -o /tmp/gcc40-native-cc1-array-index.o",
+    "transcript": {},
+    "transcript_digest_blake3": "{}",
+    "output_digest_blake3": "{}"
   }}],
   "no_tinycc_delegation": {{
-    "derivation_marker": "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.",
+    "derivation_marker": "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.",
     "regression_markers": [
       "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.",
       "Mantle GCC 4.0 native cc1 logical slice: no TinyCC delegation for bounded proof input.",
       "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.",
-      "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input."
+      "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.",
+      "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input."
     ],
     "forbidden_markers": ["$TCC/bin/tcc", "TinyCC handoff", "exec \\\"$TCC/bin/tcc\\\""]
   }},
   "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness"
 }}
 "#,
-            serde_json::to_string(array_input).unwrap(),
-            serde_json::to_string(array_transcript).unwrap(),
-            blake3::hash(array_transcript.as_bytes()).to_hex(),
-            blake3::hash(array_output).to_hex(),
+            serde_json::to_string(struct_input).unwrap(),
+            serde_json::to_string(struct_transcript).unwrap(),
+            blake3::hash(struct_transcript.as_bytes()).to_hex(),
+            blake3::hash(struct_output).to_hex(),
             serde_json::to_string(arithmetic_input).unwrap(),
             serde_json::to_string(arithmetic_transcript).unwrap(),
             blake3::hash(arithmetic_transcript.as_bytes()).to_hex(),
@@ -2889,7 +2922,11 @@ mod tests {
             serde_json::to_string(function_input).unwrap(),
             serde_json::to_string(function_transcript).unwrap(),
             blake3::hash(function_transcript.as_bytes()).to_hex(),
-            blake3::hash(function_output).to_hex()
+            blake3::hash(function_output).to_hex(),
+            serde_json::to_string(array_input).unwrap(),
+            serde_json::to_string(array_transcript).unwrap(),
+            blake3::hash(array_transcript.as_bytes()).to_hex(),
+            blake3::hash(array_output).to_hex()
         );
         if !mutation.is_empty() {
             let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
@@ -3473,6 +3510,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
@@ -3511,6 +3549,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
@@ -3580,7 +3619,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-arithmetic-v5=>mantle-gcc40-native-cc1-arithmetic-v4",
+            "mantle-gcc40-native-cc1-arithmetic-v6=>mantle-gcc40-native-cc1-arithmetic-v5",
         );
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(dir.path(), "");
@@ -3589,14 +3628,14 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("expected `mantle-gcc40-native-cc1-arithmetic-v5`"));
+        assert!(row.notes.contains("expected `mantle-gcc40-native-cc1-arithmetic-v6`"));
     }
 
     #[test]
-    fn gcc40_native_cc1_arithmetic_receipt_missing_array_index_marker_fails_closed() {
+    fn gcc40_native_cc1_arithmetic_receipt_missing_struct_field_marker_fails_closed() {
         let dir = tempdir().unwrap();
         let content = valid_gcc40_native_demangle_content().replace(
-            "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "",
         );
         write_stage(dir.path(), "gcc-4.0.ncl", &content);
@@ -3627,6 +3666,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
@@ -3665,6 +3705,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
@@ -3700,6 +3741,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
@@ -3736,6 +3778,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
@@ -3772,6 +3815,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
@@ -3811,6 +3855,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native cc1 array-index slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",

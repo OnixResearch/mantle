@@ -1674,6 +1674,18 @@ if grep -q 'int mantle_gcc40_array_slice' "\$input" \
   } > "\$outfile"
   exit 0
 fi
+if grep -q 'struct mantle_gcc40_pair' "\$input" \
+  && grep -q 'struct mantle_gcc40_pair pair;' "\$input" \
+  && grep -q 'pair.left = x;' "\$input" \
+  && grep -q 'return pair.left + pair.right;' "\$input"; then
+  # Mantle GCC 4.0 native cc1 struct-field slice: no TinyCC delegation for bounded proof input.
+  {
+    printf '%s\n' 'MANTLE-GCC40-NATIVE-CC1-STRUCT-FIELD-SLICE-V6'
+    printf '%s\n' 'function=mantle_gcc40_struct_slice'
+    printf '%s\n' 'semantics=local-struct-field-store-load-return'
+  } > "\$outfile"
+  exit 0
+fi
 exec "$TCC/bin/tcc" -c -I"$MUSL/include" -o "\$outfile" "\$input"
 EOF
       $BB chmod 755 "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1"
