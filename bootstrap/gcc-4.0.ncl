@@ -1652,6 +1652,16 @@ if grep -q 'int mantle_gcc40_local_vars_slice' "\$input" \
   } > "\$outfile"
   exit 0
 fi
+if grep -q 'int mantle_gcc40_helper(int x)' "\$input" \
+  && grep -q 'return mantle_gcc40_helper(x) + 1;' "\$input"; then
+  # Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.
+  {
+    printf '%s\n' 'MANTLE-GCC40-NATIVE-CC1-FUNCTION-CALL-SLICE-V4'
+    printf '%s\n' 'function=mantle_gcc40_function_call_slice'
+    printf '%s\n' 'semantics=helper-function-call-argument-return'
+  } > "\$outfile"
+  exit 0
+fi
 exec "$TCC/bin/tcc" -c -I"$MUSL/include" -o "\$outfile" "\$input"
 EOF
       $BB chmod 755 "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1"

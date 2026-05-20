@@ -1,7 +1,7 @@
 {
   "derivation": "bootstrap/gcc-4.0.ncl",
   "no_tinycc_delegation": {
-    "derivation_marker": "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.",
+    "derivation_marker": "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.",
     "forbidden_markers": [
       "$TCC/bin/tcc",
       "TinyCC handoff",
@@ -9,7 +9,8 @@
     ],
     "regression_markers": [
       "Mantle GCC 4.0 native cc1 arithmetic slice: no TinyCC delegation for bounded proof input.",
-      "Mantle GCC 4.0 native cc1 logical slice: no TinyCC delegation for bounded proof input."
+      "Mantle GCC 4.0 native cc1 logical slice: no TinyCC delegation for bounded proof input.",
+      "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input."
     ]
   },
   "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness",
@@ -29,16 +30,24 @@
       "slice": "logical-boolean-control-flow-v2",
       "transcript": "cc1 bounded native logical slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-logic.c -dumpbase gcc40-native-cc1-logic.c -auxbase gcc40-native-cc1-logic -o /tmp/gcc40-native-cc1-logic.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-LOGICAL-SLICE-V2\nno_tinycc_delegation: true\n",
       "transcript_digest_blake3": "5baf39aa952075f0d4b6fdc13df3316f39ab8c85745d9d059ceeae68c95ed24f"
+    },
+    {
+      "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-local-vars.c -dumpbase gcc40-native-cc1-local-vars.c -auxbase gcc40-native-cc1-local-vars -o /tmp/gcc40-native-cc1-local-vars.o",
+      "input_program": "int mantle_gcc40_local_vars_slice(int x) {\n  int y = x + 1;\n  y = y * 3;\n  return y;\n}\n",
+      "output_digest_blake3": "84cc7da949b366005d0ace7056f39df6d8d13c9853de00309dfc19b88d6a7e00",
+      "transcript": "cc1 bounded native local-vars slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-local-vars.c -dumpbase gcc40-native-cc1-local-vars.c -auxbase gcc40-native-cc1-local-vars -o /tmp/gcc40-native-cc1-local-vars.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-LOCAL-VARS-SLICE-V3\nno_tinycc_delegation: true\n",
+      "transcript_digest_blake3": "ad715a9fedf77f817eaadcd9e876201cf23c881e0dae793afd4ec50b626ab60b",
+      "slice": "local-variable-assignment-v3"
     }
   ],
-  "schema": "mantle-gcc40-native-cc1-arithmetic-v3",
-  "selected_slice": "local-variable-assignment-v3",
+  "schema": "mantle-gcc40-native-cc1-arithmetic-v4",
+  "selected_slice": "function-call-v4",
   "smoke": {
-    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-local-vars.c -dumpbase gcc40-native-cc1-local-vars.c -auxbase gcc40-native-cc1-local-vars -o /tmp/gcc40-native-cc1-local-vars.o",
-    "input_program": "int mantle_gcc40_local_vars_slice(int x) {\n  int y = x + 1;\n  y = y * 3;\n  return y;\n}\n",
-    "output_digest_blake3": "84cc7da949b366005d0ace7056f39df6d8d13c9853de00309dfc19b88d6a7e00",
-    "transcript": "cc1 bounded native local-vars slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-local-vars.c -dumpbase gcc40-native-cc1-local-vars.c -auxbase gcc40-native-cc1-local-vars -o /tmp/gcc40-native-cc1-local-vars.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-LOCAL-VARS-SLICE-V3\nno_tinycc_delegation: true\n",
-    "transcript_digest_blake3": "ad715a9fedf77f817eaadcd9e876201cf23c881e0dae793afd4ec50b626ab60b"
+    "command": "$out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-function-call.c -dumpbase gcc40-native-cc1-function-call.c -auxbase gcc40-native-cc1-function-call -o /tmp/gcc40-native-cc1-function-call.o",
+    "input_program": "int mantle_gcc40_helper(int x) {\n  return x * 2;\n}\n\nint mantle_gcc40_function_call_slice(int x) {\n  return mantle_gcc40_helper(x) + 1;\n}\n",
+    "output_digest_blake3": "6adcdd113b8327245eac6eb3174561f396696170b8a542a8900bf64401436bba",
+    "transcript": "cc1 bounded native function-call slice\ncommand: $out/libexec/gcc/x86_64-unknown-linux-musl/4.0.4/cc1 -quiet /tmp/gcc40-native-cc1-function-call.c -dumpbase gcc40-native-cc1-function-call.c -auxbase gcc40-native-cc1-function-call -o /tmp/gcc40-native-cc1-function-call.o\nexit_status: 0\nstdout: <empty>\nstderr: <empty>\nobject_marker: MANTLE-GCC40-NATIVE-CC1-FUNCTION-CALL-SLICE-V4\nno_tinycc_delegation: true\n",
+    "transcript_digest_blake3": "b05237e5a355d36d2015e0c38a4f7cc2fb14bb2911140b2f132835037f199407"
   },
   "status": "bounded-native-slice"
 }

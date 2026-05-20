@@ -29,6 +29,11 @@
       "derivation_marker": "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input."
     },
     {
+      "id": "cc1-function-call",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json",
+      "derivation_marker": "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input."
+    },
+    {
       "id": "genattrtab-bounded-output",
       "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
       "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending."
@@ -45,7 +50,7 @@
     }
   ],
   "last_observed_build_log": {
-    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-local-vars-slice",
+    "status": "complete-with-pass1-bridge-plus-bounded-native-cc1-function-call-slice",
     "boundary_log_markers": [
       "gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H  -o cc1",
       "gcc40-cc   -g -DIN_GCC     -DHAVE_CONFIG_H  -o xgcc",
@@ -57,9 +62,9 @@
     "status": "frontier-only",
     "blockers": [
       {
-        "id": "cc1-bounded-local-variable-assignment",
-        "derivation_marker": "Mantle GCC 4.0 native cc1 local-vars slice: no TinyCC delegation for bounded proof input.",
-        "frontier": "installed cc1 has checked bounded arithmetic, logical/control-flow, and local-variable no-TinyCC-delegation slices; full native cc1 parsing/codegen correctness remains pending"
+        "id": "cc1-bounded-function-call",
+        "derivation_marker": "Mantle GCC 4.0 native cc1 function-call slice: no TinyCC delegation for bounded proof input.",
+        "frontier": "installed cc1 has checked bounded arithmetic, logical/control-flow, local-variable, and helper-call no-TinyCC-delegation slices; full native cc1 parsing/codegen correctness remains pending"
       },
       {
         "id": "libiberty-demangle-bounded-semantics",
