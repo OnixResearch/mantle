@@ -2498,6 +2498,10 @@ EOF
           echo '#undef ssize_t' >> "$cparse_ssize_typedef_config"
           echo 'typedef int ssize_t;' >> "$cparse_ssize_typedef_config"
           run_cparse_stdio_probe cparse_config_stdio_ssize_pretypedef_int "$cparse_ssize_typedef_config"
+          cparse_ssize_systypes_config=/tmp/cparse_config_stdio_ssize_systypes_before_config-config.h
+          echo '#include <sys/types.h>' > "$cparse_ssize_systypes_config"
+          echo '#include "config.h"' >> "$cparse_ssize_systypes_config"
+          run_cparse_stdio_probe cparse_config_stdio_ssize_systypes_before_config "$cparse_ssize_systypes_config"
           label=cparse_config_stdio_ssize_postdefine_int
           probe=/tmp/$label.c
           echo '#include "config.h"' > "$probe"

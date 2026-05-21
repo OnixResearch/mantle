@@ -963,6 +963,20 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - WHEN the parity report validates GCC 4.0
 - THEN validation fails closed instead of promoting `gcc.4.0`.
 
+#### Scenario: c-parse ssize_t sys/types preinclude frontier records bounded v18 evidence [r[bootstrap.gcc.version-ladder.gcc40-cparse-ssize-systypes-frontier-v18]]
+
+- GIVEN the v17 source-frontier receipt showed that both pre-stdio macro and typedef `ssize_t` definitions reproduce the include-flood failure
+- WHEN the bootstrap parity report validates GCC 4.0 native `cc1` source-frontier evidence
+- THEN the receipt uses schema `mantle-gcc40-native-cc1-source-frontier-reduction-v18`
+- AND the observed frontier records compact `<sys/types.h>` before `config.h` markers showing that host typedef visibility before generated `config.h` makes the stdio probe pass
+- AND the row remains `partial` and non-promoting.
+
+#### Scenario: c-parse ssize_t sys/types preinclude frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-cparse-ssize-systypes-frontier-v18-drift]]
+
+- GIVEN the source-frontier evidence uses a stale schema, omits the v17 macro-vs-typedef markers, omits the v18 sys/types preinclude marker, or claims native GCC 4.0 correctness
+- WHEN the parity report validates GCC 4.0
+- THEN validation fails closed instead of promoting `gcc.4.0`.
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed

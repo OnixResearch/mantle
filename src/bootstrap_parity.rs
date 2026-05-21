@@ -820,9 +820,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v17" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v18" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v17`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v18`"
         ));
     }
     for field in [
@@ -935,6 +935,10 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "cparse_config_stdio_ssize_pretypedef_int_rc=1",
         "cparse_config_stdio_ssize_pretypedef_int_include_flood_lines=2",
         "cparse_config_stdio_ssize_pretypedef_int_truncated_lines=2",
+        "cparse_config_stdio_ssize_systypes_before_config_rc=0",
+        "cparse_config_stdio_ssize_systypes_before_config_include_flood_lines=0",
+        "cparse_config_stdio_ssize_systypes_before_config_truncated_lines=0",
+        "including <sys/types.h> before config.h makes the host ssize_t typedef visible early enough",
         "cparse_config_stdio_ssize_postdefine_int_rc=0",
         "cparse_config_stdio_ssize_postdefine_int_include_flood_lines=0",
         "cparse_config_stdio_ssize_postdefine_int_truncated_lines=0",
@@ -953,7 +957,7 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     ] {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v17 fragment `{required_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v18 fragment `{required_fragment}`"
             ));
         }
     }
@@ -3443,6 +3447,9 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "run_cparse_stdio_probe cparse_config_stdio_ssize_predefine_int \"$cparse_ssize_predefine_config\"\n",
             "cparse_config_stdio_ssize_pretypedef_int-config.h\n",
             "run_cparse_stdio_probe cparse_config_stdio_ssize_pretypedef_int \"$cparse_ssize_typedef_config\"\n",
+            "cparse_config_stdio_ssize_systypes_before_config-config.h\n",
+            "echo '#include <sys/types.h>' > \"$cparse_ssize_systypes_config\"\n",
+            "run_cparse_stdio_probe cparse_config_stdio_ssize_systypes_before_config \"$cparse_ssize_systypes_config\"\n",
             "label=cparse_config_stdio_ssize_postdefine_int\n",
             "echo '#define ssize_t int' >> \"$probe\"\n",
             "diag-cparse-frontier: ${label}_rc=$rc\n",
@@ -4473,7 +4480,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v17=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v18=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4520,7 +4527,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("observed_frontier missing required v17 fragment"), "{}", row.notes);
+        assert!(row.notes.contains("observed_frontier missing required v18 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 
