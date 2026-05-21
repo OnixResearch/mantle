@@ -2383,6 +2383,44 @@ EOF
           run_cparse_source_include_prefix cparse_source_include_prefix_18 18
           run_cparse_source_include_prefix cparse_source_include_prefix_19 19
 
+          cparse_system_includes=/tmp/gcc40-cparse-system-direct-includes.txt
+          $BB awk '/^# ?include[ \t]+[<\"]/{ print }' "$WORK/gcc-4.0.4/gcc/system.h" > "$cparse_system_includes"
+          cparse_system_include_count=$($BB wc -l < "$cparse_system_includes")
+          cparse_system_include_order=$($BB sed 's/^# *include[ \t]*//; s/[<>\"]//g' "$cparse_system_includes" | $BB tr '\n' ',' | $BB sed 's/,$//')
+          echo "diag-cparse-frontier: cparse_system_include_count=$cparse_system_include_count" >&2
+          echo "diag-cparse-frontier: cparse_system_include_order=$cparse_system_include_order" >&2
+          run_cparse_system_include_prefix() {
+            label="$1"
+            count="$2"
+            probe="/tmp/$label.c"
+            echo '#include "config.h"' > "$probe"
+            $BB awk -v limit="$count" 'NR <= limit { print }' "$cparse_system_includes" >> "$probe"
+            echo 'int cparse_system_include_prefix_probe;' >> "$probe"
+            set +e
+            (
+              cd gcc
+              gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
+                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+                "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr"
+            )
+            rc=$?
+            set -e
+            flood_lines=$($BB grep -c '^In file included from In file included from' "/tmp/$label.stderr" || true)
+            truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "/tmp/$label.stderr")
+            echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
+            echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
+            echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
+            $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
+          }
+          run_cparse_system_include_prefix cparse_system_include_prefix_1 1
+          run_cparse_system_include_prefix cparse_system_include_prefix_2 2
+          run_cparse_system_include_prefix cparse_system_include_prefix_3 3
+          run_cparse_system_include_prefix cparse_system_include_prefix_4 4
+          run_cparse_system_include_prefix cparse_system_include_prefix_10 10
+          run_cparse_system_include_prefix cparse_system_include_prefix_15 15
+          run_cparse_system_include_prefix cparse_system_include_prefix_21 21
+
           echo "diag: reproduce focused c-parse boundary"
           m=/tmp/gcc40-cparse-make.log
           set +e

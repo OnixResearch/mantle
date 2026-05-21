@@ -891,6 +891,22 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN the row remains a blocker
 - AND the row notes the specific failed native source-frontier evidence check
 
+#### Scenario: GCC 4.0 native cc1 c-parse system.h nested frontier is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-system-header-frontier]]
+
+- GIVEN `bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json` uses source-frontier schema `mantle-gcc40-native-cc1-source-frontier-reduction-v13`
+- AND the evidence preserves the v12 `c-parse.c` include-prefix boundary and the v11 include-flood truncation evidence
+- AND the evidence records the direct `system.h` include order and a compact nested prefix boundary where `stdarg.h` plus `stddef.h` succeeds but adding `stdio.h` fails with the same truncated include-flood shape
+- WHEN bootstrap parity validates the GCC 4.0 row
+- THEN the row may report the v13 system.h nested frontier as evidence-backed partial
+- AND `gcc.4.0` remains evidence-backed `partial` without completing live-bootstrap, Guix, or StageX parity
+
+#### Scenario: GCC 4.0 native cc1 c-parse system.h nested frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-system-header-frontier-drift]]
+
+- GIVEN the source-frontier evidence uses a stale schema, omits the v13 direct `system.h` include-prefix boundary, omits the v12 source include-prefix boundary, omits the v11 truncation evidence, or claims promotion
+- WHEN bootstrap parity validates the GCC 4.0 row
+- THEN the row remains a blocker
+- AND the row notes the specific failed native source-frontier evidence check
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed
