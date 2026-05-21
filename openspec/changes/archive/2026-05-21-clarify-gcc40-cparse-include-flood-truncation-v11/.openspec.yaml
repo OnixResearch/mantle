@@ -1,0 +1,4 @@
+id: clarify-gcc40-cparse-include-flood-truncation-v11
+status: proposed
+owner: hermes-agent
+summary: Clarify the GCC 4.0 native c-parse include-flood source-frontier shape without promoting gcc.4.0.

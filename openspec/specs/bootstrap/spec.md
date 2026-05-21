@@ -859,6 +859,22 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN `gcc.4.0` MUST remain `partial` until full native compiler/generator/demangler correctness evidence is complete
 - AND parity requirements still fail closed on the remaining GCC 4.0 blockers
 
+#### Scenario: GCC 4.0 native cc1 c-parse include-flood truncation frontier is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-include-flood-truncation-frontier]]
+
+- GIVEN `bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json` uses source-frontier schema `mantle-gcc40-native-cc1-source-frontier-reduction-v11`
+- AND the evidence preserves the v10 focused `c-parse.o` make rc, compile-command, log summary, include-flood count, bounded tail, and make-error evidence
+- AND the evidence records `cparse_make_include_flood_truncated_lines=2` and `cparse_make_include_flood_filename_payload=absent`
+- WHEN bootstrap parity validates the GCC 4.0 row
+- THEN the row may report the v11 include-flood truncation frontier as evidence-backed partial
+- AND `gcc.4.0` remains evidence-backed `partial` without completing live-bootstrap, Guix, or StageX parity
+
+#### Scenario: GCC 4.0 native cc1 c-parse include-flood truncation frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-include-flood-truncation-frontier-drift]]
+
+- GIVEN the source-frontier evidence uses a stale schema, omits the truncation markers, omits filename-payload absence, omits the focused make failure evidence, or claims promotion
+- WHEN bootstrap parity validates the GCC 4.0 row
+- THEN the row remains a blocker
+- AND the row notes the specific failed native source-frontier evidence check
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed

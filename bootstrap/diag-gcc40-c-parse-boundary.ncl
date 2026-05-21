@@ -2370,6 +2370,10 @@ EOF
             echo "diag-cparse-frontier: cparse_make_include_flood=missing" >&2
           fi
           echo "diag-cparse-frontier: cparse_make_include_flood_lines=$include_flood_lines" >&2
+          include_flood_truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "$m")
+          include_flood_filename_payload=$($BB awk '/^In file included from In file included from/ { line = $0; gsub(/In file included from /, "", line); if (index(line, "/") || index(line, ".") || line ~ /:[0-9]/) found = 1 } END { if (found) print "present"; else print "absent" }' "$m")
+          echo "diag-cparse-frontier: cparse_make_include_flood_truncated_lines=$include_flood_truncated_lines" >&2
+          echo "diag-cparse-frontier: cparse_make_include_flood_filename_payload=$include_flood_filename_payload" >&2
           echo "diag-cparse-frontier: cparse_make_cparse_o_tail" >&2
           $BB tail -n 20 "$m" >&2
           [ "$rc" = 0 ] && { echo "ERROR: c-parse.o unexpectedly compiled" >&2; exit 1; }
