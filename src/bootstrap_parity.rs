@@ -751,14 +751,25 @@ fn validate_gcc40_native_boundary_receipt(project_root: &Path, derivation_conten
     if frontier_blockers.is_empty() {
         return Err("GCC 4.0 native boundary receipt `native_frontier.blockers` must not be empty".to_string());
     }
+    let mut frontier_ids = Vec::new();
     for blocker in frontier_blockers {
         let blocker = blocker.as_object().ok_or_else(|| {
             "GCC 4.0 native boundary receipt `native_frontier.blockers` entries must be objects".to_string()
         })?;
-        require_gcc40_boundary_object_string(blocker, "id")?;
+        let id = require_gcc40_boundary_object_string(blocker, "id")?;
+        frontier_ids.push(id.to_string());
         let marker = require_gcc40_boundary_object_string(blocker, "derivation_marker")?;
         require_gcc40_boundary_object_string(blocker, "frontier")?;
         require_gcc40_derivation_marker(derivation_content, marker)?;
+    }
+    for required_id in [
+        "cc1-bounded-pointer-deref",
+        "libiberty-demangle-bounded-semantics",
+        "generator-bounded-outputs",
+    ] {
+        if !frontier_ids.iter().any(|id| id == required_id) {
+            return Err(format!("GCC 4.0 native boundary receipt native_frontier.blockers missing `{required_id}`"));
+        }
     }
 
     require_gcc40_boundary_string(
@@ -2916,6 +2927,11 @@ mod tests {
         "id": "libiberty-demangle-bounded-semantics",
         "derivation_marker": "gcc40_cplus_demangle_short_arg_itanium_v6_boundary",
         "frontier": "libiberty demangling has checked bounded flat, two-component nested, selected three-component nested zero-argument, selected single-int, selected single-char, selected single-long, and selected single-short Itanium semantic slices; full native cp-demangle remains pending"
+      },
+      {
+        "id": "generator-bounded-outputs",
+        "derivation_marker": "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.",
+        "frontier": "native generator evidence has checked bounded genattrtab and genoutput output slices; full native generator correctness remains pending"
       }
     ]
   },
@@ -3666,6 +3682,47 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
 
         assert_eq!(row.status, StageStatus::Placeholder);
         assert!(row.notes.contains("GCC 4.0 native boundary receipt marker not found"));
+    }
+
+    #[test]
+    fn gcc40_native_frontier_missing_generator_blocker_fails_closed() {
+        let dir = tempdir().unwrap();
+        let content = concat!(
+            "make -j1 -C \"$dir\"\n",
+            "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge\n",
+            "gcc (Mantle pass1 bridge) 4.0.4\n",
+            "Crunch GCC 4.0 pass1 cc1 object boundary\n",
+            "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
+            "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
+            "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
+            "under the c-parse flags deterministically segfaults TinyCC after that\n",
+            "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
+            "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
+            "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true\n",
+            "the validated TinyCC handoff. This remains a bridge until native cc1 builds.\n",
+        );
+        write_stage(dir.path(), "gcc-4.0.ncl", content);
+        write_gcc40_placeholder_inventory(dir.path(), content);
+        write_gcc40_native_boundary_receipt(dir.path());
+        let receipt_path = dir.path().join(GCC40_NATIVE_BOUNDARY_RECEIPT);
+        let receipt =
+            fs::read_to_string(&receipt_path).unwrap().replace("generator-bounded-outputs", "generator-omitted");
+        fs::write(receipt_path, receipt).unwrap();
+        write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
+        write_gcc40_native_generator_receipt(dir.path(), "");
+        write_gcc40_native_demangle_receipt(dir.path(), "");
+        write_gcc40_native_cc1_build_frontier_receipt(dir.path(), "");
+
+        let row = evaluate_stage(dir.path(), &gcc40_spec());
+
+        assert_eq!(row.status, StageStatus::Placeholder);
+        assert!(
+            row.notes.contains(
+                "GCC 4.0 native boundary receipt native_frontier.blockers missing `generator-bounded-outputs`"
+            )
+        );
     }
 
     #[test]
