@@ -939,8 +939,8 @@ const struct demangler_engine libiberty_demanglers[] = {
   { 0, unknown_demangling, 0 }
 };
 
-/* Mantle GCC 4.0 bounded Itanium single-long argument function semantic slice. */
-int gcc40_cplus_demangle_long_arg_itanium_v5_boundary(void) { return 0; }
+/* Mantle GCC 4.0 bounded Itanium single-short argument function semantic slice. */
+int gcc40_cplus_demangle_short_arg_itanium_v6_boundary(void) { return 0; }
 
 static int gcc40_demangle_is_name_char(char ch) {
   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_';
@@ -993,8 +993,9 @@ static char *gcc40_demangle_itanium_v1_function(const char *mangled) {
     if (arg == 'i') arg_kind = 1;
     else if (arg == 'c') arg_kind = 2;
     else if (arg == 'l') arg_kind = 3;
+    else if (arg == 's') arg_kind = 4;
     else if (arg != 'v') return 0;
-    if (first_len + second_len + third_len + (has_third ? 4 : 2) + (arg_kind == 1 ? 5 : (arg_kind == 2 ? 6 : (arg_kind == 3 ? 6 : 2))) > 131) return 0;
+    if (first_len + second_len + third_len + (has_third ? 4 : 2) + (arg_kind == 1 ? 5 : (arg_kind == 2 ? 6 : (arg_kind == 3 ? 6 : (arg_kind == 4 ? 7 : 2)))) > 131) return 0;
     for (i = 0; i < first_len; i++) out[pos++] = first[i];
     out[pos++] = ':';
     out[pos++] = ':';
@@ -1019,17 +1020,24 @@ static char *gcc40_demangle_itanium_v1_function(const char *mangled) {
       out[pos++] = 'o';
       out[pos++] = 'n';
       out[pos++] = 'g';
+    } else if (arg_kind == 4) {
+      out[pos++] = 's';
+      out[pos++] = 'h';
+      out[pos++] = 'o';
+      out[pos++] = 'r';
+      out[pos++] = 't';
     }
     out[pos++] = ')';
     out[pos] = 0;
     return out;
   }
   if (!gcc40_demangle_read_component(&p, &first, &first_len)) return 0;
-  if ((*p != 'v' && *p != 'i' && *p != 'c' && *p != 'l') || p[1] != 0) return 0;
+  if ((*p != 'v' && *p != 'i' && *p != 'c' && *p != 'l' && *p != 's') || p[1] != 0) return 0;
   if (*p == 'i') arg_kind = 1;
   else if (*p == 'c') arg_kind = 2;
   else if (*p == 'l') arg_kind = 3;
-  if (first_len + (arg_kind == 1 ? 5 : (arg_kind == 2 ? 6 : (arg_kind == 3 ? 6 : 2))) > 131) return 0;
+  else if (*p == 's') arg_kind = 4;
+  if (first_len + (arg_kind == 1 ? 5 : (arg_kind == 2 ? 6 : (arg_kind == 3 ? 6 : (arg_kind == 4 ? 7 : 2)))) > 131) return 0;
   pos = 0;
   for (i = 0; i < first_len; i++) out[pos++] = first[i];
   out[pos++] = '(';
@@ -1047,6 +1055,12 @@ static char *gcc40_demangle_itanium_v1_function(const char *mangled) {
     out[pos++] = 'o';
     out[pos++] = 'n';
     out[pos++] = 'g';
+  } else if (arg_kind == 4) {
+    out[pos++] = 's';
+    out[pos++] = 'h';
+    out[pos++] = 'o';
+    out[pos++] = 'r';
+    out[pos++] = 't';
   }
   out[pos++] = ')';
   out[pos] = 0;
@@ -1065,8 +1079,8 @@ enum gnu_v3_ctor_kinds is_gnu_v3_mangled_ctor(const char *name) { (void)name; re
 enum gnu_v3_dtor_kinds is_gnu_v3_mangled_dtor(const char *name) { (void)name; return 0; }
 CPLUS_DEM_EOF
       $BB cat > gcc-4.0.4/libiberty/cp-demangle.c <<'CP_DEMANGLE_EOF'
-/* Mantle GCC 4.0 bounded Itanium single-long argument function semantic slice: cplus-dem.c supports flat, two-component, and selected three-component nested zero-argument, single-int, single-char, and single-long Itanium functions; full native cp-demangle promotion pending. */
-int gcc40_cp_demangle_long_arg_itanium_v5_boundary(void) { return 0; }
+/* Mantle GCC 4.0 bounded Itanium single-short argument function semantic slice: cplus-dem.c supports flat, two-component, and selected three-component nested zero-argument, single-int, single-char, single-long, and single-short Itanium functions; full native cp-demangle promotion pending. */
+int gcc40_cp_demangle_short_arg_itanium_v6_boundary(void) { return 0; }
 CP_DEMANGLE_EOF
       $BB cat > gcc-4.0.4/libiberty/md5.c <<'MD5_EOF'
 #include "md5.h"
@@ -1336,19 +1350,26 @@ int main(void) {
   if (!a || !same(a, "foo::bar(long)")) return 13;
   a = cplus_demangle("_ZN3foo3bar3bazEl", 0);
   if (!a || !same(a, "foo::bar::baz(long)")) return 14;
-  if (cplus_demangle("_ZN3foo3bar3bazEf", 0) != 0) return 15;
-  if (cplus_demangle("_ZN3foo3bar3bazEx", 0) != 0) return 16;
-  if (cplus_demangle("_ZN3foo3bar3baz3quxEl", 0) != 0) return 17;
-  if (cplus_demangle("_ZN3foo3bar3baz3quxEc", 0) != 0) return 18;
-  if (cplus_demangle("_ZN3foo3bar3baz3quxEi", 0) != 0) return 19;
-  if (cplus_demangle("_ZN3foo3bar3baz3quxEv", 0) != 0) return 20;
-  if (cplus_demangle("_ZN3fooE", 0) != 0) return 21;
-  if (cplus_demangle("not_mangled", 0) != 0) return 22;
+  a = cplus_demangle("_Z3foos", 0);
+  if (!a || !same(a, "foo(short)")) return 15;
+  a = cplus_demangle("_ZN3foo3barEs", 0);
+  if (!a || !same(a, "foo::bar(short)")) return 16;
+  a = cplus_demangle("_ZN3foo3bar3bazEs", 0);
+  if (!a || !same(a, "foo::bar::baz(short)")) return 17;
+  if (cplus_demangle("_ZN3foo3bar3bazEf", 0) != 0) return 18;
+  if (cplus_demangle("_ZN3foo3bar3bazEx", 0) != 0) return 19;
+  if (cplus_demangle("_ZN3foo3bar3baz3quxEs", 0) != 0) return 20;
+  if (cplus_demangle("_ZN3foo3bar3baz3quxEl", 0) != 0) return 21;
+  if (cplus_demangle("_ZN3foo3bar3baz3quxEc", 0) != 0) return 22;
+  if (cplus_demangle("_ZN3foo3bar3baz3quxEi", 0) != 0) return 23;
+  if (cplus_demangle("_ZN3foo3bar3baz3quxEv", 0) != 0) return 24;
+  if (cplus_demangle("_ZN3fooE", 0) != 0) return 25;
+  if (cplus_demangle("not_mangled", 0) != 0) return 26;
   return 0;
 }
 EOF
             gcc40-cc -I$MUSL/include -D_GNU_SOURCE -I. -I$WORK/gcc-4.0.4/include /tmp/gcc40-demangle-smoke.c cplus-dem.o -o /tmp/gcc40-demangle-smoke
-            /tmp/gcc40-demangle-smoke || { echo "ERROR: cplus_demangle bounded single-long argument semantic smoke failed" >&2; exit 1; }
+            /tmp/gcc40-demangle-smoke || { echo "ERROR: cplus_demangle bounded single-short argument semantic smoke failed" >&2; exit 1; }
           )
           continue
         fi

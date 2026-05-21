@@ -454,6 +454,28 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN `gcc.4.0` MUST remain `partial` until native compiler/generator correctness and broader `cp-demangle` evidence are complete
 - AND live-bootstrap, Guix, and StageX requirements still fail closed until all remaining native compiler and demangler correctness blockers have evidence
 
+#### Scenario: GCC 4.0 native demangle single-short-argument slice is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-demangle-short-arg-slice]]
+
+- GIVEN `bootstrap/gcc-4.0.ncl` contains checked bounded libiberty demangle semantic markers for the selected single-`short` Itanium shape
+- AND a checked native-demangle receipt names schema `mantle-gcc40-native-demangle-slice-v6`, the selected shape, source markers, bounded input/output contract, preserved zero-arg, single-int, single-char, and single-long regressions, rejected unsupported shapes, and transcript digest evidence
+- WHEN the bootstrap parity report evaluates the `gcc.4.0` row
+- THEN the row may report evidence-backed `partial` with native demangle single-`short` argument slice evidence
+- AND the row MUST continue blocking live-bootstrap, Guix, and StageX until full native GCC 4.0 compiler and demangler correctness evidence exists
+
+#### Scenario: GCC 4.0 native demangle single-short-argument slice rejects stale boundary evidence [r[bootstrap.gcc.version-ladder.gcc40-native-demangle-short-arg-slice-drift]]
+
+- GIVEN the native demangle receipt references stale v5 single-`long` boundary markers, omits the v6 short markers, omits the selected short input, has digest drift, or claims full native demangler correctness
+- WHEN the bootstrap parity report evaluates the `gcc.4.0` row
+- THEN the row MUST fail closed instead of accepting stale demangle evidence
+- AND the row notes the specific failed native-demangle evidence check
+
+#### Scenario: GCC 4.0 native demangle single-short-argument slice cannot complete GCC 4.0 parity [r[bootstrap.gcc.version-ladder.gcc40-native-demangle-short-arg-slice-no-overclaim]]
+
+- GIVEN bounded libiberty demangle evidence exists for the selected single-`short` argument shape
+- WHEN live-bootstrap, Guix, or StageX parity is required
+- THEN `gcc.4.0` MUST remain `partial` until native compiler/generator correctness and broader `cp-demangle` evidence are complete
+- AND live-bootstrap, Guix, and StageX requirements still fail closed until all remaining native compiler and demangler correctness blockers have evidence
+
 #### Scenario: GCC 4.0 native genoutput slice is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-genoutput-slice]]
 
 - GIVEN `bootstrap/gcc-4.0.ncl` contains a checked `genoutput` frontier boundary for GCC 4.0

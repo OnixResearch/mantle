@@ -59,9 +59,9 @@
       "derivation_marker": "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending."
     },
     {
-      "id": "libiberty-demangle-single-long-arg",
+      "id": "libiberty-demangle-single-short-arg",
       "receipt": "bootstrap/evidence/gcc-4.0-native-demangle-slice.json",
-      "derivation_marker": "gcc40_cplus_demangle_long_arg_itanium_v5_boundary"
+      "derivation_marker": "gcc40_cplus_demangle_short_arg_itanium_v6_boundary"
     }
   ],
   "last_observed_build_log": {
@@ -83,8 +83,8 @@
       },
       {
         "id": "libiberty-demangle-bounded-semantics",
-        "derivation_marker": "gcc40_cplus_demangle_long_arg_itanium_v5_boundary",
-        "frontier": "libiberty demangling has checked bounded flat, two-component nested, selected three-component nested zero-argument, selected single-int, selected single-char, and selected single-long Itanium semantic slices; full native cp-demangle remains pending"
+        "derivation_marker": "gcc40_cplus_demangle_short_arg_itanium_v6_boundary",
+        "frontier": "libiberty demangling has checked bounded flat, two-component nested, selected three-component nested zero-argument, selected single-int, selected single-char, selected single-long, and selected single-short Itanium semantic slices; full native cp-demangle remains pending"
       }
     ]
   },

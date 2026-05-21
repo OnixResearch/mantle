@@ -1252,10 +1252,10 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native demangle receipt is not valid JSON: {err}"))?;
-    require_gcc40_demangle_string(&value, "schema", "mantle-gcc40-native-demangle-slice-v5")?;
+    require_gcc40_demangle_string(&value, "schema", "mantle-gcc40-native-demangle-slice-v6")?;
     require_gcc40_demangle_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
     require_gcc40_demangle_string(&value, "status", "bounded-native-demangle-slice")?;
-    require_gcc40_demangle_string(&value, "selected_shape", "single-long-arg-itanium-v5")?;
+    require_gcc40_demangle_string(&value, "selected_shape", "single-short-arg-itanium-v6")?;
     require_gcc40_demangle_string(
         &value,
         "parity_effect",
@@ -1266,7 +1266,10 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
         .get("bounded_contract")
         .and_then(|v| v.as_object())
         .ok_or_else(|| "GCC 4.0 native demangle receipt missing object field `bounded_contract`".to_string())?;
-    require_gcc40_demangle_named_io(contract, "accepted_inputs", "_ZN3foo3bar3bazEl", "foo::bar::baz(long)")?;
+    require_gcc40_demangle_named_io(contract, "accepted_inputs", "_ZN3foo3bar3bazEs", "foo::bar::baz(short)")?;
+    require_gcc40_demangle_named_io(contract, "short_regressions", "_ZN3foo3barEs", "foo::bar(short)")?;
+    require_gcc40_demangle_named_io(contract, "flat_short_regressions", "_Z3foos", "foo(short)")?;
+    require_gcc40_demangle_named_io(contract, "long_regressions", "_ZN3foo3bar3bazEl", "foo::bar::baz(long)")?;
     require_gcc40_demangle_named_io(contract, "long_regressions", "_ZN3foo3barEl", "foo::bar(long)")?;
     require_gcc40_demangle_named_io(contract, "flat_long_regressions", "_Z3fool", "foo(long)")?;
     require_gcc40_demangle_named_io(contract, "char_regressions", "_ZN3foo3bar3bazEc", "foo::bar::baz(char)")?;
@@ -1284,11 +1287,14 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
     for required in [
         "_ZN3foo3bar3bazEf",
         "_ZN3foo3bar3bazEx",
+        "_ZN3foo3bar3baz3quxEs",
         "_ZN3foo3bar3baz3quxEl",
         "_ZN3foo3bar3baz3quxEc",
         "_ZN3foo3bar3baz3quxEi",
         "_ZN3foo3bar3baz3quxEv",
         "_ZN3fooE",
+        "_Z3fooss",
+        "_ZN3foo3bar3bazEss",
         "not_mangled",
     ] {
         if !rejected.iter().any(|v| v.as_str() == Some(required)) {
@@ -1296,7 +1302,7 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
         }
     }
     let non_claim = require_gcc40_demangle_object_string(contract, "non_claim")?;
-    if !non_claim.contains("single-long") || !non_claim.contains("in scope") {
+    if !non_claim.contains("single-short") || !non_claim.contains("in scope") {
         return Err("GCC 4.0 native demangle receipt non-claim must bound the supported shape".to_string());
     }
 
@@ -1315,6 +1321,12 @@ fn validate_gcc40_native_demangle_receipt(project_root: &Path, derivation_conten
         .ok_or_else(|| "GCC 4.0 native demangle receipt missing object field `smoke`".to_string())?;
     let transcript = require_gcc40_demangle_object_string(smoke, "transcript")?;
     for required in [
+        "_ZN3foo3bar3bazEs",
+        "foo::bar::baz(short)",
+        "_ZN3foo3barEs",
+        "foo::bar(short)",
+        "_Z3foos",
+        "foo(short)",
         "_ZN3foo3bar3bazEl",
         "foo::bar::baz(long)",
         "_ZN3foo3barEl",
@@ -2432,9 +2444,9 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref and generator boundary smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler correctness is still unproven",
+            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref, demangle single-short, and generator boundary smokes only; native compiler correctness not proven",
+            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-demangle receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
@@ -2597,9 +2609,9 @@ mod tests {
             derivation: Some("gcc-4.0.ncl"),
             expected_complete: false,
             graph_evidence: "late graph completion recorded",
-            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref and generator boundary smokes only; native compiler correctness not proven",
-            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler correctness is still unproven",
+            semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref, demangle single-short, and generator boundary smokes only; native compiler correctness not proven",
+            proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-demangle receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab and genoutput slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         }
     }
@@ -2883,9 +2895,9 @@ mod tests {
       "derivation_marker": "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending."
     },
     {
-      "id": "libiberty-demangle-single-long-arg",
+      "id": "libiberty-demangle-single-short-arg",
       "receipt": "bootstrap/evidence/gcc-4.0-native-demangle-slice.json",
-      "derivation_marker": "gcc40_cplus_demangle_long_arg_itanium_v5_boundary"
+      "derivation_marker": "gcc40_cplus_demangle_short_arg_itanium_v6_boundary"
     }
   ],
   "last_observed_build_log": {
@@ -2902,8 +2914,8 @@ mod tests {
       },
       {
         "id": "libiberty-demangle-bounded-semantics",
-        "derivation_marker": "gcc40_cplus_demangle_long_arg_itanium_v5_boundary",
-        "frontier": "libiberty demangling has checked bounded flat, two-component nested, selected three-component nested zero-argument, selected single-int, selected single-char, and selected single-long Itanium semantic slices; full native cp-demangle remains pending"
+        "derivation_marker": "gcc40_cplus_demangle_short_arg_itanium_v6_boundary",
+        "frontier": "libiberty demangling has checked bounded flat, two-component nested, selected three-component nested zero-argument, selected single-int, selected single-char, selected single-long, and selected single-short Itanium semantic slices; full native cp-demangle remains pending"
       }
     ]
   },
@@ -3109,10 +3121,13 @@ mod tests {
         let path = root.join(GCC40_NATIVE_DEMANGLE_RECEIPT);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         let transcript = "demangle bounded native libiberty slice
-selected_shape: single-long-arg-itanium-v5
-input: _ZN3foo3bar3bazEl
-output: foo::bar::baz(long)
-long_regression: _ZN3foo3barEl -> foo::bar(long)
+selected_shape: single-short-arg-itanium-v6
+input: _ZN3foo3bar3bazEs
+output: foo::bar::baz(short)
+short_regression: _ZN3foo3barEs -> foo::bar(short)
+flat_short_regression: _Z3foos -> foo(short)
+long_regression: _ZN3foo3bar3bazEl -> foo::bar::baz(long)
+nested_long_regression: _ZN3foo3barEl -> foo::bar(long)
 flat_long_regression: _Z3fool -> foo(long)
 char_regression: _ZN3foo3bar3bazEc -> foo::bar::baz(char)
 nested_char_regression: _ZN3foo3barEc -> foo::bar(char)
@@ -3125,10 +3140,13 @@ nested_zero_arg_regression: _ZN3foo3barEv -> foo::bar()
 flat_zero_arg_regression: _Z3foov -> foo()
 negative: _ZN3foo3bar3bazEf -> <null>
 negative: _ZN3foo3bar3bazEx -> <null>
+negative: _ZN3foo3bar3baz3quxEs -> <null>
 negative: _ZN3foo3bar3baz3quxEl -> <null>
 negative: _ZN3foo3bar3baz3quxEc -> <null>
 negative: _ZN3foo3bar3baz3quxEi -> <null>
 negative: _ZN3foo3bar3baz3quxEv -> <null>
+negative: _Z3fooss -> <null>
+negative: _ZN3foo3bar3bazEss -> <null>
 exit_status: 0
 stdout: <empty>
 stderr: <empty>
@@ -3136,13 +3154,15 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
 ";
         let mut content = format!(
             r#"{{
-  "schema": "mantle-gcc40-native-demangle-slice-v5",
+  "schema": "mantle-gcc40-native-demangle-slice-v6",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "bounded-native-demangle-slice",
-  "selected_shape": "single-long-arg-itanium-v5",
+  "selected_shape": "single-short-arg-itanium-v6",
   "bounded_contract": {{
-    "accepted_inputs": [{{ "mangled": "_ZN3foo3bar3bazEl", "demangled": "foo::bar::baz(long)" }}],
-    "long_regressions": [{{ "mangled": "_ZN3foo3barEl", "demangled": "foo::bar(long)" }}],
+    "accepted_inputs": [{{ "mangled": "_ZN3foo3bar3bazEs", "demangled": "foo::bar::baz(short)" }}],
+    "short_regressions": [{{ "mangled": "_ZN3foo3barEs", "demangled": "foo::bar(short)" }}],
+    "flat_short_regressions": [{{ "mangled": "_Z3foos", "demangled": "foo(short)" }}],
+    "long_regressions": [{{ "mangled": "_ZN3foo3bar3bazEl", "demangled": "foo::bar::baz(long)" }}, {{ "mangled": "_ZN3foo3barEl", "demangled": "foo::bar(long)" }}],
     "flat_long_regressions": [{{ "mangled": "_Z3fool", "demangled": "foo(long)" }}],
     "char_regressions": [{{ "mangled": "_ZN3foo3bar3bazEc", "demangled": "foo::bar::baz(char)" }}, {{ "mangled": "_ZN3foo3barEc", "demangled": "foo::bar(char)" }}],
     "flat_char_regressions": [{{ "mangled": "_Z3fooc", "demangled": "foo(char)" }}],
@@ -3151,12 +3171,12 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     "zero_arg_regressions": [{{ "mangled": "_ZN3foo3bar3bazEv", "demangled": "foo::bar::baz()" }}],
     "nested_regressions": [{{ "mangled": "_ZN3foo3barEv", "demangled": "foo::bar()" }}],
     "flat_regressions": [{{ "mangled": "_Z3foov", "demangled": "foo()" }}],
-    "rejected_inputs": ["_ZN3foo3bar3bazEf", "_ZN3foo3bar3bazEx", "_ZN3foo3bar3baz3quxEl", "_ZN3foo3bar3baz3quxEc", "_ZN3foo3bar3baz3quxEi", "_ZN3foo3bar3baz3quxEv", "_ZN3fooE", "not_mangled"],
-    "non_claim": "only flat, two-component nested, and selected three-component nested zero-argument, single-int, single-char, or single-long Itanium function names are in scope"
+    "rejected_inputs": ["_ZN3foo3bar3bazEf", "_ZN3foo3bar3bazEx", "_ZN3foo3bar3baz3quxEs", "_ZN3foo3bar3baz3quxEl", "_ZN3foo3bar3baz3quxEc", "_ZN3foo3bar3baz3quxEi", "_ZN3foo3bar3baz3quxEv", "_Z3fooss", "_ZN3foo3bar3bazEss", "_ZN3fooE", "not_mangled"],
+    "non_claim": "only flat, two-component nested, and selected three-component nested zero-argument, single-int, single-char, single-long, or single-short Itanium function names are in scope"
   }},
   "source_markers": {{
-    "cplus_demangle_marker": "gcc40_cplus_demangle_long_arg_itanium_v5_boundary",
-    "cp_demangle_marker": "gcc40_cp_demangle_long_arg_itanium_v5_boundary"
+    "cplus_demangle_marker": "gcc40_cplus_demangle_short_arg_itanium_v6_boundary",
+    "cp_demangle_marker": "gcc40_cp_demangle_short_arg_itanium_v6_boundary"
   }},
   "smoke": {{
     "transcript": {},
@@ -3164,6 +3184,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     "output_digest_blake3": "{}"
   }},
   "forbidden_stale_markers": [
+    "gcc40_cplus_demangle_long_arg_itanium_v5_boundary",
+    "gcc40_cp_demangle_long_arg_itanium_v5_boundary",
     "gcc40_cplus_demangle_char_arg_itanium_v4_boundary",
     "gcc40_cp_demangle_char_arg_itanium_v4_boundary",
     "gcc40_cplus_demangle_int_arg_itanium_v3_boundary",
@@ -3181,7 +3203,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
 "#,
             serde_json::to_string(transcript).unwrap(),
             blake3::hash(transcript.as_bytes()).to_hex(),
-            blake3::hash(b"foo::bar::baz(long)\n").to_hex()
+            blake3::hash(b"foo::bar::baz(short)\n").to_hex()
         );
         if !mutation.is_empty() {
             let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
@@ -3624,8 +3646,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "gcc (Mantle pass1 bridge) 4.0.4\n",
             "Crunch GCC 4.0 pass1 cc1 object boundary\n",
             "exec \"$TCC/bin/tcc\" -c -I\"$MUSL/include\" -o \"\\$outfile\" \"\\$input\"\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -3664,8 +3686,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -3704,8 +3726,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -3822,8 +3844,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -3862,8 +3884,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -3899,8 +3921,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -3937,8 +3959,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -3975,8 +3997,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -4016,8 +4038,8 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native cc1 pointer-deref slice: no TinyCC delegation for bounded proof input.\n",
             "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
-            "gcc40_cplus_demangle_long_arg_itanium_v5_boundary\n",
-            "gcc40_cp_demangle_long_arg_itanium_v5_boundary\n",
+            "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
+            "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
             "rewrites before system.h trigger deterministic TinyCC segfaults.\n",
             "through TinyCC/Mes diagnostics and segfault; seed the same inert files\n",
@@ -4050,7 +4072,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(dir.path(), "");
-        write_gcc40_native_demangle_receipt(dir.path(), "71504a07=>00000000");
+        write_gcc40_native_demangle_receipt(dir.path(), "929b317c=>00000000");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
@@ -4067,12 +4089,12 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_boundary_receipt(dir.path());
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(dir.path(), "");
-        write_gcc40_native_demangle_receipt(dir.path(), "single-long-arg-itanium-v5=>operator-name-itanium-v1");
+        write_gcc40_native_demangle_receipt(dir.path(), "single-short-arg-itanium-v6=>operator-name-itanium-v1");
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("expected `single-long-arg-itanium-v5`"));
+        assert!(row.notes.contains("expected `single-short-arg-itanium-v6`"));
     }
 
     #[test]
@@ -4086,13 +4108,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_generator_receipt(dir.path(), "");
         write_gcc40_native_demangle_receipt(
             dir.path(),
-            "mantle-gcc40-native-demangle-slice-v5=>mantle-gcc40-native-demangle-slice-v0",
+            "mantle-gcc40-native-demangle-slice-v6=>mantle-gcc40-native-demangle-slice-v0",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("expected `mantle-gcc40-native-demangle-slice-v5`"));
+        assert!(row.notes.contains("expected `mantle-gcc40-native-demangle-slice-v6`"));
     }
 
     #[test]
@@ -5063,9 +5085,9 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
 
-        assert!(content.contains("gcc40_cplus_demangle_long_arg_itanium_v5_boundary"));
-        assert!(content.contains("gcc40_cp_demangle_long_arg_itanium_v5_boundary"));
-        assert!(content.contains("cplus_demangle bounded single-long argument semantic smoke"));
+        assert!(content.contains("gcc40_cplus_demangle_short_arg_itanium_v6_boundary"));
+        assert!(content.contains("gcc40_cp_demangle_short_arg_itanium_v6_boundary"));
+        assert!(content.contains("cplus_demangle bounded single-short argument semantic smoke"));
         assert!(content.contains("_Z3foov"));
         assert!(content.contains("foo()"));
         assert!(content.contains("_ZN3foo3barEv"));
@@ -5083,7 +5105,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         assert!(content.contains("_ZN3foo3bar3bazEf"));
         assert!(content.contains("_ZN3foo3bar3baz3quxEi"));
         assert!(content.contains("_ZN3foo3bar3baz3quxEv"));
-        assert!(content.contains("bounded Itanium single-long argument function semantic slice"));
+        assert!(content.contains("bounded Itanium single-short argument function semantic slice"));
         assert!(!content.contains("gcc40_cp_demangle_disabled_boundary"));
         assert!(!content.contains("libiberty_cp_demangle_bootstrap_stub"));
     }
