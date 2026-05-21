@@ -1,0 +1,4 @@
+id: reduce-gcc40-native-cc1-source-frontier-v10
+status: proposed
+specs:
+  - bootstrap

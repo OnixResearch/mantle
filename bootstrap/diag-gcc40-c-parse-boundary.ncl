@@ -2363,6 +2363,13 @@ EOF
           fi
           echo "diag-cparse-frontier: cparse_make_cparse_o_log_lines=$($BB wc -l < "$m")" >&2
           echo "diag-cparse-frontier: cparse_make_cparse_o_log_bytes=$($BB wc -c < "$m")" >&2
+          include_flood_lines=$($BB grep -c '^In file included from In file included from' "$m" || true)
+          if [ "$include_flood_lines" -gt 0 ]; then
+            echo "diag-cparse-frontier: cparse_make_include_flood=present" >&2
+          else
+            echo "diag-cparse-frontier: cparse_make_include_flood=missing" >&2
+          fi
+          echo "diag-cparse-frontier: cparse_make_include_flood_lines=$include_flood_lines" >&2
           echo "diag-cparse-frontier: cparse_make_cparse_o_tail" >&2
           $BB tail -n 20 "$m" >&2
           [ "$rc" = 0 ] && { echo "ERROR: c-parse.o unexpectedly compiled" >&2; exit 1; }

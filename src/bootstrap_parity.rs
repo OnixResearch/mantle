@@ -820,9 +820,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v9" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v10" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v9`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v10`"
         ));
     }
     for field in [
@@ -865,13 +865,15 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "cparse_make_cparse_o_compile_command=present",
         "cparse_make_cparse_o_log_lines",
         "cparse_make_cparse_o_log_bytes",
+        "cparse_make_include_flood=present",
+        "cparse_make_include_flood_lines=2",
         "cparse_make_cparse_o_tail",
         "compact_archived_matrix_v8",
         "Argument list too long",
     ] {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v9 fragment `{required_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v10 fragment `{required_fragment}`"
             ));
         }
     }
@@ -883,6 +885,7 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "this narrows the diagnostic frontier to generated-header prefix/balance behavior",
         "remaining real c-parse.o/full-header source-build boundary",
         "captured real c-parse.o make-error boundary",
+        "focused make-log summary boundary",
     ] {
         if observed_frontier.contains(stale_fragment) {
             return Err(format!(
@@ -3322,13 +3325,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v9",
-    "prior_frontier": "source-frontier v8 compacted the diagnostic derivation, avoided the host argument-size limit, and preserved the focused c-parse.o make-error boundary with only compact source-resident markers",
-    "attempted_probe": "bounded make-log summary capture from bootstrap/diag-gcc40-c-parse-boundary.ncl that checks the focused c-parse.o compile command is present in the make log and emits compact log line/byte counts before the existing bounded output tail",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v10",
+    "prior_frontier": "source-frontier v9 preserved the focused c-parse.o make-error boundary and recorded compile-command presence plus compact make-log line/byte counts and bounded tail evidence",
+    "attempted_probe": "bounded include-flood signature capture from bootstrap/diag-gcc40-c-parse-boundary.ncl that checks the focused c-parse.o make log contains the repeated include diagnostic flood before the existing bounded output tail",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
     "observed_result": "narrowed-stable-blocker",
-    "observed_frontier": "the focused c-parse make attempt remains the active frontier: after generated config.h normalization, the diagnostic reaches the real c-parse.o compile command, records cparse_make_cparse_o_compile_command=present, records cparse_make_cparse_o_log_lines=109 and cparse_make_cparse_o_log_bytes=19374 summary markers, then records cparse_make_cparse_o_rc=2, cparse_make_cparse_o_tail, repeated In file included from diagnostics, and make: *** [c-parse.o] Error 1; v5-v6 archived evidence still records six-undef autohost and generated-header sweep outcomes including cparse_undef6_inc_tm, cparse_undef6_insn_modes_lines_20 fails, cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails, cparse_undef6_machmode_lines_40 passes, cparse_undef6_machmode_lines_120 passes, cparse_undef6_tree_lines_28 passes, cparse_undef6_tree_lines_36 fails, cparse_undef6_tree_lines_80 passes, cparse_undef6_tree_lines_120 passes, cparse_undef6_tree_lines_160 passes, cparse_undef6_tree_lines_220 passes, cparse_undef6_tree_builtin_empty passes, and cparse_undef6_tree_builtin_complex_arith_only passes; compact_archived_matrix_v8 remains the active matrix marker, avoiding Argument list too long before the focused make-log summary boundary, and this still does not prove the native GCC 4.0 c-parse/cc1 source build",
-    "retirement_condition": "replace when the diagnostic handoff advances beyond the summarized captured c-parse.o make rc/stderr failure to a native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
+    "observed_frontier": "the focused c-parse make attempt remains the active frontier: after generated config.h normalization, the diagnostic reaches the real c-parse.o compile command, records cparse_make_cparse_o_compile_command=present, records cparse_make_cparse_o_log_lines=109 and cparse_make_cparse_o_log_bytes=19374 summary markers, records cparse_make_include_flood=present and cparse_make_include_flood_lines=2 for the repeated In file included from diagnostic flood, then records cparse_make_cparse_o_rc=2, cparse_make_cparse_o_tail, and make: *** [c-parse.o] Error 1; v5-v6 archived evidence still records six-undef autohost and generated-header sweep outcomes including cparse_undef6_inc_tm, cparse_undef6_insn_modes_lines_20 fails, cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails, cparse_undef6_machmode_lines_40 passes, cparse_undef6_machmode_lines_120 passes, cparse_undef6_tree_lines_28 passes, cparse_undef6_tree_lines_36 fails, cparse_undef6_tree_lines_80 passes, cparse_undef6_tree_lines_120 passes, cparse_undef6_tree_lines_160 passes, cparse_undef6_tree_lines_220 passes, cparse_undef6_tree_builtin_empty passes, and cparse_undef6_tree_builtin_complex_arith_only passes; compact_archived_matrix_v8 remains the active matrix marker, avoiding Argument list too long before the focused include-flood frontier, and this still does not prove the native GCC 4.0 c-parse/cc1 source build",
+    "retirement_condition": "replace when the diagnostic handoff advances beyond the summarized captured c-parse.o include-flood rc/stderr failure to a native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
     "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
     "diagnostic_markers": [
       "diag-cparse-frontier: compact_archived_matrix_v8",
@@ -3370,6 +3373,9 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "diag-cparse-frontier: cparse_make_cparse_o_compile_command=present\n",
             "diag-cparse-frontier: cparse_make_cparse_o_log_lines=$($BB wc -l < \"$m\")\n",
             "diag-cparse-frontier: cparse_make_cparse_o_log_bytes=$($BB wc -c < \"$m\")\n",
+            "include_flood_lines=$($BB grep -c '^In file included from In file included from' \"$m\" || true)\n",
+            "diag-cparse-frontier: cparse_make_include_flood=present\n",
+            "diag-cparse-frontier: cparse_make_include_flood_lines=$include_flood_lines\n",
             "diag-cparse-frontier: cparse_make_cparse_o_tail\n",
             "make: *** [c-parse.o] Error 1\n",
             "ERROR: c-parse.o unexpectedly compiled\n",
@@ -4383,7 +4389,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v9=>mantle-gcc40-native-cc1-source-frontier-reduction-v7",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v10=>mantle-gcc40-native-cc1-source-frontier-reduction-v9",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4430,7 +4436,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("observed_frontier missing required v9 fragment"), "{}", row.notes);
+        assert!(row.notes.contains("observed_frontier missing required v10 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 

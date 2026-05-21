@@ -13,13 +13,13 @@
     "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
   ],
   "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v9",
-    "prior_frontier": "source-frontier v8 compacted the diagnostic derivation, avoided the host argument-size limit, and preserved the focused c-parse.o make-error boundary with only compact source-resident markers",
-    "attempted_probe": "bounded make-log summary capture from bootstrap/diag-gcc40-c-parse-boundary.ncl that checks the focused c-parse.o compile command is present in the make log and emits compact log line/byte counts before the existing bounded output tail",
+    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v10",
+    "prior_frontier": "source-frontier v9 preserved the focused c-parse.o make-error boundary and recorded compile-command presence plus compact make-log line/byte counts and bounded tail evidence",
+    "attempted_probe": "bounded include-flood signature capture from bootstrap/diag-gcc40-c-parse-boundary.ncl that checks the focused c-parse.o make log contains the repeated include diagnostic flood before the existing bounded output tail",
     "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
     "observed_result": "narrowed-stable-blocker",
-    "observed_frontier": "the focused c-parse make attempt remains the active frontier: after generated config.h normalization, the diagnostic reaches the real c-parse.o compile command, records cparse_make_cparse_o_compile_command=present, records cparse_make_cparse_o_log_lines=109 and cparse_make_cparse_o_log_bytes=19374 summary markers, then records cparse_make_cparse_o_rc=2, cparse_make_cparse_o_tail, repeated In file included from diagnostics, and make: *** [c-parse.o] Error 1; v5-v6 archived evidence still records six-undef autohost and generated-header sweep outcomes including cparse_undef6_inc_tm, cparse_undef6_insn_modes_lines_20 fails, cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails, cparse_undef6_machmode_lines_40 passes, cparse_undef6_machmode_lines_120 passes, cparse_undef6_tree_lines_28 passes, cparse_undef6_tree_lines_36 fails, cparse_undef6_tree_lines_80 passes, cparse_undef6_tree_lines_120 passes, cparse_undef6_tree_lines_160 passes, cparse_undef6_tree_lines_220 passes, cparse_undef6_tree_builtin_empty passes, and cparse_undef6_tree_builtin_complex_arith_only passes; compact_archived_matrix_v8 remains the active matrix marker, avoiding Argument list too long before the focused make-log summary boundary, and this still does not prove the native GCC 4.0 c-parse/cc1 source build",
-    "retirement_condition": "replace when the diagnostic handoff advances beyond the summarized captured c-parse.o make rc/stderr failure to a native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
+    "observed_frontier": "the focused c-parse make attempt remains the active frontier: after generated config.h normalization, the diagnostic reaches the real c-parse.o compile command, records cparse_make_cparse_o_compile_command=present, records cparse_make_cparse_o_log_lines=109 and cparse_make_cparse_o_log_bytes=19374 summary markers, records cparse_make_include_flood=present and cparse_make_include_flood_lines=2 for the repeated In file included from diagnostic flood, then records cparse_make_cparse_o_rc=2, cparse_make_cparse_o_tail, and make: *** [c-parse.o] Error 1; v5-v6 archived evidence still records six-undef autohost and generated-header sweep outcomes including cparse_undef6_inc_tm, cparse_undef6_insn_modes_lines_20 fails, cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails, cparse_undef6_machmode_lines_40 passes, cparse_undef6_machmode_lines_120 passes, cparse_undef6_tree_lines_28 passes, cparse_undef6_tree_lines_36 fails, cparse_undef6_tree_lines_80 passes, cparse_undef6_tree_lines_120 passes, cparse_undef6_tree_lines_160 passes, cparse_undef6_tree_lines_220 passes, cparse_undef6_tree_builtin_empty passes, and cparse_undef6_tree_builtin_complex_arith_only passes; compact_archived_matrix_v8 remains the active matrix marker, avoiding Argument list too long before the focused include-flood frontier, and this still does not prove the native GCC 4.0 c-parse/cc1 source build",
+    "retirement_condition": "replace when the diagnostic handoff advances beyond the summarized captured c-parse.o include-flood rc/stderr failure to a native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
     "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
     "diagnostic_markers": [
       "diag-cparse-frontier: compact_archived_matrix_v8",
@@ -28,6 +28,9 @@
       "diag-cparse-frontier: cparse_make_cparse_o_compile_command=present",
       "diag-cparse-frontier: cparse_make_cparse_o_log_lines=$($BB wc -l < \"$m\")",
       "diag-cparse-frontier: cparse_make_cparse_o_log_bytes=$($BB wc -c < \"$m\")",
+      "include_flood_lines=$($BB grep -c '^In file included from In file included from' \"$m\" || true)",
+      "diag-cparse-frontier: cparse_make_include_flood=present",
+      "diag-cparse-frontier: cparse_make_include_flood_lines=$include_flood_lines",
       "diag-cparse-frontier: cparse_make_cparse_o_tail",
       "ERROR: c-parse.o unexpectedly compiled",
       "exit \"$rc\""
