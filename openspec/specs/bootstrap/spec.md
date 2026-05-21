@@ -921,6 +921,20 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - WHEN the parity report validates GCC 4.0
 - THEN validation fails closed instead of promoting `gcc.4.0`.
 
+#### Scenario: c-parse config/stdio interaction records bounded v15 evidence [r[bootstrap.gcc.version-ladder.gcc40-cparse-config-stdio-interaction-v15]]
+
+- GIVEN the v14 source-frontier receipt narrowed the failure to the `config.h` plus `<stdio.h>` interaction
+- WHEN the bootstrap parity report validates GCC 4.0 native `cc1` source-frontier evidence
+- THEN the receipt uses schema `mantle-gcc40-native-cc1-source-frontier-reduction-v15`
+- AND the observed frontier records compact config-fragment stdio probe markers where full `config.h` fails, `config-undef6.h` succeeds, the single `ssize_t` undef probe succeeds, the other single-undef probes still fail, and the all-six variant succeeds
+- AND the row remains `partial` and non-promoting.
+
+#### Scenario: c-parse config/stdio interaction rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-cparse-config-stdio-interaction-v15-drift]]
+
+- GIVEN the source-frontier evidence uses a stale schema, omits the v14 stdio boundary, omits the v15 config/stdio interaction markers, or claims native GCC 4.0 correctness
+- WHEN the parity report validates GCC 4.0
+- THEN validation fails closed instead of promoting `gcc.4.0`.
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed

@@ -820,9 +820,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v14" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v15" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v14`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v15`"
         ));
     }
     for field in [
@@ -906,6 +906,28 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "cparse_stdio_config_undef6_include_flood_lines=0",
         "cparse_stdio_config_undef6_truncated_lines=0",
         "the failing shape is not stdio.h alone but the config.h plus stdio.h interaction",
+        "cparse_config_stdio_undef_need64_rc=1",
+        "cparse_config_stdio_undef_need64_include_flood_lines=2",
+        "cparse_config_stdio_undef_need64_truncated_lines=2",
+        "cparse_config_stdio_undef_gid_rc=1",
+        "cparse_config_stdio_undef_gid_include_flood_lines=2",
+        "cparse_config_stdio_undef_gid_truncated_lines=2",
+        "cparse_config_stdio_undef_inline_rc=1",
+        "cparse_config_stdio_undef_inline_include_flood_lines=2",
+        "cparse_config_stdio_undef_inline_truncated_lines=2",
+        "cparse_config_stdio_undef_rlim_rc=1",
+        "cparse_config_stdio_undef_rlim_include_flood_lines=2",
+        "cparse_config_stdio_undef_rlim_truncated_lines=2",
+        "cparse_config_stdio_undef_ssize_rc=0",
+        "cparse_config_stdio_undef_ssize_include_flood_lines=0",
+        "cparse_config_stdio_undef_ssize_truncated_lines=0",
+        "cparse_config_stdio_undef_uid_rc=1",
+        "cparse_config_stdio_undef_uid_include_flood_lines=2",
+        "cparse_config_stdio_undef_uid_truncated_lines=2",
+        "cparse_config_stdio_undef_all6_rc=0",
+        "cparse_config_stdio_undef_all6_include_flood_lines=0",
+        "cparse_config_stdio_undef_all6_truncated_lines=0",
+        "the narrowest observed single-undef config.h plus stdio.h passing probe is undefining ssize_t",
         "cparse_make_cparse_o_rc=2",
         "cparse_make_cparse_o_compile_command=present",
         "cparse_make_cparse_o_log_lines",
@@ -920,7 +942,7 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     ] {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v14 fragment `{required_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v15 fragment `{required_fragment}`"
             ));
         }
     }
@@ -3357,85 +3379,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     fn write_gcc40_native_cc1_build_frontier_receipt(root: &Path, mutation: &str) {
         let path = root.join(GCC40_NATIVE_CC1_BUILD_FRONTIER_RECEIPT);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let mut content = r#"{
-  "schema": "mantle-gcc40-native-cc1-build-frontier-v1",
-  "derivation": "bootstrap/gcc-4.0.ncl",
-  "status": "frontier-only",
-  "native_attempt": {
-    "make_marker": "make -j1 -C gcc gengtype-yacc.c CC=tcc AR=\"$BINUTILS/bin/ar\" RANLIB=\"$BINUTILS/bin/ranlib\" MAKEINFO=true 2>&1 || true",
-    "diagnostic_marker": "MANTLE: gcc-4.0 native cc1 build reached TinyCC/Mes source boundary; installing pass1 bridge",
-    "pass1_bridge_marker": "the validated TinyCC handoff. This remains a bridge until native cc1 builds."
-  },
-  "source_frontier_markers": [
-    "under the c-parse flags deterministically segfaults TinyCC after that",
-    "rewrites before system.h trigger deterministic TinyCC segfaults.",
-    "through TinyCC/Mes diagnostics and segfault; seed the same inert files"
-  ],
-  "source_frontier_reduction": {
-    "schema": "mantle-gcc40-native-cc1-source-frontier-reduction-v14",
-    "prior_frontier": "source-frontier v12 narrowed the focused c-parse source include-prefix boundary to config.h plus system.h; config.h alone succeeds while adding system.h reproduces the same truncated include-flood shape",
-    "attempted_probe": "bounded nested system.h direct include-prefix bisection derived from gcc/system.h ordered direct include directives, checking config.h plus stdarg.h/stddef.h succeeds while adding stdio.h triggers the same truncated include-flood failure; later prefixes remain failing",
-    "probe_marker": "MANTLE-GCC40-NATIVE-CC1-SOURCE-FRONTIER-REDUCTION-V1: bounded gengtype-yacc probe records unchanged TinyCC/Mes c-parse boundary after generated-header seeds.",
-    "observed_result": "narrowed-stable-blocker",
-    "observed_frontier": "the focused c-parse source frontier now has a nested system.h direct include-prefix boundary after the v12 config.h/system.h seam; cparse_source_include_count=19; cparse_source_include_order=config.h,system.h,coretypes.h,tm.h,tree.h,langhooks.h,input.h,cpplib.h,intl.h,timevar.h,c-pragma.h,c-tree.h,flags.h,varray.h,output.h,toplev.h,ggc.h,c-common.h,gt-c-parse.h; cparse_source_include_prefix_1_rc=0; cparse_source_include_prefix_2_rc=1; cparse_source_include_prefix_3_rc=1; cparse_source_include_prefix_4_rc=1; cparse_source_include_prefix_8_rc=1; cparse_source_include_prefix_11_rc=1; cparse_source_include_prefix_12_rc=1; cparse_source_include_prefix_18_rc=1; cparse_source_include_prefix_19_rc=1; cparse_system_include_count=21; cparse_system_include_order=stdarg.h,stddef.h,stdio.h,safe-ctype.h,sys/types.h,errno.h,string.h,strings.h,stdlib.h,unistd.h,sys/param.h,limits.h,hwint.h,sys/time.h,time.h,fcntl.h,sys/wait.h,malloc.h,sys/stat.h,filenames.h,libiberty.h; cparse_system_include_prefix_1_rc=0; cparse_system_include_prefix_1_include_flood_lines=0; cparse_system_include_prefix_1_truncated_lines=0; cparse_system_include_prefix_2_rc=0; cparse_system_include_prefix_2_include_flood_lines=0; cparse_system_include_prefix_2_truncated_lines=0; cparse_system_include_prefix_3_rc=1; cparse_system_include_prefix_3_include_flood_lines=2; cparse_system_include_prefix_3_truncated_lines=2; cparse_system_include_prefix_4_rc=1; cparse_system_include_prefix_4_include_flood_lines=2; cparse_system_include_prefix_4_truncated_lines=2; cparse_system_include_prefix_10_rc=1; cparse_system_include_prefix_10_include_flood_lines=2; cparse_system_include_prefix_10_truncated_lines=2; cparse_system_include_prefix_15_rc=1; cparse_system_include_prefix_15_include_flood_lines=2; cparse_system_include_prefix_15_truncated_lines=2; cparse_system_include_prefix_21_rc=1; cparse_system_include_prefix_21_include_flood_lines=2; cparse_system_include_prefix_21_truncated_lines=2; the first failing direct system.h include prefix is stdarg.h,stddef.h,stdio.h; the focused c-parse.o compile/make attempt remains the active frontier after generated config.h normalization; cparse_make_cparse_o_rc=2; cparse_make_cparse_o_compile_command=present; cparse_make_cparse_o_log_lines=109; cparse_make_cparse_o_log_bytes=19374; cparse_make_include_flood=present; cparse_make_include_flood_lines=2; cparse_make_include_flood_truncated_lines=2; cparse_make_include_flood_filename_payload=absent; cparse_make_cparse_o_tail; make: *** [c-parse.o] Error 1; archived evidence still records the v5-v6 six-undef autohost/generated-header sweep outcomes including cparse_undef6_inc_tm, cparse_undef6_insn_modes_lines_20 fails, cparse_undef6_insn_modes_lines_40 passes, cparse_undef6_machmode_lines_20 fails, cparse_undef6_machmode_lines_40 passes, cparse_undef6_tree_lines_28 passes, cparse_undef6_tree_lines_36 fails, cparse_undef6_machmode_lines_120 passes, cparse_undef6_tree_lines_80 passes, cparse_undef6_tree_lines_120 passes, cparse_undef6_tree_lines_160 passes, cparse_undef6_tree_lines_220 passes, cparse_undef6_tree_builtin_empty passes, cparse_undef6_tree_builtin_complex_arith_only passes; compact_archived_matrix_v8 remains the active matrix marker after avoiding Argument list too long; v14 stdio isolation shows cparse_stdio_no_config_rc=0; cparse_stdio_no_config_include_flood_lines=0; cparse_stdio_no_config_truncated_lines=0; cparse_stdio_config_rc=1; cparse_stdio_config_include_flood_lines=2; cparse_stdio_config_truncated_lines=2; cparse_stdio_config_undef6_rc=0; cparse_stdio_config_undef6_include_flood_lines=0; cparse_stdio_config_undef6_truncated_lines=0; the failing shape is not stdio.h alone but the config.h plus stdio.h interaction; this still does not prove native GCC 4.0 c-parse/cc1 source build correctness",
-    "retirement_condition": "replace when the diagnostic handoff advances beyond the config.h plus stdio.h interaction and summarized captured c-parse.o include-flood/truncation rc/stderr failure to a native GCC 4.0 c-parse/cc1 source-build step without pass1 fallback",
-    "diagnostic_derivation": "bootstrap/diag-gcc40-c-parse-boundary.ncl",
-    "diagnostic_markers": [
-      "diag-cparse-frontier: compact_archived_matrix_v8",
-      "m=/tmp/gcc40-cparse-make.log",
-      "diag-cparse-frontier: cparse_source_include_count=$cparse_source_include_count",
-      "diag-cparse-frontier: cparse_source_include_order=$cparse_source_include_order",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_1 1",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_2 2",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_3 3",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_4 4",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_8 8",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_11 11",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_12 12",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_18 18",
-      "run_cparse_source_include_prefix cparse_source_include_prefix_19 19",
-      "diag-cparse-frontier: ${label}_rc=$rc",
-      "diag-cparse-frontier: cparse_make_cparse_o_rc=$rc",
-      "diag-cparse-frontier: cparse_make_cparse_o_compile_command=present",
-      "diag-cparse-frontier: cparse_make_cparse_o_log_lines=$($BB wc -l < \"$m\")",
-      "diag-cparse-frontier: cparse_make_cparse_o_log_bytes=$($BB wc -c < \"$m\")",
-      "include_flood_lines=$($BB grep -c '^In file included from In file included from' \"$m\" || true)",
-      "diag-cparse-frontier: cparse_make_include_flood=present",
-      "diag-cparse-frontier: cparse_make_include_flood_lines=$include_flood_lines",
-      "include_flood_truncated_lines=$($BB awk",
-      "include_flood_filename_payload=$($BB awk",
-      "diag-cparse-frontier: cparse_make_include_flood_truncated_lines=$include_flood_truncated_lines",
-      "diag-cparse-frontier: cparse_make_include_flood_filename_payload=$include_flood_filename_payload",
-      "diag-cparse-frontier: cparse_make_cparse_o_tail",
-      "ERROR: c-parse.o unexpectedly compiled",
-      "exit \"$rc\"",
-      "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines",
-      "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines",
-      "run_cparse_system_include_prefix cparse_system_include_prefix_21 21",
-      "$BB cp gcc/config.h gcc/config-undef6.h",
-      "run_cparse_stdio_probe cparse_stdio_no_config \"\"",
-      "run_cparse_stdio_probe cparse_stdio_config config.h",
-      "run_cparse_stdio_probe cparse_stdio_config_undef6 config-undef6.h",
-      "run_cparse_system_include_prefix cparse_system_include_prefix_15 15",
-      "run_cparse_system_include_prefix cparse_system_include_prefix_10 10",
-      "run_cparse_system_include_prefix cparse_system_include_prefix_4 4",
-      "run_cparse_system_include_prefix cparse_system_include_prefix_3 3",
-      "run_cparse_system_include_prefix cparse_system_include_prefix_2 2",
-      "run_cparse_system_include_prefix cparse_system_include_prefix_1 1",
-      "diag-cparse-frontier: cparse_system_include_order=$cparse_system_include_order",
-      "cparse_system_includes=/tmp/gcc40-cparse-system-direct-includes.txt",
-      "diag-cparse-frontier: cparse_system_include_count=$cparse_system_include_count"
-    ],
-    "non_claim": "diagnostic frontier evidence only; does not prove native GCC 4.0 compiler correctness"
-  },
-  "retirement_condition": {
-    "replacement_evidence": "retire when GCC 4.0 native cc1 source build evidence supersedes the pass1 bridge boundary",
-    "non_claim": "frontier-only receipt; does not prove native GCC 4.0 compiler correctness"
-  },
-  "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 correctness"
-}
-"#
-        .to_string();
+        let mut content = include_str!("../bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json").to_string();
         if !mutation.is_empty() {
             let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
             assert_eq!(parts.len(), 2, "mutation must be old=>new");
@@ -3475,6 +3419,14 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "run_cparse_stdio_probe cparse_stdio_no_config \"\"\n",
             "run_cparse_stdio_probe cparse_stdio_config config.h\n",
             "run_cparse_stdio_probe cparse_stdio_config_undef6 config-undef6.h\n",
+            "run_cparse_config_stdio_undef_probe() {\n",
+            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_need64 NEED_64BIT_HOST_WIDE_INT\n",
+            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_gid gid_t\n",
+            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_inline inline\n",
+            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_rlim rlim_t\n",
+            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_ssize ssize_t\n",
+            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_uid uid_t\n",
+            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_all6 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t\n",
             "diag-cparse-frontier: ${label}_rc=$rc\n",
             "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines\n",
             "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines\n",
@@ -4503,7 +4455,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v14=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v15=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4550,7 +4502,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("observed_frontier missing required v14 fragment"), "{}", row.notes);
+        assert!(row.notes.contains("observed_frontier missing required v15 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 

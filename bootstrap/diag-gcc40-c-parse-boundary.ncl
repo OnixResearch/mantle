@@ -2449,9 +2449,45 @@ EOF
           run_cparse_system_include_prefix cparse_system_include_prefix_10 10
           run_cparse_system_include_prefix cparse_system_include_prefix_15 15
           run_cparse_system_include_prefix cparse_system_include_prefix_21 21
+          run_cparse_config_stdio_undef_probe() {
+            label="$1"
+            shift
+            config_probe="/tmp/$label-config.h"
+            probe="/tmp/$label.c"
+            echo '#include "config.h"' > "$config_probe"
+            for macro in "$@"; do
+              echo "#undef $macro" >> "$config_probe"
+            done
+            echo "#include \"$config_probe\"" > "$probe"
+            echo '#include <stdio.h>' >> "$probe"
+            echo 'int cparse_config_stdio_undef_probe;' >> "$probe"
+            set +e
+            (
+              cd gcc
+              gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
+                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+                "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr"
+            )
+            rc=$?
+            set -e
+            flood_lines=$($BB grep -c '^In file included from In file included from' "/tmp/$label.stderr" || true)
+            truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "/tmp/$label.stderr")
+            echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
+            echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
+            echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
+            $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
+          }
           run_cparse_stdio_probe cparse_stdio_no_config ""
           run_cparse_stdio_probe cparse_stdio_config config.h
           run_cparse_stdio_probe cparse_stdio_config_undef6 config-undef6.h
+          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_need64 NEED_64BIT_HOST_WIDE_INT
+          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_gid gid_t
+          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_inline inline
+          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_rlim rlim_t
+          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_ssize ssize_t
+          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_uid uid_t
+          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_all6 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
 
           echo "diag: reproduce focused c-parse boundary"
           m=/tmp/gcc40-cparse-make.log
