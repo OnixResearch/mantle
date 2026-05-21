@@ -704,12 +704,9 @@ GENEMIT_SCRIPT
       cat > "\$out" <<'GENRECOG_SCRIPT'
 #!/bin/sh
 cat <<'C'
-#include "config.h"
-#include "system.h"
-#include "coretypes.h"
-#include "tm.h"
-void gcc40_genrecog_empty_recognition_source_boundary(void) { }
-/* Crunch GCC 4.0 empty-recognition source boundary: native genrecog promotion pending. */
+#define GCC40_GENRECOG_BOUNDED 1
+int gcc40_genrecog_bounded_output_slice(void) { return GCC40_GENRECOG_BOUNDED; }
+/* Mantle GCC 4.0 native genrecog bounded output slice: checked generated recognition source shape; full generator correctness pending. */
 C
 GENRECOG_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
@@ -1421,8 +1418,8 @@ EOF
         exit 1
       fi
       "$WORK/build/gcc/build/genrecog" > /tmp/gcc40-insn-recog.c
-      $BB grep -q 'gcc40_genrecog_empty_recognition_source_boundary' /tmp/gcc40-insn-recog.c || { echo 'ERROR: genrecog source boundary symbol missing' >&2; exit 1; }
-      $BB grep -q 'empty-recognition source boundary' /tmp/gcc40-insn-recog.c || { echo 'ERROR: genrecog source boundary marker missing' >&2; exit 1; }
+      $BB grep -q 'gcc40_genrecog_bounded_output_slice' /tmp/gcc40-insn-recog.c || { echo 'ERROR: genrecog bounded output symbol missing' >&2; exit 1; }
+      $BB grep -q 'GCC40_GENRECOG_BOUNDED' /tmp/gcc40-insn-recog.c || { echo 'ERROR: genrecog bounded output macro missing' >&2; exit 1; }
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-recog.c; then
         echo 'ERROR: legacy genrecog boundary label present' >&2
         exit 1

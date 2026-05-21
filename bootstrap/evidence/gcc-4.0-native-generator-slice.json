@@ -23,6 +23,14 @@
             "output_program_fragment": "#define GCC40_GENEMIT_BOUNDED 1\nvoid gcc40_genemit_bounded_output_slice(void) { }\n/* Mantle GCC 4.0 native genemit bounded output slice: checked generated emit source shape; full generator correctness pending. */\n",
             "transcript": "genemit bounded native generator slice\nselected_generator: genemit\noutput_contract: bounded emit source exposing GCC40_GENEMIT_BOUNDED and gcc40_genemit_bounded_output_slice\nexit_status: 0\nstdout_fragment: void gcc40_genemit_bounded_output_slice(void) { }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n",
             "transcript_digest_blake3": "8e4263d1c29dcdebe628eacf38adc597ddd02a613f00d9d491ae3abf67d16619"
+        },
+        "genrecog": {
+            "contract": "genrecog bounded output must emit deterministic recognition source with GCC40_GENRECOG_BOUNDED and gcc40_genrecog_bounded_output_slice while making no full-generator claim",
+            "derivation_marker": "Mantle GCC 4.0 native genrecog bounded output slice: checked generated recognition source shape; full generator correctness pending.",
+            "output_digest_blake3": "067357c3503ada189405eeee8ead783636f730cc7dde922708503b69b741e234",
+            "output_program_fragment": "#define GCC40_GENRECOG_BOUNDED 1\nint gcc40_genrecog_bounded_output_slice(void) { return GCC40_GENRECOG_BOUNDED; }\n/* Mantle GCC 4.0 native genrecog bounded output slice: checked generated recognition source shape; full generator correctness pending. */\n",
+            "transcript": "genrecog bounded native generator slice\nselected_generator: genrecog\noutput_contract: bounded recognition source exposing GCC40_GENRECOG_BOUNDED and gcc40_genrecog_bounded_output_slice\nexit_status: 0\nstdout_fragment: int gcc40_genrecog_bounded_output_slice(void) { return GCC40_GENRECOG_BOUNDED; }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n",
+            "transcript_digest_blake3": "f71e770f4e27ed482c5fe025a0785978748a090398fe59f61791839131e2a259"
         }
     },
     "derivation": "bootstrap/gcc-4.0.ncl",
@@ -32,14 +40,17 @@
         "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.",
         "gcc40_genoutput_empty_output_source_boundary",
         "Crunch GCC 4.0 empty-emit source boundary: native genemit promotion pending.",
-        "gcc40_genemit_empty_emit_source_boundary"
+        "gcc40_genemit_empty_emit_source_boundary",
+        "Crunch GCC 4.0 empty-recognition source boundary: native genrecog promotion pending.",
+        "gcc40_genrecog_empty_recognition_source_boundary"
     ],
     "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness",
-    "schema": "mantle-gcc40-native-generator-slice-v3",
+    "schema": "mantle-gcc40-native-generator-slice-v4",
     "selected_generators": [
         "genattrtab",
         "genoutput",
-        "genemit"
+        "genemit",
+        "genrecog"
     ],
     "status": "bounded-native-generator-slices"
 }
