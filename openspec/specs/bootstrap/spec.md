@@ -875,6 +875,22 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN the row remains a blocker
 - AND the row notes the specific failed native source-frontier evidence check
 
+#### Scenario: GCC 4.0 native cc1 c-parse source include bisection frontier is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-source-include-bisection-frontier]]
+
+- GIVEN `bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json` uses source-frontier schema `mantle-gcc40-native-cc1-source-frontier-reduction-v12`
+- AND the evidence preserves the v11 include-flood truncation and filename-payload absence evidence
+- AND the evidence records the source-level `c-parse.c` include order and a compact prefix boundary where `config.h` alone succeeds but adding `system.h` fails with the same truncated include-flood shape
+- WHEN bootstrap parity validates the GCC 4.0 row
+- THEN the row may report the v12 source include bisection frontier as evidence-backed partial
+- AND `gcc.4.0` remains evidence-backed `partial` without completing live-bootstrap, Guix, or StageX parity
+
+#### Scenario: GCC 4.0 native cc1 c-parse source include bisection frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-source-include-bisection-frontier-drift]]
+
+- GIVEN the source-frontier evidence uses a stale schema, omits the v11 truncation evidence, omits the source include-prefix boundary, claims the truncated make log identified a filename payload, or claims promotion
+- WHEN bootstrap parity validates the GCC 4.0 row
+- THEN the row remains a blocker
+- AND the row notes the specific failed native source-frontier evidence check
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed

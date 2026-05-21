@@ -2341,6 +2341,48 @@ EOF
 EOF
           echo "diag: normalized generated config.h to manual include form"
 
+          cparse_source_includes=/tmp/gcc40-cparse-source-includes.txt
+          $BB awk '/^#include / { gsub(/^[#]include[ \t]+\"/, ""); gsub(/\".*/, ""); print }' \
+            "$WORK/gcc-4.0.4/gcc/c-parse.c" > "$cparse_source_includes"
+          cparse_source_include_count=$($BB wc -l < "$cparse_source_includes")
+          cparse_source_include_order=$($BB tr '\n' ',' < "$cparse_source_includes" | $BB sed 's/,$//')
+          echo "diag-cparse-frontier: cparse_source_include_count=$cparse_source_include_count" >&2
+          echo "diag-cparse-frontier: cparse_source_include_order=$cparse_source_include_order" >&2
+          run_cparse_source_include_prefix() {
+            label="$1"
+            count="$2"
+            probe="/tmp/$label.c"
+            : > "$probe"
+            i=0
+            while IFS= read -r header; do
+              i=$((i + 1))
+              [ "$i" -le "$count" ] || break
+              echo "#include \"$header\"" >> "$probe"
+            done < "$cparse_source_includes"
+            echo 'int cparse_source_include_prefix_probe;' >> "$probe"
+            set +e
+            (
+              cd gcc
+              gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
+                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+                "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr"
+            )
+            rc=$?
+            set -e
+            echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
+            $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
+          }
+          run_cparse_source_include_prefix cparse_source_include_prefix_1 1
+          run_cparse_source_include_prefix cparse_source_include_prefix_2 2
+          run_cparse_source_include_prefix cparse_source_include_prefix_3 3
+          run_cparse_source_include_prefix cparse_source_include_prefix_4 4
+          run_cparse_source_include_prefix cparse_source_include_prefix_8 8
+          run_cparse_source_include_prefix cparse_source_include_prefix_11 11
+          run_cparse_source_include_prefix cparse_source_include_prefix_12 12
+          run_cparse_source_include_prefix cparse_source_include_prefix_18 18
+          run_cparse_source_include_prefix cparse_source_include_prefix_19 19
+
           echo "diag: reproduce focused c-parse boundary"
           m=/tmp/gcc40-cparse-make.log
           set +e

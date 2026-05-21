@@ -1,0 +1,4 @@
+id: reduce-gcc40-cparse-source-include-bisection-v12
+status: proposed
+owner: hermes-agent
+summary: Add bounded source-level include bisection evidence for the GCC 4.0 native c-parse frontier without promoting gcc.4.0.
