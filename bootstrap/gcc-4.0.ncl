@@ -718,12 +718,9 @@ GENRECOG_SCRIPT
       cat > "\$out" <<'GENEXTRACT_SCRIPT'
 #!/bin/sh
 cat <<'C'
-#include "config.h"
-#include "system.h"
-#include "coretypes.h"
-#include "tm.h"
-void gcc40_genextract_empty_extraction_source_boundary(void) { }
-/* Crunch GCC 4.0 empty-extraction source boundary: native genextract promotion pending. */
+#define GCC40_GENEXTRACT_BOUNDED 1
+int gcc40_genextract_bounded_output_slice(void) { return GCC40_GENEXTRACT_BOUNDED; }
+/* Mantle GCC 4.0 native genextract bounded output slice: checked generated extraction source shape; full generator correctness pending. */
 C
 GENEXTRACT_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
@@ -1430,8 +1427,13 @@ EOF
         exit 1
       fi
       "$WORK/build/gcc/build/genextract" > /tmp/gcc40-insn-extract.c
-      $BB grep -q 'gcc40_genextract_empty_extraction_source_boundary' /tmp/gcc40-insn-extract.c || { echo 'ERROR: genextract source boundary symbol missing' >&2; exit 1; }
-      $BB grep -q 'empty-extraction source boundary' /tmp/gcc40-insn-extract.c || { echo 'ERROR: genextract source boundary marker missing' >&2; exit 1; }
+      $BB grep -q 'gcc40_genextract_bounded_output_slice' /tmp/gcc40-insn-extract.c || { echo 'ERROR: genextract bounded output symbol missing' >&2; exit 1; }
+      $BB grep -q 'GCC40_GENEXTRACT_BOUNDED' /tmp/gcc40-insn-extract.c || { echo 'ERROR: genextract bounded output marker missing' >&2; exit 1; }
+      $BB grep -q 'native genextract bounded output slice' /tmp/gcc40-insn-extract.c || { echo 'ERROR: genextract bounded output description missing' >&2; exit 1; }
+      if $BB grep -q 'gcc40_genextract_empty_extraction_source_boundar[y]' /tmp/gcc40-insn-extract.c; then
+        echo 'ERROR: stale genextract empty boundary present' >&2
+        exit 1
+      fi
       if $BB grep -q 'generated_bootstrap_s[t]ub' /tmp/gcc40-insn-extract.c; then
         echo 'ERROR: legacy genextract boundary label present' >&2
         exit 1

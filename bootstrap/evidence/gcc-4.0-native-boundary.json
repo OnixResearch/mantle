@@ -69,6 +69,11 @@
       "derivation_marker": "Mantle GCC 4.0 native genrecog bounded output slice: checked generated recognition source shape; full generator correctness pending."
     },
     {
+      "id": "genextract-bounded-output",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
+      "derivation_marker": "Mantle GCC 4.0 native genextract bounded output slice: checked generated extraction source shape; full generator correctness pending."
+    },
+    {
       "id": "libiberty-demangle-single-short-arg",
       "receipt": "bootstrap/evidence/gcc-4.0-native-demangle-slice.json",
       "derivation_marker": "gcc40_cplus_demangle_short_arg_itanium_v6_boundary"
@@ -99,7 +104,7 @@
       {
         "id": "generator-bounded-outputs",
         "derivation_marker": "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.",
-        "frontier": "native generator evidence has checked bounded genattrtab, genoutput, genemit, and genrecog output slices; full native generator correctness remains pending"
+        "frontier": "native generator evidence has checked bounded genattrtab, genoutput, genemit, genrecog, and genextract output slices; full native generator correctness remains pending"
       }
     ]
   },

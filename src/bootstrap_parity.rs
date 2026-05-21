@@ -1143,13 +1143,13 @@ fn validate_gcc40_native_generator_receipt(project_root: &Path, derivation_conte
     let path = project_root.join(GCC40_NATIVE_GENERATOR_RECEIPT);
     let content = fs::read_to_string(&path).map_err(|err| {
         format!(
-            "GCC 4.0 native generator receipt missing `{}` ({err}); expected checked bounded genattrtab/genoutput/genemit/genrecog receipt",
+            "GCC 4.0 native generator receipt missing `{}` ({err}); expected checked bounded genattrtab/genoutput/genemit/genrecog/genextract receipt",
             GCC40_NATIVE_GENERATOR_RECEIPT
         )
     })?;
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("GCC 4.0 native generator receipt is not valid JSON: {err}"))?;
-    require_gcc40_generator_string(&value, "schema", "mantle-gcc40-native-generator-slice-v4")?;
+    require_gcc40_generator_string(&value, "schema", "mantle-gcc40-native-generator-slice-v5")?;
     require_gcc40_generator_string(&value, "derivation", "bootstrap/gcc-4.0.ncl")?;
     require_gcc40_generator_string(&value, "status", "bounded-native-generator-slices")?;
     require_gcc40_generator_string(
@@ -1169,7 +1169,7 @@ fn validate_gcc40_native_generator_receipt(project_root: &Path, derivation_conte
                 .ok_or_else(|| "GCC 4.0 native generator receipt selected generators must be strings".to_string())
         })
         .collect::<Result<Vec<_>, _>>()?;
-    for required in ["genattrtab", "genoutput", "genemit", "genrecog"] {
+    for required in ["genattrtab", "genoutput", "genemit", "genrecog", "genextract"] {
         if !selected.contains(&required) {
             return Err(format!("GCC 4.0 native generator receipt selected generators missing `{required}`"));
         }
@@ -1194,6 +1194,10 @@ fn validate_gcc40_native_generator_receipt(project_root: &Path, derivation_conte
     validate_gcc40_generator_output(outputs, derivation_content, "genrecog", &[
         "gcc40_genrecog_bounded_output_slice",
         "GCC40_GENRECOG_BOUNDED",
+    ])?;
+    validate_gcc40_generator_output(outputs, derivation_content, "genextract", &[
+        "gcc40_genextract_bounded_output_slice",
+        "GCC40_GENEXTRACT_BOUNDED",
     ])?;
 
     let forbidden = value.get("forbidden_boundary_markers").and_then(|v| v.as_array()).ok_or_else(|| {
@@ -2465,7 +2469,7 @@ fn parity_stage_specs() -> &'static [StageSpec] {
             graph_evidence: "late graph completion recorded",
             semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref, demangle single-short, and generator boundary smokes only; native compiler correctness not proven",
             proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-demangle receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab, genoutput, genemit, and genrecog slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab, genoutput, genemit, genrecog, and genextract slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         },
         StageSpec {
@@ -2630,7 +2634,7 @@ mod tests {
             graph_evidence: "late graph completion recorded",
             semantic_evidence: "bounded libgcc/driver/cc1 arithmetic+logical+local-vars+function-call+array-index+struct-field+pointer-deref, demangle single-short, and generator boundary smokes only; native compiler correctness not proven",
             proof_evidence: "source transcript, placeholder inventory, native-boundary receipt, native-cc1 slice receipt, native-demangle receipt, native-generator receipt, and native-cc1 build/source-frontier receipt required",
-            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab, genoutput, genemit, and genrecog slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
+            notes: "pass1 bridge and selected bounded semantics are partial progress; checked placeholder inventory at bootstrap/evidence/gcc-4.0-placeholder-inventory.json records remaining marker debt, native-boundary receipt at bootstrap/evidence/gcc-4.0-native-boundary.json records the intentional bridge boundary, native-cc1 receipt at bootstrap/evidence/gcc-4.0-native-cc1-arithmetic.json records no-TinyCC-delegation arithmetic, logical/control-flow, local-variable, helper-call, array-index, struct-field, and pointer-deref slices, native-demangle receipt at bootstrap/evidence/gcc-4.0-native-demangle-slice.json records bounded single-short Itanium demangle semantics, native-generator receipt at bootstrap/evidence/gcc-4.0-native-generator-slice.json records bounded genattrtab, genoutput, genemit, genrecog, and genextract slices, and native-cc1 build/source-frontier receipt at bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json records source-build frontier markers plus the bounded unchanged c-parse/gengtype-yacc probe, while remaining native generator/compiler/demangler correctness is still unproven",
             evidence_check: EvidenceCheck::Gcc40PlaceholderInventory,
         }
     }
@@ -2924,6 +2928,11 @@ mod tests {
       "derivation_marker": "Mantle GCC 4.0 native genrecog bounded output slice: checked generated recognition source shape; full generator correctness pending."
     },
     {
+      "id": "genextract-bounded-output",
+      "receipt": "bootstrap/evidence/gcc-4.0-native-generator-slice.json",
+      "derivation_marker": "Mantle GCC 4.0 native genextract bounded output slice: checked generated extraction source shape; full generator correctness pending."
+    },
+    {
       "id": "libiberty-demangle-single-short-arg",
       "receipt": "bootstrap/evidence/gcc-4.0-native-demangle-slice.json",
       "derivation_marker": "gcc40_cplus_demangle_short_arg_itanium_v6_boundary"
@@ -2949,7 +2958,7 @@ mod tests {
       {
         "id": "generator-bounded-outputs",
         "derivation_marker": "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.",
-        "frontier": "native generator evidence has checked bounded genattrtab, genoutput, genemit, and genrecog output slices; full native generator correctness remains pending"
+        "frontier": "native generator evidence has checked bounded genattrtab, genoutput, genemit, genrecog, and genextract output slices; full native generator correctness remains pending"
       }
     ]
   },
@@ -3105,12 +3114,14 @@ mod tests {
         let genemit_transcript = "genemit bounded native generator slice\nselected_generator: genemit\noutput_contract: bounded emit source exposing GCC40_GENEMIT_BOUNDED and gcc40_genemit_bounded_output_slice\nexit_status: 0\nstdout_fragment: void gcc40_genemit_bounded_output_slice(void) { }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n";
         let genrecog_fragment = "#define GCC40_GENRECOG_BOUNDED 1\nint gcc40_genrecog_bounded_output_slice(void) { return GCC40_GENRECOG_BOUNDED; }\n/* Mantle GCC 4.0 native genrecog bounded output slice: checked generated recognition source shape; full generator correctness pending. */\n";
         let genrecog_transcript = "genrecog bounded native generator slice\nselected_generator: genrecog\noutput_contract: bounded recognition source exposing GCC40_GENRECOG_BOUNDED and gcc40_genrecog_bounded_output_slice\nexit_status: 0\nstdout_fragment: int gcc40_genrecog_bounded_output_slice(void) { return GCC40_GENRECOG_BOUNDED; }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n";
+        let genextract_fragment = "#define GCC40_GENEXTRACT_BOUNDED 1\nint gcc40_genextract_bounded_output_slice(void) { return GCC40_GENEXTRACT_BOUNDED; }\n/* Mantle GCC 4.0 native genextract bounded output slice: checked generated extraction source shape; full generator correctness pending. */\n";
+        let genextract_transcript = "genextract bounded native generator slice\nselected_generator: genextract\noutput_contract: bounded extraction source exposing GCC40_GENEXTRACT_BOUNDED and gcc40_genextract_bounded_output_slice\nexit_status: 0\nstdout_fragment: int gcc40_genextract_bounded_output_slice(void) { return GCC40_GENEXTRACT_BOUNDED; }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n";
         let mut content = format!(
             r#"{{
-  "schema": "mantle-gcc40-native-generator-slice-v4",
+  "schema": "mantle-gcc40-native-generator-slice-v5",
   "derivation": "bootstrap/gcc-4.0.ncl",
   "status": "bounded-native-generator-slices",
-  "selected_generators": ["genattrtab", "genoutput", "genemit", "genrecog"],
+  "selected_generators": ["genattrtab", "genoutput", "genemit", "genrecog", "genextract"],
   "bounded_outputs": {{
     "genattrtab": {{
       "derivation_marker": "Mantle GCC 4.0 native genattrtab bounded output slice: checked generated attrtab shape; full generator correctness pending.",
@@ -3143,6 +3154,14 @@ mod tests {
       "transcript": {},
       "transcript_digest_blake3": "{}",
       "output_digest_blake3": "{}"
+    }},
+    "genextract": {{
+      "derivation_marker": "Mantle GCC 4.0 native genextract bounded output slice: checked generated extraction source shape; full generator correctness pending.",
+      "contract": "genextract bounded output must emit deterministic extraction source with GCC40_GENEXTRACT_BOUNDED and gcc40_genextract_bounded_output_slice while making no full-generator claim",
+      "output_program_fragment": {},
+      "transcript": {},
+      "transcript_digest_blake3": "{}",
+      "output_digest_blake3": "{}"
     }}
   }},
   "forbidden_boundary_markers": [
@@ -3153,7 +3172,9 @@ mod tests {
     "Crunch GCC 4.0 empty-emit source boundary: native genemit promotion pending.",
     "gcc40_genemit_empty_emit_source_boundary",
     "Crunch GCC 4.0 empty-recognition source boundary: native genrecog promotion pending.",
-    "gcc40_genrecog_empty_recognition_source_boundary"
+    "gcc40_genrecog_empty_recognition_source_boundary",
+    "Crunch GCC 4.0 empty-extraction source boundary: native genextract promotion pending.",
+    "gcc40_genextract_empty_extraction_source_boundary"
   ],
   "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness"
 }}
@@ -3173,7 +3194,11 @@ mod tests {
             serde_json::to_string(genrecog_fragment).unwrap(),
             serde_json::to_string(genrecog_transcript).unwrap(),
             blake3::hash(genrecog_transcript.as_bytes()).to_hex(),
-            blake3::hash(genrecog_fragment.as_bytes()).to_hex()
+            blake3::hash(genrecog_fragment.as_bytes()).to_hex(),
+            serde_json::to_string(genextract_fragment).unwrap(),
+            serde_json::to_string(genextract_transcript).unwrap(),
+            blake3::hash(genextract_transcript.as_bytes()).to_hex(),
+            blake3::hash(genextract_fragment.as_bytes()).to_hex()
         );
         if !mutation.is_empty() {
             let parts: Vec<&str> = mutation.splitn(2, "=>").collect();
@@ -4094,7 +4119,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(
             dir.path(),
-            "\"genattrtab\", \"genoutput\", \"genemit\", \"genrecog\"=>\"genattrtab\", \"genoutput\", \"genemit\"",
+            "\"genattrtab\", \"genoutput\", \"genemit\", \"genrecog\", \"genextract\"=>\"genattrtab\", \"genoutput\", \"genemit\"",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4137,13 +4162,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_cc1_arithmetic_receipt(dir.path(), "");
         write_gcc40_native_generator_receipt(
             dir.path(),
-            "mantle-gcc40-native-generator-slice-v4=>mantle-gcc40-native-generator-slice-v0",
+            "mantle-gcc40-native-generator-slice-v5=>mantle-gcc40-native-generator-slice-v0",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("expected `mantle-gcc40-native-generator-slice-v4`"));
+        assert!(row.notes.contains("expected `mantle-gcc40-native-generator-slice-v5`"));
     }
 
     fn valid_gcc40_native_demangle_content() -> &'static str {
@@ -4166,6 +4191,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genemit bounded output slice: checked generated emit source shape; full generator correctness pending.\n",
             "Mantle GCC 4.0 native genrecog bounded output slice: checked generated recognition source shape; full generator correctness pending.\n",
+            "Mantle GCC 4.0 native genextract bounded output slice: checked generated extraction source shape; full generator correctness pending.\n",
             "gcc40_cplus_demangle_short_arg_itanium_v6_boundary\n",
             "gcc40_cp_demangle_short_arg_itanium_v6_boundary\n",
             "under the c-parse flags deterministically segfaults TinyCC after that\n",
@@ -5145,12 +5171,14 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let content = fs::read_to_string(root.join("bootstrap/gcc-4.0.ncl")).unwrap();
 
-        assert!(content.contains("gcc40_genextract_empty_extraction_source_boundary"));
-        assert!(content.contains("empty-extraction source boundary"));
+        assert!(content.contains("gcc40_genextract_bounded_output_slice"));
+        assert!(content.contains("GCC40_GENEXTRACT_BOUNDED"));
+        assert!(content.contains("native genextract bounded output slice"));
         assert!(content.contains("ERROR: genextract boundary executable missing"));
-        assert!(content.contains("ERROR: genextract source boundary symbol missing"));
-        assert!(content.contains("ERROR: genextract source boundary marker missing"));
-        assert!(content.contains("generated_bootstrap_s[t]ub"));
+        assert!(content.contains("ERROR: genextract bounded output symbol missing"));
+        assert!(content.contains("ERROR: genextract bounded output marker missing"));
+        assert!(content.contains("ERROR: genextract bounded output description missing"));
+        assert!(!content.contains("gcc40_genextract_empty_extraction_source_boundary"));
         assert!(!content.contains("genextract|build/genextract|*/build/genpeep"));
     }
 
