@@ -2489,6 +2489,35 @@ EOF
           run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_uid uid_t
           run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_all6 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
 
+          ssize_line_count=$($BB grep -c '^#define ssize_t' gcc/config.h || true)
+          echo "diag-cparse-frontier: cparse_config_ssize_define_lines=$ssize_line_count" >&2
+          $BB grep '^#define ssize_t' gcc/config.h | $BB sed 's/^/diag-cparse-frontier: cparse_config_ssize_define: /' >&2 || true
+          cparse_ssize_predefine_config=/tmp/cparse_config_stdio_ssize_predefine_int-config.h
+          echo '#include "config.h"' > "$cparse_ssize_predefine_config"
+          echo '#undef ssize_t' >> "$cparse_ssize_predefine_config"
+          echo '#define ssize_t int' >> "$cparse_ssize_predefine_config"
+          run_cparse_stdio_probe cparse_config_stdio_ssize_predefine_int "$cparse_ssize_predefine_config"
+          label=cparse_config_stdio_ssize_postdefine_int
+          probe=/tmp/$label.c
+          echo '#include "config.h"' > "$probe"
+          echo '#undef ssize_t' >> "$probe"
+          echo '#include <stdio.h>' >> "$probe"
+          echo '#define ssize_t int' >> "$probe"
+          echo 'int cparse_config_stdio_ssize_order_probe;' >> "$probe"
+          set +e
+          ( cd gcc && gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
+              -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+              -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+              "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr" )
+          rc=$?
+          set -e
+          flood_lines=$($BB grep -c '^In file included from In file included from' "/tmp/$label.stderr" || true)
+          truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "/tmp/$label.stderr")
+          echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
+          echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
+          echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
+          $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
+
           echo "diag: reproduce focused c-parse boundary"
           m=/tmp/gcc40-cparse-make.log
           set +e
