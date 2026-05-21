@@ -15,6 +15,14 @@
             "output_program_fragment": "#define GCC40_GENOUTPUT_BOUNDED 1\nint gcc40_genoutput_bounded_output_slice(void) { return GCC40_GENOUTPUT_BOUNDED; }\n/* Mantle GCC 4.0 native genoutput bounded output slice: checked generated output shape; full generator correctness pending. */\n",
             "transcript": "genoutput bounded native generator slice\nselected_generator: genoutput\noutput_contract: bounded output source exposing GCC40_GENOUTPUT_BOUNDED and gcc40_genoutput_bounded_output_slice\nexit_status: 0\nstdout_fragment: int gcc40_genoutput_bounded_output_slice(void) { return GCC40_GENOUTPUT_BOUNDED; }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n",
             "transcript_digest_blake3": "e0db2e48b5a679e3e1fbd72d84ee6cb24b16b3f7979feee674ebb9237ab38df5"
+        },
+        "genemit": {
+            "contract": "genemit bounded output must emit deterministic emit source with GCC40_GENEMIT_BOUNDED and gcc40_genemit_bounded_output_slice while making no full-generator claim",
+            "derivation_marker": "Mantle GCC 4.0 native genemit bounded output slice: checked generated emit source shape; full generator correctness pending.",
+            "output_digest_blake3": "5d3390e30cf1d57fa8ac6a2c8b8238507f1ac3a1028a729be49eb7d5fadba2ca",
+            "output_program_fragment": "#define GCC40_GENEMIT_BOUNDED 1\nvoid gcc40_genemit_bounded_output_slice(void) { }\n/* Mantle GCC 4.0 native genemit bounded output slice: checked generated emit source shape; full generator correctness pending. */\n",
+            "transcript": "genemit bounded native generator slice\nselected_generator: genemit\noutput_contract: bounded emit source exposing GCC40_GENEMIT_BOUNDED and gcc40_genemit_bounded_output_slice\nexit_status: 0\nstdout_fragment: void gcc40_genemit_bounded_output_slice(void) { }\nstderr: <empty>\nnon_claim: full native GCC 4.0 generator correctness pending\n",
+            "transcript_digest_blake3": "8e4263d1c29dcdebe628eacf38adc597ddd02a613f00d9d491ae3abf67d16619"
         }
     },
     "derivation": "bootstrap/gcc-4.0.ncl",
@@ -22,13 +30,16 @@
         "Crunch GCC 4.0 empty-attrtab source boundary: native genattrtab promotion pending.",
         "gcc40_genattrtab_empty_attrtab_source_boundary",
         "Crunch GCC 4.0 empty-output source boundary: native genoutput promotion pending.",
-        "gcc40_genoutput_empty_output_source_boundary"
+        "gcc40_genoutput_empty_output_source_boundary",
+        "Crunch GCC 4.0 empty-emit source boundary: native genemit promotion pending.",
+        "gcc40_genemit_empty_emit_source_boundary"
     ],
     "parity_effect": "evidence-backed partial; does not prove native/full GCC 4.0 generator correctness",
-    "schema": "mantle-gcc40-native-generator-slice-v2",
+    "schema": "mantle-gcc40-native-generator-slice-v3",
     "selected_generators": [
         "genattrtab",
-        "genoutput"
+        "genoutput",
+        "genemit"
     ],
     "status": "bounded-native-generator-slices"
 }

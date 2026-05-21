@@ -1,0 +1,5 @@
+id: promote-gcc40-native-genemit-slice
+status: active
+created: 2026-05-21
+specs:
+  - bootstrap

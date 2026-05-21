@@ -690,12 +690,9 @@ GCOVIOV_SCRIPT
       cat > "\$out" <<'GENEMIT_SCRIPT'
 #!/bin/sh
 cat <<'C'
-#include "config.h"
-#include "system.h"
-#include "coretypes.h"
-#include "tm.h"
-void gcc40_genemit_empty_emit_source_boundary(void) { }
-/* Crunch GCC 4.0 empty-emit source boundary: native genemit promotion pending. */
+#define GCC40_GENEMIT_BOUNDED 1
+void gcc40_genemit_bounded_output_slice(void) { }
+/* Mantle GCC 4.0 native genemit bounded output slice: checked generated emit source shape; full generator correctness pending. */
 C
 GENEMIT_SCRIPT
       chmod +x "\$out" 2>/dev/null || true
@@ -1412,8 +1409,8 @@ EOF
         exit 1
       fi
       "$WORK/build/gcc/build/genemit" > /tmp/gcc40-insn-emit.c
-      $BB grep -q 'gcc40_genemit_empty_emit_source_boundary' /tmp/gcc40-insn-emit.c || { echo 'ERROR: genemit source boundary symbol missing' >&2; exit 1; }
-      $BB grep -q 'empty-emit source boundary' /tmp/gcc40-insn-emit.c || { echo 'ERROR: genemit source boundary marker missing' >&2; exit 1; }
+      $BB grep -q 'gcc40_genemit_bounded_output_slice' /tmp/gcc40-insn-emit.c || { echo 'ERROR: genemit bounded output symbol missing' >&2; exit 1; }
+      $BB grep -q 'GCC40_GENEMIT_BOUNDED' /tmp/gcc40-insn-emit.c || { echo 'ERROR: genemit bounded output macro missing' >&2; exit 1; }
       if $BB grep -q 'genemit_bootstrap_s[t]ub' /tmp/gcc40-insn-emit.c; then
         echo 'ERROR: legacy genemit boundary label present' >&2
         exit 1

@@ -498,9 +498,31 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN `gcc.4.0` remains `partial`
 - AND live-bootstrap and Guix requirements still fail closed until all remaining native compiler and generator correctness blockers have evidence
 
+#### Scenario: GCC 4.0 native genemit slice is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-genemit-slice]]
+
+- GIVEN `bootstrap/gcc-4.0.ncl` contains a checked bounded `genemit` output slice marker
+- AND a checked native-generator receipt names `genemit`, the derivation, schema version, bounded output contract, source marker, transcript digest, and output digest
+- WHEN the bootstrap parity report evaluates `gcc.4.0`
+- THEN the row may report evidence-backed `partial` with bounded native `genemit` slice evidence
+- AND the row MUST continue blocking live-bootstrap and Guix until full native GCC 4.0 compiler and generator correctness evidence exists
+
+#### Scenario: GCC 4.0 native genemit slice rejects stale boundary evidence [r[bootstrap.gcc.version-ladder.gcc40-native-genemit-slice-drift]]
+
+- GIVEN a native-generator receipt for `genemit` references a missing marker, stale digest, unsupported schema, unsupported selected generator, missing bounded output contract, or unsupported parity effect
+- WHEN the bootstrap parity report evaluates `gcc.4.0`
+- THEN the row remains a blocker
+- AND the row notes the specific failed native-generator evidence check
+
+#### Scenario: GCC 4.0 native genemit slice cannot complete GCC 4.0 parity [r[bootstrap.gcc.version-ladder.gcc40-native-genemit-slice-no-overclaim]]
+
+- GIVEN bounded generator member evidence exists for `genemit`
+- WHEN bootstrap parity claim gating evaluates live-bootstrap or Guix
+- THEN `gcc.4.0` remains `partial`
+- AND live-bootstrap and Guix requirements still fail closed until all remaining native compiler and generator correctness blockers have evidence
+
 #### Scenario: GCC 4.0 native generator frontier blocker is retained [r[bootstrap.gcc.version-ladder.gcc40-generator-frontier-blocker]]
 
-- GIVEN the GCC 4.0 native boundary receipt records bounded `genattrtab` and `genoutput` generator output slices
+- GIVEN the GCC 4.0 native boundary receipt records bounded `genattrtab`, `genoutput`, and `genemit` generator output slices
 - AND the receipt records a `generator-bounded-outputs` entry in `native_frontier.blockers`
 - AND that blocker uses a source-bound derivation marker from `bootstrap/gcc-4.0.ncl`
 - WHEN `bootstrap parity-report` evaluates the GCC 4.0 row
