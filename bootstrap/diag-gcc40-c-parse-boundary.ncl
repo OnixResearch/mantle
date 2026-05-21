@@ -2372,7 +2372,6 @@ EOF
             rc=$?
             set -e
             echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
-            $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
           }
           run_cparse_source_include_prefix cparse_source_include_prefix_1 1
           run_cparse_source_include_prefix cparse_source_include_prefix_2 2
@@ -2412,7 +2411,6 @@ EOF
             echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
             echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
             echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
-            $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
           }
           run_cparse_stdio_probe() {
             label="$1"
@@ -2440,7 +2438,6 @@ EOF
             echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
             echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
             echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
-            $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
           }
           run_cparse_system_include_prefix cparse_system_include_prefix_1 1
           run_cparse_system_include_prefix cparse_system_include_prefix_2 2
@@ -2476,7 +2473,6 @@ EOF
             echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
             echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
             echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
-            $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
           }
           run_cparse_stdio_probe cparse_stdio_no_config ""
           run_cparse_stdio_probe cparse_stdio_config config.h
@@ -2497,6 +2493,11 @@ EOF
           echo '#undef ssize_t' >> "$cparse_ssize_predefine_config"
           echo '#define ssize_t int' >> "$cparse_ssize_predefine_config"
           run_cparse_stdio_probe cparse_config_stdio_ssize_predefine_int "$cparse_ssize_predefine_config"
+          cparse_ssize_typedef_config=/tmp/cparse_config_stdio_ssize_pretypedef_int-config.h
+          echo '#include "config.h"' > "$cparse_ssize_typedef_config"
+          echo '#undef ssize_t' >> "$cparse_ssize_typedef_config"
+          echo 'typedef int ssize_t;' >> "$cparse_ssize_typedef_config"
+          run_cparse_stdio_probe cparse_config_stdio_ssize_pretypedef_int "$cparse_ssize_typedef_config"
           label=cparse_config_stdio_ssize_postdefine_int
           probe=/tmp/$label.c
           echo '#include "config.h"' > "$probe"
@@ -2516,7 +2517,6 @@ EOF
           echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
           echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
           echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
-          $BB sed 's/^/diag-cparse-frontier: '${label}' stderr: /' "/tmp/$label.stderr" >&2 || true
 
           echo "diag: reproduce focused c-parse boundary"
           m=/tmp/gcc40-cparse-make.log
