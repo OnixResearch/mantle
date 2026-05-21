@@ -716,6 +716,22 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN the row MUST remain a blocker
 - AND the row notes the specific failed native source-frontier evidence check
 
+#### Scenario: GCC 4.0 native cc1 c-parse make-log summary frontier is accepted [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-make-log-summary-frontier]]
+
+- GIVEN `bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json` uses source-frontier schema `mantle-gcc40-native-cc1-source-frontier-reduction-v9`
+- AND the diagnostic derivation records compact make-log summary markers for compile-command presence, line count, and byte count
+- AND the evidence preserves the focused `c-parse.o` make-error boundary and non-promotion semantics
+- WHEN the bootstrap parity report evaluates the `gcc.4.0` row
+- THEN the source-frontier evidence check passes
+- AND `gcc.4.0` remains evidence-backed `partial` without completing live-bootstrap, Guix, or StageX parity
+
+#### Scenario: GCC 4.0 native cc1 c-parse make-log summary frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-native-cc1-cparse-make-log-summary-frontier-drift]]
+
+- GIVEN the source-frontier evidence uses a stale schema, omits any make-log summary marker, omits the focused make-error boundary, or claims promotion
+- WHEN the bootstrap parity report evaluates the `gcc.4.0` row
+- THEN the row MUST remain a blocker
+- AND the row notes the specific failed native source-frontier evidence check
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed

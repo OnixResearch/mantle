@@ -2356,6 +2356,13 @@ EOF
           rc=$?
           set -e
           echo "diag-cparse-frontier: cparse_make_cparse_o_rc=$rc" >&2
+          if $BB grep -q '/gcc/c-parse.c -o c-parse.o' "$m"; then
+            echo "diag-cparse-frontier: cparse_make_cparse_o_compile_command=present" >&2
+          else
+            echo "diag-cparse-frontier: cparse_make_cparse_o_compile_command=missing" >&2
+          fi
+          echo "diag-cparse-frontier: cparse_make_cparse_o_log_lines=$($BB wc -l < "$m")" >&2
+          echo "diag-cparse-frontier: cparse_make_cparse_o_log_bytes=$($BB wc -c < "$m")" >&2
           echo "diag-cparse-frontier: cparse_make_cparse_o_tail" >&2
           $BB tail -n 20 "$m" >&2
           [ "$rc" = 0 ] && { echo "ERROR: c-parse.o unexpectedly compiled" >&2; exit 1; }
