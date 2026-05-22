@@ -991,6 +991,22 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - WHEN the parity report validates GCC 4.0
 - THEN validation fails closed instead of promoting `gcc.4.0`.
 
+
+#### Scenario: c-parse sys/types config preinclude make frontier records bounded v20 evidence [r[bootstrap.gcc.version-ladder.gcc40-cparse-systypes-config-frontier-v20]]
+
+- GIVEN the v19 source-frontier receipt showed that appending `#undef ssize_t` to generated `config.h` is insufficient for the real `c-parse.o` make target
+- WHEN bootstrap parity validates GCC 4.0 native `cc1` source-frontier evidence
+- THEN the receipt uses schema `mantle-gcc40-native-cc1-source-frontier-reduction-v20`
+- AND the observed frontier records the real `c-parse.o` make result after prepending `#include <sys/types.h>` to generated `config.h`
+- AND the evidence records the resulting `cparse_make_systypes_config_cparse_o_*` markers without claiming native GCC 4.0 correctness
+
+#### Scenario: c-parse sys/types config preinclude make frontier rejects stale evidence [r[bootstrap.gcc.version-ladder.gcc40-cparse-systypes-config-frontier-v20-drift]]
+
+- GIVEN the source-frontier evidence uses a stale schema, omits the v19 adjusted-config marker, omits the v20 sys/types-config make marker, or claims native GCC 4.0 correctness
+- WHEN bootstrap parity validates the GCC 4.0 source-frontier receipt
+- THEN the row remains fail-closed partial or blocked
+- AND the row notes the missing or stale evidence fragment
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed

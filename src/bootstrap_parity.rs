@@ -820,9 +820,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v19" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v20" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v19`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v20`"
         ));
     }
     for field in [
@@ -943,9 +943,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "cparse_config_stdio_ssize_postdefine_int_include_flood_lines=0",
         "cparse_config_stdio_ssize_postdefine_int_truncated_lines=0",
         "both pre-stdio ssize_t macro and typedef definitions reproduce the include-flood failure while post-stdio macro redefinition succeeds",
-        "cparse_make_adjusted_ssize_cparse_o_rc=2",
-        "cparse_make_adjusted_ssize_cparse_o_compile_command=present",
-        "cparse_make_adjusted_ssize_cparse_o_include_flood_lines=2",
+        "cparse_make_systypes_config_cparse_o_rc=2",
+        "cparse_make_systypes_config_cparse_o_compile_command=present",
+        "cparse_make_systypes_config_cparse_o_include_flood_lines=2",
         "the real make frontier remains the generated-config/host-typedef visibility order around ssize_t rather than a completed native c-parse.o build",
         "cparse_make_cparse_o_rc=2",
         "cparse_make_cparse_o_compile_command=present",
@@ -961,7 +961,7 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     ] {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v19 fragment `{required_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v20 fragment `{required_fragment}`"
             ));
         }
     }
@@ -3413,13 +3413,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         let mut content = concat!(
             "diag-cparse-frontier: compact_archived_matrix_v8\n",
-            "diag-cparse-frontier: cparse_v18_ssize_systypes_frontier=archived\n",
-            "echo '#undef ssize_t' >> gcc/config.h\n",
-            "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_rc=$adjusted_rc\n",
-            "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_compile_command=present\n",
-            "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_include_flood_lines=$adjusted_flood_lines\n",
-            "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_tail\n",
-            "$BB mv gcc/config.h.mantle-v19-original gcc/config.h\n",
+            "diag-cparse-frontier: cparse_v19_adjusted_ssize_frontier=archived\n",
+            "{ echo '#include <sys/types.h>'; $BB cat gcc/config.h.mantle-v20-original; } > gcc/config.h\n",
+            "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_rc=$systypes_rc\n",
+            "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_compile_command=present\n",
+            "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_include_flood_lines=$systypes_flood_lines\n",
+            "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_tail\n",
+            "$BB mv gcc/config.h.mantle-v20-original gcc/config.h\n",
             "m=/tmp/gcc40-cparse-make.log\n",
             "diag-cparse-frontier: cparse_make_cparse_o_rc=$rc\n",
             "diag-cparse-frontier: cparse_make_cparse_o_compile_command=present\n",
@@ -4439,7 +4439,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v19=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v20=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4486,7 +4486,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("observed_frontier missing required v19 fragment"), "{}", row.notes);
+        assert!(row.notes.contains("observed_frontier missing required v20 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 
