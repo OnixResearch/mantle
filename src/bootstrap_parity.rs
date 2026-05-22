@@ -820,9 +820,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v18" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v19" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v18`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v19`"
         ));
     }
     for field in [
@@ -943,6 +943,10 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
         "cparse_config_stdio_ssize_postdefine_int_include_flood_lines=0",
         "cparse_config_stdio_ssize_postdefine_int_truncated_lines=0",
         "both pre-stdio ssize_t macro and typedef definitions reproduce the include-flood failure while post-stdio macro redefinition succeeds",
+        "cparse_make_adjusted_ssize_cparse_o_rc=2",
+        "cparse_make_adjusted_ssize_cparse_o_compile_command=present",
+        "cparse_make_adjusted_ssize_cparse_o_include_flood_lines=2",
+        "the real make frontier remains the generated-config/host-typedef visibility order around ssize_t rather than a completed native c-parse.o build",
         "cparse_make_cparse_o_rc=2",
         "cparse_make_cparse_o_compile_command=present",
         "cparse_make_cparse_o_log_lines",
@@ -957,7 +961,7 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     ] {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v18 fragment `{required_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v19 fragment `{required_fragment}`"
             ));
         }
     }
@@ -3409,66 +3413,21 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         let mut content = concat!(
             "diag-cparse-frontier: compact_archived_matrix_v8\n",
-            "diag-cparse-frontier: cparse_source_include_count=$cparse_source_include_count\n",
-            "diag-cparse-frontier: cparse_source_include_order=$cparse_source_include_order\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_1 1\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_2 2\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_3 3\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_4 4\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_8 8\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_11 11\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_12 12\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_18 18\n",
-            "run_cparse_source_include_prefix cparse_source_include_prefix_19 19\n",
-            "cparse_system_includes=/tmp/gcc40-cparse-system-direct-includes.txt\n",
-            "diag-cparse-frontier: cparse_system_include_count=$cparse_system_include_count\n",
-            "diag-cparse-frontier: cparse_system_include_order=$cparse_system_include_order\n",
-            "run_cparse_system_include_prefix cparse_system_include_prefix_1 1\n",
-            "run_cparse_system_include_prefix cparse_system_include_prefix_2 2\n",
-            "run_cparse_system_include_prefix cparse_system_include_prefix_3 3\n",
-            "run_cparse_system_include_prefix cparse_system_include_prefix_4 4\n",
-            "run_cparse_system_include_prefix cparse_system_include_prefix_10 10\n",
-            "run_cparse_system_include_prefix cparse_system_include_prefix_15 15\n",
-            "run_cparse_system_include_prefix cparse_system_include_prefix_21 21\n",
-            "$BB cp gcc/config.h gcc/config-undef6.h\n",
-            "run_cparse_stdio_probe cparse_stdio_no_config \"\"\n",
-            "run_cparse_stdio_probe cparse_stdio_config config.h\n",
-            "run_cparse_stdio_probe cparse_stdio_config_undef6 config-undef6.h\n",
-            "run_cparse_config_stdio_undef_probe() {\n",
-            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_need64 NEED_64BIT_HOST_WIDE_INT\n",
-            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_gid gid_t\n",
-            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_inline inline\n",
-            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_rlim rlim_t\n",
-            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_ssize ssize_t\n",
-            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_uid uid_t\n",
-            "run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_all6 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t\n",
-            "cparse_config_ssize_define_lines=$ssize_line_count\n",
-            "cparse_config_stdio_ssize_predefine_int-config.h\n",
-            "run_cparse_stdio_probe cparse_config_stdio_ssize_predefine_int \"$cparse_ssize_predefine_config\"\n",
-            "cparse_config_stdio_ssize_pretypedef_int-config.h\n",
-            "run_cparse_stdio_probe cparse_config_stdio_ssize_pretypedef_int \"$cparse_ssize_typedef_config\"\n",
-            "cparse_config_stdio_ssize_systypes_before_config-config.h\n",
-            "echo '#include <sys/types.h>' > \"$cparse_ssize_systypes_config\"\n",
-            "run_cparse_stdio_probe cparse_config_stdio_ssize_systypes_before_config \"$cparse_ssize_systypes_config\"\n",
-            "label=cparse_config_stdio_ssize_postdefine_int\n",
-            "echo '#define ssize_t int' >> \"$probe\"\n",
-            "diag-cparse-frontier: ${label}_rc=$rc\n",
-            "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines\n",
-            "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines\n",
+            "diag-cparse-frontier: cparse_v18_ssize_systypes_frontier=archived\n",
+            "echo '#undef ssize_t' >> gcc/config.h\n",
+            "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_rc=$adjusted_rc\n",
+            "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_compile_command=present\n",
+            "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_include_flood_lines=$adjusted_flood_lines\n",
+            "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_tail\n",
+            "$BB mv gcc/config.h.mantle-v19-original gcc/config.h\n",
             "m=/tmp/gcc40-cparse-make.log\n",
             "diag-cparse-frontier: cparse_make_cparse_o_rc=$rc\n",
             "diag-cparse-frontier: cparse_make_cparse_o_compile_command=present\n",
-            "diag-cparse-frontier: cparse_make_cparse_o_log_lines=$($BB wc -l < \"$m\")\n",
-            "diag-cparse-frontier: cparse_make_cparse_o_log_bytes=$($BB wc -c < \"$m\")\n",
-            "include_flood_lines=$($BB grep -c '^In file included from In file included from' \"$m\" || true)\n",
             "diag-cparse-frontier: cparse_make_include_flood=present\n",
             "diag-cparse-frontier: cparse_make_include_flood_lines=$include_flood_lines\n",
-            "include_flood_truncated_lines=$($BB awk\n",
-            "include_flood_filename_payload=$($BB awk\n",
             "diag-cparse-frontier: cparse_make_include_flood_truncated_lines=$include_flood_truncated_lines\n",
             "diag-cparse-frontier: cparse_make_include_flood_filename_payload=$include_flood_filename_payload\n",
             "diag-cparse-frontier: cparse_make_cparse_o_tail\n",
-            "make: *** [c-parse.o] Error 1\n",
             "ERROR: c-parse.o unexpectedly compiled\n",
             "exit \"$rc\"\n",
         )
@@ -4480,7 +4439,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v18=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v19=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4527,7 +4486,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("observed_frontier missing required v18 fragment"), "{}", row.notes);
+        assert!(row.notes.contains("observed_frontier missing required v19 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 

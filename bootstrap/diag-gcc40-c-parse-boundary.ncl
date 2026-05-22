@@ -2342,185 +2342,28 @@ EOF
 EOF
           echo "diag: normalized generated config.h to manual include form"
 
-          cparse_source_includes=/tmp/gcc40-cparse-source-includes.txt
-          $BB awk '/^#include / { gsub(/^[#]include[ \t]+\"/, ""); gsub(/\".*/, ""); print }' \
-            "$WORK/gcc-4.0.4/gcc/c-parse.c" > "$cparse_source_includes"
-          cparse_source_include_count=$($BB wc -l < "$cparse_source_includes")
-          cparse_source_include_order=$($BB tr '\n' ',' < "$cparse_source_includes" | $BB sed 's/,$//')
-          echo "diag-cparse-frontier: cparse_source_include_count=$cparse_source_include_count" >&2
-          echo "diag-cparse-frontier: cparse_source_include_order=$cparse_source_include_order" >&2
-          run_cparse_source_include_prefix() {
-            label="$1"
-            count="$2"
-            probe="/tmp/$label.c"
-            : > "$probe"
-            i=0
-            while IFS= read -r header; do
-              i=$((i + 1))
-              [ "$i" -le "$count" ] || break
-              echo "#include \"$header\"" >> "$probe"
-            done < "$cparse_source_includes"
-            echo 'int cparse_source_include_prefix_probe;' >> "$probe"
-            set +e
-            (
-              cd gcc
-              gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
-                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
-                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
-                "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr"
-            )
-            rc=$?
-            set -e
-            echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
-          }
-          run_cparse_source_include_prefix cparse_source_include_prefix_1 1
-          run_cparse_source_include_prefix cparse_source_include_prefix_2 2
-          run_cparse_source_include_prefix cparse_source_include_prefix_3 3
-          run_cparse_source_include_prefix cparse_source_include_prefix_4 4
-          run_cparse_source_include_prefix cparse_source_include_prefix_8 8
-          run_cparse_source_include_prefix cparse_source_include_prefix_11 11
-          run_cparse_source_include_prefix cparse_source_include_prefix_12 12
-          run_cparse_source_include_prefix cparse_source_include_prefix_18 18
-          run_cparse_source_include_prefix cparse_source_include_prefix_19 19
+          # Prior source/include-prefix probes are archived in the v12-v18
+          # source-frontier receipt. Keep this active v19 diagnostic compact so
+          # the bwrap builder does not exceed Linux argument-size limits.
+          echo "diag-cparse-frontier: compact_archived_matrix_v8" >&2
+          echo "diag-cparse-frontier: cparse_v18_ssize_systypes_frontier=archived" >&2
 
-          cparse_system_includes=/tmp/gcc40-cparse-system-direct-includes.txt
-          $BB awk '/^# ?include[ \t]+[<\"]/{ print }' "$WORK/gcc-4.0.4/gcc/system.h" > "$cparse_system_includes"
-          cparse_system_include_count=$($BB wc -l < "$cparse_system_includes")
-          cparse_system_include_order=$($BB sed 's/^# *include[ \t]*//; s/[<>\"]//g' "$cparse_system_includes" | $BB tr '\n' ',' | $BB sed 's/,$//')
-          echo "diag-cparse-frontier: cparse_system_include_count=$cparse_system_include_count" >&2
-          echo "diag-cparse-frontier: cparse_system_include_order=$cparse_system_include_order" >&2
-          run_cparse_system_include_prefix() {
-            label="$1"
-            count="$2"
-            probe="/tmp/$label.c"
-            echo '#include "config.h"' > "$probe"
-            $BB awk -v limit="$count" 'NR <= limit { print }' "$cparse_system_includes" >> "$probe"
-            echo 'int cparse_system_include_prefix_probe;' >> "$probe"
-            set +e
-            (
-              cd gcc
-              gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
-                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
-                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
-                "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr"
-            )
-            rc=$?
-            set -e
-            flood_lines=$($BB grep -c '^In file included from In file included from' "/tmp/$label.stderr" || true)
-            truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "/tmp/$label.stderr")
-            echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
-            echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
-            echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
-          }
-          run_cparse_stdio_probe() {
-            label="$1"
-            config_header="$2"
-            probe="/tmp/$label.c"
-            if [ -n "$config_header" ]; then
-              echo "#include \"$config_header\"" > "$probe"
-            else
-              : > "$probe"
-            fi
-            echo '#include <stdio.h>' >> "$probe"
-            echo 'int cparse_stdio_probe;' >> "$probe"
-            set +e
-            (
-              cd gcc
-              gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
-                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
-                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
-                "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr"
-            )
-            rc=$?
-            set -e
-            flood_lines=$($BB grep -c '^In file included from In file included from' "/tmp/$label.stderr" || true)
-            truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "/tmp/$label.stderr")
-            echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
-            echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
-            echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
-          }
-          run_cparse_system_include_prefix cparse_system_include_prefix_1 1
-          run_cparse_system_include_prefix cparse_system_include_prefix_2 2
-          run_cparse_system_include_prefix cparse_system_include_prefix_3 3
-          run_cparse_system_include_prefix cparse_system_include_prefix_4 4
-          run_cparse_system_include_prefix cparse_system_include_prefix_10 10
-          run_cparse_system_include_prefix cparse_system_include_prefix_15 15
-          run_cparse_system_include_prefix cparse_system_include_prefix_21 21
-          run_cparse_config_stdio_undef_probe() {
-            label="$1"
-            shift
-            config_probe="/tmp/$label-config.h"
-            probe="/tmp/$label.c"
-            echo '#include "config.h"' > "$config_probe"
-            for macro in "$@"; do
-              echo "#undef $macro" >> "$config_probe"
-            done
-            echo "#include \"$config_probe\"" > "$probe"
-            echo '#include <stdio.h>' >> "$probe"
-            echo 'int cparse_config_stdio_undef_probe;' >> "$probe"
-            set +e
-            (
-              cd gcc
-              gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
-                -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
-                -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
-                "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr"
-            )
-            rc=$?
-            set -e
-            flood_lines=$($BB grep -c '^In file included from In file included from' "/tmp/$label.stderr" || true)
-            truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "/tmp/$label.stderr")
-            echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
-            echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
-            echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
-          }
-          run_cparse_stdio_probe cparse_stdio_no_config ""
-          run_cparse_stdio_probe cparse_stdio_config config.h
-          run_cparse_stdio_probe cparse_stdio_config_undef6 config-undef6.h
-          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_need64 NEED_64BIT_HOST_WIDE_INT
-          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_gid gid_t
-          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_inline inline
-          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_rlim rlim_t
-          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_ssize ssize_t
-          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_uid uid_t
-          run_cparse_config_stdio_undef_probe cparse_config_stdio_undef_all6 NEED_64BIT_HOST_WIDE_INT gid_t inline rlim_t ssize_t uid_t
-
-          ssize_line_count=$($BB grep -c '^#define ssize_t' gcc/config.h || true)
-          echo "diag-cparse-frontier: cparse_config_ssize_define_lines=$ssize_line_count" >&2
-          $BB grep '^#define ssize_t' gcc/config.h | $BB sed 's/^/diag-cparse-frontier: cparse_config_ssize_define: /' >&2 || true
-          cparse_ssize_predefine_config=/tmp/cparse_config_stdio_ssize_predefine_int-config.h
-          echo '#include "config.h"' > "$cparse_ssize_predefine_config"
-          echo '#undef ssize_t' >> "$cparse_ssize_predefine_config"
-          echo '#define ssize_t int' >> "$cparse_ssize_predefine_config"
-          run_cparse_stdio_probe cparse_config_stdio_ssize_predefine_int "$cparse_ssize_predefine_config"
-          cparse_ssize_typedef_config=/tmp/cparse_config_stdio_ssize_pretypedef_int-config.h
-          echo '#include "config.h"' > "$cparse_ssize_typedef_config"
-          echo '#undef ssize_t' >> "$cparse_ssize_typedef_config"
-          echo 'typedef int ssize_t;' >> "$cparse_ssize_typedef_config"
-          run_cparse_stdio_probe cparse_config_stdio_ssize_pretypedef_int "$cparse_ssize_typedef_config"
-          cparse_ssize_systypes_config=/tmp/cparse_config_stdio_ssize_systypes_before_config-config.h
-          echo '#include <sys/types.h>' > "$cparse_ssize_systypes_config"
-          echo '#include "config.h"' >> "$cparse_ssize_systypes_config"
-          run_cparse_stdio_probe cparse_config_stdio_ssize_systypes_before_config "$cparse_ssize_systypes_config"
-          label=cparse_config_stdio_ssize_postdefine_int
-          probe=/tmp/$label.c
-          echo '#include "config.h"' > "$probe"
-          echo '#undef ssize_t' >> "$probe"
-          echo '#include <stdio.h>' >> "$probe"
-          echo '#define ssize_t int' >> "$probe"
-          echo 'int cparse_config_stdio_ssize_order_probe;' >> "$probe"
+          echo "diag: reproduce adjusted c-parse ssize_t config frontier"
+          adjusted_m=/tmp/gcc40-cparse-make-adjusted-ssize.log
+          $BB cp gcc/config.h gcc/config.h.mantle-v19-original
+          echo '#undef ssize_t' >> gcc/config.h
           set +e
-          ( cd gcc && gcc40-cc -c -g -DIN_GCC -DHAVE_CONFIG_H \
-              -I. -I. -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
-              -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
-              "$probe" -o "/tmp/$label.o" > "/tmp/$label.stdout" 2> "/tmp/$label.stderr" )
-          rc=$?
+          make -j1 -C gcc CC=gcc40-cc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" LIBGCC2_INCLUDES="-I$MUSL/include" STMP_FIXINC= MAKEINFO=true c-parse.o > "$adjusted_m" 2>&1
+          adjusted_rc=$?
           set -e
-          flood_lines=$($BB grep -c '^In file included from In file included from' "/tmp/$label.stderr" || true)
-          truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "/tmp/$label.stderr")
-          echo "diag-cparse-frontier: ${label}_rc=$rc" >&2
-          echo "diag-cparse-frontier: ${label}_include_flood_lines=$flood_lines" >&2
-          echo "diag-cparse-frontier: ${label}_truncated_lines=$truncated_lines" >&2
+          echo "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_rc=$adjusted_rc" >&2
+          if $BB grep -q '/gcc/c-parse.c -o c-parse.o' "$adjusted_m"; then echo "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_compile_command=present" >&2; else echo "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_compile_command=missing" >&2; fi
+          adjusted_flood_lines=$($BB grep -c '^In file included from In file included from' "$adjusted_m" || true)
+          echo "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_include_flood_lines=$adjusted_flood_lines" >&2
+          echo "diag-cparse-frontier: cparse_make_adjusted_ssize_cparse_o_tail" >&2
+          $BB tail -n 10 "$adjusted_m" >&2
+          $BB mv gcc/config.h.mantle-v19-original gcc/config.h
+          $BB rm -f gcc/c-parse.o
 
           echo "diag: reproduce focused c-parse boundary"
           m=/tmp/gcc40-cparse-make.log
