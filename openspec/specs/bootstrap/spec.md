@@ -1018,6 +1018,16 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - AND it still requires the focused real `make -C gcc c-parse.o` frontier to fail with rc=2 and include-flood evidence
 - AND it does not promote GCC 4.0 beyond partial/frontier status
 
+
+#### Scenario: v22 auto-host ssize frontier receipt is required
+
+- GIVEN the GCC 4.0 source-frontier reduction receipt
+- WHEN parity validates the GCC 4.0 row
+- THEN it requires schema `mantle-gcc40-native-cc1-source-frontier-reduction-v22`
+- AND it requires markers for the direct generated `auto-host.h` `ssize_t` seam probe
+- AND it records that disabling only the generated `auto-host.h` `ssize_t` define does not advance the focused real `make -C gcc c-parse.o` target beyond rc=2/include-flood evidence
+- AND it does not promote GCC 4.0 beyond partial/frontier status
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed

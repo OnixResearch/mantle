@@ -2342,46 +2342,33 @@ EOF
 EOF
           echo "diag: normalized generated config.h to manual include form"
 
-          # Prior source/include-prefix/config-order probes are archived in the
-          # v12-v20 source-frontier receipt. Keep this active v21 diagnostic
-          # compact so the bwrap builder does not exceed Linux argument-size
-          # limits.
+          # Prior source/include-prefix/config-order/include-trace probes are
+          # archived in the v12-v21 source-frontier receipt. Keep this active
+          # v22 diagnostic compact so the bwrap builder does not exceed Linux
+          # argument-size limits.
           echo "diag-cparse-frontier: compact_archived_matrix_v8" >&2
           echo "diag-cparse-frontier: cparse_v19_adjusted_ssize_frontier=archived" >&2
           echo "diag-cparse-frontier: cparse_v20_systypes_config_frontier=archived" >&2
+          echo "diag-cparse-frontier: cparse_v21_include_trace_frontier=archived" >&2
 
-          echo "diag: trace c-parse preprocessor line markers before include flood"
-          pp_out=/tmp/gcc40-cparse-preprocess.out
-          pp_err=/tmp/gcc40-cparse-preprocess.err
-          set +e
-          $BB timeout 30 gcc40-cc -E -g -DIN_GCC -DHAVE_CONFIG_H \
-            -I gcc -I gcc -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
-            -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
-            "$WORK/gcc-4.0.4/gcc/c-parse.c" > "$pp_out" 2> "$pp_err"
-          pp_rc=$?
-          set -e
-          pp_marker_lines=$($BB grep -c '^# [0-9][0-9]* "' "$pp_out" || true)
-          pp_first_payload=$($BB awk '/^# [0-9][0-9]* "/ { line = $0; sub(/^# [0-9][0-9]* "/, "", line); sub(/".*/, "", line); print line; exit }' "$pp_out")
-          pp_last_payload=$($BB awk '/^# [0-9][0-9]* "/ { line = $0; sub(/^# [0-9][0-9]* "/, "", line); sub(/".*/, "", line); last = line } END { print last }' "$pp_out")
-          if [ -n "$pp_first_payload" ] || [ -n "$pp_last_payload" ]; then pp_payload=present; else pp_payload=absent; fi
-          echo "diag-cparse-frontier: cparse_preprocess_line_marker_rc=$pp_rc" >&2
-          echo "diag-cparse-frontier: cparse_preprocess_line_marker_count=$pp_marker_lines" >&2
-          echo "diag-cparse-frontier: cparse_preprocess_first_payload=$pp_first_payload" >&2
-          echo "diag-cparse-frontier: cparse_preprocess_last_payload=$pp_last_payload" >&2
-          echo "diag-cparse-frontier: cparse_preprocess_filename_payload=$pp_payload" >&2
-          echo "diag-cparse-frontier: cparse_preprocess_stderr_tail" >&2
-          $BB tail -n 5 "$pp_err" >&2 || true
-          if $BB grep -q '^#define ssize_t' gcc/auto-host.h && $BB grep -q '__NEED_ssize_t' "$MUSL/include/stdio.h" && $BB grep -q 'ssize_t' "$MUSL/include/bits/alltypes.h"; then
-            include_payload='c-parse.c->config.h->auto-host.h#define_ssize_t + c-parse.c->system.h->stdio.h->__NEED_ssize_t->bits/alltypes.h:ssize_t'
+          echo "diag: patch generated auto-host.h ssize_t seam and run focused c-parse boundary"
+          auto_orig=/tmp/gcc40-auto-host-v22-original.h
+          $BB cp gcc/auto-host.h "$auto_orig"
+          if $BB grep -q '^#define ssize_t' gcc/auto-host.h; then
+            auto_patch=present
+            $BB sed 's/^#define ssize_t/\/\/ mantle-v22-disabled #define ssize_t/' "$auto_orig" > gcc/auto-host.h
           else
-            include_payload='missing'
+            auto_patch=missing
           fi
-          echo "diag-cparse-frontier: cparse_static_include_payload=$include_payload" >&2
-          if [ "$include_payload" = missing ]; then echo "diag-cparse-frontier: cparse_static_include_payload_present=absent" >&2; else echo "diag-cparse-frontier: cparse_static_include_payload_present=present" >&2; fi
+          echo "diag-cparse-frontier: cparse_auto_host_ssize_patch=$auto_patch" >&2
+          if $BB grep -q '^// mantle-v22-disabled #define ssize_t' gcc/auto-host.h; then
+            echo "diag-cparse-frontier: cparse_auto_host_ssize_disabled=present" >&2
+          else
+            echo "diag-cparse-frontier: cparse_auto_host_ssize_disabled=absent" >&2
+          fi
           $BB rm -f gcc/c-parse.o
 
-          echo "diag: reproduce focused c-parse boundary"
-          m=/tmp/gcc40-cparse-make.log
+          m=/tmp/gcc40-cparse-make-auto-host-ssize.log
           set +e
           make -j1 -C gcc \
             CC=gcc40-cc \
@@ -2394,28 +2381,26 @@ EOF
             > "$m" 2>&1
           rc=$?
           set -e
-          echo "diag-cparse-frontier: cparse_make_cparse_o_rc=$rc" >&2
+          $BB mv "$auto_orig" gcc/auto-host.h
+          echo "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_rc=$rc" >&2
           if $BB grep -q '/gcc/c-parse.c -o c-parse.o' "$m"; then
-            echo "diag-cparse-frontier: cparse_make_cparse_o_compile_command=present" >&2
+            echo "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_compile_command=present" >&2
           else
-            echo "diag-cparse-frontier: cparse_make_cparse_o_compile_command=missing" >&2
+            echo "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_compile_command=missing" >&2
           fi
-          echo "diag-cparse-frontier: cparse_make_cparse_o_log_lines=$($BB wc -l < "$m")" >&2
-          echo "diag-cparse-frontier: cparse_make_cparse_o_log_bytes=$($BB wc -c < "$m")" >&2
+          if [ -s gcc/c-parse.o ]; then
+            echo "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_object=present" >&2
+          else
+            echo "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_object=absent" >&2
+          fi
+          echo "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_log_lines=$($BB wc -l < "$m")" >&2
+          echo "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_log_bytes=$($BB wc -c < "$m")" >&2
           include_flood_lines=$($BB grep -c '^In file included from In file included from' "$m" || true)
-          if [ "$include_flood_lines" -gt 0 ]; then
-            echo "diag-cparse-frontier: cparse_make_include_flood=present" >&2
-          else
-            echo "diag-cparse-frontier: cparse_make_include_flood=missing" >&2
-          fi
-          echo "diag-cparse-frontier: cparse_make_include_flood_lines=$include_flood_lines" >&2
+          echo "diag-cparse-frontier: cparse_make_auto_host_ssize_include_flood_lines=$include_flood_lines" >&2
           include_flood_truncated_lines=$($BB awk '/^In file included from In file included from/ { if (length($0) == 2047) c++ } END { print c + 0 }' "$m")
-          include_flood_filename_payload=$($BB awk '/^In file included from In file included from/ { line = $0; gsub(/In file included from /, "", line); if (index(line, "/") || index(line, ".") || line ~ /:[0-9]/) found = 1 } END { if (found) print "present"; else print "absent" }' "$m")
-          echo "diag-cparse-frontier: cparse_make_include_flood_truncated_lines=$include_flood_truncated_lines" >&2
-          echo "diag-cparse-frontier: cparse_make_include_flood_filename_payload=$include_flood_filename_payload" >&2
-          echo "diag-cparse-frontier: cparse_make_cparse_o_tail" >&2
+          echo "diag-cparse-frontier: cparse_make_auto_host_ssize_include_flood_truncated_lines=$include_flood_truncated_lines" >&2
+          echo "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_tail" >&2
           $BB tail -n 20 "$m" >&2
-          [ "$rc" = 0 ] && { echo "ERROR: c-parse.o unexpectedly compiled" >&2; exit 1; }
           exit "$rc"
         fi
         make -j1 -C "$dir" \

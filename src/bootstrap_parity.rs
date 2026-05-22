@@ -820,9 +820,9 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let reduction = require_gcc40_boundary_object(&value, "source_frontier_reduction")?;
     let reduction_schema = require_gcc40_boundary_object_string(reduction, "schema")?;
-    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v21" {
+    if reduction_schema != "mantle-gcc40-native-cc1-source-frontier-reduction-v22" {
         return Err(format!(
-            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v21`"
+            "GCC 4.0 native cc1 source-frontier reduction schema is `{reduction_schema}`, expected `mantle-gcc40-native-cc1-source-frontier-reduction-v22`"
         ));
     }
     for field in [
@@ -844,20 +844,18 @@ fn validate_gcc40_native_cc1_build_frontier_receipt(
     }
     let observed_frontier = require_gcc40_boundary_object_string(reduction, "observed_frontier")?;
     for required_fragment in [
-        "cparse_preprocess_line_marker_rc=139",
-        "cparse_preprocess_line_marker_count=1",
-        "cparse_preprocess_filename_payload=absent",
-        "cparse_static_include_payload=c-parse.c->config.h->auto-host.h#define_ssize_t + c-parse.c->system.h->stdio.h->__NEED_ssize_t->bits/alltypes.h:ssize_t",
-        "cparse_static_include_payload_present=present",
-        "cparse_make_cparse_o_rc=2",
-        "cparse_make_cparse_o_compile_command=present",
-        "cparse_make_include_flood_lines=2",
-        "cparse_make_include_flood_truncated_lines=2",
-        "cparse_make_include_flood_filename_payload=absent",
+        "cparse_auto_host_ssize_patch=present",
+        "cparse_auto_host_ssize_disabled=present",
+        "cparse_make_auto_host_ssize_cparse_o_rc=2",
+        "cparse_make_auto_host_ssize_cparse_o_compile_command=present",
+        "cparse_make_auto_host_ssize_cparse_o_object=absent",
+        "cparse_make_auto_host_ssize_include_flood_lines=2",
+        "cparse_make_auto_host_ssize_include_flood_truncated_lines=2",
+        "the blocker is not fixed by removing only the generated auto-host.h ssize_t define",
     ] {
         if !observed_frontier.contains(required_fragment) {
             return Err(format!(
-                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v21 fragment `{required_fragment}`"
+                "GCC 4.0 native cc1 source-frontier reduction observed_frontier missing required v22 fragment `{required_fragment}`"
             ));
         }
     }
@@ -3311,20 +3309,16 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
             "diag-cparse-frontier: compact_archived_matrix_v8\n",
             "diag-cparse-frontier: cparse_v19_adjusted_ssize_frontier=archived\n",
             "diag-cparse-frontier: cparse_v20_systypes_config_frontier=archived\n",
-            "diag-cparse-frontier: cparse_preprocess_line_marker_rc=$pp_rc\n",
-            "diag-cparse-frontier: cparse_preprocess_line_marker_count=$pp_marker_lines\n",
-            "diag-cparse-frontier: cparse_preprocess_filename_payload=$pp_payload\n",
-            "diag-cparse-frontier: cparse_static_include_payload=$include_payload\n",
-            "diag-cparse-frontier: cparse_static_include_payload_present=present\n",
-            "m=/tmp/gcc40-cparse-make.log\n",
-            "diag-cparse-frontier: cparse_make_cparse_o_rc=$rc\n",
-            "diag-cparse-frontier: cparse_make_cparse_o_compile_command=present\n",
-            "diag-cparse-frontier: cparse_make_include_flood=present\n",
-            "diag-cparse-frontier: cparse_make_include_flood_lines=$include_flood_lines\n",
-            "diag-cparse-frontier: cparse_make_include_flood_truncated_lines=$include_flood_truncated_lines\n",
-            "diag-cparse-frontier: cparse_make_include_flood_filename_payload=$include_flood_filename_payload\n",
-            "diag-cparse-frontier: cparse_make_cparse_o_tail\n",
-            "ERROR: c-parse.o unexpectedly compiled\n",
+            "diag-cparse-frontier: cparse_v21_include_trace_frontier=archived\n",
+            "diag-cparse-frontier: cparse_auto_host_ssize_patch=$auto_patch\n",
+            "diag-cparse-frontier: cparse_auto_host_ssize_disabled=present\n",
+            "m=/tmp/gcc40-cparse-make-auto-host-ssize.log\n",
+            "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_rc=$rc\n",
+            "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_compile_command=present\n",
+            "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_object=absent\n",
+            "diag-cparse-frontier: cparse_make_auto_host_ssize_include_flood_lines=$include_flood_lines\n",
+            "diag-cparse-frontier: cparse_make_auto_host_ssize_include_flood_truncated_lines=$include_flood_truncated_lines\n",
+            "diag-cparse-frontier: cparse_make_auto_host_ssize_cparse_o_tail\n",
             "exit \"$rc\"\n",
         )
         .to_string();
@@ -4335,7 +4329,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "mantle-gcc40-native-cc1-source-frontier-reduction-v21=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
+            "mantle-gcc40-native-cc1-source-frontier-reduction-v22=>mantle-gcc40-native-cc1-source-frontier-reduction-v10",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
@@ -4376,13 +4370,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_gcc40_native_demangle_receipt(dir.path(), "");
         write_gcc40_native_cc1_build_frontier_receipt(
             dir.path(),
-            "cparse_make_cparse_o_rc=2=>cparse_make_cparse_o_rc=1",
+            "cparse_make_auto_host_ssize_cparse_o_rc=2=>cparse_make_auto_host_ssize_cparse_o_rc=1",
         );
 
         let row = evaluate_stage(dir.path(), &gcc40_spec());
 
         assert_eq!(row.status, StageStatus::Placeholder);
-        assert!(row.notes.contains("observed_frontier missing required v21 fragment"), "{}", row.notes);
+        assert!(row.notes.contains("observed_frontier missing required v22 fragment"), "{}", row.notes);
         assert!(row.notes.contains("evidence check failed"));
     }
 
