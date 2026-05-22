@@ -1007,6 +1007,17 @@ GCC 4.0 pass1 libgcc member promotions MUST be evidence-backed one member at a t
 - THEN the row remains fail-closed partial or blocked
 - AND the row notes the missing or stale evidence fragment
 
+
+#### Scenario: v21 include-trace frontier receipt is required
+
+- GIVEN the GCC 4.0 source-frontier reduction receipt
+- WHEN parity validates the GCC 4.0 row
+- THEN it requires schema `mantle-gcc40-native-cc1-source-frontier-reduction-v21`
+- AND it requires compact include-trace markers from the c-parse preprocessor probe
+- AND it requires the recovered static payload `c-parse.c->config.h->auto-host.h#define_ssize_t + c-parse.c->system.h->stdio.h->__NEED_ssize_t->bits/alltypes.h:ssize_t`
+- AND it still requires the focused real `make -C gcc c-parse.o` frontier to fail with rc=2 and include-flood evidence
+- AND it does not promote GCC 4.0 beyond partial/frontier status
+
 ### Requirement: Normalized seed contract preserved
 
 The final output of the full-source chain MUST expose the same normalized seed

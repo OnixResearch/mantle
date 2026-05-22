@@ -2342,27 +2342,42 @@ EOF
 EOF
           echo "diag: normalized generated config.h to manual include form"
 
-          # Prior source/include-prefix probes are archived in the v12-v19
-          # source-frontier receipt. Keep this active v20 diagnostic compact so
-          # the bwrap builder does not exceed Linux argument-size limits.
+          # Prior source/include-prefix/config-order probes are archived in the
+          # v12-v20 source-frontier receipt. Keep this active v21 diagnostic
+          # compact so the bwrap builder does not exceed Linux argument-size
+          # limits.
           echo "diag-cparse-frontier: compact_archived_matrix_v8" >&2
           echo "diag-cparse-frontier: cparse_v19_adjusted_ssize_frontier=archived" >&2
+          echo "diag-cparse-frontier: cparse_v20_systypes_config_frontier=archived" >&2
 
-          echo "diag: reproduce sys/types preinclude c-parse config frontier"
-          systypes_m=/tmp/gcc40-cparse-make-systypes-config.log
-          $BB cp gcc/config.h gcc/config.h.mantle-v20-original
-          { echo '#include <sys/types.h>'; $BB cat gcc/config.h.mantle-v20-original; } > gcc/config.h
+          echo "diag: trace c-parse preprocessor line markers before include flood"
+          pp_out=/tmp/gcc40-cparse-preprocess.out
+          pp_err=/tmp/gcc40-cparse-preprocess.err
           set +e
-          make -j1 -C gcc CC=gcc40-cc AR="$BINUTILS/bin/ar" RANLIB="$BINUTILS/bin/ranlib" LIBGCC2_INCLUDES="-I$MUSL/include" STMP_FIXINC= MAKEINFO=true c-parse.o > "$systypes_m" 2>&1
-          systypes_rc=$?
+          $BB timeout 30 gcc40-cc -E -g -DIN_GCC -DHAVE_CONFIG_H \
+            -I gcc -I gcc -I$WORK/gcc-4.0.4/gcc -I$WORK/gcc-4.0.4/gcc/. \
+            -I$WORK/gcc-4.0.4/gcc/../include -I$WORK/gcc-4.0.4/gcc/../libcpp/include \
+            "$WORK/gcc-4.0.4/gcc/c-parse.c" > "$pp_out" 2> "$pp_err"
+          pp_rc=$?
           set -e
-          echo "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_rc=$systypes_rc" >&2
-          if $BB grep -q '/gcc/c-parse.c -o c-parse.o' "$systypes_m"; then echo "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_compile_command=present" >&2; else echo "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_compile_command=missing" >&2; fi
-          systypes_flood_lines=$($BB grep -c '^In file included from In file included from' "$systypes_m" || true)
-          echo "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_include_flood_lines=$systypes_flood_lines" >&2
-          echo "diag-cparse-frontier: cparse_make_systypes_config_cparse_o_tail" >&2
-          $BB tail -n 10 "$systypes_m" >&2
-          $BB mv gcc/config.h.mantle-v20-original gcc/config.h
+          pp_marker_lines=$($BB grep -c '^# [0-9][0-9]* "' "$pp_out" || true)
+          pp_first_payload=$($BB awk '/^# [0-9][0-9]* "/ { line = $0; sub(/^# [0-9][0-9]* "/, "", line); sub(/".*/, "", line); print line; exit }' "$pp_out")
+          pp_last_payload=$($BB awk '/^# [0-9][0-9]* "/ { line = $0; sub(/^# [0-9][0-9]* "/, "", line); sub(/".*/, "", line); last = line } END { print last }' "$pp_out")
+          if [ -n "$pp_first_payload" ] || [ -n "$pp_last_payload" ]; then pp_payload=present; else pp_payload=absent; fi
+          echo "diag-cparse-frontier: cparse_preprocess_line_marker_rc=$pp_rc" >&2
+          echo "diag-cparse-frontier: cparse_preprocess_line_marker_count=$pp_marker_lines" >&2
+          echo "diag-cparse-frontier: cparse_preprocess_first_payload=$pp_first_payload" >&2
+          echo "diag-cparse-frontier: cparse_preprocess_last_payload=$pp_last_payload" >&2
+          echo "diag-cparse-frontier: cparse_preprocess_filename_payload=$pp_payload" >&2
+          echo "diag-cparse-frontier: cparse_preprocess_stderr_tail" >&2
+          $BB tail -n 5 "$pp_err" >&2 || true
+          if $BB grep -q '^#define ssize_t' gcc/auto-host.h && $BB grep -q '__NEED_ssize_t' "$MUSL/include/stdio.h" && $BB grep -q 'ssize_t' "$MUSL/include/bits/alltypes.h"; then
+            include_payload='c-parse.c->config.h->auto-host.h#define_ssize_t + c-parse.c->system.h->stdio.h->__NEED_ssize_t->bits/alltypes.h:ssize_t'
+          else
+            include_payload='missing'
+          fi
+          echo "diag-cparse-frontier: cparse_static_include_payload=$include_payload" >&2
+          if [ "$include_payload" = missing ]; then echo "diag-cparse-frontier: cparse_static_include_payload_present=absent" >&2; else echo "diag-cparse-frontier: cparse_static_include_payload_present=present" >&2; fi
           $BB rm -f gcc/c-parse.o
 
           echo "diag: reproduce focused c-parse boundary"
