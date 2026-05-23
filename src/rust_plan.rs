@@ -132,6 +132,8 @@ pub(crate) struct UnitGraphSummary {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct UnitDerivationGraphSummary {
     pub(crate) derivation_count: usize,
+    pub(crate) host_unit_count: usize,
+    pub(crate) host_artifact_count: usize,
     pub(crate) ready: bool,
     pub(crate) digest_blake3: String,
     pub(crate) derivations: Vec<RustUnitDerivationSummary>,
@@ -144,11 +146,14 @@ pub(crate) struct RustUnitDerivationSummary {
     pub(crate) package_id: String,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
+    pub(crate) execution_kind: String,
     pub(crate) crate_types: Vec<String>,
     pub(crate) mode: String,
     pub(crate) profile: String,
     pub(crate) source_digest: SourceDigest,
     pub(crate) dependency_artifacts: Vec<RustDependencyArtifact>,
+    pub(crate) consumed_host_artifacts: Vec<RustHostArtifact>,
+    pub(crate) generated_metadata: Option<BuildScriptMetadataSummary>,
     pub(crate) derivation: ReviewableRustDerivation,
     pub(crate) rustc_args_digest_blake3: String,
 }
@@ -158,6 +163,26 @@ pub(crate) struct RustDependencyArtifact {
     pub(crate) package_id: String,
     pub(crate) name: String,
     pub(crate) artifact: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct RustHostArtifact {
+    pub(crate) package_id: String,
+    pub(crate) target_name: String,
+    pub(crate) target_kind: String,
+    pub(crate) artifact: String,
+    pub(crate) metadata_digest_blake3: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct BuildScriptMetadataSummary {
+    pub(crate) out_dir: String,
+    pub(crate) rustc_cfg: Vec<String>,
+    pub(crate) rustc_env: BTreeMap<String, String>,
+    pub(crate) rustc_link_lib: Vec<String>,
+    pub(crate) rustc_link_search: Vec<String>,
+    pub(crate) rerun_if_changed: Vec<String>,
+    pub(crate) digest_blake3: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -706,6 +731,8 @@ fn summarize_unit_derivation_graph(
         let digest_blake3 = unit_derivation_graph_digest(&derivations, &blockers)?;
         return Ok(UnitDerivationGraphSummary {
             derivation_count: 0,
+            host_unit_count: 0,
+            host_artifact_count: 0,
             ready: false,
             digest_blake3,
             derivations,
@@ -713,18 +740,22 @@ fn summarize_unit_derivation_graph(
         });
     };
 
+    let host_artifacts = host_artifacts_by_package(units);
     for (index, unit) in units.iter().enumerate() {
-        match summarize_unit_derivation(index, unit, source_closure, options) {
-            Ok(Some(derivation)) => derivations.push(derivation),
-            Ok(None) => {}
+        match summarize_unit_derivation(index, unit, source_closure, options, &host_artifacts) {
+            Ok(derivation) => derivations.push(derivation),
             Err(blocker) => blockers.push(blocker),
         }
     }
     derivations.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
     blockers.sort_by(|left, right| left.unit_id.cmp(&right.unit_id).then(left.class.cmp(&right.class)));
     let digest_blake3 = unit_derivation_graph_digest(&derivations, &blockers)?;
+    let host_unit_count = derivations.iter().filter(|derivation| derivation.execution_kind == "host").count();
+    let host_artifact_count = host_artifacts.values().map(Vec::len).sum();
     Ok(UnitDerivationGraphSummary {
         derivation_count: derivations.len(),
+        host_unit_count,
+        host_artifact_count,
         ready: blockers.is_empty(),
         digest_blake3,
         derivations,
@@ -737,7 +768,8 @@ fn summarize_unit_derivation(
     unit: &Value,
     source_closure: &SourceClosureSummary,
     options: &RustPlanOptions,
-) -> Result<Option<RustUnitDerivationSummary>, UnitDerivationBlocker> {
+    host_artifacts: &BTreeMap<String, Vec<RustHostArtifact>>,
+) -> Result<RustUnitDerivationSummary, UnitDerivationBlocker> {
     let package_id = required_unit_string(unit, "pkg_id", index)?;
     let target = unit
         .get("target")
@@ -753,6 +785,12 @@ fn summarize_unit_derivation(
         ));
     }
     let target_kind = select_supported_target_kind(target, index, &package_id)?;
+    let execution_kind = if is_host_target_kind(&target_kind) {
+        "host"
+    } else {
+        "target"
+    }
+    .to_string();
     let crate_types = target_string_array(target, "crate_types");
     let edition = target_string(target, "edition").unwrap_or_else(|| "2021".to_string());
     let src_path = required_target_string(target, "src_path", index, &package_id)?;
@@ -767,6 +805,9 @@ fn summarize_unit_derivation(
     })?;
 
     let dependency_artifacts = unit_dependency_artifacts(unit);
+    let consumed_host_artifacts = consumed_host_artifacts(unit, host_artifacts);
+    let generated_metadata =
+        (target_kind == "custom-build").then(|| build_script_metadata_summary(&package_id, &target_name));
     let mut args = vec![
         "--crate-name".to_string(),
         rust_crate_name(&target_name),
@@ -799,20 +840,24 @@ fn summarize_unit_derivation(
     }
     let mut inputs = vec![format!("source:{}:{}", package_id, source.source_digest.value)];
     inputs.extend(dependency_artifacts.iter().map(|dependency| dependency.artifact.clone()));
+    inputs.extend(consumed_host_artifacts.iter().map(|artifact| artifact.artifact.clone()));
     inputs.sort();
     inputs.dedup();
     let unit_id = rust_unit_id(index, &package_id, &target_name, &target_kind, &mode);
 
-    Ok(Some(RustUnitDerivationSummary {
+    Ok(RustUnitDerivationSummary {
         unit_id: unit_id.clone(),
         package_id: package_id.clone(),
         target_name: target_name.clone(),
         target_kind,
+        execution_kind: execution_kind.clone(),
         crate_types,
         mode,
         profile: options.profile.clone(),
         source_digest: source.source_digest.clone(),
         dependency_artifacts,
+        consumed_host_artifacts,
+        generated_metadata,
         derivation: ReviewableRustDerivation {
             name: derivation_name(&target_name, index),
             builder: "rustc".to_string(),
@@ -824,7 +869,7 @@ fn summarize_unit_derivation(
             addressing_mode: "content-addressed".to_string(),
         },
         rustc_args_digest_blake3: args_digest,
-    }))
+    })
 }
 
 fn select_supported_target_kind(
@@ -833,13 +878,11 @@ fn select_supported_target_kind(
     package_id: &str,
 ) -> Result<String, UnitDerivationBlocker> {
     let kinds = target_string_array(target, "kind");
-    if kinds.iter().any(|kind| kind == "custom-build" || kind == "proc-macro") {
-        return Err(unit_blocker(
-            index,
-            Some(package_id.to_string()),
-            "unsupported-host-unit",
-            "build-script and proc-macro units require explicit host/target separation before derivation emission",
-        ));
+    if kinds.iter().any(|kind| kind == "custom-build") {
+        return Ok("custom-build".to_string());
+    }
+    if kinds.iter().any(|kind| kind == "proc-macro") {
+        return Ok("proc-macro".to_string());
     }
     if kinds.iter().any(|kind| kind == "lib") {
         return Ok("lib".to_string());
@@ -861,6 +904,103 @@ fn select_supported_target_kind(
         )
     };
     Err(unit_blocker(index, Some(package_id.to_string()), class, &message))
+}
+
+fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostArtifact>> {
+    let mut artifacts: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
+    for (index, unit) in units.iter().enumerate() {
+        let Some(package_id) = target_string(unit, "pkg_id") else {
+            continue;
+        };
+        let Some(target) = unit.get("target") else {
+            continue;
+        };
+        let kinds = target_string_array(target, "kind");
+        let target_kind = if kinds.iter().any(|kind| kind == "custom-build") {
+            "custom-build"
+        } else if kinds.iter().any(|kind| kind == "proc-macro") {
+            "proc-macro"
+        } else {
+            continue;
+        };
+        let target_name = target_string(target, "name").unwrap_or_else(|| format!("host-unit-{index}"));
+        let metadata_digest_blake3 = (target_kind == "custom-build")
+            .then(|| build_script_metadata_summary(&package_id, &target_name).digest_blake3);
+        artifacts.entry(package_id.clone()).or_default().push(RustHostArtifact {
+            package_id,
+            target_name: target_name.clone(),
+            target_kind: target_kind.to_string(),
+            artifact: format!("host-artifact:{index}:{target_kind}:{}", rust_crate_name(&target_name)),
+            metadata_digest_blake3,
+        });
+    }
+    for values in artifacts.values_mut() {
+        values.sort();
+        values.dedup();
+    }
+    artifacts
+}
+
+fn consumed_host_artifacts(
+    unit: &Value,
+    host_artifacts: &BTreeMap<String, Vec<RustHostArtifact>>,
+) -> Vec<RustHostArtifact> {
+    let mut artifacts = Vec::new();
+    if let Some(package_id) = target_string(unit, "pkg_id") {
+        artifacts.extend(host_artifacts.get(&package_id).into_iter().flatten().cloned());
+    }
+    if let Some(deps) = unit.get("deps").and_then(Value::as_array) {
+        for dep in deps {
+            if let Some(package_id) =
+                dep.get("pkg_id").and_then(Value::as_str).or_else(|| dep.get("package_id").and_then(Value::as_str))
+            {
+                artifacts.extend(host_artifacts.get(package_id).into_iter().flatten().cloned());
+            }
+        }
+    }
+    artifacts.sort();
+    artifacts.dedup();
+    artifacts
+}
+
+fn build_script_metadata_summary(package_id: &str, target_name: &str) -> BuildScriptMetadataSummary {
+    let out_dir = format!("host-metadata:{package_id}:{target_name}:OUT_DIR");
+    let rustc_cfg = Vec::new();
+    let rustc_env = BTreeMap::new();
+    let rustc_link_lib = Vec::new();
+    let rustc_link_search = Vec::new();
+    let rerun_if_changed = Vec::new();
+    #[derive(Serialize)]
+    struct Hashable<'a> {
+        out_dir: &'a str,
+        rustc_cfg: &'a [String],
+        rustc_env: &'a BTreeMap<String, String>,
+        rustc_link_lib: &'a [String],
+        rustc_link_search: &'a [String],
+        rerun_if_changed: &'a [String],
+    }
+    let canonical = serde_json::to_vec(&Hashable {
+        out_dir: &out_dir,
+        rustc_cfg: &rustc_cfg,
+        rustc_env: &rustc_env,
+        rustc_link_lib: &rustc_link_lib,
+        rustc_link_search: &rustc_link_search,
+        rerun_if_changed: &rerun_if_changed,
+    })
+    .unwrap_or_default();
+    BuildScriptMetadataSummary {
+        out_dir,
+        rustc_cfg,
+        rustc_env,
+        rustc_link_lib,
+        rustc_link_search,
+        rerun_if_changed,
+        digest_blake3: blake3::hash(&canonical).to_hex().to_string(),
+    }
+}
+
+fn is_host_target_kind(target_kind: &str) -> bool {
+    matches!(target_kind, "custom-build" | "proc-macro")
 }
 
 fn unit_dependency_artifacts(unit: &Value) -> Vec<RustDependencyArtifact> {
@@ -1259,7 +1399,7 @@ checksum = "0123456789abcdef"
     }
 
     #[test]
-    fn unit_derivation_graph_blocks_host_units_before_host_target_split() {
+    fn unit_derivation_graph_represents_build_script_host_units() {
         let dir = TempDir::new().unwrap();
         let manifest_path = dir.path().join("build-crate/Cargo.toml");
         std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
@@ -1288,9 +1428,82 @@ checksum = "0123456789abcdef"
 
         let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
 
-        assert!(!graph.ready);
-        assert_eq!(graph.derivation_count, 0);
-        assert_eq!(graph.blockers[0].class, "unsupported-host-unit");
+        assert!(graph.ready);
+        assert_eq!(graph.derivation_count, 1);
+        assert_eq!(graph.host_unit_count, 1);
+        assert_eq!(graph.host_artifact_count, 1);
+        let unit = &graph.derivations[0];
+        assert_eq!(unit.execution_kind, "host");
+        assert_eq!(unit.target_kind, "custom-build");
+        let metadata = unit.generated_metadata.as_ref().unwrap();
+        assert!(metadata.out_dir.contains("OUT_DIR"));
+        assert_eq!(metadata.digest_blake3.len(), 64);
+        assert!(unit.derivation.inputs.iter().any(|input| input.starts_with("source:")));
+    }
+
+    #[test]
+    fn unit_derivation_graph_binds_proc_macro_host_artifacts_to_target_units() {
+        let dir = TempDir::new().unwrap();
+        let macro_manifest = dir.path().join("mac/Cargo.toml");
+        let app_manifest = dir.path().join("app/Cargo.toml");
+        std::fs::create_dir_all(macro_manifest.parent().unwrap().join("src")).unwrap();
+        std::fs::create_dir_all(app_manifest.parent().unwrap().join("src")).unwrap();
+        std::fs::write(&macro_manifest, "[package]\nname='mac'\nversion='0.1.0'\n").unwrap();
+        std::fs::write(&app_manifest, "[package]\nname='app'\nversion='0.1.0'\n").unwrap();
+        let packages = vec![
+            CargoPackage {
+                id: "path+file://app#app@0.1.0".to_string(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_manifest.display().to_string(),
+            },
+            CargoPackage {
+                id: "path+file://mac#mac@0.1.0".to_string(),
+                name: "mac".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: macro_manifest.display().to_string(),
+            },
+        ];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": "path+file://mac#mac@0.1.0",
+                    "target": {
+                        "name": "mac",
+                        "kind": ["proc-macro"],
+                        "crate_types": ["proc-macro"],
+                        "src_path": dir.path().join("mac/src/lib.rs").display().to_string(),
+                        "edition": "2021"
+                    },
+                    "mode": "build"
+                },
+                {
+                    "pkg_id": "path+file://app#app@0.1.0",
+                    "target": {
+                        "name": "app",
+                        "kind": ["lib"],
+                        "crate_types": ["lib"],
+                        "src_path": dir.path().join("app/src/lib.rs").display().to_string(),
+                        "edition": "2021"
+                    },
+                    "mode": "build",
+                    "deps": [{"pkg_id": "path+file://mac#mac@0.1.0", "extern_crate_name": "mac"}]
+                }
+            ]
+        });
+
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+
+        assert!(graph.ready);
+        assert_eq!(graph.derivation_count, 2);
+        assert_eq!(graph.host_unit_count, 1);
+        let target = graph.derivations.iter().find(|unit| unit.execution_kind == "target").unwrap();
+        assert_eq!(target.consumed_host_artifacts.len(), 1);
+        assert_eq!(target.consumed_host_artifacts[0].target_kind, "proc-macro");
+        assert!(target.derivation.inputs.iter().any(|input| input.starts_with("host-artifact:")));
     }
 
     #[test]
