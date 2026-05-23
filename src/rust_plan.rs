@@ -221,12 +221,21 @@ pub(crate) struct RustUnitExecutionReceipt {
     pub(crate) execution_status: String,
     pub(crate) rebuild_reason: String,
     pub(crate) source_digest: SourceDigest,
+    pub(crate) toolchain: RustToolchainIdentity,
     pub(crate) rustc_args_digest_blake3: String,
+    pub(crate) declared_outputs: Vec<String>,
     pub(crate) dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) output_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
     pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustToolchainIdentity {
+    pub(crate) tool: String,
+    pub(crate) version_verbose: String,
+    pub(crate) version_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1190,6 +1199,10 @@ pub(crate) fn execute_first_supported_rust_unit(
             &format!("rustc tool is not available: {}", options.rustc.display()),
         );
     }
+    let toolchain = match rustc_toolchain_identity(&options.rustc)? {
+        Ok(identity) => identity,
+        Err(blocker) => return blocked_execution_receipt(Some(unit), &blocker.class, &blocker.message),
+    };
     let src_path = rustc_source_path(&unit.derivation.args).ok_or_else(|| {
         RunError::Internal(format!("unit {} lacks a rustc source path in reviewable args", unit.unit_id))
     })?;
@@ -1198,6 +1211,13 @@ pub(crate) fn execute_first_supported_rust_unit(
             Some(unit),
             "missing-source-material",
             &format!("declared Rust source is not readable: {}", src_path.display()),
+        );
+    }
+    if unit.derivation.outputs.is_empty() {
+        return blocked_execution_receipt(
+            Some(unit),
+            "missing-declared-output",
+            "unit derivation does not declare any output artifact paths",
         );
     }
     let dependency_artifact_digests = artifact_digests(
@@ -1238,6 +1258,7 @@ pub(crate) fn execute_first_supported_rust_unit(
         let diagnostic = redacted_diagnostic(&output.stderr);
         return failed_execution_receipt(
             unit,
+            toolchain,
             dependency_artifact_digests.unwrap(),
             host_artifact_digests.unwrap(),
             &diagnostic,
@@ -1255,6 +1276,7 @@ pub(crate) fn execute_first_supported_rust_unit(
         unit,
         "success",
         "rebuilt-explicit-unit",
+        toolchain,
         dependency_artifact_digests.unwrap(),
         host_artifact_digests.unwrap(),
         output_artifact_digests,
@@ -1321,6 +1343,7 @@ fn blocked_execution_receipt(
         },
         "blocked",
         "not-run-preflight-blocker",
+        missing_toolchain_identity(),
         Vec::new(),
         Vec::new(),
         Vec::new(),
@@ -1333,6 +1356,7 @@ fn blocked_execution_receipt(
 
 fn failed_execution_receipt(
     unit: &RustUnitDerivationSummary,
+    toolchain: RustToolchainIdentity,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     diagnostic: &str,
@@ -1341,6 +1365,7 @@ fn failed_execution_receipt(
         unit,
         "failed",
         "rustc-exit-nonzero",
+        toolchain,
         dependency_artifact_digests,
         host_artifact_digests,
         Vec::new(),
@@ -1355,6 +1380,7 @@ fn finalized_execution_receipt(
     unit: &RustUnitDerivationSummary,
     execution_status: &str,
     rebuild_reason: &str,
+    toolchain: RustToolchainIdentity,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     output_artifact_digests: Vec<RustExecutionArtifactDigest>,
@@ -1369,7 +1395,9 @@ fn finalized_execution_receipt(
         execution_status: execution_status.to_string(),
         rebuild_reason: rebuild_reason.to_string(),
         source_digest: unit.source_digest.clone(),
+        toolchain,
         rustc_args_digest_blake3: unit.rustc_args_digest_blake3.clone(),
+        declared_outputs: sorted_strings(unit.derivation.outputs.clone()),
         dependency_artifact_digests,
         host_artifact_digests,
         output_artifact_digests,
@@ -1386,6 +1414,36 @@ fn rust_unit_execution_receipt_hash(receipt: &RustUnitExecutionReceipt) -> Resul
     let canonical = serde_json::to_vec(&hashable)
         .map_err(|err| RunError::Internal(format!("canonicalizing Rust unit execution receipt: {err}")))?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn rustc_toolchain_identity(tool: &Path) -> Result<Result<RustToolchainIdentity, RustUnitExecutionBlocker>, RunError> {
+    let output = Command::new(tool)
+        .arg("-vV")
+        .output()
+        .map_err(|err| RunError::Internal(format!("querying rustc toolchain identity {}: {err}", tool.display())))?;
+    if !output.status.success() {
+        return Ok(Err(RustUnitExecutionBlocker {
+            class: "missing-toolchain-identity".to_string(),
+            message: format!("rustc -vV failed for {}", tool.display()),
+        }));
+    }
+    let version_verbose = String::from_utf8(output.stdout)
+        .map_err(|err| RunError::Internal(format!("rustc -vV emitted non-UTF-8 output: {err}")))?
+        .trim()
+        .to_string();
+    Ok(Ok(RustToolchainIdentity {
+        tool: tool.file_name().and_then(OsStr::to_str).unwrap_or("rustc").to_string(),
+        version_digest_blake3: blake3::hash(version_verbose.as_bytes()).to_hex().to_string(),
+        version_verbose,
+    }))
+}
+
+fn missing_toolchain_identity() -> RustToolchainIdentity {
+    RustToolchainIdentity {
+        tool: "missing".to_string(),
+        version_verbose: "missing".to_string(),
+        version_digest_blake3: "missing".to_string(),
+    }
 }
 
 fn rustc_source_path(args: &[String]) -> Option<PathBuf> {
@@ -1416,7 +1474,9 @@ fn digest_output_artifacts(output_dir: &Path) -> Result<Vec<RustExecutionArtifac
     collect_output_files(output_dir, &mut paths)?;
     let mut digests = Vec::new();
     for path in paths {
-        digests.push(digest_artifact_path(&path)?);
+        let relative_path = path.strip_prefix(output_dir).unwrap_or(&path);
+        let receipt_path = format!("declared-output/{}", normalize_path_string(relative_path));
+        digests.push(digest_artifact_path_with_receipt_path(&path, receipt_path)?);
     }
     digests.sort_by(|left, right| left.path.cmp(&right.path));
     Ok(digests)
@@ -1442,10 +1502,17 @@ fn collect_output_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<()
 }
 
 fn digest_artifact_path(path: &Path) -> Result<RustExecutionArtifactDigest, RunError> {
+    digest_artifact_path_with_receipt_path(path, normalize_path_string(path))
+}
+
+fn digest_artifact_path_with_receipt_path(
+    path: &Path,
+    receipt_path: String,
+) -> Result<RustExecutionArtifactDigest, RunError> {
     let bytes =
         fs::read(path).map_err(|err| RunError::Internal(format!("reading artifact {}: {err}", path.display())))?;
     Ok(RustExecutionArtifactDigest {
-        path: normalize_path_string(path),
+        path: receipt_path,
         blake3: blake3::hash(&bytes).to_hex().to_string(),
     })
 }
@@ -1807,10 +1874,27 @@ checksum = "0123456789abcdef"
         assert_eq!(receipt.rebuild_reason, "rebuilt-explicit-unit");
         assert_eq!(receipt.target_kind, "lib");
         assert_eq!(receipt.rustc_args_digest_blake3, graph.derivations[0].rustc_args_digest_blake3);
+        assert_eq!(receipt.declared_outputs, vec!["out".to_string()]);
+        assert_eq!(receipt.toolchain.tool, "rustc");
+        assert!(!receipt.toolchain.version_verbose.is_empty());
+        assert_eq!(receipt.toolchain.version_digest_blake3.len(), 64);
         assert!(receipt.blocker.is_none());
         assert!(!receipt.output_artifact_digests.is_empty());
         assert!(receipt.output_artifact_digests.iter().any(|artifact| artifact.path.ends_with(".rlib")));
+        assert!(receipt.output_artifact_digests.iter().all(|artifact| artifact.path.starts_with("declared-output/")));
         assert_eq!(receipt.receipt_hash.len(), 64);
+
+        let repeated = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("unit-out"),
+        })
+        .unwrap();
+        assert_eq!(repeated.execution_status, "success");
+        assert_eq!(repeated.rebuild_reason, "rebuilt-explicit-unit");
+        assert_eq!(repeated.declared_outputs, receipt.declared_outputs);
+        assert_eq!(repeated.toolchain, receipt.toolchain);
+        assert_eq!(repeated.output_artifact_digests, receipt.output_artifact_digests);
+        assert_eq!(repeated.receipt_hash, receipt.receipt_hash);
     }
 
     #[test]
