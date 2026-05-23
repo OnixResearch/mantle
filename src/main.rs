@@ -27,6 +27,7 @@ mod release_evidence;
 mod release_nix_witness;
 mod release_reproducibility;
 mod release_source;
+mod rust_plan;
 mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
@@ -380,6 +381,41 @@ enum Command {
         /// Internal: reuse the exact stage0-produced busybox binary in later proof stages.
         #[arg(long, hide = true)]
         bootstrap_busybox_path: Option<PathBuf>,
+    },
+
+    /// Capture Cargo oracle metadata and unit graph as a normalized Rust package plan receipt
+    RustPlan {
+        /// Rust workspace root (default: current directory)
+        #[arg(long)]
+        root: Option<PathBuf>,
+
+        /// Cargo executable to invoke for metadata and unit-graph capture
+        #[arg(long, default_value = "cargo")]
+        cargo: PathBuf,
+
+        /// rustc executable to invoke for verbose toolchain identity
+        #[arg(long, default_value = "rustc")]
+        rustc: PathBuf,
+
+        /// Target triple to pass to Cargo; repeatable
+        #[arg(long = "target")]
+        targets: Vec<String>,
+
+        /// Cargo profile for unit graph capture
+        #[arg(long, default_value_t = rust_plan::default_profile())]
+        profile: String,
+
+        /// Comma-separated features to enable
+        #[arg(long, value_delimiter = ',')]
+        features: Vec<String>,
+
+        /// Enable all Cargo features
+        #[arg(long, conflicts_with = "features")]
+        all_features: bool,
+
+        /// Disable default Cargo features
+        #[arg(long)]
+        no_default_features: bool,
     },
 
     /// Enter a development shell from the compatibility-named crunch.ncl devShells
@@ -1202,6 +1238,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         | Command::ListStale
         | Command::Upgrade => run_project_command(&args.command),
         Command::SelfBuild { .. } => run_self_build_from_command(ctx, &args.command),
+        Command::RustPlan { .. } => run_rust_plan_command(ctx, &args.command),
         Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
@@ -1870,6 +1907,35 @@ fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunE
         &ctx.store_prefix,
         ctx.json,
     )
+}
+
+fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
+    let Command::RustPlan {
+        root,
+        cargo,
+        rustc,
+        targets,
+        profile,
+        features,
+        all_features,
+        no_default_features,
+    } = command
+    else {
+        return Err(RunError::Internal("run_rust_plan_command called with non-RustPlan command".to_string()));
+    };
+    let root = root.clone().unwrap_or(current_dir_or_error()?);
+    let options = rust_plan::RustPlanOptions {
+        root,
+        cargo: cargo.clone(),
+        rustc: rustc.clone(),
+        targets: targets.clone(),
+        profile: profile.clone(),
+        features: features.clone(),
+        all_features: *all_features,
+        no_default_features: *no_default_features,
+    };
+    let receipt = rust_plan::capture_rust_plan(&options)?;
+    rust_plan::print_rust_plan_receipt(&receipt, ctx.json)
 }
 
 fn run_shell_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
