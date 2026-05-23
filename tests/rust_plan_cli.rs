@@ -453,6 +453,126 @@ fn rust_plan_cli_binds_build_script_native_link_metadata() {
 }
 
 #[test]
+fn rust_plan_cli_executes_unified_topology_with_build_script_and_bin() {
+    let dir = TempDir::new().unwrap();
+    let crate_dir = dir.path().join("unified-topology-crate");
+    std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    std::fs::write(
+        crate_dir.join("Cargo.toml"),
+        "[package]\nname = \"unified-topology-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        crate_dir.join("build.rs"),
+        "fn main() {\n    println!(\"cargo:rustc-cfg=mantle_unified_topology\");\n    println!(\"cargo:rustc-env=UNIFIED_VALUE=unified-ok\");\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        crate_dir.join("src/lib.rs"),
+        "#[cfg(not(mantle_unified_topology))]\ncompile_error!(\"missing unified topology cfg\");\npub fn value() -> &'static str { env!(\"UNIFIED_VALUE\") }\n",
+    )
+    .unwrap();
+    std::fs::write(crate_dir.join("src/main.rs"), "fn main() { let _ = unified_topology_crate::value(); }\n").unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&crate_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&crate_dir)
+        .arg("--execute-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("unified-output"))
+        .output()
+        .expect("rust-plan unified topology CLI should run");
+
+    assert!(
+        output.status.success(),
+        "rust-plan unified topology CLI failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    assert!(receipt["rust_plan"]["unit_derivation_graph"]["ready"].as_bool().unwrap());
+    let topology = &receipt["topology_execution"];
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    assert!(topology["claim"].as_str().unwrap().contains("bounded unified Rust unit topology"));
+    assert_eq!(topology["receipt_hash"].as_str().unwrap().len(), 64);
+    let metadata_runs = topology["build_script_metadata_runs"].as_array().unwrap();
+    assert_eq!(metadata_runs.len(), 1, "{receipt:#?}");
+    assert_eq!(metadata_runs[0]["rustc_cfg"].as_array().unwrap()[0], "mantle_unified_topology");
+    let unit_executions = topology["unit_executions"].as_array().unwrap();
+    let target_kinds = unit_executions
+        .iter()
+        .map(|execution| execution["target_kind"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(target_kinds, vec!["custom-build", "lib", "bin"], "{receipt:#?}");
+    assert!(unit_executions.iter().all(|execution| execution["execution_status"] == "success"));
+    assert!(unit_executions[2]["dependency_artifact_digests"].as_array().unwrap().iter().any(|artifact| {
+        artifact["path"].as_str().unwrap().contains("libunified_topology_crate")
+            && artifact["blake3"].as_str().unwrap().len() == 64
+    }));
+}
+
+#[test]
+fn rust_plan_cli_executes_unified_topology_for_proc_macro_shape() {
+    let dir = TempDir::new().unwrap();
+    let macro_dir = dir.path().join("demo-macro");
+    let app_dir = dir.path().join("app-crate");
+    std::fs::create_dir_all(macro_dir.join("src")).unwrap();
+    std::fs::create_dir_all(app_dir.join("src")).unwrap();
+    std::fs::write(
+        macro_dir.join("Cargo.toml"),
+        "[package]\nname = \"demo-macro\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nproc-macro = true\n",
+    )
+    .unwrap();
+    std::fs::write(
+        macro_dir.join("src/lib.rs"),
+        "extern crate proc_macro;\nuse proc_macro::TokenStream;\n#[proc_macro_attribute]\npub fn demo(_attr: TokenStream, item: TokenStream) -> TokenStream { item }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        app_dir.join("Cargo.toml"),
+        "[package]\nname = \"app-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_macro = { package = \"demo-macro\", path = \"../demo-macro\" }\n",
+    )
+    .unwrap();
+    std::fs::write(app_dir.join("src/lib.rs"), "use demo_macro::demo;\n#[demo]\npub fn value() -> u32 { 1 }\n")
+        .unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&app_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("unified-proc-macro-output"))
+        .output()
+        .expect("rust-plan unified topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let topology = &receipt["topology_execution"];
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    assert!(topology["blocker"].is_null());
+    let unit_executions = topology["unit_executions"].as_array().unwrap();
+    assert_eq!(unit_executions.len(), 2);
+    assert_eq!(unit_executions[0]["target_kind"], "proc-macro");
+    assert_eq!(unit_executions[1]["target_kind"], "lib");
+}
+
+#[test]
 fn rust_plan_cli_blocks_unsupported_build_script_link_metadata() {
     let dir = TempDir::new().unwrap();
     let crate_dir = dir.path().join("bad-build-link-crate");

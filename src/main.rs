@@ -418,21 +418,26 @@ enum Command {
         no_default_features: bool,
 
         /// Execute the first supported lib/bin unit from the captured explicit derivation graph
-        #[arg(long, conflicts_with_all = ["execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology"])]
         execute_first_supported_unit: bool,
 
         /// Execute the first bounded dependency chain from the captured explicit derivation graph
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_target_topology", "execute_host_artifact_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_target_topology", "execute_host_artifact_topology", "execute_topology"])]
         execute_first_dependency_chain: bool,
 
         /// Execute a bounded target-only unit topology from the captured explicit derivation graph
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_host_artifact_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_host_artifact_topology", "execute_topology"])]
         execute_target_topology: bool,
 
         /// Execute a bounded host-artifact unit topology from the captured explicit derivation
         /// graph
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_topology"])]
         execute_host_artifact_topology: bool,
+
+        /// Execute a bounded unified host+target unit topology from the captured explicit
+        /// derivation graph
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology"])]
+        execute_topology: bool,
 
         /// Output directory for execution artifacts
         #[arg(long)]
@@ -1944,6 +1949,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         execute_first_dependency_chain,
         execute_target_topology,
         execute_host_artifact_topology,
+        execute_topology,
         execution_output_root,
     } = command
     else {
@@ -2033,6 +2039,25 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             &rust_plan::RustPlanHostArtifactTopologyExecutionReceipt {
                 rust_plan: receipt,
                 host_artifact_topology_execution,
+            },
+            ctx.json,
+        );
+    }
+    if *execute_topology {
+        let output_root = execution_output_root
+            .clone()
+            .ok_or_else(|| RunError::Internal("--execute-topology requires --execution-output-root".to_string()))?;
+        let topology_execution = rust_plan::execute_rust_unit_topology(
+            &receipt.unit_derivation_graph,
+            &rust_plan::RustUnitExecutionOptions {
+                rustc: rustc.clone(),
+                output_root,
+            },
+        )?;
+        return rust_plan::print_rust_plan_topology_execution_receipt(
+            &rust_plan::RustPlanTopologyExecutionReceipt {
+                rust_plan: receipt,
+                topology_execution,
             },
             ctx.json,
         );
