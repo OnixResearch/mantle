@@ -206,6 +206,42 @@ pub(crate) struct UnitDerivationBlocker {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct RustUnitExecutionOptions {
+    pub(crate) rustc: PathBuf,
+    pub(crate) output_root: PathBuf,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustUnitExecutionReceipt {
+    pub(crate) schema_version: u32,
+    pub(crate) unit_id: String,
+    pub(crate) package_id: String,
+    pub(crate) target_name: String,
+    pub(crate) target_kind: String,
+    pub(crate) execution_status: String,
+    pub(crate) rebuild_reason: String,
+    pub(crate) source_digest: SourceDigest,
+    pub(crate) rustc_args_digest_blake3: String,
+    pub(crate) dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    pub(crate) host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    pub(crate) output_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    pub(crate) blocker: Option<RustUnitExecutionBlocker>,
+    pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustExecutionArtifactDigest {
+    pub(crate) path: String,
+    pub(crate) blake3: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustUnitExecutionBlocker {
+    pub(crate) class: String,
+    pub(crate) message: String,
+}
+
+#[derive(Debug, Clone)]
 struct CargoOutput {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
@@ -1118,6 +1154,335 @@ fn unit_derivation_graph_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
+pub(crate) fn execute_first_supported_rust_unit(
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    let Some(unit) = graph
+        .derivations
+        .iter()
+        .find(|unit| unit.execution_kind == "target" && matches!(unit.target_kind.as_str(), "lib" | "bin"))
+    else {
+        return blocked_execution_receipt(
+            None,
+            "missing-supported-unit",
+            "unit_derivation_graph does not contain a supported target lib/bin unit",
+        );
+    };
+    if !graph.ready {
+        return blocked_execution_receipt(
+            Some(unit),
+            "unit-derivation-graph-blocked",
+            "unit_derivation_graph is not ready; resolve planning blockers before execution",
+        );
+    }
+    if unit.derivation.builder != "rustc" {
+        return blocked_execution_receipt(
+            Some(unit),
+            "unsupported-builder",
+            "only rustc-backed Rust unit derivations are supported by this execution rail",
+        );
+    }
+    if !tool_exists(&options.rustc) {
+        return blocked_execution_receipt(
+            Some(unit),
+            "missing-toolchain",
+            &format!("rustc tool is not available: {}", options.rustc.display()),
+        );
+    }
+    let src_path = rustc_source_path(&unit.derivation.args).ok_or_else(|| {
+        RunError::Internal(format!("unit {} lacks a rustc source path in reviewable args", unit.unit_id))
+    })?;
+    if !src_path.is_file() {
+        return blocked_execution_receipt(
+            Some(unit),
+            "missing-source-material",
+            &format!("declared Rust source is not readable: {}", src_path.display()),
+        );
+    }
+    let dependency_artifact_digests = artifact_digests(
+        &unit.dependency_artifacts.iter().map(|artifact| artifact.artifact.as_str()).collect::<Vec<_>>(),
+        "missing-dependency-artifact",
+    )?;
+    if let Err(blocker) = &dependency_artifact_digests {
+        return blocked_execution_receipt(Some(unit), &blocker.class, &blocker.message);
+    }
+    let host_artifact_digests = artifact_digests(
+        &unit.consumed_host_artifacts.iter().map(|artifact| artifact.artifact.as_str()).collect::<Vec<_>>(),
+        "missing-host-artifact",
+    )?;
+    if let Err(blocker) = &host_artifact_digests {
+        return blocked_execution_receipt(Some(unit), &blocker.class, &blocker.message);
+    }
+
+    let unit_output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
+    if unit_output_dir.exists() {
+        fs::remove_dir_all(&unit_output_dir).map_err(|err| {
+            RunError::Internal(format!("removing prior Rust unit output {}: {err}", unit_output_dir.display()))
+        })?;
+    }
+    fs::create_dir_all(&unit_output_dir)
+        .map_err(|err| RunError::Internal(format!("creating Rust unit output {}: {err}", unit_output_dir.display())))?;
+
+    let mut command = Command::new(&options.rustc);
+    command.args(&unit.derivation.args);
+    command.arg("--out-dir").arg(&unit_output_dir);
+    command.env_clear();
+    for (key, value) in &unit.derivation.env {
+        command.env(key, value);
+    }
+    let output = command
+        .output()
+        .map_err(|err| RunError::Internal(format!("executing rustc for unit {}: {err}", unit.unit_id)))?;
+    if !output.status.success() {
+        let diagnostic = redacted_diagnostic(&output.stderr);
+        return failed_execution_receipt(
+            unit,
+            dependency_artifact_digests.unwrap(),
+            host_artifact_digests.unwrap(),
+            &diagnostic,
+        );
+    }
+    let output_artifact_digests = digest_output_artifacts(&unit_output_dir)?;
+    if output_artifact_digests.is_empty() {
+        return blocked_execution_receipt(
+            Some(unit),
+            "missing-declared-output",
+            "rustc completed but produced no declared output artifacts",
+        );
+    }
+    finalized_execution_receipt(
+        unit,
+        "success",
+        "rebuilt-explicit-unit",
+        dependency_artifact_digests.unwrap(),
+        host_artifact_digests.unwrap(),
+        output_artifact_digests,
+        None,
+    )
+}
+
+fn blocked_execution_receipt(
+    unit: Option<&RustUnitDerivationSummary>,
+    class: &str,
+    message: &str,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    let fallback_source_digest = SourceDigest {
+        algorithm: "missing".to_string(),
+        value: "missing".to_string(),
+    };
+    let (unit_id, package_id, target_name, target_kind, source_digest, rustc_args_digest_blake3) = unit.map_or_else(
+        || {
+            (
+                "missing".to_string(),
+                "missing".to_string(),
+                "missing".to_string(),
+                "missing".to_string(),
+                fallback_source_digest.clone(),
+                "missing".to_string(),
+            )
+        },
+        |unit| {
+            (
+                unit.unit_id.clone(),
+                unit.package_id.clone(),
+                unit.target_name.clone(),
+                unit.target_kind.clone(),
+                unit.source_digest.clone(),
+                unit.rustc_args_digest_blake3.clone(),
+            )
+        },
+    );
+    finalized_execution_receipt(
+        &RustUnitDerivationSummary {
+            unit_id,
+            package_id,
+            target_name,
+            target_kind,
+            execution_kind: "target".to_string(),
+            crate_types: Vec::new(),
+            mode: "build".to_string(),
+            profile: String::new(),
+            source_digest,
+            dependency_artifacts: Vec::new(),
+            consumed_host_artifacts: Vec::new(),
+            generated_metadata: None,
+            derivation: ReviewableRustDerivation {
+                name: String::new(),
+                builder: "rustc".to_string(),
+                system: String::new(),
+                args: Vec::new(),
+                outputs: Vec::new(),
+                env: BTreeMap::new(),
+                inputs: Vec::new(),
+                addressing_mode: String::new(),
+            },
+            rustc_args_digest_blake3,
+        },
+        "blocked",
+        "not-run-preflight-blocker",
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Some(RustUnitExecutionBlocker {
+            class: class.to_string(),
+            message: message.to_string(),
+        }),
+    )
+}
+
+fn failed_execution_receipt(
+    unit: &RustUnitDerivationSummary,
+    dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    diagnostic: &str,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    finalized_execution_receipt(
+        unit,
+        "failed",
+        "rustc-exit-nonzero",
+        dependency_artifact_digests,
+        host_artifact_digests,
+        Vec::new(),
+        Some(RustUnitExecutionBlocker {
+            class: "rustc-failed".to_string(),
+            message: diagnostic.to_string(),
+        }),
+    )
+}
+
+fn finalized_execution_receipt(
+    unit: &RustUnitDerivationSummary,
+    execution_status: &str,
+    rebuild_reason: &str,
+    dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    output_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    blocker: Option<RustUnitExecutionBlocker>,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    let mut receipt = RustUnitExecutionReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        unit_id: unit.unit_id.clone(),
+        package_id: unit.package_id.clone(),
+        target_name: unit.target_name.clone(),
+        target_kind: unit.target_kind.clone(),
+        execution_status: execution_status.to_string(),
+        rebuild_reason: rebuild_reason.to_string(),
+        source_digest: unit.source_digest.clone(),
+        rustc_args_digest_blake3: unit.rustc_args_digest_blake3.clone(),
+        dependency_artifact_digests,
+        host_artifact_digests,
+        output_artifact_digests,
+        blocker,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = rust_unit_execution_receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn rust_unit_execution_receipt_hash(receipt: &RustUnitExecutionReceipt) -> Result<String, RunError> {
+    let mut hashable = receipt.clone();
+    hashable.receipt_hash.clear();
+    let canonical = serde_json::to_vec(&hashable)
+        .map_err(|err| RunError::Internal(format!("canonicalizing Rust unit execution receipt: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn rustc_source_path(args: &[String]) -> Option<PathBuf> {
+    args.iter().find(|arg| !arg.starts_with('-') && arg.ends_with(".rs")).map(PathBuf::from)
+}
+
+fn artifact_digests(
+    paths: &[&str],
+    missing_class: &str,
+) -> Result<Result<Vec<RustExecutionArtifactDigest>, RustUnitExecutionBlocker>, RunError> {
+    let mut digests = Vec::new();
+    for path in paths {
+        let artifact_path = Path::new(path);
+        if !artifact_path.is_file() {
+            return Ok(Err(RustUnitExecutionBlocker {
+                class: missing_class.to_string(),
+                message: format!("declared artifact is not readable: {path}"),
+            }));
+        }
+        digests.push(digest_artifact_path(artifact_path)?);
+    }
+    digests.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(Ok(digests))
+}
+
+fn digest_output_artifacts(output_dir: &Path) -> Result<Vec<RustExecutionArtifactDigest>, RunError> {
+    let mut paths = Vec::new();
+    collect_output_files(output_dir, &mut paths)?;
+    let mut digests = Vec::new();
+    for path in paths {
+        digests.push(digest_artifact_path(&path)?);
+    }
+    digests.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(digests)
+}
+
+fn collect_output_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), RunError> {
+    let entries = fs::read_dir(directory)
+        .map_err(|err| RunError::Internal(format!("reading Rust unit output {}: {err}", directory.display())))?;
+    for entry in entries {
+        let entry = entry
+            .map_err(|err| RunError::Internal(format!("reading Rust unit output {}: {err}", directory.display())))?;
+        let file_type = entry.file_type().map_err(|err| {
+            RunError::Internal(format!("reading Rust unit output metadata {}: {err}", entry.path().display()))
+        })?;
+        if file_type.is_dir() {
+            collect_output_files(&entry.path(), files)?;
+        } else if file_type.is_file() {
+            files.push(entry.path());
+        }
+    }
+    files.sort();
+    Ok(())
+}
+
+fn digest_artifact_path(path: &Path) -> Result<RustExecutionArtifactDigest, RunError> {
+    let bytes =
+        fs::read(path).map_err(|err| RunError::Internal(format!("reading artifact {}: {err}", path.display())))?;
+    Ok(RustExecutionArtifactDigest {
+        path: normalize_path_string(path),
+        blake3: blake3::hash(&bytes).to_hex().to_string(),
+    })
+}
+
+fn safe_path_component(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn tool_exists(tool: &Path) -> bool {
+    if tool.components().count() > 1 || tool.is_absolute() {
+        return tool.is_file();
+    }
+    let Some(paths) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&paths).any(|directory| directory.join(tool).is_file())
+}
+
+fn redacted_diagnostic(stderr: &[u8]) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let compact = text.lines().take(12).collect::<Vec<_>>().join("\n");
+    if compact.is_empty() {
+        "rustc exited with a nonzero status".to_string()
+    } else {
+        compact.replace(' ', "")
+    }
+}
+
 fn summarize_unit_graph(unit_graph: Value) -> Result<UnitGraphSummary, RunError> {
     let normalized = normalize_json_value(unit_graph);
     let canonical = serde_json::to_vec(&normalized)
@@ -1396,6 +1761,99 @@ checksum = "0123456789abcdef"
         assert_eq!(unit.dependency_artifacts[0].name, "serde");
         assert_eq!(unit.derivation.env.get("SOURCE_CLOSURE_DIGEST"), Some(&closure.digest_blake3));
         assert_eq!(graph.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn executes_first_supported_lib_unit_from_derivation_graph() {
+        let dir = TempDir::new().unwrap();
+        let crate_dir = dir.path().join("exec-crate");
+        let manifest_path = crate_dir.join("Cargo.toml");
+        let src_dir = crate_dir.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='exec-crate'\nversion='0.1.0'\n").unwrap();
+        let lib_path = src_dir.join("lib.rs");
+        std::fs::write(&lib_path, "pub fn answer() -> u32 { 42 }\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://exec-crate#exec-crate@0.1.0".to_string(),
+            name: "exec-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://exec-crate#exec-crate@0.1.0",
+                "target": {
+                    "name": "exec-crate",
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": lib_path.display().to_string(),
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "deps": []
+            }]
+        });
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("unit-out"),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "success");
+        assert_eq!(receipt.rebuild_reason, "rebuilt-explicit-unit");
+        assert_eq!(receipt.target_kind, "lib");
+        assert_eq!(receipt.rustc_args_digest_blake3, graph.derivations[0].rustc_args_digest_blake3);
+        assert!(receipt.blocker.is_none());
+        assert!(!receipt.output_artifact_digests.is_empty());
+        assert!(receipt.output_artifact_digests.iter().any(|artifact| artifact.path.ends_with(".rlib")));
+        assert_eq!(receipt.receipt_hash.len(), 64);
+    }
+
+    #[test]
+    fn rust_unit_execution_blocks_missing_source_before_rustc() {
+        let dir = TempDir::new().unwrap();
+        let crate_dir = dir.path().join("missing-source-crate");
+        let manifest_path = crate_dir.join("Cargo.toml");
+        std::fs::create_dir_all(&crate_dir).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='missing-source-crate'\nversion='0.1.0'\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://missing-source-crate#missing-source-crate@0.1.0".to_string(),
+            name: "missing-source-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://missing-source-crate#missing-source-crate@0.1.0",
+                "target": {
+                    "name": "missing-source-crate",
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": crate_dir.join("src/lib.rs").display().to_string(),
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "deps": []
+            }]
+        });
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("unit-out"),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.rebuild_reason, "not-run-preflight-blocker");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "missing-source-material");
+        assert!(receipt.output_artifact_digests.is_empty());
     }
 
     #[test]
