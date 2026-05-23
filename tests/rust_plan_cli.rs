@@ -395,6 +395,107 @@ fn rust_plan_cli_executes_build_script_metadata_topology() {
 }
 
 #[test]
+fn rust_plan_cli_binds_build_script_native_link_metadata() {
+    let dir = TempDir::new().unwrap();
+    let crate_dir = dir.path().join("build-link-crate");
+    std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    std::fs::write(
+        crate_dir.join("Cargo.toml"),
+        "[package]\nname = \"build-link-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        crate_dir.join("build.rs"),
+        "fn main() {\n    println!(\"cargo:rustc-link-search=native=/tmp\");\n    println!(\"cargo:rustc-link-lib=m\");\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        crate_dir.join("src/main.rs"),
+        "unsafe extern \"C\" { fn cos(input: f64) -> f64; }\nfn main() { let _ = unsafe { cos(0.0) }; }\n",
+    )
+    .unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&crate_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&crate_dir)
+        .arg("--execute-host-artifact-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("build-link-output"))
+        .output()
+        .expect("rust-plan host-artifact topology CLI should run");
+
+    assert!(
+        output.status.success(),
+        "rust-plan build-script link metadata CLI failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let topology = &receipt["host_artifact_topology_execution"];
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    let metadata_runs = topology["build_script_metadata_runs"].as_array().unwrap();
+    assert_eq!(metadata_runs.len(), 1, "{receipt:#?}");
+    assert_eq!(metadata_runs[0]["rustc_link_lib"].as_array().unwrap()[0], "m");
+    assert_eq!(metadata_runs[0]["rustc_link_search"].as_array().unwrap()[0], "native=/tmp");
+    let unit_executions = topology["unit_executions"].as_array().unwrap();
+    assert_eq!(unit_executions.len(), 2);
+    assert_eq!(unit_executions[0]["target_kind"], "custom-build");
+    assert_eq!(unit_executions[1]["target_kind"], "bin");
+    assert!(unit_executions.iter().all(|execution| execution["execution_status"] == "success"));
+}
+
+#[test]
+fn rust_plan_cli_blocks_unsupported_build_script_link_metadata() {
+    let dir = TempDir::new().unwrap();
+    let crate_dir = dir.path().join("bad-build-link-crate");
+    std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    std::fs::write(
+        crate_dir.join("Cargo.toml"),
+        "[package]\nname = \"bad-build-link-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        crate_dir.join("build.rs"),
+        "fn main() { println!(\"cargo:rustc-link-lib=static:+whole-archive=m\"); }\n",
+    )
+    .unwrap();
+    std::fs::write(crate_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&crate_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&crate_dir)
+        .arg("--execute-host-artifact-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("bad-build-link-output"))
+        .output()
+        .expect("rust-plan host-artifact topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let topology = &receipt["host_artifact_topology_execution"];
+    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
+    assert_eq!(topology["blocker"]["class"], "malformed-build-script-metadata");
+    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 1);
+    assert_eq!(topology["unit_executions"].as_array().unwrap()[0]["target_kind"], "custom-build");
+}
+
+#[test]
 fn rust_plan_cli_blocks_malformed_build_script_metadata() {
     let dir = TempDir::new().unwrap();
     let crate_dir = dir.path().join("bad-build-meta-crate");

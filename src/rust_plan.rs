@@ -1003,7 +1003,7 @@ fn summarize_unit_derivation(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    if is_host_target_kind(&target_kind) {
+    if is_host_target_kind(&target_kind) || target_kind == "bin" {
         if let Some(linker) = resolve_tool_path("cc") {
             args.push("-C".to_string());
             args.push(format!("linker={}", normalize_path_string(&linker)));
@@ -1928,6 +1928,14 @@ fn bind_all_build_script_metadata(
             bound.derivation.args.push("--cfg".to_string());
             bound.derivation.args.push(cfg.clone());
         }
+        for search in &metadata.rustc_link_search {
+            bound.derivation.args.push("-L".to_string());
+            bound.derivation.args.push(search.clone());
+        }
+        for lib in &metadata.rustc_link_lib {
+            bound.derivation.args.push("-l".to_string());
+            bound.derivation.args.push(lib.clone());
+        }
     }
     bound.rustc_args_digest_blake3 = blake3::hash(bound.derivation.args.join("\0").as_bytes()).to_hex().to_string();
     Ok(bound)
@@ -2028,8 +2036,10 @@ fn parse_build_script_metadata(
             }
             rustc_env.insert(key.to_string(), env_value.to_string());
         } else if let Some(value) = payload.strip_prefix("rustc-link-lib=") {
+            validate_rustc_link_lib_metadata(value, line_index)?;
             push_metadata_value(&mut rustc_link_lib, value, line_index)?;
         } else if let Some(value) = payload.strip_prefix("rustc-link-search=") {
+            validate_rustc_link_search_metadata(value, line_index)?;
             push_metadata_value(&mut rustc_link_search, value, line_index)?;
         } else if let Some(value) = payload.strip_prefix("rerun-if-changed=") {
             push_metadata_value(&mut rerun_if_changed, value, line_index)?;
@@ -2051,6 +2061,65 @@ fn parse_build_script_metadata(
         rustc_link_search,
         rerun_if_changed,
     )
+}
+
+fn validate_rustc_link_lib_metadata(value: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
+    if value.is_empty() {
+        return Err(malformed_build_script_metadata(line_index, "metadata value must not be empty"));
+    }
+    if contains_metadata_whitespace(value) {
+        return Err(malformed_build_script_metadata(line_index, "rustc-link-lib must not contain whitespace"));
+    }
+    if value.contains(':') || value.contains(',') {
+        return Err(malformed_build_script_metadata(
+            line_index,
+            "rustc-link-lib modifiers and renames are not supported by this bounded rail",
+        ));
+    }
+    let name = if let Some((kind, name)) = value.split_once('=') {
+        if !matches!(kind, "static" | "dylib" | "framework") {
+            return Err(malformed_build_script_metadata(line_index, "unsupported rustc-link-lib kind"));
+        }
+        name
+    } else {
+        value
+    };
+    if !is_safe_link_token(name) {
+        return Err(malformed_build_script_metadata(line_index, "rustc-link-lib name must be a safe token"));
+    }
+    Ok(())
+}
+
+fn validate_rustc_link_search_metadata(value: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
+    if value.is_empty() {
+        return Err(malformed_build_script_metadata(line_index, "metadata value must not be empty"));
+    }
+    if contains_metadata_whitespace(value) {
+        return Err(malformed_build_script_metadata(line_index, "rustc-link-search must not contain whitespace"));
+    }
+    let path = if let Some((kind, path)) = value.split_once('=') {
+        if !matches!(kind, "dependency" | "crate" | "native" | "framework" | "all") {
+            return Err(malformed_build_script_metadata(line_index, "unsupported rustc-link-search kind"));
+        }
+        path
+    } else {
+        value
+    };
+    if path.is_empty() || path.contains("..") {
+        return Err(malformed_build_script_metadata(
+            line_index,
+            "rustc-link-search path must be non-empty and must not contain parent traversal",
+        ));
+    }
+    Ok(())
+}
+
+fn contains_metadata_whitespace(value: &str) -> bool {
+    value.chars().any(char::is_whitespace)
+}
+
+fn is_safe_link_token(value: &str) -> bool {
+    !value.is_empty() && value.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
 }
 
 fn push_metadata_value(
