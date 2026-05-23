@@ -418,11 +418,15 @@ enum Command {
         no_default_features: bool,
 
         /// Execute the first supported lib/bin unit from the captured explicit derivation graph
-        #[arg(long)]
+        #[arg(long, conflicts_with = "execute_first_dependency_chain")]
         execute_first_supported_unit: bool,
 
-        /// Output directory for --execute-first-supported-unit artifacts
-        #[arg(long, requires = "execute_first_supported_unit")]
+        /// Execute the first bounded dependency chain from the captured explicit derivation graph
+        #[arg(long, conflicts_with = "execute_first_supported_unit")]
+        execute_first_dependency_chain: bool,
+
+        /// Output directory for execution artifacts
+        #[arg(long)]
         execution_output_root: Option<PathBuf>,
     },
 
@@ -1928,6 +1932,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         all_features,
         no_default_features,
         execute_first_supported_unit,
+        execute_first_dependency_chain,
         execution_output_root,
     } = command
     else {
@@ -1960,6 +1965,25 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             &rust_plan::RustPlanExecutionReceipt {
                 rust_plan: receipt,
                 unit_execution,
+            },
+            ctx.json,
+        );
+    }
+    if *execute_first_dependency_chain {
+        let output_root = execution_output_root.clone().ok_or_else(|| {
+            RunError::Internal("--execute-first-dependency-chain requires --execution-output-root".to_string())
+        })?;
+        let dependency_chain_execution = rust_plan::execute_first_rust_unit_dependency_chain(
+            &receipt.unit_derivation_graph,
+            &rust_plan::RustUnitExecutionOptions {
+                rustc: rustc.clone(),
+                output_root,
+            },
+        )?;
+        return rust_plan::print_rust_plan_dependency_chain_execution_receipt(
+            &rust_plan::RustPlanDependencyChainExecutionReceipt {
+                rust_plan: receipt,
+                dependency_chain_execution,
             },
             ctx.json,
         );

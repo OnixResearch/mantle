@@ -266,6 +266,12 @@ pub(crate) struct RustPlanExecutionReceipt {
     pub(crate) unit_execution: RustUnitExecutionReceipt,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanDependencyChainExecutionReceipt {
+    pub(crate) rust_plan: RustPlanReceipt,
+    pub(crate) dependency_chain_execution: RustUnitDependencyChainExecutionReceipt,
+}
+
 #[derive(Debug, Clone)]
 struct CargoOutput {
     stdout: Vec<u8>,
@@ -404,6 +410,20 @@ pub(crate) fn print_rust_plan_execution_receipt(
         serde_json::to_string_pretty(receipt)
     }
     .map_err(|err| RunError::Internal(format!("rendering Rust plan execution receipt: {err}")))?;
+    println!("{rendered}");
+    Ok(())
+}
+
+pub(crate) fn print_rust_plan_dependency_chain_execution_receipt(
+    receipt: &RustPlanDependencyChainExecutionReceipt,
+    json_mode: bool,
+) -> Result<(), RunError> {
+    let rendered = if json_mode {
+        serde_json::to_string(receipt)
+    } else {
+        serde_json::to_string_pretty(receipt)
+    }
+    .map_err(|err| RunError::Internal(format!("rendering Rust dependency-chain execution receipt: {err}")))?;
     println!("{rendered}");
     Ok(())
 }
@@ -817,7 +837,7 @@ fn summarize_unit_derivation_graph(
 
     let host_artifacts = host_artifacts_by_package(units);
     for (index, unit) in units.iter().enumerate() {
-        match summarize_unit_derivation(index, unit, source_closure, options, &host_artifacts) {
+        match summarize_unit_derivation(index, unit, units, source_closure, options, &host_artifacts) {
             Ok(derivation) => derivations.push(derivation),
             Err(blocker) => blockers.push(blocker),
         }
@@ -841,6 +861,7 @@ fn summarize_unit_derivation_graph(
 fn summarize_unit_derivation(
     index: usize,
     unit: &Value,
+    units: &[Value],
     source_closure: &SourceClosureSummary,
     options: &RustPlanOptions,
     host_artifacts: &BTreeMap<String, Vec<RustHostArtifact>>,
@@ -879,8 +900,8 @@ fn summarize_unit_derivation(
         )
     })?;
 
-    let dependency_artifacts = unit_dependency_artifacts(unit);
-    let consumed_host_artifacts = consumed_host_artifacts(unit, host_artifacts);
+    let dependency_artifacts = unit_dependency_artifacts(unit, units);
+    let consumed_host_artifacts = consumed_host_artifacts(unit, units, host_artifacts);
     let generated_metadata =
         (target_kind == "custom-build").then(|| build_script_metadata_summary(&package_id, &target_name));
     let mut args = vec![
@@ -1016,19 +1037,24 @@ fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostAr
     artifacts
 }
 
+fn unit_dependency_array(unit: &Value) -> Option<&Vec<Value>> {
+    unit.get("deps")
+        .and_then(Value::as_array)
+        .or_else(|| unit.get("dependencies").and_then(Value::as_array))
+}
+
 fn consumed_host_artifacts(
     unit: &Value,
+    units: &[Value],
     host_artifacts: &BTreeMap<String, Vec<RustHostArtifact>>,
 ) -> Vec<RustHostArtifact> {
     let mut artifacts = Vec::new();
     if let Some(package_id) = target_string(unit, "pkg_id") {
         artifacts.extend(host_artifacts.get(&package_id).into_iter().flatten().cloned());
     }
-    if let Some(deps) = unit.get("deps").and_then(Value::as_array) {
+    if let Some(deps) = unit_dependency_array(unit) {
         for dep in deps {
-            if let Some(package_id) =
-                dep.get("pkg_id").and_then(Value::as_str).or_else(|| dep.get("package_id").and_then(Value::as_str))
-            {
+            if let Some(package_id) = dependency_package_id(dep, units) {
                 artifacts.extend(host_artifacts.get(package_id).into_iter().flatten().cloned());
             }
         }
@@ -1078,15 +1104,13 @@ fn is_host_target_kind(target_kind: &str) -> bool {
     matches!(target_kind, "custom-build" | "proc-macro")
 }
 
-fn unit_dependency_artifacts(unit: &Value) -> Vec<RustDependencyArtifact> {
+fn unit_dependency_artifacts(unit: &Value, units: &[Value]) -> Vec<RustDependencyArtifact> {
     let mut artifacts = Vec::new();
-    let Some(deps) = unit.get("deps").and_then(Value::as_array) else {
+    let Some(deps) = unit_dependency_array(unit) else {
         return artifacts;
     };
     for dep in deps {
-        let Some(package_id) =
-            dep.get("pkg_id").and_then(Value::as_str).or_else(|| dep.get("package_id").and_then(Value::as_str))
-        else {
+        let Some(package_id) = dependency_package_id(dep, units) else {
             continue;
         };
         let name = dep
@@ -1105,6 +1129,17 @@ fn unit_dependency_artifacts(unit: &Value) -> Vec<RustDependencyArtifact> {
     artifacts.sort_by(|left, right| left.package_id.cmp(&right.package_id).then(left.name.cmp(&right.name)));
     artifacts.dedup();
     artifacts
+}
+
+fn dependency_package_id<'a>(dep: &'a Value, units: &'a [Value]) -> Option<&'a str> {
+    dep.get("pkg_id")
+        .and_then(Value::as_str)
+        .or_else(|| dep.get("package_id").and_then(Value::as_str))
+        .or_else(|| {
+            let index = dep.get("index").and_then(Value::as_u64)?;
+            let unit = units.get(usize::try_from(index).ok()?)?;
+            unit.get("pkg_id").and_then(Value::as_str)
+        })
 }
 
 fn normalized_crate_types(crate_types: &[String], target_kind: &str) -> Vec<String> {

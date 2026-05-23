@@ -57,3 +57,79 @@ fn rust_plan_cli_executes_supported_unit_from_explicit_receipt_material() {
     assert!(receipt["rust_plan"]["unit_derivation_graph"]["ready"].as_bool().unwrap());
     assert_eq!(receipt["rust_plan"]["unit_derivation_graph"]["derivation_count"], 1);
 }
+
+#[test]
+fn rust_plan_cli_executes_dependency_chain_from_explicit_receipt_material() {
+    let dir = TempDir::new().unwrap();
+    let dep_dir = dir.path().join("dep-crate");
+    let app_dir = dir.path().join("app-crate");
+    std::fs::create_dir_all(dep_dir.join("src")).unwrap();
+    std::fs::create_dir_all(app_dir.join("src")).unwrap();
+    std::fs::write(
+        dep_dir.join("Cargo.toml"),
+        "[package]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    std::fs::write(dep_dir.join("src/lib.rs"), "pub fn answer() -> u32 { 42 }\n").unwrap();
+    std::fs::write(
+        app_dir.join("Cargo.toml"),
+        "[package]\nname = \"app-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep_crate = { package = \"dep-crate\", path = \"../dep-crate\" }\n",
+    )
+    .unwrap();
+    std::fs::write(app_dir.join("src/lib.rs"), "pub fn call_dep() -> u32 { dep_crate::answer() }\n").unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&app_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(
+        lock_output.status.success(),
+        "cargo generate-lockfile failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&lock_output.stdout),
+        String::from_utf8_lossy(&lock_output.stderr)
+    );
+
+    let output_root = dir.path().join("chain-output");
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-first-dependency-chain")
+        .arg("--execution-output-root")
+        .arg(&output_root)
+        .output()
+        .expect("rust-plan dependency-chain CLI should run");
+
+    assert!(
+        output.status.success(),
+        "rust-plan dependency-chain CLI failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    assert!(receipt["rust_plan"]["unit_derivation_graph"]["ready"].as_bool().unwrap());
+    let chain = &receipt["dependency_chain_execution"];
+    assert_eq!(chain["execution_status"], "success", "{receipt:#?}");
+    assert!(chain["claim"].as_str().unwrap().contains("bounded explicit Rust dependency edge"));
+    assert!(chain["blocker"].is_null());
+    let unit_executions = chain["unit_executions"].as_array().unwrap();
+    assert_eq!(unit_executions.len(), 2);
+    assert_eq!(unit_executions[0]["target_kind"], "lib");
+    assert_eq!(unit_executions[1]["target_kind"], "lib");
+    assert_eq!(unit_executions[0]["execution_status"], "success");
+    assert_eq!(unit_executions[1]["execution_status"], "success");
+    assert!(
+        unit_executions[1]["dependency_artifact_digests"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|artifact| artifact["blake3"].as_str().unwrap().len() == 64)
+    );
+    assert!(unit_executions.iter().all(|execution| {
+        execution["output_artifact_digests"].as_array().unwrap().iter().any(|artifact| {
+            artifact["path"].as_str().unwrap().starts_with("declared-output/")
+                && artifact["blake3"].as_str().unwrap().len() == 64
+        })
+    }));
+}
