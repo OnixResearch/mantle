@@ -1,4 +1,7 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::ffi::OsStr;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -11,6 +14,9 @@ use crate::errors::RunError;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
 const DEFAULT_CARGO_PROFILE: &str = "dev";
+const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
+const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
+const GIT_SOURCE_DIGEST_ALGORITHM: &str = "git-revision";
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustPlanOptions {
@@ -34,6 +40,7 @@ pub(crate) struct RustPlanReceipt {
     pub(crate) invocation: RustPlanInvocation,
     pub(crate) package_count: usize,
     pub(crate) packages: Vec<PackageSummary>,
+    pub(crate) source_closure: SourceClosureSummary,
     pub(crate) unit_graph: UnitGraphSummary,
     pub(crate) receipt_hash: String,
 }
@@ -60,6 +67,58 @@ pub(crate) struct PackageSummary {
     pub(crate) version: String,
     pub(crate) source: Option<String>,
     pub(crate) manifest_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct SourceClosureSummary {
+    pub(crate) source_count: usize,
+    pub(crate) ready: bool,
+    pub(crate) digest_blake3: String,
+    pub(crate) sources: Vec<SourceInputSummary>,
+    pub(crate) blockers: Vec<SourceClosureBlocker>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct SourceInputSummary {
+    pub(crate) package_id: String,
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) kind: SourceKind,
+    pub(crate) source: Option<String>,
+    pub(crate) manifest_path: String,
+    pub(crate) lockfile_identity: Option<LockPackageIdentity>,
+    pub(crate) resolved_revision: Option<String>,
+    pub(crate) source_digest: SourceDigest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum SourceKind {
+    Path,
+    Registry,
+    Git,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct LockPackageIdentity {
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) source: Option<String>,
+    pub(crate) checksum: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct SourceDigest {
+    pub(crate) algorithm: String,
+    pub(crate) value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct SourceClosureBlocker {
+    pub(crate) package_id: String,
+    pub(crate) class: String,
+    pub(crate) message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,13 +176,21 @@ struct CargoMetadata {
     workspace_members: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct CargoPackage {
     id: String,
     name: String,
     version: String,
     source: Option<String>,
     manifest_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockPackage {
+    name: String,
+    version: String,
+    source: Option<String>,
+    checksum: Option<String>,
 }
 
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
@@ -149,6 +216,10 @@ fn capture_rust_plan_with_oracle(
     let unit_graph_value: Value = serde_json::from_slice(&unit_graph_output)
         .map_err(|err| RunError::Internal(format!("cargo build --unit-graph did not emit valid JSON: {err}")))?;
 
+    let lock_packages = parse_lockfile_packages(&options.root)?;
+    let source_closure = summarize_source_closure(&metadata.packages, &lock_packages)?;
+    let packages = summarize_packages(metadata.packages.clone(), &metadata.workspace_members);
+
     let mut receipt = RustPlanReceipt {
         schema_version: RECEIPT_SCHEMA_VERSION,
         workspace_root: normalize_path_string(Path::new(&metadata.workspace_root)),
@@ -163,7 +234,8 @@ fn capture_rust_plan_with_oracle(
             no_default_features: options.no_default_features,
         },
         package_count: metadata.packages.len(),
-        packages: summarize_packages(metadata.packages, &metadata.workspace_members),
+        packages,
+        source_closure,
         unit_graph: summarize_unit_graph(unit_graph_value)?,
         receipt_hash: String::new(),
     };
@@ -258,7 +330,7 @@ fn lockfile_identity(root: &Path) -> Result<LockfileIdentity, RunError> {
 }
 
 fn summarize_packages(packages: Vec<CargoPackage>, workspace_members: &[String]) -> Vec<PackageSummary> {
-    let workspace_member_set: std::collections::BTreeSet<&str> = workspace_members.iter().map(String::as_str).collect();
+    let workspace_member_set: BTreeSet<&str> = workspace_members.iter().map(String::as_str).collect();
     let mut summaries: Vec<PackageSummary> = packages
         .into_iter()
         .filter(|package| workspace_member_set.contains(package.id.as_str()))
@@ -272,6 +344,286 @@ fn summarize_packages(packages: Vec<CargoPackage>, workspace_members: &[String])
         .collect();
     summaries.sort_by(|left, right| left.id.cmp(&right.id));
     summaries
+}
+
+fn summarize_source_closure(
+    packages: &[CargoPackage],
+    lock_packages: &[LockPackage],
+) -> Result<SourceClosureSummary, RunError> {
+    let mut sources = Vec::with_capacity(packages.len());
+    let mut blockers = Vec::new();
+    for package in packages {
+        let kind = source_kind(package.source.as_deref());
+        let lockfile_identity = find_lock_package(package, lock_packages).map(|lock_package| LockPackageIdentity {
+            name: lock_package.name.clone(),
+            version: lock_package.version.clone(),
+            source: lock_package.source.clone(),
+            checksum: lock_package.checksum.clone(),
+        });
+        let resolved_revision = package.source.as_deref().and_then(source_revision);
+        let digest = source_digest(package, &kind, lockfile_identity.as_ref());
+        let source_digest = match digest {
+            Ok(source_digest) => source_digest,
+            Err(blocker) => {
+                blockers.push(blocker);
+                SourceDigest {
+                    algorithm: "missing".to_string(),
+                    value: "missing".to_string(),
+                }
+            }
+        };
+        sources.push(SourceInputSummary {
+            package_id: package.id.clone(),
+            name: package.name.clone(),
+            version: package.version.clone(),
+            kind,
+            source: package.source.clone(),
+            manifest_path: normalize_path_string(Path::new(&package.manifest_path)),
+            lockfile_identity,
+            resolved_revision,
+            source_digest,
+        });
+    }
+    sources.sort_by(|left, right| left.package_id.cmp(&right.package_id));
+    blockers.sort_by(|left, right| left.package_id.cmp(&right.package_id).then(left.class.cmp(&right.class)));
+    let digest_blake3 = source_closure_digest(&sources, &blockers)?;
+    Ok(SourceClosureSummary {
+        source_count: sources.len(),
+        ready: blockers.is_empty(),
+        digest_blake3,
+        sources,
+        blockers,
+    })
+}
+
+fn parse_lockfile_packages(root: &Path) -> Result<Vec<LockPackage>, RunError> {
+    let path = root.join("Cargo.lock");
+    let text = fs::read_to_string(&path).map_err(|err| {
+        RunError::Internal(format!("Rust plan requires a readable Cargo.lock at {}: {err}", path.display()))
+    })?;
+    Ok(parse_lockfile_packages_text(&text))
+}
+
+fn parse_lockfile_packages_text(text: &str) -> Vec<LockPackage> {
+    let mut packages = Vec::new();
+    let mut current = LockPackage {
+        name: String::new(),
+        version: String::new(),
+        source: None,
+        checksum: None,
+    };
+    let mut in_package = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[[package]]" {
+            push_lock_package(&mut packages, &mut current, in_package);
+            in_package = true;
+            continue;
+        }
+        if !in_package {
+            continue;
+        }
+        if let Some(value) = parse_lock_string_field(trimmed, "name") {
+            current.name = value;
+        } else if let Some(value) = parse_lock_string_field(trimmed, "version") {
+            current.version = value;
+        } else if let Some(value) = parse_lock_string_field(trimmed, "source") {
+            current.source = Some(value);
+        } else if let Some(value) = parse_lock_string_field(trimmed, "checksum") {
+            current.checksum = Some(value);
+        }
+    }
+    push_lock_package(&mut packages, &mut current, in_package);
+    packages.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then(left.version.cmp(&right.version))
+            .then(left.source.cmp(&right.source))
+    });
+    packages
+}
+
+fn push_lock_package(packages: &mut Vec<LockPackage>, current: &mut LockPackage, in_package: bool) {
+    if in_package && !current.name.is_empty() && !current.version.is_empty() {
+        packages.push(current.clone());
+    }
+    *current = LockPackage {
+        name: String::new(),
+        version: String::new(),
+        source: None,
+        checksum: None,
+    };
+}
+
+fn parse_lock_string_field(line: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key} = \"");
+    line.strip_prefix(&prefix).and_then(|tail| tail.strip_suffix('"')).map(ToString::to_string)
+}
+
+fn find_lock_package<'a>(package: &CargoPackage, lock_packages: &'a [LockPackage]) -> Option<&'a LockPackage> {
+    lock_packages.iter().find(|lock_package| {
+        lock_package.name == package.name
+            && lock_package.version == package.version
+            && lock_source_matches(lock_package.source.as_deref(), package.source.as_deref())
+    })
+}
+
+fn lock_source_matches(lock_source: Option<&str>, metadata_source: Option<&str>) -> bool {
+    match (lock_source, metadata_source) {
+        (None, None) => true,
+        (Some(lock_source), Some(metadata_source)) => lock_source == metadata_source,
+        _ => false,
+    }
+}
+
+fn source_kind(source: Option<&str>) -> SourceKind {
+    match source {
+        None => SourceKind::Path,
+        Some(source) if source.starts_with("registry+") => SourceKind::Registry,
+        Some(source) if source.starts_with("git+") => SourceKind::Git,
+        Some(_) => SourceKind::Other,
+    }
+}
+
+fn source_revision(source: &str) -> Option<String> {
+    source
+        .rsplit_once('#')
+        .and_then(|(_, revision)| (!revision.is_empty()).then(|| revision.to_string()))
+}
+
+fn source_digest(
+    package: &CargoPackage,
+    kind: &SourceKind,
+    lockfile_identity: Option<&LockPackageIdentity>,
+) -> Result<SourceDigest, SourceClosureBlocker> {
+    match kind {
+        SourceKind::Path => path_source_digest(package),
+        SourceKind::Registry => registry_source_digest(package, lockfile_identity),
+        SourceKind::Git => git_source_digest(package),
+        SourceKind::Other => Err(SourceClosureBlocker {
+            package_id: package.id.clone(),
+            class: "unsupported-source-kind".to_string(),
+            message: "Cargo source kind is not registry, git, or path".to_string(),
+        }),
+    }
+}
+
+fn registry_source_digest(
+    package: &CargoPackage,
+    lockfile_identity: Option<&LockPackageIdentity>,
+) -> Result<SourceDigest, SourceClosureBlocker> {
+    let Some(checksum) = lockfile_identity.and_then(|identity| identity.checksum.as_ref()) else {
+        return Err(SourceClosureBlocker {
+            package_id: package.id.clone(),
+            class: "missing-registry-checksum".to_string(),
+            message: "registry package lacks a Cargo.lock checksum".to_string(),
+        });
+    };
+    Ok(SourceDigest {
+        algorithm: REGISTRY_SOURCE_DIGEST_ALGORITHM.to_string(),
+        value: checksum.clone(),
+    })
+}
+
+fn git_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClosureBlocker> {
+    let Some(source) = package.source.as_deref() else {
+        return Err(SourceClosureBlocker {
+            package_id: package.id.clone(),
+            class: "missing-git-source".to_string(),
+            message: "git package lacks a source URL".to_string(),
+        });
+    };
+    let Some(revision) = source_revision(source) else {
+        return Err(SourceClosureBlocker {
+            package_id: package.id.clone(),
+            class: "missing-git-revision".to_string(),
+            message: "git package lacks a resolved revision".to_string(),
+        });
+    };
+    Ok(SourceDigest {
+        algorithm: GIT_SOURCE_DIGEST_ALGORITHM.to_string(),
+        value: revision,
+    })
+}
+
+fn path_source_digest(package: &CargoPackage) -> Result<SourceDigest, SourceClosureBlocker> {
+    let manifest_path = Path::new(&package.manifest_path);
+    let Some(source_root) = manifest_path.parent() else {
+        return Err(SourceClosureBlocker {
+            package_id: package.id.clone(),
+            class: "invalid-path-source".to_string(),
+            message: "path package manifest has no parent directory".to_string(),
+        });
+    };
+    hash_path_source_tree(source_root)
+        .map(|value| SourceDigest {
+            algorithm: PATH_SOURCE_DIGEST_ALGORITHM.to_string(),
+            value,
+        })
+        .map_err(|message| SourceClosureBlocker {
+            package_id: package.id.clone(),
+            class: "path-source-unreadable".to_string(),
+            message,
+        })
+}
+
+fn hash_path_source_tree(root: &Path) -> Result<String, String> {
+    let mut files = Vec::new();
+    collect_source_files(root, &mut files)?;
+    let mut hasher = blake3::Hasher::new();
+    for file in files {
+        let relative = file.strip_prefix(root).map_err(|err| format!("normalizing {}: {err}", file.display()))?;
+        let relative_text = normalize_path_string(relative);
+        let bytes = fs::read(&file).map_err(|err| format!("reading path source {}: {err}", file.display()))?;
+        hasher.update(b"file\0");
+        hasher.update(relative_text.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(bytes.len().to_string().as_bytes());
+        hasher.update(b"\0");
+        hasher.update(&bytes);
+        hasher.update(b"\0");
+    }
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+fn collect_source_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries = fs::read_dir(directory)
+        .map_err(|err| format!("reading path source directory {}: {err}", directory.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|err| format!("reading path source directory {}: {err}", directory.display()))?;
+        let path = entry.path();
+        let file_name = entry.file_name();
+        if should_skip_source_entry(file_name.as_os_str()) {
+            continue;
+        }
+        let file_type =
+            entry.file_type().map_err(|err| format!("reading path source metadata {}: {err}", path.display()))?;
+        if file_type.is_dir() {
+            collect_source_files(&path, files)?;
+        } else if file_type.is_file() {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(())
+}
+
+fn should_skip_source_entry(file_name: &OsStr) -> bool {
+    matches!(file_name.to_str(), Some(".git" | "target"))
+}
+
+fn source_closure_digest(
+    sources: &[SourceInputSummary],
+    blockers: &[SourceClosureBlocker],
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct Hashable<'a> {
+        sources: &'a [SourceInputSummary],
+        blockers: &'a [SourceClosureBlocker],
+    }
+    let canonical = serde_json::to_vec(&Hashable { sources, blockers })
+        .map_err(|err| RunError::Internal(format!("canonicalizing Rust source closure: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
 fn summarize_unit_graph(unit_graph: Value) -> Result<UnitGraphSummary, RunError> {
@@ -407,9 +759,94 @@ mod tests {
         assert!(receipt.lockfile.blake3.len() >= 32);
         assert_eq!(receipt.package_count, 1);
         assert_eq!(receipt.packages[0].name, "demo");
+        assert!(receipt.source_closure.ready);
+        assert_eq!(receipt.source_closure.source_count, 1);
+        assert_eq!(receipt.source_closure.sources[0].kind, SourceKind::Path);
+        assert_eq!(receipt.source_closure.sources[0].source_digest.algorithm, PATH_SOURCE_DIGEST_ALGORITHM);
         assert_eq!(receipt.unit_graph.unit_count, 1);
         assert_eq!(receipt.unit_graph.root_count, 1);
         assert_eq!(receipt.receipt_hash.len(), 64);
+    }
+
+    #[test]
+    fn source_closure_records_registry_git_and_path_identities() {
+        let dir = TempDir::new().unwrap();
+        let path_manifest = dir.path().join("path-crate/Cargo.toml");
+        std::fs::create_dir_all(path_manifest.parent().unwrap()).unwrap();
+        std::fs::write(&path_manifest, "[package]\nname='path-crate'\nversion='0.1.0'\n").unwrap();
+        let lockfile = r#"
+[[package]]
+name = "git-crate"
+version = "0.2.0"
+source = "git+https://example.invalid/repo?rev=main#abcdef123456"
+
+[[package]]
+name = "path-crate"
+version = "0.1.0"
+
+[[package]]
+name = "registry-crate"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0123456789abcdef"
+"#;
+        std::fs::write(dir.path().join("Cargo.lock"), lockfile).unwrap();
+        let packages = vec![
+            CargoPackage {
+                id: "git+https://example.invalid/repo?rev=main#abcdef123456#git-crate@0.2.0".to_string(),
+                name: "git-crate".to_string(),
+                version: "0.2.0".to_string(),
+                source: Some("git+https://example.invalid/repo?rev=main#abcdef123456".to_string()),
+                manifest_path: dir.path().join("git-crate/Cargo.toml").display().to_string(),
+            },
+            CargoPackage {
+                id: "path+file:///path-crate#path-crate@0.1.0".to_string(),
+                name: "path-crate".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: path_manifest.display().to_string(),
+            },
+            CargoPackage {
+                id: "registry+https://github.com/rust-lang/crates.io-index#registry-crate@1.2.3".to_string(),
+                name: "registry-crate".to_string(),
+                version: "1.2.3".to_string(),
+                source: Some("registry+https://github.com/rust-lang/crates.io-index".to_string()),
+                manifest_path: dir.path().join("registry-crate/Cargo.toml").display().to_string(),
+            },
+        ];
+        let closure = summarize_source_closure(&packages, &parse_lockfile_packages(dir.path()).unwrap()).unwrap();
+
+        assert!(closure.ready);
+        assert_eq!(closure.source_count, 3);
+        assert_eq!(closure.sources[0].kind, SourceKind::Git);
+        assert_eq!(closure.sources[0].resolved_revision.as_deref(), Some("abcdef123456"));
+        assert_eq!(closure.sources[0].source_digest.algorithm, GIT_SOURCE_DIGEST_ALGORITHM);
+        assert_eq!(closure.sources[1].kind, SourceKind::Path);
+        assert_eq!(closure.sources[1].source_digest.algorithm, PATH_SOURCE_DIGEST_ALGORITHM);
+        assert_eq!(closure.sources[2].kind, SourceKind::Registry);
+        assert_eq!(
+            closure.sources[2].lockfile_identity.as_ref().unwrap().checksum.as_deref(),
+            Some("0123456789abcdef")
+        );
+        assert_eq!(closure.sources[2].source_digest.algorithm, REGISTRY_SOURCE_DIGEST_ALGORITHM);
+        assert_eq!(closure.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn source_closure_blocks_registry_without_checksum() {
+        let package = CargoPackage {
+            id: "registry+https://github.com/rust-lang/crates.io-index#missing@1.0.0".to_string(),
+            name: "missing".to_string(),
+            version: "1.0.0".to_string(),
+            source: Some("registry+https://github.com/rust-lang/crates.io-index".to_string()),
+            manifest_path: "/tmp/missing/Cargo.toml".to_string(),
+        };
+
+        let closure = summarize_source_closure(&[package], &[]).unwrap();
+
+        assert!(!closure.ready);
+        assert_eq!(closure.blockers[0].class, "missing-registry-checksum");
+        assert_eq!(closure.sources[0].source_digest.algorithm, "missing");
     }
 
     #[test]
