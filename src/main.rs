@@ -416,6 +416,14 @@ enum Command {
         /// Disable default Cargo features
         #[arg(long)]
         no_default_features: bool,
+
+        /// Execute the first supported lib/bin unit from the captured explicit derivation graph
+        #[arg(long)]
+        execute_first_supported_unit: bool,
+
+        /// Output directory for --execute-first-supported-unit artifacts
+        #[arg(long, requires = "execute_first_supported_unit")]
+        execution_output_root: Option<PathBuf>,
     },
 
     /// Enter a development shell from the compatibility-named crunch.ncl devShells
@@ -1919,6 +1927,8 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         features,
         all_features,
         no_default_features,
+        execute_first_supported_unit,
+        execution_output_root,
     } = command
     else {
         return Err(RunError::Internal("run_rust_plan_command called with non-RustPlan command".to_string()));
@@ -1935,6 +1945,25 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         no_default_features: *no_default_features,
     };
     let receipt = rust_plan::capture_rust_plan(&options)?;
+    if *execute_first_supported_unit {
+        let output_root = execution_output_root.clone().ok_or_else(|| {
+            RunError::Internal("--execute-first-supported-unit requires --execution-output-root".to_string())
+        })?;
+        let unit_execution = rust_plan::execute_first_supported_rust_unit(
+            &receipt.unit_derivation_graph,
+            &rust_plan::RustUnitExecutionOptions {
+                rustc: rustc.clone(),
+                output_root,
+            },
+        )?;
+        return rust_plan::print_rust_plan_execution_receipt(
+            &rust_plan::RustPlanExecutionReceipt {
+                rust_plan: receipt,
+                unit_execution,
+            },
+            ctx.json,
+        );
+    }
     rust_plan::print_rust_plan_receipt(&receipt, ctx.json)
 }
 

@@ -250,6 +250,12 @@ pub(crate) struct RustUnitExecutionBlocker {
     pub(crate) message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanExecutionReceipt {
+    pub(crate) rust_plan: RustPlanReceipt,
+    pub(crate) unit_execution: RustUnitExecutionReceipt,
+}
+
 #[derive(Debug, Clone)]
 struct CargoOutput {
     stdout: Vec<u8>,
@@ -374,6 +380,20 @@ pub(crate) fn print_rust_plan_receipt(receipt: &RustPlanReceipt, json_mode: bool
         serde_json::to_string_pretty(receipt)
     }
     .map_err(|err| RunError::Internal(format!("rendering Rust plan receipt: {err}")))?;
+    println!("{rendered}");
+    Ok(())
+}
+
+pub(crate) fn print_rust_plan_execution_receipt(
+    receipt: &RustPlanExecutionReceipt,
+    json_mode: bool,
+) -> Result<(), RunError> {
+    let rendered = if json_mode {
+        serde_json::to_string(receipt)
+    } else {
+        serde_json::to_string_pretty(receipt)
+    }
+    .map_err(|err| RunError::Internal(format!("rendering Rust plan execution receipt: {err}")))?;
     println!("{rendered}");
     Ok(())
 }
