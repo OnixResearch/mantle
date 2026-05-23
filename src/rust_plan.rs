@@ -232,6 +232,16 @@ pub(crate) struct RustUnitExecutionReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustUnitDependencyChainExecutionReceipt {
+    pub(crate) schema_version: u32,
+    pub(crate) execution_status: String,
+    pub(crate) claim: String,
+    pub(crate) unit_executions: Vec<RustUnitExecutionReceipt>,
+    pub(crate) blocker: Option<RustUnitExecutionBlocker>,
+    pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct RustToolchainIdentity {
     pub(crate) tool: String,
     pub(crate) version_verbose: String,
@@ -1187,11 +1197,7 @@ pub(crate) fn execute_first_supported_rust_unit(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
-    let Some(unit) = graph
-        .derivations
-        .iter()
-        .find(|unit| unit.execution_kind == "target" && matches!(unit.target_kind.as_str(), "lib" | "bin"))
-    else {
+    let Some(unit) = graph.derivations.iter().find(|unit| is_supported_target_unit(unit)) else {
         return blocked_execution_receipt(
             None,
             "missing-supported-unit",
@@ -1205,6 +1211,112 @@ pub(crate) fn execute_first_supported_rust_unit(
             "unit_derivation_graph is not ready; resolve planning blockers before execution",
         );
     }
+    execute_rust_unit(unit, options)
+}
+
+pub(crate) fn execute_first_rust_unit_dependency_chain(
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustUnitDependencyChainExecutionReceipt, RunError> {
+    if !graph.ready {
+        return dependency_chain_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message:
+                    "unit_derivation_graph is not ready; resolve planning blockers before dependency-chain execution"
+                        .to_string(),
+            }),
+        );
+    }
+    let Some(consumer) = graph
+        .derivations
+        .iter()
+        .find(|unit| is_supported_target_unit(unit) && !unit.dependency_artifacts.is_empty())
+    else {
+        return dependency_chain_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-dependency-chain".to_string(),
+                message: "unit_derivation_graph does not contain a supported target unit with dependency artifacts"
+                    .to_string(),
+            }),
+        );
+    };
+    if !consumer.consumed_host_artifacts.is_empty() {
+        return dependency_chain_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unsupported-chain-shape".to_string(),
+                message:
+                    "bounded dependency-chain execution does not yet support host/proc-macro/build-script artifacts"
+                        .to_string(),
+            }),
+        );
+    }
+    if consumer.dependency_artifacts.len() != 1 {
+        return dependency_chain_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unsupported-chain-shape".to_string(),
+                message:
+                    "bounded dependency-chain execution currently supports exactly one producer dependency artifact"
+                        .to_string(),
+            }),
+        );
+    }
+    let dependency = &consumer.dependency_artifacts[0];
+    let Some(producer) = graph.derivations.iter().find(|unit| {
+        is_supported_target_unit(unit)
+            && unit.package_id == dependency.package_id
+            && unit.target_kind == "lib"
+            && unit.dependency_artifacts.is_empty()
+            && unit.consumed_host_artifacts.is_empty()
+    }) else {
+        return dependency_chain_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-dependency-producer".to_string(),
+                message: format!("no supported producer lib unit for dependency package {}", dependency.package_id),
+            }),
+        );
+    };
+
+    let producer_receipt = execute_rust_unit(producer, options)?;
+    if producer_receipt.execution_status != "success" {
+        return dependency_chain_receipt(
+            "blocked",
+            vec![producer_receipt],
+            Some(RustUnitExecutionBlocker {
+                class: "dependency-producer-failed".to_string(),
+                message: format!("producer unit {} did not produce a successful artifact", producer.unit_id),
+            }),
+        );
+    }
+    let producer_artifact = match produced_library_artifact_path(producer, options)? {
+        Ok(path) => path,
+        Err(blocker) => return dependency_chain_receipt("blocked", vec![producer_receipt], Some(blocker)),
+    };
+    let bound_consumer = bind_dependency_artifact(consumer, dependency, &producer_artifact)?;
+    let consumer_receipt = execute_rust_unit(&bound_consumer, options)?;
+    let status = if consumer_receipt.execution_status == "success" {
+        "success"
+    } else {
+        "blocked"
+    };
+    let blocker = consumer_receipt.blocker.clone();
+    dependency_chain_receipt(status, vec![producer_receipt, consumer_receipt], blocker)
+}
+
+fn execute_rust_unit(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustUnitExecutionReceipt, RunError> {
     if unit.derivation.builder != "rustc" {
         return blocked_execution_receipt(
             Some(unit),
@@ -1302,6 +1414,104 @@ pub(crate) fn execute_first_supported_rust_unit(
         output_artifact_digests,
         None,
     )
+}
+
+fn is_supported_target_unit(unit: &RustUnitDerivationSummary) -> bool {
+    unit.execution_kind == "target" && matches!(unit.target_kind.as_str(), "lib" | "bin")
+}
+
+fn produced_library_artifact_path(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<Result<PathBuf, RustUnitExecutionBlocker>, RunError> {
+    let output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
+    if !output_dir.is_dir() {
+        return Ok(Err(RustUnitExecutionBlocker {
+            class: "missing-produced-dependency-artifact".to_string(),
+            message: format!("producer output directory is missing: {}", output_dir.display()),
+        }));
+    }
+    let mut files = Vec::new();
+    collect_output_files(&output_dir, &mut files)?;
+    let crate_prefix = format!("lib{}", rust_crate_name(&unit.target_name));
+    let artifact = files
+        .into_iter()
+        .find(|path| {
+            path.extension().and_then(OsStr::to_str) == Some("rlib")
+                && path.file_name().and_then(OsStr::to_str).is_some_and(|name| name.starts_with(&crate_prefix))
+        })
+        .ok_or_else(|| RustUnitExecutionBlocker {
+            class: "missing-produced-dependency-artifact".to_string(),
+            message: format!("producer unit {} did not emit a matching .rlib artifact", unit.unit_id),
+        });
+    Ok(artifact.map_err(|blocker| blocker))
+}
+
+fn bind_dependency_artifact(
+    consumer: &RustUnitDerivationSummary,
+    dependency: &RustDependencyArtifact,
+    produced_artifact: &Path,
+) -> Result<RustUnitDerivationSummary, RunError> {
+    let produced_artifact = normalize_path_string(produced_artifact);
+    let mut bound = consumer.clone();
+    for artifact in &mut bound.dependency_artifacts {
+        if artifact.package_id == dependency.package_id
+            && artifact.name == dependency.name
+            && artifact.artifact == dependency.artifact
+        {
+            artifact.artifact = produced_artifact.clone();
+        }
+    }
+    for input in &mut bound.derivation.inputs {
+        if input == &dependency.artifact {
+            *input = produced_artifact.clone();
+        }
+    }
+    let expected_extern = format!("{}={}", dependency.name, dependency.artifact);
+    let rewritten_extern = format!("{}={produced_artifact}", dependency.name);
+    let mut replaced = false;
+    for arg in &mut bound.derivation.args {
+        if arg == &expected_extern {
+            *arg = rewritten_extern.clone();
+            replaced = true;
+        }
+    }
+    if !replaced {
+        return Err(RunError::Internal(format!(
+            "consumer unit {} lacks expected dependency extern {}",
+            consumer.unit_id, expected_extern
+        )));
+    }
+    bound.rustc_args_digest_blake3 = blake3::hash(bound.derivation.args.join("\0").as_bytes()).to_hex().to_string();
+    Ok(bound)
+}
+
+fn dependency_chain_receipt(
+    execution_status: &str,
+    unit_executions: Vec<RustUnitExecutionReceipt>,
+    blocker: Option<RustUnitExecutionBlocker>,
+) -> Result<RustUnitDependencyChainExecutionReceipt, RunError> {
+    let mut receipt = RustUnitDependencyChainExecutionReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        execution_status: execution_status.to_string(),
+        claim: "bounded explicit Rust dependency edge only; not full Cargo compatibility or a general scheduler"
+            .to_string(),
+        unit_executions,
+        blocker,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = rust_unit_dependency_chain_execution_receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn rust_unit_dependency_chain_execution_receipt_hash(
+    receipt: &RustUnitDependencyChainExecutionReceipt,
+) -> Result<String, RunError> {
+    let mut hashable = receipt.clone();
+    hashable.receipt_hash.clear();
+    let canonical = serde_json::to_vec(&hashable)
+        .map_err(|err| RunError::Internal(format!("canonicalizing Rust dependency-chain execution receipt: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
 fn blocked_execution_receipt(
@@ -1915,6 +2125,124 @@ checksum = "0123456789abcdef"
         assert_eq!(repeated.toolchain, receipt.toolchain);
         assert_eq!(repeated.output_artifact_digests, receipt.output_artifact_digests);
         assert_eq!(repeated.receipt_hash, receipt.receipt_hash);
+    }
+
+    #[test]
+    fn executes_dependency_chain_from_produced_lib_artifact() {
+        let dir = TempDir::new().unwrap();
+        let dep_dir = dir.path().join("dep-crate");
+        let app_dir = dir.path().join("app-crate");
+        std::fs::create_dir_all(dep_dir.join("src")).unwrap();
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        let dep_manifest = dep_dir.join("Cargo.toml");
+        let app_manifest = app_dir.join("Cargo.toml");
+        std::fs::write(&dep_manifest, "[package]\nname='dep-crate'\nversion='0.1.0'\n").unwrap();
+        std::fs::write(&app_manifest, "[package]\nname='app-crate'\nversion='0.1.0'\n").unwrap();
+        let dep_lib = dep_dir.join("src/lib.rs");
+        let app_main = app_dir.join("src/lib.rs");
+        std::fs::write(&dep_lib, "pub fn answer() -> u32 { 42 }\n").unwrap();
+        std::fs::write(&app_main, "pub fn call_dep() -> u32 { dep_crate::answer() }\n").unwrap();
+        let packages = vec![
+            CargoPackage {
+                id: "path+file://app-crate#app-crate@0.1.0".to_string(),
+                name: "app-crate".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_manifest.display().to_string(),
+            },
+            CargoPackage {
+                id: "path+file://dep-crate#dep-crate@0.1.0".to_string(),
+                name: "dep-crate".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: dep_manifest.display().to_string(),
+            },
+        ];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": "path+file://dep-crate#dep-crate@0.1.0",
+                    "target": {"name": "dep-crate", "kind": ["lib"], "crate_types": ["lib"], "src_path": dep_lib.display().to_string(), "edition": "2021"},
+                    "mode": "build",
+                    "deps": []
+                },
+                {
+                    "pkg_id": "path+file://app-crate#app-crate@0.1.0",
+                    "target": {"name": "app-crate", "kind": ["lib"], "crate_types": ["lib"], "src_path": app_main.display().to_string(), "edition": "2021"},
+                    "mode": "build",
+                    "deps": [{"pkg_id": "path+file://dep-crate#dep-crate@0.1.0", "extern_crate_name": "dep_crate"}]
+                }
+            ]
+        });
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+        assert!(graph.ready);
+        let consumer = graph
+            .derivations
+            .iter()
+            .find(|unit| unit.package_id == "path+file://app-crate#app-crate@0.1.0")
+            .unwrap();
+        assert_eq!(
+            consumer.dependency_artifacts[0].artifact,
+            "artifact:path+file://dep-crate#dep-crate@0.1.0:dep_crate"
+        );
+
+        let receipt = execute_first_rust_unit_dependency_chain(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("chain-out"),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "success", "{receipt:#?}");
+        assert!(receipt.claim.contains("bounded explicit Rust dependency edge"));
+        assert_eq!(receipt.unit_executions.len(), 2);
+        assert_eq!(receipt.unit_executions[0].target_kind, "lib");
+        assert_eq!(receipt.unit_executions[1].target_kind, "lib");
+        assert_eq!(receipt.unit_executions[1].execution_status, "success");
+        assert_eq!(receipt.unit_executions[1].dependency_artifact_digests.len(), 1);
+        assert!(receipt.unit_executions[1].dependency_artifact_digests[0].path.ends_with(".rlib"));
+        assert!(receipt.unit_executions[1].blocker.is_none());
+        assert_eq!(receipt.receipt_hash.len(), 64);
+    }
+
+    #[test]
+    fn dependency_chain_blocks_missing_producer_before_consumer_rustc() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app-crate");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        let app_manifest = app_dir.join("Cargo.toml");
+        std::fs::write(&app_manifest, "[package]\nname='app-crate'\nversion='0.1.0'\n").unwrap();
+        let app_main = app_dir.join("src/main.rs");
+        std::fs::write(&app_main, "fn main() { let _ = missing_dep::answer(); }\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://app-crate#app-crate@0.1.0".to_string(),
+            name: "app-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: app_manifest.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://app-crate#app-crate@0.1.0",
+                "target": {"name": "app-crate", "kind": ["bin"], "crate_types": ["bin"], "src_path": app_main.display().to_string(), "edition": "2021"},
+                "mode": "build",
+                "deps": [{"pkg_id": "path+file://missing-dep#missing-dep@0.1.0", "extern_crate_name": "missing_dep"}]
+            }]
+        });
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+        assert!(graph.ready);
+
+        let receipt = execute_first_rust_unit_dependency_chain(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("chain-out"),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert!(receipt.unit_executions.is_empty());
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "missing-dependency-producer");
+        assert_eq!(receipt.receipt_hash.len(), 64);
     }
 
     #[test]
