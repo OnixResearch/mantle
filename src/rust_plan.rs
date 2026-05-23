@@ -242,6 +242,16 @@ pub(crate) struct RustUnitDependencyChainExecutionReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustUnitTargetTopologyExecutionReceipt {
+    pub(crate) schema_version: u32,
+    pub(crate) execution_status: String,
+    pub(crate) claim: String,
+    pub(crate) unit_executions: Vec<RustUnitExecutionReceipt>,
+    pub(crate) blocker: Option<RustUnitExecutionBlocker>,
+    pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct RustToolchainIdentity {
     pub(crate) tool: String,
     pub(crate) version_verbose: String,
@@ -270,6 +280,12 @@ pub(crate) struct RustPlanExecutionReceipt {
 pub(crate) struct RustPlanDependencyChainExecutionReceipt {
     pub(crate) rust_plan: RustPlanReceipt,
     pub(crate) dependency_chain_execution: RustUnitDependencyChainExecutionReceipt,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanTargetTopologyExecutionReceipt {
+    pub(crate) rust_plan: RustPlanReceipt,
+    pub(crate) target_topology_execution: RustUnitTargetTopologyExecutionReceipt,
 }
 
 #[derive(Debug, Clone)]
@@ -424,6 +440,20 @@ pub(crate) fn print_rust_plan_dependency_chain_execution_receipt(
         serde_json::to_string_pretty(receipt)
     }
     .map_err(|err| RunError::Internal(format!("rendering Rust dependency-chain execution receipt: {err}")))?;
+    println!("{rendered}");
+    Ok(())
+}
+
+pub(crate) fn print_rust_plan_target_topology_execution_receipt(
+    receipt: &RustPlanTargetTopologyExecutionReceipt,
+    json_mode: bool,
+) -> Result<(), RunError> {
+    let rendered = if json_mode {
+        serde_json::to_string(receipt)
+    } else {
+        serde_json::to_string_pretty(receipt)
+    }
+    .map_err(|err| RunError::Internal(format!("rendering Rust target-topology execution receipt: {err}")))?;
     println!("{rendered}");
     Ok(())
 }
@@ -1348,6 +1378,212 @@ pub(crate) fn execute_first_rust_unit_dependency_chain(
     dependency_chain_receipt(status, vec![producer_receipt, consumer_receipt], blocker)
 }
 
+pub(crate) fn execute_rust_target_unit_topology(
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
+    if !graph.ready {
+        return target_topology_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message:
+                    "unit_derivation_graph is not ready; resolve planning blockers before target-topology execution"
+                        .to_string(),
+            }),
+        );
+    }
+
+    let mut selected_indices = Vec::new();
+    for (index, unit) in graph.derivations.iter().enumerate() {
+        if is_supported_target_unit(unit) {
+            if !unit.consumed_host_artifacts.is_empty() {
+                return target_topology_receipt(
+                    "blocked",
+                    Vec::new(),
+                    Some(RustUnitExecutionBlocker {
+                        class: "unsupported-topology-shape".to_string(),
+                        message: format!(
+                            "target topology execution does not yet support host/proc-macro/build-script artifacts for unit {}",
+                            unit.unit_id
+                        ),
+                    }),
+                );
+            }
+            selected_indices.push(index);
+        }
+    }
+    if selected_indices.is_empty() {
+        return target_topology_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-supported-unit".to_string(),
+                message: "unit_derivation_graph does not contain supported target lib/bin units".to_string(),
+            }),
+        );
+    }
+
+    let selected_set = selected_indices.iter().copied().collect::<BTreeSet<_>>();
+    let mut lib_producers = BTreeMap::new();
+    for index in &selected_indices {
+        let unit = &graph.derivations[*index];
+        if unit.target_kind == "lib" {
+            lib_producers.entry(unit.package_id.clone()).or_insert(*index);
+        }
+    }
+
+    let mut edges = BTreeMap::<usize, Vec<usize>>::new();
+    for index in &selected_indices {
+        let unit = &graph.derivations[*index];
+        let mut deps = Vec::new();
+        for dependency in &unit.dependency_artifacts {
+            let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
+                return target_topology_receipt(
+                    "blocked",
+                    Vec::new(),
+                    Some(RustUnitExecutionBlocker {
+                        class: "missing-dependency-producer".to_string(),
+                        message: format!(
+                            "no supported producer lib unit for dependency package {}",
+                            dependency.package_id
+                        ),
+                    }),
+                );
+            };
+            if !selected_set.contains(&producer_index) {
+                return target_topology_receipt(
+                    "blocked",
+                    Vec::new(),
+                    Some(RustUnitExecutionBlocker {
+                        class: "missing-dependency-producer".to_string(),
+                        message: format!(
+                            "dependency producer for package {} is outside the selected target topology",
+                            dependency.package_id
+                        ),
+                    }),
+                );
+            }
+            if producer_index != *index {
+                deps.push(producer_index);
+            }
+        }
+        deps.sort_unstable();
+        deps.dedup();
+        edges.insert(*index, deps);
+    }
+
+    let mut ordered_indices = Vec::new();
+    let mut temporary = BTreeSet::new();
+    let mut permanent = BTreeSet::new();
+    for index in &selected_indices {
+        if let Err(blocker) =
+            visit_target_topology_unit(*index, &edges, &mut temporary, &mut permanent, &mut ordered_indices, graph)
+        {
+            return target_topology_receipt("blocked", Vec::new(), Some(blocker));
+        }
+    }
+
+    let mut executions = Vec::new();
+    let mut produced_artifacts = BTreeMap::<String, PathBuf>::new();
+    for index in ordered_indices {
+        let unit = &graph.derivations[index];
+        let executable_unit = if unit.dependency_artifacts.is_empty() {
+            unit.clone()
+        } else {
+            bind_all_dependency_artifacts(unit, &produced_artifacts)?
+        };
+        let receipt = execute_rust_unit(&executable_unit, options)?;
+        if receipt.execution_status != "success" {
+            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+                class: "target-unit-failed".to_string(),
+                message: format!("target topology unit {} did not execute successfully", unit.unit_id),
+            });
+            executions.push(receipt);
+            return target_topology_receipt("blocked", executions, Some(blocker));
+        }
+        if unit.target_kind == "lib" {
+            match produced_library_artifact_path(&executable_unit, options)? {
+                Ok(path) => {
+                    produced_artifacts.insert(unit.package_id.clone(), path);
+                }
+                Err(blocker) => {
+                    executions.push(receipt);
+                    return target_topology_receipt("blocked", executions, Some(blocker));
+                }
+            }
+        }
+        executions.push(receipt);
+    }
+
+    target_topology_receipt("success", executions, None)
+}
+
+fn visit_target_topology_unit(
+    index: usize,
+    edges: &BTreeMap<usize, Vec<usize>>,
+    temporary: &mut BTreeSet<usize>,
+    permanent: &mut BTreeSet<usize>,
+    ordered_indices: &mut Vec<usize>,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<(), RustUnitExecutionBlocker> {
+    if permanent.contains(&index) {
+        return Ok(());
+    }
+    if !temporary.insert(index) {
+        return Err(RustUnitExecutionBlocker {
+            class: "dependency-cycle".to_string(),
+            message: format!(
+                "target topology contains a dependency cycle at unit {}",
+                graph.derivations[index].unit_id
+            ),
+        });
+    }
+    for dependency_index in edges.get(&index).into_iter().flatten() {
+        visit_target_topology_unit(*dependency_index, edges, temporary, permanent, ordered_indices, graph)?;
+    }
+    temporary.remove(&index);
+    permanent.insert(index);
+    ordered_indices.push(index);
+    Ok(())
+}
+
+fn bind_all_dependency_artifacts(
+    unit: &RustUnitDerivationSummary,
+    produced_artifacts: &BTreeMap<String, PathBuf>,
+) -> Result<RustUnitDerivationSummary, RunError> {
+    let mut bound = unit.clone();
+    for dependency in &unit.dependency_artifacts {
+        let produced_artifact = produced_artifacts.get(&dependency.package_id).ok_or_else(|| {
+            RunError::Internal(format!(
+                "unit {} reached execution before dependency package {} was produced",
+                unit.unit_id, dependency.package_id
+            ))
+        })?;
+        bound = bind_dependency_artifact(&bound, dependency, produced_artifact)?;
+    }
+    append_dependency_search_paths(&mut bound, produced_artifacts);
+    Ok(bound)
+}
+
+fn append_dependency_search_paths(
+    unit: &mut RustUnitDerivationSummary,
+    produced_artifacts: &BTreeMap<String, PathBuf>,
+) {
+    let mut search_args = BTreeSet::new();
+    for produced_artifact in produced_artifacts.values() {
+        if let Some(parent) = produced_artifact.parent() {
+            search_args.insert(format!("dependency={}", normalize_path_string(parent)));
+        }
+    }
+    for search_arg in search_args {
+        unit.derivation.args.push("-L".to_string());
+        unit.derivation.args.push(search_arg);
+    }
+    unit.rustc_args_digest_blake3 = blake3::hash(unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
+}
+
 fn execute_rust_unit(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
@@ -1546,6 +1782,34 @@ fn rust_unit_dependency_chain_execution_receipt_hash(
     hashable.receipt_hash.clear();
     let canonical = serde_json::to_vec(&hashable)
         .map_err(|err| RunError::Internal(format!("canonicalizing Rust dependency-chain execution receipt: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn target_topology_receipt(
+    execution_status: &str,
+    unit_executions: Vec<RustUnitExecutionReceipt>,
+    blocker: Option<RustUnitExecutionBlocker>,
+) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
+    let mut receipt = RustUnitTargetTopologyExecutionReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        execution_status: execution_status.to_string(),
+        claim: "bounded target-only Rust unit topology; not full Cargo compatibility, host artifact execution, or a general scheduler"
+            .to_string(),
+        unit_executions,
+        blocker,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = rust_unit_target_topology_execution_receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn rust_unit_target_topology_execution_receipt_hash(
+    receipt: &RustUnitTargetTopologyExecutionReceipt,
+) -> Result<String, RunError> {
+    let mut hashable = receipt.clone();
+    hashable.receipt_hash.clear();
+    let canonical = serde_json::to_vec(&hashable)
+        .map_err(|err| RunError::Internal(format!("canonicalizing Rust target-topology execution receipt: {err}")))?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 

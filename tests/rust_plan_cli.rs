@@ -133,3 +133,136 @@ fn rust_plan_cli_executes_dependency_chain_from_explicit_receipt_material() {
         })
     }));
 }
+
+#[test]
+fn rust_plan_cli_executes_target_unit_topology_from_explicit_receipt_material() {
+    let dir = TempDir::new().unwrap();
+    let dep_a_dir = dir.path().join("dep-a");
+    let dep_b_dir = dir.path().join("dep-b");
+    let app_dir = dir.path().join("app-crate");
+    for crate_dir in [&dep_a_dir, &dep_b_dir, &app_dir] {
+        std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    }
+    std::fs::write(
+        dep_a_dir.join("Cargo.toml"),
+        "[package]\nname = \"dep-a\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    std::fs::write(dep_a_dir.join("src/lib.rs"), "pub fn a() -> u32 { 40 }\n").unwrap();
+    std::fs::write(
+        dep_b_dir.join("Cargo.toml"),
+        "[package]\nname = \"dep-b\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep_a = { package = \"dep-a\", path = \"../dep-a\" }\n",
+    )
+    .unwrap();
+    std::fs::write(dep_b_dir.join("src/lib.rs"), "pub fn b() -> u32 { dep_a::a() + 1 }\n").unwrap();
+    std::fs::write(
+        app_dir.join("Cargo.toml"),
+        "[package]\nname = \"app-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep_b = { package = \"dep-b\", path = \"../dep-b\" }\n",
+    )
+    .unwrap();
+    std::fs::write(app_dir.join("src/lib.rs"), "pub fn call_dep() -> u32 { dep_b::b() + 1 }\n").unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&app_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(
+        lock_output.status.success(),
+        "cargo generate-lockfile failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&lock_output.stdout),
+        String::from_utf8_lossy(&lock_output.stderr)
+    );
+
+    let output_root = dir.path().join("topology-output");
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-target-topology")
+        .arg("--execution-output-root")
+        .arg(&output_root)
+        .output()
+        .expect("rust-plan target-topology CLI should run");
+
+    assert!(
+        output.status.success(),
+        "rust-plan target-topology CLI failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    assert!(receipt["rust_plan"]["unit_derivation_graph"]["ready"].as_bool().unwrap());
+    let topology = &receipt["target_topology_execution"];
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    assert!(topology["claim"].as_str().unwrap().contains("bounded target-only Rust unit topology"));
+    assert!(topology["blocker"].is_null());
+    assert_eq!(topology["receipt_hash"].as_str().unwrap().len(), 64);
+    let unit_executions = topology["unit_executions"].as_array().unwrap();
+    assert_eq!(unit_executions.len(), 3);
+    assert!(unit_executions.iter().all(|execution| execution["execution_status"] == "success"));
+    assert!(
+        unit_executions[1]["dependency_artifact_digests"].as_array().unwrap()[0]["blake3"]
+            .as_str()
+            .unwrap()
+            .len()
+            == 64
+    );
+    assert!(
+        unit_executions[2]["dependency_artifact_digests"].as_array().unwrap()[0]["blake3"]
+            .as_str()
+            .unwrap()
+            .len()
+            == 64
+    );
+}
+
+#[test]
+fn rust_plan_cli_blocks_target_topology_with_proc_macro_host_artifact() {
+    let dir = TempDir::new().unwrap();
+    let macro_dir = dir.path().join("demo-macro");
+    let app_dir = dir.path().join("app-crate");
+    std::fs::create_dir_all(macro_dir.join("src")).unwrap();
+    std::fs::create_dir_all(app_dir.join("src")).unwrap();
+    std::fs::write(
+        macro_dir.join("Cargo.toml"),
+        "[package]\nname = \"demo-macro\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nproc-macro = true\n",
+    )
+    .unwrap();
+    std::fs::write(
+        macro_dir.join("src/lib.rs"),
+        "use proc_macro::TokenStream;\n#[proc_macro_attribute]\npub fn demo(_attr: TokenStream, item: TokenStream) -> TokenStream { item }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        app_dir.join("Cargo.toml"),
+        "[package]\nname = \"app-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_macro = { package = \"demo-macro\", path = \"../demo-macro\" }\n",
+    )
+    .unwrap();
+    std::fs::write(app_dir.join("src/lib.rs"), "use demo_macro::demo;\n#[demo]\npub fn value() -> u32 { 1 }\n")
+        .unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&app_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-target-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("blocked-output"))
+        .output()
+        .expect("rust-plan target-topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let topology = &receipt["target_topology_execution"];
+    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
+    assert_eq!(topology["blocker"]["class"], "unsupported-topology-shape");
+    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
+}
