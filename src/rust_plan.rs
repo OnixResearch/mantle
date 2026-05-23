@@ -1941,6 +1941,196 @@ checksum = "0123456789abcdef"
     }
 
     #[test]
+    fn rust_unit_execution_blocks_source_closure_blocker_before_rustc() {
+        let dir = TempDir::new().unwrap();
+        let crate_dir = dir.path().join("registry-crate");
+        let manifest_path = crate_dir.join("Cargo.toml");
+        let src_dir = crate_dir.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='registry-crate'\nversion='1.0.0'\n").unwrap();
+        let lib_path = src_dir.join("lib.rs");
+        std::fs::write(&lib_path, "pub fn answer() -> u32 { 42 }\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "registry+https://github.com/rust-lang/crates.io-index#registry-crate@1.0.0".to_string(),
+            name: "registry-crate".to_string(),
+            version: "1.0.0".to_string(),
+            source: Some("registry+https://github.com/rust-lang/crates.io-index".to_string()),
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        assert!(!closure.ready);
+        assert_eq!(closure.blockers[0].class, "missing-registry-checksum");
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "registry+https://github.com/rust-lang/crates.io-index#registry-crate@1.0.0",
+                "target": {
+                    "name": "registry-crate",
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": lib_path.display().to_string(),
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "deps": []
+            }]
+        });
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+        assert!(!graph.ready);
+        assert_eq!(graph.blockers[0].class, "source-closure-blocked");
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("unit-out"),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.rebuild_reason, "not-run-preflight-blocker");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "unit-derivation-graph-blocked");
+        assert!(receipt.output_artifact_digests.is_empty());
+    }
+
+    #[test]
+    fn rust_unit_execution_blocks_missing_dependency_artifact_before_rustc() {
+        let dir = TempDir::new().unwrap();
+        let crate_dir = dir.path().join("dep-crate");
+        let manifest_path = crate_dir.join("Cargo.toml");
+        let src_dir = crate_dir.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='dep-crate'\nversion='0.1.0'\n").unwrap();
+        let lib_path = src_dir.join("lib.rs");
+        std::fs::write(&lib_path, "pub fn answer() -> u32 { 42 }\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://dep-crate#dep-crate@0.1.0".to_string(),
+            name: "dep-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://dep-crate#dep-crate@0.1.0",
+                "target": {
+                    "name": "dep-crate",
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": lib_path.display().to_string(),
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "deps": [{"pkg_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0", "extern_crate_name": "serde"}]
+            }]
+        });
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+        assert!(graph.ready);
+        assert_eq!(graph.derivations[0].dependency_artifacts[0].name, "serde");
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("unit-out"),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "missing-dependency-artifact");
+        assert!(receipt.blocker.as_ref().unwrap().message.contains("artifact:"));
+        assert!(receipt.output_artifact_digests.is_empty());
+    }
+
+    #[test]
+    fn rust_unit_execution_blocks_missing_host_artifact_before_rustc() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("hosted/Cargo.toml");
+        std::fs::create_dir_all(manifest_path.parent().unwrap().join("src")).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='hosted'\nversion='0.1.0'\n").unwrap();
+        let app_lib = dir.path().join("hosted/src/lib.rs");
+        let build_rs = dir.path().join("hosted/build.rs");
+        std::fs::write(&app_lib, "pub fn answer() -> u32 { 42 }\n").unwrap();
+        std::fs::write(&build_rs, "fn main() {}\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://hosted#hosted@0.1.0".to_string(),
+            name: "hosted".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": "path+file://hosted#hosted@0.1.0",
+                    "target": {"name": "build-script-build", "kind": ["custom-build"], "crate_types": ["bin"], "src_path": build_rs.display().to_string(), "edition": "2021"},
+                    "mode": "build"
+                },
+                {
+                    "pkg_id": "path+file://hosted#hosted@0.1.0",
+                    "target": {"name": "hosted", "kind": ["lib"], "crate_types": ["lib"], "src_path": app_lib.display().to_string(), "edition": "2021"},
+                    "mode": "build",
+                    "deps": []
+                }
+            ]
+        });
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+        assert!(graph.ready);
+        let target = graph.derivations.iter().find(|unit| unit.execution_kind == "target").unwrap();
+        assert_eq!(target.dependency_artifacts.len(), 0);
+        assert_eq!(target.consumed_host_artifacts.len(), 1);
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("unit-out"),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "missing-host-artifact");
+        assert!(receipt.blocker.as_ref().unwrap().message.contains("host-artifact:"));
+        assert!(receipt.output_artifact_digests.is_empty());
+    }
+
+    #[test]
+    fn rust_unit_execution_blocks_missing_declared_output_before_rustc() {
+        let dir = TempDir::new().unwrap();
+        let crate_dir = dir.path().join("no-output-crate");
+        let manifest_path = crate_dir.join("Cargo.toml");
+        let src_dir = crate_dir.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='no-output-crate'\nversion='0.1.0'\n").unwrap();
+        let lib_path = src_dir.join("lib.rs");
+        std::fs::write(&lib_path, "pub fn answer() -> u32 { 42 }\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://no-output-crate#no-output-crate@0.1.0".to_string(),
+            name: "no-output-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://no-output-crate#no-output-crate@0.1.0",
+                "target": {"name": "no-output-crate", "kind": ["lib"], "crate_types": ["lib"], "src_path": lib_path.display().to_string(), "edition": "2021"},
+                "mode": "build",
+                "deps": []
+            }]
+        });
+        let mut graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+        graph.derivations[0].derivation.outputs.clear();
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("unit-out"),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "missing-declared-output");
+        assert_eq!(receipt.declared_outputs, Vec::<String>::new());
+        assert!(receipt.output_artifact_digests.is_empty());
+    }
+
+    #[test]
     fn unit_derivation_graph_represents_build_script_host_units() {
         let dir = TempDir::new().unwrap();
         let manifest_path = dir.path().join("build-crate/Cargo.toml");
