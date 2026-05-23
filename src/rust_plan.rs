@@ -743,15 +743,19 @@ fn summarize_unit_derivation(
         .get("target")
         .ok_or_else(|| unit_blocker(index, Some(package_id.clone()), "missing-target", "unit lacks a target object"))?;
     let target_name = required_target_string(target, "name", index, &package_id)?;
-    let target_kind = select_supported_target_kind(target, index, &package_id)?;
-    if target_kind.is_none() {
-        return Ok(None);
+    let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
+    if mode != "build" {
+        return Err(unit_blocker(
+            index,
+            Some(package_id.clone()),
+            "unsupported-unit-mode",
+            "only Cargo build-mode units are supported before explicit test/doctest/run derivation modeling lands",
+        ));
     }
-    let target_kind = target_kind.unwrap_or_default();
+    let target_kind = select_supported_target_kind(target, index, &package_id)?;
     let crate_types = target_string_array(target, "crate_types");
     let edition = target_string(target, "edition").unwrap_or_else(|| "2021".to_string());
     let src_path = required_target_string(target, "src_path", index, &package_id)?;
-    let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
     let features = unit_string_array(unit, "features");
     let source = source_closure.sources.iter().find(|source| source.package_id == package_id).ok_or_else(|| {
         unit_blocker(
@@ -827,7 +831,7 @@ fn select_supported_target_kind(
     target: &Value,
     index: usize,
     package_id: &str,
-) -> Result<Option<String>, UnitDerivationBlocker> {
+) -> Result<String, UnitDerivationBlocker> {
     let kinds = target_string_array(target, "kind");
     if kinds.iter().any(|kind| kind == "custom-build" || kind == "proc-macro") {
         return Err(unit_blocker(
@@ -838,12 +842,25 @@ fn select_supported_target_kind(
         ));
     }
     if kinds.iter().any(|kind| kind == "lib") {
-        return Ok(Some("lib".to_string()));
+        return Ok("lib".to_string());
     }
     if kinds.iter().any(|kind| kind == "bin") {
-        return Ok(Some("bin".to_string()));
+        return Ok("bin".to_string());
     }
-    Ok(None)
+    let class = if kinds.is_empty() {
+        "missing-target-kind"
+    } else {
+        "unsupported-target-kind"
+    };
+    let message = if kinds.is_empty() {
+        "unit target lacks a kind array".to_string()
+    } else {
+        format!(
+            "target kinds [{}] are outside Mantle's currently supported lib/bin Rust derivation subset",
+            kinds.join(",")
+        )
+    };
+    Err(unit_blocker(index, Some(package_id.to_string()), class, &message))
 }
 
 fn unit_dependency_artifacts(unit: &Value) -> Vec<RustDependencyArtifact> {
@@ -1274,6 +1291,78 @@ checksum = "0123456789abcdef"
         assert!(!graph.ready);
         assert_eq!(graph.derivation_count, 0);
         assert_eq!(graph.blockers[0].class, "unsupported-host-unit");
+    }
+
+    #[test]
+    fn unit_derivation_graph_blocks_unsupported_target_kinds() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("example/Cargo.toml");
+        std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='example'\nversion='0.1.0'\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://example#example@0.1.0".to_string(),
+            name: "example".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://example#example@0.1.0",
+                "target": {
+                    "name": "example-test",
+                    "kind": ["test"],
+                    "crate_types": ["bin"],
+                    "src_path": dir.path().join("example/tests/smoke.rs").display().to_string(),
+                    "edition": "2021"
+                },
+                "mode": "build"
+            }]
+        });
+
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+
+        assert!(!graph.ready);
+        assert_eq!(graph.derivation_count, 0);
+        assert_eq!(graph.blockers[0].class, "unsupported-target-kind");
+        assert!(graph.blockers[0].message.contains("lib/bin"));
+    }
+
+    #[test]
+    fn unit_derivation_graph_blocks_doctest_or_non_build_modes() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("doc-crate/Cargo.toml");
+        std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='doc-crate'\nversion='0.1.0'\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://doc-crate#doc-crate@0.1.0".to_string(),
+            name: "doc-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://doc-crate#doc-crate@0.1.0",
+                "target": {
+                    "name": "doc_crate",
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": dir.path().join("doc-crate/src/lib.rs").display().to_string(),
+                    "edition": "2021"
+                },
+                "mode": "doctest"
+            }]
+        });
+
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+
+        assert!(!graph.ready);
+        assert_eq!(graph.derivation_count, 0);
+        assert_eq!(graph.blockers[0].class, "unsupported-unit-mode");
+        assert!(graph.blockers[0].message.contains("doctest"));
     }
 
     #[test]
