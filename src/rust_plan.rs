@@ -42,6 +42,7 @@ pub(crate) struct RustPlanReceipt {
     pub(crate) packages: Vec<PackageSummary>,
     pub(crate) source_closure: SourceClosureSummary,
     pub(crate) unit_graph: UnitGraphSummary,
+    pub(crate) unit_derivation_graph: UnitDerivationGraphSummary,
     pub(crate) receipt_hash: String,
 }
 
@@ -126,6 +127,57 @@ pub(crate) struct UnitGraphSummary {
     pub(crate) unit_count: usize,
     pub(crate) root_count: usize,
     pub(crate) digest_blake3: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct UnitDerivationGraphSummary {
+    pub(crate) derivation_count: usize,
+    pub(crate) ready: bool,
+    pub(crate) digest_blake3: String,
+    pub(crate) derivations: Vec<RustUnitDerivationSummary>,
+    pub(crate) blockers: Vec<UnitDerivationBlocker>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustUnitDerivationSummary {
+    pub(crate) unit_id: String,
+    pub(crate) package_id: String,
+    pub(crate) target_name: String,
+    pub(crate) target_kind: String,
+    pub(crate) crate_types: Vec<String>,
+    pub(crate) mode: String,
+    pub(crate) profile: String,
+    pub(crate) source_digest: SourceDigest,
+    pub(crate) dependency_artifacts: Vec<RustDependencyArtifact>,
+    pub(crate) derivation: ReviewableRustDerivation,
+    pub(crate) rustc_args_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustDependencyArtifact {
+    pub(crate) package_id: String,
+    pub(crate) name: String,
+    pub(crate) artifact: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct ReviewableRustDerivation {
+    pub(crate) name: String,
+    pub(crate) builder: String,
+    pub(crate) system: String,
+    pub(crate) args: Vec<String>,
+    pub(crate) outputs: Vec<String>,
+    pub(crate) env: BTreeMap<String, String>,
+    pub(crate) inputs: Vec<String>,
+    pub(crate) addressing_mode: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct UnitDerivationBlocker {
+    pub(crate) unit_id: String,
+    pub(crate) package_id: Option<String>,
+    pub(crate) class: String,
+    pub(crate) message: String,
 }
 
 #[derive(Debug, Clone)]
@@ -218,6 +270,7 @@ fn capture_rust_plan_with_oracle(
 
     let lock_packages = parse_lockfile_packages(&options.root)?;
     let source_closure = summarize_source_closure(&metadata.packages, &lock_packages)?;
+    let unit_derivation_graph = summarize_unit_derivation_graph(&unit_graph_value, &source_closure, options)?;
     let packages = summarize_packages(metadata.packages.clone(), &metadata.workspace_members);
 
     let mut receipt = RustPlanReceipt {
@@ -237,6 +290,7 @@ fn capture_rust_plan_with_oracle(
         packages,
         source_closure,
         unit_graph: summarize_unit_graph(unit_graph_value)?,
+        unit_derivation_graph,
         receipt_hash: String::new(),
     };
     receipt.receipt_hash = receipt_hash(&receipt)?;
@@ -626,6 +680,287 @@ fn source_closure_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
+fn summarize_unit_derivation_graph(
+    unit_graph: &Value,
+    source_closure: &SourceClosureSummary,
+    options: &RustPlanOptions,
+) -> Result<UnitDerivationGraphSummary, RunError> {
+    let mut derivations = Vec::new();
+    let mut blockers = source_closure
+        .blockers
+        .iter()
+        .map(|blocker| UnitDerivationBlocker {
+            unit_id: blocker.package_id.clone(),
+            package_id: Some(blocker.package_id.clone()),
+            class: "source-closure-blocked".to_string(),
+            message: blocker.message.clone(),
+        })
+        .collect::<Vec<_>>();
+    let Some(units) = unit_graph.get("units").and_then(Value::as_array) else {
+        blockers.push(UnitDerivationBlocker {
+            unit_id: "unit-graph".to_string(),
+            package_id: None,
+            class: "missing-units".to_string(),
+            message: "Cargo unit graph did not contain a units array".to_string(),
+        });
+        let digest_blake3 = unit_derivation_graph_digest(&derivations, &blockers)?;
+        return Ok(UnitDerivationGraphSummary {
+            derivation_count: 0,
+            ready: false,
+            digest_blake3,
+            derivations,
+            blockers,
+        });
+    };
+
+    for (index, unit) in units.iter().enumerate() {
+        match summarize_unit_derivation(index, unit, source_closure, options) {
+            Ok(Some(derivation)) => derivations.push(derivation),
+            Ok(None) => {}
+            Err(blocker) => blockers.push(blocker),
+        }
+    }
+    derivations.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
+    blockers.sort_by(|left, right| left.unit_id.cmp(&right.unit_id).then(left.class.cmp(&right.class)));
+    let digest_blake3 = unit_derivation_graph_digest(&derivations, &blockers)?;
+    Ok(UnitDerivationGraphSummary {
+        derivation_count: derivations.len(),
+        ready: blockers.is_empty(),
+        digest_blake3,
+        derivations,
+        blockers,
+    })
+}
+
+fn summarize_unit_derivation(
+    index: usize,
+    unit: &Value,
+    source_closure: &SourceClosureSummary,
+    options: &RustPlanOptions,
+) -> Result<Option<RustUnitDerivationSummary>, UnitDerivationBlocker> {
+    let package_id = required_unit_string(unit, "pkg_id", index)?;
+    let target = unit
+        .get("target")
+        .ok_or_else(|| unit_blocker(index, Some(package_id.clone()), "missing-target", "unit lacks a target object"))?;
+    let target_name = required_target_string(target, "name", index, &package_id)?;
+    let target_kind = select_supported_target_kind(target, index, &package_id)?;
+    if target_kind.is_none() {
+        return Ok(None);
+    }
+    let target_kind = target_kind.unwrap_or_default();
+    let crate_types = target_string_array(target, "crate_types");
+    let edition = target_string(target, "edition").unwrap_or_else(|| "2021".to_string());
+    let src_path = required_target_string(target, "src_path", index, &package_id)?;
+    let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
+    let features = unit_string_array(unit, "features");
+    let source = source_closure.sources.iter().find(|source| source.package_id == package_id).ok_or_else(|| {
+        unit_blocker(
+            index,
+            Some(package_id.clone()),
+            "missing-source-input",
+            "unit package is absent from source closure",
+        )
+    })?;
+
+    let dependency_artifacts = unit_dependency_artifacts(unit);
+    let mut args = vec![
+        "--crate-name".to_string(),
+        rust_crate_name(&target_name),
+        "--edition".to_string(),
+        edition,
+        src_path.clone(),
+        "--emit=link".to_string(),
+    ];
+    for crate_type in normalized_crate_types(&crate_types, &target_kind) {
+        args.push("--crate-type".to_string());
+        args.push(crate_type);
+    }
+    for feature in features {
+        args.push("--cfg".to_string());
+        args.push(format!("feature=\"{feature}\""));
+    }
+    for dependency in &dependency_artifacts {
+        args.push("--extern".to_string());
+        args.push(format!("{}={}", dependency.name, dependency.artifact));
+    }
+    let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
+    let mut env = BTreeMap::new();
+    env.insert("CRATE_KIND".to_string(), target_kind.clone());
+    env.insert("MODE".to_string(), mode.clone());
+    env.insert("PACKAGE_ID".to_string(), package_id.clone());
+    env.insert("PROFILE".to_string(), options.profile.clone());
+    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    if let Some(target) = options.targets.first() {
+        env.insert("TARGET".to_string(), target.clone());
+    }
+    let mut inputs = vec![format!("source:{}:{}", package_id, source.source_digest.value)];
+    inputs.extend(dependency_artifacts.iter().map(|dependency| dependency.artifact.clone()));
+    inputs.sort();
+    inputs.dedup();
+    let unit_id = rust_unit_id(index, &package_id, &target_name, &target_kind, &mode);
+
+    Ok(Some(RustUnitDerivationSummary {
+        unit_id: unit_id.clone(),
+        package_id: package_id.clone(),
+        target_name: target_name.clone(),
+        target_kind,
+        crate_types,
+        mode,
+        profile: options.profile.clone(),
+        source_digest: source.source_digest.clone(),
+        dependency_artifacts,
+        derivation: ReviewableRustDerivation {
+            name: derivation_name(&target_name, index),
+            builder: "rustc".to_string(),
+            system: "x86_64-linux".to_string(),
+            args,
+            outputs: vec!["out".to_string()],
+            env,
+            inputs,
+            addressing_mode: "content-addressed".to_string(),
+        },
+        rustc_args_digest_blake3: args_digest,
+    }))
+}
+
+fn select_supported_target_kind(
+    target: &Value,
+    index: usize,
+    package_id: &str,
+) -> Result<Option<String>, UnitDerivationBlocker> {
+    let kinds = target_string_array(target, "kind");
+    if kinds.iter().any(|kind| kind == "custom-build" || kind == "proc-macro") {
+        return Err(unit_blocker(
+            index,
+            Some(package_id.to_string()),
+            "unsupported-host-unit",
+            "build-script and proc-macro units require explicit host/target separation before derivation emission",
+        ));
+    }
+    if kinds.iter().any(|kind| kind == "lib") {
+        return Ok(Some("lib".to_string()));
+    }
+    if kinds.iter().any(|kind| kind == "bin") {
+        return Ok(Some("bin".to_string()));
+    }
+    Ok(None)
+}
+
+fn unit_dependency_artifacts(unit: &Value) -> Vec<RustDependencyArtifact> {
+    let mut artifacts = Vec::new();
+    let Some(deps) = unit.get("deps").and_then(Value::as_array) else {
+        return artifacts;
+    };
+    for dep in deps {
+        let Some(package_id) =
+            dep.get("pkg_id").and_then(Value::as_str).or_else(|| dep.get("package_id").and_then(Value::as_str))
+        else {
+            continue;
+        };
+        let name = dep
+            .get("extern_crate_name")
+            .and_then(Value::as_str)
+            .or_else(|| dep.get("name").and_then(Value::as_str))
+            .map(rust_crate_name)
+            .unwrap_or_else(|| "unknown_dep".to_string());
+        let artifact = format!("artifact:{package_id}:{name}");
+        artifacts.push(RustDependencyArtifact {
+            package_id: package_id.to_string(),
+            name,
+            artifact,
+        });
+    }
+    artifacts.sort_by(|left, right| left.package_id.cmp(&right.package_id).then(left.name.cmp(&right.name)));
+    artifacts.dedup();
+    artifacts
+}
+
+fn normalized_crate_types(crate_types: &[String], target_kind: &str) -> Vec<String> {
+    let mut normalized = if crate_types.is_empty() {
+        vec![target_kind.to_string()]
+    } else {
+        crate_types.to_vec()
+    };
+    normalized.sort();
+    normalized.dedup();
+    normalized
+}
+
+fn rust_unit_id(index: usize, package_id: &str, target_name: &str, target_kind: &str, mode: &str) -> String {
+    format!("{index}:{package_id}:{target_name}:{target_kind}:{mode}")
+}
+
+fn derivation_name(target_name: &str, index: usize) -> String {
+    format!("rust-unit-{index}-{}", rust_crate_name(target_name))
+}
+
+fn rust_crate_name(name: &str) -> String {
+    name.replace('-', "_")
+}
+
+fn required_unit_string(unit: &Value, field: &str, index: usize) -> Result<String, UnitDerivationBlocker> {
+    target_string(unit, field)
+        .ok_or_else(|| unit_blocker(index, None, &format!("missing-{field}"), &format!("unit lacks `{field}`")))
+}
+
+fn required_target_string(
+    target: &Value,
+    field: &str,
+    index: usize,
+    package_id: &str,
+) -> Result<String, UnitDerivationBlocker> {
+    target_string(target, field).ok_or_else(|| {
+        unit_blocker(
+            index,
+            Some(package_id.to_string()),
+            &format!("missing-target-{field}"),
+            &format!("unit target lacks `{field}`"),
+        )
+    })
+}
+
+fn target_string(value: &Value, field: &str) -> Option<String> {
+    value.get(field).and_then(Value::as_str).map(ToString::to_string)
+}
+
+fn unit_string_array(value: &Value, field: &str) -> Vec<String> {
+    target_string_array(value, field)
+}
+
+fn target_string_array(value: &Value, field: &str) -> Vec<String> {
+    let mut values = value
+        .get(field)
+        .and_then(Value::as_array)
+        .map(|items| items.iter().filter_map(Value::as_str).map(ToString::to_string).collect::<Vec<_>>())
+        .unwrap_or_default();
+    values.sort();
+    values.dedup();
+    values
+}
+
+fn unit_blocker(index: usize, package_id: Option<String>, class: &str, message: &str) -> UnitDerivationBlocker {
+    UnitDerivationBlocker {
+        unit_id: index.to_string(),
+        package_id,
+        class: class.to_string(),
+        message: message.to_string(),
+    }
+}
+
+fn unit_derivation_graph_digest(
+    derivations: &[RustUnitDerivationSummary],
+    blockers: &[UnitDerivationBlocker],
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct Hashable<'a> {
+        derivations: &'a [RustUnitDerivationSummary],
+        blockers: &'a [UnitDerivationBlocker],
+    }
+    let canonical = serde_json::to_vec(&Hashable { derivations, blockers })
+        .map_err(|err| RunError::Internal(format!("canonicalizing Rust unit derivation graph: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
 fn summarize_unit_graph(unit_graph: Value) -> Result<UnitGraphSummary, RunError> {
     let normalized = normalize_json_value(unit_graph);
     let canonical = serde_json::to_vec(&normalized)
@@ -747,9 +1082,10 @@ mod tests {
             cargo_version: ok_output("cargo 1.91.0\n"),
             rustc_version: ok_output("rustc 1.91.0\nhost: x86_64-unknown-linux-gnu\n"),
             metadata: ok_output(&metadata),
-            unit_graph: ok_output(
-                r#"{"roots":[0],"units":[{"pkg_id":"path+file://root#demo@0.1.0","target":{"name":"demo"}}]}"#,
-            ),
+            unit_graph: ok_output(&format!(
+                r#"{{"roots":[0],"units":[{{"pkg_id":"path+file://root#demo@0.1.0","target":{{"name":"demo","kind":["lib"],"crate_types":["lib"],"src_path":"{}","edition":"2021"}},"mode":"build","features":["serde"],"deps":[]}}]}}"#,
+                dir.path().join("src/lib.rs").display()
+            )),
         };
 
         let receipt = capture_rust_plan_with_oracle(&options(dir.path()), &oracle).unwrap();
@@ -765,6 +1101,14 @@ mod tests {
         assert_eq!(receipt.source_closure.sources[0].source_digest.algorithm, PATH_SOURCE_DIGEST_ALGORITHM);
         assert_eq!(receipt.unit_graph.unit_count, 1);
         assert_eq!(receipt.unit_graph.root_count, 1);
+        assert!(receipt.unit_derivation_graph.ready);
+        assert_eq!(receipt.unit_derivation_graph.derivation_count, 1);
+        let derivation = &receipt.unit_derivation_graph.derivations[0];
+        assert_eq!(derivation.target_kind, "lib");
+        assert_eq!(derivation.derivation.builder, "rustc");
+        assert!(derivation.derivation.args.contains(&"--crate-name".to_string()));
+        assert!(derivation.derivation.args.contains(&"feature=\"serde\"".to_string()));
+        assert_eq!(derivation.rustc_args_digest_blake3.len(), 64);
         assert_eq!(receipt.receipt_hash.len(), 64);
     }
 
@@ -847,6 +1191,89 @@ checksum = "0123456789abcdef"
         assert!(!closure.ready);
         assert_eq!(closure.blockers[0].class, "missing-registry-checksum");
         assert_eq!(closure.sources[0].source_digest.algorithm, "missing");
+    }
+
+    #[test]
+    fn unit_derivation_graph_emits_binary_with_dependency_artifact() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("app/Cargo.toml");
+        std::fs::create_dir_all(manifest_path.parent().unwrap().join("src")).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='app'\nversion='0.1.0'\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://app#app@0.1.0".to_string(),
+            name: "app".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://app#app@0.1.0",
+                "target": {
+                    "name": "app-bin",
+                    "kind": ["bin"],
+                    "crate_types": ["bin"],
+                    "src_path": dir.path().join("app/src/main.rs").display().to_string(),
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "features": ["cli"],
+                "deps": [{
+                    "pkg_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0",
+                    "extern_crate_name": "serde"
+                }]
+            }]
+        });
+
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+
+        assert!(graph.ready);
+        assert_eq!(graph.derivation_count, 1);
+        let unit = &graph.derivations[0];
+        assert_eq!(unit.target_kind, "bin");
+        assert_eq!(unit.derivation.name, "rust-unit-0-app_bin");
+        assert!(unit.derivation.args.contains(&"--crate-type".to_string()));
+        assert!(unit.derivation.args.contains(&"bin".to_string()));
+        assert!(unit.derivation.args.contains(&"--extern".to_string()));
+        assert_eq!(unit.dependency_artifacts[0].name, "serde");
+        assert_eq!(unit.derivation.env.get("SOURCE_CLOSURE_DIGEST"), Some(&closure.digest_blake3));
+        assert_eq!(graph.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn unit_derivation_graph_blocks_host_units_before_host_target_split() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("build-crate/Cargo.toml");
+        std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='build-crate'\nversion='0.1.0'\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://build-crate#build-crate@0.1.0".to_string(),
+            name: "build-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://build-crate#build-crate@0.1.0",
+                "target": {
+                    "name": "build-script-build",
+                    "kind": ["custom-build"],
+                    "crate_types": ["bin"],
+                    "src_path": dir.path().join("build-crate/build.rs").display().to_string(),
+                    "edition": "2021"
+                },
+                "mode": "build"
+            }]
+        });
+
+        let graph = summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir.path())).unwrap();
+
+        assert!(!graph.ready);
+        assert_eq!(graph.derivation_count, 0);
+        assert_eq!(graph.blockers[0].class, "unsupported-host-unit");
     }
 
     #[test]
