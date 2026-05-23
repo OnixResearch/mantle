@@ -257,8 +257,28 @@ pub(crate) struct RustUnitHostArtifactTopologyExecutionReceipt {
     pub(crate) execution_status: String,
     pub(crate) claim: String,
     pub(crate) unit_executions: Vec<RustUnitExecutionReceipt>,
+    pub(crate) build_script_metadata_runs: Vec<BuildScriptMetadataRunReceipt>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
     pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct BuildScriptMetadataRunReceipt {
+    pub(crate) schema_version: u32,
+    pub(crate) unit_id: String,
+    pub(crate) package_id: String,
+    pub(crate) target_name: String,
+    pub(crate) execution_status: String,
+    pub(crate) out_dir: String,
+    pub(crate) rustc_cfg: Vec<String>,
+    pub(crate) rustc_env: BTreeMap<String, String>,
+    pub(crate) rustc_link_lib: Vec<String>,
+    pub(crate) rustc_link_search: Vec<String>,
+    pub(crate) rerun_if_changed: Vec<String>,
+    pub(crate) out_dir_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    pub(crate) stdout_digest_blake3: String,
+    pub(crate) metadata_digest_blake3: String,
+    pub(crate) blocker: Option<RustUnitExecutionBlocker>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -897,6 +917,9 @@ fn summarize_unit_derivation_graph(
 
     let host_artifacts = host_artifacts_by_package(units);
     for (index, unit) in units.iter().enumerate() {
+        if is_custom_build_run_unit(unit) {
+            continue;
+        }
         match summarize_unit_derivation(index, unit, units, source_closure, options, &host_artifacts) {
             Ok(derivation) => derivations.push(derivation),
             Err(blocker) => blockers.push(blocker),
@@ -1075,6 +1098,9 @@ fn select_supported_target_kind(
 fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostArtifact>> {
     let mut artifacts: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     for (index, unit) in units.iter().enumerate() {
+        if is_custom_build_run_unit(unit) {
+            continue;
+        }
         let Some(package_id) = target_string(unit, "pkg_id") else {
             continue;
         };
@@ -1105,6 +1131,16 @@ fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostAr
         values.dedup();
     }
     artifacts
+}
+
+fn is_custom_build_run_unit(unit: &Value) -> bool {
+    let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
+    if mode == "build" {
+        return false;
+    }
+    unit.get("target")
+        .map(|target| target_string_array(target, "kind").iter().any(|kind| kind == "custom-build"))
+        .unwrap_or(false)
 }
 
 fn unit_dependency_array(unit: &Value) -> Option<&Vec<Value>> {
@@ -1568,6 +1604,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
         return host_artifact_topology_receipt(
             "blocked",
             Vec::new(),
+            Vec::new(),
             Some(RustUnitExecutionBlocker {
                 class: "unit-derivation-graph-blocked".to_string(),
                 message: "unit_derivation_graph is not ready; resolve planning blockers before host-artifact execution"
@@ -1585,6 +1622,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
     if host_indices.is_empty() {
         return host_artifact_topology_receipt(
             "blocked",
+            Vec::new(),
             Vec::new(),
             Some(RustUnitExecutionBlocker {
                 class: "missing-host-artifact-unit".to_string(),
@@ -1607,6 +1645,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
                     return host_artifact_topology_receipt(
                         "blocked",
                         Vec::new(),
+                        Vec::new(),
                         Some(RustUnitExecutionBlocker {
                             class: "missing-host-artifact-producer".to_string(),
                             message: format!(
@@ -1623,6 +1662,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
     if target_indices.is_empty() {
         return host_artifact_topology_receipt(
             "blocked",
+            Vec::new(),
             Vec::new(),
             Some(RustUnitExecutionBlocker {
                 class: "missing-host-artifact-consumer".to_string(),
@@ -1650,6 +1690,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
             let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
                 return host_artifact_topology_receipt(
                     "blocked",
+                    Vec::new(),
                     Vec::new(),
                     Some(RustUnitExecutionBlocker {
                         class: "missing-dependency-producer".to_string(),
@@ -1681,12 +1722,14 @@ pub(crate) fn execute_rust_host_artifact_topology(
             &mut ordered_target_indices,
             graph,
         ) {
-            return host_artifact_topology_receipt("blocked", Vec::new(), Some(blocker));
+            return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
         }
     }
 
     let mut executions = Vec::new();
+    let mut build_script_metadata_runs = Vec::new();
     let mut produced_host_artifacts = BTreeMap::<String, PathBuf>::new();
+    let mut produced_build_script_metadata = BTreeMap::<String, BuildScriptMetadataSummary>::new();
     for index in host_indices {
         let unit = &graph.derivations[index];
         let receipt = execute_rust_unit(unit, options)?;
@@ -1696,15 +1739,38 @@ pub(crate) fn execute_rust_host_artifact_topology(
                 message: format!("host unit {} did not execute successfully", unit.unit_id),
             });
             executions.push(receipt);
-            return host_artifact_topology_receipt("blocked", executions, Some(blocker));
+            return host_artifact_topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
         }
         match produced_host_artifact_path(unit, options)? {
             Ok(path) => {
+                if unit.target_kind == "custom-build" {
+                    match run_build_script_metadata(unit, options, &path)? {
+                        Ok(metadata_run) => {
+                            produced_build_script_metadata
+                                .insert(unit.package_id.clone(), build_script_metadata_from_run(&metadata_run));
+                            build_script_metadata_runs.push(metadata_run);
+                        }
+                        Err(blocker) => {
+                            executions.push(receipt);
+                            return host_artifact_topology_receipt(
+                                "blocked",
+                                executions,
+                                build_script_metadata_runs,
+                                Some(blocker),
+                            );
+                        }
+                    }
+                }
                 produced_host_artifacts.insert(unit.package_id.clone(), path);
             }
             Err(blocker) => {
                 executions.push(receipt);
-                return host_artifact_topology_receipt("blocked", executions, Some(blocker));
+                return host_artifact_topology_receipt(
+                    "blocked",
+                    executions,
+                    build_script_metadata_runs,
+                    Some(blocker),
+                );
             }
         }
         executions.push(receipt);
@@ -1714,6 +1780,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
     for index in ordered_target_indices {
         let unit = &graph.derivations[index];
         let mut executable_unit = bind_all_host_artifacts(unit, &produced_host_artifacts)?;
+        executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;
         if !executable_unit.dependency_artifacts.is_empty() {
             executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
         }
@@ -1724,7 +1791,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
                 message: format!("target unit {} did not execute successfully", unit.unit_id),
             });
             executions.push(receipt);
-            return host_artifact_topology_receipt("blocked", executions, Some(blocker));
+            return host_artifact_topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
         }
         if unit.target_kind == "lib" {
             match produced_library_artifact_path(&executable_unit, options)? {
@@ -1733,14 +1800,19 @@ pub(crate) fn execute_rust_host_artifact_topology(
                 }
                 Err(blocker) => {
                     executions.push(receipt);
-                    return host_artifact_topology_receipt("blocked", executions, Some(blocker));
+                    return host_artifact_topology_receipt(
+                        "blocked",
+                        executions,
+                        build_script_metadata_runs,
+                        Some(blocker),
+                    );
                 }
             }
         }
         executions.push(receipt);
     }
 
-    host_artifact_topology_receipt("success", executions, None)
+    host_artifact_topology_receipt("success", executions, build_script_metadata_runs, None)
 }
 
 fn visit_target_topology_unit(
@@ -1831,6 +1903,243 @@ fn bind_all_host_artifacts(
         }
     }
     Ok(bound)
+}
+
+fn bind_all_build_script_metadata(
+    unit: &RustUnitDerivationSummary,
+    produced_metadata: &BTreeMap<String, BuildScriptMetadataSummary>,
+) -> Result<RustUnitDerivationSummary, RunError> {
+    let mut bound = unit.clone();
+    for host_artifact in &unit.consumed_host_artifacts {
+        if host_artifact.target_kind != "custom-build" {
+            continue;
+        }
+        let metadata = produced_metadata.get(&host_artifact.package_id).ok_or_else(|| {
+            RunError::Internal(format!(
+                "unit {} reached execution before build-script metadata package {} was produced",
+                unit.unit_id, host_artifact.package_id
+            ))
+        })?;
+        bound.derivation.env.insert("OUT_DIR".to_string(), metadata.out_dir.clone());
+        for (key, value) in &metadata.rustc_env {
+            bound.derivation.env.insert(key.clone(), value.clone());
+        }
+        for cfg in &metadata.rustc_cfg {
+            bound.derivation.args.push("--cfg".to_string());
+            bound.derivation.args.push(cfg.clone());
+        }
+    }
+    bound.rustc_args_digest_blake3 = blake3::hash(bound.derivation.args.join("\0").as_bytes()).to_hex().to_string();
+    Ok(bound)
+}
+
+fn run_build_script_metadata(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    executable: &Path,
+) -> Result<Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>, RunError> {
+    if !executable.is_file() {
+        return Ok(Err(RustUnitExecutionBlocker {
+            class: "missing-build-script-executable".to_string(),
+            message: format!("custom-build unit {} did not produce an executable", unit.unit_id),
+        }));
+    }
+    let out_dir = options.output_root.join(safe_path_component(&unit.unit_id)).join("out-dir");
+    if out_dir.exists() {
+        fs::remove_dir_all(&out_dir).map_err(|err| {
+            RunError::Internal(format!("removing prior build-script OUT_DIR {}: {err}", out_dir.display()))
+        })?;
+    }
+    fs::create_dir_all(&out_dir)
+        .map_err(|err| RunError::Internal(format!("creating build-script OUT_DIR {}: {err}", out_dir.display())))?;
+
+    let mut command = Command::new(executable);
+    command.env_clear();
+    command.env("OUT_DIR", &out_dir);
+    command.env("CARGO_PKG_NAME", rust_crate_name(&unit.target_name));
+    if let Some(src_path) =
+        rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf))
+    {
+        command.env("CARGO_MANIFEST_DIR", src_path);
+    }
+    let output = command
+        .output()
+        .map_err(|err| RunError::Internal(format!("running build-script unit {}: {err}", unit.unit_id)))?;
+    if !output.status.success() {
+        return Ok(Err(RustUnitExecutionBlocker {
+            class: "build-script-run-failed".to_string(),
+            message: redacted_diagnostic(&output.stderr),
+        }));
+    }
+    let stdout = match String::from_utf8(output.stdout.clone()) {
+        Ok(stdout) => stdout,
+        Err(_) => {
+            return Ok(Err(RustUnitExecutionBlocker {
+                class: "malformed-build-script-metadata".to_string(),
+                message: "build-script stdout was not valid UTF-8".to_string(),
+            }));
+        }
+    };
+    let metadata = match parse_build_script_metadata(&stdout, &out_dir) {
+        Ok(metadata) => metadata,
+        Err(blocker) => return Ok(Err(blocker)),
+    };
+    let out_dir_artifact_digests = digest_build_script_out_dir(&out_dir)?;
+    Ok(Ok(BuildScriptMetadataRunReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        unit_id: unit.unit_id.clone(),
+        package_id: unit.package_id.clone(),
+        target_name: unit.target_name.clone(),
+        execution_status: "success".to_string(),
+        out_dir: metadata.out_dir,
+        rustc_cfg: metadata.rustc_cfg,
+        rustc_env: metadata.rustc_env,
+        rustc_link_lib: metadata.rustc_link_lib,
+        rustc_link_search: metadata.rustc_link_search,
+        rerun_if_changed: metadata.rerun_if_changed,
+        out_dir_artifact_digests,
+        stdout_digest_blake3: blake3::hash(&output.stdout).to_hex().to_string(),
+        metadata_digest_blake3: metadata.digest_blake3,
+        blocker: None,
+    }))
+}
+
+fn parse_build_script_metadata(
+    stdout: &str,
+    out_dir: &Path,
+) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
+    let mut rustc_cfg = Vec::new();
+    let mut rustc_env = BTreeMap::new();
+    let mut rustc_link_lib = Vec::new();
+    let mut rustc_link_search = Vec::new();
+    let mut rerun_if_changed = Vec::new();
+    for (line_index, line) in stdout.lines().enumerate() {
+        let Some(payload) = line.strip_prefix("cargo:") else {
+            continue;
+        };
+        if let Some(value) = payload.strip_prefix("rustc-cfg=") {
+            push_metadata_value(&mut rustc_cfg, value, line_index)?;
+        } else if let Some(value) = payload.strip_prefix("rustc-env=") {
+            let Some((key, env_value)) = value.split_once('=') else {
+                return Err(malformed_build_script_metadata(line_index, "rustc-env must be KEY=VALUE"));
+            };
+            if key.is_empty() {
+                return Err(malformed_build_script_metadata(line_index, "rustc-env key must not be empty"));
+            }
+            rustc_env.insert(key.to_string(), env_value.to_string());
+        } else if let Some(value) = payload.strip_prefix("rustc-link-lib=") {
+            push_metadata_value(&mut rustc_link_lib, value, line_index)?;
+        } else if let Some(value) = payload.strip_prefix("rustc-link-search=") {
+            push_metadata_value(&mut rustc_link_search, value, line_index)?;
+        } else if let Some(value) = payload.strip_prefix("rerun-if-changed=") {
+            push_metadata_value(&mut rerun_if_changed, value, line_index)?;
+        }
+    }
+    rustc_cfg.sort();
+    rustc_cfg.dedup();
+    rustc_link_lib.sort();
+    rustc_link_lib.dedup();
+    rustc_link_search.sort();
+    rustc_link_search.dedup();
+    rerun_if_changed.sort();
+    rerun_if_changed.dedup();
+    build_script_metadata_summary_from_parts(
+        normalize_path_string(out_dir),
+        rustc_cfg,
+        rustc_env,
+        rustc_link_lib,
+        rustc_link_search,
+        rerun_if_changed,
+    )
+}
+
+fn push_metadata_value(
+    values: &mut Vec<String>,
+    value: &str,
+    line_index: usize,
+) -> Result<(), RustUnitExecutionBlocker> {
+    if value.is_empty() {
+        return Err(malformed_build_script_metadata(line_index, "metadata value must not be empty"));
+    }
+    values.push(value.to_string());
+    Ok(())
+}
+
+fn malformed_build_script_metadata(line_index: usize, reason: &str) -> RustUnitExecutionBlocker {
+    RustUnitExecutionBlocker {
+        class: "malformed-build-script-metadata".to_string(),
+        message: format!("build-script metadata line {} is malformed: {reason}", line_index + 1),
+    }
+}
+
+fn build_script_metadata_summary_from_parts(
+    out_dir: String,
+    rustc_cfg: Vec<String>,
+    rustc_env: BTreeMap<String, String>,
+    rustc_link_lib: Vec<String>,
+    rustc_link_search: Vec<String>,
+    rerun_if_changed: Vec<String>,
+) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
+    #[derive(Serialize)]
+    struct Hashable<'a> {
+        out_dir: &'a str,
+        rustc_cfg: &'a [String],
+        rustc_env: &'a BTreeMap<String, String>,
+        rustc_link_lib: &'a [String],
+        rustc_link_search: &'a [String],
+        rerun_if_changed: &'a [String],
+    }
+    let canonical = serde_json::to_vec(&Hashable {
+        out_dir: &out_dir,
+        rustc_cfg: &rustc_cfg,
+        rustc_env: &rustc_env,
+        rustc_link_lib: &rustc_link_lib,
+        rustc_link_search: &rustc_link_search,
+        rerun_if_changed: &rerun_if_changed,
+    })
+    .map_err(|err| RustUnitExecutionBlocker {
+        class: "malformed-build-script-metadata".to_string(),
+        message: format!("canonicalizing build-script metadata failed: {err}"),
+    })?;
+    Ok(BuildScriptMetadataSummary {
+        out_dir,
+        rustc_cfg,
+        rustc_env,
+        rustc_link_lib,
+        rustc_link_search,
+        rerun_if_changed,
+        digest_blake3: blake3::hash(&canonical).to_hex().to_string(),
+    })
+}
+
+fn build_script_metadata_from_run(run: &BuildScriptMetadataRunReceipt) -> BuildScriptMetadataSummary {
+    BuildScriptMetadataSummary {
+        out_dir: run.out_dir.clone(),
+        rustc_cfg: run.rustc_cfg.clone(),
+        rustc_env: run.rustc_env.clone(),
+        rustc_link_lib: run.rustc_link_lib.clone(),
+        rustc_link_search: run.rustc_link_search.clone(),
+        rerun_if_changed: run.rerun_if_changed.clone(),
+        digest_blake3: run.metadata_digest_blake3.clone(),
+    }
+}
+
+fn digest_build_script_out_dir(out_dir: &Path) -> Result<Vec<RustExecutionArtifactDigest>, RunError> {
+    let mut files = Vec::new();
+    collect_output_files(out_dir, &mut files)?;
+    let mut digests = Vec::new();
+    for file in files {
+        let bytes = fs::read(&file).map_err(|err| {
+            RunError::Internal(format!("reading build-script OUT_DIR artifact {}: {err}", file.display()))
+        })?;
+        let relative = file.strip_prefix(out_dir).unwrap_or(file.as_path());
+        digests.push(RustExecutionArtifactDigest {
+            path: format!("out-dir/{}", normalize_path_string(relative)),
+            blake3: blake3::hash(&bytes).to_hex().to_string(),
+        });
+    }
+    digests.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(digests)
 }
 
 fn append_dependency_search_paths(
@@ -2119,14 +2428,16 @@ fn rust_unit_target_topology_execution_receipt_hash(
 fn host_artifact_topology_receipt(
     execution_status: &str,
     unit_executions: Vec<RustUnitExecutionReceipt>,
+    build_script_metadata_runs: Vec<BuildScriptMetadataRunReceipt>,
     blocker: Option<RustUnitExecutionBlocker>,
 ) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
     let mut receipt = RustUnitHostArtifactTopologyExecutionReceipt {
         schema_version: RECEIPT_SCHEMA_VERSION,
         execution_status: execution_status.to_string(),
-        claim: "bounded Rust host-artifact topology; not full Cargo compatibility, native-link probing, or a general scheduler"
+        claim: "bounded Rust host-artifact topology with build-script metadata; not full Cargo compatibility, native-link probing, or a general scheduler"
             .to_string(),
         unit_executions,
+        build_script_metadata_runs,
         blocker,
         receipt_hash: String::new(),
     };
