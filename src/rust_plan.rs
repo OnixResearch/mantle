@@ -252,6 +252,16 @@ pub(crate) struct RustUnitTargetTopologyExecutionReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustUnitHostArtifactTopologyExecutionReceipt {
+    pub(crate) schema_version: u32,
+    pub(crate) execution_status: String,
+    pub(crate) claim: String,
+    pub(crate) unit_executions: Vec<RustUnitExecutionReceipt>,
+    pub(crate) blocker: Option<RustUnitExecutionBlocker>,
+    pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct RustToolchainIdentity {
     pub(crate) tool: String,
     pub(crate) version_verbose: String,
@@ -286,6 +296,12 @@ pub(crate) struct RustPlanDependencyChainExecutionReceipt {
 pub(crate) struct RustPlanTargetTopologyExecutionReceipt {
     pub(crate) rust_plan: RustPlanReceipt,
     pub(crate) target_topology_execution: RustUnitTargetTopologyExecutionReceipt,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanHostArtifactTopologyExecutionReceipt {
+    pub(crate) rust_plan: RustPlanReceipt,
+    pub(crate) host_artifact_topology_execution: RustUnitHostArtifactTopologyExecutionReceipt,
 }
 
 #[derive(Debug, Clone)]
@@ -454,6 +470,20 @@ pub(crate) fn print_rust_plan_target_topology_execution_receipt(
         serde_json::to_string_pretty(receipt)
     }
     .map_err(|err| RunError::Internal(format!("rendering Rust target-topology execution receipt: {err}")))?;
+    println!("{rendered}");
+    Ok(())
+}
+
+pub(crate) fn print_rust_plan_host_artifact_topology_execution_receipt(
+    receipt: &RustPlanHostArtifactTopologyExecutionReceipt,
+    json_mode: bool,
+) -> Result<(), RunError> {
+    let rendered = if json_mode {
+        serde_json::to_string(receipt)
+    } else {
+        serde_json::to_string_pretty(receipt)
+    }
+    .map_err(|err| RunError::Internal(format!("rendering Rust host-artifact topology execution receipt: {err}")))?;
     println!("{rendered}");
     Ok(())
 }
@@ -931,7 +961,11 @@ fn summarize_unit_derivation(
     })?;
 
     let dependency_artifacts = unit_dependency_artifacts(unit, units);
-    let consumed_host_artifacts = consumed_host_artifacts(unit, units, host_artifacts);
+    let consumed_host_artifacts = if execution_kind == "host" {
+        Vec::new()
+    } else {
+        consumed_host_artifacts(unit, units, host_artifacts)
+    };
     let generated_metadata =
         (target_kind == "custom-build").then(|| build_script_metadata_summary(&package_id, &target_name));
     let mut args = vec![
@@ -945,6 +979,12 @@ fn summarize_unit_derivation(
     for crate_type in normalized_crate_types(&crate_types, &target_kind) {
         args.push("--crate-type".to_string());
         args.push(crate_type);
+    }
+    if is_host_target_kind(&target_kind) {
+        if let Some(linker) = resolve_tool_path("cc") {
+            args.push("-C".to_string());
+            args.push(format!("linker={}", normalize_path_string(&linker)));
+        }
     }
     for feature in features {
         args.push("--cfg".to_string());
@@ -1520,6 +1560,189 @@ pub(crate) fn execute_rust_target_unit_topology(
     target_topology_receipt("success", executions, None)
 }
 
+pub(crate) fn execute_rust_host_artifact_topology(
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
+    if !graph.ready {
+        return host_artifact_topology_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message: "unit_derivation_graph is not ready; resolve planning blockers before host-artifact execution"
+                    .to_string(),
+            }),
+        );
+    }
+
+    let host_indices = graph
+        .derivations
+        .iter()
+        .enumerate()
+        .filter_map(|(index, unit)| is_supported_host_unit(unit).then_some(index))
+        .collect::<Vec<_>>();
+    if host_indices.is_empty() {
+        return host_artifact_topology_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-host-artifact-unit".to_string(),
+                message: "unit_derivation_graph does not contain supported proc-macro/custom-build host units"
+                    .to_string(),
+            }),
+        );
+    }
+
+    let mut host_producers = BTreeMap::<String, usize>::new();
+    for index in &host_indices {
+        host_producers.entry(graph.derivations[*index].package_id.clone()).or_insert(*index);
+    }
+
+    let mut target_indices = Vec::new();
+    for (index, unit) in graph.derivations.iter().enumerate() {
+        if is_supported_target_unit(unit) && !unit.consumed_host_artifacts.is_empty() {
+            for host_artifact in &unit.consumed_host_artifacts {
+                if !host_producers.contains_key(&host_artifact.package_id) {
+                    return host_artifact_topology_receipt(
+                        "blocked",
+                        Vec::new(),
+                        Some(RustUnitExecutionBlocker {
+                            class: "missing-host-artifact-producer".to_string(),
+                            message: format!(
+                                "no supported host producer unit for host artifact package {}",
+                                host_artifact.package_id
+                            ),
+                        }),
+                    );
+                }
+            }
+            target_indices.push(index);
+        }
+    }
+    if target_indices.is_empty() {
+        return host_artifact_topology_receipt(
+            "blocked",
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-host-artifact-consumer".to_string(),
+                message: "unit_derivation_graph does not contain target units that consume host artifacts".to_string(),
+            }),
+        );
+    }
+
+    let selected_set = target_indices.iter().copied().collect::<BTreeSet<_>>();
+    let mut lib_producers = BTreeMap::new();
+    for index in &target_indices {
+        let unit = &graph.derivations[*index];
+        if unit.target_kind == "lib" {
+            lib_producers.entry(unit.package_id.clone()).or_insert(*index);
+        }
+    }
+    let mut edges = BTreeMap::<usize, Vec<usize>>::new();
+    for index in &target_indices {
+        let unit = &graph.derivations[*index];
+        let mut deps = Vec::new();
+        for dependency in &unit.dependency_artifacts {
+            if host_producers.contains_key(&dependency.package_id) {
+                continue;
+            }
+            let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
+                return host_artifact_topology_receipt(
+                    "blocked",
+                    Vec::new(),
+                    Some(RustUnitExecutionBlocker {
+                        class: "missing-dependency-producer".to_string(),
+                        message: format!(
+                            "no supported target producer lib unit for dependency package {}",
+                            dependency.package_id
+                        ),
+                    }),
+                );
+            };
+            if selected_set.contains(&producer_index) && producer_index != *index {
+                deps.push(producer_index);
+            }
+        }
+        deps.sort_unstable();
+        deps.dedup();
+        edges.insert(*index, deps);
+    }
+
+    let mut ordered_target_indices = Vec::new();
+    let mut temporary = BTreeSet::new();
+    let mut permanent = BTreeSet::new();
+    for index in &target_indices {
+        if let Err(blocker) = visit_target_topology_unit(
+            *index,
+            &edges,
+            &mut temporary,
+            &mut permanent,
+            &mut ordered_target_indices,
+            graph,
+        ) {
+            return host_artifact_topology_receipt("blocked", Vec::new(), Some(blocker));
+        }
+    }
+
+    let mut executions = Vec::new();
+    let mut produced_host_artifacts = BTreeMap::<String, PathBuf>::new();
+    for index in host_indices {
+        let unit = &graph.derivations[index];
+        let receipt = execute_rust_unit(unit, options)?;
+        if receipt.execution_status != "success" {
+            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+                class: "host-unit-failed".to_string(),
+                message: format!("host unit {} did not execute successfully", unit.unit_id),
+            });
+            executions.push(receipt);
+            return host_artifact_topology_receipt("blocked", executions, Some(blocker));
+        }
+        match produced_host_artifact_path(unit, options)? {
+            Ok(path) => {
+                produced_host_artifacts.insert(unit.package_id.clone(), path);
+            }
+            Err(blocker) => {
+                executions.push(receipt);
+                return host_artifact_topology_receipt("blocked", executions, Some(blocker));
+            }
+        }
+        executions.push(receipt);
+    }
+
+    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
+    for index in ordered_target_indices {
+        let unit = &graph.derivations[index];
+        let mut executable_unit = bind_all_host_artifacts(unit, &produced_host_artifacts)?;
+        if !executable_unit.dependency_artifacts.is_empty() {
+            executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
+        }
+        let receipt = execute_rust_unit(&executable_unit, options)?;
+        if receipt.execution_status != "success" {
+            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+                class: "target-unit-failed".to_string(),
+                message: format!("target unit {} did not execute successfully", unit.unit_id),
+            });
+            executions.push(receipt);
+            return host_artifact_topology_receipt("blocked", executions, Some(blocker));
+        }
+        if unit.target_kind == "lib" {
+            match produced_library_artifact_path(&executable_unit, options)? {
+                Ok(path) => {
+                    produced_target_artifacts.insert(unit.package_id.clone(), path);
+                }
+                Err(blocker) => {
+                    executions.push(receipt);
+                    return host_artifact_topology_receipt("blocked", executions, Some(blocker));
+                }
+            }
+        }
+        executions.push(receipt);
+    }
+
+    host_artifact_topology_receipt("success", executions, None)
+}
+
 fn visit_target_topology_unit(
     index: usize,
     edges: &BTreeMap<usize, Vec<usize>>,
@@ -1555,6 +1778,9 @@ fn bind_all_dependency_artifacts(
 ) -> Result<RustUnitDerivationSummary, RunError> {
     let mut bound = unit.clone();
     for dependency in &unit.dependency_artifacts {
+        if Path::new(&dependency.artifact).is_file() {
+            continue;
+        }
         let produced_artifact = produced_artifacts.get(&dependency.package_id).ok_or_else(|| {
             RunError::Internal(format!(
                 "unit {} reached execution before dependency package {} was produced",
@@ -1564,6 +1790,46 @@ fn bind_all_dependency_artifacts(
         bound = bind_dependency_artifact(&bound, dependency, produced_artifact)?;
     }
     append_dependency_search_paths(&mut bound, produced_artifacts);
+    Ok(bound)
+}
+
+fn bind_all_host_artifacts(
+    unit: &RustUnitDerivationSummary,
+    produced_host_artifacts: &BTreeMap<String, PathBuf>,
+) -> Result<RustUnitDerivationSummary, RunError> {
+    let mut bound = unit.clone();
+    for host_artifact in &unit.consumed_host_artifacts {
+        let produced_artifact = produced_host_artifacts.get(&host_artifact.package_id).ok_or_else(|| {
+            RunError::Internal(format!(
+                "unit {} reached execution before host artifact package {} was produced",
+                unit.unit_id, host_artifact.package_id
+            ))
+        })?;
+        let produced_artifact_string = normalize_path_string(produced_artifact);
+        for artifact in &mut bound.consumed_host_artifacts {
+            if artifact.package_id == host_artifact.package_id
+                && artifact.target_name == host_artifact.target_name
+                && artifact.target_kind == host_artifact.target_kind
+                && artifact.artifact == host_artifact.artifact
+            {
+                artifact.artifact = produced_artifact_string.clone();
+            }
+        }
+        for input in &mut bound.derivation.inputs {
+            if input == &host_artifact.artifact {
+                *input = produced_artifact_string.clone();
+            }
+        }
+        let matching_dependencies = bound
+            .dependency_artifacts
+            .iter()
+            .filter(|dependency| dependency.package_id == host_artifact.package_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        for dependency in matching_dependencies {
+            bound = bind_dependency_artifact(&bound, &dependency, produced_artifact)?;
+        }
+    }
     Ok(bound)
 }
 
@@ -1691,6 +1957,43 @@ fn is_supported_target_unit(unit: &RustUnitDerivationSummary) -> bool {
     unit.execution_kind == "target" && matches!(unit.target_kind.as_str(), "lib" | "bin")
 }
 
+fn is_supported_host_unit(unit: &RustUnitDerivationSummary) -> bool {
+    unit.execution_kind == "host" && matches!(unit.target_kind.as_str(), "proc-macro" | "custom-build")
+}
+
+fn produced_host_artifact_path(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<Result<PathBuf, RustUnitExecutionBlocker>, RunError> {
+    let output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
+    if !output_dir.is_dir() {
+        return Ok(Err(RustUnitExecutionBlocker {
+            class: "missing-produced-host-artifact".to_string(),
+            message: format!("host output directory is missing: {}", output_dir.display()),
+        }));
+    }
+    let mut files = Vec::new();
+    collect_output_files(&output_dir, &mut files)?;
+    let crate_name = rust_crate_name(&unit.target_name);
+    let artifact = if unit.target_kind == "proc-macro" {
+        files.into_iter().find(|path| {
+            matches!(path.extension().and_then(OsStr::to_str), Some("so" | "dylib" | "dll"))
+                && path.file_name().and_then(OsStr::to_str).is_some_and(|name| name.contains(&crate_name))
+        })
+    } else {
+        files.into_iter().find(|path| {
+            path.file_name()
+                .and_then(OsStr::to_str)
+                .is_some_and(|name| name == crate_name || name.contains(&crate_name))
+        })
+    }
+    .ok_or_else(|| RustUnitExecutionBlocker {
+        class: "missing-produced-host-artifact".to_string(),
+        message: format!("host unit {} did not emit a matching artifact", unit.unit_id),
+    });
+    Ok(artifact.map_err(|blocker| blocker))
+}
+
 fn produced_library_artifact_path(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
@@ -1810,6 +2113,35 @@ fn rust_unit_target_topology_execution_receipt_hash(
     hashable.receipt_hash.clear();
     let canonical = serde_json::to_vec(&hashable)
         .map_err(|err| RunError::Internal(format!("canonicalizing Rust target-topology execution receipt: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn host_artifact_topology_receipt(
+    execution_status: &str,
+    unit_executions: Vec<RustUnitExecutionReceipt>,
+    blocker: Option<RustUnitExecutionBlocker>,
+) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
+    let mut receipt = RustUnitHostArtifactTopologyExecutionReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        execution_status: execution_status.to_string(),
+        claim: "bounded Rust host-artifact topology; not full Cargo compatibility, native-link probing, or a general scheduler"
+            .to_string(),
+        unit_executions,
+        blocker,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = rust_unit_host_artifact_topology_execution_receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn rust_unit_host_artifact_topology_execution_receipt_hash(
+    receipt: &RustUnitHostArtifactTopologyExecutionReceipt,
+) -> Result<String, RunError> {
+    let mut hashable = receipt.clone();
+    hashable.receipt_hash.clear();
+    let canonical = serde_json::to_vec(&hashable).map_err(|err| {
+        RunError::Internal(format!("canonicalizing Rust host-artifact topology execution receipt: {err}"))
+    })?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
@@ -2063,10 +2395,18 @@ fn tool_exists(tool: &Path) -> bool {
     if tool.components().count() > 1 || tool.is_absolute() {
         return tool.is_file();
     }
-    let Some(paths) = std::env::var_os("PATH") else {
-        return false;
-    };
-    std::env::split_paths(&paths).any(|directory| directory.join(tool).is_file())
+    resolve_tool_path(tool).is_some()
+}
+
+fn resolve_tool_path(tool: impl AsRef<Path>) -> Option<PathBuf> {
+    let tool = tool.as_ref();
+    if tool.components().count() > 1 || tool.is_absolute() {
+        return tool.is_file().then(|| tool.to_path_buf());
+    }
+    let paths = std::env::var_os("PATH")?;
+    std::env::split_paths(&paths)
+        .map(|directory| directory.join(tool))
+        .find(|candidate| candidate.is_file())
 }
 
 fn redacted_diagnostic(stderr: &[u8]) -> String {
