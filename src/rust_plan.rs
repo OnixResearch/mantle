@@ -3339,10 +3339,117 @@ pub(crate) fn execute_rust_unit_topology(
     topology_receipt("success", executions, build_script_metadata_runs, None)
 }
 
+fn validate_native_host_artifact_topology_inputs(
+    native_host_graph: &NativeHostUnitGraphPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+) -> Option<RustUnitExecutionBlocker> {
+    if !native_host_graph.ready {
+        return Some(RustUnitExecutionBlocker {
+            class: "native-host-unit-graph-blocked".to_string(),
+            message: "native_host_unit_graph_planning is not ready; resolve native host graph blockers before host-artifact execution".to_string(),
+        });
+    }
+    if !graph.ready {
+        return None;
+    }
+
+    let graph_host_units = graph
+        .derivations
+        .iter()
+        .filter(|unit| is_supported_host_unit(unit))
+        .map(|unit| (unit.unit_id.clone(), unit.package_id.clone(), unit.target_name.clone(), unit.target_kind.clone()))
+        .collect::<BTreeSet<_>>();
+    let native_host_units = native_host_graph
+        .host_units
+        .iter()
+        .map(|unit| (unit.unit_id.clone(), unit.package_id.clone(), unit.target_name.clone(), unit.target_kind.clone()))
+        .collect::<BTreeSet<_>>();
+
+    for native_unit in &native_host_units {
+        if !graph_host_units.contains(native_unit) {
+            return Some(RustUnitExecutionBlocker {
+                class: "missing-native-host-derivation".to_string(),
+                message: format!(
+                    "native host unit {} for package {} is absent from unit_derivation_graph",
+                    native_unit.0, native_unit.1
+                ),
+            });
+        }
+    }
+    for graph_unit in &graph_host_units {
+        if !native_host_units.contains(graph_unit) {
+            return Some(RustUnitExecutionBlocker {
+                class: "non-native-host-derivation".to_string(),
+                message: format!(
+                    "host derivation {} for package {} is not backed by native_host_unit_graph_planning",
+                    graph_unit.0, graph_unit.1
+                ),
+            });
+        }
+    }
+
+    let graph_consumers = graph
+        .derivations
+        .iter()
+        .filter(|unit| is_supported_target_unit(unit) && !unit.consumed_host_artifacts.is_empty())
+        .map(|unit| {
+            let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
+            (unit.unit_id.clone(), (unit.package_id.clone(), artifacts))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let native_consumers = native_host_graph
+        .target_consumers
+        .iter()
+        .filter(|unit| !unit.consumed_host_artifacts.is_empty())
+        .map(|unit| {
+            let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
+            (unit.unit_id.clone(), (unit.package_id.clone(), artifacts))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    for (unit_id, (package_id, native_artifacts)) in &native_consumers {
+        let Some((_, graph_artifacts)) = graph_consumers.get_key_value(unit_id) else {
+            return Some(RustUnitExecutionBlocker {
+                class: "missing-native-host-consumer-derivation".to_string(),
+                message: format!(
+                    "native host-artifact consumer {unit_id} for package {package_id} is absent from unit_derivation_graph"
+                ),
+            });
+        };
+        for artifact in native_artifacts {
+            if !graph_artifacts.1.contains(artifact) {
+                return Some(RustUnitExecutionBlocker {
+                    class: "missing-native-host-artifact-binding".to_string(),
+                    message: format!(
+                        "native host artifact from package {} is absent from derivation consumer {unit_id}",
+                        artifact.package_id
+                    ),
+                });
+            }
+        }
+    }
+    for (unit_id, (package_id, _)) in &graph_consumers {
+        if !native_consumers.contains_key(unit_id) {
+            return Some(RustUnitExecutionBlocker {
+                class: "non-native-host-artifact-consumer".to_string(),
+                message: format!(
+                    "host-artifact consumer {unit_id} for package {package_id} is not backed by native_host_unit_graph_planning"
+                ),
+            });
+        }
+    }
+
+    None
+}
+
 pub(crate) fn execute_rust_host_artifact_topology(
+    native_host_graph: &NativeHostUnitGraphPlanningSummary,
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
+    if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph) {
+        return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
+    }
     if !graph.ready {
         return host_artifact_topology_receipt(
             "blocked",
