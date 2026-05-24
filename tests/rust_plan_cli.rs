@@ -204,6 +204,54 @@ fn rust_plan_cli_blocks_host_artifact_topology_when_native_host_graph_is_not_rea
 }
 
 #[test]
+fn rust_plan_cli_blocks_unified_topology_when_native_host_graph_is_not_ready() {
+    let dir = TempDir::new().unwrap();
+    let crate_dir = dir.path().join("feature-build-script-unified");
+    let helper_dir = dir.path().join("helper-crate");
+    std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    std::fs::create_dir_all(helper_dir.join("src")).unwrap();
+    std::fs::write(
+        helper_dir.join("Cargo.toml"),
+        "[package]\nname = \"helper-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    std::fs::write(helper_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+    std::fs::write(
+        crate_dir.join("Cargo.toml"),
+        "[package]\nname = \"feature-build-script-unified\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[build-dependencies]\nhelper_crate = { package = \"helper-crate\", path = \"../helper-crate\" }\n",
+    )
+    .unwrap();
+    std::fs::write(crate_dir.join("build.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(crate_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&crate_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&crate_dir)
+        .arg("--execute-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("native-blocked-unified-output"))
+        .output()
+        .expect("rust-plan unified topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    assert!(!receipt["rust_plan"]["native_host_unit_graph_planning"]["ready"].as_bool().unwrap());
+    let topology = &receipt["topology_execution"];
+    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
+    assert_eq!(topology["blocker"]["class"], "native-host-unit-graph-blocked");
+    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+}
+
+#[test]
 fn rust_plan_cli_executes_supported_unit_from_explicit_receipt_material() {
     let dir = TempDir::new().unwrap();
     let crate_dir = dir.path().join("cli-exec");
@@ -699,6 +747,7 @@ fn rust_plan_cli_executes_unified_topology_with_build_script_and_bin() {
     );
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     assert!(receipt["rust_plan"]["unit_derivation_graph"]["ready"].as_bool().unwrap());
+    assert!(receipt["rust_plan"]["native_host_unit_graph_planning"]["ready"].as_bool().unwrap());
     let topology = &receipt["topology_execution"];
     assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
     assert!(topology["claim"].as_str().unwrap().contains("bounded unified Rust unit topology"));
@@ -763,6 +812,7 @@ fn rust_plan_cli_executes_unified_topology_for_proc_macro_shape() {
 
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    assert!(receipt["rust_plan"]["native_host_unit_graph_planning"]["ready"].as_bool().unwrap());
     let topology = &receipt["topology_execution"];
     assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
     assert!(topology["blocker"].is_null());

@@ -2049,6 +2049,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             .clone()
             .ok_or_else(|| RunError::Internal("--execute-topology requires --execution-output-root".to_string()))?;
         let topology_execution = rust_plan::execute_rust_unit_topology(
+            &receipt.native_host_unit_graph_planning,
             &receipt.unit_derivation_graph,
             &rust_plan::RustUnitExecutionOptions {
                 rustc: rustc.clone(),

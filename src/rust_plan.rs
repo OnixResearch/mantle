@@ -3146,9 +3146,13 @@ pub(crate) fn execute_rust_target_unit_topology(
 }
 
 pub(crate) fn execute_rust_unit_topology(
+    native_host_graph: &NativeHostUnitGraphPlanningSummary,
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
+    if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph, "topology") {
+        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
+    }
     if !graph.ready {
         return topology_receipt(
             "blocked",
@@ -3342,11 +3346,14 @@ pub(crate) fn execute_rust_unit_topology(
 fn validate_native_host_artifact_topology_inputs(
     native_host_graph: &NativeHostUnitGraphPlanningSummary,
     graph: &UnitDerivationGraphSummary,
+    execution_context: &str,
 ) -> Option<RustUnitExecutionBlocker> {
     if !native_host_graph.ready {
         return Some(RustUnitExecutionBlocker {
             class: "native-host-unit-graph-blocked".to_string(),
-            message: "native_host_unit_graph_planning is not ready; resolve native host graph blockers before host-artifact execution".to_string(),
+            message: format!(
+                "native_host_unit_graph_planning is not ready; resolve native host graph blockers before {execution_context} execution"
+            ),
         });
     }
     if !graph.ready {
@@ -3447,7 +3454,7 @@ pub(crate) fn execute_rust_host_artifact_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
-    if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph) {
+    if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph, "host-artifact") {
         return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
     if !graph.ready {
