@@ -7,6 +7,156 @@ fn mantle_cmd() -> Command {
 }
 
 #[test]
+fn rust_plan_cli_reports_native_host_unit_graph_for_build_script() {
+    let dir = TempDir::new().unwrap();
+    let crate_dir = dir.path().join("native-build-script");
+    std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    std::fs::write(
+        crate_dir.join("Cargo.toml"),
+        "[package]\nname = \"native-build-script\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n",
+    )
+    .unwrap();
+    std::fs::write(crate_dir.join("build.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(crate_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&crate_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&crate_dir)
+        .output()
+        .expect("rust-plan CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let host_graph = &receipt["native_host_unit_graph_planning"];
+    assert!(host_graph["ready"].as_bool().unwrap(), "{receipt:#?}");
+    assert_eq!(host_graph["comparison_status"], "matched");
+    assert_eq!(host_graph["host_units"].as_array().unwrap().len(), 1);
+    assert_eq!(host_graph["host_units"][0]["target_kind"], "custom-build");
+    assert_eq!(host_graph["target_consumers"].as_array().unwrap().len(), 1);
+    assert_eq!(host_graph["target_consumers"][0]["consumed_host_artifacts"][0]["target_kind"], "custom-build");
+    assert!(receipt["unit_derivation_graph"]["ready"].as_bool().unwrap());
+    assert_eq!(receipt["unit_derivation_graph"]["host_unit_count"], 1);
+    assert_eq!(receipt["unit_derivation_graph"]["host_artifact_count"], 1);
+    assert_eq!(receipt["unit_derivation_graph"]["derivations"].as_array().unwrap().len(), 2);
+    assert_eq!(receipt["unit_derivation_graph"]["derivations"][0]["target_kind"], "lib");
+    assert_eq!(
+        receipt["unit_derivation_graph"]["derivations"][0]["consumed_host_artifacts"][0]["target_kind"],
+        "custom-build"
+    );
+}
+
+#[test]
+fn rust_plan_cli_reports_native_host_unit_graph_for_proc_macro_dependency() {
+    let dir = TempDir::new().unwrap();
+    let macro_dir = dir.path().join("demo-macro");
+    let app_dir = dir.path().join("app-crate");
+    std::fs::create_dir_all(macro_dir.join("src")).unwrap();
+    std::fs::create_dir_all(app_dir.join("src")).unwrap();
+    std::fs::write(
+        macro_dir.join("Cargo.toml"),
+        "[package]\nname = \"demo-macro\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nproc-macro = true\n",
+    )
+    .unwrap();
+    std::fs::write(
+        macro_dir.join("src/lib.rs"),
+        "extern crate proc_macro;\nuse proc_macro::TokenStream;\n#[proc_macro_attribute]\npub fn demo(_attr: TokenStream, item: TokenStream) -> TokenStream { item }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        app_dir.join("Cargo.toml"),
+        "[package]\nname = \"app-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_macro = { package = \"demo-macro\", path = \"../demo-macro\" }\n",
+    )
+    .unwrap();
+    std::fs::write(app_dir.join("src/lib.rs"), "use demo_macro::demo;\n#[demo]\npub fn value() -> u32 { 1 }\n")
+        .unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&app_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .output()
+        .expect("rust-plan CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let host_graph = &receipt["native_host_unit_graph_planning"];
+    assert!(host_graph["ready"].as_bool().unwrap(), "{receipt:#?}");
+    assert_eq!(host_graph["host_units"].as_array().unwrap().len(), 1);
+    assert_eq!(host_graph["host_units"][0]["target_kind"], "proc-macro");
+    assert_eq!(host_graph["target_consumers"].as_array().unwrap().len(), 1);
+    assert_eq!(host_graph["target_consumers"][0]["target_kind"], "lib");
+    assert_eq!(host_graph["target_consumers"][0]["consumed_host_artifacts"][0]["target_kind"], "proc-macro");
+    assert!(receipt["unit_derivation_graph"]["ready"].as_bool().unwrap());
+    assert_eq!(receipt["unit_derivation_graph"]["host_unit_count"], 1);
+    assert_eq!(receipt["unit_derivation_graph"]["derivations"][1]["target_kind"], "proc-macro");
+}
+
+#[test]
+fn rust_plan_cli_blocks_native_host_unit_graph_when_native_fragment_is_unsupported() {
+    let dir = TempDir::new().unwrap();
+    let crate_dir = dir.path().join("feature-build-script");
+    let helper_dir = dir.path().join("helper-crate");
+    std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    std::fs::create_dir_all(helper_dir.join("src")).unwrap();
+    std::fs::write(
+        helper_dir.join("Cargo.toml"),
+        "[package]\nname = \"helper-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    std::fs::write(helper_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+    std::fs::write(
+        crate_dir.join("Cargo.toml"),
+        "[package]\nname = \"feature-build-script\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[build-dependencies]\nhelper_crate = { package = \"helper-crate\", path = \"../helper-crate\" }\n",
+    )
+    .unwrap();
+    std::fs::write(crate_dir.join("build.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(crate_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&crate_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&crate_dir)
+        .output()
+        .expect("rust-plan CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let host_graph = &receipt["native_host_unit_graph_planning"];
+    assert!(!host_graph["ready"].as_bool().unwrap(), "{receipt:#?}");
+    assert_eq!(host_graph["blockers"][0]["class"], "native-package-target-planning-blocked");
+    assert!(
+        receipt["native_package_target_planning"]["blockers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|blocker| blocker["class"] == "unsupported-build-dependencies"),
+        "{receipt:#?}"
+    );
+}
+
+#[test]
 fn rust_plan_cli_executes_supported_unit_from_explicit_receipt_material() {
     let dir = TempDir::new().unwrap();
     let crate_dir = dir.path().join("cli-exec");
