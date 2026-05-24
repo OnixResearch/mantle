@@ -13,6 +13,7 @@ use serde_json::Value;
 use crate::errors::RunError;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
+const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
 const DEFAULT_CARGO_PROFILE: &str = "dev";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
@@ -2511,6 +2512,17 @@ fn execute_rust_unit(
     }
 
     let unit_output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
+    let dependency_artifact_digests = dependency_artifact_digests.unwrap();
+    let host_artifact_digests = host_artifact_digests.unwrap();
+    if let Some(receipt) = try_reuse_rust_unit_outputs(
+        unit,
+        &unit_output_dir,
+        toolchain.clone(),
+        dependency_artifact_digests.clone(),
+        host_artifact_digests.clone(),
+    )? {
+        return Ok(receipt);
+    }
     if unit_output_dir.exists() {
         fs::remove_dir_all(&unit_output_dir).map_err(|err| {
             RunError::Internal(format!("removing prior Rust unit output {}: {err}", unit_output_dir.display()))
@@ -2534,8 +2546,8 @@ fn execute_rust_unit(
         return failed_execution_receipt(
             unit,
             toolchain,
-            dependency_artifact_digests.unwrap(),
-            host_artifact_digests.unwrap(),
+            dependency_artifact_digests,
+            host_artifact_digests,
             &diagnostic,
         );
     }
@@ -2547,16 +2559,132 @@ fn execute_rust_unit(
             "rustc completed but produced no declared output artifacts",
         );
     }
-    finalized_execution_receipt(
+    let receipt = finalized_execution_receipt(
         unit,
         "success",
         "rebuilt-explicit-unit",
         toolchain,
-        dependency_artifact_digests.unwrap(),
-        host_artifact_digests.unwrap(),
+        dependency_artifact_digests,
+        host_artifact_digests,
         output_artifact_digests,
         None,
+    )?;
+    write_rust_unit_execution_receipt(&unit_output_dir, &receipt)?;
+    Ok(receipt)
+}
+
+fn try_reuse_rust_unit_outputs(
+    unit: &RustUnitDerivationSummary,
+    unit_output_dir: &Path,
+    toolchain: RustToolchainIdentity,
+    dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
+    let receipt_path = unit_output_dir.join(RUST_UNIT_EXECUTION_RECEIPT_FILE);
+    if !receipt_path.exists() {
+        return Ok(None);
+    }
+    let prior_receipt = match fs::read(&receipt_path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<RustUnitExecutionReceipt>(&bytes).ok())
+    {
+        Some(receipt) => receipt,
+        None => {
+            return stale_cached_output_receipt(
+                unit,
+                toolchain,
+                dependency_artifact_digests,
+                host_artifact_digests,
+                Vec::new(),
+                "prior execution receipt is missing or malformed",
+            )
+            .map(Some);
+        }
+    };
+    let current_output_artifact_digests = digest_output_artifacts(unit_output_dir)?;
+    if current_output_artifact_digests.is_empty() {
+        return stale_cached_output_receipt(
+            unit,
+            toolchain,
+            dependency_artifact_digests,
+            host_artifact_digests,
+            current_output_artifact_digests,
+            "prior execution receipt exists but no declared output artifacts are readable",
+        )
+        .map(Some);
+    }
+    let expected_outputs = sorted_strings(unit.derivation.outputs.clone());
+    let matches_current_inputs = prior_receipt.execution_status == "success"
+        && prior_receipt.unit_id == unit.unit_id
+        && prior_receipt.package_id == unit.package_id
+        && prior_receipt.target_name == unit.target_name
+        && prior_receipt.target_kind == unit.target_kind
+        && prior_receipt.source_digest == unit.source_digest
+        && prior_receipt.toolchain == toolchain
+        && prior_receipt.rustc_args_digest_blake3 == unit.rustc_args_digest_blake3
+        && prior_receipt.declared_outputs == expected_outputs
+        && prior_receipt.dependency_artifact_digests == dependency_artifact_digests
+        && prior_receipt.host_artifact_digests == host_artifact_digests
+        && prior_receipt.output_artifact_digests == current_output_artifact_digests
+        && prior_receipt.blocker.is_none();
+    if !matches_current_inputs {
+        return stale_cached_output_receipt(
+            unit,
+            toolchain,
+            dependency_artifact_digests,
+            host_artifact_digests,
+            current_output_artifact_digests,
+            "prior execution receipt does not match current explicit inputs or output artifact digests",
+        )
+        .map(Some);
+    }
+    let receipt = finalized_execution_receipt(
+        unit,
+        "success",
+        "reused-explicit-unit-output",
+        toolchain,
+        dependency_artifact_digests,
+        host_artifact_digests,
+        current_output_artifact_digests,
+        None,
+    )?;
+    write_rust_unit_execution_receipt(unit_output_dir, &receipt)?;
+    Ok(Some(receipt))
+}
+
+fn stale_cached_output_receipt(
+    unit: &RustUnitDerivationSummary,
+    toolchain: RustToolchainIdentity,
+    dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    output_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    message: &str,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    finalized_execution_receipt(
+        unit,
+        "blocked",
+        "not-run-stale-cached-output",
+        toolchain,
+        dependency_artifact_digests,
+        host_artifact_digests,
+        output_artifact_digests,
+        Some(RustUnitExecutionBlocker {
+            class: "stale-cached-output".to_string(),
+            message: message.to_string(),
+        }),
     )
+}
+
+fn write_rust_unit_execution_receipt(
+    unit_output_dir: &Path,
+    receipt: &RustUnitExecutionReceipt,
+) -> Result<(), RunError> {
+    let receipt_path = unit_output_dir.join(RUST_UNIT_EXECUTION_RECEIPT_FILE);
+    let bytes = serde_json::to_vec_pretty(receipt)
+        .map_err(|err| RunError::Internal(format!("canonicalizing Rust unit execution receipt for cache: {err}")))?;
+    fs::write(&receipt_path, bytes).map_err(|err| {
+        RunError::Internal(format!("writing Rust unit execution receipt {}: {err}", receipt_path.display()))
+    })
 }
 
 fn is_supported_target_unit(unit: &RustUnitDerivationSummary) -> bool {
@@ -2971,6 +3099,9 @@ fn digest_output_artifacts(output_dir: &Path) -> Result<Vec<RustExecutionArtifac
     collect_output_files(output_dir, &mut paths)?;
     let mut digests = Vec::new();
     for path in paths {
+        if path.file_name().and_then(OsStr::to_str) == Some(RUST_UNIT_EXECUTION_RECEIPT_FILE) {
+            continue;
+        }
         let relative_path = path.strip_prefix(output_dir).unwrap_or(&path);
         let receipt_path = format!("declared-output/{}", normalize_path_string(relative_path));
         digests.push(digest_artifact_path_with_receipt_path(&path, receipt_path)?);
@@ -3395,11 +3526,11 @@ checksum = "0123456789abcdef"
         })
         .unwrap();
         assert_eq!(repeated.execution_status, "success");
-        assert_eq!(repeated.rebuild_reason, "rebuilt-explicit-unit");
+        assert_eq!(repeated.rebuild_reason, "reused-explicit-unit-output");
         assert_eq!(repeated.declared_outputs, receipt.declared_outputs);
         assert_eq!(repeated.toolchain, receipt.toolchain);
         assert_eq!(repeated.output_artifact_digests, receipt.output_artifact_digests);
-        assert_eq!(repeated.receipt_hash, receipt.receipt_hash);
+        assert_eq!(repeated.receipt_hash.len(), 64);
     }
 
     #[test]
