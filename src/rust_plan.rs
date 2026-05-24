@@ -42,6 +42,7 @@ pub(crate) struct RustPlanReceipt {
     pub(crate) package_count: usize,
     pub(crate) packages: Vec<PackageSummary>,
     pub(crate) source_closure: SourceClosureSummary,
+    pub(crate) native_package_target_planning: NativePackageTargetPlanningSummary,
     pub(crate) unit_graph: UnitGraphSummary,
     pub(crate) unit_derivation_graph: UnitDerivationGraphSummary,
     pub(crate) receipt_hash: String,
@@ -119,6 +120,50 @@ pub(crate) struct SourceDigest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct SourceClosureBlocker {
     pub(crate) package_id: String,
+    pub(crate) class: String,
+    pub(crate) message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NativePackageTargetPlanningSummary {
+    pub(crate) ready: bool,
+    pub(crate) comparison_status: String,
+    pub(crate) cargo_oracle_identity: String,
+    pub(crate) digest_blake3: String,
+    pub(crate) packages: Vec<NativePackagePlanningSummary>,
+    pub(crate) blockers: Vec<NativePackagePlanningBlocker>,
+    pub(crate) non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NativePackagePlanningSummary {
+    pub(crate) package_id: String,
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) manifest_path: String,
+    pub(crate) selected_features: Vec<String>,
+    pub(crate) targets: Vec<NativeTargetPlanningSummary>,
+    pub(crate) path_dependencies: Vec<NativePathDependencySummary>,
+    pub(crate) source_digest: SourceDigest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativeTargetPlanningSummary {
+    pub(crate) name: String,
+    pub(crate) kind: String,
+    pub(crate) crate_name: String,
+    pub(crate) source_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativePathDependencySummary {
+    pub(crate) name: String,
+    pub(crate) manifest_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativePackagePlanningBlocker {
+    pub(crate) package_id: Option<String>,
     pub(crate) class: String,
     pub(crate) message: String,
 }
@@ -397,6 +442,60 @@ struct CargoPackage {
     version: String,
     source: Option<String>,
     manifest_path: String,
+    #[serde(default)]
+    targets: Vec<CargoTarget>,
+    #[serde(default)]
+    features: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CargoTarget {
+    name: String,
+    kind: Vec<String>,
+    src_path: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct NativeManifestPackage {
+    name: String,
+    version: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct NativeManifestLib {
+    name: Option<String>,
+    path: Option<String>,
+    #[serde(rename = "proc-macro", default)]
+    proc_macro: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct NativeManifestBin {
+    name: Option<String>,
+    path: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct NativeManifestWorkspace {
+    #[serde(default)]
+    members: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct NativeManifest {
+    package: Option<NativeManifestPackage>,
+    workspace: Option<NativeManifestWorkspace>,
+    lib: Option<NativeManifestLib>,
+    #[serde(default)]
+    bin: Vec<NativeManifestBin>,
+    #[serde(default)]
+    features: BTreeMap<String, Vec<String>>,
+    #[serde(default)]
+    dependencies: BTreeMap<String, toml::Value>,
+    #[serde(rename = "dev-dependencies", default)]
+    dev_dependencies: BTreeMap<String, toml::Value>,
+    #[serde(rename = "build-dependencies", default)]
+    build_dependencies: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -432,6 +531,13 @@ fn capture_rust_plan_with_oracle(
 
     let lock_packages = parse_lockfile_packages(&options.root)?;
     let source_closure = summarize_source_closure(&metadata.packages, &lock_packages)?;
+    let native_package_target_planning = summarize_native_package_target_planning(
+        &options.root,
+        options,
+        &metadata.packages,
+        &metadata.workspace_members,
+        &source_closure,
+    )?;
     let unit_derivation_graph = summarize_unit_derivation_graph(&unit_graph_value, &source_closure, options)?;
     let packages = summarize_packages(metadata.packages.clone(), &metadata.workspace_members);
 
@@ -451,6 +557,7 @@ fn capture_rust_plan_with_oracle(
         package_count: metadata.packages.len(),
         packages,
         source_closure,
+        native_package_target_planning,
         unit_graph: summarize_unit_graph(unit_graph_value)?,
         unit_derivation_graph,
         receipt_hash: String::new(),
@@ -909,6 +1016,423 @@ fn source_closure_digest(
     }
     let canonical = serde_json::to_vec(&Hashable { sources, blockers })
         .map_err(|err| RunError::Internal(format!("canonicalizing Rust source closure: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn summarize_native_package_target_planning(
+    root: &Path,
+    options: &RustPlanOptions,
+    cargo_packages: &[CargoPackage],
+    workspace_members: &[String],
+    source_closure: &SourceClosureSummary,
+) -> Result<NativePackageTargetPlanningSummary, RunError> {
+    let cargo_oracle_identity = cargo_package_target_oracle_digest(cargo_packages, workspace_members)?;
+    let mut blockers = Vec::new();
+    let manifest_paths = native_workspace_manifest_paths(root, &mut blockers);
+    let workspace_member_set: BTreeSet<&str> = workspace_members.iter().map(String::as_str).collect();
+    let cargo_workspace_packages = cargo_packages
+        .iter()
+        .filter(|package| workspace_member_set.contains(package.id.as_str()))
+        .collect::<Vec<_>>();
+    let mut native_packages = Vec::new();
+    for manifest_path in manifest_paths {
+        match native_package_from_manifest(&manifest_path, options, source_closure) {
+            Ok(package) => native_packages.push(package),
+            Err(blocker) => blockers.push(blocker),
+        }
+    }
+    native_packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
+    compare_native_packages_to_cargo(&native_packages, &cargo_workspace_packages, &mut blockers);
+    blockers.sort();
+    blockers.dedup();
+    let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
+    let digest_blake3 = native_package_target_digest(&native_packages, &blockers, &comparison_status)?;
+    Ok(NativePackageTargetPlanningSummary {
+        ready: blockers.is_empty(),
+        comparison_status,
+        cargo_oracle_identity,
+        digest_blake3,
+        packages: native_packages,
+        blockers,
+        non_claims: vec![
+            "bounded-lib-bin-path-fragment-only".to_string(),
+            "not-full-cargo-feature-resolution".to_string(),
+            "not-full-cargo-compatibility".to_string(),
+            "not-cargo-free-build-scheduling".to_string(),
+        ],
+    })
+}
+
+fn native_workspace_manifest_paths(root: &Path, blockers: &mut Vec<NativePackagePlanningBlocker>) -> Vec<PathBuf> {
+    let root_manifest_path = root.join("Cargo.toml");
+    let Ok(root_manifest) = read_native_manifest(&root_manifest_path) else {
+        blockers.push(native_blocker(
+            None,
+            "missing-native-root-manifest",
+            &format!("native planner requires readable root manifest at {}", root_manifest_path.display()),
+        ));
+        return Vec::new();
+    };
+    let mut manifests = Vec::new();
+    if root_manifest.package.is_some() {
+        manifests.push(root_manifest_path.clone());
+    }
+    if let Some(workspace) = root_manifest.workspace {
+        for member in workspace.members {
+            if member.contains('*') || member.contains('?') || member.contains('[') {
+                blockers.push(native_blocker(
+                    None,
+                    "unsupported-workspace-member-pattern",
+                    &format!("native planner supports explicit workspace members only, got `{member}`"),
+                ));
+                continue;
+            }
+            manifests.push(root.join(member).join("Cargo.toml"));
+        }
+    }
+    manifests.sort();
+    manifests.dedup();
+    manifests
+}
+
+fn native_package_from_manifest(
+    manifest_path: &Path,
+    options: &RustPlanOptions,
+    source_closure: &SourceClosureSummary,
+) -> Result<NativePackagePlanningSummary, NativePackagePlanningBlocker> {
+    let manifest =
+        read_native_manifest(manifest_path).map_err(|message| native_blocker(None, "unreadable-manifest", &message))?;
+    let Some(package) = manifest.package.as_ref() else {
+        return Err(native_blocker(
+            None,
+            "missing-package-section",
+            &format!("manifest {} lacks [package]", manifest_path.display()),
+        ));
+    };
+    let package_id = cargo_path_package_id(&package.name, &package.version);
+    if !manifest.build_dependencies.is_empty() {
+        return Err(native_blocker(
+            Some(package_id),
+            "unsupported-build-dependencies",
+            "native fragment does not model build-dependencies or build scripts",
+        ));
+    }
+    if !manifest.dev_dependencies.is_empty() {
+        return Err(native_blocker(
+            Some(package_id),
+            "unsupported-dev-dependencies",
+            "native fragment does not model dev-dependencies/test surfaces",
+        ));
+    }
+    let source_root = manifest_path.parent().ok_or_else(|| {
+        native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
+    })?;
+    let targets = native_targets_for_manifest(source_root, package, &manifest)?;
+    let path_dependencies = native_path_dependencies(source_root, &manifest.dependencies, Some(package_id.clone()))?;
+    let source_digest = source_closure
+        .sources
+        .iter()
+        .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+        .map(|source| source.source_digest.clone())
+        .unwrap_or_else(|| SourceDigest {
+            algorithm: "missing".to_string(),
+            value: "missing".to_string(),
+        });
+    Ok(NativePackagePlanningSummary {
+        package_id,
+        name: package.name.clone(),
+        version: package.version.clone(),
+        manifest_path: normalize_path_string(manifest_path),
+        selected_features: native_selected_features(options, &manifest.features),
+        targets,
+        path_dependencies,
+        source_digest,
+    })
+}
+
+fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
+    let text = fs::read_to_string(path).map_err(|err| format!("reading manifest {}: {err}", path.display()))?;
+    toml::from_str(&text).map_err(|err| format!("parsing manifest {}: {err}", path.display()))
+}
+
+fn native_targets_for_manifest(
+    source_root: &Path,
+    package: &NativeManifestPackage,
+    manifest: &NativeManifest,
+) -> Result<Vec<NativeTargetPlanningSummary>, NativePackagePlanningBlocker> {
+    let mut targets = Vec::new();
+    if let Some(lib) = &manifest.lib {
+        if lib.proc_macro {
+            return Err(native_blocker(
+                Some(cargo_path_package_id(&package.name, &package.version)),
+                "unsupported-proc-macro-target",
+                "native package/target fragment supports only lib/bin targets",
+            ));
+        }
+        let path = source_root.join(lib.path.as_deref().unwrap_or("src/lib.rs"));
+        push_native_target(&mut targets, lib.name.as_deref().unwrap_or(&package.name), "lib", &path)?;
+    } else {
+        let path = source_root.join("src/lib.rs");
+        if path.is_file() {
+            push_native_target(&mut targets, &package.name, "lib", &path)?;
+        }
+    }
+    if manifest.bin.is_empty() {
+        let path = source_root.join("src/main.rs");
+        if path.is_file() {
+            push_native_target(&mut targets, &package.name, "bin", &path)?;
+        }
+    } else {
+        for bin in &manifest.bin {
+            let name = bin.name.as_deref().unwrap_or(&package.name);
+            let default_path = format!("src/bin/{name}.rs");
+            let path = source_root.join(bin.path.as_deref().unwrap_or(&default_path));
+            push_native_target(&mut targets, name, "bin", &path)?;
+        }
+    }
+    if targets.is_empty() {
+        return Err(native_blocker(
+            Some(cargo_path_package_id(&package.name, &package.version)),
+            "missing-supported-target",
+            "native package/target fragment found no readable lib/bin target source",
+        ));
+    }
+    targets.sort();
+    targets.dedup();
+    Ok(targets)
+}
+
+fn push_native_target(
+    targets: &mut Vec<NativeTargetPlanningSummary>,
+    name: &str,
+    kind: &str,
+    path: &Path,
+) -> Result<(), NativePackagePlanningBlocker> {
+    if !path.is_file() {
+        return Err(native_blocker(
+            None,
+            "missing-target-source",
+            &format!("target `{name}` source {} is not readable", path.display()),
+        ));
+    }
+    targets.push(NativeTargetPlanningSummary {
+        name: name.to_string(),
+        kind: kind.to_string(),
+        crate_name: rust_crate_name(name),
+        source_path: normalize_path_string(path),
+    });
+    Ok(())
+}
+
+fn native_path_dependencies(
+    source_root: &Path,
+    dependencies: &BTreeMap<String, toml::Value>,
+    package_id: Option<String>,
+) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
+    let mut summaries = Vec::new();
+    for (name, value) in dependencies {
+        let Some(path) = dependency_path(value) else {
+            return Err(native_blocker(
+                package_id,
+                "unsupported-non-path-dependency",
+                &format!("dependency `{name}` is outside the bounded path-dependency fragment"),
+            ));
+        };
+        let manifest_path = source_root.join(path).join("Cargo.toml");
+        if !manifest_path.is_file() {
+            return Err(native_blocker(
+                package_id,
+                "missing-path-dependency-manifest",
+                &format!("dependency `{name}` manifest {} is not readable", manifest_path.display()),
+            ));
+        }
+        summaries.push(NativePathDependencySummary {
+            name: name.clone(),
+            manifest_path: normalize_path_string(&manifest_path),
+        });
+    }
+    summaries.sort();
+    summaries.dedup();
+    Ok(summaries)
+}
+
+fn dependency_path(value: &toml::Value) -> Option<&str> {
+    value.as_table()?.get("path")?.as_str()
+}
+
+fn native_selected_features(options: &RustPlanOptions, feature_defs: &BTreeMap<String, Vec<String>>) -> Vec<String> {
+    if options.all_features {
+        return sorted_strings(feature_defs.keys().cloned().collect());
+    }
+    if !options.features.is_empty() {
+        return sorted_strings(options.features.clone());
+    }
+    if options.no_default_features || !feature_defs.contains_key("default") {
+        return Vec::new();
+    }
+    vec!["default".to_string()]
+}
+
+fn compare_native_packages_to_cargo(
+    native_packages: &[NativePackagePlanningSummary],
+    cargo_packages: &[&CargoPackage],
+    blockers: &mut Vec<NativePackagePlanningBlocker>,
+) {
+    for native in native_packages {
+        let Some(cargo) = cargo_packages
+            .iter()
+            .find(|package| manifest_paths_same(&package.manifest_path, Path::new(&native.manifest_path)))
+        else {
+            blockers.push(native_blocker(
+                Some(native.package_id.clone()),
+                "cargo-oracle-missing-package",
+                "native package has no matching Cargo oracle workspace package",
+            ));
+            continue;
+        };
+        if native.name != cargo.name || native.version != cargo.version {
+            blockers.push(native_blocker(
+                Some(native.package_id.clone()),
+                "cargo-oracle-package-identity-mismatch",
+                "native package identity differs from Cargo oracle",
+            ));
+        }
+        let cargo_targets = cargo_supported_targets(cargo);
+        if native.targets != cargo_targets {
+            blockers.push(native_blocker(
+                Some(native.package_id.clone()),
+                "cargo-oracle-target-mismatch",
+                "native target facts differ from Cargo oracle target facts",
+            ));
+        }
+        for target in &cargo.targets {
+            if !target.kind.iter().any(|kind| kind == "lib" || kind == "bin") {
+                blockers.push(native_blocker(
+                    Some(native.package_id.clone()),
+                    "unsupported-cargo-oracle-target-kind",
+                    "Cargo oracle contains a target kind outside the native lib/bin fragment",
+                ));
+            }
+        }
+    }
+    for cargo in cargo_packages {
+        if !native_packages
+            .iter()
+            .any(|native| manifest_paths_same(&native.manifest_path, Path::new(&cargo.manifest_path)))
+        {
+            blockers.push(native_blocker(
+                Some(cargo.id.clone()),
+                "native-missing-cargo-package",
+                "Cargo oracle workspace package is absent from native planning fragment",
+            ));
+        }
+    }
+}
+
+fn cargo_supported_targets(package: &CargoPackage) -> Vec<NativeTargetPlanningSummary> {
+    let mut targets = package
+        .targets
+        .iter()
+        .filter_map(|target| {
+            let kind = if target.kind.iter().any(|kind| kind == "lib") {
+                "lib"
+            } else if target.kind.iter().any(|kind| kind == "bin") {
+                "bin"
+            } else {
+                return None;
+            };
+            Some(NativeTargetPlanningSummary {
+                name: target.name.clone(),
+                kind: kind.to_string(),
+                crate_name: rust_crate_name(&target.name),
+                source_path: normalize_path_string(Path::new(&target.src_path)),
+            })
+        })
+        .collect::<Vec<_>>();
+    targets.sort();
+    targets.dedup();
+    targets
+}
+
+fn manifest_paths_same(left: &str, right: &Path) -> bool {
+    normalize_path_string(Path::new(left)) == normalize_path_string(right)
+}
+
+fn cargo_path_package_id(name: &str, version: &str) -> String {
+    format!("path+native#{name}@{version}")
+}
+
+fn native_blocker(package_id: Option<String>, class: &str, message: &str) -> NativePackagePlanningBlocker {
+    NativePackagePlanningBlocker {
+        package_id,
+        class: class.to_string(),
+        message: message.to_string(),
+    }
+}
+
+fn cargo_package_target_oracle_digest(
+    cargo_packages: &[CargoPackage],
+    workspace_members: &[String],
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct HashableTarget<'a> {
+        name: &'a str,
+        kind: &'a [String],
+        src_path: &'a str,
+    }
+    #[derive(Serialize)]
+    struct HashablePackage<'a> {
+        id: &'a str,
+        name: &'a str,
+        version: &'a str,
+        manifest_path: &'a str,
+        targets: Vec<HashableTarget<'a>>,
+        features: &'a BTreeMap<String, Vec<String>>,
+    }
+    let workspace_member_set: BTreeSet<&str> = workspace_members.iter().map(String::as_str).collect();
+    let mut packages = cargo_packages
+        .iter()
+        .filter(|package| workspace_member_set.contains(package.id.as_str()))
+        .map(|package| HashablePackage {
+            id: &package.id,
+            name: &package.name,
+            version: &package.version,
+            manifest_path: &package.manifest_path,
+            targets: package
+                .targets
+                .iter()
+                .map(|target| HashableTarget {
+                    name: &target.name,
+                    kind: &target.kind,
+                    src_path: &target.src_path,
+                })
+                .collect(),
+            features: &package.features,
+        })
+        .collect::<Vec<_>>();
+    packages.sort_by(|left, right| left.id.cmp(right.id));
+    let canonical = serde_json::to_vec(&packages)
+        .map_err(|err| RunError::Internal(format!("canonicalizing Cargo oracle target facts: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn native_package_target_digest(
+    packages: &[NativePackagePlanningSummary],
+    blockers: &[NativePackagePlanningBlocker],
+    comparison_status: &str,
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct Hashable<'a> {
+        comparison_status: &'a str,
+        packages: &'a [NativePackagePlanningSummary],
+        blockers: &'a [NativePackagePlanningBlocker],
+    }
+    let canonical = serde_json::to_vec(&Hashable {
+        comparison_status,
+        packages,
+        blockers,
+    })
+    .map_err(|err| RunError::Internal(format!("canonicalizing native Rust package/target planning fragment: {err}")))?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
@@ -3338,6 +3862,130 @@ mod tests {
     }
 
     #[test]
+    fn native_package_target_fragment_matches_supported_path_workspace() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let dep_dir = dir.path().join("dep-crate");
+        std::fs::create_dir_all(app_dir.join("src/bin")).unwrap();
+        std::fs::create_dir_all(dep_dir.join("src")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"app\", \"dep-crate\"]\n").unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep_crate = { package = \"dep-crate\", path = \"../dep-crate\" }\n\n[lib]\nname = \"app\"\npath = \"src/lib.rs\"\n\n[[bin]]\nname = \"app-cli\"\npath = \"src/bin/app-cli.rs\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dep_dir.join("Cargo.toml"),
+            "[package]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn answer() -> u32 { dep_crate::answer() }\n").unwrap();
+        std::fs::write(app_dir.join("src/bin/app-cli.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dep_dir.join("src/lib.rs"), "pub fn answer() -> u32 { 42 }\n").unwrap();
+        let packages = vec![
+            CargoPackage {
+                id: "path+file://app#app@0.1.0".to_string(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![
+                    CargoTarget {
+                        name: "app".to_string(),
+                        kind: vec!["lib".to_string()],
+                        src_path: app_dir.join("src/lib.rs").display().to_string(),
+                    },
+                    CargoTarget {
+                        name: "app-cli".to_string(),
+                        kind: vec!["bin".to_string()],
+                        src_path: app_dir.join("src/bin/app-cli.rs").display().to_string(),
+                    },
+                ],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: "path+file://dep-crate#dep-crate@0.1.0".to_string(),
+                name: "dep-crate".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: dep_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "dep-crate".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: dep_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+        ];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let planning = summarize_native_package_target_planning(
+            dir.path(),
+            &RustPlanOptions {
+                features: Vec::new(),
+                no_default_features: false,
+                ..options(dir.path())
+            },
+            &packages,
+            &[
+                "path+file://app#app@0.1.0".to_string(),
+                "path+file://dep-crate#dep-crate@0.1.0".to_string(),
+            ],
+            &closure,
+        )
+        .unwrap();
+
+        assert!(planning.ready, "{:#?}", planning.blockers);
+        assert_eq!(planning.comparison_status, "matched");
+        assert_eq!(planning.packages.len(), 2);
+        let app = planning.packages.iter().find(|package| package.name == "app").unwrap();
+        assert_eq!(app.targets.len(), 2);
+        assert_eq!(app.path_dependencies[0].name, "dep_crate");
+        assert!(planning.non_claims.contains(&"not-full-cargo-compatibility".to_string()));
+        assert_eq!(planning.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn native_package_target_fragment_blocks_unsupported_and_mismatch() {
+        let dir = TempDir::new().unwrap();
+        let crate_dir = dir.path().join("mac");
+        std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"mac\"]\n").unwrap();
+        std::fs::write(
+            crate_dir.join("Cargo.toml"),
+            "[package]\nname = \"mac\"\nversion = \"0.1.0\"\n\n[lib]\nproc-macro = true\n",
+        )
+        .unwrap();
+        std::fs::write(crate_dir.join("src/lib.rs"), "extern crate proc_macro;\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://mac#mac@0.1.0".to_string(),
+            name: "mac".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: crate_dir.join("Cargo.toml").display().to_string(),
+            targets: vec![CargoTarget {
+                name: "mac".to_string(),
+                kind: vec!["proc-macro".to_string()],
+                src_path: crate_dir.join("src/lib.rs").display().to_string(),
+            }],
+            features: BTreeMap::new(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let planning = summarize_native_package_target_planning(
+            dir.path(),
+            &options(dir.path()),
+            &packages,
+            &["path+file://mac#mac@0.1.0".to_string()],
+            &closure,
+        )
+        .unwrap();
+
+        assert!(!planning.ready);
+        assert_eq!(planning.comparison_status, "blocked");
+        assert!(planning.blockers.iter().any(|blocker| blocker.class == "unsupported-proc-macro-target"));
+        assert!(planning.blockers.iter().any(|blocker| blocker.class == "native-missing-cargo-package"));
+    }
+
+    #[test]
     fn source_closure_records_registry_git_and_path_identities() {
         let dir = TempDir::new().unwrap();
         let path_manifest = dir.path().join("path-crate/Cargo.toml");
@@ -3367,6 +4015,8 @@ checksum = "0123456789abcdef"
                 version: "0.2.0".to_string(),
                 source: Some("git+https://example.invalid/repo?rev=main#abcdef123456".to_string()),
                 manifest_path: dir.path().join("git-crate/Cargo.toml").display().to_string(),
+                targets: Vec::new(),
+                features: BTreeMap::new(),
             },
             CargoPackage {
                 id: "path+file:///path-crate#path-crate@0.1.0".to_string(),
@@ -3374,6 +4024,8 @@ checksum = "0123456789abcdef"
                 version: "0.1.0".to_string(),
                 source: None,
                 manifest_path: path_manifest.display().to_string(),
+                targets: Vec::new(),
+                features: BTreeMap::new(),
             },
             CargoPackage {
                 id: "registry+https://github.com/rust-lang/crates.io-index#registry-crate@1.2.3".to_string(),
@@ -3381,6 +4033,8 @@ checksum = "0123456789abcdef"
                 version: "1.2.3".to_string(),
                 source: Some("registry+https://github.com/rust-lang/crates.io-index".to_string()),
                 manifest_path: dir.path().join("registry-crate/Cargo.toml").display().to_string(),
+                targets: Vec::new(),
+                features: BTreeMap::new(),
             },
         ];
         let closure = summarize_source_closure(&packages, &parse_lockfile_packages(dir.path()).unwrap()).unwrap();
@@ -3409,6 +4063,8 @@ checksum = "0123456789abcdef"
             version: "1.0.0".to_string(),
             source: Some("registry+https://github.com/rust-lang/crates.io-index".to_string()),
             manifest_path: "/tmp/missing/Cargo.toml".to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         };
 
         let closure = summarize_source_closure(&[package], &[]).unwrap();
@@ -3430,6 +4086,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -3482,6 +4140,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -3555,6 +4215,8 @@ checksum = "0123456789abcdef"
                 version: "0.1.0".to_string(),
                 source: None,
                 manifest_path: app_manifest.display().to_string(),
+                targets: Vec::new(),
+                features: BTreeMap::new(),
             },
             CargoPackage {
                 id: "path+file://dep-crate#dep-crate@0.1.0".to_string(),
@@ -3562,6 +4224,8 @@ checksum = "0123456789abcdef"
                 version: "0.1.0".to_string(),
                 source: None,
                 manifest_path: dep_manifest.display().to_string(),
+                targets: Vec::new(),
+                features: BTreeMap::new(),
             },
         ];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
@@ -3626,6 +4290,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: app_manifest.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -3664,6 +4330,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -3710,6 +4378,8 @@ checksum = "0123456789abcdef"
             version: "1.0.0".to_string(),
             source: Some("registry+https://github.com/rust-lang/crates.io-index".to_string()),
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         assert!(!closure.ready);
@@ -3760,6 +4430,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -3808,6 +4480,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -3859,6 +4533,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -3896,6 +4572,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -3943,6 +4621,8 @@ checksum = "0123456789abcdef"
                 version: "0.1.0".to_string(),
                 source: None,
                 manifest_path: app_manifest.display().to_string(),
+                targets: Vec::new(),
+                features: BTreeMap::new(),
             },
             CargoPackage {
                 id: "path+file://mac#mac@0.1.0".to_string(),
@@ -3950,6 +4630,8 @@ checksum = "0123456789abcdef"
                 version: "0.1.0".to_string(),
                 source: None,
                 manifest_path: macro_manifest.display().to_string(),
+                targets: Vec::new(),
+                features: BTreeMap::new(),
             },
         ];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
@@ -4004,6 +4686,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
@@ -4040,6 +4724,8 @@ checksum = "0123456789abcdef"
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
         }];
         let closure = summarize_source_closure(&packages, &[]).unwrap();
         let unit_graph = serde_json::json!({
