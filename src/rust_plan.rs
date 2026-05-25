@@ -42,6 +42,7 @@ pub(crate) struct RustPlanReceipt {
     pub(crate) package_count: usize,
     pub(crate) packages: Vec<PackageSummary>,
     pub(crate) source_closure: SourceClosureSummary,
+    pub(crate) native_registry_source_planning: NativeRegistrySourcePlanningSummary,
     pub(crate) native_package_target_planning: NativePackageTargetPlanningSummary,
     pub(crate) native_unit_graph_planning: NativeUnitGraphPlanningSummary,
     pub(crate) native_host_unit_graph_planning: NativeHostUnitGraphPlanningSummary,
@@ -105,7 +106,7 @@ pub(crate) enum SourceKind {
     Other,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct LockPackageIdentity {
     pub(crate) name: String,
     pub(crate) version: String,
@@ -122,6 +123,38 @@ pub(crate) struct SourceDigest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct SourceClosureBlocker {
     pub(crate) package_id: String,
+    pub(crate) class: String,
+    pub(crate) message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NativeRegistrySourcePlanningSummary {
+    pub(crate) ready: bool,
+    pub(crate) comparison_status: String,
+    pub(crate) lockfile_digest_blake3: String,
+    pub(crate) digest_blake3: String,
+    pub(crate) sources: Vec<NativeRegistrySourceSummary>,
+    pub(crate) blockers: Vec<NativeRegistrySourceBlocker>,
+    pub(crate) non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativeRegistrySourceSummary {
+    pub(crate) package_id: String,
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) source: String,
+    pub(crate) source_class: String,
+    pub(crate) checksum: String,
+    pub(crate) vendor_root: String,
+    pub(crate) manifest_path: String,
+    pub(crate) source_digest: SourceDigest,
+    pub(crate) lockfile_identity: LockPackageIdentity,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativeRegistrySourceBlocker {
+    pub(crate) package_id: Option<String>,
     pub(crate) class: String,
     pub(crate) message: String,
 }
@@ -616,12 +649,16 @@ fn capture_rust_plan_with_oracle(
 
     let lock_packages = parse_lockfile_packages(&options.root)?;
     let source_closure = summarize_source_closure(&metadata.packages, &lock_packages)?;
+    let lockfile = lockfile_identity(&options.root)?;
+    let native_registry_source_planning =
+        summarize_native_registry_source_planning(&options.root, &metadata.packages, &lock_packages, &lockfile)?;
     let native_package_target_planning = summarize_native_package_target_planning(
         &options.root,
         options,
         &metadata.packages,
         &metadata.workspace_members,
         &source_closure,
+        &native_registry_source_planning,
     )?;
     let native_unit_graph_planning = summarize_native_unit_graph_planning(
         &unit_graph_value,
@@ -650,7 +687,7 @@ fn capture_rust_plan_with_oracle(
         workspace_root: normalize_path_string(Path::new(&metadata.workspace_root)),
         cargo_version: cargo_version.trim().to_string(),
         rustc_version_verbose: rustc_version_verbose.trim().to_string(),
-        lockfile: lockfile_identity(&options.root)?,
+        lockfile,
         invocation: RustPlanInvocation {
             profile: options.profile.clone(),
             targets: sorted_strings(options.targets.clone()),
@@ -661,6 +698,7 @@ fn capture_rust_plan_with_oracle(
         package_count: metadata.packages.len(),
         packages,
         source_closure,
+        native_registry_source_planning,
         native_package_target_planning,
         native_unit_graph_planning,
         native_host_unit_graph_planning,
@@ -1125,12 +1163,299 @@ fn source_closure_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
+#[derive(Debug, Deserialize)]
+struct CargoConfigToml {
+    #[serde(default)]
+    source: BTreeMap<String, CargoConfigSource>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct CargoConfigSource {
+    directory: Option<String>,
+    #[serde(rename = "replace-with")]
+    replace_with: Option<String>,
+}
+
+fn summarize_native_registry_source_planning(
+    root: &Path,
+    cargo_packages: &[CargoPackage],
+    lock_packages: &[LockPackage],
+    lockfile: &LockfileIdentity,
+) -> Result<NativeRegistrySourcePlanningSummary, RunError> {
+    let mut blockers = Vec::new();
+    let vendor_roots = declared_vendor_roots(root, &mut blockers);
+    let mut sources = Vec::new();
+    for package in cargo_packages
+        .iter()
+        .filter(|package| source_kind(package.source.as_deref()) == SourceKind::Registry)
+    {
+        let lock_identity = find_lock_package(package, lock_packages).map(|lock_package| LockPackageIdentity {
+            name: lock_package.name.clone(),
+            version: lock_package.version.clone(),
+            source: lock_package.source.clone(),
+            checksum: lock_package.checksum.clone(),
+        });
+        let package_id = package.id.clone();
+        let Some(lock_identity) = lock_identity else {
+            blockers.push(native_registry_blocker(
+                Some(package_id),
+                "missing-lockfile-registry-identity",
+                "registry package has no matching Cargo.lock package identity",
+            ));
+            continue;
+        };
+        let Some(source) = lock_identity.source.clone().or_else(|| package.source.clone()) else {
+            blockers.push(native_registry_blocker(
+                Some(package.id.clone()),
+                "missing-registry-source",
+                "registry package lacks lockfile source material",
+            ));
+            continue;
+        };
+        if !source.starts_with("registry+") {
+            blockers.push(native_registry_blocker(
+                Some(package.id.clone()),
+                "unsupported-registry-source-kind",
+                "native registry source planning supports only registry+ lockfile sources",
+            ));
+            continue;
+        }
+        let Some(checksum) = lock_identity.checksum.clone() else {
+            blockers.push(native_registry_blocker(
+                Some(package.id.clone()),
+                "missing-registry-checksum",
+                "registry package lacks Cargo.lock checksum material",
+            ));
+            continue;
+        };
+        if lock_identity.name != package.name
+            || lock_identity.version != package.version
+            || Some(source.clone()) != package.source
+        {
+            blockers.push(native_registry_blocker(
+                Some(package.id.clone()),
+                "cargo-oracle-registry-identity-mismatch",
+                "Cargo oracle registry package identity differs from Cargo.lock identity",
+            ));
+            continue;
+        }
+        match bind_declared_vendor_source(root, package, &checksum, &vendor_roots) {
+            Ok((vendor_root, manifest_path, source_digest)) => sources.push(NativeRegistrySourceSummary {
+                package_id: package.id.clone(),
+                name: package.name.clone(),
+                version: package.version.clone(),
+                source,
+                source_class: "registry".to_string(),
+                checksum,
+                vendor_root: normalize_path_string(&vendor_root),
+                manifest_path: normalize_path_string(&manifest_path),
+                source_digest,
+                lockfile_identity: lock_identity,
+            }),
+            Err(blocker) => blockers.push(blocker),
+        }
+    }
+    sources.sort();
+    blockers.sort();
+    blockers.dedup();
+    let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
+    let digest_blake3 = native_registry_source_digest(&sources, &blockers, &comparison_status, &lockfile.blake3)?;
+    Ok(NativeRegistrySourcePlanningSummary {
+        ready: blockers.is_empty(),
+        comparison_status,
+        lockfile_digest_blake3: lockfile.blake3.clone(),
+        digest_blake3,
+        sources,
+        blockers,
+        non_claims: vec![
+            "declared-local-vendor-source-only".to_string(),
+            "no-network-fetch".to_string(),
+            "no-version-solving".to_string(),
+            "no-ambient-cargo-cache".to_string(),
+            "not-general-cargo-registry-compatibility".to_string(),
+        ],
+    })
+}
+
+fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlocker>) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    for config_path in [root.join(".cargo/config.toml"), root.join(".cargo/config")] {
+        if !config_path.is_file() {
+            continue;
+        }
+        let config_text = match fs::read_to_string(&config_path) {
+            Ok(text) => text,
+            Err(err) => {
+                blockers.push(native_registry_blocker(
+                    None,
+                    "unreadable-cargo-source-config",
+                    &format!("reading declared Cargo source config {}: {err}", config_path.display()),
+                ));
+                continue;
+            }
+        };
+        let config: CargoConfigToml = match toml::from_str(&config_text) {
+            Ok(config) => config,
+            Err(err) => {
+                blockers.push(native_registry_blocker(
+                    None,
+                    "invalid-cargo-source-config",
+                    &format!("parsing declared Cargo source config {}: {err}", config_path.display()),
+                ));
+                continue;
+            }
+        };
+        for source in config.source.values() {
+            let declared_directory = source.directory.as_deref().or_else(|| {
+                source
+                    .replace_with
+                    .as_ref()
+                    .and_then(|replace_with| config.source.get(replace_with))
+                    .and_then(|replacement| replacement.directory.as_deref())
+            });
+            let Some(directory) = declared_directory else {
+                continue;
+            };
+            let path = Path::new(directory);
+            let vendor_root = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                config_path.parent().unwrap_or(root).join(path)
+            };
+            roots.push(fs::canonicalize(&vendor_root).unwrap_or(vendor_root));
+        }
+    }
+    roots.sort();
+    roots.dedup();
+    roots
+}
+
+fn bind_declared_vendor_source(
+    _root: &Path,
+    package: &CargoPackage,
+    checksum: &str,
+    vendor_roots: &[PathBuf],
+) -> Result<(PathBuf, PathBuf, SourceDigest), NativeRegistrySourceBlocker> {
+    if vendor_roots.is_empty() {
+        return Err(native_registry_blocker(
+            Some(package.id.clone()),
+            "missing-declared-vendor-root",
+            "registry package requires a declared local vendor/source root; ambient Cargo caches are not accepted",
+        ));
+    }
+    let manifest_path = PathBuf::from(&package.manifest_path);
+    let manifest_parent = manifest_path.parent();
+    for vendor_root in vendor_roots {
+        let package_root = vendor_root.join(format!("{}-{}", package.name, package.version));
+        let candidate_manifest = package_root.join("Cargo.toml");
+        let manifest_candidate = if candidate_manifest.is_file() {
+            Some(candidate_manifest)
+        } else if manifest_parent.is_some_and(|parent| parent.starts_with(vendor_root)) && manifest_path.is_file() {
+            Some(manifest_path.clone())
+        } else {
+            None
+        };
+        let Some(manifest_candidate) = manifest_candidate else {
+            continue;
+        };
+        let source_root = manifest_candidate.parent().ok_or_else(|| {
+            native_registry_blocker(
+                Some(package.id.clone()),
+                "invalid-vendor-source-root",
+                "declared vendor manifest path has no parent directory",
+            )
+        })?;
+        validate_vendor_checksum(package, source_root, checksum)?;
+        let digest = hash_path_source_tree(source_root).map_err(|message| {
+            native_registry_blocker(Some(package.id.clone()), "vendor-source-unreadable", &message)
+        })?;
+        return Ok((vendor_root.clone(), manifest_candidate, SourceDigest {
+            algorithm: PATH_SOURCE_DIGEST_ALGORITHM.to_string(),
+            value: digest,
+        }));
+    }
+    Err(native_registry_blocker(
+        Some(package.id.clone()),
+        "missing-vendor-source-root",
+        "declared vendor/source roots do not contain the registry package source tree",
+    ))
+}
+
+fn validate_vendor_checksum(
+    package: &CargoPackage,
+    source_root: &Path,
+    expected_checksum: &str,
+) -> Result<(), NativeRegistrySourceBlocker> {
+    let checksum_path = source_root.join(".cargo-checksum.json");
+    let text = fs::read_to_string(&checksum_path).map_err(|err| {
+        native_registry_blocker(
+            Some(package.id.clone()),
+            "missing-vendor-checksum-manifest",
+            &format!("reading vendor checksum manifest {}: {err}", checksum_path.display()),
+        )
+    })?;
+    let value: Value = serde_json::from_str(&text).map_err(|err| {
+        native_registry_blocker(
+            Some(package.id.clone()),
+            "invalid-vendor-checksum-manifest",
+            &format!("parsing vendor checksum manifest {}: {err}", checksum_path.display()),
+        )
+    })?;
+    let actual = value.get("package").and_then(Value::as_str).ok_or_else(|| {
+        native_registry_blocker(
+            Some(package.id.clone()),
+            "missing-vendor-package-checksum",
+            "vendor checksum manifest lacks package checksum material",
+        )
+    })?;
+    if actual != expected_checksum {
+        return Err(native_registry_blocker(
+            Some(package.id.clone()),
+            "vendor-checksum-mismatch",
+            "vendor package checksum does not match Cargo.lock checksum material",
+        ));
+    }
+    Ok(())
+}
+
+fn native_registry_source_digest(
+    sources: &[NativeRegistrySourceSummary],
+    blockers: &[NativeRegistrySourceBlocker],
+    comparison_status: &str,
+    lockfile_digest_blake3: &str,
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct Hashable<'a> {
+        comparison_status: &'a str,
+        lockfile_digest_blake3: &'a str,
+        sources: &'a [NativeRegistrySourceSummary],
+        blockers: &'a [NativeRegistrySourceBlocker],
+    }
+    let canonical = serde_json::to_vec(&Hashable {
+        comparison_status,
+        lockfile_digest_blake3,
+        sources,
+        blockers,
+    })
+    .map_err(|err| RunError::Internal(format!("canonicalizing native registry source planning fragment: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn native_registry_blocker(package_id: Option<String>, class: &str, message: &str) -> NativeRegistrySourceBlocker {
+    NativeRegistrySourceBlocker {
+        package_id,
+        class: class.to_string(),
+        message: message.to_string(),
+    }
+}
+
 fn summarize_native_package_target_planning(
     root: &Path,
     options: &RustPlanOptions,
     cargo_packages: &[CargoPackage],
     workspace_members: &[String],
     source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
 ) -> Result<NativePackageTargetPlanningSummary, RunError> {
     let cargo_oracle_identity = cargo_package_target_oracle_digest(cargo_packages, workspace_members)?;
     let mut blockers = Vec::new();
@@ -1142,6 +1467,10 @@ fn summarize_native_package_target_planning(
             .filter(|source| source.kind == SourceKind::Path)
             .map(|source| PathBuf::from(&source.manifest_path)),
     );
+    if native_registry_source_planning.ready {
+        manifest_paths
+            .extend(native_registry_source_planning.sources.iter().map(|source| PathBuf::from(&source.manifest_path)));
+    }
     manifest_paths.sort();
     manifest_paths.dedup();
     let workspace_member_set: BTreeSet<&str> = workspace_members.iter().map(String::as_str).collect();
@@ -1154,7 +1483,7 @@ fn summarize_native_package_target_planning(
         .collect::<Vec<_>>();
     let mut native_packages = Vec::new();
     for manifest_path in manifest_paths {
-        match native_package_from_manifest(&manifest_path, options, source_closure) {
+        match native_package_from_manifest(&manifest_path, options, source_closure, native_registry_source_planning) {
             Ok(package) => native_packages.push(package),
             Err(blocker) => blockers.push(blocker),
         }
@@ -1217,6 +1546,7 @@ fn native_package_from_manifest(
     manifest_path: &Path,
     options: &RustPlanOptions,
     source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
 ) -> Result<NativePackagePlanningSummary, NativePackagePlanningBlocker> {
     let manifest =
         read_native_manifest(manifest_path).map_err(|message| native_blocker(None, "unreadable-manifest", &message))?;
@@ -1232,6 +1562,13 @@ fn native_package_from_manifest(
         .iter()
         .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
         .map(|source| source.package_id.clone())
+        .or_else(|| {
+            native_registry_source_planning
+                .sources
+                .iter()
+                .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+                .map(|source| source.package_id.clone())
+        })
         .unwrap_or_else(|| cargo_path_package_id(&package.name, &package.version));
     if !manifest.build_dependencies.is_empty() {
         return Err(native_blocker(
@@ -1251,12 +1588,24 @@ fn native_package_from_manifest(
         native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
     })?;
     let targets = native_targets_for_manifest(source_root, package, &manifest)?;
-    let path_dependencies = native_path_dependencies(source_root, &manifest.dependencies, Some(package_id.clone()))?;
+    let path_dependencies = native_path_dependencies(
+        source_root,
+        &manifest.dependencies,
+        Some(package_id.clone()),
+        native_registry_source_planning,
+    )?;
     let source_digest = source_closure
         .sources
         .iter()
         .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
         .map(|source| source.source_digest.clone())
+        .or_else(|| {
+            native_registry_source_planning
+                .sources
+                .iter()
+                .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+                .map(|source| source.source_digest.clone())
+        })
         .unwrap_or_else(|| SourceDigest {
             algorithm: "missing".to_string(),
             value: "missing".to_string(),
@@ -1351,17 +1700,21 @@ fn native_path_dependencies(
     source_root: &Path,
     dependencies: &BTreeMap<String, toml::Value>,
     package_id: Option<String>,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
     let mut summaries = Vec::new();
     for (name, value) in dependencies {
-        let Some(path) = dependency_path(value) else {
+        let manifest_path = if let Some(path) = dependency_path(value) {
+            source_root.join(path).join("Cargo.toml")
+        } else if let Some(registry_source) = registry_dependency_source(name, value, native_registry_source_planning) {
+            PathBuf::from(&registry_source.manifest_path)
+        } else {
             return Err(native_blocker(
                 package_id,
                 "unsupported-non-path-dependency",
-                &format!("dependency `{name}` is outside the bounded path-dependency fragment"),
+                &format!("dependency `{name}` is outside the bounded path-or-declared-registry-dependency fragment"),
             ));
         };
-        let manifest_path = source_root.join(path).join("Cargo.toml");
         if !manifest_path.is_file() {
             return Err(native_blocker(
                 package_id,
@@ -1377,6 +1730,22 @@ fn native_path_dependencies(
     summaries.sort();
     summaries.dedup();
     Ok(summaries)
+}
+
+fn registry_dependency_source<'a>(
+    dependency_name: &str,
+    value: &toml::Value,
+    native_registry_source_planning: &'a NativeRegistrySourcePlanningSummary,
+) -> Option<&'a NativeRegistrySourceSummary> {
+    if !native_registry_source_planning.ready {
+        return None;
+    }
+    let package_name = value
+        .as_table()
+        .and_then(|table| table.get("package"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or(dependency_name);
+    native_registry_source_planning.sources.iter().find(|source| source.name == package_name)
 }
 
 fn dependency_path(value: &toml::Value) -> Option<&str> {
@@ -4924,6 +5293,18 @@ mod tests {
         }
     }
 
+    fn empty_registry_planning() -> NativeRegistrySourcePlanningSummary {
+        NativeRegistrySourcePlanningSummary {
+            ready: true,
+            comparison_status: "matched".to_string(),
+            lockfile_digest_blake3: "test-lockfile".to_string(),
+            digest_blake3: "test-registry".to_string(),
+            sources: Vec::new(),
+            blockers: Vec::new(),
+            non_claims: vec!["declared-local-vendor-source-only".to_string()],
+        }
+    }
+
     #[test]
     fn captures_normalized_oracle_receipt() {
         let dir = TempDir::new().unwrap();
@@ -5038,6 +5419,7 @@ mod tests {
                 "path+file://dep-crate#dep-crate@0.1.0".to_string(),
             ],
             &closure,
+            &empty_registry_planning(),
         )
         .unwrap();
 
@@ -5049,6 +5431,146 @@ mod tests {
         assert_eq!(app.path_dependencies[0].name, "dep_crate");
         assert!(planning.non_claims.contains(&"not-full-cargo-compatibility".to_string()));
         assert_eq!(planning.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn native_registry_source_planning_binds_declared_vendor_source() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let vendor_dir = dir.path().join("vendor");
+        let dep_dir = vendor_dir.join("dep-crate-0.1.0");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(dep_dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.path().join(".cargo")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"app\"]\n").unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep_crate = { package = \"dep-crate\", version = \"0.1.0\" }\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { dep_crate::dep() }\n").unwrap();
+        std::fs::write(
+            dep_dir.join("Cargo.toml"),
+            "[package]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(dep_dir.join("src/lib.rs"), "pub fn dep() -> u32 { 7 }\n").unwrap();
+        let checksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        std::fs::write(dep_dir.join(".cargo-checksum.json"), format!(r#"{{"package":"{checksum}","files":{{}}}}"#))
+            .unwrap();
+        std::fs::write(
+            dir.path().join(".cargo/config.toml"),
+            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"../vendor\"\n",
+        )
+        .unwrap();
+        let registry_source = "registry+https://github.com/rust-lang/crates.io-index".to_string();
+        let app_id = "path+file://app#app@0.1.0".to_string();
+        let dep_id = "registry+https://github.com/rust-lang/crates.io-index#dep-crate@0.1.0".to_string();
+        let packages = vec![
+            CargoPackage {
+                id: app_id.clone(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "app".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: app_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: dep_id.clone(),
+                name: "dep-crate".to_string(),
+                version: "0.1.0".to_string(),
+                source: Some(registry_source.clone()),
+                manifest_path: dep_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "dep-crate".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: dep_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+        ];
+        let lock_packages = vec![LockPackage {
+            name: "dep-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(registry_source),
+            checksum: Some(checksum.to_string()),
+        }];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+        let registry_planning =
+            summarize_native_registry_source_planning(dir.path(), &packages, &lock_packages, &lockfile).unwrap();
+        let source_closure = summarize_source_closure(&packages, &lock_packages).unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &plan_options,
+            &packages,
+            &[app_id, dep_id],
+            &source_closure,
+            &registry_planning,
+        )
+        .unwrap();
+
+        assert!(registry_planning.ready, "{:#?}", registry_planning.blockers);
+        assert_eq!(registry_planning.sources.len(), 1);
+        let registry_source = &registry_planning.sources[0];
+        assert_eq!(registry_source.name, "dep-crate");
+        assert_eq!(registry_source.checksum, checksum);
+        assert_eq!(registry_source.source_digest.algorithm, PATH_SOURCE_DIGEST_ALGORITHM);
+        assert_eq!(registry_source.source_digest.value.len(), 64);
+        assert!(registry_planning.non_claims.contains(&"no-ambient-cargo-cache".to_string()));
+        assert!(package_planning.ready, "{:#?}", package_planning.blockers);
+        assert_eq!(package_planning.packages.len(), 2);
+        let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
+        assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&dep_dir.join("Cargo.toml")));
+    }
+
+    #[test]
+    fn native_registry_source_planning_blocks_missing_vendor_material() {
+        let dir = TempDir::new().unwrap();
+        let registry_source = "registry+https://github.com/rust-lang/crates.io-index".to_string();
+        let packages = vec![CargoPackage {
+            id: "registry+https://github.com/rust-lang/crates.io-index#dep-crate@0.1.0".to_string(),
+            name: "dep-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(registry_source.clone()),
+            manifest_path: dir.path().join("ambient-cargo-cache/dep-crate-0.1.0/Cargo.toml").display().to_string(),
+            targets: vec![CargoTarget {
+                name: "dep-crate".to_string(),
+                kind: vec!["lib".to_string()],
+                src_path: dir.path().join("ambient-cargo-cache/dep-crate-0.1.0/src/lib.rs").display().to_string(),
+            }],
+            features: BTreeMap::new(),
+        }];
+        let lock_packages = vec![LockPackage {
+            name: "dep-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(registry_source),
+            checksum: Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()),
+        }];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+
+        let registry_planning =
+            summarize_native_registry_source_planning(dir.path(), &packages, &lock_packages, &lockfile).unwrap();
+
+        assert!(!registry_planning.ready);
+        assert_eq!(registry_planning.comparison_status, "blocked");
+        assert!(registry_planning.sources.is_empty());
+        assert!(registry_planning.blockers.iter().any(|blocker| blocker.class == "missing-declared-vendor-root"));
     }
 
     #[test]
@@ -5121,6 +5643,7 @@ mod tests {
             &packages,
             &[app_id.clone(), dep_id.clone()],
             &closure,
+            &empty_registry_planning(),
         )
         .unwrap();
         let unit_graph = serde_json::json!({
@@ -5207,6 +5730,7 @@ mod tests {
             &packages,
             &[package_id.clone()],
             &closure,
+            &empty_registry_planning(),
         )
         .unwrap();
         package_planning.packages[0].path_dependencies.push(NativePathDependencySummary {
@@ -5260,6 +5784,7 @@ mod tests {
             &packages,
             &["path+file://benchy#benchy@0.1.0".to_string()],
             &closure,
+            &empty_registry_planning(),
         )
         .unwrap();
 
