@@ -5151,9 +5151,14 @@ mod tests {
 
         let native_units =
             summarize_native_unit_graph_planning(&unit_graph, &closure, &package_planning, &plan_options).unwrap();
-        let derivation_graph =
-            summarize_unit_derivation_graph_with_native(&unit_graph, &closure, &plan_options, Some(&native_units))
-                .unwrap();
+        let derivation_graph = summarize_unit_derivation_graph_with_native(
+            &unit_graph,
+            &closure,
+            &plan_options,
+            Some(&native_units),
+            None,
+        )
+        .unwrap();
 
         assert!(native_units.ready, "{:#?}", native_units.blockers);
         assert_eq!(native_units.comparison_status, "matched");
@@ -5224,31 +5229,27 @@ mod tests {
         assert!(!native_units.ready);
         assert_eq!(native_units.comparison_status, "blocked");
         assert!(native_units.blockers.iter().any(|blocker| blocker.class == "unresolved-path-dependency-edge"));
-        assert!(native_units.blockers.iter().any(|blocker| blocker.class == "cargo-oracle-unit-graph-mismatch"));
+        assert!(native_units.blockers.iter().all(|blocker| blocker.class != "cargo-oracle-unit-graph-mismatch"));
     }
 
     #[test]
     fn native_package_target_fragment_blocks_unsupported_and_mismatch() {
         let dir = TempDir::new().unwrap();
-        let crate_dir = dir.path().join("mac");
+        let crate_dir = dir.path().join("benchy");
         std::fs::create_dir_all(crate_dir.join("src")).unwrap();
-        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"mac\"]\n").unwrap();
-        std::fs::write(
-            crate_dir.join("Cargo.toml"),
-            "[package]\nname = \"mac\"\nversion = \"0.1.0\"\n\n[lib]\nproc-macro = true\n",
-        )
-        .unwrap();
-        std::fs::write(crate_dir.join("src/lib.rs"), "extern crate proc_macro;\n").unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"benchy\"]\n").unwrap();
+        std::fs::write(crate_dir.join("Cargo.toml"), "[package]\nname = \"benchy\"\nversion = \"0.1.0\"\n").unwrap();
+        std::fs::write(crate_dir.join("src/lib.rs"), "pub fn value() -> u8 { 1 }\n").unwrap();
         let packages = vec![CargoPackage {
-            id: "path+file://mac#mac@0.1.0".to_string(),
-            name: "mac".to_string(),
+            id: "path+file://benchy#benchy@0.1.0".to_string(),
+            name: "benchy".to_string(),
             version: "0.1.0".to_string(),
             source: None,
             manifest_path: crate_dir.join("Cargo.toml").display().to_string(),
             targets: vec![CargoTarget {
-                name: "mac".to_string(),
-                kind: vec!["proc-macro".to_string()],
-                src_path: crate_dir.join("src/lib.rs").display().to_string(),
+                name: "benchy-bench".to_string(),
+                kind: vec!["bench".to_string()],
+                src_path: crate_dir.join("benches/benchy.rs").display().to_string(),
             }],
             features: BTreeMap::new(),
         }];
@@ -5257,15 +5258,15 @@ mod tests {
             dir.path(),
             &options(dir.path()),
             &packages,
-            &["path+file://mac#mac@0.1.0".to_string()],
+            &["path+file://benchy#benchy@0.1.0".to_string()],
             &closure,
         )
         .unwrap();
 
         assert!(!planning.ready);
         assert_eq!(planning.comparison_status, "blocked");
-        assert!(planning.blockers.iter().any(|blocker| blocker.class == "unsupported-proc-macro-target"));
-        assert!(planning.blockers.iter().any(|blocker| blocker.class == "native-missing-cargo-package"));
+        assert!(planning.blockers.iter().any(|blocker| blocker.class == "unsupported-cargo-oracle-target-kind"));
+        assert!(planning.blockers.iter().all(|blocker| blocker.class != "native-package-target-mismatch"));
     }
 
     #[test]
