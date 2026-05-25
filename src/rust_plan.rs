@@ -1320,7 +1320,7 @@ fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlo
             let vendor_root = if path.is_absolute() {
                 path.to_path_buf()
             } else {
-                config_path.parent().unwrap_or(root).join(path)
+                root.join(path)
             };
             roots.push(fs::canonicalize(&vendor_root).unwrap_or(vendor_root));
         }
@@ -1594,13 +1594,13 @@ fn native_package_from_manifest(
         Some(package_id.clone()),
         native_registry_source_planning,
     )?;
-    let source_digest = source_closure
+    let source_digest = native_registry_source_planning
         .sources
         .iter()
         .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
         .map(|source| source.source_digest.clone())
         .or_else(|| {
-            native_registry_source_planning
+            source_closure
                 .sources
                 .iter()
                 .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
@@ -3515,10 +3515,14 @@ pub(crate) fn execute_rust_target_unit_topology(
 }
 
 pub(crate) fn execute_rust_unit_topology(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
     native_host_graph: &NativeHostUnitGraphPlanningSummary,
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
+    if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
+        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
+    }
     if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph, "topology") {
         return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
@@ -3710,6 +3714,51 @@ pub(crate) fn execute_rust_unit_topology(
     }
 
     topology_receipt("success", executions, build_script_metadata_runs, None)
+}
+
+fn validate_native_registry_topology_inputs(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+) -> Option<RustUnitExecutionBlocker> {
+    let registry_packages = graph
+        .derivations
+        .iter()
+        .filter(|unit| unit.package_id.starts_with("registry+"))
+        .map(|unit| unit.package_id.clone())
+        .collect::<BTreeSet<_>>();
+    if registry_packages.is_empty() {
+        return None;
+    }
+    if !native_registry_sources.ready {
+        let blocker_classes = native_registry_sources
+            .blockers
+            .iter()
+            .map(|blocker| blocker.class.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        return Some(RustUnitExecutionBlocker {
+            class: "native-registry-source-planning-blocked".to_string(),
+            message: format!(
+                "registry-backed topology execution requires ready native registry source facts; blockers: {blocker_classes}"
+            ),
+        });
+    }
+    let source_packages = native_registry_sources
+        .sources
+        .iter()
+        .map(|source| source.package_id.clone())
+        .collect::<BTreeSet<_>>();
+    for package_id in registry_packages {
+        if !source_packages.contains(&package_id) {
+            return Some(RustUnitExecutionBlocker {
+                class: "missing-native-registry-source-fact".to_string(),
+                message: format!(
+                    "registry-backed unit package {package_id} is not backed by native_registry_source_planning"
+                ),
+            });
+        }
+    }
+    None
 }
 
 fn validate_native_host_artifact_topology_inputs(
@@ -5460,7 +5509,7 @@ mod tests {
             .unwrap();
         std::fs::write(
             dir.path().join(".cargo/config.toml"),
-            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"../vendor\"\n",
+            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor\"\n",
         )
         .unwrap();
         let registry_source = "registry+https://github.com/rust-lang/crates.io-index".to_string();
