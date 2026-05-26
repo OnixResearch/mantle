@@ -2605,7 +2605,12 @@ fn compare_native_packages_to_cargo(
         let _cargo_targets = cargo_supported_targets(cargo);
         for target in &cargo.targets {
             if !target.kind.iter().any(|kind| {
-                kind == "lib" || kind == "bin" || kind == "custom-build" || kind == "proc-macro" || kind == "test"
+                kind == "lib"
+                    || kind == "rlib"
+                    || kind == "bin"
+                    || kind == "custom-build"
+                    || kind == "proc-macro"
+                    || kind == "test"
             }) {
                 blockers.push(native_blocker(
                     Some(native.package_id.clone()),
@@ -2637,7 +2642,7 @@ fn cargo_supported_targets(package: &CargoPackage) -> Vec<NativeTargetPlanningSu
                 "custom-build"
             } else if target.kind.iter().any(|kind| kind == "proc-macro") {
                 "proc-macro"
-            } else if target.kind.iter().any(|kind| kind == "lib") {
+            } else if target.kind.iter().any(|kind| kind == "lib" || kind == "rlib") {
                 "lib"
             } else if target.kind.iter().any(|kind| kind == "bin") {
                 "bin"
@@ -3861,7 +3866,7 @@ fn select_supported_target_kind(
     if kinds.iter().any(|kind| kind == "proc-macro") {
         return Ok("proc-macro".to_string());
     }
-    if kinds.iter().any(|kind| kind == "lib") {
+    if kinds.iter().any(|kind| kind == "lib" || kind == "rlib") {
         return Ok("lib".to_string());
     }
     if kinds.iter().any(|kind| kind == "bin") {
