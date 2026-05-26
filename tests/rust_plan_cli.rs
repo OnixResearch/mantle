@@ -1381,7 +1381,7 @@ fn write_target_cfg_vendored_registry_fixture(dir: &TempDir, unsupported_cfg: bo
     std::fs::write(
         mid_dir.join("Cargo.toml"),
         format!(
-            "[package]\nname = \"demo-cfg-mid\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"demo_cfg_mid\"\npath = \"src/lib.rs\"\n\n[{cfg_table}]\ndemo_cfg_leaf = {{ package = \"demo-cfg-leaf\", version = \"=0.1.0\" }}\n"
+            "[package]\nname = \"demo-cfg-mid\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"demo_cfg_mid\"\npath = \"src/lib.rs\"\n\n[features]\ndefault = []\n\n[target.'cfg(target_os = \"linux\")'.dependencies.missing_optional_cfg_dep]\nversion = \"=0.1.0\"\noptional = true\n\n[{cfg_table}]\ndemo_cfg_leaf = {{ package = \"demo-cfg-leaf\", version = \"=0.1.0\" }}\n"
         ),
     )
     .unwrap();
@@ -2687,6 +2687,12 @@ fn rust_plan_cli_executes_target_cfg_vendored_registry_dependency_in_unified_top
             && dependency["decision"] == "selected"
             && dependency["name"] == "demo_cfg_leaf"
             && dependency["manifest_path"].as_str().unwrap().contains("demo-cfg-leaf-0.1.0")
+    }));
+    assert!(cfg_mid["target_cfg_dependencies"].as_array().unwrap().iter().any(|dependency| {
+        dependency["cfg"] == "cfg(target_os = \"linux\")"
+            && dependency["decision"] == "not-selected-optional"
+            && dependency["name"] == "missing_optional_cfg_dep"
+            && dependency["manifest_path"].is_null()
     }));
     assert!(cfg_mid["path_dependencies"].as_array().unwrap().iter().any(|dependency| {
         dependency["name"] == "demo_cfg_leaf"

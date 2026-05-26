@@ -1937,6 +1937,8 @@ fn native_package_from_manifest(
         source_root,
         &manifest.target,
         &active_target,
+        &manifest.features,
+        &selected_features,
         Some(package_id.clone()),
         native_registry_source_planning,
     )?;
@@ -2396,13 +2398,15 @@ fn native_target_cfg_dependencies(
     source_root: &Path,
     target_tables: &BTreeMap<String, NativeManifestTarget>,
     active_target: &str,
+    feature_defs: &BTreeMap<String, Vec<String>>,
+    selected_features: &[String],
     package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
 ) -> Result<(Vec<NativeTargetCfgDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
     let mut cfg_facts = Vec::new();
     let mut selected_dependencies = Vec::new();
     for (cfg_expr, target) in target_tables {
-        let selected = evaluate_supported_target_cfg(cfg_expr, active_target).ok_or_else(|| {
+        let cfg_selected = evaluate_supported_target_cfg(cfg_expr, active_target).ok_or_else(|| {
             native_blocker(
                 package_id.clone(),
                 "unsupported-target-cfg-surface",
@@ -2410,13 +2414,17 @@ fn native_target_cfg_dependencies(
             )
         })?;
         for (name, value) in &target.dependencies {
-            let manifest_path = if selected {
+            let mut dependency_selected = cfg_selected
+                && (!dependency_optional(value) || optional_dependency_selected(name, feature_defs, selected_features));
+            let manifest_path = if dependency_selected {
                 if let Some(path) = dependency_path(value) {
                     Some(source_root.join(path).join("Cargo.toml"))
                 } else if let Some(registry_source) =
                     registry_dependency_source(name, value, native_registry_source_planning)
                 {
                     Some(PathBuf::from(&registry_source.manifest_path))
+                } else if dependency_optional(value) {
+                    None
                 } else {
                     return Err(native_blocker(
                         package_id.clone(),
@@ -2429,6 +2437,9 @@ fn native_target_cfg_dependencies(
             } else {
                 None
             };
+            if manifest_path.is_none() && dependency_optional(value) {
+                dependency_selected = false;
+            }
             if let Some(path) = &manifest_path {
                 if !path.is_file() {
                     return Err(native_blocker(
@@ -2442,12 +2453,19 @@ fn native_target_cfg_dependencies(
             cfg_facts.push(NativeTargetCfgDependencySummary {
                 cfg: cfg_expr.clone(),
                 active_target: active_target.to_string(),
-                decision: if selected { "selected" } else { "not-selected" }.to_string(),
+                decision: if dependency_selected {
+                    "selected"
+                } else if cfg_selected {
+                    "not-selected-optional"
+                } else {
+                    "not-selected"
+                }
+                .to_string(),
                 name: name.clone(),
                 manifest_path: normalized_manifest_path.clone(),
                 blocker_class: None,
             });
-            if selected {
+            if dependency_selected {
                 if let Some(path) = normalized_manifest_path {
                     selected_dependencies.push(NativePathDependencySummary {
                         name: name.clone(),
@@ -2683,11 +2701,13 @@ fn optional_dependency_selected(
     selected_features.iter().any(|feature| {
         feature_defs
             .get(feature)
-            .map(|entries| {
-                entries.iter().any(|entry| entry == dependency_name || entry == &format!("dep:{dependency_name}"))
-            })
+            .map(|entries| entries.iter().any(|entry| feature_entry_selects_dependency(entry, dependency_name)))
             .unwrap_or(false)
     })
+}
+
+fn feature_entry_selects_dependency(entry: &str, dependency_name: &str) -> bool {
+    entry == dependency_name || entry == format!("dep:{dependency_name}")
 }
 
 fn registry_dependency_source<'a>(
