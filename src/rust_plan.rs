@@ -2466,21 +2466,121 @@ fn native_target_cfg_dependencies(
 
 fn evaluate_supported_target_cfg(cfg_expr: &str, active_target: &str) -> Option<bool> {
     let trimmed = cfg_expr.trim();
-    if trimmed == "cfg(unix)" {
-        return Some(target_is_unix(active_target));
+    if !trimmed.starts_with("cfg(") {
+        return Some(trimmed == active_target);
     }
-    parse_cfg_key_value(trimmed, "target_os")
-        .map(|target_os| target_os == target_os_from_triple(active_target))
-        .or_else(|| {
-            parse_cfg_key_value(trimmed, "target_arch")
-                .map(|target_arch| target_arch == target_arch_from_triple(active_target))
-        })
+    let inner = trimmed.strip_prefix("cfg(")?.strip_suffix(')')?.trim();
+    evaluate_cfg_inner(inner, active_target)
 }
 
-fn parse_cfg_key_value<'a>(cfg_expr: &'a str, key: &str) -> Option<&'a str> {
-    let inner = cfg_expr.strip_prefix("cfg(")?.strip_suffix(')')?.trim();
-    let (left, right) = inner.split_once('=')?;
-    (left.trim() == key).then(|| right.trim().trim_matches('"'))
+fn evaluate_cfg_inner(expr: &str, active_target: &str) -> Option<bool> {
+    let trimmed = expr.trim();
+    if let Some(inner) = cfg_call_arg(trimmed, "not") {
+        return evaluate_cfg_inner(inner, active_target).map(|value| !value);
+    }
+    if let Some(inner) = cfg_call_arg(trimmed, "any") {
+        let args = split_cfg_args(inner)?;
+        for arg in args {
+            if evaluate_cfg_inner(arg, active_target)? {
+                return Some(true);
+            }
+        }
+        return Some(false);
+    }
+    if let Some(inner) = cfg_call_arg(trimmed, "all") {
+        let args = split_cfg_args(inner)?;
+        for arg in args {
+            if !evaluate_cfg_inner(arg, active_target)? {
+                return Some(false);
+            }
+        }
+        return Some(true);
+    }
+    if trimmed == "unix" {
+        return Some(target_is_unix(active_target));
+    }
+    if trimmed == "windows" {
+        return Some(target_os_from_triple(active_target) == "windows");
+    }
+    if let Some((key, value)) = parse_cfg_key_value(trimmed) {
+        return cfg_key_value_matches(key, value, active_target);
+    }
+    known_inactive_cfg_atom(trimmed).then_some(false)
+}
+
+fn known_inactive_cfg_atom(atom: &str) -> bool {
+    matches!(
+        atom,
+        "loom"
+            | "miri"
+            | "criterion"
+            | "compiletests"
+            | "crossbeam_loom"
+            | "diatomic_waker_loom"
+            | "tokio_unstable"
+            | "tracing_unstable"
+            | "valgrind"
+            | "windows_raw_dylib"
+            | "rustix_use_libc"
+            | "rustix_use_experimental_asm"
+    )
+}
+
+fn cfg_call_arg<'a>(expr: &'a str, name: &str) -> Option<&'a str> {
+    expr.strip_prefix(name)?.strip_prefix('(')?.strip_suffix(')')
+}
+
+fn split_cfg_args(args: &str) -> Option<Vec<&str>> {
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut start = 0usize;
+    for (index, ch) in args.char_indices() {
+        match ch {
+            '"' => in_string = !in_string,
+            '(' if !in_string => depth = depth.checked_add(1)?,
+            ')' if !in_string => depth = depth.checked_sub(1)?,
+            ',' if !in_string && depth == 0 => {
+                let part = args[start..index].trim();
+                if !part.is_empty() {
+                    parts.push(part);
+                }
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    if in_string || depth != 0 {
+        return None;
+    }
+    let tail = args[start..].trim();
+    if !tail.is_empty() {
+        parts.push(tail);
+    }
+    Some(parts)
+}
+
+fn parse_cfg_key_value(expr: &str) -> Option<(&str, &str)> {
+    let (left, right) = expr.split_once('=')?;
+    Some((left.trim(), right.trim().trim_matches('"')))
+}
+
+fn cfg_key_value_matches(key: &str, value: &str, active_target: &str) -> Option<bool> {
+    let matched = match key {
+        "target_os" => value == target_os_from_triple(active_target),
+        "target_arch" => value == target_arch_from_triple(active_target),
+        "target_family" => value == target_family_from_triple(active_target),
+        "target_vendor" => value == target_vendor_from_triple(active_target),
+        "target_env" => value == target_env_from_triple(active_target),
+        "target_abi" => value == target_abi_from_triple(active_target),
+        "target_endian" => value == target_endian_from_triple(active_target),
+        "target_pointer_width" => value == target_pointer_width_from_triple(active_target),
+        "target_has_atomic" => target_has_atomic(active_target, value),
+        "feature" => false,
+        key if key.ends_with("_backend") || key.starts_with("rustix_") || key == "getrandom_backend" => false,
+        _ => return None,
+    };
+    Some(matched)
 }
 
 fn active_rust_target(options: &RustPlanOptions) -> String {
@@ -2523,6 +2623,56 @@ fn target_os_from_triple(active_target: &str) -> &str {
 
 fn target_arch_from_triple(active_target: &str) -> &str {
     active_target.split('-').next().unwrap_or("unknown")
+}
+
+fn target_family_from_triple(active_target: &str) -> &str {
+    if target_is_unix(active_target) {
+        "unix"
+    } else if target_os_from_triple(active_target) == "windows" {
+        "windows"
+    } else if active_target.contains("wasm") {
+        "wasm"
+    } else {
+        "unknown"
+    }
+}
+
+fn target_vendor_from_triple(active_target: &str) -> &str {
+    let mut parts = active_target.split('-');
+    let _arch = parts.next();
+    parts.next().unwrap_or("unknown")
+}
+
+fn target_env_from_triple(active_target: &str) -> &str {
+    if active_target.contains("musl") {
+        "musl"
+    } else if active_target.contains("msvc") {
+        "msvc"
+    } else if active_target.contains("gnu") {
+        "gnu"
+    } else {
+        ""
+    }
+}
+
+fn target_abi_from_triple(active_target: &str) -> &str {
+    if active_target.contains("llvm") { "llvm" } else { "" }
+}
+
+fn target_endian_from_triple(_active_target: &str) -> &str {
+    "little"
+}
+
+fn target_pointer_width_from_triple(active_target: &str) -> &str {
+    match target_arch_from_triple(active_target) {
+        "x86_64" | "aarch64" | "riscv64" | "powerpc64" | "s390x" | "wasm64" => "64",
+        _ => "32",
+    }
+}
+
+fn target_has_atomic(active_target: &str, width: &str) -> bool {
+    let pointer_width = target_pointer_width_from_triple(active_target).parse::<u32>().unwrap_or(0);
+    width.parse::<u32>().map(|width| width <= pointer_width).unwrap_or(false)
 }
 
 fn optional_dependency_selected(
@@ -7612,6 +7762,37 @@ mod tests {
         assert!(planning.ready, "{:#?}", planning.blockers);
         assert_eq!(planning.comparison_status, "matched");
         assert!(planning.blockers.iter().all(|blocker| blocker.class != "unsupported-cargo-oracle-target-kind"));
+    }
+
+    #[test]
+    fn native_target_cfg_predicate_scope_evaluates_nested_common_predicates() {
+        let target = "x86_64-unknown-linux-gnu";
+
+        assert_eq!(evaluate_supported_target_cfg("cfg(unix)", target), Some(true));
+        assert_eq!(evaluate_supported_target_cfg("cfg(windows)", target), Some(false));
+        assert_eq!(evaluate_supported_target_cfg("cfg(not(windows))", target), Some(true));
+        assert_eq!(
+            evaluate_supported_target_cfg("cfg(any(target_os = \"linux\", target_os = \"macos\"))", target),
+            Some(true)
+        );
+        assert_eq!(
+            evaluate_supported_target_cfg(
+                "cfg(all(any(target_arch = \"x86\", target_arch = \"x86_64\"), not(target_os = \"windows\")))",
+                target
+            ),
+            Some(true)
+        );
+        assert_eq!(evaluate_supported_target_cfg("x86_64-unknown-linux-gnu", target), Some(true));
+        assert_eq!(evaluate_supported_target_cfg("aarch64-pc-windows-gnullvm", target), Some(false));
+        assert_eq!(evaluate_supported_target_cfg("cfg(loom)", target), Some(false));
+    }
+
+    #[test]
+    fn native_target_cfg_predicate_scope_blocks_unknown_or_malformed_syntax() {
+        let target = "x86_64-unknown-linux-gnu";
+
+        assert_eq!(evaluate_supported_target_cfg("cfg(unknown_selector)", target), None);
+        assert_eq!(evaluate_supported_target_cfg("cfg(any(target_os = \"linux\"", target), None);
     }
 
     #[test]

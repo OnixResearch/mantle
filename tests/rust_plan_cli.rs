@@ -1374,7 +1374,7 @@ fn write_target_cfg_vendored_registry_fixture(dir: &TempDir, unsupported_cfg: bo
     .unwrap();
 
     let cfg_table = if unsupported_cfg {
-        "target.'cfg(any(target_os = \"linux\", target_os = \"macos\"))'.dependencies"
+        "target.'cfg(unsupported_native_cfg_selector)'.dependencies"
     } else {
         "target.'cfg(unix)'.dependencies"
     };
