@@ -1083,6 +1083,66 @@ fn rust_plan_cli_executes_vendored_registry_build_script_host_artifact_topology(
 }
 
 #[test]
+fn rust_plan_cli_executes_vendored_registry_build_script_in_unified_topology() {
+    let dir = TempDir::new().unwrap();
+    let app_dir = write_vendored_registry_build_script_fixture(&dir, false);
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("registry-unified-host-output"))
+        .output()
+        .expect("rust-plan registry unified host topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    assert!(receipt["rust_plan"]["native_registry_source_planning"]["ready"].as_bool().unwrap(), "{receipt:#?}");
+    assert!(receipt["rust_plan"]["native_host_unit_graph_planning"]["ready"].as_bool().unwrap(), "{receipt:#?}");
+    let registry_sources = receipt["rust_plan"]["native_registry_source_planning"]["sources"].as_array().unwrap();
+    assert_eq!(registry_sources.len(), 1, "{receipt:#?}");
+    assert_eq!(registry_sources[0]["checksum"], "fakechecksum");
+    assert_eq!(registry_sources[0]["source_digest"]["algorithm"], "blake3-tree-v1");
+    assert!(registry_sources[0]["vendor_root"].as_str().unwrap().ends_with("/vendor"));
+
+    let topology = &receipt["topology_execution"];
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    let metadata_runs = topology["build_script_metadata_runs"].as_array().unwrap();
+    assert_eq!(metadata_runs.len(), 1, "{receipt:#?}");
+    assert_eq!(metadata_runs[0]["rustc_cfg"].as_array().unwrap()[0], "registry_build_script");
+    assert_eq!(metadata_runs[0]["rustc_env"]["REGISTRY_BUILD_VALUE"], "registry-env-ok");
+    assert_eq!(metadata_runs[0]["out_dir_artifact_digests"].as_array().unwrap().len(), 1);
+
+    let unit_executions = topology["unit_executions"].as_array().unwrap();
+    assert_eq!(unit_executions.len(), 3, "{receipt:#?}");
+    assert_eq!(
+        unit_executions[0]["target_kind"], "custom-build",
+        "host producer should execute before target consumers: {receipt:#?}"
+    );
+    let registry_units = unit_executions
+        .iter()
+        .filter(|unit| unit["package_id"].as_str().unwrap().starts_with("registry+"))
+        .collect::<Vec<_>>();
+    assert_eq!(registry_units.len(), 2, "{receipt:#?}");
+    assert!(registry_units.iter().all(|unit| unit["source_digest"]["algorithm"] == "blake3-tree-v1"));
+    assert!(registry_units.iter().any(|unit| {
+        unit["host_artifact_digests"].as_array().unwrap().iter().any(|artifact| {
+            artifact["path"].as_str().unwrap().contains("build_script_build")
+                && artifact["blake3"].as_str().unwrap().len() == 64
+        })
+    }));
+    assert!(unit_executions.iter().any(|unit| {
+        unit["dependency_artifact_digests"].as_array().unwrap().iter().any(|artifact| {
+            artifact["path"].as_str().unwrap().contains("libdemo_build")
+                && artifact["blake3"].as_str().unwrap().len() == 64
+        })
+    }));
+}
+
+#[test]
 fn rust_plan_cli_blocks_unsupported_vendored_registry_host_artifact_layout_before_rustc() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_vendored_registry_build_script_fixture(&dir, true);
@@ -1107,6 +1167,36 @@ fn rust_plan_cli_blocks_unsupported_vendored_registry_host_artifact_layout_befor
         "{receipt:#?}"
     );
     let topology = &receipt["host_artifact_topology_execution"];
+    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
+    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn rust_plan_cli_blocks_unsupported_vendored_registry_unified_host_layout_before_rustc() {
+    let dir = TempDir::new().unwrap();
+    let app_dir = write_vendored_registry_build_script_fixture(&dir, true);
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("registry-unified-host-blocked-output"))
+        .output()
+        .expect("rust-plan registry unified host topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    assert!(receipt["rust_plan"]["native_registry_source_planning"]["ready"].as_bool().unwrap(), "{receipt:#?}");
+    let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
+    assert!(
+        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-cargo-oracle-target-kind"),
+        "{receipt:#?}"
+    );
+    let topology = &receipt["topology_execution"];
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
     assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
     assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);

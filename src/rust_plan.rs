@@ -3612,10 +3612,10 @@ pub(crate) fn execute_rust_unit_topology(
         let unit = &graph.derivations[*index];
         let mut deps = Vec::new();
         for dependency in &unit.dependency_artifacts {
-            if host_producers.contains_key(&dependency.package_id) {
-                continue;
-            }
             let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
+                if host_producers.contains_key(&dependency.package_id) {
+                    continue;
+                }
                 return topology_receipt(
                     "blocked",
                     Vec::new(),
