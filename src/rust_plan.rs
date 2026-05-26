@@ -179,6 +179,7 @@ pub(crate) struct NativePackagePlanningSummary {
     pub(crate) selected_features: Vec<String>,
     pub(crate) targets: Vec<NativeTargetPlanningSummary>,
     pub(crate) path_dependencies: Vec<NativePathDependencySummary>,
+    pub(crate) target_cfg_dependencies: Vec<NativeTargetCfgDependencySummary>,
     pub(crate) source_digest: SourceDigest,
 }
 
@@ -194,6 +195,16 @@ pub(crate) struct NativeTargetPlanningSummary {
 pub(crate) struct NativePathDependencySummary {
     pub(crate) name: String,
     pub(crate) manifest_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativeTargetCfgDependencySummary {
+    pub(crate) cfg: String,
+    pub(crate) active_target: String,
+    pub(crate) decision: String,
+    pub(crate) name: String,
+    pub(crate) manifest_path: Option<String>,
+    pub(crate) blocker_class: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -598,6 +609,12 @@ struct NativeManifestWorkspace {
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
+struct NativeManifestTarget {
+    #[serde(default)]
+    dependencies: BTreeMap<String, toml::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
 struct NativeManifest {
     package: Option<NativeManifestPackage>,
     workspace: Option<NativeManifestWorkspace>,
@@ -614,6 +631,8 @@ struct NativeManifest {
     dev_dependencies: BTreeMap<String, toml::Value>,
     #[serde(rename = "build-dependencies", default)]
     build_dependencies: BTreeMap<String, toml::Value>,
+    #[serde(default)]
+    target: BTreeMap<String, NativeManifestTarget>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1590,6 +1609,14 @@ fn native_package_from_manifest(
     })?;
     let targets = native_targets_for_manifest(source_root, package, &manifest)?;
     let selected_features = native_selected_features(options, &manifest.features);
+    let active_target = active_rust_target(options);
+    let (target_cfg_dependencies, selected_target_cfg_dependencies) = native_target_cfg_dependencies(
+        source_root,
+        &manifest.target,
+        &active_target,
+        Some(package_id.clone()),
+        native_registry_source_planning,
+    )?;
     let path_dependencies = native_path_dependencies(
         source_root,
         &manifest.dependencies,
@@ -1598,6 +1625,10 @@ fn native_package_from_manifest(
         Some(package_id.clone()),
         native_registry_source_planning,
     )?;
+    let mut path_dependencies = path_dependencies;
+    path_dependencies.extend(selected_target_cfg_dependencies);
+    path_dependencies.sort();
+    path_dependencies.dedup();
     let source_digest = native_registry_source_planning
         .sources
         .iter()
@@ -1622,6 +1653,7 @@ fn native_package_from_manifest(
         selected_features,
         targets,
         path_dependencies,
+        target_cfg_dependencies,
         source_digest,
     })
 }
@@ -1747,6 +1779,139 @@ fn dependency_optional(value: &toml::Value) -> bool {
         .and_then(|table| table.get("optional"))
         .and_then(toml::Value::as_bool)
         .unwrap_or(false)
+}
+
+fn native_target_cfg_dependencies(
+    source_root: &Path,
+    target_tables: &BTreeMap<String, NativeManifestTarget>,
+    active_target: &str,
+    package_id: Option<String>,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+) -> Result<(Vec<NativeTargetCfgDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
+    let mut cfg_facts = Vec::new();
+    let mut selected_dependencies = Vec::new();
+    for (cfg_expr, target) in target_tables {
+        let selected = evaluate_supported_target_cfg(cfg_expr, active_target).ok_or_else(|| {
+            native_blocker(
+                package_id.clone(),
+                "unsupported-target-cfg-surface",
+                &format!("target cfg `{cfg_expr}` is outside the bounded native target-cfg fragment"),
+            )
+        })?;
+        for (name, value) in &target.dependencies {
+            let manifest_path = if selected {
+                if let Some(path) = dependency_path(value) {
+                    Some(source_root.join(path).join("Cargo.toml"))
+                } else if let Some(registry_source) =
+                    registry_dependency_source(name, value, native_registry_source_planning)
+                {
+                    Some(PathBuf::from(&registry_source.manifest_path))
+                } else {
+                    return Err(native_blocker(
+                        package_id.clone(),
+                        "unsupported-target-cfg-dependency",
+                        &format!(
+                            "target cfg dependency `{name}` is outside the bounded path-or-declared-registry-dependency fragment"
+                        ),
+                    ));
+                }
+            } else {
+                None
+            };
+            if let Some(path) = &manifest_path {
+                if !path.is_file() {
+                    return Err(native_blocker(
+                        package_id.clone(),
+                        "missing-target-cfg-dependency-manifest",
+                        &format!("target cfg dependency `{name}` manifest {} is not readable", path.display()),
+                    ));
+                }
+            }
+            let normalized_manifest_path = manifest_path.as_ref().map(|path| normalize_path_string(path));
+            cfg_facts.push(NativeTargetCfgDependencySummary {
+                cfg: cfg_expr.clone(),
+                active_target: active_target.to_string(),
+                decision: if selected { "selected" } else { "not-selected" }.to_string(),
+                name: name.clone(),
+                manifest_path: normalized_manifest_path.clone(),
+                blocker_class: None,
+            });
+            if selected {
+                if let Some(path) = normalized_manifest_path {
+                    selected_dependencies.push(NativePathDependencySummary {
+                        name: name.clone(),
+                        manifest_path: path,
+                    });
+                }
+            }
+        }
+    }
+    cfg_facts.sort();
+    cfg_facts.dedup();
+    selected_dependencies.sort();
+    selected_dependencies.dedup();
+    Ok((cfg_facts, selected_dependencies))
+}
+
+fn evaluate_supported_target_cfg(cfg_expr: &str, active_target: &str) -> Option<bool> {
+    let trimmed = cfg_expr.trim();
+    if trimmed == "cfg(unix)" {
+        return Some(target_is_unix(active_target));
+    }
+    parse_cfg_key_value(trimmed, "target_os")
+        .map(|target_os| target_os == target_os_from_triple(active_target))
+        .or_else(|| {
+            parse_cfg_key_value(trimmed, "target_arch")
+                .map(|target_arch| target_arch == target_arch_from_triple(active_target))
+        })
+}
+
+fn parse_cfg_key_value<'a>(cfg_expr: &'a str, key: &str) -> Option<&'a str> {
+    let inner = cfg_expr.strip_prefix("cfg(")?.strip_suffix(')')?.trim();
+    let (left, right) = inner.split_once('=')?;
+    (left.trim() == key).then(|| right.trim().trim_matches('"'))
+}
+
+fn active_rust_target(options: &RustPlanOptions) -> String {
+    options.targets.first().cloned().unwrap_or_else(host_target_triple)
+}
+
+fn host_target_triple() -> String {
+    format!("{}-unknown-{}-gnu", std::env::consts::ARCH, match std::env::consts::OS {
+        "macos" => "darwin",
+        other => other,
+    })
+}
+
+fn target_is_unix(active_target: &str) -> bool {
+    matches!(
+        target_os_from_triple(active_target),
+        "linux" | "darwin" | "freebsd" | "netbsd" | "openbsd" | "dragonfly" | "android"
+    )
+}
+
+fn target_os_from_triple(active_target: &str) -> &str {
+    if active_target.contains("linux") {
+        "linux"
+    } else if active_target.contains("darwin") || active_target.contains("apple") {
+        "darwin"
+    } else if active_target.contains("windows") || active_target.contains("msvc") {
+        "windows"
+    } else if active_target.contains("freebsd") {
+        "freebsd"
+    } else if active_target.contains("netbsd") {
+        "netbsd"
+    } else if active_target.contains("openbsd") {
+        "openbsd"
+    } else if active_target.contains("android") {
+        "android"
+    } else {
+        "unknown"
+    }
+}
+
+fn target_arch_from_triple(active_target: &str) -> &str {
+    active_target.split('-').next().unwrap_or("unknown")
 }
 
 fn optional_dependency_selected(
