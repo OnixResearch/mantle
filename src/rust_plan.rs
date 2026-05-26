@@ -650,6 +650,8 @@ struct NativeManifest {
     #[serde(rename = "build-dependencies", default)]
     build_dependencies: BTreeMap<String, toml::Value>,
     #[serde(default)]
+    patch: BTreeMap<String, BTreeMap<String, toml::Value>>,
+    #[serde(default)]
     target: BTreeMap<String, NativeManifestTarget>,
 }
 
@@ -1293,6 +1295,7 @@ fn summarize_native_registry_source_planning(
             Err(blocker) => blockers.push(blocker),
         }
     }
+    append_native_patch_sources(root, cargo_packages, &mut sources, &mut blockers);
     sources.sort();
     blockers.sort();
     blockers.dedup();
@@ -1313,6 +1316,95 @@ fn summarize_native_registry_source_planning(
             "not-general-cargo-registry-compatibility".to_string(),
         ],
     })
+}
+
+fn append_native_patch_sources(
+    root: &Path,
+    cargo_packages: &[CargoPackage],
+    sources: &mut Vec<NativeRegistrySourceSummary>,
+    blockers: &mut Vec<NativeRegistrySourceBlocker>,
+) {
+    let manifest_path = root.join("Cargo.toml");
+    let manifest = match read_native_manifest(&manifest_path) {
+        Ok(manifest) => manifest,
+        Err(message) => {
+            blockers.push(native_registry_blocker(None, "unreadable-patch-source-manifest", &message));
+            return;
+        }
+    };
+    if manifest.patch.is_empty() {
+        return;
+    }
+    for (registry, patches) in &manifest.patch {
+        if registry != "crates-io" {
+            blockers.push(native_registry_blocker(
+                None,
+                "unsupported-patch-source-registry",
+                &format!("patch registry `{registry}` is outside the bounded crates-io patch fragment"),
+            ));
+            continue;
+        }
+        for (dependency_key, value) in patches {
+            let Some(path) = dependency_path(value) else {
+                blockers.push(native_registry_blocker(
+                    None,
+                    "unsupported-patch-source-kind",
+                    &format!("patch `{dependency_key}` is outside the bounded local path patch fragment"),
+                ));
+                continue;
+            };
+            let package_name = dependency_package_name(dependency_key, value);
+            let patch_manifest = root.join(path).join("Cargo.toml");
+            if !patch_manifest.is_file() {
+                blockers.push(native_registry_blocker(
+                    None,
+                    "missing-patch-source-manifest",
+                    &format!("patch `{dependency_key}` manifest {} is not readable", patch_manifest.display()),
+                ));
+                continue;
+            }
+            let Some(package) = cargo_packages.iter().find(|package| {
+                package.name == package_name && manifest_paths_same(&package.manifest_path, &patch_manifest)
+            }) else {
+                blockers.push(native_registry_blocker(
+                    None,
+                    "missing-patch-source-cargo-package",
+                    &format!("patch `{dependency_key}` has no matching Cargo metadata package"),
+                ));
+                continue;
+            };
+            if source_kind(package.source.as_deref()) != SourceKind::Path {
+                blockers.push(native_registry_blocker(
+                    Some(package.id.clone()),
+                    "unsupported-patch-source-cargo-kind",
+                    "patched package must resolve to a local path package in Cargo metadata",
+                ));
+                continue;
+            }
+            match path_source_digest(package) {
+                Ok(source_digest) => sources.push(NativeRegistrySourceSummary {
+                    package_id: package.id.clone(),
+                    name: package.name.clone(),
+                    version: package.version.clone(),
+                    source: format!("patch+{registry}"),
+                    source_class: "patch-path".to_string(),
+                    checksum: format!("patch-path:{}", source_digest.value),
+                    vendor_root: normalize_path_string(&root.join(path)),
+                    manifest_path: normalize_path_string(&patch_manifest),
+                    source_digest,
+                    lockfile_identity: LockPackageIdentity {
+                        name: package.name.clone(),
+                        version: package.version.clone(),
+                        source: None,
+                        checksum: None,
+                    },
+                }),
+                Err(blocker) => {
+                    blockers.push(native_registry_blocker(Some(package.id.clone()), &blocker.class, &blocker.message))
+                }
+            }
+        }
+    }
 }
 
 fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlocker>) -> Vec<PathBuf> {
