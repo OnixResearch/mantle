@@ -418,34 +418,38 @@ enum Command {
         no_default_features: bool,
 
         /// Execute the first supported lib/bin unit from the captured explicit derivation graph
-        #[arg(long, conflicts_with_all = ["execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_first_supported_unit: bool,
 
         /// Execute the first bounded dependency chain from the captured explicit derivation graph
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_first_dependency_chain: bool,
 
         /// Execute a bounded target-only unit topology from the captured explicit derivation graph
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_target_topology: bool,
 
         /// Execute a bounded host-artifact unit topology from the captured explicit derivation
         /// graph
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_host_artifact_topology: bool,
 
         /// Execute a bounded unified host+target unit topology from the captured explicit
         /// derivation graph
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_topology: bool,
 
         /// Execute a bounded native dev-dependency test topology from explicit receipts
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_workspace_dependency_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_dev_dependency_test_topology: bool,
 
         /// Execute a bounded native workspace-dependency topology from explicit receipts
-        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology"])]
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_patch_source_topology"])]
         execute_workspace_dependency_topology: bool,
+
+        /// Execute a bounded native patch-source topology from explicit receipts
+        #[arg(long, conflicts_with_all = ["execute_first_supported_unit", "execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology"])]
+        execute_patch_source_topology: bool,
 
         /// Output directory for execution artifacts
         #[arg(long)]
@@ -1960,6 +1964,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         execute_topology,
         execute_dev_dependency_test_topology,
         execute_workspace_dependency_topology,
+        execute_patch_source_topology,
         execution_output_root,
     } = command
     else {
@@ -2114,6 +2119,27 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             &rust_plan::RustPlanWorkspaceDependencyTopologyExecutionReceipt {
                 rust_plan: receipt,
                 native_registry_workspace_dependency_topology_execution,
+            },
+            ctx.json,
+        );
+    }
+    if *execute_patch_source_topology {
+        let output_root = execution_output_root.clone().ok_or_else(|| {
+            RunError::Internal("--execute-patch-source-topology requires --execution-output-root".to_string())
+        })?;
+        let native_registry_patch_source_topology_execution = rust_plan::execute_native_registry_patch_source_topology(
+            &receipt.native_registry_source_planning,
+            &receipt.native_package_target_planning,
+            &receipt.unit_derivation_graph,
+            &rust_plan::RustUnitExecutionOptions {
+                rustc: rustc.clone(),
+                output_root,
+            },
+        )?;
+        return rust_plan::print_rust_plan_patch_source_topology_execution_receipt(
+            &rust_plan::RustPlanPatchSourceTopologyExecutionReceipt {
+                rust_plan: receipt,
+                native_registry_patch_source_topology_execution,
             },
             ctx.json,
         );

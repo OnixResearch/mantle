@@ -2390,6 +2390,10 @@ fn rust_plan_cli_executes_patch_source_registry_dependency_in_unified_topology()
             && source["checksum"].as_str().unwrap().starts_with("patch-path:")
             && source["manifest_path"].as_str().unwrap().contains("patches/demo-patch-leaf")
     }));
+    assert!(
+        receipt["native_registry_patch_source_topology_execution"].is_null(),
+        "normal --execute-topology should not emit the explicit patch-source execution receipt: {receipt:#?}"
+    );
 
     let topology = &receipt["topology_execution"];
     assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
@@ -2429,6 +2433,81 @@ fn rust_plan_cli_blocks_unsupported_patch_source_registry_before_rustc() {
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
     assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
     assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn rust_plan_cli_executes_explicit_patch_source_registry_topology() {
+    let dir = TempDir::new().unwrap();
+    let app_dir = write_patch_source_registry_fixture(&dir, false);
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-patch-source-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("explicit-registry-patch-source-topology-output"))
+        .output()
+        .expect("explicit patch source topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let execution = &receipt["native_registry_patch_source_topology_execution"];
+    assert_eq!(execution["execution_status"], "success", "{receipt:#?}");
+    assert!(execution["claim"].as_str().unwrap().contains("not Cargo orchestration"), "{receipt:#?}");
+    assert!(
+        execution["consumer_package_id"].as_str().unwrap().contains("registry-patch-source-topology-app"),
+        "{receipt:#?}"
+    );
+    assert!(
+        execution["patch_source_packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|package| package.as_str().unwrap().contains("demo-patch-leaf")),
+        "{receipt:#?}"
+    );
+    let unit_executions = execution["unit_executions"].as_array().unwrap();
+    assert_eq!(unit_executions.len(), 2, "{receipt:#?}");
+    assert!(unit_executions[0]["package_id"].as_str().unwrap().contains("demo-patch-leaf"), "{receipt:#?}");
+    assert!(
+        unit_executions[1]["package_id"].as_str().unwrap().contains("registry-patch-source-topology-app"),
+        "{receipt:#?}"
+    );
+    assert!(unit_executions[1]["dependency_artifact_digests"].as_array().unwrap().iter().any(|artifact| {
+        artifact["path"].as_str().unwrap().contains("libdemo_patch_leaf")
+            && artifact["blake3"].as_str().unwrap().len() == 64
+    }));
+}
+
+#[test]
+fn rust_plan_cli_blocks_explicit_patch_source_registry_topology_before_rustc() {
+    let dir = TempDir::new().unwrap();
+    let app_dir = write_patch_source_registry_fixture(&dir, true);
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-patch-source-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("explicit-registry-patch-source-blocked-output"))
+        .output()
+        .expect("explicit patch source topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let source_blockers = receipt["rust_plan"]["native_registry_source_planning"]["blockers"].as_array().unwrap();
+    assert!(
+        source_blockers.iter().any(|blocker| blocker["class"] == "unsupported-patch-source-registry"),
+        "{receipt:#?}"
+    );
+    let execution = &receipt["native_registry_patch_source_topology_execution"];
+    assert_eq!(execution["execution_status"], "blocked", "{receipt:#?}");
+    assert_eq!(execution["blocker"]["class"], "patch-source-planning-not-ready", "{receipt:#?}");
+    assert_eq!(execution["unit_executions"].as_array().unwrap().len(), 0);
 }
 
 #[test]

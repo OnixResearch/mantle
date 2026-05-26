@@ -490,6 +490,18 @@ pub(crate) struct RustWorkspaceDependencyTopologyExecutionReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPatchSourceTopologyExecutionReceipt {
+    pub(crate) schema_version: u32,
+    pub(crate) execution_status: String,
+    pub(crate) claim: String,
+    pub(crate) consumer_package_id: Option<String>,
+    pub(crate) patch_source_packages: Vec<String>,
+    pub(crate) unit_executions: Vec<RustUnitExecutionReceipt>,
+    pub(crate) blocker: Option<RustUnitExecutionBlocker>,
+    pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct BuildScriptMetadataRunReceipt {
     pub(crate) schema_version: u32,
     pub(crate) unit_id: String,
@@ -567,6 +579,12 @@ pub(crate) struct RustPlanDevDependencyTestTopologyExecutionReceipt {
 pub(crate) struct RustPlanWorkspaceDependencyTopologyExecutionReceipt {
     pub(crate) rust_plan: RustPlanReceipt,
     pub(crate) native_registry_workspace_dependency_topology_execution: RustWorkspaceDependencyTopologyExecutionReceipt,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanPatchSourceTopologyExecutionReceipt {
+    pub(crate) rust_plan: RustPlanReceipt,
+    pub(crate) native_registry_patch_source_topology_execution: RustPatchSourceTopologyExecutionReceipt,
 }
 
 #[derive(Debug, Clone)]
@@ -908,6 +926,20 @@ pub(crate) fn print_rust_plan_workspace_dependency_topology_execution_receipt(
     .map_err(|err| {
         RunError::Internal(format!("rendering Rust workspace-dependency topology execution receipt: {err}"))
     })?;
+    println!("{rendered}");
+    Ok(())
+}
+
+pub(crate) fn print_rust_plan_patch_source_topology_execution_receipt(
+    receipt: &RustPlanPatchSourceTopologyExecutionReceipt,
+    json_mode: bool,
+) -> Result<(), RunError> {
+    let rendered = if json_mode {
+        serde_json::to_string(receipt)
+    } else {
+        serde_json::to_string_pretty(receipt)
+    }
+    .map_err(|err| RunError::Internal(format!("rendering Rust patch-source topology execution receipt: {err}")))?;
     println!("{rendered}");
     Ok(())
 }
@@ -5043,6 +5075,210 @@ pub(crate) fn execute_native_registry_workspace_dependency_topology(
     )
 }
 
+pub(crate) fn execute_native_registry_patch_source_topology(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
+    native_package_target_planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustPatchSourceTopologyExecutionReceipt, RunError> {
+    if !native_registry_sources.ready {
+        return patch_source_topology_receipt(
+            "blocked",
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "patch-source-planning-not-ready".to_string(),
+                message: "native_registry_patch_source_topology_execution requires ready native_registry_patch_source_planning evidence".to_string(),
+            }),
+        );
+    }
+    if !native_package_target_planning.ready {
+        return patch_source_topology_receipt(
+            "blocked",
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "native-package-planning-not-ready".to_string(),
+                message: "native package/target planning is not ready; resolve planning blockers before patch-source topology execution".to_string(),
+            }),
+        );
+    }
+    if !graph.ready {
+        return patch_source_topology_receipt(
+            "blocked",
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message: "unit_derivation_graph is not ready; resolve planning blockers before patch-source topology execution".to_string(),
+            }),
+        );
+    }
+
+    let patch_sources = native_registry_sources
+        .sources
+        .iter()
+        .filter(|source| source.source_class == "patch-path")
+        .collect::<Vec<_>>();
+    if patch_sources.len() != 1 {
+        return patch_source_topology_receipt(
+            "blocked",
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "ambiguous-patch-source-topology".to_string(),
+                message: format!(
+                    "expected exactly one local patch source for bounded execution, found {}",
+                    patch_sources.len()
+                ),
+            }),
+        );
+    }
+    let patch_source = patch_sources[0];
+    let packages_by_manifest = native_package_target_planning
+        .packages
+        .iter()
+        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
+        .collect::<BTreeMap<_, _>>();
+    let Some(patch_package) = packages_by_manifest.get(&normalize_path_string(Path::new(&patch_source.manifest_path)))
+    else {
+        return patch_source_topology_receipt(
+            "blocked",
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-patch-source-package".to_string(),
+                message: format!("patch source {} has no native package facts", patch_source.package_id),
+            }),
+        );
+    };
+    let candidate_consumers = native_package_target_planning
+        .packages
+        .iter()
+        .filter(|package| {
+            package.package_id != patch_package.package_id
+                && package.path_dependencies.iter().any(|dependency| {
+                    manifest_paths_same(&dependency.manifest_path, Path::new(&patch_source.manifest_path))
+                })
+        })
+        .collect::<Vec<_>>();
+    if candidate_consumers.len() != 1 {
+        return patch_source_topology_receipt(
+            "blocked",
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "ambiguous-patch-source-consumer".to_string(),
+                message: format!(
+                    "expected exactly one consumer for bounded patch-source execution, found {}",
+                    candidate_consumers.len()
+                ),
+            }),
+        );
+    }
+    let consumer_package = candidate_consumers[0];
+    let Some(producer) = graph
+        .derivations
+        .iter()
+        .find(|unit| unit.package_id == patch_package.package_id && unit.target_kind == "lib" && unit.mode == "build")
+    else {
+        return patch_source_topology_receipt(
+            "blocked",
+            Some(consumer_package.package_id.clone()),
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-patch-source-artifact".to_string(),
+                message: format!("patch source {} has no supported lib derivation", patch_source.package_id),
+            }),
+        );
+    };
+    let Some(consumer) = graph.derivations.iter().find(|unit| {
+        unit.package_id == consumer_package.package_id
+            && matches!(unit.target_kind.as_str(), "lib" | "bin")
+            && unit.mode == "build"
+    }) else {
+        return patch_source_topology_receipt(
+            "blocked",
+            Some(consumer_package.package_id.clone()),
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-patch-source-consumer".to_string(),
+                message: format!(
+                    "patch source consumer {} has no supported lib/bin derivation",
+                    consumer_package.package_id
+                ),
+            }),
+        );
+    };
+
+    let mut executions = Vec::new();
+    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
+    let executable_producer = bind_all_dependency_artifacts(producer, &produced_target_artifacts)?;
+    let receipt = execute_rust_unit(&executable_producer, options)?;
+    if receipt.execution_status != "success" {
+        let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+            class: "patch-source-producer-failed".to_string(),
+            message: format!("patch source producer {} did not execute successfully", producer.unit_id),
+        });
+        executions.push(receipt);
+        return patch_source_topology_receipt(
+            "blocked",
+            Some(consumer_package.package_id.clone()),
+            Vec::new(),
+            executions,
+            Some(blocker),
+        );
+    }
+    match produced_library_artifact_path(&executable_producer, options)? {
+        Ok(path) => {
+            produced_target_artifacts.insert(producer.package_id.clone(), path);
+        }
+        Err(blocker) => {
+            executions.push(receipt);
+            return patch_source_topology_receipt(
+                "blocked",
+                Some(consumer_package.package_id.clone()),
+                Vec::new(),
+                executions,
+                Some(blocker),
+            );
+        }
+    }
+    executions.push(receipt);
+    let executable_consumer = bind_all_dependency_artifacts(consumer, &produced_target_artifacts)?;
+    let receipt = execute_rust_unit(&executable_consumer, options)?;
+    if receipt.execution_status != "success" {
+        let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+            class: "patch-source-consumer-failed".to_string(),
+            message: format!("patch source consumer {} did not execute successfully", consumer.unit_id),
+        });
+        executions.push(receipt);
+        return patch_source_topology_receipt(
+            "blocked",
+            Some(consumer_package.package_id.clone()),
+            vec![producer.package_id.clone()],
+            executions,
+            Some(blocker),
+        );
+    }
+    executions.push(receipt);
+    patch_source_topology_receipt(
+        "success",
+        Some(consumer_package.package_id.clone()),
+        vec![producer.package_id.clone()],
+        executions,
+        None,
+    )
+}
+
 fn validate_native_registry_topology_inputs(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     graph: &UnitDerivationGraphSummary,
@@ -6353,6 +6589,38 @@ fn rust_workspace_dependency_topology_execution_receipt_hash(
     hashable.receipt_hash.clear();
     let canonical = serde_json::to_vec(&hashable).map_err(|err| {
         RunError::Internal(format!("canonicalizing Rust workspace-dependency topology execution receipt: {err}"))
+    })?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn patch_source_topology_receipt(
+    execution_status: &str,
+    consumer_package_id: Option<String>,
+    patch_source_packages: Vec<String>,
+    unit_executions: Vec<RustUnitExecutionReceipt>,
+    blocker: Option<RustUnitExecutionBlocker>,
+) -> Result<RustPatchSourceTopologyExecutionReceipt, RunError> {
+    let mut receipt = RustPatchSourceTopologyExecutionReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        execution_status: execution_status.to_string(),
+        claim: "bounded native registry patch-source topology; explicit local [patch.crates-io] source facts only, not Cargo orchestration, Cargo resolver fallback, registry cache fallback, or network/index access".to_string(),
+        consumer_package_id,
+        patch_source_packages,
+        unit_executions,
+        blocker,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = rust_patch_source_topology_execution_receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn rust_patch_source_topology_execution_receipt_hash(
+    receipt: &RustPatchSourceTopologyExecutionReceipt,
+) -> Result<String, RunError> {
+    let mut hashable = receipt.clone();
+    hashable.receipt_hash.clear();
+    let canonical = serde_json::to_vec(&hashable).map_err(|err| {
+        RunError::Internal(format!("canonicalizing Rust patch-source topology execution receipt: {err}"))
     })?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
