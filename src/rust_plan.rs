@@ -215,6 +215,8 @@ pub(crate) struct NativeWorkspaceDependencySummary {
     pub(crate) member_package_id: String,
     pub(crate) dependency_key: String,
     pub(crate) inherited_package_name: String,
+    pub(crate) inherited_features: Vec<String>,
+    pub(crate) inherited_default_features: Option<bool>,
     pub(crate) decision: String,
     pub(crate) manifest_path: Option<String>,
     pub(crate) blocker_class: Option<String>,
@@ -1887,8 +1889,8 @@ fn native_workspace_dependencies(
                 &format!("dependency `{name}` uses workspace inheritance but root [workspace.dependencies] has no matching key"),
             )
         })?;
-        if dependency_has_unsupported_workspace_options(value)
-            || dependency_has_unsupported_workspace_options(inherited)
+        if dependency_has_unsupported_workspace_member_options(value)
+            || dependency_has_unsupported_workspace_inherited_options(inherited)
         {
             return Err(native_blocker(
                 package_id.clone(),
@@ -1898,6 +1900,8 @@ fn native_workspace_dependencies(
                 ),
             ));
         }
+        let inherited_features = dependency_features(inherited)?;
+        let inherited_default_features = dependency_default_features(inherited)?;
         let manifest_path = if let Some(path) = dependency_path(inherited) {
             source_root.join(path).join("Cargo.toml")
         } else if let Some(registry_source) =
@@ -1925,6 +1929,8 @@ fn native_workspace_dependencies(
             member_package_id: member_package_id.to_string(),
             dependency_key: name.clone(),
             inherited_package_name,
+            inherited_features,
+            inherited_default_features,
             decision: "selected".to_string(),
             manifest_path: Some(normalized_manifest_path.clone()),
             blocker_class: None,
@@ -1949,11 +1955,58 @@ fn dependency_uses_workspace(value: &toml::Value) -> bool {
         .unwrap_or(false)
 }
 
-fn dependency_has_unsupported_workspace_options(value: &toml::Value) -> bool {
+fn dependency_has_unsupported_workspace_member_options(value: &toml::Value) -> bool {
     let Some(table) = value.as_table() else {
         return false;
     };
     ["features", "default-features", "optional", "target"].iter().any(|key| table.contains_key(*key))
+}
+
+fn dependency_has_unsupported_workspace_inherited_options(value: &toml::Value) -> bool {
+    let Some(table) = value.as_table() else {
+        return false;
+    };
+    ["optional", "target", "workspace"].iter().any(|key| table.contains_key(*key))
+}
+
+fn dependency_features(value: &toml::Value) -> Result<Vec<String>, NativePackagePlanningBlocker> {
+    let Some(features) = value.as_table().and_then(|table| table.get("features")) else {
+        return Ok(Vec::new());
+    };
+    let Some(array) = features.as_array() else {
+        return Err(native_blocker(
+            None,
+            "unsupported-workspace-dependency-options",
+            "workspace dependency features must be an array of strings",
+        ));
+    };
+    let mut out = Vec::new();
+    for feature in array {
+        let Some(feature) = feature.as_str() else {
+            return Err(native_blocker(
+                None,
+                "unsupported-workspace-dependency-options",
+                "workspace dependency features must be an array of strings",
+            ));
+        };
+        out.push(feature.to_string());
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
+fn dependency_default_features(value: &toml::Value) -> Result<Option<bool>, NativePackagePlanningBlocker> {
+    let Some(default_features) = value.as_table().and_then(|table| table.get("default-features")) else {
+        return Ok(None);
+    };
+    default_features.as_bool().map(Some).ok_or_else(|| {
+        native_blocker(
+            None,
+            "unsupported-workspace-dependency-options",
+            "workspace dependency default-features must be a boolean",
+        )
+    })
 }
 
 fn dependency_package_name<'a>(dependency_name: &'a str, value: &'a toml::Value) -> &'a str {

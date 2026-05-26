@@ -1036,11 +1036,7 @@ fn write_workspace_dependency_vendored_registry_fixture(
     std::fs::create_dir_all(member_dir.join("src")).unwrap();
     std::fs::create_dir_all(app_dir.join(".cargo")).unwrap();
     std::fs::create_dir_all(leaf_dir.join("src")).unwrap();
-    let workspace_dependency = if unsupported_inheritance {
-        "demo_ws_leaf = { package = \"demo-ws-leaf\", version = \"=0.1.0\", default-features = false }"
-    } else {
-        "demo_ws_leaf = { package = \"demo-ws-leaf\", version = \"=0.1.0\" }"
-    };
+    let workspace_dependency = "demo_ws_leaf = { package = \"demo-ws-leaf\", version = \"=0.1.0\", features = [\"extra\"], default-features = false }";
     std::fs::write(
         app_dir.join("Cargo.toml"),
         format!(
@@ -1050,7 +1046,11 @@ fn write_workspace_dependency_vendored_registry_fixture(
     .unwrap();
     std::fs::write(
         member_dir.join("Cargo.toml"),
-        "[package]\nname = \"registry-workspace-dependency-topology-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_ws_leaf = { workspace = true }\n",
+        if unsupported_inheritance {
+            "[package]\nname = \"registry-workspace-dependency-topology-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_ws_leaf = { workspace = true, features = [\"member-side\"] }\n"
+        } else {
+            "[package]\nname = \"registry-workspace-dependency-topology-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_ws_leaf = { workspace = true }\n"
+        },
     )
     .unwrap();
     std::fs::write(member_dir.join("src/lib.rs"), "pub fn value() -> u32 { demo_ws_leaf::value() + 1 }\n").unwrap();
@@ -1061,7 +1061,7 @@ fn write_workspace_dependency_vendored_registry_fixture(
     .unwrap();
     std::fs::write(
         leaf_dir.join("Cargo.toml"),
-        "[package]\nname = \"demo-ws-leaf\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"demo_ws_leaf\"\npath = \"src/lib.rs\"\n",
+        "[package]\nname = \"demo-ws-leaf\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"demo_ws_leaf\"\npath = \"src/lib.rs\"\n\n[features]\nextra = []\nmember-side = []\n",
     )
     .unwrap();
     std::fs::write(leaf_dir.join("src/lib.rs"), "pub fn value() -> u32 { 40 }\n").unwrap();
@@ -1852,6 +1852,8 @@ fn rust_plan_cli_executes_workspace_dependency_vendored_registry_dependency_in_u
     assert!(member["workspace_dependencies"].as_array().unwrap().iter().any(|dependency| {
         dependency["dependency_key"] == "demo_ws_leaf"
             && dependency["inherited_package_name"] == "demo-ws-leaf"
+            && dependency["inherited_features"].as_array().unwrap().iter().any(|feature| feature == "extra")
+            && dependency["inherited_default_features"] == false
             && dependency["decision"] == "selected"
             && dependency["manifest_path"].as_str().unwrap().contains("demo-ws-leaf-0.1.0")
     }));
