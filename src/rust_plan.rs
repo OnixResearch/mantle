@@ -180,6 +180,7 @@ pub(crate) struct NativePackagePlanningSummary {
     pub(crate) targets: Vec<NativeTargetPlanningSummary>,
     pub(crate) path_dependencies: Vec<NativePathDependencySummary>,
     pub(crate) build_dependencies: Vec<NativePathDependencySummary>,
+    pub(crate) dev_dependencies: Vec<NativePathDependencySummary>,
     pub(crate) target_cfg_dependencies: Vec<NativeTargetCfgDependencySummary>,
     pub(crate) workspace_dependencies: Vec<NativeWorkspaceDependencySummary>,
     pub(crate) source_digest: SourceDigest,
@@ -1768,13 +1769,6 @@ fn native_package_from_manifest(
                 .map(|source| source.package_id.clone())
         })
         .unwrap_or_else(|| cargo_path_package_id(&package.name, &package.version));
-    if !manifest.dev_dependencies.is_empty() {
-        return Err(native_blocker(
-            Some(package_id),
-            "unsupported-dev-dependencies",
-            "native fragment does not model dev-dependencies/test surfaces",
-        ));
-    }
     let source_root = manifest_path.parent().ok_or_else(|| {
         native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
     })?;
@@ -1799,6 +1793,12 @@ fn native_package_from_manifest(
     let build_dependencies = native_build_dependencies(
         source_root,
         &manifest.build_dependencies,
+        Some(package_id.clone()),
+        native_registry_source_planning,
+    )?;
+    let dev_dependencies = native_dev_dependencies(
+        source_root,
+        &manifest.dev_dependencies,
         Some(package_id.clone()),
         native_registry_source_planning,
     )?;
@@ -1840,6 +1840,7 @@ fn native_package_from_manifest(
         targets,
         path_dependencies,
         build_dependencies,
+        dev_dependencies,
         target_cfg_dependencies,
         workspace_dependencies,
         source_digest,
@@ -1989,7 +1990,43 @@ fn native_build_dependencies(
     )
 }
 
+fn native_dev_dependencies(
+    source_root: &Path,
+    dependencies: &BTreeMap<String, toml::Value>,
+    package_id: Option<String>,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
+    for (name, value) in dependencies {
+        if dependency_has_unsupported_dev_options(value) {
+            return Err(native_blocker(
+                package_id,
+                "unsupported-dev-dependency-options",
+                &format!(
+                    "dev dependency `{name}` uses unsupported feature/default-feature/optional/target/workspace behavior"
+                ),
+            ));
+        }
+    }
+    native_path_dependencies(
+        source_root,
+        dependencies,
+        &BTreeMap::new(),
+        &[],
+        package_id,
+        native_registry_source_planning,
+    )
+}
+
 fn dependency_has_unsupported_build_options(value: &toml::Value) -> bool {
+    let Some(table) = value.as_table() else {
+        return false;
+    };
+    ["features", "default-features", "optional", "target", "workspace"]
+        .iter()
+        .any(|key| table.contains_key(*key))
+}
+
+fn dependency_has_unsupported_dev_options(value: &toml::Value) -> bool {
     let Some(table) = value.as_table() else {
         return false;
     };
