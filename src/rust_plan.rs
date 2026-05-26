@@ -1604,6 +1604,10 @@ fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlo
             roots.push(fs::canonicalize(&vendor_root).unwrap_or(vendor_root));
         }
     }
+    let conventional_vendor_deps = root.join("vendor-deps");
+    if conventional_vendor_deps.is_dir() {
+        roots.push(fs::canonicalize(&conventional_vendor_deps).unwrap_or(conventional_vendor_deps));
+    }
     roots.sort();
     roots.dedup();
     roots
@@ -1625,33 +1629,38 @@ fn bind_declared_vendor_source(
     let manifest_path = PathBuf::from(&package.manifest_path);
     let manifest_parent = manifest_path.parent();
     for vendor_root in vendor_roots {
-        let package_root = vendor_root.join(format!("{}-{}", package.name, package.version));
-        let candidate_manifest = package_root.join("Cargo.toml");
-        let manifest_candidate = if candidate_manifest.is_file() {
-            Some(candidate_manifest)
-        } else if manifest_parent.is_some_and(|parent| parent.starts_with(vendor_root)) && manifest_path.is_file() {
-            Some(manifest_path.clone())
-        } else {
-            None
-        };
-        let Some(manifest_candidate) = manifest_candidate else {
-            continue;
-        };
-        let source_root = manifest_candidate.parent().ok_or_else(|| {
-            native_registry_blocker(
-                Some(package.id.clone()),
-                "invalid-vendor-source-root",
-                "declared vendor manifest path has no parent directory",
-            )
-        })?;
-        validate_vendor_checksum(package, source_root, checksum)?;
-        let digest = hash_path_source_tree(source_root).map_err(|message| {
-            native_registry_blocker(Some(package.id.clone()), "vendor-source-unreadable", &message)
-        })?;
-        return Ok((vendor_root.clone(), manifest_candidate, SourceDigest {
-            algorithm: PATH_SOURCE_DIGEST_ALGORITHM.to_string(),
-            value: digest,
-        }));
+        let candidate_roots = [
+            vendor_root.join(format!("{}-{}", package.name, package.version)),
+            vendor_root.join(&package.name),
+        ];
+        for package_root in candidate_roots {
+            let candidate_manifest = package_root.join("Cargo.toml");
+            let manifest_candidate = if candidate_manifest.is_file() {
+                Some(candidate_manifest)
+            } else if manifest_parent.is_some_and(|parent| parent.starts_with(vendor_root)) && manifest_path.is_file() {
+                Some(manifest_path.clone())
+            } else {
+                None
+            };
+            let Some(manifest_candidate) = manifest_candidate else {
+                continue;
+            };
+            let source_root = manifest_candidate.parent().ok_or_else(|| {
+                native_registry_blocker(
+                    Some(package.id.clone()),
+                    "invalid-vendor-source-root",
+                    "declared vendor manifest path has no parent directory",
+                )
+            })?;
+            validate_vendor_checksum(package, source_root, checksum)?;
+            let digest = hash_path_source_tree(source_root).map_err(|message| {
+                native_registry_blocker(Some(package.id.clone()), "vendor-source-unreadable", &message)
+            })?;
+            return Ok((vendor_root.clone(), manifest_candidate, SourceDigest {
+                algorithm: PATH_SOURCE_DIGEST_ALGORITHM.to_string(),
+                value: digest,
+            }));
+        }
     }
     Err(native_registry_blocker(
         Some(package.id.clone()),
@@ -1774,7 +1783,7 @@ fn summarize_native_package_target_planning(
         }
     }
     native_packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
-    compare_native_packages_to_cargo(&native_packages, &cargo_workspace_packages, &mut blockers);
+    compare_native_packages_to_cargo(&native_packages, cargo_packages, &cargo_workspace_packages, &mut blockers);
     blockers.sort();
     blockers.dedup();
     let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
@@ -2570,14 +2579,15 @@ fn native_selected_features(options: &RustPlanOptions, feature_defs: &BTreeMap<S
 
 fn compare_native_packages_to_cargo(
     native_packages: &[NativePackagePlanningSummary],
-    cargo_packages: &[&CargoPackage],
+    all_cargo_packages: &[CargoPackage],
+    required_cargo_packages: &[&CargoPackage],
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) {
     for native in native_packages {
-        let Some(cargo) = cargo_packages
-            .iter()
-            .find(|package| manifest_paths_same(&package.manifest_path, Path::new(&native.manifest_path)))
-        else {
+        let Some(cargo) = all_cargo_packages.iter().find(|package| {
+            package.id == native.package_id
+                || manifest_paths_same(&package.manifest_path, Path::new(&native.manifest_path))
+        }) else {
             blockers.push(native_blocker(
                 Some(native.package_id.clone()),
                 "cargo-oracle-missing-package",
@@ -2605,11 +2615,10 @@ fn compare_native_packages_to_cargo(
             }
         }
     }
-    for cargo in cargo_packages {
-        if !native_packages
-            .iter()
-            .any(|native| manifest_paths_same(&native.manifest_path, Path::new(&cargo.manifest_path)))
-        {
+    for cargo in required_cargo_packages {
+        if !native_packages.iter().any(|native| {
+            native.package_id == cargo.id || manifest_paths_same(&native.manifest_path, Path::new(&cargo.manifest_path))
+        }) {
             blockers.push(native_blocker(
                 Some(cargo.id.clone()),
                 "native-missing-cargo-package",
@@ -2649,7 +2658,10 @@ fn cargo_supported_targets(package: &CargoPackage) -> Vec<NativeTargetPlanningSu
 }
 
 fn manifest_paths_same(left: &str, right: &Path) -> bool {
-    normalize_path_string(Path::new(left)) == normalize_path_string(right)
+    let left_path = Path::new(left);
+    let left_normalized = left_path.canonicalize().unwrap_or_else(|_| left_path.to_path_buf());
+    let right_normalized = right.canonicalize().unwrap_or_else(|_| right.to_path_buf());
+    left_normalized == right_normalized
 }
 
 fn cargo_path_package_id(name: &str, version: &str) -> String {
