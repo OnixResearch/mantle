@@ -2000,6 +2000,10 @@ fn rust_plan_cli_executes_workspace_dependency_vendored_registry_dependency_in_u
         dependency["name"] == "demo_ws_leaf"
             && dependency["manifest_path"].as_str().unwrap().contains("demo-ws-leaf-0.1.0")
     }));
+    assert!(
+        receipt["native_registry_workspace_dependency_topology_execution"].is_null(),
+        "normal --execute-topology should not emit the explicit workspace-dependency execution receipt: {receipt:#?}"
+    );
 
     let topology = &receipt["topology_execution"];
     assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
@@ -2048,6 +2052,89 @@ fn rust_plan_cli_blocks_unsupported_workspace_dependency_vendored_registry_topol
     assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
     assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
     assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn rust_plan_cli_executes_explicit_workspace_dependency_vendored_registry_topology() {
+    let dir = TempDir::new().unwrap();
+    let app_dir = write_workspace_dependency_vendored_registry_fixture(&dir, false);
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-workspace-dependency-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("explicit-registry-workspace-dependency-topology-output"))
+        .output()
+        .expect("explicit workspace-dependency registry topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let execution = &receipt["native_registry_workspace_dependency_topology_execution"];
+    assert_eq!(execution["execution_status"], "success", "{receipt:#?}");
+    assert!(execution["claim"].as_str().unwrap().contains("not Cargo orchestration"), "{receipt:#?}");
+    assert!(
+        execution["member_package_id"]
+            .as_str()
+            .unwrap()
+            .contains("registry-workspace-dependency-topology-app"),
+        "{receipt:#?}"
+    );
+    assert!(
+        execution["inherited_dependency_packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|package| package.as_str().unwrap().contains("demo-ws-leaf")),
+        "{receipt:#?}"
+    );
+    let unit_executions = execution["unit_executions"].as_array().unwrap();
+    assert_eq!(unit_executions.len(), 2, "{receipt:#?}");
+    assert!(unit_executions[0]["package_id"].as_str().unwrap().contains("demo-ws-leaf"), "{receipt:#?}");
+    assert!(
+        unit_executions[1]["package_id"]
+            .as_str()
+            .unwrap()
+            .contains("registry-workspace-dependency-topology-app"),
+        "{receipt:#?}"
+    );
+    assert!(unit_executions[1]["dependency_artifact_digests"].as_array().unwrap().iter().any(|artifact| {
+        artifact["path"].as_str().unwrap().contains("libdemo_ws_leaf")
+            && artifact["blake3"].as_str().unwrap().len() == 64
+    }));
+}
+
+#[test]
+fn rust_plan_cli_blocks_explicit_workspace_dependency_topology_before_rustc() {
+    let dir = TempDir::new().unwrap();
+    let app_dir = write_workspace_dependency_vendored_registry_fixture(&dir, true);
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-workspace-dependency-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("explicit-registry-workspace-dependency-blocked-output"))
+        .output()
+        .expect("explicit workspace-dependency registry topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
+    assert!(
+        package_blockers
+            .iter()
+            .any(|blocker| blocker["class"] == "unsupported-workspace-dependency-options"),
+        "{receipt:#?}"
+    );
+    let execution = &receipt["native_registry_workspace_dependency_topology_execution"];
+    assert_eq!(execution["execution_status"], "blocked", "{receipt:#?}");
+    assert_eq!(execution["blocker"]["class"], "workspace-dependency-planning-not-ready", "{receipt:#?}");
+    assert_eq!(execution["unit_executions"].as_array().unwrap().len(), 0);
 }
 
 #[test]

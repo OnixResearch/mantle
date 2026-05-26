@@ -477,6 +477,19 @@ pub(crate) struct RustDevDependencyTestTopologyExecutionReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustWorkspaceDependencyTopologyExecutionReceipt {
+    pub(crate) schema_version: u32,
+    pub(crate) execution_status: String,
+    pub(crate) claim: String,
+    pub(crate) workspace_root: Option<String>,
+    pub(crate) member_package_id: Option<String>,
+    pub(crate) inherited_dependency_packages: Vec<String>,
+    pub(crate) unit_executions: Vec<RustUnitExecutionReceipt>,
+    pub(crate) blocker: Option<RustUnitExecutionBlocker>,
+    pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct BuildScriptMetadataRunReceipt {
     pub(crate) schema_version: u32,
     pub(crate) unit_id: String,
@@ -548,6 +561,12 @@ pub(crate) struct RustPlanTopologyExecutionReceipt {
 pub(crate) struct RustPlanDevDependencyTestTopologyExecutionReceipt {
     pub(crate) rust_plan: RustPlanReceipt,
     pub(crate) native_rust_dev_dependency_test_topology_execution: RustDevDependencyTestTopologyExecutionReceipt,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanWorkspaceDependencyTopologyExecutionReceipt {
+    pub(crate) rust_plan: RustPlanReceipt,
+    pub(crate) native_registry_workspace_dependency_topology_execution: RustWorkspaceDependencyTopologyExecutionReceipt,
 }
 
 #[derive(Debug, Clone)]
@@ -872,6 +891,22 @@ pub(crate) fn print_rust_plan_dev_dependency_test_topology_execution_receipt(
     }
     .map_err(|err| {
         RunError::Internal(format!("rendering Rust dev-dependency test topology execution receipt: {err}"))
+    })?;
+    println!("{rendered}");
+    Ok(())
+}
+
+pub(crate) fn print_rust_plan_workspace_dependency_topology_execution_receipt(
+    receipt: &RustPlanWorkspaceDependencyTopologyExecutionReceipt,
+    json_mode: bool,
+) -> Result<(), RunError> {
+    let rendered = if json_mode {
+        serde_json::to_string(receipt)
+    } else {
+        serde_json::to_string_pretty(receipt)
+    }
+    .map_err(|err| {
+        RunError::Internal(format!("rendering Rust workspace-dependency topology execution receipt: {err}"))
     })?;
     println!("{rendered}");
     Ok(())
@@ -4790,6 +4825,224 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
     )
 }
 
+pub(crate) fn execute_native_registry_workspace_dependency_topology(
+    native_package_target_planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustWorkspaceDependencyTopologyExecutionReceipt, RunError> {
+    if !native_package_target_planning.ready {
+        return workspace_dependency_topology_receipt(
+            "blocked",
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "workspace-dependency-planning-not-ready".to_string(),
+                message: "native_registry_workspace_dependency_topology_execution requires ready native_registry_workspace_dependency_topology_planning evidence".to_string(),
+            }),
+        );
+    }
+    if !graph.ready {
+        return workspace_dependency_topology_receipt(
+            "blocked",
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message: "unit_derivation_graph is not ready; resolve planning blockers before workspace-dependency topology execution".to_string(),
+            }),
+        );
+    }
+
+    let candidate_packages = native_package_target_planning
+        .packages
+        .iter()
+        .filter(|package| package.workspace_dependencies.iter().any(|dependency| dependency.decision == "selected"))
+        .collect::<Vec<_>>();
+    if candidate_packages.len() != 1 {
+        return workspace_dependency_topology_receipt(
+            "blocked",
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "ambiguous-workspace-dependency-topology".to_string(),
+                message: format!(
+                    "expected exactly one package with selected workspace-inherited dependencies for bounded execution, found {}",
+                    candidate_packages.len()
+                ),
+            }),
+        );
+    }
+    let package = candidate_packages[0];
+    let selected_dependencies = package
+        .workspace_dependencies
+        .iter()
+        .filter(|dependency| dependency.decision == "selected")
+        .collect::<Vec<_>>();
+    if selected_dependencies.is_empty() {
+        return workspace_dependency_topology_receipt(
+            "blocked",
+            None,
+            Some(package.package_id.clone()),
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-workspace-dependency-selection".to_string(),
+                message: format!("package {} has no selected workspace-inherited dependency facts", package.package_id),
+            }),
+        );
+    }
+
+    let packages_by_manifest = native_package_target_planning
+        .packages
+        .iter()
+        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
+        .collect::<BTreeMap<_, _>>();
+    let mut executions = Vec::new();
+    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
+    let mut inherited_dependency_packages = Vec::new();
+
+    for dependency in selected_dependencies {
+        let Some(manifest_path) = dependency.manifest_path.as_deref() else {
+            return workspace_dependency_topology_receipt(
+                "blocked",
+                Some(dependency.workspace_root.clone()),
+                Some(package.package_id.clone()),
+                inherited_dependency_packages,
+                executions,
+                Some(RustUnitExecutionBlocker {
+                    class: "missing-workspace-dependency-source".to_string(),
+                    message: format!("workspace dependency `{}` has no manifest path", dependency.dependency_key),
+                }),
+            );
+        };
+        let Some(dependency_package) = packages_by_manifest.get(&normalize_path_string(Path::new(manifest_path)))
+        else {
+            return workspace_dependency_topology_receipt(
+                "blocked",
+                Some(dependency.workspace_root.clone()),
+                Some(package.package_id.clone()),
+                inherited_dependency_packages,
+                executions,
+                Some(RustUnitExecutionBlocker {
+                    class: "missing-workspace-dependency-source".to_string(),
+                    message: format!(
+                        "workspace dependency `{}` has no native package source facts",
+                        dependency.dependency_key
+                    ),
+                }),
+            );
+        };
+        let Some(producer) = graph.derivations.iter().find(|unit| {
+            unit.package_id == dependency_package.package_id && unit.target_kind == "lib" && unit.mode == "build"
+        }) else {
+            return workspace_dependency_topology_receipt(
+                "blocked",
+                Some(dependency.workspace_root.clone()),
+                Some(package.package_id.clone()),
+                inherited_dependency_packages,
+                executions,
+                Some(RustUnitExecutionBlocker {
+                    class: "missing-workspace-dependency-artifact".to_string(),
+                    message: format!(
+                        "workspace dependency `{}` has no supported lib derivation",
+                        dependency.dependency_key
+                    ),
+                }),
+            );
+        };
+        let executable_producer = bind_all_dependency_artifacts(producer, &produced_target_artifacts)?;
+        let receipt = execute_rust_unit(&executable_producer, options)?;
+        if receipt.execution_status != "success" {
+            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+                class: "workspace-dependency-producer-failed".to_string(),
+                message: format!("workspace dependency producer {} did not execute successfully", producer.unit_id),
+            });
+            executions.push(receipt);
+            return workspace_dependency_topology_receipt(
+                "blocked",
+                Some(dependency.workspace_root.clone()),
+                Some(package.package_id.clone()),
+                inherited_dependency_packages,
+                executions,
+                Some(blocker),
+            );
+        }
+        match produced_library_artifact_path(&executable_producer, options)? {
+            Ok(path) => {
+                produced_target_artifacts.insert(producer.package_id.clone(), path);
+            }
+            Err(blocker) => {
+                executions.push(receipt);
+                return workspace_dependency_topology_receipt(
+                    "blocked",
+                    Some(dependency.workspace_root.clone()),
+                    Some(package.package_id.clone()),
+                    inherited_dependency_packages,
+                    executions,
+                    Some(blocker),
+                );
+            }
+        }
+        inherited_dependency_packages.push(producer.package_id.clone());
+        executions.push(receipt);
+    }
+    inherited_dependency_packages.sort();
+    inherited_dependency_packages.dedup();
+
+    let Some(consumer) = graph.derivations.iter().find(|unit| {
+        unit.package_id == package.package_id
+            && matches!(unit.target_kind.as_str(), "lib" | "bin")
+            && unit.mode == "build"
+    }) else {
+        return workspace_dependency_topology_receipt(
+            "blocked",
+            package.workspace_dependencies.first().map(|dependency| dependency.workspace_root.clone()),
+            Some(package.package_id.clone()),
+            inherited_dependency_packages,
+            executions,
+            Some(RustUnitExecutionBlocker {
+                class: "missing-workspace-dependency-consumer".to_string(),
+                message: format!(
+                    "workspace dependency consumer {} has no supported lib/bin derivation",
+                    package.package_id
+                ),
+            }),
+        );
+    };
+    let executable_consumer = bind_all_dependency_artifacts(consumer, &produced_target_artifacts)?;
+    let receipt = execute_rust_unit(&executable_consumer, options)?;
+    if receipt.execution_status != "success" {
+        let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+            class: "workspace-dependency-consumer-failed".to_string(),
+            message: format!("workspace dependency consumer {} did not execute successfully", consumer.unit_id),
+        });
+        executions.push(receipt);
+        return workspace_dependency_topology_receipt(
+            "blocked",
+            package.workspace_dependencies.first().map(|dependency| dependency.workspace_root.clone()),
+            Some(package.package_id.clone()),
+            inherited_dependency_packages,
+            executions,
+            Some(blocker),
+        );
+    }
+    executions.push(receipt);
+    workspace_dependency_topology_receipt(
+        "success",
+        package.workspace_dependencies.first().map(|dependency| dependency.workspace_root.clone()),
+        Some(package.package_id.clone()),
+        inherited_dependency_packages,
+        executions,
+        None,
+    )
+}
+
 fn validate_native_registry_topology_inputs(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     graph: &UnitDerivationGraphSummary,
@@ -6066,6 +6319,40 @@ fn rust_dev_dependency_test_topology_execution_receipt_hash(
     hashable.receipt_hash.clear();
     let canonical = serde_json::to_vec(&hashable).map_err(|err| {
         RunError::Internal(format!("canonicalizing Rust dev-dependency test topology execution receipt: {err}"))
+    })?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn workspace_dependency_topology_receipt(
+    execution_status: &str,
+    workspace_root: Option<String>,
+    member_package_id: Option<String>,
+    inherited_dependency_packages: Vec<String>,
+    unit_executions: Vec<RustUnitExecutionReceipt>,
+    blocker: Option<RustUnitExecutionBlocker>,
+) -> Result<RustWorkspaceDependencyTopologyExecutionReceipt, RunError> {
+    let mut receipt = RustWorkspaceDependencyTopologyExecutionReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        execution_status: execution_status.to_string(),
+        claim: "bounded native registry workspace-dependency topology; explicit workspace inheritance facts only, not Cargo orchestration, Cargo resolver fallback, registry cache fallback, or network/index access".to_string(),
+        workspace_root,
+        member_package_id,
+        inherited_dependency_packages,
+        unit_executions,
+        blocker,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = rust_workspace_dependency_topology_execution_receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn rust_workspace_dependency_topology_execution_receipt_hash(
+    receipt: &RustWorkspaceDependencyTopologyExecutionReceipt,
+) -> Result<String, RunError> {
+    let mut hashable = receipt.clone();
+    hashable.receipt_hash.clear();
+    let canonical = serde_json::to_vec(&hashable).map_err(|err| {
+        RunError::Internal(format!("canonicalizing Rust workspace-dependency topology execution receipt: {err}"))
     })?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
