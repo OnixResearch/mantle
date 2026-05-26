@@ -180,6 +180,7 @@ pub(crate) struct NativePackagePlanningSummary {
     pub(crate) targets: Vec<NativeTargetPlanningSummary>,
     pub(crate) path_dependencies: Vec<NativePathDependencySummary>,
     pub(crate) target_cfg_dependencies: Vec<NativeTargetCfgDependencySummary>,
+    pub(crate) workspace_dependencies: Vec<NativeWorkspaceDependencySummary>,
     pub(crate) source_digest: SourceDigest,
 }
 
@@ -203,6 +204,17 @@ pub(crate) struct NativeTargetCfgDependencySummary {
     pub(crate) active_target: String,
     pub(crate) decision: String,
     pub(crate) name: String,
+    pub(crate) manifest_path: Option<String>,
+    pub(crate) blocker_class: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativeWorkspaceDependencySummary {
+    pub(crate) workspace_root: String,
+    pub(crate) member_package_id: String,
+    pub(crate) dependency_key: String,
+    pub(crate) inherited_package_name: String,
+    pub(crate) decision: String,
     pub(crate) manifest_path: Option<String>,
     pub(crate) blocker_class: Option<String>,
 }
@@ -606,6 +618,8 @@ struct NativeManifestBin {
 struct NativeManifestWorkspace {
     #[serde(default)]
     members: Vec<String>,
+    #[serde(default)]
+    dependencies: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1503,7 +1517,13 @@ fn summarize_native_package_target_planning(
         .collect::<Vec<_>>();
     let mut native_packages = Vec::new();
     for manifest_path in manifest_paths {
-        match native_package_from_manifest(&manifest_path, options, source_closure, native_registry_source_planning) {
+        match native_package_from_manifest(
+            root,
+            &manifest_path,
+            options,
+            source_closure,
+            native_registry_source_planning,
+        ) {
             Ok(package) => native_packages.push(package),
             Err(blocker) => blockers.push(blocker),
         }
@@ -1563,6 +1583,7 @@ fn native_workspace_manifest_paths(root: &Path, blockers: &mut Vec<NativePackage
 }
 
 fn native_package_from_manifest(
+    workspace_root: &Path,
     manifest_path: &Path,
     options: &RustPlanOptions,
     source_closure: &SourceClosureSummary,
@@ -1625,8 +1646,17 @@ fn native_package_from_manifest(
         Some(package_id.clone()),
         native_registry_source_planning,
     )?;
+    let (workspace_dependencies, selected_workspace_dependencies) = native_workspace_dependencies(
+        workspace_root,
+        source_root,
+        &package_id,
+        &manifest.dependencies,
+        Some(package_id.clone()),
+        native_registry_source_planning,
+    )?;
     let mut path_dependencies = path_dependencies;
     path_dependencies.extend(selected_target_cfg_dependencies);
+    path_dependencies.extend(selected_workspace_dependencies);
     path_dependencies.sort();
     path_dependencies.dedup();
     let source_digest = native_registry_source_planning
@@ -1654,6 +1684,7 @@ fn native_package_from_manifest(
         targets,
         path_dependencies,
         target_cfg_dependencies,
+        workspace_dependencies,
         source_digest,
     })
 }
@@ -1742,6 +1773,9 @@ fn native_path_dependencies(
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
     let mut summaries = Vec::new();
     for (name, value) in dependencies {
+        if dependency_uses_workspace(value) {
+            continue;
+        }
         if dependency_optional(value) && !optional_dependency_selected(name, feature_defs, selected_features) {
             continue;
         }
@@ -1779,6 +1813,119 @@ fn dependency_optional(value: &toml::Value) -> bool {
         .and_then(|table| table.get("optional"))
         .and_then(toml::Value::as_bool)
         .unwrap_or(false)
+}
+
+fn native_workspace_dependencies(
+    workspace_root: &Path,
+    source_root: &Path,
+    member_package_id: &str,
+    dependencies: &BTreeMap<String, toml::Value>,
+    package_id: Option<String>,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+) -> Result<(Vec<NativeWorkspaceDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
+    if !dependencies.values().any(dependency_uses_workspace) {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let workspace_manifest_path = workspace_root.join("Cargo.toml");
+    let workspace_manifest = read_native_manifest(&workspace_manifest_path)
+        .map_err(|message| native_blocker(package_id.clone(), "unreadable-workspace-manifest", &message))?;
+    let workspace_dependencies =
+        workspace_manifest.workspace.as_ref().map(|workspace| &workspace.dependencies).ok_or_else(|| {
+            native_blocker(
+                package_id.clone(),
+                "missing-workspace-section",
+                "workspace dependency inheritance requires a root [workspace] table",
+            )
+        })?;
+
+    let mut summaries = Vec::new();
+    let mut selected = Vec::new();
+    for (name, value) in dependencies {
+        if !dependency_uses_workspace(value) {
+            continue;
+        }
+        let inherited = workspace_dependencies.get(name).ok_or_else(|| {
+            native_blocker(
+                package_id.clone(),
+                "missing-workspace-dependency",
+                &format!("dependency `{name}` uses workspace inheritance but root [workspace.dependencies] has no matching key"),
+            )
+        })?;
+        if dependency_has_unsupported_workspace_options(value)
+            || dependency_has_unsupported_workspace_options(inherited)
+        {
+            return Err(native_blocker(
+                package_id.clone(),
+                "unsupported-workspace-dependency-options",
+                &format!(
+                    "workspace dependency `{name}` uses unsupported inherited feature/default-feature/platform behavior"
+                ),
+            ));
+        }
+        let manifest_path = if let Some(path) = dependency_path(inherited) {
+            source_root.join(path).join("Cargo.toml")
+        } else if let Some(registry_source) =
+            registry_dependency_source(name, inherited, native_registry_source_planning)
+        {
+            PathBuf::from(&registry_source.manifest_path)
+        } else {
+            return Err(native_blocker(
+                package_id.clone(),
+                "unsupported-workspace-dependency-source",
+                &format!("workspace dependency `{name}` is outside the bounded path-or-declared-registry fragment"),
+            ));
+        };
+        if !manifest_path.is_file() {
+            return Err(native_blocker(
+                package_id.clone(),
+                "missing-workspace-dependency-manifest",
+                &format!("workspace dependency `{name}` manifest {} is not readable", manifest_path.display()),
+            ));
+        }
+        let inherited_package_name = dependency_package_name(name, inherited).to_string();
+        let normalized_manifest_path = normalize_path_string(&manifest_path);
+        summaries.push(NativeWorkspaceDependencySummary {
+            workspace_root: normalize_path_string(workspace_root),
+            member_package_id: member_package_id.to_string(),
+            dependency_key: name.clone(),
+            inherited_package_name,
+            decision: "selected".to_string(),
+            manifest_path: Some(normalized_manifest_path.clone()),
+            blocker_class: None,
+        });
+        selected.push(NativePathDependencySummary {
+            name: name.clone(),
+            manifest_path: normalized_manifest_path,
+        });
+    }
+    summaries.sort();
+    summaries.dedup();
+    selected.sort();
+    selected.dedup();
+    Ok((summaries, selected))
+}
+
+fn dependency_uses_workspace(value: &toml::Value) -> bool {
+    value
+        .as_table()
+        .and_then(|table| table.get("workspace"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn dependency_has_unsupported_workspace_options(value: &toml::Value) -> bool {
+    let Some(table) = value.as_table() else {
+        return false;
+    };
+    ["features", "default-features", "optional", "target"].iter().any(|key| table.contains_key(*key))
+}
+
+fn dependency_package_name<'a>(dependency_name: &'a str, value: &'a toml::Value) -> &'a str {
+    value
+        .as_table()
+        .and_then(|table| table.get("package"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or(dependency_name)
 }
 
 fn native_target_cfg_dependencies(
