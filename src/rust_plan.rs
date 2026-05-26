@@ -2182,40 +2182,36 @@ fn native_build_dependencies(
 fn native_dev_dependencies(
     source_root: &Path,
     dependencies: &BTreeMap<String, toml::Value>,
-    package_id: Option<String>,
+    _package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
+    // Dev-dependency feature/default-feature/test resolver behavior is not part of the normal build
+    // topology. Record only explicitly readable path or declared-registry source material for the
+    // dedicated dev-test rails; otherwise ignore test-only dependencies so they cannot block build-mode
+    // package/target facts or normal self execution.
+    let mut summaries = Vec::new();
     for (name, value) in dependencies {
-        if dependency_has_unsupported_dev_options(value) {
-            return Err(native_blocker(
-                package_id,
-                "unsupported-dev-dependency-options",
-                &format!(
-                    "dev dependency `{name}` uses unsupported feature/default-feature/optional/target/workspace behavior"
-                ),
-            ));
+        let manifest_path = if let Some(path) = dependency_path(value) {
+            source_root.join(path).join("Cargo.toml")
+        } else if let Some(registry_source) = registry_dependency_source(name, value, native_registry_source_planning) {
+            PathBuf::from(&registry_source.manifest_path)
+        } else {
+            continue;
+        };
+        if !manifest_path.is_file() {
+            continue;
         }
+        summaries.push(NativePathDependencySummary {
+            name: name.clone(),
+            manifest_path: normalize_path_string(&manifest_path),
+        });
     }
-    native_path_dependencies(
-        source_root,
-        dependencies,
-        &BTreeMap::new(),
-        &[],
-        package_id,
-        native_registry_source_planning,
-    )
+    summaries.sort();
+    summaries.dedup();
+    Ok(summaries)
 }
 
 fn dependency_has_unsupported_build_options(value: &toml::Value) -> bool {
-    let Some(table) = value.as_table() else {
-        return false;
-    };
-    ["features", "default-features", "optional", "target", "workspace"]
-        .iter()
-        .any(|key| table.contains_key(*key))
-}
-
-fn dependency_has_unsupported_dev_options(value: &toml::Value) -> bool {
     let Some(table) = value.as_table() else {
         return false;
     };
@@ -2772,6 +2768,12 @@ fn summarize_native_unit_graph_planning(
             "native unit graph fragment supports only bounded default feature invocation",
         ));
     }
+    let cargo_graph = summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?;
+    let cargo_build_package_ids = cargo_graph
+        .derivations
+        .iter()
+        .map(|derivation| derivation.package_id.clone())
+        .collect::<BTreeSet<_>>();
     let packages_by_id = native_package_target_planning
         .packages
         .iter()
@@ -2779,6 +2781,9 @@ fn summarize_native_unit_graph_planning(
         .collect::<BTreeMap<_, _>>();
     let mut unit_index = 0usize;
     for package in &native_package_target_planning.packages {
+        if !cargo_build_package_ids.contains(&package.package_id) {
+            continue;
+        }
         if !source_closure.sources.iter().any(|source| source.package_id == package.package_id) {
             blockers.push(native_unit_blocker(
                 None,
@@ -2844,7 +2849,6 @@ fn summarize_native_unit_graph_planning(
     units.sort();
     blockers.sort();
     blockers.dedup();
-    let cargo_graph = summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?;
     compare_native_units_to_cargo(&units, &cargo_graph, &mut blockers);
     blockers.sort();
     blockers.dedup();
@@ -4798,22 +4802,28 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
                 }),
             );
         };
-        let Some(producer) = graph.derivations.iter().find(|unit| {
-            unit.package_id == dev_package.package_id && unit.target_kind == "lib" && unit.mode == "build"
-        }) else {
-            return dev_dependency_test_topology_receipt(
-                "blocked",
-                Some(package.package_id.clone()),
-                Some(test_name.to_string()),
-                dev_dependency_packages,
-                executions,
-                Some(RustUnitExecutionBlocker {
-                    class: "missing-dev-dependency-artifact".to_string(),
-                    message: format!("dev dependency `{}` has no supported lib derivation", dev_dependency.name),
-                }),
-            );
+        let producer = match graph
+            .derivations
+            .iter()
+            .find(|unit| unit.package_id == dev_package.package_id && unit.target_kind == "lib" && unit.mode == "build")
+            .cloned()
+        {
+            Some(producer) => producer,
+            None => match dev_dependency_lib_derivation(dev_package, &dev_dependency.name) {
+                Ok(producer) => producer,
+                Err(blocker) => {
+                    return dev_dependency_test_topology_receipt(
+                        "blocked",
+                        Some(package.package_id.clone()),
+                        Some(test_name.to_string()),
+                        dev_dependency_packages,
+                        executions,
+                        Some(blocker),
+                    );
+                }
+            },
         };
-        let executable_producer = bind_all_dependency_artifacts(producer, &produced_target_artifacts)?;
+        let executable_producer = bind_all_dependency_artifacts(&producer, &produced_target_artifacts)?;
         let receipt = execute_rust_unit(&executable_producer, options)?;
         if receipt.execution_status != "success" {
             let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
@@ -6608,6 +6618,62 @@ fn rust_unit_topology_execution_receipt_hash(receipt: &RustUnitTopologyExecution
     let canonical = serde_json::to_vec(&hashable)
         .map_err(|err| RunError::Internal(format!("canonicalizing Rust topology execution receipt: {err}")))?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn dev_dependency_lib_derivation(
+    package: &NativePackagePlanningSummary,
+    dependency_name: &str,
+) -> Result<RustUnitDerivationSummary, RustUnitExecutionBlocker> {
+    let libs = package.targets.iter().filter(|target| target.kind == "lib").collect::<Vec<_>>();
+    if libs.len() != 1 {
+        return Err(RustUnitExecutionBlocker {
+            class: "missing-dev-dependency-artifact".to_string(),
+            message: format!("dev dependency `{dependency_name}` has no supported lib derivation"),
+        });
+    }
+    let target = libs[0];
+    let unit_id = format!("native-dev-dependency-lib:{}:{}", package.package_id, target.name);
+    let args = vec![
+        "--crate-name".to_string(),
+        target.crate_name.clone(),
+        "--edition".to_string(),
+        "2021".to_string(),
+        target.source_path.clone(),
+        "--emit=link".to_string(),
+        "--crate-type".to_string(),
+        "lib".to_string(),
+    ];
+    let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
+    let mut env = BTreeMap::new();
+    env.insert("CRATE_KIND".to_string(), "lib".to_string());
+    env.insert("MODE".to_string(), "build".to_string());
+    env.insert("PACKAGE_ID".to_string(), package.package_id.clone());
+    env.insert("PROFILE".to_string(), DEFAULT_CARGO_PROFILE.to_string());
+    Ok(RustUnitDerivationSummary {
+        unit_id,
+        package_id: package.package_id.clone(),
+        target_name: target.name.clone(),
+        target_kind: "lib".to_string(),
+        execution_kind: "target".to_string(),
+        crate_types: vec!["lib".to_string()],
+        mode: "build".to_string(),
+        profile: DEFAULT_CARGO_PROFILE.to_string(),
+        source_digest: package.source_digest.clone(),
+        dependency_artifacts: Vec::new(),
+        consumed_host_artifacts: Vec::new(),
+        generated_metadata: None,
+        derivation: ReviewableRustDerivation {
+            name: derivation_name(&target.name, 0),
+            builder: "rustc".to_string(),
+            system: "x86_64-linux".to_string(),
+            args,
+            outputs: vec!["out".to_string()],
+            env,
+            inputs: vec![format!("source:{}:{}", package.package_id, package.source_digest.value)],
+            addressing_mode: "content-addressed".to_string(),
+        },
+        rustc_args_digest_blake3: args_digest,
+    })
 }
 
 fn dev_dependency_test_topology_receipt(

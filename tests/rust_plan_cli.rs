@@ -2314,7 +2314,7 @@ fn rust_plan_cli_plans_dev_dependency_test_topology_evidence() {
 }
 
 #[test]
-fn rust_plan_cli_blocks_unsupported_dev_dependency_options_before_rustc() {
+fn rust_plan_cli_ignores_dev_dependency_options_in_normal_build_topology() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_dev_dependency_test_topology_fixture(&dir, true);
 
@@ -2333,12 +2333,17 @@ fn rust_plan_cli_blocks_unsupported_dev_dependency_options_before_rustc() {
     let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-dev-dependency-options"),
+        !package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-dev-dependency-options"),
         "{receipt:#?}"
     );
     let topology = &receipt["topology_execution"];
-    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    let executions = topology["unit_executions"].as_array().unwrap();
+    assert_eq!(executions.len(), 1, "{receipt:#?}");
+    assert!(
+        !executions.iter().any(|unit| unit["target_name"] == "dev_helper"),
+        "normal build topology must not execute dev-dependency units: {receipt:#?}"
+    );
 }
 
 #[test]
