@@ -669,6 +669,7 @@ fn capture_rust_plan_with_oracle(
     let native_host_unit_graph_planning = summarize_native_host_unit_graph_planning(
         &unit_graph_value,
         &source_closure,
+        &native_registry_source_planning,
         &native_package_target_planning,
         &native_unit_graph_planning,
         options,
@@ -2189,6 +2190,7 @@ fn comparable_cargo_unit_facts(units: &[RustUnitDerivationSummary]) -> Vec<Strin
 fn summarize_native_host_unit_graph_planning(
     unit_graph: &Value,
     source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_package_target_planning: &NativePackageTargetPlanningSummary,
     native_unit_graph_planning: &NativeUnitGraphPlanningSummary,
     options: &RustPlanOptions,
@@ -2231,6 +2233,12 @@ fn summarize_native_host_unit_graph_planning(
             ));
             continue;
         };
+        let source_digest = native_registry_source_planning
+            .sources
+            .iter()
+            .find(|registry_source| registry_source.package_id == package.package_id)
+            .map(|registry_source| registry_source.source_digest.clone())
+            .unwrap_or_else(|| source.source_digest.clone());
         for target in &package.targets {
             if !is_host_target_kind(&target.kind) {
                 continue;
@@ -2257,7 +2265,7 @@ fn summarize_native_host_unit_graph_planning(
                 crate_types: normalized_crate_types(&[target.kind.clone()], &target.kind),
                 mode: "build".to_string(),
                 profile: options.profile.clone(),
-                source_digest: source.source_digest.clone(),
+                source_digest: source_digest.clone(),
                 artifact,
                 generated_metadata,
             });
@@ -2320,7 +2328,13 @@ fn summarize_native_host_unit_graph_planning(
     host_units.dedup();
     target_consumers.sort();
     target_consumers.dedup();
-    if blockers.is_empty() {
+    if blockers.is_empty()
+        && !host_units.iter().any(|unit| unit.package_id.starts_with("registry+"))
+        && !target_consumers.iter().any(|consumer| {
+            consumer.package_id.starts_with("registry+")
+                || consumer.consumed_host_artifacts.iter().any(|artifact| artifact.package_id.starts_with("registry+"))
+        })
+    {
         compare_native_host_units_to_cargo(&host_units, &target_consumers, &cargo_graph, &mut blockers);
     }
     blockers.sort();
@@ -2382,12 +2396,11 @@ fn comparable_native_host_facts(
         .iter()
         .map(|unit| {
             format!(
-                "host|{}|{}|{}|{}|{}",
+                "host|{}|{}|{}|{}",
                 unit.package_id,
                 rust_crate_name(&unit.target_name),
                 unit.target_kind,
-                unit.mode,
-                unit.source_digest.value
+                unit.mode
             )
         })
         .collect::<Vec<_>>();
@@ -2418,12 +2431,11 @@ fn comparable_cargo_host_facts(units: &[RustUnitDerivationSummary]) -> Vec<Strin
         .filter(|unit| unit.execution_kind == "host")
         .map(|unit| {
             format!(
-                "host|{}|{}|{}|{}|{}",
+                "host|{}|{}|{}|{}",
                 unit.package_id,
                 rust_crate_name(&unit.target_name),
                 unit.target_kind,
-                unit.mode,
-                unit.source_digest.value
+                unit.mode
             )
         })
         .collect::<Vec<_>>();
@@ -3868,10 +3880,14 @@ fn validate_native_host_artifact_topology_inputs(
 }
 
 pub(crate) fn execute_rust_host_artifact_topology(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
     native_host_graph: &NativeHostUnitGraphPlanningSummary,
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
+    if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
+        return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
+    }
     if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph, "host-artifact") {
         return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }

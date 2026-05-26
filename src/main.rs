@@ -2029,6 +2029,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             RunError::Internal("--execute-host-artifact-topology requires --execution-output-root".to_string())
         })?;
         let host_artifact_topology_execution = rust_plan::execute_rust_host_artifact_topology(
+            &receipt.native_registry_source_planning,
             &receipt.native_host_unit_graph_planning,
             &receipt.unit_derivation_graph,
             &rust_plan::RustUnitExecutionOptions {
