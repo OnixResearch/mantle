@@ -179,6 +179,7 @@ pub(crate) struct NativePackagePlanningSummary {
     pub(crate) selected_features: Vec<String>,
     pub(crate) targets: Vec<NativeTargetPlanningSummary>,
     pub(crate) path_dependencies: Vec<NativePathDependencySummary>,
+    pub(crate) build_dependencies: Vec<NativePathDependencySummary>,
     pub(crate) target_cfg_dependencies: Vec<NativeTargetCfgDependencySummary>,
     pub(crate) workspace_dependencies: Vec<NativeWorkspaceDependencySummary>,
     pub(crate) source_digest: SourceDigest,
@@ -287,6 +288,7 @@ pub(crate) struct NativeHostUnitSummary {
     pub(crate) profile: String,
     pub(crate) source_digest: SourceDigest,
     pub(crate) artifact: RustHostArtifact,
+    pub(crate) dependency_artifacts: Vec<RustDependencyArtifact>,
     pub(crate) generated_metadata: Option<BuildScriptMetadataSummary>,
 }
 
@@ -1611,13 +1613,6 @@ fn native_package_from_manifest(
                 .map(|source| source.package_id.clone())
         })
         .unwrap_or_else(|| cargo_path_package_id(&package.name, &package.version));
-    if !manifest.build_dependencies.is_empty() {
-        return Err(native_blocker(
-            Some(package_id),
-            "unsupported-build-dependencies",
-            "native fragment does not model build-dependencies yet",
-        ));
-    }
     if !manifest.dev_dependencies.is_empty() {
         return Err(native_blocker(
             Some(package_id),
@@ -1643,6 +1638,12 @@ fn native_package_from_manifest(
         &manifest.dependencies,
         &manifest.features,
         &selected_features,
+        Some(package_id.clone()),
+        native_registry_source_planning,
+    )?;
+    let build_dependencies = native_build_dependencies(
+        source_root,
+        &manifest.build_dependencies,
         Some(package_id.clone()),
         native_registry_source_planning,
     )?;
@@ -1683,6 +1684,7 @@ fn native_package_from_manifest(
         selected_features,
         targets,
         path_dependencies,
+        build_dependencies,
         target_cfg_dependencies,
         workspace_dependencies,
         source_digest,
@@ -1805,6 +1807,40 @@ fn native_path_dependencies(
     summaries.sort();
     summaries.dedup();
     Ok(summaries)
+}
+
+fn native_build_dependencies(
+    source_root: &Path,
+    dependencies: &BTreeMap<String, toml::Value>,
+    package_id: Option<String>,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
+    for (name, value) in dependencies {
+        if dependency_has_unsupported_build_options(value) {
+            return Err(native_blocker(
+                package_id,
+                "unsupported-build-dependency-options",
+                &format!("build dependency `{name}` uses unsupported feature/default-feature/optional behavior"),
+            ));
+        }
+    }
+    native_path_dependencies(
+        source_root,
+        dependencies,
+        &BTreeMap::new(),
+        &[],
+        package_id,
+        native_registry_source_planning,
+    )
+}
+
+fn dependency_has_unsupported_build_options(value: &toml::Value) -> bool {
+    let Some(table) = value.as_table() else {
+        return false;
+    };
+    ["features", "default-features", "optional", "target", "workspace"]
+        .iter()
+        .any(|key| table.contains_key(*key))
 }
 
 fn dependency_optional(value: &toml::Value) -> bool {
@@ -2316,6 +2352,7 @@ fn summarize_native_unit_graph_planning(
         }
         let dependency_artifacts = native_dependency_artifacts(
             package,
+            &package.path_dependencies,
             &packages_by_id,
             &native_package_target_planning.packages,
             &mut blockers,
@@ -2403,12 +2440,13 @@ fn target_build_order(kind: &str) -> usize {
 
 fn native_dependency_artifacts(
     package: &NativePackagePlanningSummary,
+    dependencies: &[NativePathDependencySummary],
     packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
     packages: &[NativePackagePlanningSummary],
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) -> Vec<RustDependencyArtifact> {
     let mut artifacts = Vec::new();
-    for dependency in &package.path_dependencies {
+    for dependency in dependencies {
         let Some(dependency_package) = packages
             .iter()
             .find(|candidate| manifest_path_strings_same(&candidate.manifest_path, &dependency.manifest_path))
@@ -2556,6 +2594,11 @@ fn summarize_native_host_unit_graph_planning(
         .iter()
         .map(|package| (package.manifest_path.clone(), package))
         .collect::<BTreeMap<_, _>>();
+    let packages_by_id = native_package_target_planning
+        .packages
+        .iter()
+        .map(|package| (package.package_id.clone(), package))
+        .collect::<BTreeMap<_, _>>();
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     let mut host_index = native_unit_graph_planning.units.len();
     for package in &native_package_target_planning.packages {
@@ -2574,6 +2617,12 @@ fn summarize_native_host_unit_graph_planning(
             .find(|registry_source| registry_source.package_id == package.package_id)
             .map(|registry_source| registry_source.source_digest.clone())
             .unwrap_or_else(|| source.source_digest.clone());
+        let host_dependency_artifacts = native_host_dependency_artifacts(
+            package,
+            &packages_by_id,
+            &native_package_target_planning.packages,
+            &mut blockers,
+        );
         for target in &package.targets {
             if !is_host_target_kind(&target.kind) {
                 continue;
@@ -2602,6 +2651,7 @@ fn summarize_native_host_unit_graph_planning(
                 profile: options.profile.clone(),
                 source_digest: source_digest.clone(),
                 artifact,
+                dependency_artifacts: host_dependency_artifacts.clone(),
                 generated_metadata,
             });
             host_index += 1;
@@ -2693,6 +2743,46 @@ fn summarize_native_host_unit_graph_planning(
             "not-full-host-scheduling-or-execution".to_string(),
         ],
     })
+}
+
+fn native_host_dependency_artifacts(
+    package: &NativePackagePlanningSummary,
+    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
+    packages: &[NativePackagePlanningSummary],
+    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
+) -> Vec<RustDependencyArtifact> {
+    let mut artifacts = Vec::new();
+    for dependency in &package.build_dependencies {
+        let Some(dependency_package) = packages
+            .iter()
+            .find(|candidate| manifest_path_strings_same(&candidate.manifest_path, &dependency.manifest_path))
+        else {
+            blockers.push(native_host_blocker(
+                None,
+                Some(package.package_id.clone()),
+                "unresolved-build-dependency-edge",
+                &format!("build dependency `{}` has no native package fact", dependency.name),
+            ));
+            continue;
+        };
+        if packages_by_id.get(&dependency_package.package_id).is_none() {
+            blockers.push(native_host_blocker(
+                None,
+                Some(package.package_id.clone()),
+                "missing-native-build-dependency-fact",
+                &format!("build dependency `{}` cannot be resolved to a native package", dependency.name),
+            ));
+            continue;
+        }
+        artifacts.push(RustDependencyArtifact {
+            package_id: dependency_package.package_id.clone(),
+            name: rust_crate_name(&dependency.name),
+            artifact: format!("artifact:{}:{}", dependency_package.package_id, rust_crate_name(&dependency.name)),
+        });
+    }
+    artifacts.sort();
+    artifacts.dedup();
+    artifacts
 }
 
 fn compare_native_host_units_to_cargo(
@@ -3009,6 +3099,10 @@ fn native_host_unit_derivation(
         args.push("-C".to_string());
         args.push(format!("linker={}", normalize_path_string(&linker)));
     }
+    for dependency in &unit.dependency_artifacts {
+        args.push("--extern".to_string());
+        args.push(format!("{}={}", dependency.name, dependency.artifact));
+    }
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
     let mut env = BTreeMap::new();
     env.insert("CRATE_KIND".to_string(), unit.target_kind.clone());
@@ -3019,7 +3113,10 @@ fn native_host_unit_derivation(
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
     }
-    let inputs = vec![format!("source:{}:{}", unit.package_id, unit.source_digest.value)];
+    let mut inputs = vec![format!("source:{}:{}", unit.package_id, unit.source_digest.value)];
+    inputs.extend(unit.dependency_artifacts.iter().map(|dependency| dependency.artifact.clone()));
+    inputs.sort();
+    inputs.dedup();
     RustUnitDerivationSummary {
         unit_id: unit.unit_id.clone(),
         package_id: unit.package_id.clone(),
@@ -3030,7 +3127,7 @@ fn native_host_unit_derivation(
         mode: unit.mode.clone(),
         profile: options.profile.clone(),
         source_digest: unit.source_digest.clone(),
-        dependency_artifacts: Vec::new(),
+        dependency_artifacts: unit.dependency_artifacts.clone(),
         consumed_host_artifacts: Vec::new(),
         generated_metadata: unit.generated_metadata.clone(),
         derivation: ReviewableRustDerivation {
@@ -3989,13 +4086,80 @@ pub(crate) fn execute_rust_unit_topology(
         }
     }
 
+    let mut host_dependency_indices = BTreeSet::new();
+    fn collect_target_dependencies(index: usize, edges: &BTreeMap<usize, Vec<usize>>, collected: &mut BTreeSet<usize>) {
+        if !collected.insert(index) {
+            return;
+        }
+        if let Some(deps) = edges.get(&index) {
+            for dep in deps {
+                collect_target_dependencies(*dep, edges, collected);
+            }
+        }
+    }
+    for index in &host_indices {
+        let unit = &graph.derivations[*index];
+        for dependency in &unit.dependency_artifacts {
+            let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
+                return topology_receipt(
+                    "blocked",
+                    Vec::new(),
+                    Vec::new(),
+                    Some(RustUnitExecutionBlocker {
+                        class: "missing-host-dependency-producer".to_string(),
+                        message: format!(
+                            "no supported target producer lib unit for host dependency package {}",
+                            dependency.package_id
+                        ),
+                    }),
+                );
+            };
+            collect_target_dependencies(producer_index, &edges, &mut host_dependency_indices);
+        }
+    }
+
     let mut executions = Vec::new();
     let mut build_script_metadata_runs = Vec::new();
+    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
+    let mut executed_target_indices = BTreeSet::new();
+    for index in ordered_target_indices.iter().copied().filter(|index| host_dependency_indices.contains(index)) {
+        let unit = &graph.derivations[index];
+        let mut executable_unit = bind_all_host_artifacts(unit, &BTreeMap::new())?;
+        if !executable_unit.dependency_artifacts.is_empty() {
+            executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
+        }
+        let receipt = execute_rust_unit(&executable_unit, options)?;
+        if receipt.execution_status != "success" {
+            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+                class: "host-dependency-target-unit-failed".to_string(),
+                message: format!("host dependency target unit {} did not execute successfully", unit.unit_id),
+            });
+            executions.push(receipt);
+            return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+        }
+        if unit.target_kind == "lib" {
+            match produced_library_artifact_path(&executable_unit, options)? {
+                Ok(path) => {
+                    produced_target_artifacts.insert(unit.package_id.clone(), path);
+                }
+                Err(blocker) => {
+                    executions.push(receipt);
+                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+                }
+            }
+        }
+        executed_target_indices.insert(index);
+        executions.push(receipt);
+    }
     let mut produced_host_artifacts = BTreeMap::<String, PathBuf>::new();
     let mut produced_build_script_metadata = BTreeMap::<String, BuildScriptMetadataSummary>::new();
     for index in host_indices {
         let unit = &graph.derivations[index];
-        let receipt = execute_rust_unit(unit, options)?;
+        let mut executable_unit = unit.clone();
+        if !executable_unit.dependency_artifacts.is_empty() {
+            executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
+        }
+        let receipt = execute_rust_unit(&executable_unit, options)?;
         if receipt.execution_status != "success" {
             let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
                 class: "host-unit-failed".to_string(),
@@ -4029,8 +4193,10 @@ pub(crate) fn execute_rust_unit_topology(
         executions.push(receipt);
     }
 
-    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
     for index in ordered_target_indices {
+        if executed_target_indices.contains(&index) {
+            continue;
+        }
         let unit = &graph.derivations[index];
         let mut executable_unit = bind_all_host_artifacts(unit, &produced_host_artifacts)?;
         executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;

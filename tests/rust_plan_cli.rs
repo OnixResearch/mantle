@@ -115,13 +115,13 @@ fn rust_plan_cli_blocks_native_host_unit_graph_when_native_fragment_is_unsupport
     std::fs::create_dir_all(helper_dir.join("src")).unwrap();
     std::fs::write(
         helper_dir.join("Cargo.toml"),
-        "[package]\nname = \"helper-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "[package]\nname = \"helper-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\nunsupported = []\n",
     )
     .unwrap();
     std::fs::write(helper_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
     std::fs::write(
         crate_dir.join("Cargo.toml"),
-        "[package]\nname = \"feature-build-script\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[build-dependencies]\nhelper_crate = { package = \"helper-crate\", path = \"../helper-crate\" }\n",
+        "[package]\nname = \"feature-build-script\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[build-dependencies]\nhelper_crate = { package = \"helper-crate\", path = \"../helper-crate\", features = [\"unsupported\"] }\n",
     )
     .unwrap();
     std::fs::write(crate_dir.join("build.rs"), "fn main() {}\n").unwrap();
@@ -151,7 +151,7 @@ fn rust_plan_cli_blocks_native_host_unit_graph_when_native_fragment_is_unsupport
             .as_array()
             .unwrap()
             .iter()
-            .any(|blocker| blocker["class"] == "unsupported-build-dependencies"),
+            .any(|blocker| blocker["class"] == "unsupported-build-dependency-options"),
         "{receipt:#?}"
     );
 }
@@ -165,13 +165,13 @@ fn rust_plan_cli_blocks_host_artifact_topology_when_native_host_graph_is_not_rea
     std::fs::create_dir_all(helper_dir.join("src")).unwrap();
     std::fs::write(
         helper_dir.join("Cargo.toml"),
-        "[package]\nname = \"helper-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "[package]\nname = \"helper-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\nunsupported = []\n",
     )
     .unwrap();
     std::fs::write(helper_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
     std::fs::write(
         crate_dir.join("Cargo.toml"),
-        "[package]\nname = \"feature-build-script-exec\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[build-dependencies]\nhelper_crate = { package = \"helper-crate\", path = \"../helper-crate\" }\n",
+        "[package]\nname = \"feature-build-script-exec\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[build-dependencies]\nhelper_crate = { package = \"helper-crate\", path = \"../helper-crate\", features = [\"unsupported\"] }\n",
     )
     .unwrap();
     std::fs::write(crate_dir.join("build.rs"), "fn main() {}\n").unwrap();
@@ -212,13 +212,13 @@ fn rust_plan_cli_blocks_unified_topology_when_native_host_graph_is_not_ready() {
     std::fs::create_dir_all(helper_dir.join("src")).unwrap();
     std::fs::write(
         helper_dir.join("Cargo.toml"),
-        "[package]\nname = \"helper-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "[package]\nname = \"helper-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[features]\nunsupported = []\n",
     )
     .unwrap();
     std::fs::write(helper_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
     std::fs::write(
         crate_dir.join("Cargo.toml"),
-        "[package]\nname = \"feature-build-script-unified\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[build-dependencies]\nhelper_crate = { package = \"helper-crate\", path = \"../helper-crate\" }\n",
+        "[package]\nname = \"feature-build-script-unified\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[build-dependencies]\nhelper_crate = { package = \"helper-crate\", path = \"../helper-crate\", features = [\"unsupported\"] }\n",
     )
     .unwrap();
     std::fs::write(crate_dir.join("build.rs"), "fn main() {}\n").unwrap();
@@ -1282,6 +1282,165 @@ fn write_vendored_registry_build_script_fixture(dir: &TempDir, unsupported_regis
     )
     .unwrap();
     app_dir
+}
+
+fn write_build_dependency_vendored_registry_fixture(
+    dir: &TempDir,
+    unsupported_build_dependency: bool,
+) -> std::path::PathBuf {
+    let app_dir = dir.path().join("registry-build-dependency-topology-app");
+    let build_dir = app_dir.join("vendor/demo-build-with-dep-0.1.0");
+    let helper_dir = app_dir.join("vendor/demo-build-helper-0.1.0");
+    std::fs::create_dir_all(app_dir.join("src")).unwrap();
+    std::fs::create_dir_all(app_dir.join(".cargo")).unwrap();
+    std::fs::create_dir_all(build_dir.join("src")).unwrap();
+    std::fs::create_dir_all(helper_dir.join("src")).unwrap();
+    std::fs::write(
+        app_dir.join("Cargo.toml"),
+        "[package]\nname = \"registry-build-dependency-topology-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndemo_build_with_dep = { package = \"demo-build-with-dep\", version = \"=0.1.0\" }\n",
+    )
+    .unwrap();
+    std::fs::write(app_dir.join("src/lib.rs"), "pub fn value() -> &'static str { demo_build_with_dep::value() }\n")
+        .unwrap();
+    std::fs::write(
+        app_dir.join(".cargo/config.toml"),
+        "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor\"\n",
+    )
+    .unwrap();
+    let build_dependencies = if unsupported_build_dependency {
+        "[build-dependencies]\ndemo_build_helper = { package = \"demo-build-helper\", version = \"=0.1.0\", features = [\"unsupported\"] }\n"
+    } else {
+        "[build-dependencies]\ndemo_build_helper = { package = \"demo-build-helper\", version = \"=0.1.0\" }\n"
+    };
+    std::fs::write(
+        build_dir.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"demo-build-with-dep\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[lib]\nname = \"demo_build_with_dep\"\npath = \"src/lib.rs\"\n\n{build_dependencies}"
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        build_dir.join("build.rs"),
+        "fn main() {\n    let out = std::env::var(\"OUT_DIR\").unwrap();\n    std::fs::write(format!(\"{out}/generated.txt\"), demo_build_helper::message()).unwrap();\n    println!(\"cargo:rustc-cfg=build_dependency_ready\");\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        build_dir.join("src/lib.rs"),
+        "#[cfg(not(build_dependency_ready))]\ncompile_error!(\"missing build dependency metadata\");\npub fn value() -> &'static str { include_str!(concat!(env!(\"OUT_DIR\"), \"/generated.txt\")) }\n",
+    )
+    .unwrap();
+    std::fs::write(build_dir.join(".cargo-checksum.json"), "{\"files\":{},\"package\":\"builddepchecksum\"}\n")
+        .unwrap();
+    std::fs::write(
+        helper_dir.join("Cargo.toml"),
+        "[package]\nname = \"demo-build-helper\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"demo_build_helper\"\npath = \"src/lib.rs\"\n\n[features]\nunsupported = []\n",
+    )
+    .unwrap();
+    std::fs::write(helper_dir.join("src/lib.rs"), "pub fn message() -> &'static str { \"build-dependency-ok\" }\n")
+        .unwrap();
+    std::fs::write(helper_dir.join(".cargo-checksum.json"), "{\"files\":{},\"package\":\"buildhelperchecksum\"}\n")
+        .unwrap();
+    let missing_lock = " \"demo-build-helper\",\n";
+    let helper_package = "[[package]]\nname = \"demo-build-helper\"\nversion = \"0.1.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"buildhelperchecksum\"\n";
+    std::fs::write(
+        app_dir.join("Cargo.lock"),
+        format!(
+            "# This file is automatically @generated by Cargo.\nversion = 4\n\n[[package]]\nname = \"registry-build-dependency-topology-app\"\nversion = \"0.1.0\"\ndependencies = [\n \"demo-build-with-dep\",\n]\n\n[[package]]\nname = \"demo-build-with-dep\"\nversion = \"0.1.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"builddepchecksum\"\ndependencies = [\n{missing_lock}]\n\n{helper_package}"
+        ),
+    )
+    .unwrap();
+    app_dir
+}
+
+#[test]
+fn rust_plan_cli_executes_build_dependency_vendored_registry_dependency_in_unified_topology() {
+    let dir = TempDir::new().unwrap();
+    let app_dir = write_build_dependency_vendored_registry_fixture(&dir, false);
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("registry-build-dependency-topology-output"))
+        .output()
+        .expect("rust-plan build-dependency registry topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let registry_sources = &receipt["rust_plan"]["native_registry_source_planning"];
+    assert!(registry_sources["ready"].as_bool().unwrap(), "{receipt:#?}");
+    let sources = registry_sources["sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 2, "{receipt:#?}");
+    assert!(sources.iter().any(|source| source["checksum"] == "builddepchecksum"));
+    assert!(sources.iter().any(|source| source["checksum"] == "buildhelperchecksum"));
+
+    let packages = receipt["rust_plan"]["native_package_target_planning"]["packages"].as_array().unwrap();
+    let build_package = packages
+        .iter()
+        .find(|package| package["name"] == "demo-build-with-dep")
+        .expect("build-script registry package should have native facts");
+    assert!(build_package["build_dependencies"].as_array().unwrap().iter().any(|dependency| {
+        dependency["name"] == "demo_build_helper"
+            && dependency["manifest_path"].as_str().unwrap().contains("demo-build-helper-0.1.0")
+    }));
+    let host_units = receipt["rust_plan"]["native_host_unit_graph_planning"]["host_units"].as_array().unwrap();
+    let build_host = host_units
+        .iter()
+        .find(|unit| unit["package_id"].as_str().unwrap().contains("demo-build-with-dep"))
+        .expect("build script host unit should be present");
+    assert!(build_host["dependency_artifacts"].as_array().unwrap().iter().any(|artifact| {
+        artifact["package_id"].as_str().unwrap().contains("demo-build-helper")
+            && artifact["name"] == "demo_build_helper"
+    }));
+
+    let topology = &receipt["topology_execution"];
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    let unit_executions = topology["unit_executions"].as_array().unwrap();
+    assert_eq!(unit_executions.len(), 4, "{receipt:#?}");
+    assert!(unit_executions[0]["package_id"].as_str().unwrap().contains("demo-build-helper"), "{receipt:#?}");
+    assert_eq!(unit_executions[1]["target_kind"], "custom-build", "{receipt:#?}");
+    assert!(unit_executions[1]["dependency_artifact_digests"].as_array().unwrap().iter().any(|artifact| {
+        artifact["path"].as_str().unwrap().contains("libdemo_build_helper")
+            && artifact["blake3"].as_str().unwrap().len() == 64
+    }));
+    assert!(
+        topology["build_script_metadata_runs"].as_array().unwrap()[0]["out_dir_artifact_digests"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|artifact| artifact["blake3"].as_str().unwrap().len() == 64)
+    );
+}
+
+#[test]
+fn rust_plan_cli_blocks_unsupported_build_dependency_vendored_registry_topology_before_rustc() {
+    let dir = TempDir::new().unwrap();
+    let app_dir = write_build_dependency_vendored_registry_fixture(&dir, true);
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&app_dir)
+        .arg("--execute-topology")
+        .arg("--execution-output-root")
+        .arg(dir.path().join("registry-build-dependency-blocked-output"))
+        .output()
+        .expect("rust-plan build-dependency registry topology CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
+    assert!(
+        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-build-dependency-options"),
+        "{receipt:#?}"
+    );
+    let topology = &receipt["topology_execution"];
+    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
+    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
 }
 
 #[test]
