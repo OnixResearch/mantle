@@ -1589,9 +1589,12 @@ fn native_package_from_manifest(
         native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
     })?;
     let targets = native_targets_for_manifest(source_root, package, &manifest)?;
+    let selected_features = native_selected_features(options, &manifest.features);
     let path_dependencies = native_path_dependencies(
         source_root,
         &manifest.dependencies,
+        &manifest.features,
+        &selected_features,
         Some(package_id.clone()),
         native_registry_source_planning,
     )?;
@@ -1616,7 +1619,7 @@ fn native_package_from_manifest(
         name: package.name.clone(),
         version: package.version.clone(),
         manifest_path: normalize_path_string(manifest_path),
-        selected_features: native_selected_features(options, &manifest.features),
+        selected_features,
         targets,
         path_dependencies,
         source_digest,
@@ -1700,11 +1703,16 @@ fn push_native_target(
 fn native_path_dependencies(
     source_root: &Path,
     dependencies: &BTreeMap<String, toml::Value>,
+    feature_defs: &BTreeMap<String, Vec<String>>,
+    selected_features: &[String],
     package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
     let mut summaries = Vec::new();
     for (name, value) in dependencies {
+        if dependency_optional(value) && !optional_dependency_selected(name, feature_defs, selected_features) {
+            continue;
+        }
         let manifest_path = if let Some(path) = dependency_path(value) {
             source_root.join(path).join("Cargo.toml")
         } else if let Some(registry_source) = registry_dependency_source(name, value, native_registry_source_planning) {
@@ -1731,6 +1739,29 @@ fn native_path_dependencies(
     summaries.sort();
     summaries.dedup();
     Ok(summaries)
+}
+
+fn dependency_optional(value: &toml::Value) -> bool {
+    value
+        .as_table()
+        .and_then(|table| table.get("optional"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn optional_dependency_selected(
+    dependency_name: &str,
+    feature_defs: &BTreeMap<String, Vec<String>>,
+    selected_features: &[String],
+) -> bool {
+    selected_features.iter().any(|feature| {
+        feature_defs
+            .get(feature)
+            .map(|entries| {
+                entries.iter().any(|entry| entry == dependency_name || entry == &format!("dep:{dependency_name}"))
+            })
+            .unwrap_or(false)
+    })
 }
 
 fn registry_dependency_source<'a>(
@@ -1947,12 +1978,12 @@ fn summarize_native_unit_graph_planning(
             "native unit graph planning requires ready native package/target facts",
         ));
     }
-    if options.all_features || options.no_default_features || !options.features.is_empty() {
+    if options.all_features || options.no_default_features {
         blockers.push(native_unit_blocker(
             None,
             None,
             "unsupported-feature-surface",
-            "native unit graph fragment supports only default feature invocation",
+            "native unit graph fragment supports only bounded default feature invocation",
         ));
     }
     let packages_by_id = native_package_target_planning
@@ -1970,14 +2001,6 @@ fn summarize_native_unit_graph_planning(
                 "native unit package is absent from source closure",
             ));
             continue;
-        }
-        if !package.selected_features.is_empty() {
-            blockers.push(native_unit_blocker(
-                None,
-                Some(package.package_id.clone()),
-                "unsupported-feature-surface",
-                "native unit graph fragment does not model selected features yet",
-            ));
         }
         let dependency_artifacts = native_dependency_artifacts(
             package,
