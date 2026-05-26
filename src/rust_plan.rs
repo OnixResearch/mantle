@@ -655,10 +655,44 @@ struct CargoTarget {
     src_path: String,
 }
 
+#[derive(Debug, Clone, Default)]
+struct NativeManifestInheritedString {
+    value: Option<String>,
+    workspace: bool,
+}
+
+impl<'de> Deserialize<'de> for NativeManifestInheritedString {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        let value = toml::Value::deserialize(deserializer)?;
+        if let Some(text) = value.as_str() {
+            return Ok(Self {
+                value: Some(text.to_string()),
+                workspace: false,
+            });
+        }
+        if let Some(table) = value.as_table() {
+            let workspace = table.get("workspace").and_then(toml::Value::as_bool).unwrap_or(false);
+            if workspace && table.len() == 1 {
+                return Ok(Self {
+                    value: None,
+                    workspace: true,
+                });
+            }
+        }
+        Err(serde::de::Error::custom("expected string or { workspace = true }"))
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct NativeWorkspacePackage {
+    version: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct NativeManifestPackage {
     name: String,
-    version: String,
+    version: NativeManifestInheritedString,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -689,6 +723,8 @@ struct NativeManifestWorkspace {
     members: Vec<String>,
     #[serde(default)]
     dependencies: BTreeMap<String, toml::Value>,
+    #[serde(default)]
+    package: NativeWorkspacePackage,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1868,6 +1904,7 @@ fn native_package_from_manifest(
             &format!("manifest {} lacks [package]", manifest_path.display()),
         ));
     };
+    let package_version = native_package_version(workspace_root, &package.name, &package.version)?;
     let package_id = source_closure
         .sources
         .iter()
@@ -1880,11 +1917,11 @@ fn native_package_from_manifest(
                 .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
                 .map(|source| source.package_id.clone())
         })
-        .unwrap_or_else(|| cargo_path_package_id(&package.name, &package.version));
+        .unwrap_or_else(|| cargo_path_package_id(&package.name, &package_version));
     let source_root = manifest_path.parent().ok_or_else(|| {
         native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
     })?;
-    let targets = native_targets_for_manifest(source_root, package, &manifest)?;
+    let targets = native_targets_for_manifest(source_root, &package.name, &package_version, &manifest)?;
     let selected_features = native_selected_features(options, &manifest.features);
     let active_target = active_rust_target(options);
     let (target_cfg_dependencies, selected_target_cfg_dependencies) = native_target_cfg_dependencies(
@@ -1946,7 +1983,7 @@ fn native_package_from_manifest(
     Ok(NativePackagePlanningSummary {
         package_id,
         name: package.name.clone(),
-        version: package.version.clone(),
+        version: package_version.clone(),
         manifest_path: normalize_path_string(manifest_path),
         selected_features,
         targets,
@@ -1959,6 +1996,36 @@ fn native_package_from_manifest(
     })
 }
 
+fn native_package_version(
+    workspace_root: &Path,
+    package_name: &str,
+    version: &NativeManifestInheritedString,
+) -> Result<String, NativePackagePlanningBlocker> {
+    if let Some(value) = &version.value {
+        return Ok(value.clone());
+    }
+    if !version.workspace {
+        return Err(native_blocker(
+            None,
+            "missing-package-version",
+            &format!("package `{package_name}` lacks a literal version or workspace version inheritance"),
+        ));
+    }
+    let root_manifest_path = workspace_root.join("Cargo.toml");
+    let root_manifest = read_native_manifest(&root_manifest_path)
+        .map_err(|message| native_blocker(None, "unreadable-workspace-package-manifest", &message))?;
+    let Some(workspace_version) = root_manifest.workspace.and_then(|workspace| workspace.package.version) else {
+        return Err(native_blocker(
+            None,
+            "missing-workspace-package-version",
+            &format!(
+                "package `{package_name}` inherits version from [workspace.package], but no workspace package version is declared"
+            ),
+        ));
+    };
+    Ok(workspace_version)
+}
+
 fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
     let text = fs::read_to_string(path).map_err(|err| format!("reading manifest {}: {err}", path.display()))?;
     toml::from_str(&text).map_err(|err| format!("parsing manifest {}: {err}", path.display()))
@@ -1966,7 +2033,8 @@ fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
 
 fn native_targets_for_manifest(
     source_root: &Path,
-    package: &NativeManifestPackage,
+    package_name: &str,
+    package_version: &str,
     manifest: &NativeManifest,
 ) -> Result<Vec<NativeTargetPlanningSummary>, NativePackagePlanningBlocker> {
     let mut targets = Vec::new();
@@ -1979,21 +2047,21 @@ fn native_targets_for_manifest(
     if let Some(lib) = &manifest.lib {
         let kind = if lib.proc_macro { "proc-macro" } else { "lib" };
         let path = source_root.join(lib.path.as_deref().unwrap_or("src/lib.rs"));
-        push_native_target(&mut targets, lib.name.as_deref().unwrap_or(&package.name), kind, &path)?;
+        push_native_target(&mut targets, lib.name.as_deref().unwrap_or(package_name), kind, &path)?;
     } else {
         let path = source_root.join("src/lib.rs");
         if path.is_file() {
-            push_native_target(&mut targets, &package.name, "lib", &path)?;
+            push_native_target(&mut targets, package_name, "lib", &path)?;
         }
     }
     if manifest.bin.is_empty() {
         let path = source_root.join("src/main.rs");
         if path.is_file() {
-            push_native_target(&mut targets, &package.name, "bin", &path)?;
+            push_native_target(&mut targets, package_name, "bin", &path)?;
         }
     } else {
         for bin in &manifest.bin {
-            let name = bin.name.as_deref().unwrap_or(&package.name);
+            let name = bin.name.as_deref().unwrap_or(package_name);
             let default_path = format!("src/bin/{name}.rs");
             let path = source_root.join(bin.path.as_deref().unwrap_or(&default_path));
             push_native_target(&mut targets, name, "bin", &path)?;
@@ -2001,7 +2069,7 @@ fn native_targets_for_manifest(
     }
     if targets.is_empty() {
         return Err(native_blocker(
-            Some(cargo_path_package_id(&package.name, &package.version)),
+            Some(cargo_path_package_id(package_name, package_version)),
             "missing-supported-target",
             "native package/target fragment found no readable lib/bin target source",
         ));

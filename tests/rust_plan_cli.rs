@@ -7,6 +7,47 @@ fn mantle_cmd() -> Command {
 }
 
 #[test]
+fn rust_plan_cli_supports_workspace_package_version_inheritance() {
+    let dir = TempDir::new().unwrap();
+    let crate_dir = dir.path().join("workspace-package-version-app");
+    std::fs::create_dir_all(crate_dir.join("src")).unwrap();
+    std::fs::write(
+        crate_dir.join("Cargo.toml"),
+        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.1.0\"\nedition = \"2021\"\nlicense = \"AGPL-3.0-or-later\"\n\n[package]\nname = \"workspace-package-version-app\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\n",
+    )
+    .unwrap();
+    std::fs::write(crate_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+    let lock_output = std::process::Command::new("cargo")
+        .arg("generate-lockfile")
+        .current_dir(&crate_dir)
+        .output()
+        .expect("cargo generate-lockfile should run");
+    assert!(lock_output.status.success(), "{}", String::from_utf8_lossy(&lock_output.stderr));
+
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("rust-plan")
+        .arg("--root")
+        .arg(&crate_dir)
+        .output()
+        .expect("rust-plan CLI should run");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let receipt: Value = serde_json::from_slice(&output.stdout).expect("CLI should emit JSON receipt");
+    assert!(receipt["native_package_target_planning"]["ready"].as_bool().unwrap(), "{receipt:#?}");
+    let packages = receipt["native_package_target_planning"]["packages"].as_array().unwrap();
+    let package = packages
+        .iter()
+        .find(|package| package["name"] == "workspace-package-version-app")
+        .expect("native facts should include workspace-package-version-app");
+    assert_eq!(package["version"], "0.1.0");
+    assert!(
+        package["package_id"].as_str().unwrap().contains("workspace-package-version-app#0.1.0"),
+        "{package:#?}"
+    );
+}
+
+#[test]
 fn rust_plan_cli_reports_native_host_unit_graph_for_build_script() {
     let dir = TempDir::new().unwrap();
     let crate_dir = dir.path().join("native-build-script");
