@@ -1662,20 +1662,81 @@ fn native_workspace_manifest_paths(root: &Path, blockers: &mut Vec<NativePackage
     }
     if let Some(workspace) = root_manifest.workspace {
         for member in workspace.members {
-            if member.contains('*') || member.contains('?') || member.contains('[') {
+            if workspace_member_has_unsupported_glob(&member) {
                 blockers.push(native_blocker(
                     None,
                     "unsupported-workspace-member-pattern",
-                    &format!("native planner supports explicit workspace members only, got `{member}`"),
+                    &format!("native planner supports explicit members or one-level `*` workspace member globs, got `{member}`"),
                 ));
                 continue;
             }
-            manifests.push(root.join(member).join("Cargo.toml"));
+            if member.contains('*') {
+                match expand_workspace_member_glob(root, &member) {
+                    Ok(paths) => manifests.extend(paths),
+                    Err(blocker) => blockers.push(blocker),
+                }
+            } else {
+                manifests.push(root.join(member).join("Cargo.toml"));
+            }
         }
     }
     manifests.sort();
     manifests.dedup();
     manifests
+}
+
+fn workspace_member_has_unsupported_glob(member: &str) -> bool {
+    if member.contains('?') || member.contains('[') || member.contains(']') || member.contains("**") {
+        return true;
+    }
+    if !member.contains('*') {
+        return false;
+    }
+    let Some((prefix, suffix)) = member.split_once('*') else {
+        return true;
+    };
+    !suffix.is_empty() || prefix.is_empty() || !prefix.ends_with('/') || prefix[..prefix.len() - 1].contains('*')
+}
+
+fn expand_workspace_member_glob(root: &Path, member: &str) -> Result<Vec<PathBuf>, NativePackagePlanningBlocker> {
+    let Some((prefix, "")) = member.split_once('*') else {
+        return Err(native_blocker(
+            None,
+            "unsupported-workspace-member-pattern",
+            &format!("native planner cannot expand workspace member pattern `{member}`"),
+        ));
+    };
+    let base = root.join(prefix.trim_end_matches('/'));
+    let entries = fs::read_dir(&base).map_err(|err| {
+        native_blocker(
+            None,
+            "unreadable-workspace-member-glob-root",
+            &format!("reading workspace member glob root {}: {err}", base.display()),
+        )
+    })?;
+    let mut manifests = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|err| {
+            native_blocker(
+                None,
+                "unreadable-workspace-member-glob-entry",
+                &format!("reading workspace member glob entry {}: {err}", base.display()),
+            )
+        })?;
+        let path = entry.path();
+        if path.join("Cargo.toml").is_file() {
+            manifests.push(path.join("Cargo.toml"));
+        }
+    }
+    if manifests.is_empty() {
+        return Err(native_blocker(
+            None,
+            "empty-workspace-member-glob",
+            &format!("workspace member glob `{member}` matched no readable manifests"),
+        ));
+    }
+    manifests.sort();
+    Ok(manifests)
 }
 
 fn native_package_from_manifest(
