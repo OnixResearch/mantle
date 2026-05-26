@@ -464,6 +464,19 @@ pub(crate) struct RustUnitTopologyExecutionReceipt {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustDevDependencyTestTopologyExecutionReceipt {
+    pub(crate) schema_version: u32,
+    pub(crate) execution_status: String,
+    pub(crate) claim: String,
+    pub(crate) package_id: Option<String>,
+    pub(crate) test_target: Option<String>,
+    pub(crate) dev_dependency_packages: Vec<String>,
+    pub(crate) unit_executions: Vec<RustUnitExecutionReceipt>,
+    pub(crate) blocker: Option<RustUnitExecutionBlocker>,
+    pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct BuildScriptMetadataRunReceipt {
     pub(crate) schema_version: u32,
     pub(crate) unit_id: String,
@@ -529,6 +542,12 @@ pub(crate) struct RustPlanHostArtifactTopologyExecutionReceipt {
 pub(crate) struct RustPlanTopologyExecutionReceipt {
     pub(crate) rust_plan: RustPlanReceipt,
     pub(crate) topology_execution: RustUnitTopologyExecutionReceipt,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanDevDependencyTestTopologyExecutionReceipt {
+    pub(crate) rust_plan: RustPlanReceipt,
+    pub(crate) native_rust_dev_dependency_test_topology_execution: RustDevDependencyTestTopologyExecutionReceipt,
 }
 
 #[derive(Debug, Clone)]
@@ -620,6 +639,14 @@ struct NativeManifestBin {
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
+struct NativeManifestTest {
+    name: Option<String>,
+    path: Option<String>,
+    #[serde(default)]
+    harness: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
 struct NativeManifestWorkspace {
     #[serde(default)]
     members: Vec<String>,
@@ -642,6 +669,8 @@ struct NativeManifest {
     lib: Option<NativeManifestLib>,
     #[serde(default)]
     bin: Vec<NativeManifestBin>,
+    #[serde(default)]
+    test: Vec<NativeManifestTest>,
     #[serde(default)]
     features: BTreeMap<String, Vec<String>>,
     #[serde(default)]
@@ -828,6 +857,22 @@ pub(crate) fn print_rust_plan_topology_execution_receipt(
         serde_json::to_string_pretty(receipt)
     }
     .map_err(|err| RunError::Internal(format!("rendering Rust topology execution receipt: {err}")))?;
+    println!("{rendered}");
+    Ok(())
+}
+
+pub(crate) fn print_rust_plan_dev_dependency_test_topology_execution_receipt(
+    receipt: &RustPlanDevDependencyTestTopologyExecutionReceipt,
+    json_mode: bool,
+) -> Result<(), RunError> {
+    let rendered = if json_mode {
+        serde_json::to_string(receipt)
+    } else {
+        serde_json::to_string_pretty(receipt)
+    }
+    .map_err(|err| {
+        RunError::Internal(format!("rendering Rust dev-dependency test topology execution receipt: {err}"))
+    })?;
     println!("{rendered}");
     Ok(())
 }
@@ -2414,15 +2459,13 @@ fn compare_native_packages_to_cargo(
         }
         let _cargo_targets = cargo_supported_targets(cargo);
         for target in &cargo.targets {
-            if !target
-                .kind
-                .iter()
-                .any(|kind| kind == "lib" || kind == "bin" || kind == "custom-build" || kind == "proc-macro")
-            {
+            if !target.kind.iter().any(|kind| {
+                kind == "lib" || kind == "bin" || kind == "custom-build" || kind == "proc-macro" || kind == "test"
+            }) {
                 blockers.push(native_blocker(
                     Some(native.package_id.clone()),
                     "unsupported-cargo-oracle-target-kind",
-                    "Cargo oracle contains a target kind outside the native lib/bin/custom-build/proc-macro fragment",
+                    "Cargo oracle contains a target kind outside the native lib/bin/custom-build/proc-macro/test fragment",
                 ));
             }
         }
@@ -4472,6 +4515,281 @@ pub(crate) fn execute_rust_unit_topology(
     topology_receipt("success", executions, build_script_metadata_runs, None)
 }
 
+pub(crate) fn execute_native_rust_dev_dependency_test_topology(
+    native_package_target_planning: &NativePackageTargetPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustDevDependencyTestTopologyExecutionReceipt, RunError> {
+    if !native_package_target_planning.ready {
+        return dev_dependency_test_topology_receipt(
+            "blocked",
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "dev-dependency-test-planning-not-ready".to_string(),
+                message: "native_rust_dev_dependency_test_topology_execution requires ready native package/dev-dependency planning evidence".to_string(),
+            }),
+        );
+    }
+    if !graph.ready {
+        return dev_dependency_test_topology_receipt(
+            "blocked",
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message: "unit_derivation_graph is not ready; resolve planning blockers before dev-dependency test topology execution".to_string(),
+            }),
+        );
+    }
+
+    let candidate_packages = native_package_target_planning
+        .packages
+        .iter()
+        .filter(|package| !package.dev_dependencies.is_empty())
+        .collect::<Vec<_>>();
+    if candidate_packages.len() != 1 {
+        return dev_dependency_test_topology_receipt(
+            "blocked",
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "ambiguous-dev-dependency-test-topology".to_string(),
+                message: format!(
+                    "expected exactly one package with dev-dependencies for bounded execution, found {}",
+                    candidate_packages.len()
+                ),
+            }),
+        );
+    }
+    let package = candidate_packages[0];
+    let manifest_path = Path::new(&package.manifest_path);
+    let source_root = manifest_path
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("package manifest path has no parent: {}", package.manifest_path)))?;
+    let manifest = match read_native_manifest(manifest_path) {
+        Ok(manifest) => manifest,
+        Err(message) => {
+            return dev_dependency_test_topology_receipt(
+                "blocked",
+                Some(package.package_id.clone()),
+                None,
+                package.dev_dependencies.iter().map(|dep| dep.name.clone()).collect(),
+                Vec::new(),
+                Some(RustUnitExecutionBlocker {
+                    class: "unreadable-test-manifest".to_string(),
+                    message,
+                }),
+            );
+        }
+    };
+    let supported_tests = manifest.test.iter().filter(|test| !test.harness).collect::<Vec<_>>();
+    if supported_tests.len() != 1 {
+        return dev_dependency_test_topology_receipt(
+            "blocked",
+            Some(package.package_id.clone()),
+            None,
+            package.dev_dependencies.iter().map(|dep| dep.name.clone()).collect(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unsupported-cargo-test-harness".to_string(),
+                message: "bounded dev-dependency test execution requires exactly one explicit [[test]] target with harness = false".to_string(),
+            }),
+        );
+    }
+    let test = supported_tests[0];
+    let test_name = test.name.as_deref().unwrap_or("dev_dependency_test");
+    let test_source = source_root.join(test.path.as_deref().unwrap_or(&format!("tests/{test_name}.rs")));
+    if !test_source.is_file() {
+        return dev_dependency_test_topology_receipt(
+            "blocked",
+            Some(package.package_id.clone()),
+            Some(test_name.to_string()),
+            package.dev_dependencies.iter().map(|dep| dep.name.clone()).collect(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "missing-test-unit-derivation".to_string(),
+                message: format!("declared test target source is not readable: {}", test_source.display()),
+            }),
+        );
+    }
+
+    let packages_by_manifest = native_package_target_planning
+        .packages
+        .iter()
+        .map(|candidate| (normalize_path_string(Path::new(&candidate.manifest_path)), candidate))
+        .collect::<BTreeMap<_, _>>();
+    let mut executions = Vec::new();
+    let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
+    let mut dependency_artifacts = Vec::new();
+    let mut dev_dependency_packages = Vec::new();
+
+    for dev_dependency in &package.dev_dependencies {
+        let Some(dev_package) =
+            packages_by_manifest.get(&normalize_path_string(Path::new(&dev_dependency.manifest_path)))
+        else {
+            return dev_dependency_test_topology_receipt(
+                "blocked",
+                Some(package.package_id.clone()),
+                Some(test_name.to_string()),
+                dev_dependency_packages,
+                executions,
+                Some(RustUnitExecutionBlocker {
+                    class: "missing-dev-dependency-source".to_string(),
+                    message: format!("dev dependency `{}` has no native package source facts", dev_dependency.name),
+                }),
+            );
+        };
+        let Some(producer) = graph.derivations.iter().find(|unit| {
+            unit.package_id == dev_package.package_id && unit.target_kind == "lib" && unit.mode == "build"
+        }) else {
+            return dev_dependency_test_topology_receipt(
+                "blocked",
+                Some(package.package_id.clone()),
+                Some(test_name.to_string()),
+                dev_dependency_packages,
+                executions,
+                Some(RustUnitExecutionBlocker {
+                    class: "missing-dev-dependency-artifact".to_string(),
+                    message: format!("dev dependency `{}` has no supported lib derivation", dev_dependency.name),
+                }),
+            );
+        };
+        let executable_producer = bind_all_dependency_artifacts(producer, &produced_target_artifacts)?;
+        let receipt = execute_rust_unit(&executable_producer, options)?;
+        if receipt.execution_status != "success" {
+            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+                class: "dev-dependency-producer-failed".to_string(),
+                message: format!("dev dependency producer {} did not execute successfully", producer.unit_id),
+            });
+            executions.push(receipt);
+            return dev_dependency_test_topology_receipt(
+                "blocked",
+                Some(package.package_id.clone()),
+                Some(test_name.to_string()),
+                dev_dependency_packages,
+                executions,
+                Some(blocker),
+            );
+        }
+        match produced_library_artifact_path(&executable_producer, options)? {
+            Ok(path) => {
+                produced_target_artifacts.insert(producer.package_id.clone(), path);
+            }
+            Err(blocker) => {
+                executions.push(receipt);
+                return dev_dependency_test_topology_receipt(
+                    "blocked",
+                    Some(package.package_id.clone()),
+                    Some(test_name.to_string()),
+                    dev_dependency_packages,
+                    executions,
+                    Some(blocker),
+                );
+            }
+        }
+        dependency_artifacts.push(RustDependencyArtifact {
+            package_id: producer.package_id.clone(),
+            name: dev_dependency.name.clone(),
+            artifact: format!("artifact:{}:{}", producer.package_id, dev_dependency.name),
+        });
+        dev_dependency_packages.push(producer.package_id.clone());
+        executions.push(receipt);
+    }
+    dependency_artifacts.sort();
+    dependency_artifacts.dedup();
+    dev_dependency_packages.sort();
+    dev_dependency_packages.dedup();
+
+    let mut args = vec![
+        "--crate-name".to_string(),
+        rust_crate_name(test_name),
+        "--edition".to_string(),
+        "2021".to_string(),
+        normalize_path_string(&test_source),
+        "--emit=link".to_string(),
+        "--crate-type".to_string(),
+        "bin".to_string(),
+    ];
+    if let Some(linker) = resolve_tool_path("cc") {
+        args.push("-C".to_string());
+        args.push(format!("linker={}", normalize_path_string(&linker)));
+    }
+    for dependency in &dependency_artifacts {
+        args.push("--extern".to_string());
+        args.push(format!("{}={}", dependency.name, dependency.artifact));
+    }
+    let unit_id = format!("native-dev-dependency-test:{}:{}", package.package_id, test_name);
+    let mut env = BTreeMap::new();
+    env.insert("CRATE_KIND".to_string(), "test".to_string());
+    env.insert("MODE".to_string(), "test".to_string());
+    env.insert("PACKAGE_ID".to_string(), package.package_id.clone());
+    env.insert("PROFILE".to_string(), DEFAULT_CARGO_PROFILE.to_string());
+    let mut inputs = vec![format!("source:{}:{}", package.package_id, package.source_digest.value)];
+    inputs.extend(dependency_artifacts.iter().map(|dependency| dependency.artifact.clone()));
+    inputs.sort();
+    inputs.dedup();
+    let mut test_unit = RustUnitDerivationSummary {
+        unit_id: unit_id.clone(),
+        package_id: package.package_id.clone(),
+        target_name: test_name.to_string(),
+        target_kind: "test".to_string(),
+        execution_kind: "target".to_string(),
+        crate_types: vec!["bin".to_string()],
+        mode: "test".to_string(),
+        profile: DEFAULT_CARGO_PROFILE.to_string(),
+        source_digest: package.source_digest.clone(),
+        dependency_artifacts,
+        consumed_host_artifacts: Vec::new(),
+        generated_metadata: None,
+        derivation: ReviewableRustDerivation {
+            name: derivation_name(test_name, 0),
+            builder: "rustc".to_string(),
+            system: "x86_64-linux".to_string(),
+            args,
+            outputs: vec!["out".to_string()],
+            env,
+            inputs,
+            addressing_mode: "content-addressed".to_string(),
+        },
+        rustc_args_digest_blake3: String::new(),
+    };
+    test_unit = bind_all_dependency_artifacts(&test_unit, &produced_target_artifacts)?;
+    test_unit.rustc_args_digest_blake3 =
+        blake3::hash(test_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
+    let receipt = execute_rust_unit(&test_unit, options)?;
+    if receipt.execution_status != "success" {
+        let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+            class: "dev-dependency-test-unit-failed".to_string(),
+            message: format!("dev-dependency test unit {unit_id} did not execute successfully"),
+        });
+        executions.push(receipt);
+        return dev_dependency_test_topology_receipt(
+            "blocked",
+            Some(package.package_id.clone()),
+            Some(test_name.to_string()),
+            dev_dependency_packages,
+            executions,
+            Some(blocker),
+        );
+    }
+    executions.push(receipt);
+    dev_dependency_test_topology_receipt(
+        "success",
+        Some(package.package_id.clone()),
+        Some(test_name.to_string()),
+        dev_dependency_packages,
+        executions,
+        None,
+    )
+}
+
 fn validate_native_registry_topology_inputs(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     graph: &UnitDerivationGraphSummary,
@@ -5715,6 +6033,40 @@ fn rust_unit_topology_execution_receipt_hash(receipt: &RustUnitTopologyExecution
     hashable.receipt_hash.clear();
     let canonical = serde_json::to_vec(&hashable)
         .map_err(|err| RunError::Internal(format!("canonicalizing Rust topology execution receipt: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn dev_dependency_test_topology_receipt(
+    execution_status: &str,
+    package_id: Option<String>,
+    test_target: Option<String>,
+    dev_dependency_packages: Vec<String>,
+    unit_executions: Vec<RustUnitExecutionReceipt>,
+    blocker: Option<RustUnitExecutionBlocker>,
+) -> Result<RustDevDependencyTestTopologyExecutionReceipt, RunError> {
+    let mut receipt = RustDevDependencyTestTopologyExecutionReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        execution_status: execution_status.to_string(),
+        claim: "bounded native Rust dev-dependency test topology; explicit harness=false test target only, not full cargo test compatibility or Cargo orchestration".to_string(),
+        package_id,
+        test_target,
+        dev_dependency_packages,
+        unit_executions,
+        blocker,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = rust_dev_dependency_test_topology_execution_receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn rust_dev_dependency_test_topology_execution_receipt_hash(
+    receipt: &RustDevDependencyTestTopologyExecutionReceipt,
+) -> Result<String, RunError> {
+    let mut hashable = receipt.clone();
+    hashable.receipt_hash.clear();
+    let canonical = serde_json::to_vec(&hashable).map_err(|err| {
+        RunError::Internal(format!("canonicalizing Rust dev-dependency test topology execution receipt: {err}"))
+    })?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
