@@ -1883,7 +1883,7 @@ fn rust_plan_cli_executes_vendored_registry_proc_macro_in_unified_topology() {
 }
 
 #[test]
-fn rust_plan_cli_blocks_unsupported_vendored_registry_proc_macro_layout_before_rustc() {
+fn rust_plan_cli_ignores_out_of_scope_vendored_registry_proc_macro_targets() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_vendored_registry_proc_macro_fixture(&dir, true);
 
@@ -1903,17 +1903,16 @@ fn rust_plan_cli_blocks_unsupported_vendored_registry_proc_macro_layout_before_r
     assert!(receipt["rust_plan"]["native_registry_source_planning"]["ready"].as_bool().unwrap(), "{receipt:#?}");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-cargo-oracle-target-kind"),
+        package_blockers.iter().all(|blocker| blocker["class"] != "unsupported-cargo-oracle-target-kind"),
         "{receipt:#?}"
     );
     let topology = &receipt["topology_execution"];
-    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
-    assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    assert!(!topology["unit_executions"].as_array().unwrap().is_empty(), "{receipt:#?}");
 }
 
 #[test]
-fn rust_plan_cli_blocks_unsupported_vendored_registry_host_artifact_layout_before_rustc() {
+fn rust_plan_cli_ignores_out_of_scope_vendored_registry_host_artifact_targets() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_vendored_registry_build_script_fixture(&dir, true);
 
@@ -1933,17 +1932,16 @@ fn rust_plan_cli_blocks_unsupported_vendored_registry_host_artifact_layout_befor
     assert!(receipt["rust_plan"]["native_registry_source_planning"]["ready"].as_bool().unwrap(), "{receipt:#?}");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-cargo-oracle-target-kind"),
+        package_blockers.iter().all(|blocker| blocker["class"] != "unsupported-cargo-oracle-target-kind"),
         "{receipt:#?}"
     );
     let topology = &receipt["host_artifact_topology_execution"];
-    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
-    assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    assert!(!topology["unit_executions"].as_array().unwrap().is_empty(), "{receipt:#?}");
 }
 
 #[test]
-fn rust_plan_cli_blocks_unsupported_vendored_registry_unified_host_layout_before_rustc() {
+fn rust_plan_cli_ignores_out_of_scope_vendored_registry_unified_host_targets() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_vendored_registry_build_script_fixture(&dir, true);
 
@@ -1963,13 +1961,12 @@ fn rust_plan_cli_blocks_unsupported_vendored_registry_unified_host_layout_before
     assert!(receipt["rust_plan"]["native_registry_source_planning"]["ready"].as_bool().unwrap(), "{receipt:#?}");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-cargo-oracle-target-kind"),
+        package_blockers.iter().all(|blocker| blocker["class"] != "unsupported-cargo-oracle-target-kind"),
         "{receipt:#?}"
     );
     let topology = &receipt["topology_execution"];
-    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
-    assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    assert!(!topology["unit_executions"].as_array().unwrap().is_empty(), "{receipt:#?}");
 }
 
 #[test]
@@ -2793,7 +2790,7 @@ fn rust_plan_cli_executes_transitive_vendored_registry_dependencies_in_unified_t
 }
 
 #[test]
-fn rust_plan_cli_blocks_unsupported_transitive_vendored_registry_layout_before_rustc() {
+fn rust_plan_cli_ignores_out_of_scope_transitive_vendored_registry_targets() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_transitive_vendored_registry_fixture(&dir, true);
 
@@ -2815,17 +2812,16 @@ fn rust_plan_cli_blocks_unsupported_transitive_vendored_registry_layout_before_r
     assert_eq!(registry_sources.len(), 2, "{receipt:#?}");
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-cargo-oracle-target-kind"),
+        package_blockers.iter().all(|blocker| blocker["class"] != "unsupported-cargo-oracle-target-kind"),
         "{receipt:#?}"
     );
     let topology = &receipt["topology_execution"];
-    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
-    assert_eq!(topology["build_script_metadata_runs"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    assert!(!topology["unit_executions"].as_array().unwrap().is_empty(), "{receipt:#?}");
 }
 
 #[test]
-fn rust_plan_cli_blocks_unsupported_vendored_registry_layout_before_topology_rustc() {
+fn rust_plan_cli_ignores_out_of_scope_vendored_registry_targets() {
     let dir = TempDir::new().unwrap();
     let app_dir = write_vendored_registry_fixture(&dir, true);
 
@@ -2845,12 +2841,12 @@ fn rust_plan_cli_blocks_unsupported_vendored_registry_layout_before_topology_rus
     assert!(receipt["rust_plan"]["native_registry_source_planning"]["ready"].as_bool().unwrap());
     let package_blockers = receipt["rust_plan"]["native_package_target_planning"]["blockers"].as_array().unwrap();
     assert!(
-        package_blockers.iter().any(|blocker| blocker["class"] == "unsupported-cargo-oracle-target-kind"),
+        package_blockers.iter().all(|blocker| blocker["class"] != "unsupported-cargo-oracle-target-kind"),
         "{receipt:#?}"
     );
     let topology = &receipt["topology_execution"];
-    assert_eq!(topology["execution_status"], "blocked", "{receipt:#?}");
-    assert_eq!(topology["unit_executions"].as_array().unwrap().len(), 0);
+    assert_eq!(topology["execution_status"], "success", "{receipt:#?}");
+    assert!(!topology["unit_executions"].as_array().unwrap().is_empty(), "{receipt:#?}");
 }
 
 #[test]

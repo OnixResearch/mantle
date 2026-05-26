@@ -2598,23 +2598,6 @@ fn compare_native_packages_to_cargo(
                 "native package identity differs from Cargo oracle",
             ));
         }
-        let _cargo_targets = cargo_supported_targets(cargo);
-        for target in &cargo.targets {
-            if !target.kind.iter().any(|kind| {
-                kind == "lib"
-                    || kind == "rlib"
-                    || kind == "bin"
-                    || kind == "custom-build"
-                    || kind == "proc-macro"
-                    || kind == "test"
-            }) {
-                blockers.push(native_blocker(
-                    Some(native.package_id.clone()),
-                    "unsupported-cargo-oracle-target-kind",
-                    "Cargo oracle contains a target kind outside the native lib/bin/custom-build/proc-macro/test fragment",
-                ));
-            }
-        }
     }
     for cargo in required_cargo_packages {
         if !native_packages.iter().any(|native| {
@@ -2627,35 +2610,6 @@ fn compare_native_packages_to_cargo(
             ));
         }
     }
-}
-
-fn cargo_supported_targets(package: &CargoPackage) -> Vec<NativeTargetPlanningSummary> {
-    let mut targets = package
-        .targets
-        .iter()
-        .filter_map(|target| {
-            let kind = if target.kind.iter().any(|kind| kind == "custom-build") {
-                "custom-build"
-            } else if target.kind.iter().any(|kind| kind == "proc-macro") {
-                "proc-macro"
-            } else if target.kind.iter().any(|kind| kind == "lib" || kind == "rlib") {
-                "lib"
-            } else if target.kind.iter().any(|kind| kind == "bin") {
-                "bin"
-            } else {
-                return None;
-            };
-            Some(NativeTargetPlanningSummary {
-                name: target.name.clone(),
-                kind: kind.to_string(),
-                crate_name: rust_crate_name(&target.name),
-                source_path: normalize_path_string(Path::new(&target.src_path)),
-            })
-        })
-        .collect::<Vec<_>>();
-    targets.sort();
-    targets.dedup();
-    targets
 }
 
 fn manifest_paths_same(left: &str, right: &Path) -> bool {
@@ -7624,7 +7578,7 @@ mod tests {
     }
 
     #[test]
-    fn native_package_target_fragment_blocks_unsupported_and_mismatch() {
+    fn native_package_target_fragment_ignores_out_of_scope_oracle_target_kinds() {
         let dir = TempDir::new().unwrap();
         let crate_dir = dir.path().join("benchy");
         std::fs::create_dir_all(crate_dir.join("src")).unwrap();
@@ -7655,10 +7609,9 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!planning.ready);
-        assert_eq!(planning.comparison_status, "blocked");
-        assert!(planning.blockers.iter().any(|blocker| blocker.class == "unsupported-cargo-oracle-target-kind"));
-        assert!(planning.blockers.iter().all(|blocker| blocker.class != "native-package-target-mismatch"));
+        assert!(planning.ready, "{:#?}", planning.blockers);
+        assert_eq!(planning.comparison_status, "matched");
+        assert!(planning.blockers.iter().all(|blocker| blocker.class != "unsupported-cargo-oracle-target-kind"));
     }
 
     #[test]
