@@ -21,15 +21,15 @@ Native package dependency planning currently only resolves path dependencies and
 
 ### 2. Bind git source roots with BLAKE3 tree digests
 
-**Choice:** Each ready git fact records the lockfile digest, URL, resolved revision, source root/manifest path, and BLAKE3 source-tree digest.
+**Choice:** Each ready git fact records the lockfile digest, URL, resolved revision, source root/manifest path, and BLAKE3 source-tree digest. The URL/revision identify the locked package; the source bytes remain provider-agnostic captured source material so the default source path can be snix-store-backed BLAKE3 content rather than a hard-coded git pull.
 
-**Rationale:** The lock revision alone proves identity, not the bytes fed to rustc. A BLAKE3 tree digest makes the source material auditable and comparable in the same style as vendored registry source facts.
+**Rationale:** The lock revision alone proves identity, not the bytes fed to rustc. A BLAKE3 tree digest makes the source material auditable and comparable in the same style as vendored registry source facts while leaving materialization owned by the source-closure/store layer.
 
 ### 3. Dependency resolution consumes only ready facts
 
-**Choice:** Native dependency edge resolution may resolve a selected dependency through a ready native git source fact. Missing, unreadable, mismatched, or ambiguous git source evidence remains a deterministic blocker before rustc execution.
+**Choice:** Native dependency edge resolution may resolve a selected dependency through a ready native git source fact only when package name, optional manifest version, git URL, and requested rev/tag/branch identity match. Missing, unreadable, mismatched, or ambiguous git source evidence remains a deterministic blocker before rustc execution.
 
-**Rationale:** This unblocks the `snix-castore -> wu-manber` chain without weakening fail-closed boundaries for other non-path dependencies.
+**Rationale:** This unblocks the `snix-castore -> wu-manber` chain without weakening fail-closed boundaries for other non-path dependencies or coupling source materialization to git-specific fetching.
 
 ### 4. No network or ambient-cache discovery
 

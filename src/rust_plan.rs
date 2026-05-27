@@ -43,6 +43,7 @@ pub(crate) struct RustPlanReceipt {
     pub(crate) packages: Vec<PackageSummary>,
     pub(crate) source_closure: SourceClosureSummary,
     pub(crate) native_registry_source_planning: NativeRegistrySourcePlanningSummary,
+    pub(crate) native_git_source_planning: NativeGitSourcePlanningSummary,
     pub(crate) native_package_target_planning: NativePackageTargetPlanningSummary,
     pub(crate) native_unit_graph_planning: NativeUnitGraphPlanningSummary,
     pub(crate) native_host_unit_graph_planning: NativeHostUnitGraphPlanningSummary,
@@ -154,6 +155,39 @@ pub(crate) struct NativeRegistrySourceSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct NativeRegistrySourceBlocker {
+    pub(crate) package_id: Option<String>,
+    pub(crate) class: String,
+    pub(crate) message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NativeGitSourcePlanningSummary {
+    pub(crate) ready: bool,
+    pub(crate) comparison_status: String,
+    pub(crate) lockfile_digest_blake3: String,
+    pub(crate) source_closure_digest_blake3: String,
+    pub(crate) digest_blake3: String,
+    pub(crate) sources: Vec<NativeGitSourceSummary>,
+    pub(crate) blockers: Vec<NativeGitSourceBlocker>,
+    pub(crate) non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativeGitSourceSummary {
+    pub(crate) package_id: String,
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) source: String,
+    pub(crate) source_class: String,
+    pub(crate) resolved_revision: String,
+    pub(crate) source_root: String,
+    pub(crate) manifest_path: String,
+    pub(crate) source_digest: SourceDigest,
+    pub(crate) lockfile_identity: LockPackageIdentity,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct NativeGitSourceBlocker {
     pub(crate) package_id: Option<String>,
     pub(crate) class: String,
     pub(crate) message: String,
@@ -794,6 +828,8 @@ fn capture_rust_plan_with_oracle(
     let lockfile = lockfile_identity(&options.root)?;
     let native_registry_source_planning =
         summarize_native_registry_source_planning(&options.root, &metadata.packages, &lock_packages, &lockfile)?;
+    let native_git_source_planning =
+        summarize_native_git_source_planning(&metadata.packages, &lock_packages, &lockfile, &source_closure)?;
     let native_package_target_planning = summarize_native_package_target_planning(
         &options.root,
         options,
@@ -802,6 +838,7 @@ fn capture_rust_plan_with_oracle(
         &metadata.workspace_members,
         &source_closure,
         &native_registry_source_planning,
+        &native_git_source_planning,
     )?;
     let native_unit_graph_planning = summarize_native_unit_graph_planning(
         &unit_graph_value,
@@ -843,6 +880,7 @@ fn capture_rust_plan_with_oracle(
         packages,
         source_closure,
         native_registry_source_planning,
+        native_git_source_planning,
         native_package_target_planning,
         native_unit_graph_planning,
         native_host_unit_graph_planning,
@@ -1707,6 +1745,177 @@ fn validate_vendor_checksum(
     Ok(())
 }
 
+fn summarize_native_git_source_planning(
+    cargo_packages: &[CargoPackage],
+    lock_packages: &[LockPackage],
+    lockfile: &LockfileIdentity,
+    source_closure: &SourceClosureSummary,
+) -> Result<NativeGitSourcePlanningSummary, RunError> {
+    let mut sources = Vec::new();
+    let mut blockers = Vec::new();
+    for package in cargo_packages.iter().filter(|package| source_kind(package.source.as_deref()) == SourceKind::Git) {
+        match bind_captured_git_source(package, lock_packages, source_closure) {
+            Ok(source) => sources.push(source),
+            Err(blocker) => blockers.push(blocker),
+        }
+    }
+    sources.sort();
+    blockers.sort();
+    blockers.dedup();
+    let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
+    let digest_blake3 = native_git_source_digest(
+        &sources,
+        &blockers,
+        &comparison_status,
+        &lockfile.blake3,
+        &source_closure.digest_blake3,
+    )?;
+    Ok(NativeGitSourcePlanningSummary {
+        ready: blockers.is_empty(),
+        comparison_status,
+        lockfile_digest_blake3: lockfile.blake3.clone(),
+        source_closure_digest_blake3: source_closure.digest_blake3.clone(),
+        digest_blake3,
+        sources,
+        blockers,
+        non_claims: vec![
+            "captured-source-closure-only".to_string(),
+            "source-material-provider-agnostic".to_string(),
+            "content-addressed-source-by-blake3".to_string(),
+            "no-network-fetch".to_string(),
+            "no-version-solving".to_string(),
+            "no-ambient-cargo-git-scan".to_string(),
+            "not-general-cargo-git-compatibility".to_string(),
+        ],
+    })
+}
+
+fn bind_captured_git_source(
+    package: &CargoPackage,
+    lock_packages: &[LockPackage],
+    source_closure: &SourceClosureSummary,
+) -> Result<NativeGitSourceSummary, NativeGitSourceBlocker> {
+    let package_id = package.id.clone();
+    let lock_identity = find_lock_package(package, lock_packages)
+        .map(|lock_package| LockPackageIdentity {
+            name: lock_package.name.clone(),
+            version: lock_package.version.clone(),
+            source: lock_package.source.clone(),
+            checksum: lock_package.checksum.clone(),
+        })
+        .ok_or_else(|| {
+            native_git_blocker(
+                Some(package_id.clone()),
+                "missing-lockfile-git-identity",
+                "git package has no matching Cargo.lock package identity",
+            )
+        })?;
+    let source = lock_identity.source.clone().or_else(|| package.source.clone()).ok_or_else(|| {
+        native_git_blocker(Some(package_id.clone()), "missing-git-source", "git package lacks lockfile source material")
+    })?;
+    if !source.starts_with("git+") {
+        return Err(native_git_blocker(
+            Some(package_id),
+            "unsupported-git-source-kind",
+            "native git source planning supports only git+ lockfile sources",
+        ));
+    }
+    let resolved_revision = source_revision(&source).ok_or_else(|| {
+        native_git_blocker(Some(package_id.clone()), "missing-git-revision", "git package lacks a resolved revision")
+    })?;
+    if lock_identity.name != package.name
+        || lock_identity.version != package.version
+        || Some(source.clone()) != package.source
+    {
+        return Err(native_git_blocker(
+            Some(package_id),
+            "cargo-oracle-git-identity-mismatch",
+            "Cargo oracle git package identity differs from Cargo.lock identity",
+        ));
+    }
+    let matching_sources = source_closure
+        .sources
+        .iter()
+        .filter(|source| source.package_id == package.id && source.kind == SourceKind::Git)
+        .collect::<Vec<_>>();
+    if matching_sources.len() != 1 {
+        return Err(native_git_blocker(
+            Some(package.id.clone()),
+            "ambiguous-git-source-closure-material",
+            "git package requires exactly one captured source-closure record",
+        ));
+    }
+    let closure_source = matching_sources[0];
+    if closure_source.source.as_deref() != Some(source.as_str())
+        || closure_source.resolved_revision.as_deref() != Some(resolved_revision.as_str())
+    {
+        return Err(native_git_blocker(
+            Some(package.id.clone()),
+            "source-closure-git-identity-mismatch",
+            "captured source-closure git identity differs from Cargo.lock identity",
+        ));
+    }
+    let manifest_path = PathBuf::from(&closure_source.manifest_path);
+    if !manifest_path.is_file() {
+        return Err(native_git_blocker(
+            Some(package.id.clone()),
+            "missing-git-source-manifest",
+            &format!("captured git source manifest {} is not readable", manifest_path.display()),
+        ));
+    }
+    let source_root = manifest_path.parent().ok_or_else(|| {
+        native_git_blocker(
+            Some(package.id.clone()),
+            "invalid-git-source-root",
+            "captured git source manifest has no parent directory",
+        )
+    })?;
+    let source_digest = hash_path_source_tree(source_root)
+        .map(|value| SourceDigest {
+            algorithm: PATH_SOURCE_DIGEST_ALGORITHM.to_string(),
+            value,
+        })
+        .map_err(|message| native_git_blocker(Some(package.id.clone()), "git-source-unreadable", &message))?;
+    Ok(NativeGitSourceSummary {
+        package_id: package.id.clone(),
+        name: package.name.clone(),
+        version: package.version.clone(),
+        source,
+        source_class: "git".to_string(),
+        resolved_revision,
+        source_root: normalize_path_string(source_root),
+        manifest_path: normalize_path_string(&manifest_path),
+        source_digest,
+        lockfile_identity: lock_identity,
+    })
+}
+
+fn native_git_source_digest(
+    sources: &[NativeGitSourceSummary],
+    blockers: &[NativeGitSourceBlocker],
+    comparison_status: &str,
+    lockfile_digest_blake3: &str,
+    source_closure_digest_blake3: &str,
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct Hashable<'a> {
+        comparison_status: &'a str,
+        lockfile_digest_blake3: &'a str,
+        source_closure_digest_blake3: &'a str,
+        sources: &'a [NativeGitSourceSummary],
+        blockers: &'a [NativeGitSourceBlocker],
+    }
+    let canonical = serde_json::to_vec(&Hashable {
+        comparison_status,
+        lockfile_digest_blake3,
+        source_closure_digest_blake3,
+        sources,
+        blockers,
+    })
+    .map_err(|err| RunError::Internal(format!("canonicalizing native git source planning fragment: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
 fn native_registry_source_digest(
     sources: &[NativeRegistrySourceSummary],
     blockers: &[NativeRegistrySourceBlocker],
@@ -1738,6 +1947,14 @@ fn native_registry_blocker(package_id: Option<String>, class: &str, message: &st
     }
 }
 
+fn native_git_blocker(package_id: Option<String>, class: &str, message: &str) -> NativeGitSourceBlocker {
+    NativeGitSourceBlocker {
+        package_id,
+        class: class.to_string(),
+        message: message.to_string(),
+    }
+}
+
 fn summarize_native_package_target_planning(
     root: &Path,
     options: &RustPlanOptions,
@@ -1746,6 +1963,7 @@ fn summarize_native_package_target_planning(
     workspace_members: &[String],
     source_closure: &SourceClosureSummary,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<NativePackageTargetPlanningSummary, RunError> {
     let cargo_oracle_identity = cargo_package_target_oracle_digest(cargo_packages, workspace_members)?;
     let selected_features_by_package = selected_features_by_package_from_unit_graph(unit_graph);
@@ -1761,6 +1979,10 @@ fn summarize_native_package_target_planning(
     if native_registry_source_planning.ready {
         manifest_paths
             .extend(native_registry_source_planning.sources.iter().map(|source| PathBuf::from(&source.manifest_path)));
+    }
+    if native_git_source_planning.ready {
+        manifest_paths
+            .extend(native_git_source_planning.sources.iter().map(|source| PathBuf::from(&source.manifest_path)));
     }
     manifest_paths.sort();
     manifest_paths.dedup();
@@ -1780,6 +2002,7 @@ fn summarize_native_package_target_planning(
             options,
             source_closure,
             native_registry_source_planning,
+            native_git_source_planning,
             &selected_features_by_package,
         ) {
             Ok(package) => native_packages.push(package),
@@ -1907,6 +2130,7 @@ fn native_package_from_manifest(
     options: &RustPlanOptions,
     source_closure: &SourceClosureSummary,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
     selected_features_by_package: &BTreeMap<String, Vec<String>>,
 ) -> Result<NativePackagePlanningSummary, NativePackagePlanningBlocker> {
     let manifest =
@@ -1931,6 +2155,13 @@ fn native_package_from_manifest(
                 .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
                 .map(|source| source.package_id.clone())
         })
+        .or_else(|| {
+            native_git_source_planning
+                .sources
+                .iter()
+                .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+                .map(|source| source.package_id.clone())
+        })
         .unwrap_or_else(|| cargo_path_package_id(&package.name, &package_version));
     let source_root = manifest_path.parent().ok_or_else(|| {
         native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
@@ -1949,6 +2180,7 @@ fn native_package_from_manifest(
         &selected_features,
         Some(package_id.clone()),
         native_registry_source_planning,
+        native_git_source_planning,
     )?;
     let path_dependencies = native_path_dependencies(
         source_root,
@@ -1957,6 +2189,7 @@ fn native_package_from_manifest(
         &selected_features,
         Some(package_id.clone()),
         native_registry_source_planning,
+        native_git_source_planning,
     )?;
     let build_dependencies = native_build_dependencies(
         source_root,
@@ -1965,12 +2198,14 @@ fn native_package_from_manifest(
         &selected_features,
         Some(package_id.clone()),
         native_registry_source_planning,
+        native_git_source_planning,
     )?;
     let dev_dependencies = native_dev_dependencies(
         source_root,
         &manifest.dev_dependencies,
         Some(package_id.clone()),
         native_registry_source_planning,
+        native_git_source_planning,
     )?;
     let (workspace_dependencies, selected_workspace_dependencies) = native_workspace_dependencies(
         workspace_root,
@@ -1979,6 +2214,7 @@ fn native_package_from_manifest(
         &manifest.dependencies,
         Some(package_id.clone()),
         native_registry_source_planning,
+        native_git_source_planning,
     )?;
     let mut path_dependencies = path_dependencies;
     path_dependencies.extend(selected_target_cfg_dependencies);
@@ -1990,6 +2226,13 @@ fn native_package_from_manifest(
         .iter()
         .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
         .map(|source| source.source_digest.clone())
+        .or_else(|| {
+            native_git_source_planning
+                .sources
+                .iter()
+                .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+                .map(|source| source.source_digest.clone())
+        })
         .or_else(|| {
             source_closure
                 .sources
@@ -2129,6 +2372,7 @@ fn native_path_dependencies(
     selected_features: &[String],
     package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
     let mut summaries = Vec::new();
     for (name, value) in dependencies {
@@ -2140,14 +2384,21 @@ fn native_path_dependencies(
         }
         let manifest_path = if let Some(path) = dependency_path(value) {
             source_root.join(path).join("Cargo.toml")
-        } else if let Some(registry_source) = registry_dependency_source(name, value, native_registry_source_planning) {
-            PathBuf::from(&registry_source.manifest_path)
         } else {
-            return Err(native_blocker(
-                package_id,
-                "unsupported-non-path-dependency",
-                &format!("dependency `{name}` is outside the bounded path-or-declared-registry-dependency fragment"),
-            ));
+            let resolved =
+                native_dependency_source(name, value, native_registry_source_planning, native_git_source_planning)
+                    .map_err(|err| native_blocker(package_id.clone(), err.class, &err.message))?;
+            if let Some(source) = resolved {
+                PathBuf::from(source)
+            } else {
+                return Err(native_blocker(
+                    package_id,
+                    "unsupported-non-path-dependency",
+                    &format!(
+                        "dependency `{name}` is outside the bounded path, declared-registry, or captured-git dependency fragment"
+                    ),
+                ));
+            }
         };
         if !manifest_path.is_file() {
             return Err(native_blocker(
@@ -2173,6 +2424,7 @@ fn native_build_dependencies(
     selected_features: &[String],
     package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
     for (name, value) in dependencies {
         if dependency_has_unsupported_build_options(value) {
@@ -2190,14 +2442,16 @@ fn native_build_dependencies(
         selected_features,
         package_id,
         native_registry_source_planning,
+        native_git_source_planning,
     )
 }
 
 fn native_dev_dependencies(
     source_root: &Path,
     dependencies: &BTreeMap<String, toml::Value>,
-    _package_id: Option<String>,
+    package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
     // Dev-dependency feature/default-feature/test resolver behavior is not part of the normal build
     // topology. Record only explicitly readable path or declared-registry source material for the
@@ -2207,10 +2461,12 @@ fn native_dev_dependencies(
     for (name, value) in dependencies {
         let manifest_path = if let Some(path) = dependency_path(value) {
             source_root.join(path).join("Cargo.toml")
-        } else if let Some(registry_source) = registry_dependency_source(name, value, native_registry_source_planning) {
-            PathBuf::from(&registry_source.manifest_path)
         } else {
-            continue;
+            match native_dependency_source(name, value, native_registry_source_planning, native_git_source_planning) {
+                Ok(Some(source)) => PathBuf::from(source),
+                Ok(None) => continue,
+                Err(err) => return Err(native_blocker(package_id.clone(), err.class, &err.message)),
+            }
         };
         if !manifest_path.is_file() {
             continue;
@@ -2247,6 +2503,7 @@ fn native_workspace_dependencies(
     dependencies: &BTreeMap<String, toml::Value>,
     package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<(Vec<NativeWorkspaceDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
     if !dependencies.values().any(dependency_uses_workspace) {
         return Ok((Vec::new(), Vec::new()));
@@ -2291,16 +2548,21 @@ fn native_workspace_dependencies(
         let inherited_default_features = dependency_default_features(inherited)?;
         let manifest_path = if let Some(path) = dependency_path(inherited) {
             source_root.join(path).join("Cargo.toml")
-        } else if let Some(registry_source) =
-            registry_dependency_source(name, inherited, native_registry_source_planning)
-        {
-            PathBuf::from(&registry_source.manifest_path)
         } else {
-            return Err(native_blocker(
-                package_id.clone(),
-                "unsupported-workspace-dependency-source",
-                &format!("workspace dependency `{name}` is outside the bounded path-or-declared-registry fragment"),
-            ));
+            let resolved =
+                native_dependency_source(name, inherited, native_registry_source_planning, native_git_source_planning)
+                    .map_err(|err| native_blocker(package_id.clone(), err.class, &err.message))?;
+            if let Some(source) = resolved {
+                PathBuf::from(source)
+            } else {
+                return Err(native_blocker(
+                    package_id.clone(),
+                    "unsupported-workspace-dependency-source",
+                    &format!(
+                        "workspace dependency `{name}` is outside the bounded path, declared-registry, or captured-git fragment"
+                    ),
+                ));
+            }
         };
         if !manifest_path.is_file() {
             return Err(native_blocker(
@@ -2412,6 +2674,7 @@ fn native_target_cfg_dependencies(
     selected_features: &[String],
     package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<(Vec<NativeTargetCfgDependencySummary>, Vec<NativePathDependencySummary>), NativePackagePlanningBlocker> {
     let mut cfg_facts = Vec::new();
     let mut selected_dependencies = Vec::new();
@@ -2429,20 +2692,27 @@ fn native_target_cfg_dependencies(
             let manifest_path = if dependency_selected {
                 if let Some(path) = dependency_path(value) {
                     Some(source_root.join(path).join("Cargo.toml"))
-                } else if let Some(registry_source) =
-                    registry_dependency_source(name, value, native_registry_source_planning)
-                {
-                    Some(PathBuf::from(&registry_source.manifest_path))
-                } else if dependency_optional(value) {
-                    None
                 } else {
-                    return Err(native_blocker(
-                        package_id.clone(),
-                        "unsupported-target-cfg-dependency",
-                        &format!(
-                            "target cfg dependency `{name}` is outside the bounded path-or-declared-registry-dependency fragment"
-                        ),
-                    ));
+                    let resolved = native_dependency_source(
+                        name,
+                        value,
+                        native_registry_source_planning,
+                        native_git_source_planning,
+                    )
+                    .map_err(|err| native_blocker(package_id.clone(), err.class, &err.message))?;
+                    if let Some(source) = resolved {
+                        Some(PathBuf::from(source))
+                    } else if dependency_optional(value) {
+                        None
+                    } else {
+                        return Err(native_blocker(
+                            package_id.clone(),
+                            "unsupported-target-cfg-dependency",
+                            &format!(
+                                "target cfg dependency `{name}` is outside the bounded path, declared-registry, or captured-git dependency fragment"
+                            ),
+                        ));
+                    }
                 }
             } else {
                 None
@@ -2721,6 +2991,20 @@ fn feature_entry_selects_dependency(entry: &str, dependency_name: &str) -> bool 
     entry == dependency_name || entry == format!("dep:{dependency_name}")
 }
 
+fn native_dependency_source<'a>(
+    dependency_name: &str,
+    value: &toml::Value,
+    native_registry_source_planning: &'a NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &'a NativeGitSourcePlanningSummary,
+) -> Result<Option<&'a str>, DependencySourceResolutionError> {
+    if dependency_git_url(value).is_some() {
+        return git_dependency_source(dependency_name, value, native_git_source_planning)
+            .map(|source| Some(source.manifest_path.as_str()));
+    }
+    Ok(registry_dependency_source(dependency_name, value, native_registry_source_planning)
+        .map(|source| source.manifest_path.as_str()))
+}
+
 fn registry_dependency_source<'a>(
     dependency_name: &str,
     value: &toml::Value,
@@ -2729,12 +3013,179 @@ fn registry_dependency_source<'a>(
     if !native_registry_source_planning.ready {
         return None;
     }
-    let package_name = value
-        .as_table()
-        .and_then(|table| table.get("package"))
-        .and_then(toml::Value::as_str)
-        .unwrap_or(dependency_name);
+    let package_name = dependency_package_name(dependency_name, value);
     native_registry_source_planning.sources.iter().find(|source| source.name == package_name)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DependencySourceResolutionError {
+    class: &'static str,
+    message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GitDependencySelector<'a> {
+    package_name: &'a str,
+    package_version: Option<&'a str>,
+    normalized_url: &'a str,
+    reference: Option<GitDependencyReference<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum GitDependencyReference<'a> {
+    Revision(&'a str),
+    Tag(&'a str),
+    Branch(&'a str),
+}
+
+fn git_dependency_source<'a>(
+    dependency_name: &str,
+    value: &toml::Value,
+    native_git_source_planning: &'a NativeGitSourcePlanningSummary,
+) -> Result<&'a NativeGitSourceSummary, DependencySourceResolutionError> {
+    if !native_git_source_planning.ready {
+        return Err(dependency_source_error(
+            "native-git-source-planning-blocked",
+            "native git source facts are not ready for dependency resolution",
+        ));
+    }
+    let selector = git_dependency_selector(dependency_name, value)?;
+    let identity_matches = native_git_source_planning
+        .sources
+        .iter()
+        .filter(|source| git_source_identity_matches(source, &selector))
+        .collect::<Vec<_>>();
+    if identity_matches.is_empty() {
+        return Err(dependency_source_error(
+            "missing-captured-git-source-fact",
+            format!(
+                "git dependency `{dependency_name}` has no captured source fact for package `{}` at {}",
+                selector.package_name, selector.normalized_url
+            ),
+        ));
+    }
+    let reference_matches = identity_matches
+        .iter()
+        .copied()
+        .filter(|source| git_source_reference_matches(source, &selector))
+        .collect::<Vec<_>>();
+    if reference_matches.is_empty() {
+        return Err(dependency_source_error(
+            "git-dependency-reference-mismatch",
+            format!(
+                "git dependency `{dependency_name}` requested source identity not present in captured source facts"
+            ),
+        ));
+    }
+    if reference_matches.len() != 1 {
+        return Err(dependency_source_error(
+            "ambiguous-captured-git-source-fact",
+            format!(
+                "git dependency `{dependency_name}` matches multiple captured source facts; add an exact rev, tag, branch, or package version"
+            ),
+        ));
+    }
+    Ok(reference_matches[0])
+}
+
+fn dependency_git_url(value: &toml::Value) -> Option<&str> {
+    value.as_table()?.get("git")?.as_str()
+}
+
+fn dependency_version(value: &toml::Value) -> Option<&str> {
+    value.as_table()?.get("version")?.as_str()
+}
+
+fn git_dependency_selector<'a>(
+    dependency_name: &'a str,
+    value: &'a toml::Value,
+) -> Result<GitDependencySelector<'a>, DependencySourceResolutionError> {
+    let package_name = dependency_package_name(dependency_name, value);
+    let package_version = dependency_version(value);
+    let git_url = dependency_git_url(value).ok_or_else(|| {
+        dependency_source_error("missing-git-dependency-url", format!("dependency `{dependency_name}` has no git URL"))
+    })?;
+    Ok(GitDependencySelector {
+        package_name,
+        package_version,
+        normalized_url: normalized_git_dependency_url(git_url),
+        reference: git_dependency_reference(value)?,
+    })
+}
+
+fn git_dependency_reference<'a>(
+    value: &'a toml::Value,
+) -> Result<Option<GitDependencyReference<'a>>, DependencySourceResolutionError> {
+    let Some(table) = value.as_table() else {
+        return Ok(None);
+    };
+    let mut references = Vec::new();
+    if let Some(rev) = table.get("rev").and_then(toml::Value::as_str) {
+        references.push(GitDependencyReference::Revision(rev));
+    }
+    if let Some(tag) = table.get("tag").and_then(toml::Value::as_str) {
+        references.push(GitDependencyReference::Tag(tag));
+    }
+    if let Some(branch) = table.get("branch").and_then(toml::Value::as_str) {
+        references.push(GitDependencyReference::Branch(branch));
+    }
+    if references.len() > 1 {
+        return Err(dependency_source_error(
+            "unsupported-git-dependency-reference",
+            "git dependency declares multiple ref selectors; expected exactly one of rev, tag, or branch",
+        ));
+    }
+    Ok(references.into_iter().next())
+}
+
+fn git_source_identity_matches(source: &NativeGitSourceSummary, selector: &GitDependencySelector<'_>) -> bool {
+    if source.name != selector.package_name {
+        return false;
+    }
+    if let Some(package_version) = selector.package_version {
+        if source.version != package_version {
+            return false;
+        }
+    }
+    normalized_git_source_url(&source.source) == Some(selector.normalized_url)
+}
+
+fn git_source_reference_matches(source: &NativeGitSourceSummary, selector: &GitDependencySelector<'_>) -> bool {
+    match &selector.reference {
+        None => true,
+        Some(GitDependencyReference::Revision(rev)) => source.resolved_revision == *rev,
+        Some(GitDependencyReference::Tag(tag)) => git_source_query_value(&source.source, "tag") == Some(*tag),
+        Some(GitDependencyReference::Branch(branch)) => {
+            git_source_query_value(&source.source, "branch") == Some(*branch)
+        }
+    }
+}
+
+fn git_source_query_value<'a>(source: &'a str, key: &str) -> Option<&'a str> {
+    let without_prefix = source.strip_prefix("git+")?;
+    let without_revision = without_prefix.split_once('#').map(|(prefix, _)| prefix).unwrap_or(without_prefix);
+    let (_, query) = without_revision.split_once('?')?;
+    query.split('&').find_map(|pair| {
+        let (candidate_key, value) = pair.split_once('=')?;
+        (candidate_key == key).then_some(value)
+    })
+}
+
+fn dependency_source_error(class: &'static str, message: impl Into<String>) -> DependencySourceResolutionError {
+    DependencySourceResolutionError {
+        class,
+        message: message.into(),
+    }
+}
+
+fn normalized_git_dependency_url(url: &str) -> &str {
+    url.split_once('?').map(|(prefix, _)| prefix).unwrap_or(url)
+}
+
+fn normalized_git_source_url(source: &str) -> Option<&str> {
+    let without_prefix = source.strip_prefix("git+")?;
+    let without_revision = without_prefix.split_once('#').map(|(prefix, _)| prefix).unwrap_or(without_prefix);
+    Some(normalized_git_dependency_url(without_revision))
 }
 
 fn dependency_path(value: &toml::Value) -> Option<&str> {
@@ -7331,6 +7782,19 @@ mod tests {
         }
     }
 
+    fn empty_git_planning() -> NativeGitSourcePlanningSummary {
+        NativeGitSourcePlanningSummary {
+            ready: true,
+            comparison_status: "matched".to_string(),
+            lockfile_digest_blake3: "test-lockfile".to_string(),
+            source_closure_digest_blake3: "test-source-closure".to_string(),
+            digest_blake3: "test-git".to_string(),
+            sources: Vec::new(),
+            blockers: Vec::new(),
+            non_claims: vec!["captured-source-closure-only".to_string()],
+        }
+    }
+
     #[test]
     fn captures_normalized_oracle_receipt() {
         let dir = TempDir::new().unwrap();
@@ -7447,6 +7911,7 @@ mod tests {
             ],
             &closure,
             &empty_registry_planning(),
+            &empty_git_planning(),
         )
         .unwrap();
 
@@ -7547,6 +8012,7 @@ mod tests {
             &[app_id, dep_id],
             &source_closure,
             &registry_planning,
+            &empty_git_planning(),
         )
         .unwrap();
 
@@ -7599,6 +8065,419 @@ mod tests {
         assert_eq!(registry_planning.comparison_status, "blocked");
         assert!(registry_planning.sources.is_empty());
         assert!(registry_planning.blockers.iter().any(|blocker| blocker.class == "missing-declared-vendor-root"));
+    }
+
+    #[test]
+    fn native_git_source_planning_binds_captured_source_and_resolves_dependency_edge() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let git_dir = dir.path().join("git-checkout/wu-manber");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(git_dir.join("src")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"app\"]\n").unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nwu_manber = { package = \"wu-manber\", git = \"https://example.invalid/wu-manber.git\", rev = \"abcdef123456\" }\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { wu_manber::scan() }\n").unwrap();
+        std::fs::write(
+            git_dir.join("Cargo.toml"),
+            "[package]\nname = \"wu-manber\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"wu_manber\"\npath = \"src/lib.rs\"\n",
+        )
+        .unwrap();
+        std::fs::write(git_dir.join("src/lib.rs"), "pub fn scan() -> u32 { 7 }\n").unwrap();
+        let git_source = "git+https://example.invalid/wu-manber.git#abcdef123456".to_string();
+        let app_id = "path+file://app#app@0.1.0".to_string();
+        let git_id = "git+https://example.invalid/wu-manber.git#wu-manber@0.1.0".to_string();
+        let packages = vec![
+            CargoPackage {
+                id: app_id.clone(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "app".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: app_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: git_id.clone(),
+                name: "wu-manber".to_string(),
+                version: "0.1.0".to_string(),
+                source: Some(git_source.clone()),
+                manifest_path: git_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "wu-manber".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: git_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+        ];
+        let lock_packages = vec![LockPackage {
+            name: "wu-manber".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(git_source),
+            checksum: None,
+        }];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+        let source_closure = summarize_source_closure(&packages, &lock_packages).unwrap();
+        let git_planning =
+            summarize_native_git_source_planning(&packages, &lock_packages, &lockfile, &source_closure).unwrap();
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &options(dir.path()),
+            &empty_unit_graph(),
+            &packages,
+            &[app_id, git_id],
+            &source_closure,
+            &empty_registry_planning(),
+            &git_planning,
+        )
+        .unwrap();
+
+        assert!(git_planning.ready, "{:#?}", git_planning.blockers);
+        assert_eq!(git_planning.sources.len(), 1);
+        let git_source = &git_planning.sources[0];
+        assert_eq!(git_source.name, "wu-manber");
+        assert_eq!(git_source.resolved_revision, "abcdef123456");
+        assert_eq!(git_source.source_digest.algorithm, PATH_SOURCE_DIGEST_ALGORITHM);
+        assert_eq!(git_source.source_digest.value.len(), 64);
+        assert!(git_planning.non_claims.contains(&"no-network-fetch".to_string()));
+        assert!(git_planning.non_claims.contains(&"source-material-provider-agnostic".to_string()));
+        assert!(git_planning.non_claims.contains(&"content-addressed-source-by-blake3".to_string()));
+        assert_eq!(git_planning.source_closure_digest_blake3, source_closure.digest_blake3);
+        assert!(package_planning.ready, "{:#?}", package_planning.blockers);
+        let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
+        assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&git_dir.join("Cargo.toml")));
+    }
+
+    #[test]
+    fn native_git_source_planning_blocks_missing_captured_manifest() {
+        let dir = TempDir::new().unwrap();
+        let git_source = "git+https://example.invalid/wu-manber.git#abcdef123456".to_string();
+        let packages = vec![CargoPackage {
+            id: "git+https://example.invalid/wu-manber.git#wu-manber@0.1.0".to_string(),
+            name: "wu-manber".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(git_source.clone()),
+            manifest_path: dir.path().join("missing/wu-manber/Cargo.toml").display().to_string(),
+            targets: vec![CargoTarget {
+                name: "wu-manber".to_string(),
+                kind: vec!["lib".to_string()],
+                src_path: dir.path().join("missing/wu-manber/src/lib.rs").display().to_string(),
+            }],
+            features: BTreeMap::new(),
+        }];
+        let lock_packages = vec![LockPackage {
+            name: "wu-manber".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(git_source),
+            checksum: None,
+        }];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+        let source_closure = summarize_source_closure(&packages, &lock_packages).unwrap();
+
+        let git_planning =
+            summarize_native_git_source_planning(&packages, &lock_packages, &lockfile, &source_closure).unwrap();
+
+        assert!(!git_planning.ready);
+        assert_eq!(git_planning.comparison_status, "blocked");
+        assert!(git_planning.sources.is_empty());
+        assert!(git_planning.blockers.iter().any(|blocker| blocker.class == "missing-git-source-manifest"));
+    }
+
+    #[test]
+    fn native_git_dependency_resolution_blocks_mismatched_revision() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let git_dir = dir.path().join("git-checkout/wu-manber");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(git_dir.join("src")).unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nwu_manber = { package = \"wu-manber\", git = \"https://example.invalid/wu-manber.git\", rev = \"deadbeef\" }\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { wu_manber::scan() }\n").unwrap();
+        std::fs::write(
+            git_dir.join("Cargo.toml"),
+            "[package]\nname = \"wu-manber\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"wu_manber\"\npath = \"src/lib.rs\"\n",
+        )
+        .unwrap();
+        std::fs::write(git_dir.join("src/lib.rs"), "pub fn scan() -> u32 { 7 }\n").unwrap();
+        let git_source = "git+https://example.invalid/wu-manber.git#abcdef123456".to_string();
+        let app_id = "path+file://app#app@0.1.0".to_string();
+        let git_id = "git+https://example.invalid/wu-manber.git#wu-manber@0.1.0".to_string();
+        let packages = vec![
+            CargoPackage {
+                id: app_id.clone(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "app".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: app_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: git_id.clone(),
+                name: "wu-manber".to_string(),
+                version: "0.1.0".to_string(),
+                source: Some(git_source.clone()),
+                manifest_path: git_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "wu-manber".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: git_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+        ];
+        let lock_packages = vec![LockPackage {
+            name: "wu-manber".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(git_source),
+            checksum: None,
+        }];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+        let source_closure = summarize_source_closure(&packages, &lock_packages).unwrap();
+        let git_planning =
+            summarize_native_git_source_planning(&packages, &lock_packages, &lockfile, &source_closure).unwrap();
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &options(dir.path()),
+            &empty_unit_graph(),
+            &packages,
+            &[app_id, git_id],
+            &source_closure,
+            &empty_registry_planning(),
+            &git_planning,
+        )
+        .unwrap();
+
+        assert!(git_planning.ready, "{:#?}", git_planning.blockers);
+        assert!(!package_planning.ready);
+        assert!(package_planning.blockers.iter().any(|blocker| blocker.class == "git-dependency-reference-mismatch"));
+        assert!(!package_planning.blockers.iter().any(|blocker| blocker.class == "unsupported-non-path-dependency"));
+    }
+
+    #[test]
+    fn native_git_dev_dependency_resolution_blocks_mismatched_revision() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let git_dir = dir.path().join("git-checkout/wu-manber");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(git_dir.join("src")).unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dev-dependencies]\nwu_manber = { package = \"wu-manber\", git = \"https://example.invalid/wu-manber.git\", rev = \"deadbeef\" }\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { 1 }\n").unwrap();
+        std::fs::write(
+            git_dir.join("Cargo.toml"),
+            "[package]\nname = \"wu-manber\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\nname = \"wu_manber\"\npath = \"src/lib.rs\"\n",
+        )
+        .unwrap();
+        std::fs::write(git_dir.join("src/lib.rs"), "pub fn scan() -> u32 { 7 }\n").unwrap();
+        let git_source = "git+https://example.invalid/wu-manber.git#abcdef123456".to_string();
+        let app_id = "path+file://app#app@0.1.0".to_string();
+        let git_id = "git+https://example.invalid/wu-manber.git#wu-manber@0.1.0".to_string();
+        let packages = vec![
+            CargoPackage {
+                id: app_id.clone(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "app".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: app_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: git_id.clone(),
+                name: "wu-manber".to_string(),
+                version: "0.1.0".to_string(),
+                source: Some(git_source.clone()),
+                manifest_path: git_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "wu-manber".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: git_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+        ];
+        let lock_packages = vec![LockPackage {
+            name: "wu-manber".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(git_source),
+            checksum: None,
+        }];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+        let source_closure = summarize_source_closure(&packages, &lock_packages).unwrap();
+        let git_planning =
+            summarize_native_git_source_planning(&packages, &lock_packages, &lockfile, &source_closure).unwrap();
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &options(dir.path()),
+            &empty_unit_graph(),
+            &packages,
+            &[app_id, git_id],
+            &source_closure,
+            &empty_registry_planning(),
+            &git_planning,
+        )
+        .unwrap();
+
+        assert!(git_planning.ready, "{:#?}", git_planning.blockers);
+        assert!(!package_planning.ready);
+        assert!(package_planning.blockers.iter().any(|blocker| blocker.class == "git-dependency-reference-mismatch"));
+        assert!(!package_planning.packages.iter().any(|package| {
+            package.name == "app" && package.dev_dependencies.iter().any(|dep| dep.name == "wu_manber")
+        }));
+    }
+
+    #[test]
+    fn native_git_dependency_resolution_blocks_ambiguous_same_url_sources() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let git_dir_old = dir.path().join("git-checkout/wu-manber-old");
+        let git_dir_new = dir.path().join("git-checkout/wu-manber-new");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(git_dir_old.join("src")).unwrap();
+        std::fs::create_dir_all(git_dir_new.join("src")).unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nwu_manber = { package = \"wu-manber\", git = \"https://example.invalid/wu-manber.git\" }\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { wu_manber::scan() }\n").unwrap();
+        for (dir_path, version, body) in [
+            (&git_dir_old, "0.1.0", "pub fn scan() -> u32 { 7 }\n"),
+            (&git_dir_new, "0.2.0", "pub fn scan() -> u32 { 8 }\n"),
+        ] {
+            std::fs::write(
+                dir_path.join("Cargo.toml"),
+                format!(
+                    "[package]\nname = \"wu-manber\"\nversion = \"{version}\"\nedition = \"2021\"\n\n[lib]\nname = \"wu_manber\"\npath = \"src/lib.rs\"\n"
+                ),
+            )
+            .unwrap();
+            std::fs::write(dir_path.join("src/lib.rs"), body).unwrap();
+        }
+        let git_source_old = "git+https://example.invalid/wu-manber.git#abcdef123456".to_string();
+        let git_source_new = "git+https://example.invalid/wu-manber.git#fedcba654321".to_string();
+        let app_id = "path+file://app#app@0.1.0".to_string();
+        let git_id_old = "git+https://example.invalid/wu-manber.git#wu-manber@0.1.0".to_string();
+        let git_id_new = "git+https://example.invalid/wu-manber.git#wu-manber@0.2.0".to_string();
+        let packages = vec![
+            CargoPackage {
+                id: app_id.clone(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "app".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: app_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: git_id_old.clone(),
+                name: "wu-manber".to_string(),
+                version: "0.1.0".to_string(),
+                source: Some(git_source_old.clone()),
+                manifest_path: git_dir_old.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "wu-manber".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: git_dir_old.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: git_id_new.clone(),
+                name: "wu-manber".to_string(),
+                version: "0.2.0".to_string(),
+                source: Some(git_source_new.clone()),
+                manifest_path: git_dir_new.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "wu-manber".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: git_dir_new.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+        ];
+        let lock_packages = vec![
+            LockPackage {
+                name: "wu-manber".to_string(),
+                version: "0.1.0".to_string(),
+                source: Some(git_source_old),
+                checksum: None,
+            },
+            LockPackage {
+                name: "wu-manber".to_string(),
+                version: "0.2.0".to_string(),
+                source: Some(git_source_new),
+                checksum: None,
+            },
+        ];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+        let source_closure = summarize_source_closure(&packages, &lock_packages).unwrap();
+        let git_planning =
+            summarize_native_git_source_planning(&packages, &lock_packages, &lockfile, &source_closure).unwrap();
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &options(dir.path()),
+            &empty_unit_graph(),
+            &packages,
+            &[app_id, git_id_old, git_id_new],
+            &source_closure,
+            &empty_registry_planning(),
+            &git_planning,
+        )
+        .unwrap();
+
+        assert!(git_planning.ready, "{:#?}", git_planning.blockers);
+        assert_eq!(git_planning.sources.len(), 2);
+        assert!(!package_planning.ready);
+        assert!(
+            package_planning
+                .blockers
+                .iter()
+                .any(|blocker| blocker.class == "ambiguous-captured-git-source-fact")
+        );
+        assert!(!package_planning.blockers.iter().any(|blocker| blocker.class == "unsupported-non-path-dependency"));
     }
 
     #[test]
@@ -7673,6 +8552,7 @@ mod tests {
             &[app_id.clone(), dep_id.clone()],
             &closure,
             &empty_registry_planning(),
+            &empty_git_planning(),
         )
         .unwrap();
         let unit_graph = serde_json::json!({
@@ -7761,6 +8641,7 @@ mod tests {
             &[package_id.clone()],
             &closure,
             &empty_registry_planning(),
+            &empty_git_planning(),
         )
         .unwrap();
         package_planning.packages[0].path_dependencies.push(NativePathDependencySummary {
@@ -7816,6 +8697,7 @@ mod tests {
             &["path+file://benchy#benchy@0.1.0".to_string()],
             &closure,
             &empty_registry_planning(),
+            &empty_git_planning(),
         )
         .unwrap();
 
