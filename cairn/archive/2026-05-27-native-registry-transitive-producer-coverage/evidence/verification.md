@@ -24,7 +24,7 @@ Next action: rerun validation and gates after implementation and archive sync.
 
 ## Focused tests
 
-Command evidence: pueue task `18` after same-family review remediation.
+Command evidence: pueue task `25` final validation after same-family review remediation.
 
 ```text
 cargo test -p mantle --bin mantle native_unit_graph_ -- --nocapture
@@ -93,9 +93,21 @@ git diff --check -- PASS
 
 Decision: implementation evidence is ready to sync and archive.
 
+## Oracle checkpoint: archived task evidence portability
+
+Question: Are the archived task references reviewable without relying on hidden pueue history from the original implementation turn?
+
+Inspected evidence: pueue task `20` post-commit self-probe summary at `target/mantle-self-rust-plan-probe-after-2bb5e36b/blocker-summary.txt`; pueue task `25` final validation transcript; `git_status_short_bytes=0` in the pueue `20` probe summary; current `cairn validate` output with `changes=0`.
+
+Decision owner: coding agent.
+
+Decision: use pueue task `20` as the self-probe/blocker-movement evidence and pueue task `25` as the final clean-state validation evidence. Earlier task references (`18`, `27`, `28`, `29`) were historical execution breadcrumbs, not required for current review; `tasks.md` now cites `20` and `25` directly. The archive/sync state is covered by `cairn validate` reporting no active changes and one synced spec.
+
+Next action: for future archived changes, keep task evidence tied to the latest post-commit validation task and include a checkpoint when older queue IDs remain in prose.
+
 ## Sync and archive
 
-Command evidence: pueue tasks `28` and `29`.
+Command evidence: pueue tasks `28` and `29`, plus the portability checkpoint above.
 
 ```text
 cairn validate before archive -- valid=true, changes=1, specs_validated=2, issues=[]
