@@ -5168,6 +5168,121 @@ pub(crate) fn execute_rust_target_unit_topology(
     target_topology_receipt("success", executions, None)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HostDependencyTopologyPlan {
+    target_dependency_indices: BTreeSet<usize>,
+    host_edges: BTreeMap<usize, Vec<usize>>,
+}
+
+fn plan_host_dependency_topology(
+    host_indices: &[usize],
+    lib_producers: &BTreeMap<String, usize>,
+    proc_macro_producers: &BTreeMap<String, usize>,
+    target_edges: &BTreeMap<usize, Vec<usize>>,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<HostDependencyTopologyPlan, RustUnitExecutionBlocker> {
+    let mut target_dependency_indices = BTreeSet::new();
+    let mut host_edges = BTreeMap::<usize, Vec<usize>>::new();
+    for index in host_indices {
+        let unit = &graph.derivations[*index];
+        let mut host_dependencies = Vec::new();
+        for dependency in &unit.dependency_artifacts {
+            if let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() {
+                collect_target_dependencies(producer_index, target_edges, &mut target_dependency_indices);
+                host_dependencies.push(producer_index);
+                continue;
+            }
+            if let Some(producer_index) = proc_macro_producers.get(&dependency.package_id).copied() {
+                if producer_index != *index {
+                    host_dependencies.push(producer_index);
+                }
+                continue;
+            }
+            return Err(RustUnitExecutionBlocker {
+                class: "missing-host-dependency-producer".to_string(),
+                message: format!(
+                    "no supported target lib or proc-macro host producer for host dependency package {}",
+                    dependency.package_id
+                ),
+            });
+        }
+        host_dependencies.sort_unstable();
+        host_dependencies.dedup();
+        host_edges.insert(*index, host_dependencies);
+    }
+    Ok(HostDependencyTopologyPlan {
+        target_dependency_indices,
+        host_edges,
+    })
+}
+
+fn collect_target_dependencies(index: usize, edges: &BTreeMap<usize, Vec<usize>>, collected: &mut BTreeSet<usize>) {
+    if !collected.insert(index) {
+        return;
+    }
+    if let Some(deps) = edges.get(&index) {
+        for dep in deps {
+            collect_target_dependencies(*dep, edges, collected);
+        }
+    }
+}
+
+fn plan_combined_unit_topology_order(
+    target_indices: &[usize],
+    host_indices: &[usize],
+    lib_producers: &BTreeMap<String, usize>,
+    host_producers: &BTreeMap<String, usize>,
+    proc_macro_producers: &BTreeMap<String, usize>,
+    target_edges: &BTreeMap<usize, Vec<usize>>,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+    let host_dependency_plan =
+        plan_host_dependency_topology(host_indices, lib_producers, proc_macro_producers, target_edges, graph)?;
+    let mut combined_edges = target_edges.clone();
+    for index in &host_dependency_plan.target_dependency_indices {
+        debug_assert!(combined_edges.contains_key(index));
+    }
+    for (index, deps) in host_dependency_plan.host_edges {
+        combined_edges.entry(index).or_default().extend(deps);
+    }
+    for index in target_indices {
+        let unit = &graph.derivations[*index];
+        for host_artifact in &unit.consumed_host_artifacts {
+            let Some(producer_index) = host_producers.get(&host_artifact.package_id).copied() else {
+                return Err(RustUnitExecutionBlocker {
+                    class: "missing-host-artifact-producer".to_string(),
+                    message: format!(
+                        "no supported host producer unit for host artifact package {}",
+                        host_artifact.package_id
+                    ),
+                });
+            };
+            if producer_index != *index {
+                combined_edges.entry(*index).or_default().push(producer_index);
+            }
+        }
+    }
+    for deps in combined_edges.values_mut() {
+        deps.sort_unstable();
+        deps.dedup();
+    }
+
+    let mut ordered_unit_indices = Vec::new();
+    let mut temporary = BTreeSet::new();
+    let mut permanent = BTreeSet::new();
+    for index in target_indices {
+        visit_target_topology_unit(
+            *index,
+            &combined_edges,
+            &mut temporary,
+            &mut permanent,
+            &mut ordered_unit_indices,
+            graph,
+        )?;
+    }
+    Ok(ordered_unit_indices)
+}
+
 pub(crate) fn execute_rust_unit_topology(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     native_host_graph: &NativeHostUnitGraphPlanningSummary,
@@ -5218,8 +5333,13 @@ pub(crate) fn execute_rust_unit_topology(
     }
 
     let mut host_producers = BTreeMap::<String, usize>::new();
+    let mut proc_macro_producers = BTreeMap::<String, usize>::new();
     for index in &host_indices {
-        host_producers.entry(graph.derivations[*index].package_id.clone()).or_insert(*index);
+        let unit = &graph.derivations[*index];
+        host_producers.entry(unit.package_id.clone()).or_insert(*index);
+        if unit.target_kind == "proc-macro" {
+            proc_macro_producers.entry(unit.package_id.clone()).or_insert(*index);
+        }
     }
     for index in &target_indices {
         let unit = &graph.derivations[*index];
@@ -5280,160 +5400,105 @@ pub(crate) fn execute_rust_unit_topology(
         edges.insert(*index, deps);
     }
 
-    let mut ordered_target_indices = Vec::new();
-    let mut temporary = BTreeSet::new();
-    let mut permanent = BTreeSet::new();
-    for index in &target_indices {
-        if let Err(blocker) = visit_target_topology_unit(
-            *index,
-            &edges,
-            &mut temporary,
-            &mut permanent,
-            &mut ordered_target_indices,
-            graph,
-        ) {
-            return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
-        }
-    }
-
-    let mut host_dependency_indices = BTreeSet::new();
-    fn collect_target_dependencies(index: usize, edges: &BTreeMap<usize, Vec<usize>>, collected: &mut BTreeSet<usize>) {
-        if !collected.insert(index) {
-            return;
-        }
-        if let Some(deps) = edges.get(&index) {
-            for dep in deps {
-                collect_target_dependencies(*dep, edges, collected);
-            }
-        }
-    }
-    for index in &host_indices {
-        let unit = &graph.derivations[*index];
-        for dependency in &unit.dependency_artifacts {
-            let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
-                return topology_receipt(
-                    "blocked",
-                    Vec::new(),
-                    Vec::new(),
-                    Some(RustUnitExecutionBlocker {
-                        class: "missing-host-dependency-producer".to_string(),
-                        message: format!(
-                            "no supported target producer lib unit for host dependency package {}",
-                            dependency.package_id
-                        ),
-                    }),
-                );
-            };
-            collect_target_dependencies(producer_index, &edges, &mut host_dependency_indices);
-        }
-    }
+    let ordered_unit_indices = match plan_combined_unit_topology_order(
+        &target_indices,
+        &host_indices,
+        &lib_producers,
+        &host_producers,
+        &proc_macro_producers,
+        &edges,
+        graph,
+    ) {
+        Ok(order) => order,
+        Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
+    };
 
     let mut executions = Vec::new();
     let mut build_script_metadata_runs = Vec::new();
     let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
-    let mut executed_target_indices = BTreeSet::new();
-    for index in ordered_target_indices.iter().copied().filter(|index| host_dependency_indices.contains(index)) {
-        let unit = &graph.derivations[index];
-        let mut executable_unit = bind_all_host_artifacts(unit, &BTreeMap::new())?;
-        if !executable_unit.dependency_artifacts.is_empty() {
-            executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
-        }
-        let receipt = execute_rust_unit(&executable_unit, options)?;
-        if receipt.execution_status != "success" {
-            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                class: "host-dependency-target-unit-failed".to_string(),
-                message: format!("host dependency target unit {} did not execute successfully", unit.unit_id),
-            });
-            executions.push(receipt);
-            return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-        }
-        if unit.target_kind == "lib" {
-            match produced_library_artifact_path(&executable_unit, options)? {
-                Ok(path) => {
-                    produced_target_artifacts.insert(unit.package_id.clone(), path);
-                }
-                Err(blocker) => {
-                    executions.push(receipt);
-                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                }
-            }
-        }
-        executed_target_indices.insert(index);
-        executions.push(receipt);
-    }
     let mut produced_host_artifacts = BTreeMap::<String, PathBuf>::new();
+    let mut produced_proc_macro_artifacts = BTreeMap::<String, PathBuf>::new();
     let mut produced_build_script_metadata = BTreeMap::<String, BuildScriptMetadataSummary>::new();
-    for index in host_indices {
+    for index in ordered_unit_indices {
         let unit = &graph.derivations[index];
-        let mut executable_unit = unit.clone();
-        if !executable_unit.dependency_artifacts.is_empty() {
-            executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
-        }
-        let receipt = execute_rust_unit(&executable_unit, options)?;
-        if receipt.execution_status != "success" {
-            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                class: "host-unit-failed".to_string(),
-                message: format!("host unit {} did not execute successfully", unit.unit_id),
-            });
-            executions.push(receipt);
-            return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-        }
-        match produced_host_artifact_path(unit, options)? {
-            Ok(path) => {
-                if unit.target_kind == "custom-build" {
-                    match run_build_script_metadata(unit, options, &path)? {
-                        Ok(metadata_run) => {
-                            produced_build_script_metadata
-                                .insert(unit.package_id.clone(), build_script_metadata_from_run(&metadata_run));
-                            build_script_metadata_runs.push(metadata_run);
-                        }
-                        Err(blocker) => {
-                            executions.push(receipt);
-                            return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-                        }
-                    }
-                }
-                produced_host_artifacts.insert(unit.package_id.clone(), path);
+        if is_supported_host_unit(unit) {
+            let mut executable_unit = unit.clone();
+            if !executable_unit.dependency_artifacts.is_empty() {
+                let mut produced_dependency_artifacts = produced_target_artifacts.clone();
+                produced_dependency_artifacts.extend(produced_proc_macro_artifacts.clone());
+                executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_dependency_artifacts)?;
             }
-            Err(blocker) => {
+            let receipt = execute_rust_unit(&executable_unit, options)?;
+            if receipt.execution_status != "success" {
+                let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+                    class: "host-unit-failed".to_string(),
+                    message: format!("host unit {} did not execute successfully", unit.unit_id),
+                });
                 executions.push(receipt);
                 return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
             }
-        }
-        executions.push(receipt);
-    }
-
-    for index in ordered_target_indices {
-        if executed_target_indices.contains(&index) {
-            continue;
-        }
-        let unit = &graph.derivations[index];
-        let mut executable_unit = bind_all_host_artifacts(unit, &produced_host_artifacts)?;
-        executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;
-        if !executable_unit.dependency_artifacts.is_empty() {
-            executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
-        }
-        let receipt = execute_rust_unit(&executable_unit, options)?;
-        if receipt.execution_status != "success" {
-            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                class: "target-unit-failed".to_string(),
-                message: format!("target unit {} did not execute successfully", unit.unit_id),
-            });
-            executions.push(receipt);
-            return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
-        }
-        if unit.target_kind == "lib" {
-            match produced_library_artifact_path(&executable_unit, options)? {
+            match produced_host_artifact_path(unit, options)? {
                 Ok(path) => {
-                    produced_target_artifacts.insert(unit.package_id.clone(), path);
+                    if unit.target_kind == "custom-build" {
+                        match run_build_script_metadata(unit, options, &path)? {
+                            Ok(metadata_run) => {
+                                produced_build_script_metadata
+                                    .insert(unit.package_id.clone(), build_script_metadata_from_run(&metadata_run));
+                                build_script_metadata_runs.push(metadata_run);
+                            }
+                            Err(blocker) => {
+                                executions.push(receipt);
+                                return topology_receipt(
+                                    "blocked",
+                                    executions,
+                                    build_script_metadata_runs,
+                                    Some(blocker),
+                                );
+                            }
+                        }
+                    }
+                    if unit.target_kind == "proc-macro" {
+                        produced_proc_macro_artifacts.insert(unit.package_id.clone(), path.clone());
+                    }
+                    produced_host_artifacts.insert(unit.package_id.clone(), path);
                 }
                 Err(blocker) => {
                     executions.push(receipt);
                     return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
                 }
             }
+            executions.push(receipt);
+            continue;
         }
-        executions.push(receipt);
+
+        if is_supported_target_unit(unit) {
+            let mut executable_unit = bind_all_host_artifacts(unit, &produced_host_artifacts)?;
+            executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;
+            if !executable_unit.dependency_artifacts.is_empty() {
+                executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
+            }
+            let receipt = execute_rust_unit(&executable_unit, options)?;
+            if receipt.execution_status != "success" {
+                let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
+                    class: "target-unit-failed".to_string(),
+                    message: format!("target unit {} did not execute successfully", unit.unit_id),
+                });
+                executions.push(receipt);
+                return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+            }
+            if unit.target_kind == "lib" {
+                match produced_library_artifact_path(&executable_unit, options)? {
+                    Ok(path) => {
+                        produced_target_artifacts.insert(unit.package_id.clone(), path);
+                    }
+                    Err(blocker) => {
+                        executions.push(receipt);
+                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+                    }
+                }
+            }
+            executions.push(receipt);
+        }
     }
 
     topology_receipt("success", executions, build_script_metadata_runs, None)
@@ -8025,6 +8090,199 @@ mod tests {
                 .collect(),
             blockers: Vec::new(),
         }
+    }
+
+    fn test_rust_derivation(
+        index: usize,
+        package_id: &str,
+        target_kind: &str,
+        execution_kind: &str,
+        dependencies: Vec<RustDependencyArtifact>,
+    ) -> RustUnitDerivationSummary {
+        RustUnitDerivationSummary {
+            unit_id: rust_unit_id(index, package_id, package_id, target_kind, "build"),
+            package_id: package_id.to_string(),
+            target_name: package_id.to_string(),
+            target_kind: target_kind.to_string(),
+            execution_kind: execution_kind.to_string(),
+            crate_types: vec![target_kind.to_string()],
+            mode: "build".to_string(),
+            profile: default_profile(),
+            source_digest: test_source_digest(package_id),
+            dependency_artifacts: dependencies,
+            consumed_host_artifacts: Vec::new(),
+            generated_metadata: None,
+            derivation: ReviewableRustDerivation {
+                name: format!("unit-{index}"),
+                builder: "rustc".to_string(),
+                system: "x86_64-linux".to_string(),
+                args: Vec::new(),
+                outputs: vec!["out".to_string()],
+                env: BTreeMap::new(),
+                inputs: Vec::new(),
+                addressing_mode: "content-addressed".to_string(),
+            },
+            rustc_args_digest_blake3: test_source_digest(&format!("args-{index}")).value,
+        }
+    }
+
+    fn test_dependency_artifact(package_id: &str, name: &str) -> RustDependencyArtifact {
+        RustDependencyArtifact {
+            package_id: package_id.to_string(),
+            name: name.to_string(),
+            artifact: format!("artifact:{package_id}:{name}"),
+        }
+    }
+
+    fn test_host_artifact(package_id: &str, target_kind: &str) -> RustHostArtifact {
+        RustHostArtifact {
+            package_id: package_id.to_string(),
+            target_name: package_id.to_string(),
+            target_kind: target_kind.to_string(),
+            artifact: format!("host-artifact:{package_id}:{target_kind}"),
+            metadata_digest_blake3: None,
+        }
+    }
+
+    fn test_unit_derivation_graph(derivations: Vec<RustUnitDerivationSummary>) -> UnitDerivationGraphSummary {
+        UnitDerivationGraphSummary {
+            derivation_count: derivations.len(),
+            host_unit_count: derivations.iter().filter(|unit| unit.execution_kind == "host").count(),
+            host_artifact_count: 0,
+            ready: true,
+            digest_blake3: "test-unit-graph".to_string(),
+            derivations,
+            blockers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn host_dependency_topology_accepts_proc_macro_host_producer() {
+        let host_consumer_id = "registry+https://github.com/rust-lang/crates.io-index#consumer@0.1.0";
+        let proc_macro_id = "registry+https://github.com/rust-lang/crates.io-index#rustversion@1.0.22";
+        let graph = test_unit_derivation_graph(vec![
+            test_rust_derivation(0, host_consumer_id, "custom-build", "host", vec![test_dependency_artifact(
+                proc_macro_id,
+                "rustversion",
+            )]),
+            test_rust_derivation(1, proc_macro_id, "proc-macro", "host", Vec::new()),
+        ]);
+        let mut proc_macro_producers = BTreeMap::new();
+        proc_macro_producers.insert(proc_macro_id.to_string(), 1usize);
+
+        let plan = plan_host_dependency_topology(
+            &[0usize, 1usize],
+            &BTreeMap::new(),
+            &proc_macro_producers,
+            &BTreeMap::new(),
+            &graph,
+        )
+        .unwrap();
+
+        assert!(plan.target_dependency_indices.is_empty());
+        assert_eq!(plan.host_edges.get(&0).cloned().unwrap_or_default(), vec![1usize]);
+        assert!(plan.host_edges.get(&1).cloned().unwrap_or_default().is_empty());
+    }
+
+    #[test]
+    fn host_dependency_topology_accepts_target_lib_producer() {
+        let host_consumer_id = "registry+https://github.com/rust-lang/crates.io-index#consumer@0.1.0";
+        let target_lib_id = "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59";
+        let graph = test_unit_derivation_graph(vec![
+            test_rust_derivation(0, target_lib_id, "lib", "target", Vec::new()),
+            test_rust_derivation(1, host_consumer_id, "custom-build", "host", vec![test_dependency_artifact(
+                target_lib_id,
+                "cc",
+            )]),
+        ]);
+        let mut lib_producers = BTreeMap::new();
+        lib_producers.insert(target_lib_id.to_string(), 0usize);
+
+        let plan = plan_host_dependency_topology(&[1usize], &lib_producers, &BTreeMap::new(), &BTreeMap::new(), &graph)
+            .unwrap();
+
+        assert_eq!(plan.target_dependency_indices.iter().copied().collect::<Vec<_>>(), vec![0usize]);
+        assert_eq!(plan.host_edges.get(&1).cloned().unwrap_or_default(), vec![0usize]);
+    }
+
+    #[test]
+    fn combined_unit_topology_orders_target_host_and_proc_macro_edges() {
+        let target_lib_id = "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228";
+        let proc_macro_id = "registry+https://github.com/rust-lang/crates.io-index#rustversion@1.0.22";
+        let mut target_lib = test_rust_derivation(0, target_lib_id, "lib", "target", Vec::new());
+        target_lib.consumed_host_artifacts = vec![test_host_artifact(target_lib_id, "custom-build")];
+        let host_build_script =
+            test_rust_derivation(1, target_lib_id, "custom-build", "host", vec![test_dependency_artifact(
+                proc_macro_id,
+                "rustversion",
+            )]);
+        let proc_macro = test_rust_derivation(2, proc_macro_id, "proc-macro", "host", Vec::new());
+        let graph = test_unit_derivation_graph(vec![target_lib, host_build_script, proc_macro]);
+        let mut lib_producers = BTreeMap::new();
+        lib_producers.insert(target_lib_id.to_string(), 0usize);
+        let mut host_producers = BTreeMap::new();
+        host_producers.insert(target_lib_id.to_string(), 1usize);
+        host_producers.insert(proc_macro_id.to_string(), 2usize);
+        let mut proc_macro_producers = BTreeMap::new();
+        proc_macro_producers.insert(proc_macro_id.to_string(), 2usize);
+        let mut target_edges = BTreeMap::new();
+        target_edges.insert(0usize, Vec::new());
+
+        let order = plan_combined_unit_topology_order(
+            &[0usize],
+            &[1usize, 2usize],
+            &lib_producers,
+            &host_producers,
+            &proc_macro_producers,
+            &target_edges,
+            &graph,
+        )
+        .unwrap();
+
+        assert_eq!(order, vec![2usize, 1usize, 0usize]);
+    }
+
+    #[test]
+    fn combined_unit_topology_blocks_missing_target_host_artifact_producer() {
+        let target_lib_id = "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228";
+        let mut target_lib = test_rust_derivation(0, target_lib_id, "lib", "target", Vec::new());
+        target_lib.consumed_host_artifacts = vec![test_host_artifact(target_lib_id, "custom-build")];
+        let graph = test_unit_derivation_graph(vec![target_lib]);
+        let mut lib_producers = BTreeMap::new();
+        lib_producers.insert(target_lib_id.to_string(), 0usize);
+        let mut target_edges = BTreeMap::new();
+        target_edges.insert(0usize, Vec::new());
+
+        let err = plan_combined_unit_topology_order(
+            &[0usize],
+            &[],
+            &lib_producers,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &target_edges,
+            &graph,
+        )
+        .unwrap_err();
+
+        assert_eq!(err.class, "missing-host-artifact-producer");
+        assert!(err.message.contains(target_lib_id));
+    }
+
+    #[test]
+    fn host_dependency_topology_blocks_missing_producer() {
+        let host_consumer_id = "registry+https://github.com/rust-lang/crates.io-index#consumer@0.1.0";
+        let missing_id = "registry+https://github.com/rust-lang/crates.io-index#missing@0.1.0";
+        let graph =
+            test_unit_derivation_graph(vec![test_rust_derivation(0, host_consumer_id, "custom-build", "host", vec![
+                test_dependency_artifact(missing_id, "missing"),
+            ])]);
+
+        let err =
+            plan_host_dependency_topology(&[0usize], &BTreeMap::new(), &BTreeMap::new(), &BTreeMap::new(), &graph)
+                .unwrap_err();
+
+        assert_eq!(err.class, "missing-host-dependency-producer");
+        assert!(err.message.contains(missing_id));
     }
 
     #[test]
