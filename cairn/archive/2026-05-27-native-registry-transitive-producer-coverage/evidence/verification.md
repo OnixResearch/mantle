@@ -46,12 +46,12 @@ Decision: positive and negative producer coverage is present. The negative cases
 
 ## Self-probe blocker movement
 
-Command evidence: pueue task `15` after the selected-dependency remediation commit.
+Command evidence: pueue task `20` after the host-sibling remediation commit.
 
-Summary artifact: `target/mantle-self-rust-plan-probe-after-621bbfd9/blocker-summary.txt`.
+Summary artifact: `target/mantle-self-rust-plan-probe-after-2bb5e36b/blocker-summary.txt`.
 
 ```text
-head: 621bbfd9ca7b2fed5ba2f35053219523f7646b4c
+head: 2bb5e36b872f0beacec034181c34daed79679a7f
 git_status_short_bytes=0
 
 probe_status=0
