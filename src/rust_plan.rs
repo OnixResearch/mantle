@@ -3380,6 +3380,8 @@ fn summarize_native_unit_graph_planning(
         .iter()
         .map(|derivation| derivation.package_id.clone())
         .collect::<BTreeSet<_>>();
+    let native_build_package_ids =
+        native_build_unit_package_ids(&cargo_build_package_ids, &native_package_target_planning.packages);
     let packages_by_id = native_package_target_planning
         .packages
         .iter()
@@ -3387,7 +3389,7 @@ fn summarize_native_unit_graph_planning(
         .collect::<BTreeMap<_, _>>();
     let mut unit_index = 0usize;
     for package in &native_package_target_planning.packages {
-        if !cargo_build_package_ids.contains(&package.package_id) {
+        if !native_build_package_ids.contains(&package.package_id) {
             continue;
         }
         if !source_closure.sources.iter().any(|source| source.package_id == package.package_id) {
@@ -3453,6 +3455,7 @@ fn summarize_native_unit_graph_planning(
         }
     }
     units.sort();
+    add_missing_native_producer_blockers(&units, &mut blockers);
     blockers.sort();
     blockers.dedup();
     compare_native_units_to_cargo(&units, &cargo_graph, &mut blockers);
@@ -3486,6 +3489,60 @@ fn target_build_order(kind: &str) -> usize {
     }
 }
 
+fn native_build_unit_package_ids(
+    cargo_build_package_ids: &BTreeSet<String>,
+    packages: &[NativePackagePlanningSummary],
+) -> BTreeSet<String> {
+    let mut selected = cargo_build_package_ids.clone();
+    let mut queue = selected.iter().cloned().collect::<Vec<_>>();
+    let mut cursor = 0usize;
+    while cursor < queue.len() {
+        let package_id = queue[cursor].clone();
+        cursor += 1;
+        let Some(package) = packages.iter().find(|candidate| candidate.package_id == package_id) else {
+            continue;
+        };
+        for dependency in &package.path_dependencies {
+            let Some(dependency_package) = packages
+                .iter()
+                .find(|candidate| manifest_path_strings_same(&candidate.manifest_path, &dependency.manifest_path))
+            else {
+                continue;
+            };
+            if selected.insert(dependency_package.package_id.clone()) {
+                queue.push(dependency_package.package_id.clone());
+            }
+        }
+    }
+    selected
+}
+
+fn add_missing_native_producer_blockers(
+    units: &[NativeRustUnitSummary],
+    blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
+) {
+    for unit in units {
+        for dependency in &unit.dependency_artifacts {
+            let has_producer = units.iter().any(|producer| {
+                producer.package_id == dependency.package_id
+                    && producer.target_kind == "lib"
+                    && producer.mode == "build"
+            });
+            if !has_producer {
+                blockers.push(native_unit_blocker(
+                    Some(unit.unit_id.clone()),
+                    Some(unit.package_id.clone()),
+                    "missing-native-dependency-producer",
+                    &format!(
+                        "dependency `{}` for package {} has no supported native lib producer unit",
+                        dependency.name, dependency.package_id
+                    ),
+                ));
+            }
+        }
+    }
+}
+
 fn native_dependency_artifacts(
     package: &NativePackagePlanningSummary,
     dependencies: &[NativePathDependencySummary],
@@ -3514,6 +3571,9 @@ fn native_dependency_artifacts(
                 "missing-native-package-fact",
                 &format!("path dependency `{}` cannot be resolved to a native package", dependency.name),
             ));
+            continue;
+        }
+        if dependency_package.targets.iter().any(|target| target.kind == "proc-macro") {
             continue;
         }
         artifacts.push(RustDependencyArtifact {
@@ -4265,8 +4325,14 @@ fn summarize_unit_derivation_graph_with_native(
     native_unit_graph: Option<&NativeUnitGraphPlanningSummary>,
     native_host_unit_graph: Option<&NativeHostUnitGraphPlanningSummary>,
 ) -> Result<UnitDerivationGraphSummary, RunError> {
-    if let (Some(native_unit_graph), Some(native_host_unit_graph)) = (native_unit_graph, native_host_unit_graph) {
-        if native_unit_graph.ready && native_host_unit_graph.ready {
+    if let Some(native_unit_graph) = native_unit_graph {
+        if !native_unit_graph.ready {
+            return blocked_unit_derivation_graph_from_native(native_unit_graph, native_host_unit_graph);
+        }
+        if let Some(native_host_unit_graph) = native_host_unit_graph {
+            if !native_host_unit_graph.ready {
+                return blocked_unit_derivation_graph_from_native(native_unit_graph, Some(native_host_unit_graph));
+            }
             return summarize_native_unit_derivation_graph(
                 native_unit_graph,
                 Some(native_host_unit_graph),
@@ -4274,13 +4340,50 @@ fn summarize_unit_derivation_graph_with_native(
                 options,
             );
         }
-    }
-    if let Some(native_unit_graph) = native_unit_graph {
-        if native_unit_graph.ready {
-            return summarize_native_unit_derivation_graph(native_unit_graph, None, source_closure, options);
-        }
+        return summarize_native_unit_derivation_graph(native_unit_graph, None, source_closure, options);
     }
     summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)
+}
+
+fn blocked_unit_derivation_graph_from_native(
+    native_unit_graph: &NativeUnitGraphPlanningSummary,
+    native_host_unit_graph: Option<&NativeHostUnitGraphPlanningSummary>,
+) -> Result<UnitDerivationGraphSummary, RunError> {
+    let mut blockers = native_unit_graph
+        .blockers
+        .iter()
+        .map(|blocker| UnitDerivationBlocker {
+            unit_id: blocker.unit_id.clone().unwrap_or_else(|| "native-unit-graph".to_string()),
+            package_id: blocker.package_id.clone(),
+            class: blocker.class.clone(),
+            message: blocker.message.clone(),
+        })
+        .collect::<Vec<_>>();
+    if let Some(native_host_unit_graph) = native_host_unit_graph {
+        blockers.extend(native_host_unit_graph.blockers.iter().map(|blocker| UnitDerivationBlocker {
+            unit_id: blocker.unit_id.clone().unwrap_or_else(|| "native-host-unit-graph".to_string()),
+            package_id: blocker.package_id.clone(),
+            class: blocker.class.clone(),
+            message: blocker.message.clone(),
+        }));
+    }
+    blockers.sort_by(|left, right| left.unit_id.cmp(&right.unit_id).then(left.class.cmp(&right.class)));
+    blockers.dedup_by(|left, right| {
+        left.unit_id == right.unit_id
+            && left.package_id == right.package_id
+            && left.class == right.class
+            && left.message == right.message
+    });
+    let digest_blake3 = unit_derivation_graph_digest(&[], &blockers)?;
+    Ok(UnitDerivationGraphSummary {
+        derivation_count: 0,
+        host_unit_count: 0,
+        host_artifact_count: 0,
+        ready: false,
+        digest_blake3,
+        derivations: Vec::new(),
+        blockers,
+    })
 }
 
 fn summarize_cargo_unit_derivation_graph(
@@ -8028,6 +8131,259 @@ mod tests {
         assert_eq!(package_planning.packages.len(), 2);
         let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
         assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&dep_dir.join("Cargo.toml")));
+    }
+
+    #[test]
+    fn native_unit_graph_adds_transitive_registry_producer_unit() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let vendor_dir = dir.path().join("vendor");
+        let dep_dir = vendor_dir.join("dep-crate-0.1.0");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(dep_dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.path().join(".cargo")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"app\"]\n").unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep_crate = { package = \"dep-crate\", version = \"0.1.0\" }\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { dep_crate::dep() }\n").unwrap();
+        std::fs::write(
+            dep_dir.join("Cargo.toml"),
+            "[package]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(dep_dir.join("src/lib.rs"), "pub fn dep() -> u32 { 7 }\n").unwrap();
+        let checksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        std::fs::write(dep_dir.join(".cargo-checksum.json"), format!(r#"{{"package":"{checksum}","files":{{}}}}"#))
+            .unwrap();
+        std::fs::write(
+            dir.path().join(".cargo/config.toml"),
+            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor\"\n",
+        )
+        .unwrap();
+        let registry_source = "registry+https://github.com/rust-lang/crates.io-index".to_string();
+        let app_id = "path+file://app#app@0.1.0".to_string();
+        let dep_id = "registry+https://github.com/rust-lang/crates.io-index#dep-crate@0.1.0".to_string();
+        let packages = vec![
+            CargoPackage {
+                id: app_id.clone(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "app".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: app_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: dep_id.clone(),
+                name: "dep-crate".to_string(),
+                version: "0.1.0".to_string(),
+                source: Some(registry_source.clone()),
+                manifest_path: dep_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "dep-crate".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: dep_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+        ];
+        let lock_packages = vec![LockPackage {
+            name: "dep-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(registry_source),
+            checksum: Some(checksum.to_string()),
+        }];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+        let registry_planning =
+            summarize_native_registry_source_planning(dir.path(), &packages, &lock_packages, &lockfile).unwrap();
+        let source_closure = summarize_source_closure(&packages, &lock_packages).unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &plan_options,
+            &empty_unit_graph(),
+            &packages,
+            std::slice::from_ref(&app_id),
+            &source_closure,
+            &registry_planning,
+            &empty_git_planning(),
+        )
+        .unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": app_id,
+                "target": {"name": "app", "kind": ["lib"], "crate_types": ["lib"], "src_path": app_dir.join("src/lib.rs").display().to_string(), "edition": "2021"},
+                "mode": "build",
+                "features": [],
+                "deps": [{"pkg_id": dep_id, "extern_crate_name": "dep_crate"}]
+            }]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        let derivation_graph = summarize_unit_derivation_graph_with_native(
+            &unit_graph,
+            &source_closure,
+            &plan_options,
+            Some(&native_units),
+            None,
+        )
+        .unwrap();
+
+        assert!(registry_planning.ready, "{:#?}", registry_planning.blockers);
+        assert!(native_units.ready, "{:#?}", native_units.blockers);
+        assert!(
+            native_units
+                .units
+                .iter()
+                .any(|unit| unit.package_id.contains("dep-crate@0.1.0") && unit.target_kind == "lib")
+        );
+        assert!(derivation_graph.ready, "{:#?}", derivation_graph.blockers);
+        assert!(
+            derivation_graph
+                .derivations
+                .iter()
+                .any(|unit| unit.package_id.contains("dep-crate@0.1.0") && unit.target_kind == "lib")
+        );
+    }
+
+    #[test]
+    fn native_unit_graph_blocks_registry_dependency_without_lib_producer() {
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let vendor_dir = dir.path().join("vendor");
+        let dep_dir = vendor_dir.join("dep-crate-0.1.0");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(dep_dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.path().join(".cargo")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"app\"]\n").unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep_crate = { package = \"dep-crate\", version = \"0.1.0\" }\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { 1 }\n").unwrap();
+        std::fs::write(
+            dep_dir.join("Cargo.toml"),
+            "[package]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[[bin]]\nname = \"dep-crate\"\npath = \"src/main.rs\"\n",
+        )
+        .unwrap();
+        std::fs::write(dep_dir.join("src/main.rs"), "fn main() {}\n").unwrap();
+        let checksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        std::fs::write(dep_dir.join(".cargo-checksum.json"), format!(r#"{{"package":"{checksum}","files":{{}}}}"#))
+            .unwrap();
+        std::fs::write(
+            dir.path().join(".cargo/config.toml"),
+            "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor\"\n",
+        )
+        .unwrap();
+        let registry_source = "registry+https://github.com/rust-lang/crates.io-index".to_string();
+        let app_id = "path+file://app#app@0.1.0".to_string();
+        let dep_id = "registry+https://github.com/rust-lang/crates.io-index#dep-crate@0.1.0".to_string();
+        let packages = vec![
+            CargoPackage {
+                id: app_id.clone(),
+                name: "app".to_string(),
+                version: "0.1.0".to_string(),
+                source: None,
+                manifest_path: app_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "app".to_string(),
+                    kind: vec!["lib".to_string()],
+                    src_path: app_dir.join("src/lib.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+            CargoPackage {
+                id: dep_id.clone(),
+                name: "dep-crate".to_string(),
+                version: "0.1.0".to_string(),
+                source: Some(registry_source.clone()),
+                manifest_path: dep_dir.join("Cargo.toml").display().to_string(),
+                targets: vec![CargoTarget {
+                    name: "dep-crate".to_string(),
+                    kind: vec!["bin".to_string()],
+                    src_path: dep_dir.join("src/main.rs").display().to_string(),
+                }],
+                features: BTreeMap::new(),
+            },
+        ];
+        let lock_packages = vec![LockPackage {
+            name: "dep-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some(registry_source),
+            checksum: Some(checksum.to_string()),
+        }];
+        let lockfile = LockfileIdentity {
+            path: "Cargo.lock".to_string(),
+            blake3: "lock-digest".to_string(),
+        };
+        let registry_planning =
+            summarize_native_registry_source_planning(dir.path(), &packages, &lock_packages, &lockfile).unwrap();
+        let source_closure = summarize_source_closure(&packages, &lock_packages).unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &plan_options,
+            &empty_unit_graph(),
+            &packages,
+            std::slice::from_ref(&app_id),
+            &source_closure,
+            &registry_planning,
+            &empty_git_planning(),
+        )
+        .unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": app_id,
+                "target": {"name": "app", "kind": ["lib"], "crate_types": ["lib"], "src_path": app_dir.join("src/lib.rs").display().to_string(), "edition": "2021"},
+                "mode": "build",
+                "features": [],
+                "deps": [{"pkg_id": dep_id, "extern_crate_name": "dep_crate"}]
+            }]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        let derivation_graph = summarize_unit_derivation_graph_with_native(
+            &unit_graph,
+            &source_closure,
+            &plan_options,
+            Some(&native_units),
+            None,
+        )
+        .unwrap();
+
+        assert!(registry_planning.ready, "{:#?}", registry_planning.blockers);
+        assert!(!native_units.ready);
+        assert!(native_units.blockers.iter().any(|blocker| blocker.class == "missing-native-dependency-producer"));
+        assert!(!derivation_graph.ready);
+        assert!(
+            derivation_graph
+                .blockers
+                .iter()
+                .any(|blocker| blocker.class == "missing-native-dependency-producer")
+        );
     }
 
     #[test]

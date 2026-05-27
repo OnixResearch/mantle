@@ -759,3 +759,4 @@ cd nixtamal && nix-shell  # then dune build
 ## Mantle rust-plan test gotchas
 
 - Topology CLI tests that execute `rustc` can fail with `env: bash: No such file or directory` when the derivation execution environment does not carry a PATH containing `/run/current-system/sw/bin` or a Nix bash for the clang wrapper. Passing PATH to the outer `cargo test` process is not sufficient for Mantle's topology child env in all cases. For dependency-planning changes, prefer focused planning assertions unless the test specifically needs rustc/link execution.
+- `cairn archive <change> --execute` can currently create `cairn/archive/1970-01-01-<change>` in this repo even when current date is known. Rename that archive dir to the session date (`YYYY-MM-DD-<change>`), rerun `cairn validate`, and record the manual rename in evidence if it happens.
