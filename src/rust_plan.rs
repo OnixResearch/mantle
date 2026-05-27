@@ -797,6 +797,7 @@ fn capture_rust_plan_with_oracle(
     let native_package_target_planning = summarize_native_package_target_planning(
         &options.root,
         options,
+        &unit_graph_value,
         &metadata.packages,
         &metadata.workspace_members,
         &source_closure,
@@ -1740,12 +1741,14 @@ fn native_registry_blocker(package_id: Option<String>, class: &str, message: &st
 fn summarize_native_package_target_planning(
     root: &Path,
     options: &RustPlanOptions,
+    unit_graph: &Value,
     cargo_packages: &[CargoPackage],
     workspace_members: &[String],
     source_closure: &SourceClosureSummary,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
 ) -> Result<NativePackageTargetPlanningSummary, RunError> {
     let cargo_oracle_identity = cargo_package_target_oracle_digest(cargo_packages, workspace_members)?;
+    let selected_features_by_package = selected_features_by_package_from_unit_graph(unit_graph);
     let mut blockers = Vec::new();
     let mut manifest_paths = native_workspace_manifest_paths(root, &mut blockers);
     manifest_paths.extend(
@@ -1777,6 +1780,7 @@ fn summarize_native_package_target_planning(
             options,
             source_closure,
             native_registry_source_planning,
+            &selected_features_by_package,
         ) {
             Ok(package) => native_packages.push(package),
             Err(blocker) => blockers.push(blocker),
@@ -1903,6 +1907,7 @@ fn native_package_from_manifest(
     options: &RustPlanOptions,
     source_closure: &SourceClosureSummary,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    selected_features_by_package: &BTreeMap<String, Vec<String>>,
 ) -> Result<NativePackagePlanningSummary, NativePackagePlanningBlocker> {
     let manifest =
         read_native_manifest(manifest_path).map_err(|message| native_blocker(None, "unreadable-manifest", &message))?;
@@ -1931,7 +1936,10 @@ fn native_package_from_manifest(
         native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
     })?;
     let targets = native_targets_for_manifest(source_root, &package.name, &package_version, &manifest)?;
-    let selected_features = native_selected_features(options, &manifest.features);
+    let selected_features = selected_features_by_package
+        .get(&package_id)
+        .cloned()
+        .unwrap_or_else(|| native_selected_features(options, &manifest.features));
     let active_target = active_rust_target(options);
     let (target_cfg_dependencies, selected_target_cfg_dependencies) = native_target_cfg_dependencies(
         source_root,
@@ -1953,6 +1961,8 @@ fn native_package_from_manifest(
     let build_dependencies = native_build_dependencies(
         source_root,
         &manifest.build_dependencies,
+        &manifest.features,
+        &selected_features,
         Some(package_id.clone()),
         native_registry_source_planning,
     )?;
@@ -2159,6 +2169,8 @@ fn native_path_dependencies(
 fn native_build_dependencies(
     source_root: &Path,
     dependencies: &BTreeMap<String, toml::Value>,
+    feature_defs: &BTreeMap<String, Vec<String>>,
+    selected_features: &[String],
     package_id: Option<String>,
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
 ) -> Result<Vec<NativePathDependencySummary>, NativePackagePlanningBlocker> {
@@ -2167,15 +2179,15 @@ fn native_build_dependencies(
             return Err(native_blocker(
                 package_id,
                 "unsupported-build-dependency-options",
-                &format!("build dependency `{name}` uses unsupported feature/default-feature/optional behavior"),
+                &format!("build dependency `{name}` uses unsupported target or workspace behavior"),
             ));
         }
     }
     native_path_dependencies(
         source_root,
         dependencies,
-        &BTreeMap::new(),
-        &[],
+        feature_defs,
+        selected_features,
         package_id,
         native_registry_source_planning,
     )
@@ -2217,9 +2229,7 @@ fn dependency_has_unsupported_build_options(value: &toml::Value) -> bool {
     let Some(table) = value.as_table() else {
         return false;
     };
-    ["features", "default-features", "optional", "target", "workspace"]
-        .iter()
-        .any(|key| table.contains_key(*key))
+    ["target", "workspace"].iter().any(|key| table.contains_key(*key))
 }
 
 fn dependency_optional(value: &toml::Value) -> bool {
@@ -2699,10 +2709,11 @@ fn optional_dependency_selected(
     selected_features: &[String],
 ) -> bool {
     selected_features.iter().any(|feature| {
-        feature_defs
-            .get(feature)
-            .map(|entries| entries.iter().any(|entry| feature_entry_selects_dependency(entry, dependency_name)))
-            .unwrap_or(false)
+        feature == dependency_name
+            || feature_defs
+                .get(feature)
+                .map(|entries| entries.iter().any(|entry| feature_entry_selects_dependency(entry, dependency_name)))
+                .unwrap_or(false)
     })
 }
 
@@ -2728,6 +2739,26 @@ fn registry_dependency_source<'a>(
 
 fn dependency_path(value: &toml::Value) -> Option<&str> {
     value.as_table()?.get("path")?.as_str()
+}
+
+fn selected_features_by_package_from_unit_graph(unit_graph: &Value) -> BTreeMap<String, Vec<String>> {
+    let mut features_by_package = BTreeMap::<String, BTreeSet<String>>::new();
+    let Some(units) = unit_graph.get("units").and_then(Value::as_array) else {
+        return BTreeMap::new();
+    };
+    for unit in units {
+        let Some(package_id) = unit.get("pkg_id").and_then(Value::as_str) else {
+            continue;
+        };
+        let entry = features_by_package.entry(package_id.to_string()).or_default();
+        for feature in unit_string_array(unit, "features") {
+            entry.insert(feature);
+        }
+    }
+    features_by_package
+        .into_iter()
+        .map(|(package_id, features)| (package_id, features.into_iter().collect()))
+        .collect()
 }
 
 fn native_selected_features(options: &RustPlanOptions, feature_defs: &BTreeMap<String, Vec<String>>) -> Vec<String> {
@@ -7284,6 +7315,10 @@ mod tests {
         }
     }
 
+    fn empty_unit_graph() -> Value {
+        serde_json::json!({"units": []})
+    }
+
     fn empty_registry_planning() -> NativeRegistrySourcePlanningSummary {
         NativeRegistrySourcePlanningSummary {
             ready: true,
@@ -7404,6 +7439,7 @@ mod tests {
                 no_default_features: false,
                 ..options(dir.path())
             },
+            &empty_unit_graph(),
             &packages,
             &[
                 "path+file://app#app@0.1.0".to_string(),
@@ -7506,6 +7542,7 @@ mod tests {
         let package_planning = summarize_native_package_target_planning(
             dir.path(),
             &plan_options,
+            &empty_unit_graph(),
             &packages,
             &[app_id, dep_id],
             &source_closure,
@@ -7631,6 +7668,7 @@ mod tests {
         let package_planning = summarize_native_package_target_planning(
             dir.path(),
             &plan_options,
+            &empty_unit_graph(),
             &packages,
             &[app_id.clone(), dep_id.clone()],
             &closure,
@@ -7718,6 +7756,7 @@ mod tests {
         let mut package_planning = summarize_native_package_target_planning(
             dir.path(),
             &plan_options,
+            &empty_unit_graph(),
             &packages,
             &[package_id.clone()],
             &closure,
@@ -7772,6 +7811,7 @@ mod tests {
         let planning = summarize_native_package_target_planning(
             dir.path(),
             &options(dir.path()),
+            &empty_unit_graph(),
             &packages,
             &["path+file://benchy#benchy@0.1.0".to_string()],
             &closure,
