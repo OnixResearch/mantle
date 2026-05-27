@@ -24,29 +24,33 @@ Next action: rerun validation and gates after implementation and archive sync.
 
 ## Focused tests
 
-Command evidence: pueue task `30` (final rerun after archive evidence edits).
+Command evidence: pueue task `34` after same-family review remediation.
 
 ```text
 cargo test -p mantle --bin mantle native_unit_graph_ -- --nocapture
 
-running 4 tests
+running 7 tests
+test rust_plan::tests::native_unit_graph_follows_selected_unit_dependencies_not_all_manifest_dependencies ... ok
+test rust_plan::tests::native_unit_graph_blocks_selected_dependency_without_native_package_fact ... ok
+test rust_plan::tests::native_unit_graph_blocks_selected_dependency_without_source_fact ... ok
 test rust_plan::tests::native_unit_graph_fragment_blocks_mismatch_and_missing_edges ... ok
 test rust_plan::tests::native_unit_graph_blocks_registry_dependency_without_lib_producer ... ok
 test rust_plan::tests::native_unit_graph_adds_transitive_registry_producer_unit ... ok
 test rust_plan::tests::native_unit_graph_fragment_feeds_supported_unit_derivations ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 455 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 455 filtered out; finished in 0.00s
 ```
 
-Decision: positive and negative producer coverage is present. The negative case verifies `unit_derivation_graph.ready=false` when native producer coverage is missing.
+Decision: positive and negative producer coverage is present. The negative cases verify missing native package facts, missing source facts, and missing lib producers all keep `unit_derivation_graph.ready=false`. The selected-dependency test verifies native producer closure follows Cargo's selected unit dependency artifacts instead of all manifest dependencies.
 
 ## Self-probe blocker movement
 
-Command evidence: pueue task `31` (final rerun after last code edit).
+Command evidence: pueue task `13` after same-family review remediation.
 
-Summary artifact: `target/mantle-self-rust-plan-probe-after-native-registry-producer-coverage/blocker-summary.txt`.
+Summary artifact: `target/mantle-self-rust-plan-probe-after-native-registry-producer-selected-fix/blocker-summary.txt`.
 
 ```text
+head: 72871a68e0a42ba67976578444155545c3699246
 probe_status=0
 topology_execution=blocked
 source_closure=true
@@ -64,10 +68,11 @@ topology blocker:
 - missing-host-dependency-producer: no supported target producer lib unit for host dependency package registry+https://github.com/rust-lang/crates.io-index#rustversion@1.0.22
 
 itertools producer units:
-- 259:registry+https://github.com/rust-lang/crates.io-index#itertools@0.10.5:itertools:lib:build kind=lib deps=1
+
+itertools dependency artifacts:
 ```
 
-Decision: the `itertools@0.10.5` missing target producer blocker is resolved. Remaining topology blocker moved to host-dependency producer coverage for `rustversion@1.0.22`.
+Decision: the `itertools@0.10.5` missing target producer blocker is resolved. Same-family review showed the earlier producer was from unselected manifest dependency expansion; after remediation there is no selected `itertools@0.10.5` dependency artifact and therefore no unsupported producer requirement. Remaining topology blocker moved to host-dependency producer coverage for `rustversion@1.0.22`.
 
 Next action: handle host dependency producer coverage in a later Cairn change if requested.
 
