@@ -3581,7 +3581,7 @@ fn native_selected_dependency_artifacts(
             artifacts.push(artifact.clone());
             continue;
         };
-        if dependency_package.targets.iter().any(|target| is_host_target_kind(&target.kind)) {
+        if dependency_package.targets.iter().all(|target| is_host_target_kind(&target.kind)) {
             continue;
         }
         if !source_closure.sources.iter().any(|source| source.package_id == artifact.package_id) {
@@ -8438,6 +8438,47 @@ mod tests {
         assert!(native_units.ready, "{:#?}", native_units.blockers);
         assert!(native_units.units.iter().any(|unit| unit.package_id == dep_id));
         assert!(!native_units.units.iter().any(|unit| unit.package_id == extra_id));
+        let app_unit = native_units.units.iter().find(|unit| unit.package_id == app_id).unwrap();
+        assert_eq!(app_unit.dependency_artifacts.len(), 1);
+        assert_eq!(app_unit.dependency_artifacts[0].package_id, dep_id);
+    }
+
+    #[test]
+    fn native_unit_graph_keeps_selected_lib_dependency_with_host_target_sibling() {
+        let dir = TempDir::new().unwrap();
+        let app_id = "path+file://app#app@0.1.0".to_string();
+        let dep_id = "registry+https://github.com/rust-lang/crates.io-index#dep-crate@0.1.0".to_string();
+        let mut dep = test_native_package(&dep_id, "dep-crate", "lib", Vec::new());
+        dep.targets.push(NativeTargetPlanningSummary {
+            name: "build-script-build".to_string(),
+            kind: "custom-build".to_string(),
+            crate_name: "build_script_build".to_string(),
+            source_path: "/test/dep-crate/build.rs".to_string(),
+        });
+        let packages = vec![test_native_package(&app_id, "app", "lib", Vec::new()), dep];
+        let source_closure = test_source_closure(&packages);
+        let package_planning = test_package_planning(packages);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": app_id,
+                "target": {"name": "app", "kind": ["lib"], "crate_types": ["lib"], "src_path": "/test/app/src/lib.rs", "edition": "2021"},
+                "mode": "build",
+                "features": [],
+                "deps": [{"pkg_id": dep_id, "extern_crate_name": "dep_crate"}]
+            }]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+
+        assert!(native_units.ready, "{:#?}", native_units.blockers);
+        assert!(native_units.units.iter().any(|unit| unit.package_id == dep_id && unit.target_kind == "lib"));
         let app_unit = native_units.units.iter().find(|unit| unit.package_id == app_id).unwrap();
         assert_eq!(app_unit.dependency_artifacts.len(), 1);
         assert_eq!(app_unit.dependency_artifacts[0].package_id, dep_id);

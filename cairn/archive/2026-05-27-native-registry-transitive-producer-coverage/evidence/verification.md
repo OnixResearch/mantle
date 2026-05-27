@@ -24,33 +24,36 @@ Next action: rerun validation and gates after implementation and archive sync.
 
 ## Focused tests
 
-Command evidence: pueue task `34` after same-family review remediation.
+Command evidence: pueue task `18` after same-family review remediation.
 
 ```text
 cargo test -p mantle --bin mantle native_unit_graph_ -- --nocapture
 
-running 7 tests
+running 8 tests
 test rust_plan::tests::native_unit_graph_follows_selected_unit_dependencies_not_all_manifest_dependencies ... ok
 test rust_plan::tests::native_unit_graph_blocks_selected_dependency_without_native_package_fact ... ok
 test rust_plan::tests::native_unit_graph_blocks_selected_dependency_without_source_fact ... ok
+test rust_plan::tests::native_unit_graph_keeps_selected_lib_dependency_with_host_target_sibling ... ok
 test rust_plan::tests::native_unit_graph_fragment_blocks_mismatch_and_missing_edges ... ok
 test rust_plan::tests::native_unit_graph_blocks_registry_dependency_without_lib_producer ... ok
 test rust_plan::tests::native_unit_graph_adds_transitive_registry_producer_unit ... ok
 test rust_plan::tests::native_unit_graph_fragment_feeds_supported_unit_derivations ... ok
 
-test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 455 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 455 filtered out; finished in 0.00s
 ```
 
-Decision: positive and negative producer coverage is present. The negative cases verify missing native package facts, missing source facts, and missing lib producers all keep `unit_derivation_graph.ready=false`. The selected-dependency test verifies native producer closure follows Cargo's selected unit dependency artifacts instead of all manifest dependencies.
+Decision: positive and negative producer coverage is present. The negative cases verify missing native package facts, missing source facts, and missing lib producers all keep `unit_derivation_graph.ready=false`. The selected-dependency test verifies native producer closure follows Cargo's selected unit dependency artifacts instead of all manifest dependencies. The host-sibling regression verifies a selected normal `lib` dependency is retained when the dependency package also has a host/build-script target.
 
 ## Self-probe blocker movement
 
-Command evidence: pueue task `13` after same-family review remediation.
+Command evidence: pueue task `15` after the selected-dependency remediation commit.
 
-Summary artifact: `target/mantle-self-rust-plan-probe-after-native-registry-producer-selected-fix/blocker-summary.txt`.
+Summary artifact: `target/mantle-self-rust-plan-probe-after-621bbfd9/blocker-summary.txt`.
 
 ```text
-head: 72871a68e0a42ba67976578444155545c3699246
+head: 621bbfd9ca7b2fed5ba2f35053219523f7646b4c
+git_status_short_bytes=0
+
 probe_status=0
 topology_execution=blocked
 source_closure=true
