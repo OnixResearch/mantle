@@ -9330,7 +9330,7 @@ rust-version = "1.80"
 
     #[test]
     fn build_script_profile_env_child_ignores_ambient_process_env_probe() {
-        if std::env::var_os(PROFILE_ENV_CHILD_PROBE_ENV).is_none() {
+        if std::env::var(PROFILE_ENV_CHILD_PROBE_ENV).as_deref() != Ok(PROFILE_ENV_CHILD_PROBE_VALUE) {
             return;
         }
         assert_eq!(std::env::var(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), AMBIENT_OPT_LEVEL_VALUE);
