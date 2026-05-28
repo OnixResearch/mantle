@@ -780,3 +780,5 @@ cd nixtamal && nix-shell  # then dune build
 - 2026-05-28: Native host planning must filter to Cargo-selected host units; planning every manifest-visible proc-macro fabricated an unselected `jiff-static` frontier. Use Cargo-derived `(package_id,target_name,target_kind)` host keys, not all host targets from metadata.
 
 - 2026-05-28: Cargo unit graph custom-build targets can be named `build-script-main` while Mantle metadata package targets use `build-script-build`. Selected-host filtering must normalize custom-build names before matching or linked packages like `aws-lc-sys` lose their metadata producer.
+
+- 2026-05-28: `ring` build.rs unwraps `CARGO_MANIFEST_LINKS`; native build-script env must set it from `[package].links` (empty if absent), and `append_cargo_package_env` must allow this non-`CARGO_PKG_` Cargo key.

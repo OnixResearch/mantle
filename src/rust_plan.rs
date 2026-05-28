@@ -21,6 +21,7 @@ const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
 const BUILD_SCRIPT_OUT_DIR_ENV: &str = "OUT_DIR";
 const BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV: &str = "CARGO_MANIFEST_DIR";
+const BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV: &str = "CARGO_MANIFEST_LINKS";
 const BUILD_SCRIPT_CARGO_PKG_NAME_ENV: &str = "CARGO_PKG_NAME";
 const CARGO_PKG_AUTHORS_ENV: &str = "CARGO_PKG_AUTHORS";
 const CARGO_PKG_DESCRIPTION_ENV: &str = "CARGO_PKG_DESCRIPTION";
@@ -2417,6 +2418,7 @@ fn native_cargo_package_env(
             CARGO_PKG_LICENSE_FILE_ENV.to_string(),
             native_manifest_string_env(&package.license_file, &workspace_package.license_file),
         ),
+        (BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV.to_string(), package.links.clone().unwrap_or_default()),
         (BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), package.name.clone()),
         (
             CARGO_PKG_README_ENV.to_string(),
@@ -4903,7 +4905,7 @@ fn native_host_unit_derivation(
 
 fn append_cargo_package_env(env: &mut BTreeMap<String, String>, package_env: &BTreeMap<String, String>) {
     for (key, value) in package_env {
-        debug_assert!(key.starts_with("CARGO_PKG_"));
+        debug_assert!(key.starts_with("CARGO_PKG_") || key == BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV);
         env.insert(key.clone(), value.clone());
     }
 }
@@ -7595,7 +7597,7 @@ fn append_build_script_dependency_env(env: &mut BTreeMap<String, String>, source
 
 fn append_build_script_package_env(env: &mut BTreeMap<String, String>, source: &BTreeMap<String, String>) {
     for (key, value) in source {
-        if key.starts_with("CARGO_PKG_") {
+        if key.starts_with("CARGO_PKG_") || key == BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV {
             env.insert(key.clone(), value.clone());
         }
     }
@@ -9640,6 +9642,7 @@ mod tests {
 [package]
 name = "aws-lc-sys"
 version = "0.39.1-alpha.2+build.5"
+links = "aws_lc_0_39_1"
 authors = ["AWS", "Crypto"]
 repository = "https://github.com/aws/aws-lc-rs"
 "#,
@@ -9650,6 +9653,7 @@ repository = "https://github.com/aws/aws-lc-rs"
         let env = native_cargo_package_env(package, &NativeWorkspacePackage::default(), "0.39.1-alpha.2+build.5");
 
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), "aws-lc-sys");
+        assert_eq!(env.get(BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV).unwrap(), "aws_lc_0_39_1");
         assert_eq!(env.get(CARGO_PKG_VERSION_ENV).unwrap(), "0.39.1-alpha.2+build.5");
         assert_eq!(env.get(CARGO_PKG_VERSION_MAJOR_ENV).unwrap(), "0");
         assert_eq!(env.get(CARGO_PKG_VERSION_MINOR_ENV).unwrap(), "39");
@@ -9713,6 +9717,7 @@ rust-version = "1.80"
         assert_eq!(env.get(CARGO_PKG_README_ENV).unwrap(), "README.md");
         assert_eq!(env.get(CARGO_PKG_REPOSITORY_ENV).unwrap(), "https://example.invalid/repo");
         assert_eq!(env.get(CARGO_PKG_RUST_VERSION_ENV).unwrap(), "1.80");
+        assert_eq!(env.get(BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV).unwrap(), "");
     }
 
     #[test]
@@ -9721,7 +9726,7 @@ rust-version = "1.80"
         let package_name = "hyphen-pkg".to_string();
         let package_id = "path+file://hyphen-pkg#hyphen-pkg@0.1.0".to_string();
         let source_path = dir.path().join("hyphen-pkg/build.rs");
-        let unit = NativeHostUnitSummary {
+        let mut unit = NativeHostUnitSummary {
             unit_id: rust_unit_id(0, &package_id, "build-script-build", "custom-build", "build"),
             package_id: package_id.clone(),
             package_name: package_name.clone(),
@@ -9744,6 +9749,8 @@ rust-version = "1.80"
             metadata_dependencies: Vec::new(),
             generated_metadata: Some(build_script_metadata_summary(&package_id, "build-script-build")),
         };
+        unit.cargo_package_env
+            .insert(BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV.to_string(), "hyphen_links".to_string());
         let source_closure = SourceClosureSummary {
             source_count: 1,
             ready: true,
@@ -9757,6 +9764,7 @@ rust-version = "1.80"
         assert_eq!(derivation.derivation.env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
         assert_eq!(derivation.derivation.env.get(CARGO_PKG_VERSION_ENV).unwrap(), "1.2.3-alpha.1+build.5");
         assert_eq!(derivation.derivation.env.get(CARGO_PKG_VERSION_PRE_ENV).unwrap(), "alpha.1");
+        assert_eq!(derivation.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV).unwrap(), "hyphen_links");
         assert_eq!(
             derivation.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(),
             &normalize_path_string(&dir.path().join("hyphen-pkg"))
@@ -9773,6 +9781,7 @@ rust-version = "1.80"
         assert_eq!(child_env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
         assert_eq!(child_env.get(CARGO_PKG_VERSION_ENV).unwrap(), "1.2.3-alpha.1+build.5");
         assert_eq!(child_env.get(CARGO_PKG_VERSION_PRE_ENV).unwrap(), "alpha.1");
+        assert_eq!(child_env.get(BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV).unwrap(), "hyphen_links");
     }
 
     #[test]

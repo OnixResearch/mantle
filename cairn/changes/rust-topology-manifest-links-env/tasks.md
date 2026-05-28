@@ -1,0 +1,4 @@
+- [x] [serial] Record current `ring` missing `CARGO_MANIFEST_LINKS` blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_manifest_links_env]
+- [x] [serial] Add positive and negative package-env tests for `CARGO_MANIFEST_LINKS`. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_manifest_links_env]
+- [x] [serial] Implement bounded `CARGO_MANIFEST_LINKS` package env. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_manifest_links_env]
+- [ ] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_manifest_links_env]
