@@ -19,7 +19,7 @@ Does native Rust topology now provide Cargo package metadata environment variabl
 
 ## Decision
 
-Accepted. Native package facts now carry bounded `CARGO_PKG_*` values, native rustc derivations receive those values, and build-script child execution passes them through. Focused tests cover version components, empty optional metadata defaults, compile-time derivation env, and runtime child env.
+Accepted. Native package facts now carry bounded `CARGO_PKG_*` values, native rustc derivations receive those values, and build-script child execution passes them through. Focused tests cover version components, empty optional metadata defaults, workspace-inherited optional metadata, compile-time derivation env, and runtime child env.
 
 The committed clean self-probe moved past the prior `aws-lc-sys` compile failure:
 
@@ -46,12 +46,22 @@ missing env var "CARGO_CFG_TARGET_ARCH"
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 ```
 
-Focused tests passed:
+Focused tests passed before archive:
 
 ```text
 running 69 tests
 ...
 test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 427 filtered out; finished in 0.03s
+```
+
+Focused tests passed after review repair added workspace-inherited optional metadata coverage:
+
+```text
+running 70 tests
+...
+test rust_plan::tests::native_cargo_package_env_inherits_optional_workspace_metadata ... ok
+...
+test result: ok. 70 passed; 0 failed; 0 ignored; 0 measured; 427 filtered out; finished in 0.03s
 ```
 
 Cairn validation passed before final task closure:
@@ -69,6 +79,21 @@ Cairn validation passed before final task closure:
 }
 ```
 
+Post-archive Cairn validation passed with no active changes:
+
+```json
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 1,
+  "valid": true
+}
+```
+
 `git diff --check` produced no output.
 
 ## Owner
@@ -77,4 +102,4 @@ Mantle agent.
 
 ## Next action
 
-Archive the Cairn change if review stays clean. Next topology frontier is native build-script `CARGO_CFG_*` target cfg runtime env parity.
+Next topology frontier is native build-script `CARGO_CFG_*` target cfg runtime env parity.

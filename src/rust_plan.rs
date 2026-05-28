@@ -779,6 +779,22 @@ impl<'de> Deserialize<'de> for NativeManifestInheritedString {
 struct NativeWorkspacePackage {
     version: Option<String>,
     edition: Option<String>,
+    #[serde(default)]
+    authors: Option<toml::Value>,
+    #[serde(default)]
+    description: Option<toml::Value>,
+    #[serde(default)]
+    homepage: Option<toml::Value>,
+    #[serde(default)]
+    license: Option<toml::Value>,
+    #[serde(rename = "license-file", default)]
+    license_file: Option<toml::Value>,
+    #[serde(default)]
+    readme: Option<toml::Value>,
+    #[serde(default)]
+    repository: Option<toml::Value>,
+    #[serde(rename = "rust-version", default)]
+    rust_version: Option<toml::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -2223,6 +2239,7 @@ fn native_package_from_manifest(
     };
     let package_version = native_package_version(workspace_root, &package.name, &package.version)?;
     let package_edition = native_package_edition(workspace_root, &package.name, &package.edition)?;
+    let workspace_package = native_cargo_package_env_workspace(workspace_root, package)?;
     let package_id = source_closure
         .sources
         .iter()
@@ -2331,7 +2348,7 @@ fn native_package_from_manifest(
         version: package_version.clone(),
         manifest_path: normalize_path_string(manifest_path),
         links: package.links.clone(),
-        cargo_package_env: native_cargo_package_env(package, &package_version),
+        cargo_package_env: native_cargo_package_env(package, &workspace_package, &package_version),
         selected_features,
         targets,
         path_dependencies,
@@ -2343,18 +2360,46 @@ fn native_package_from_manifest(
     })
 }
 
-fn native_cargo_package_env(package: &NativeManifestPackage, package_version: &str) -> BTreeMap<String, String> {
+fn native_cargo_package_env(
+    package: &NativeManifestPackage,
+    workspace_package: &NativeWorkspacePackage,
+    package_version: &str,
+) -> BTreeMap<String, String> {
     let (major, minor, patch, pre) = cargo_package_version_components(package_version);
     BTreeMap::from([
-        (CARGO_PKG_AUTHORS_ENV.to_string(), native_manifest_authors_env(&package.authors)),
-        (CARGO_PKG_DESCRIPTION_ENV.to_string(), native_manifest_string_env(&package.description)),
-        (CARGO_PKG_HOMEPAGE_ENV.to_string(), native_manifest_string_env(&package.homepage)),
-        (CARGO_PKG_LICENSE_ENV.to_string(), native_manifest_string_env(&package.license)),
-        (CARGO_PKG_LICENSE_FILE_ENV.to_string(), native_manifest_string_env(&package.license_file)),
+        (
+            CARGO_PKG_AUTHORS_ENV.to_string(),
+            native_manifest_authors_env(&package.authors, &workspace_package.authors),
+        ),
+        (
+            CARGO_PKG_DESCRIPTION_ENV.to_string(),
+            native_manifest_string_env(&package.description, &workspace_package.description),
+        ),
+        (
+            CARGO_PKG_HOMEPAGE_ENV.to_string(),
+            native_manifest_string_env(&package.homepage, &workspace_package.homepage),
+        ),
+        (
+            CARGO_PKG_LICENSE_ENV.to_string(),
+            native_manifest_string_env(&package.license, &workspace_package.license),
+        ),
+        (
+            CARGO_PKG_LICENSE_FILE_ENV.to_string(),
+            native_manifest_string_env(&package.license_file, &workspace_package.license_file),
+        ),
         (BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), package.name.clone()),
-        (CARGO_PKG_README_ENV.to_string(), native_manifest_string_env(&package.readme)),
-        (CARGO_PKG_REPOSITORY_ENV.to_string(), native_manifest_string_env(&package.repository)),
-        (CARGO_PKG_RUST_VERSION_ENV.to_string(), native_manifest_string_env(&package.rust_version)),
+        (
+            CARGO_PKG_README_ENV.to_string(),
+            native_manifest_string_env(&package.readme, &workspace_package.readme),
+        ),
+        (
+            CARGO_PKG_REPOSITORY_ENV.to_string(),
+            native_manifest_string_env(&package.repository, &workspace_package.repository),
+        ),
+        (
+            CARGO_PKG_RUST_VERSION_ENV.to_string(),
+            native_manifest_string_env(&package.rust_version, &workspace_package.rust_version),
+        ),
         (CARGO_PKG_VERSION_ENV.to_string(), package_version.to_string()),
         (CARGO_PKG_VERSION_MAJOR_ENV.to_string(), major),
         (CARGO_PKG_VERSION_MINOR_ENV.to_string(), minor),
@@ -2373,18 +2418,66 @@ fn cargo_package_version_components(version: &str) -> (String, String, String, S
     (major, minor, patch, pre.to_string())
 }
 
-fn native_manifest_string_env(value: &Option<toml::Value>) -> String {
-    value.as_ref().and_then(toml::Value::as_str).unwrap_or_default().to_string()
+fn native_cargo_package_env_workspace(
+    workspace_root: &Path,
+    package: &NativeManifestPackage,
+) -> Result<NativeWorkspacePackage, NativePackagePlanningBlocker> {
+    if !native_package_env_uses_workspace(package) {
+        return Ok(NativeWorkspacePackage::default());
+    }
+    let root_manifest_path = workspace_root.join("Cargo.toml");
+    let root_manifest = read_native_manifest(&root_manifest_path)
+        .map_err(|message| native_blocker(None, "unreadable-workspace-package-manifest", &message))?;
+    Ok(root_manifest.workspace.map(|workspace| workspace.package).unwrap_or_default())
 }
 
-fn native_manifest_authors_env(value: &Option<toml::Value>) -> String {
-    let Some(value) = value else {
+fn native_package_env_uses_workspace(package: &NativeManifestPackage) -> bool {
+    native_manifest_uses_workspace(&package.authors)
+        || native_manifest_uses_workspace(&package.description)
+        || native_manifest_uses_workspace(&package.homepage)
+        || native_manifest_uses_workspace(&package.license)
+        || native_manifest_uses_workspace(&package.license_file)
+        || native_manifest_uses_workspace(&package.readme)
+        || native_manifest_uses_workspace(&package.repository)
+        || native_manifest_uses_workspace(&package.rust_version)
+}
+
+fn native_manifest_string_env(value: &Option<toml::Value>, workspace_value: &Option<toml::Value>) -> String {
+    native_manifest_env_value(value, workspace_value)
+        .and_then(toml::Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn native_manifest_authors_env(value: &Option<toml::Value>, workspace_value: &Option<toml::Value>) -> String {
+    let Some(value) = native_manifest_env_value(value, workspace_value) else {
         return String::new();
     };
     if let Some(author) = value.as_str() {
         return author.to_string();
     }
     value.as_array().into_iter().flatten().filter_map(toml::Value::as_str).collect::<Vec<_>>().join(":")
+}
+
+fn native_manifest_env_value<'a>(
+    value: &'a Option<toml::Value>,
+    workspace_value: &'a Option<toml::Value>,
+) -> Option<&'a toml::Value> {
+    let value = value.as_ref()?;
+    if native_manifest_value_uses_workspace(value) {
+        return workspace_value.as_ref();
+    }
+    Some(value)
+}
+
+fn native_manifest_uses_workspace(value: &Option<toml::Value>) -> bool {
+    value.as_ref().is_some_and(native_manifest_value_uses_workspace)
+}
+
+fn native_manifest_value_uses_workspace(value: &toml::Value) -> bool {
+    value
+        .as_table()
+        .is_some_and(|table| table.len() == 1 && table.get("workspace").and_then(toml::Value::as_bool) == Some(true))
 }
 
 fn native_package_edition(
@@ -8650,7 +8743,7 @@ mod tests {
             repository: None,
             rust_version: None,
         };
-        native_cargo_package_env(&package, version)
+        native_cargo_package_env(&package, &NativeWorkspacePackage::default(), version)
     }
 
     fn test_native_package(
@@ -8946,7 +9039,7 @@ repository = "https://github.com/aws/aws-lc-rs"
         .unwrap();
         let package = manifest.package.as_ref().unwrap();
 
-        let env = native_cargo_package_env(package, "0.39.1-alpha.2+build.5");
+        let env = native_cargo_package_env(package, &NativeWorkspacePackage::default(), "0.39.1-alpha.2+build.5");
 
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), "aws-lc-sys");
         assert_eq!(env.get(CARGO_PKG_VERSION_ENV).unwrap(), "0.39.1-alpha.2+build.5");
@@ -8962,6 +9055,56 @@ repository = "https://github.com/aws/aws-lc-rs"
         assert_eq!(env.get(CARGO_PKG_LICENSE_FILE_ENV).unwrap(), "");
         assert_eq!(env.get(CARGO_PKG_README_ENV).unwrap(), "");
         assert_eq!(env.get(CARGO_PKG_RUST_VERSION_ENV).unwrap(), "");
+    }
+
+    #[test]
+    fn native_cargo_package_env_inherits_optional_workspace_metadata() {
+        let member_manifest = toml::from_str::<NativeManifest>(
+            r#"
+[package]
+name = "member"
+version = "0.1.0"
+authors.workspace = true
+description.workspace = true
+homepage.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+"#,
+        )
+        .unwrap();
+        let workspace_manifest = toml::from_str::<NativeManifest>(
+            r#"
+[workspace]
+members = ["member"]
+
+[workspace.package]
+authors = ["Workspace", "Team"]
+description = "workspace description"
+homepage = "https://example.invalid/home"
+license = "Apache-2.0"
+license-file = "LICENSE.md"
+readme = "README.md"
+repository = "https://example.invalid/repo"
+rust-version = "1.80"
+"#,
+        )
+        .unwrap();
+        let package = member_manifest.package.as_ref().unwrap();
+        let workspace_package = &workspace_manifest.workspace.as_ref().unwrap().package;
+
+        let env = native_cargo_package_env(package, workspace_package, "0.1.0");
+
+        assert_eq!(env.get(CARGO_PKG_AUTHORS_ENV).unwrap(), "Workspace:Team");
+        assert_eq!(env.get(CARGO_PKG_DESCRIPTION_ENV).unwrap(), "workspace description");
+        assert_eq!(env.get(CARGO_PKG_HOMEPAGE_ENV).unwrap(), "https://example.invalid/home");
+        assert_eq!(env.get(CARGO_PKG_LICENSE_ENV).unwrap(), "Apache-2.0");
+        assert_eq!(env.get(CARGO_PKG_LICENSE_FILE_ENV).unwrap(), "LICENSE.md");
+        assert_eq!(env.get(CARGO_PKG_README_ENV).unwrap(), "README.md");
+        assert_eq!(env.get(CARGO_PKG_REPOSITORY_ENV).unwrap(), "https://example.invalid/repo");
+        assert_eq!(env.get(CARGO_PKG_RUST_VERSION_ENV).unwrap(), "1.80");
     }
 
     #[test]
