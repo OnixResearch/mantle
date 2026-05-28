@@ -42,4 +42,21 @@ Dirty self-probe result:
 - `thiserror@2.0.18` lib execution status: `success`.
 - New remaining blocker: `rustc-failed` compiling `vendor-deps/curve25519-dalek/src/backend/vector/scalar_mul/variable_base.rs`, with duplicate `CachedPoint` / `ExtendedPoint` imports from both `avx2` and `ifma` cfg paths.
 
-Clean post-commit self-probe and archive validation are pending until the implementation commit exists.
+Clean self-probe:
+
+```sh
+pueue task 72: cargo run -q -p mantle --bin mantle -- --json rust-plan --root . --cargo /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo --rustc /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --target x86_64-unknown-linux-gnu --execute-topology --execution-output-root target/mantle-self-rust-plan-probe-after-39eb548c-clean/execution
+```
+
+Clean self-probe result:
+
+- Receipt: `target/mantle-self-rust-plan-probe-after-39eb548c-clean/receipt.json`.
+- HEAD: `39eb548c17e42c21e63cbf06380e0f3952fbc13f`.
+- `git_status_short_bytes=0`.
+- `topology_execution=blocked`.
+- `topology_unit_executions=217`.
+- `metadata_runs=63`.
+- `thiserror@2.0.18` consumed host artifacts include `thiserror-impl@2.0.18` proc macro and its own custom-build artifact.
+- `thiserror@2.0.18` lib execution status: `success`.
+- New remaining blocker: `rustc-failed` compiling `vendor-deps/curve25519-dalek/src/backend/vector/scalar_mul/variable_base.rs`, with duplicate `CachedPoint` / `ExtendedPoint` imports from both `avx2` and `ifma` cfg paths.
+- Archive command emitted `cairn/archive/1970-01-01-rust-topology-registry-version-resolution/`; it was manually renamed to `cairn/archive/2026-05-28-rust-topology-registry-version-resolution/`, then `cairn validate --root .` passed.
