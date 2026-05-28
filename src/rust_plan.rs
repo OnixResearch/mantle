@@ -9560,6 +9560,28 @@ mod tests {
     }
 
     #[test]
+    fn native_unit_metadata_disambiguator_ignores_ambient_tool_roots() {
+        let first_dir = TempDir::new().unwrap();
+        let second_dir = TempDir::new().unwrap();
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#bytes@1.11.1";
+        let mut unit = test_native_rust_unit(package_id, "bytes", "lib", first_dir.path());
+        unit.selected_features = vec!["serde".to_string(), "std".to_string()];
+        let source_closure = test_source_closure_with_kind(package_id, "bytes", SourceKind::Registry);
+        let mut first_options = options(first_dir.path());
+        first_options.cargo = first_dir.path().join("cargo-a");
+        first_options.rustc = first_dir.path().join("rustc-a");
+        let mut second_options = options(second_dir.path());
+        second_options.cargo = second_dir.path().join("cargo-b");
+        second_options.rustc = second_dir.path().join("rustc-b");
+
+        let first = native_unit_derivation(&unit, Vec::new(), &source_closure, &first_options);
+        let second = native_unit_derivation(&unit, Vec::new(), &source_closure, &second_options);
+
+        assert_eq!(rustc_metadata_arg(&first.derivation.args), rustc_metadata_arg(&second.derivation.args));
+        assert_eq!(first.rustc_args_digest_blake3, second.rustc_args_digest_blake3);
+    }
+
+    #[test]
     fn native_host_unit_derivation_emits_metadata_disambiguator() {
         let dir = TempDir::new().unwrap();
         let package_id = "registry+https://github.com/rust-lang/crates.io-index#spez@0.1.2";
