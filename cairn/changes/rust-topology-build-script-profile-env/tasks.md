@@ -1,4 +1,4 @@
-- [ ] [serial] Record current `aws-lc-sys` missing runtime `OPT_LEVEL` blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_build_script_profile_env]
-- [ ] [serial] Add focused positive and negative tests for profile env derivation and build-script child env pass-through. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_profile_env]
-- [ ] [serial] Implement bounded `OPT_LEVEL`, `DEBUG`, and `NUM_JOBS` propagation into native build-script runtime env. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_build_script_profile_env]
+- [x] [serial] Record current `aws-lc-sys` missing runtime `OPT_LEVEL` blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_build_script_profile_env]
+- [x] [serial] Add focused positive and negative tests for profile env derivation and build-script child env pass-through. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_profile_env]
+- [x] [serial] Implement bounded `OPT_LEVEL`, `DEBUG`, and `NUM_JOBS` propagation into native build-script runtime env. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_build_script_profile_env]
 - [ ] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_profile_env]

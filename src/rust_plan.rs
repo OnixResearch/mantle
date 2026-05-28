@@ -39,6 +39,16 @@ const BUILD_SCRIPT_RUSTC_ENV: &str = "RUSTC";
 const BUILD_SCRIPT_HOST_ENV: &str = "HOST";
 const BUILD_SCRIPT_TARGET_ENV: &str = "TARGET";
 const BUILD_SCRIPT_PROFILE_ENV: &str = "PROFILE";
+const BUILD_SCRIPT_OPT_LEVEL_ENV: &str = "OPT_LEVEL";
+const BUILD_SCRIPT_DEBUG_ENV: &str = "DEBUG";
+const BUILD_SCRIPT_NUM_JOBS_ENV: &str = "NUM_JOBS";
+const CARGO_PROFILE_RELEASE: &str = "release";
+const CARGO_PROFILE_BENCH: &str = "bench";
+const CARGO_OPT_LEVEL_DEBUG: &str = "0";
+const CARGO_OPT_LEVEL_RELEASE: &str = "3";
+const CARGO_DEBUG_TRUE: &str = "true";
+const CARGO_DEBUG_FALSE: &str = "false";
+const MANTLE_DETERMINISTIC_NUM_JOBS: &str = "1";
 const CARGO_CFG_TARGET_ABI_ENV: &str = "CARGO_CFG_TARGET_ABI";
 const CARGO_CFG_TARGET_ARCH_ENV: &str = "CARGO_CFG_TARGET_ARCH";
 const CARGO_CFG_TARGET_ENDIAN_ENV: &str = "CARGO_CFG_TARGET_ENDIAN";
@@ -3252,6 +3262,26 @@ fn target_feature_env_from_triple(active_target: &str) -> &str {
         "wasm32" => "bulk-memory,multivalue,mutable-globals,nontrapping-fptoint,reference-types,sign-ext",
         _ => "",
     }
+}
+
+fn build_script_profile_env(profile: &str) -> BTreeMap<String, String> {
+    debug_assert!(!profile.is_empty());
+    let release_like = matches!(profile, CARGO_PROFILE_RELEASE | CARGO_PROFILE_BENCH);
+    let opt_level = if release_like {
+        CARGO_OPT_LEVEL_RELEASE
+    } else {
+        CARGO_OPT_LEVEL_DEBUG
+    };
+    let debug = if release_like {
+        CARGO_DEBUG_FALSE
+    } else {
+        CARGO_DEBUG_TRUE
+    };
+    BTreeMap::from([
+        (BUILD_SCRIPT_OPT_LEVEL_ENV.to_string(), opt_level.to_string()),
+        (BUILD_SCRIPT_DEBUG_ENV.to_string(), debug.to_string()),
+        (BUILD_SCRIPT_NUM_JOBS_ENV.to_string(), MANTLE_DETERMINISTIC_NUM_JOBS.to_string()),
+    ])
 }
 
 fn build_script_target_cfg_env(active_target: &str) -> BTreeMap<String, String> {
@@ -7380,6 +7410,7 @@ fn build_script_child_env(
     env.insert(BUILD_SCRIPT_HOST_ENV.to_string(), host_target_triple());
     let target = unit.derivation.env.get(BUILD_SCRIPT_TARGET_ENV).cloned().unwrap_or_else(host_target_triple);
     append_build_script_target_cfg_env(&mut env, &target);
+    append_build_script_profile_env(&mut env, &unit.profile);
     env.insert(BUILD_SCRIPT_TARGET_ENV.to_string(), target);
     env.insert(BUILD_SCRIPT_PROFILE_ENV.to_string(), unit.profile.clone());
     if let Some(root) = package_root {
@@ -7407,6 +7438,13 @@ fn append_build_script_package_env(env: &mut BTreeMap<String, String>, source: &
 fn append_build_script_target_cfg_env(env: &mut BTreeMap<String, String>, target: &str) {
     for (key, value) in build_script_target_cfg_env(target) {
         debug_assert!(key.starts_with("CARGO_CFG_"));
+        env.insert(key, value);
+    }
+}
+
+fn append_build_script_profile_env(env: &mut BTreeMap<String, String>, profile: &str) {
+    for (key, value) in build_script_profile_env(profile) {
+        debug_assert!(!key.is_empty());
         env.insert(key, value);
     }
 }
@@ -9249,6 +9287,19 @@ rust-version = "1.80"
     }
 
     #[test]
+    fn build_script_profile_env_derives_dev_and_release_defaults() {
+        let dev_env = build_script_profile_env(DEFAULT_CARGO_PROFILE);
+        let release_env = build_script_profile_env(CARGO_PROFILE_RELEASE);
+
+        assert_eq!(dev_env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_DEBUG);
+        assert_eq!(dev_env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_TRUE);
+        assert_eq!(dev_env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
+        assert_eq!(release_env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
+        assert_eq!(release_env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
+        assert_eq!(release_env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
+    }
+
+    #[test]
     fn build_script_child_env_sets_tool_target_and_manifest_package_name() {
         let dir = TempDir::new().unwrap();
         let package_root = dir.path().join("hyphen-pkg");
@@ -9286,6 +9337,9 @@ rust-version = "1.80"
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(), &normalize_path_string(&package_root));
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
         assert_eq!(env.get(CARGO_PKG_VERSION_ENV).unwrap(), "9.8.7");
+        assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
+        assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
+        assert_eq!(env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
         assert_eq!(env.get(CARGO_CFG_TARGET_ARCH_ENV).unwrap(), "wasm32");
         assert_eq!(env.get(CARGO_CFG_TARGET_OS_ENV).unwrap(), "unknown");
         assert_eq!(env.get(CARGO_CFG_TARGET_ENV_ENV).unwrap(), "");
@@ -9310,6 +9364,9 @@ rust-version = "1.80"
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &rust_crate_name(&unit.target_name));
         assert_eq!(env.get(BUILD_SCRIPT_TARGET_ENV).unwrap(), &host_target_triple());
         assert_eq!(env.get(BUILD_SCRIPT_PROFILE_ENV).unwrap(), DEFAULT_CARGO_PROFILE);
+        assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_DEBUG);
+        assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_TRUE);
+        assert_eq!(env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
     }
 
     #[test]
