@@ -39,6 +39,17 @@ const BUILD_SCRIPT_RUSTC_ENV: &str = "RUSTC";
 const BUILD_SCRIPT_HOST_ENV: &str = "HOST";
 const BUILD_SCRIPT_TARGET_ENV: &str = "TARGET";
 const BUILD_SCRIPT_PROFILE_ENV: &str = "PROFILE";
+const CARGO_CFG_TARGET_ABI_ENV: &str = "CARGO_CFG_TARGET_ABI";
+const CARGO_CFG_TARGET_ARCH_ENV: &str = "CARGO_CFG_TARGET_ARCH";
+const CARGO_CFG_TARGET_ENDIAN_ENV: &str = "CARGO_CFG_TARGET_ENDIAN";
+const CARGO_CFG_TARGET_ENV_ENV: &str = "CARGO_CFG_TARGET_ENV";
+const CARGO_CFG_TARGET_FAMILY_ENV: &str = "CARGO_CFG_TARGET_FAMILY";
+const CARGO_CFG_TARGET_FEATURE_ENV: &str = "CARGO_CFG_TARGET_FEATURE";
+const CARGO_CFG_TARGET_OS_ENV: &str = "CARGO_CFG_TARGET_OS";
+const CARGO_CFG_TARGET_POINTER_WIDTH_ENV: &str = "CARGO_CFG_TARGET_POINTER_WIDTH";
+const CARGO_CFG_TARGET_VENDOR_ENV: &str = "CARGO_CFG_TARGET_VENDOR";
+const CARGO_CFG_UNIX_ENV: &str = "CARGO_CFG_UNIX";
+const CARGO_CFG_WINDOWS_ENV: &str = "CARGO_CFG_WINDOWS";
 const BUILD_SCRIPT_DEP_ENV_PREFIX: &str = "DEP_";
 const BUILD_SCRIPT_TARGET_NAME: &str = "build-script-build";
 const PACKAGE_LINKS_ENV: &str = "MANTLE_PACKAGE_LINKS";
@@ -3233,6 +3244,41 @@ fn target_pointer_width_from_triple(active_target: &str) -> &str {
         "x86_64" | "aarch64" | "riscv64" | "powerpc64" | "s390x" | "wasm64" => "64",
         _ => "32",
     }
+}
+
+fn target_feature_env_from_triple(active_target: &str) -> &str {
+    match target_arch_from_triple(active_target) {
+        "x86_64" => "fxsr,sse,sse2,x87",
+        "wasm32" => "bulk-memory,multivalue,mutable-globals,nontrapping-fptoint,reference-types,sign-ext",
+        _ => "",
+    }
+}
+
+fn build_script_target_cfg_env(active_target: &str) -> BTreeMap<String, String> {
+    debug_assert!(!active_target.is_empty());
+    let mut env = BTreeMap::from([
+        (CARGO_CFG_TARGET_ABI_ENV.to_string(), target_abi_from_triple(active_target).to_string()),
+        (CARGO_CFG_TARGET_ARCH_ENV.to_string(), target_arch_from_triple(active_target).to_string()),
+        (CARGO_CFG_TARGET_ENDIAN_ENV.to_string(), target_endian_from_triple(active_target).to_string()),
+        (CARGO_CFG_TARGET_ENV_ENV.to_string(), target_env_from_triple(active_target).to_string()),
+        (CARGO_CFG_TARGET_FAMILY_ENV.to_string(), target_family_from_triple(active_target).to_string()),
+        (CARGO_CFG_TARGET_FEATURE_ENV.to_string(), target_feature_env_from_triple(active_target).to_string()),
+        (CARGO_CFG_TARGET_OS_ENV.to_string(), target_os_from_triple(active_target).to_string()),
+        (
+            CARGO_CFG_TARGET_POINTER_WIDTH_ENV.to_string(),
+            target_pointer_width_from_triple(active_target).to_string(),
+        ),
+        (CARGO_CFG_TARGET_VENDOR_ENV.to_string(), target_vendor_from_triple(active_target).to_string()),
+    ]);
+    if target_is_unix(active_target) {
+        env.insert(CARGO_CFG_UNIX_ENV.to_string(), String::new());
+    }
+    if target_os_from_triple(active_target) == "windows" {
+        env.insert(CARGO_CFG_WINDOWS_ENV.to_string(), String::new());
+    }
+    debug_assert!(env.contains_key(CARGO_CFG_TARGET_ARCH_ENV));
+    debug_assert!(env.contains_key(CARGO_CFG_TARGET_POINTER_WIDTH_ENV));
+    env
 }
 
 fn target_has_atomic(active_target: &str, width: &str) -> bool {
@@ -7332,10 +7378,9 @@ fn build_script_child_env(
     );
     env.insert(BUILD_SCRIPT_RUSTC_ENV.to_string(), normalize_path_string(&options.rustc));
     env.insert(BUILD_SCRIPT_HOST_ENV.to_string(), host_target_triple());
-    env.insert(
-        BUILD_SCRIPT_TARGET_ENV.to_string(),
-        unit.derivation.env.get(BUILD_SCRIPT_TARGET_ENV).cloned().unwrap_or_else(host_target_triple),
-    );
+    let target = unit.derivation.env.get(BUILD_SCRIPT_TARGET_ENV).cloned().unwrap_or_else(host_target_triple);
+    append_build_script_target_cfg_env(&mut env, &target);
+    env.insert(BUILD_SCRIPT_TARGET_ENV.to_string(), target);
     env.insert(BUILD_SCRIPT_PROFILE_ENV.to_string(), unit.profile.clone());
     if let Some(root) = package_root {
         env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), normalize_path_string(root));
@@ -7356,6 +7401,13 @@ fn append_build_script_package_env(env: &mut BTreeMap<String, String>, source: &
         if key.starts_with("CARGO_PKG_") {
             env.insert(key.clone(), value.clone());
         }
+    }
+}
+
+fn append_build_script_target_cfg_env(env: &mut BTreeMap<String, String>, target: &str) {
+    for (key, value) in build_script_target_cfg_env(target) {
+        debug_assert!(key.starts_with("CARGO_CFG_"));
+        env.insert(key, value);
     }
 }
 
@@ -9167,6 +9219,36 @@ rust-version = "1.80"
     }
 
     #[test]
+    fn build_script_target_cfg_env_derives_x86_64_linux_values() {
+        let env = build_script_target_cfg_env("x86_64-unknown-linux-gnu");
+
+        assert_eq!(env.get(CARGO_CFG_TARGET_ARCH_ENV).unwrap(), "x86_64");
+        assert_eq!(env.get(CARGO_CFG_TARGET_VENDOR_ENV).unwrap(), "unknown");
+        assert_eq!(env.get(CARGO_CFG_TARGET_OS_ENV).unwrap(), "linux");
+        assert_eq!(env.get(CARGO_CFG_TARGET_ENV_ENV).unwrap(), "gnu");
+        assert_eq!(env.get(CARGO_CFG_TARGET_FAMILY_ENV).unwrap(), "unix");
+        assert_eq!(env.get(CARGO_CFG_TARGET_ENDIAN_ENV).unwrap(), "little");
+        assert_eq!(env.get(CARGO_CFG_TARGET_POINTER_WIDTH_ENV).unwrap(), "64");
+        assert_eq!(env.get(CARGO_CFG_TARGET_FEATURE_ENV).unwrap(), "fxsr,sse,sse2,x87");
+        assert_eq!(env.get(CARGO_CFG_UNIX_ENV).unwrap(), "");
+        assert!(!env.contains_key(CARGO_CFG_WINDOWS_ENV));
+    }
+
+    #[test]
+    fn build_script_target_cfg_env_uses_empty_env_for_wasm_unknown() {
+        let env = build_script_target_cfg_env("wasm32-unknown-unknown");
+
+        assert_eq!(env.get(CARGO_CFG_TARGET_ARCH_ENV).unwrap(), "wasm32");
+        assert_eq!(env.get(CARGO_CFG_TARGET_VENDOR_ENV).unwrap(), "unknown");
+        assert_eq!(env.get(CARGO_CFG_TARGET_OS_ENV).unwrap(), "unknown");
+        assert_eq!(env.get(CARGO_CFG_TARGET_ENV_ENV).unwrap(), "");
+        assert_eq!(env.get(CARGO_CFG_TARGET_FAMILY_ENV).unwrap(), "wasm");
+        assert_eq!(env.get(CARGO_CFG_TARGET_POINTER_WIDTH_ENV).unwrap(), "32");
+        assert!(!env.contains_key(CARGO_CFG_UNIX_ENV));
+        assert!(!env.contains_key(CARGO_CFG_WINDOWS_ENV));
+    }
+
+    #[test]
     fn build_script_child_env_sets_tool_target_and_manifest_package_name() {
         let dir = TempDir::new().unwrap();
         let package_root = dir.path().join("hyphen-pkg");
@@ -9204,6 +9286,10 @@ rust-version = "1.80"
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(), &normalize_path_string(&package_root));
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
         assert_eq!(env.get(CARGO_PKG_VERSION_ENV).unwrap(), "9.8.7");
+        assert_eq!(env.get(CARGO_CFG_TARGET_ARCH_ENV).unwrap(), "wasm32");
+        assert_eq!(env.get(CARGO_CFG_TARGET_OS_ENV).unwrap(), "unknown");
+        assert_eq!(env.get(CARGO_CFG_TARGET_ENV_ENV).unwrap(), "");
+        assert_eq!(env.get(CARGO_CFG_TARGET_FAMILY_ENV).unwrap(), "wasm");
     }
 
     #[test]
