@@ -4009,12 +4009,15 @@ fn selected_host_unit_keys(unit_graph: &Value) -> BTreeSet<(String, String, Stri
 }
 
 fn host_unit_key(package_id: &str, target_name: &str, target_kind: &str) -> (String, String, String) {
-    let normalized_target_name = if target_kind == "custom-build" {
-        BUILD_SCRIPT_TARGET_NAME
-    } else {
-        target_name
+    debug_assert!(!package_id.is_empty());
+    debug_assert!(!target_name.is_empty());
+    debug_assert!(!target_kind.is_empty());
+    let normalized_target_name = match target_kind {
+        "custom-build" => BUILD_SCRIPT_TARGET_NAME.to_string(),
+        "proc-macro" => rust_crate_name(target_name),
+        _ => target_name.to_string(),
     };
-    (package_id.to_string(), normalized_target_name.to_string(), target_kind.to_string())
+    (package_id.to_string(), normalized_target_name, target_kind.to_string())
 }
 
 fn selected_native_dependency_artifacts_by_package(
@@ -9574,7 +9577,7 @@ mod tests {
     }
 
     #[test]
-    fn native_host_planning_follows_selected_host_units_only() {
+    fn native_host_planning_normalizes_proc_macro_target_names_and_follows_selected_units_only() {
         let dir = TempDir::new().unwrap();
         let app_id = "path+file://app#app@0.1.0";
         let selected_macro_id = "path+file://selected-macro#selected-macro@0.1.0";
@@ -9611,7 +9614,7 @@ mod tests {
                 },
                 {
                     "pkg_id": selected_macro_id,
-                    "target": {"name": "selected-macro", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": "/test/selected-macro/src/lib.rs", "edition": "2021"},
+                    "target": {"name": "selected_macro", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": "/test/selected-macro/src/lib.rs", "edition": "2021"},
                     "mode": "build",
                     "features": [],
                     "deps": [{"pkg_id": quote_id, "extern_crate_name": "quote"}]

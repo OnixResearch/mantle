@@ -783,4 +783,8 @@ cd nixtamal && nix-shell  # then dune build
 
 - 2026-05-28: `ring` build.rs unwraps `CARGO_MANIFEST_LINKS`; native build-script env must set it from `[package].links` (empty if absent), and `append_cargo_package_env` must allow this non-`CARGO_PKG_` Cargo key.
 
-- 2026-05-28: After manifest-links env parity, native topology reaches first-party `crates/crunch-project/src/error.rs`; current blocker is `thiserror::Error` expansion (`could not find __private in thiserror`, missing `as_dyn_error` on `serde_json::Error`). Treat next frontier as dependency binding between `thiserror` runtime lib and `thiserror-impl` proc macro, not as manifest-links regression.
+- 2026-05-28: Native registry dependency source resolution must be package-version-aware when vendored registry sources contain same-name versions (for example `thiserror` / `thiserror-impl` 1.x and 2.x). Name-only selection linked `thiserror@2.0.18` to `thiserror-impl@1.0.69` and produced `could not find __private` / `as_dyn_error` errors.
+
+- 2026-05-28: Cargo unit graph proc-macro target names can use crate-name underscore spelling while manifest-derived native targets keep hyphen package spelling (`curve25519_dalek_derive` vs `curve25519-dalek-derive`). Normalize proc-macro host keys with `rust_crate_name(...)` or selected proc macros are omitted; curve25519-dalek then compiles both AVX2/IFMA specialization imports unexpanded.
+
+- 2026-05-28: After proc-macro target-name normalization, dirty native topology gets past curve25519 and fails at `aws-lc-sys@0.39.1` with internal error `aws_lc_sys:lib:build reached execution before dependency package ... aws-lc-sys ... was produced`. Treat next frontier as same-package build-script artifact binding / self-dependency ordering, not as a proc-macro selection regression.
