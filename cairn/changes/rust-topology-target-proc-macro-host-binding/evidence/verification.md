@@ -15,6 +15,8 @@ Does native target proc-macro host extern binding move the topology past the `da
 - Full focused suite command: `cargo test -p mantle --bin mantle rust_plan::`
 - Dirty self-probe artifact: `target/mantle-self-rust-plan-probe-after-target-proc-macro-host-binding-dirty2/receipt.json`
 - Dirty self-probe summary: `target/mantle-self-rust-plan-probe-after-target-proc-macro-host-binding-dirty2/blocker-summary.txt`
+- Clean self-probe artifact: `target/mantle-self-rust-plan-probe-after-4b957b2c-clean/receipt.json`
+- Clean self-probe summary: `target/mantle-self-rust-plan-probe-after-4b957b2c-clean/blocker-summary.txt`
 
 ## Decision
 
@@ -44,12 +46,12 @@ running 79 tests
 test result: ok. 79 passed; 0 failed; 0 ignored; 0 measured; 427 filtered out; finished in 0.03s
 ```
 
-The dirty self-probe moved past the prior `darling@0.20.11` sysroot `darling_macro` blocker. `darling@0.20.11` now builds successfully, and the next frontier is Cargo cap-lints parity for registry dependencies (`derive_builder_core` warning promoted to error by crate lints):
+The clean self-probe moved past the prior `darling@0.20.11` sysroot `darling_macro` blocker. `darling@0.20.11` now builds successfully, and the next frontier is Cargo cap-lints parity for registry dependencies (`derive_builder_core` warning promoted to error by crate lints):
 
 ```text
-probe: target/mantle-self-rust-plan-probe-after-target-proc-macro-host-binding-dirty2/receipt.json
-head: 19f3145c345af20b43c20d174d42587593feaefd
-git_status_short_bytes=335
+probe: target/mantle-self-rust-plan-probe-after-4b957b2c-clean/receipt.json
+head: 4b957b2c2492386e57cf8fa32038e2e26d00bfc0
+git_status_short_bytes=0
 
 probe_status=0
 topology_execution=blocked
@@ -80,4 +82,4 @@ Mantle agent.
 
 ## Next action
 
-Commit this change, run a clean self-probe, then address the next topology frontier: Cargo-compatible `--cap-lints allow` for non-local registry dependencies.
+Archive this change after validation, then address the next topology frontier: Cargo-compatible `--cap-lints allow` for non-local registry dependencies.

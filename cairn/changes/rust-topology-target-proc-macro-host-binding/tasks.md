@@ -1,4 +1,4 @@
 - [x] [serial] Record current `darling_macro` sysroot proc-macro blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_target_proc_macro_host_extern_binding]
 - [x] [serial] Add focused positive and negative tests for proc-macro host extern insertion, transitive proc-macro search paths, no-duplicate rewriting, and custom-build exclusion. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_target_proc_macro_host_extern_binding]
 - [x] [serial] Implement consumed host artifact extern binding and produced proc-macro search paths without relaxing missing-material blockers. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_target_proc_macro_host_extern_binding]
-- [ ] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_target_proc_macro_host_extern_binding]
+- [x] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_target_proc_macro_host_extern_binding]
