@@ -36,4 +36,20 @@ pueue task 67: cargo run -q -p mantle --bin mantle -- --json rust-plan --root . 
 - Previous `CARGO_MANIFEST_LINKS` unwrap panic is absent.
 - New remaining blocker: `rustc-failed` compiling `crates/crunch-project/src/error.rs`, with `thiserror::Error` derive expansion failing to find `thiserror::__private` and missing `as_dyn_error` on `serde_json::Error`.
 
-Clean post-commit self-probe and archive validation are pending until the implementation commit exists.
+Clean self-probe:
+
+```sh
+pueue task 68: cargo run -q -p mantle --bin mantle -- --json rust-plan --root . --cargo /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo --rustc /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --target x86_64-unknown-linux-gnu --execute-topology --execution-output-root target/mantle-self-rust-plan-probe-after-27794c0b-clean/execution
+```
+
+Clean self-probe result:
+
+- Receipt: `target/mantle-self-rust-plan-probe-after-27794c0b-clean/receipt.json`.
+- HEAD: `27794c0b4ff5e7448c40674e854d0ba2d8082af0`.
+- `git_status_short_bytes=0`.
+- `topology_execution=blocked`.
+- `topology_unit_executions=201`.
+- `metadata_runs=63`.
+- `ring@0.17.14` metadata run: `success`.
+- New remaining blocker: `rustc-failed` compiling `crates/crunch-project/src/error.rs`, with `thiserror::Error` derive expansion failing to find `thiserror::__private` and missing `as_dyn_error` on `serde_json::Error`.
+- Archive command emitted `cairn/archive/1970-01-01-rust-topology-manifest-links-env/`; it was manually renamed to `cairn/archive/2026-05-28-rust-topology-manifest-links-env/`, then `cairn validate --root .` passed.
