@@ -3661,6 +3661,19 @@ fn selected_dependency_artifacts_by_package(
     artifacts_by_package
 }
 
+fn selected_native_dependency_artifacts_by_package(
+    native_units: &[NativeRustUnitSummary],
+) -> BTreeMap<String, BTreeSet<RustDependencyArtifact>> {
+    let mut artifacts_by_package = BTreeMap::<String, BTreeSet<RustDependencyArtifact>>::new();
+    for unit in native_units {
+        artifacts_by_package
+            .entry(unit.package_id.clone())
+            .or_default()
+            .extend(unit.dependency_artifacts.iter().cloned());
+    }
+    artifacts_by_package
+}
+
 fn native_selected_dependency_artifacts(
     package: &NativePackagePlanningSummary,
     selected_artifacts: &BTreeSet<RustDependencyArtifact>,
@@ -3869,6 +3882,8 @@ fn summarize_native_host_unit_graph_planning(
         .map(|package| (package.package_id.clone(), package))
         .collect::<BTreeMap<_, _>>();
     let selected_dependency_artifacts_by_package = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
+    let selected_native_dependency_artifacts_by_package =
+        selected_native_dependency_artifacts_by_package(&native_unit_graph_planning.units);
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     let mut host_index = native_unit_graph_planning.units.len();
     for package in &native_package_target_planning.packages {
@@ -3903,7 +3918,8 @@ fn summarize_native_host_unit_graph_planning(
             let metadata_dependencies = native_host_metadata_dependencies(
                 package,
                 &target.kind,
-                &native_package_target_planning.packages,
+                selected_native_dependency_artifacts_by_package.get(&package.package_id),
+                &packages_by_id,
                 &mut blockers,
             );
             let unit_id = rust_unit_id(host_index, &package.package_id, &target.name, &target.kind, "build");
@@ -4033,23 +4049,27 @@ fn summarize_native_host_unit_graph_planning(
 fn native_host_metadata_dependencies(
     package: &NativePackagePlanningSummary,
     target_kind: &str,
-    packages: &[NativePackagePlanningSummary],
+    selected_artifacts: Option<&BTreeSet<RustDependencyArtifact>>,
+    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<BuildScriptMetadataDependency> {
     if target_kind != "custom-build" {
         return Vec::new();
     }
+    let Some(selected_artifacts) = selected_artifacts else {
+        return Vec::new();
+    };
     let mut dependencies = Vec::new();
-    for dependency in package.path_dependencies.iter().chain(package.build_dependencies.iter()) {
-        let Some(dependency_package) = packages
-            .iter()
-            .find(|candidate| manifest_path_strings_same(&candidate.manifest_path, &dependency.manifest_path))
-        else {
+    for artifact in selected_artifacts {
+        if artifact.package_id == package.package_id {
+            continue;
+        }
+        let Some(dependency_package) = packages_by_id.get(&artifact.package_id).copied() else {
             blockers.push(native_host_blocker(
                 None,
                 Some(package.package_id.clone()),
-                "unresolved-linked-metadata-dependency-edge",
-                &format!("linked dependency `{}` has no native package fact", dependency.name),
+                "missing-native-linked-metadata-dependency-fact",
+                &format!("selected linked dependency package {} has no native package fact", artifact.package_id),
             ));
             continue;
         };
@@ -9162,6 +9182,87 @@ mod tests {
         .unwrap();
 
         assert_eq!(order, vec![2usize, 1usize, 0usize]);
+    }
+
+    #[test]
+    fn native_host_metadata_dependencies_follow_selected_target_artifacts_only() {
+        let consumer_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-rs@1.16.2";
+        let linked_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1";
+        let unselected_id = "registry+https://github.com/rust-lang/crates.io-index#unused-sys@1.0.0";
+        let build_only_id = "registry+https://github.com/rust-lang/crates.io-index#build-only-sys@1.0.0";
+        let mut consumer = test_native_package(consumer_id, "aws-lc-rs", "custom-build", vec![
+            NativePathDependencySummary {
+                name: "aws-lc-sys".to_string(),
+                manifest_path: "/test/aws-lc-sys/Cargo.toml".to_string(),
+            },
+            NativePathDependencySummary {
+                name: "unused-sys".to_string(),
+                manifest_path: "/test/unused-sys/Cargo.toml".to_string(),
+            },
+        ]);
+        consumer.build_dependencies = vec![NativePathDependencySummary {
+            name: "build-only-sys".to_string(),
+            manifest_path: "/test/build-only-sys/Cargo.toml".to_string(),
+        }];
+        let mut linked = test_native_package(linked_id, "aws-lc-sys", "custom-build", Vec::new());
+        linked.links = Some("aws_lc_0_39_1".to_string());
+        let mut unselected = test_native_package(unselected_id, "unused-sys", "custom-build", Vec::new());
+        unselected.links = Some("unused_native".to_string());
+        let mut build_only = test_native_package(build_only_id, "build-only-sys", "custom-build", Vec::new());
+        build_only.links = Some("build_only_native".to_string());
+        let packages = [consumer.clone(), linked, unselected, build_only];
+        let packages_by_id =
+            packages.iter().map(|package| (package.package_id.clone(), package)).collect::<BTreeMap<_, _>>();
+        let selected_artifacts = BTreeSet::from([
+            test_dependency_artifact(consumer_id, "aws_lc_rs"),
+            test_dependency_artifact(linked_id, "aws_lc_sys"),
+        ]);
+        let mut blockers = Vec::new();
+
+        let dependencies = native_host_metadata_dependencies(
+            &consumer,
+            "custom-build",
+            Some(&selected_artifacts),
+            &packages_by_id,
+            &mut blockers,
+        );
+
+        assert_eq!(dependencies, vec![BuildScriptMetadataDependency {
+            package_id: linked_id.to_string(),
+            links: "aws_lc_0_39_1".to_string(),
+        }]);
+        assert!(blockers.is_empty());
+        assert!(dependencies.iter().all(|dependency| dependency.package_id != unselected_id));
+        assert!(dependencies.iter().all(|dependency| dependency.package_id != build_only_id));
+    }
+
+    #[test]
+    fn native_host_metadata_dependencies_ignore_unselected_linked_manifest_edges() {
+        let consumer_id = "registry+https://github.com/rust-lang/crates.io-index#consumer@1.0.0";
+        let linked_id = "registry+https://github.com/rust-lang/crates.io-index#optional-sys@1.0.0";
+        let consumer =
+            test_native_package(consumer_id, "consumer", "custom-build", vec![NativePathDependencySummary {
+                name: "optional-sys".to_string(),
+                manifest_path: "/test/optional-sys/Cargo.toml".to_string(),
+            }]);
+        let mut linked = test_native_package(linked_id, "optional-sys", "custom-build", Vec::new());
+        linked.links = Some("optional_native".to_string());
+        let packages = [consumer.clone(), linked];
+        let packages_by_id =
+            packages.iter().map(|package| (package.package_id.clone(), package)).collect::<BTreeMap<_, _>>();
+        let selected_artifacts = BTreeSet::new();
+        let mut blockers = Vec::new();
+
+        let dependencies = native_host_metadata_dependencies(
+            &consumer,
+            "custom-build",
+            Some(&selected_artifacts),
+            &packages_by_id,
+            &mut blockers,
+        );
+
+        assert!(dependencies.is_empty());
+        assert!(blockers.is_empty());
     }
 
     #[test]
