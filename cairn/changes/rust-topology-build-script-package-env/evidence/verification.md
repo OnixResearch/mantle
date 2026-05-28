@@ -11,8 +11,9 @@ Does native Rust topology now provide Cargo package metadata environment variabl
 
 - Implementation: `src/rust_plan.rs`
 - Focused test command: `cargo test -p mantle --bin mantle rust_plan::`
-- Self-probe artifact: `target/mantle-self-rust-plan-probe-after-package-env-dirty/receipt.json`
-- Self-probe summary: `target/mantle-self-rust-plan-probe-after-package-env-dirty/blocker-summary.txt`
+- Dirty self-probe artifact: `target/mantle-self-rust-plan-probe-after-package-env-dirty/receipt.json`
+- Clean self-probe artifact: `target/mantle-self-rust-plan-probe-after-0efb3458-clean/receipt.json`
+- Clean self-probe summary: `target/mantle-self-rust-plan-probe-after-0efb3458-clean/blocker-summary.txt`
 - Cairn validation command: `cairn validate --root .`
 - Whitespace check: `git diff --check`
 
@@ -20,12 +21,12 @@ Does native Rust topology now provide Cargo package metadata environment variabl
 
 Accepted. Native package facts now carry bounded `CARGO_PKG_*` values, native rustc derivations receive those values, and build-script child execution passes them through. Focused tests cover version components, empty optional metadata defaults, compile-time derivation env, and runtime child env.
 
-The dirty self-probe moved past the prior `aws-lc-sys` compile failure:
+The committed clean self-probe moved past the prior `aws-lc-sys` compile failure:
 
 ```text
-probe: target/mantle-self-rust-plan-probe-after-package-env-dirty/receipt.json
-head: bdeb06a5472b38ede18fe00b953715cbbcd8f5f6
-git_status_short_bytes=20
+probe: target/mantle-self-rust-plan-probe-after-0efb3458-clean/receipt.json
+head: 0efb3458fda7c826b6cbeb822898ea2df4ad5cd6
+git_status_short_bytes=0
 
 probe_status=0
 topology_execution=blocked
@@ -76,4 +77,4 @@ Mantle agent.
 
 ## Next action
 
-Commit package-env implementation, rerun clean self-probe from committed HEAD, then archive the Cairn change if review stays clean. Next topology frontier is native build-script `CARGO_CFG_*` target cfg runtime env parity.
+Archive the Cairn change if review stays clean. Next topology frontier is native build-script `CARGO_CFG_*` target cfg runtime env parity.
