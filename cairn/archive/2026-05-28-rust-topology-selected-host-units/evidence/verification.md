@@ -40,4 +40,21 @@ pueue task 64: cargo run -q -p mantle --bin mantle -- --json rust-plan --root . 
 - Previous unselected `jiff-static` unresolved `quote`/`syn` blocker is absent.
 - New remaining blocker: `build-script-run-failed` in `vendor-deps/ring/build.rs`, panic at line 287 from `Option::unwrap()` on `None`.
 
-Clean post-commit self-probe and archive validation are still pending in this evidence file until the implementation commit exists.
+Clean self-probe:
+
+```sh
+pueue task 65: cargo run -q -p mantle --bin mantle -- --json rust-plan --root . --cargo /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo --rustc /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --target x86_64-unknown-linux-gnu --execute-topology --execution-output-root target/mantle-self-rust-plan-probe-after-21bd9c17-clean/execution
+```
+
+Clean self-probe result:
+
+- Receipt: `target/mantle-self-rust-plan-probe-after-21bd9c17-clean/receipt.json`.
+- HEAD: `21bd9c174225d136131c10a12494384d541b291e`.
+- `git_status_short_bytes=0`.
+- `topology_execution=blocked`.
+- `topology_unit_executions=152`.
+- `metadata_runs=44`.
+- `jiff-static` executions: none.
+- `aws-lc-sys` and `aws-lc-rs` metadata runs: `success`.
+- New remaining blocker: `build-script-run-failed` in `vendor-deps/ring/build.rs`, panic at line 287 from `Option::unwrap()` on `None`.
+- Archive command emitted `cairn/archive/1970-01-01-rust-topology-selected-host-units/`; it was manually renamed to `cairn/archive/2026-05-28-rust-topology-selected-host-units/`, then `cairn validate --root .` passed.
