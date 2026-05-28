@@ -782,3 +782,5 @@ cd nixtamal && nix-shell  # then dune build
 - 2026-05-28: Cargo unit graph custom-build targets can be named `build-script-main` while Mantle metadata package targets use `build-script-build`. Selected-host filtering must normalize custom-build names before matching or linked packages like `aws-lc-sys` lose their metadata producer.
 
 - 2026-05-28: `ring` build.rs unwraps `CARGO_MANIFEST_LINKS`; native build-script env must set it from `[package].links` (empty if absent), and `append_cargo_package_env` must allow this non-`CARGO_PKG_` Cargo key.
+
+- 2026-05-28: After manifest-links env parity, native topology reaches first-party `crates/crunch-project/src/error.rs`; current blocker is `thiserror::Error` expansion (`could not find __private in thiserror`, missing `as_dyn_error` on `serde_json::Error`). Treat next frontier as dependency binding between `thiserror` runtime lib and `thiserror-impl` proc macro, not as manifest-links regression.
