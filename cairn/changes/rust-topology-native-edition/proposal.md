@@ -4,7 +4,7 @@ Native Rust topology now reaches `nix-compat-derive`, but its generated rustc ar
 
 ## What Changes
 
-- Record each native target's manifest package edition in native package/target facts.
+- Record each native target's manifest package edition, including `edition.workspace = true`, in native package/target facts.
 - Use the recorded edition when generating native target, native host, and helper dev-dependency rustc args.
 - Default absent `package.edition` to Cargo's documented 2015 behavior instead of hard-coded 2021.
 - Add focused positive and negative tests for declared and missing edition behavior.

@@ -13,6 +13,14 @@ WHEN Mantle plans native target or host unit derivations for that package
 THEN Mantle MUST emit rustc args with `--edition 2024` for that package's generated unit derivations.
 AND Mantle MUST NOT replace the declared edition with a hard-coded default.
 
+#### Scenario: Workspace-inherited edition is used
+
+GIVEN a supported native package manifest declares `edition.workspace = true`
+AND the root workspace manifest declares `workspace.package.edition = "2024"`
+WHEN Mantle plans native target or host unit derivations for that package
+THEN Mantle MUST emit rustc args with `--edition 2024`.
+AND Mantle MUST keep the inherited edition deterministic in native package/target facts.
+
 #### Scenario: Missing edition uses Cargo default
 
 GIVEN a supported native package manifest omits `package.edition`

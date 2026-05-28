@@ -16,6 +16,7 @@ use crate::errors::RunError;
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
 const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
 const DEFAULT_CARGO_PROFILE: &str = "dev";
+const DEFAULT_RUST_EDITION: &str = "2015";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
 const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
@@ -231,6 +232,7 @@ pub(crate) struct NativeTargetPlanningSummary {
     pub(crate) kind: String,
     pub(crate) crate_name: String,
     pub(crate) source_path: String,
+    pub(crate) edition: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -289,6 +291,7 @@ pub(crate) struct NativeRustUnitSummary {
     pub(crate) target_kind: String,
     pub(crate) crate_name: String,
     pub(crate) source_path: String,
+    pub(crate) edition: String,
     pub(crate) crate_types: Vec<String>,
     pub(crate) mode: String,
     pub(crate) profile: String,
@@ -325,6 +328,7 @@ pub(crate) struct NativeHostUnitSummary {
     pub(crate) target_kind: String,
     pub(crate) crate_name: String,
     pub(crate) source_path: String,
+    pub(crate) edition: String,
     pub(crate) crate_types: Vec<String>,
     pub(crate) mode: String,
     pub(crate) profile: String,
@@ -726,12 +730,15 @@ impl<'de> Deserialize<'de> for NativeManifestInheritedString {
 #[derive(Debug, Clone, Deserialize, Default)]
 struct NativeWorkspacePackage {
     version: Option<String>,
+    edition: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct NativeManifestPackage {
     name: String,
     version: NativeManifestInheritedString,
+    #[serde(default)]
+    edition: NativeManifestInheritedString,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -2148,6 +2155,7 @@ fn native_package_from_manifest(
         ));
     };
     let package_version = native_package_version(workspace_root, &package.name, &package.version)?;
+    let package_edition = native_package_edition(workspace_root, &package.name, &package.edition)?;
     let package_id = source_closure
         .sources
         .iter()
@@ -2171,7 +2179,8 @@ fn native_package_from_manifest(
     let source_root = manifest_path.parent().ok_or_else(|| {
         native_blocker(Some(package_id.clone()), "invalid-manifest-path", "manifest path has no parent directory")
     })?;
-    let targets = native_targets_for_manifest(source_root, &package.name, &package_version, &manifest)?;
+    let targets =
+        native_targets_for_manifest(source_root, &package.name, &package_version, &package_edition, &manifest)?;
     let selected_features = selected_features_by_package
         .get(&package_id)
         .cloned()
@@ -2265,6 +2274,30 @@ fn native_package_from_manifest(
     })
 }
 
+fn native_package_edition(
+    workspace_root: &Path,
+    package_name: &str,
+    edition: &NativeManifestInheritedString,
+) -> Result<String, NativePackagePlanningBlocker> {
+    if let Some(value) = &edition.value {
+        return Ok(value.clone());
+    }
+    if !edition.workspace {
+        return Ok(DEFAULT_RUST_EDITION.to_string());
+    }
+    let root_manifest_path = workspace_root.join("Cargo.toml");
+    let root_manifest = read_native_manifest(&root_manifest_path)
+        .map_err(|message| native_blocker(None, "unreadable-workspace-package-manifest", &message))?;
+    let Some(workspace_edition) = root_manifest.workspace.and_then(|workspace| workspace.package.edition) else {
+        return Err(native_blocker(
+            None,
+            "missing-workspace-package-edition",
+            &format!("package `{package_name}` inherits workspace edition but workspace.package.edition is missing"),
+        ));
+    };
+    Ok(workspace_edition)
+}
+
 fn native_package_version(
     workspace_root: &Path,
     package_name: &str,
@@ -2304,6 +2337,7 @@ fn native_targets_for_manifest(
     source_root: &Path,
     package_name: &str,
     package_version: &str,
+    package_edition: &str,
     manifest: &NativeManifest,
 ) -> Result<Vec<NativeTargetPlanningSummary>, NativePackagePlanningBlocker> {
     let mut targets = Vec::new();
@@ -2311,29 +2345,29 @@ fn native_targets_for_manifest(
         manifest.build.as_deref().or_else(|| source_root.join("build.rs").is_file().then_some("build.rs"))
     {
         let path = source_root.join(build_script);
-        push_native_target(&mut targets, "build-script-build", "custom-build", &path)?;
+        push_native_target(&mut targets, "build-script-build", "custom-build", &path, package_edition)?;
     }
     if let Some(lib) = &manifest.lib {
         let kind = if lib.proc_macro { "proc-macro" } else { "lib" };
         let path = source_root.join(lib.path.as_deref().unwrap_or("src/lib.rs"));
-        push_native_target(&mut targets, lib.name.as_deref().unwrap_or(package_name), kind, &path)?;
+        push_native_target(&mut targets, lib.name.as_deref().unwrap_or(package_name), kind, &path, package_edition)?;
     } else {
         let path = source_root.join("src/lib.rs");
         if path.is_file() {
-            push_native_target(&mut targets, package_name, "lib", &path)?;
+            push_native_target(&mut targets, package_name, "lib", &path, package_edition)?;
         }
     }
     if manifest.bin.is_empty() {
         let path = source_root.join("src/main.rs");
         if path.is_file() {
-            push_native_target(&mut targets, package_name, "bin", &path)?;
+            push_native_target(&mut targets, package_name, "bin", &path, package_edition)?;
         }
     } else {
         for bin in &manifest.bin {
             let name = bin.name.as_deref().unwrap_or(package_name);
             let default_path = format!("src/bin/{name}.rs");
             let path = source_root.join(bin.path.as_deref().unwrap_or(&default_path));
-            push_native_target(&mut targets, name, "bin", &path)?;
+            push_native_target(&mut targets, name, "bin", &path, package_edition)?;
         }
     }
     if targets.is_empty() {
@@ -2353,6 +2387,7 @@ fn push_native_target(
     name: &str,
     kind: &str,
     path: &Path,
+    edition: &str,
 ) -> Result<(), NativePackagePlanningBlocker> {
     if !path.is_file() {
         return Err(native_blocker(
@@ -2366,6 +2401,7 @@ fn push_native_target(
         kind: kind.to_string(),
         crate_name: rust_crate_name(name),
         source_path: normalize_path_string(path),
+        edition: edition.to_string(),
     });
     Ok(())
 }
@@ -3456,6 +3492,7 @@ fn summarize_native_unit_graph_planning(
                 target_kind: target.kind.clone(),
                 crate_name: target.crate_name.clone(),
                 source_path: target.source_path.clone(),
+                edition: target.edition.clone(),
                 crate_types: vec![target.kind.clone()],
                 mode: "build".to_string(),
                 profile: options.profile.clone(),
@@ -3818,6 +3855,7 @@ fn summarize_native_host_unit_graph_planning(
                 target_kind: target.kind.clone(),
                 crate_name: target.crate_name.clone(),
                 source_path: target.source_path.clone(),
+                edition: target.edition.clone(),
                 crate_types: normalized_crate_types(&[target.kind.clone()], &target.kind),
                 mode: "build".to_string(),
                 profile: options.profile.clone(),
@@ -4190,7 +4228,7 @@ fn native_unit_derivation(
         "--crate-name".to_string(),
         unit.crate_name.clone(),
         "--edition".to_string(),
-        "2021".to_string(),
+        unit.edition.clone(),
         unit.source_path.clone(),
         "--emit=link".to_string(),
     ];
@@ -4259,7 +4297,7 @@ fn native_host_unit_derivation(
         "--crate-name".to_string(),
         unit.crate_name.clone(),
         "--edition".to_string(),
-        "2021".to_string(),
+        unit.edition.clone(),
         unit.source_path.clone(),
         "--emit=link".to_string(),
     ];
@@ -4541,7 +4579,7 @@ fn summarize_unit_derivation(
     }
     .to_string();
     let crate_types = target_string_array(target, "crate_types");
-    let edition = target_string(target, "edition").unwrap_or_else(|| "2021".to_string());
+    let edition = target_string(target, "edition").unwrap_or_else(|| DEFAULT_RUST_EDITION.to_string());
     let src_path = required_target_string(target, "src_path", index, &package_id)?;
     let features = unit_string_array(unit, "features");
     let source = source_closure.sources.iter().find(|source| source.package_id == package_id).ok_or_else(|| {
@@ -5711,7 +5749,7 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
         "--crate-name".to_string(),
         rust_crate_name(test_name),
         "--edition".to_string(),
-        "2021".to_string(),
+        native_package_test_edition(package),
         normalize_path_string(&test_source),
         "--emit=link".to_string(),
         "--crate-type".to_string(),
@@ -7506,6 +7544,14 @@ fn rust_unit_topology_execution_receipt_hash(receipt: &RustUnitTopologyExecution
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
+fn native_package_test_edition(package: &NativePackagePlanningSummary) -> String {
+    package
+        .targets
+        .first()
+        .map(|target| target.edition.clone())
+        .unwrap_or_else(|| DEFAULT_RUST_EDITION.to_string())
+}
+
 fn dev_dependency_lib_derivation(
     package: &NativePackagePlanningSummary,
     dependency_name: &str,
@@ -7523,7 +7569,7 @@ fn dev_dependency_lib_derivation(
         "--crate-name".to_string(),
         target.crate_name.clone(),
         "--edition".to_string(),
-        "2021".to_string(),
+        target.edition.clone(),
         target.source_path.clone(),
         "--emit=link".to_string(),
         "--crate-type".to_string(),
@@ -8100,6 +8146,7 @@ mod tests {
                 kind: target_kind.to_string(),
                 crate_name: rust_crate_name(name),
                 source_path: format!("/test/{name}/src/lib.rs"),
+                edition: "2021".to_string(),
             }],
             path_dependencies,
             build_dependencies: Vec::new(),
@@ -8207,6 +8254,11 @@ mod tests {
             derivations,
             blockers: Vec::new(),
         }
+    }
+
+    fn rustc_edition_arg(args: &[String]) -> &str {
+        let edition_index = args.iter().position(|arg| arg == "--edition").expect("missing --edition flag");
+        args.get(edition_index + 1).expect("missing edition value").as_str()
     }
 
     #[test]
@@ -8586,6 +8638,291 @@ mod tests {
     }
 
     #[test]
+    fn native_manifest_declared_edition_feeds_target_derivation_args() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("Cargo.toml");
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname = 'editioned'\nversion = '0.1.0'\nedition = '2024'\n").unwrap();
+        std::fs::write(dir.path().join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+        let package_id = "path+file://editioned#editioned@0.1.0".to_string();
+        let packages = vec![CargoPackage {
+            id: package_id.clone(),
+            name: "editioned".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+            targets: vec![CargoTarget {
+                name: "editioned".to_string(),
+                kind: vec!["lib".to_string()],
+                src_path: dir.path().join("src/lib.rs").display().to_string(),
+            }],
+            features: BTreeMap::new(),
+        }];
+        let source_closure = summarize_source_closure(&packages, &[]).unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &plan_options,
+            &empty_unit_graph(),
+            &packages,
+            &[package_id.clone()],
+            &source_closure,
+            &empty_registry_planning(),
+            &empty_git_planning(),
+        )
+        .unwrap();
+        let target = &package_planning.packages[0].targets[0];
+        assert_eq!(target.edition, "2024");
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": package_id,
+                "target": {"name": "editioned", "kind": ["lib"], "crate_types": ["lib"], "src_path": target.source_path.clone()},
+                "mode": "build",
+                "features": [],
+                "deps": []
+            }]
+        });
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        assert!(native_units.ready, "{:#?}", native_units.blockers);
+        assert_eq!(native_units.units[0].edition, "2024");
+        let graph = summarize_unit_derivation_graph_with_native(
+            &unit_graph,
+            &source_closure,
+            &plan_options,
+            Some(&native_units),
+            None,
+        )
+        .unwrap();
+        assert_eq!(rustc_edition_arg(&graph.derivations[0].derivation.args), "2024");
+    }
+
+    #[test]
+    fn native_manifest_workspace_edition_feeds_target_derivation_args() {
+        let dir = TempDir::new().unwrap();
+        let member_dir = dir.path().join("member");
+        let manifest_path = member_dir.join("Cargo.toml");
+        std::fs::create_dir_all(member_dir.join("src")).unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[workspace]\nmembers = ['member']\n\n[workspace.package]\nedition = '2024'\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &manifest_path,
+            "[package]\nname = 'workspace-editioned'\nversion = '0.1.0'\nedition.workspace = true\n",
+        )
+        .unwrap();
+        std::fs::write(member_dir.join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+        let package_id = "path+file://workspace-editioned#workspace-editioned@0.1.0".to_string();
+        let packages = vec![CargoPackage {
+            id: package_id.clone(),
+            name: "workspace-editioned".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+            targets: vec![CargoTarget {
+                name: "workspace-editioned".to_string(),
+                kind: vec!["lib".to_string()],
+                src_path: member_dir.join("src/lib.rs").display().to_string(),
+            }],
+            features: BTreeMap::new(),
+        }];
+        let source_closure = summarize_source_closure(&packages, &[]).unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &plan_options,
+            &empty_unit_graph(),
+            &packages,
+            &[package_id.clone()],
+            &source_closure,
+            &empty_registry_planning(),
+            &empty_git_planning(),
+        )
+        .unwrap();
+        let target = &package_planning.packages[0].targets[0];
+        assert_eq!(target.edition, "2024");
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": package_id,
+                "target": {"name": "workspace-editioned", "kind": ["lib"], "crate_types": ["lib"], "src_path": target.source_path.clone()},
+                "mode": "build",
+                "features": [],
+                "deps": []
+            }]
+        });
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        assert!(native_units.ready, "{:#?}", native_units.blockers);
+        assert_eq!(native_units.units[0].edition, "2024");
+        let graph = summarize_unit_derivation_graph_with_native(
+            &unit_graph,
+            &source_closure,
+            &plan_options,
+            Some(&native_units),
+            None,
+        )
+        .unwrap();
+        assert_eq!(rustc_edition_arg(&graph.derivations[0].derivation.args), "2024");
+    }
+
+    #[test]
+    fn native_manifest_missing_edition_uses_cargo_default() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("Cargo.toml");
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname = 'defaulted'\nversion = '0.1.0'\n").unwrap();
+        std::fs::write(dir.path().join("src/lib.rs"), "pub fn value() -> u32 { 1 }\n").unwrap();
+        let package_id = "path+file://defaulted#defaulted@0.1.0".to_string();
+        let packages = vec![CargoPackage {
+            id: package_id.clone(),
+            name: "defaulted".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+            targets: vec![CargoTarget {
+                name: "defaulted".to_string(),
+                kind: vec!["lib".to_string()],
+                src_path: dir.path().join("src/lib.rs").display().to_string(),
+            }],
+            features: BTreeMap::new(),
+        }];
+        let source_closure = summarize_source_closure(&packages, &[]).unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &plan_options,
+            &empty_unit_graph(),
+            &packages,
+            &[package_id.clone()],
+            &source_closure,
+            &empty_registry_planning(),
+            &empty_git_planning(),
+        )
+        .unwrap();
+        let target = &package_planning.packages[0].targets[0];
+        assert_eq!(target.edition, DEFAULT_RUST_EDITION);
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": package_id,
+                "target": {"name": "defaulted", "kind": ["lib"], "crate_types": ["lib"], "src_path": target.source_path.clone()},
+                "mode": "build",
+                "features": [],
+                "deps": []
+            }]
+        });
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        assert!(native_units.ready, "{:#?}", native_units.blockers);
+        assert_eq!(native_units.units[0].edition, DEFAULT_RUST_EDITION);
+        let graph = summarize_unit_derivation_graph_with_native(
+            &unit_graph,
+            &source_closure,
+            &plan_options,
+            Some(&native_units),
+            None,
+        )
+        .unwrap();
+        assert_eq!(rustc_edition_arg(&graph.derivations[0].derivation.args), DEFAULT_RUST_EDITION);
+    }
+
+    #[test]
+    fn native_manifest_declared_edition_feeds_host_derivation_args() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("Cargo.toml");
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(
+            &manifest_path,
+            "[package]\nname = 'mac'\nversion = '0.1.0'\nedition = '2024'\n\n[lib]\nproc-macro = true\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("src/lib.rs"), "extern crate proc_macro;\n").unwrap();
+        let package_id = "path+file://mac#mac@0.1.0".to_string();
+        let packages = vec![CargoPackage {
+            id: package_id.clone(),
+            name: "mac".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+            targets: vec![CargoTarget {
+                name: "mac".to_string(),
+                kind: vec!["proc-macro".to_string()],
+                src_path: dir.path().join("src/lib.rs").display().to_string(),
+            }],
+            features: BTreeMap::new(),
+        }];
+        let source_closure = summarize_source_closure(&packages, &[]).unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let package_planning = summarize_native_package_target_planning(
+            dir.path(),
+            &plan_options,
+            &empty_unit_graph(),
+            &packages,
+            &[package_id.clone()],
+            &source_closure,
+            &empty_registry_planning(),
+            &empty_git_planning(),
+        )
+        .unwrap();
+        let target = &package_planning.packages[0].targets[0];
+        assert_eq!(target.edition, "2024");
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": package_id,
+                "target": {"name": "mac", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": target.source_path.clone()},
+                "mode": "build",
+                "features": [],
+                "deps": []
+            }]
+        });
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        assert!(native_units.ready, "{:#?}", native_units.blockers);
+        let native_hosts = summarize_native_host_unit_graph_planning(
+            &unit_graph,
+            &source_closure,
+            &empty_registry_planning(),
+            &package_planning,
+            &native_units,
+            &plan_options,
+        )
+        .unwrap();
+        assert!(native_hosts.ready, "{:#?}", native_hosts.blockers);
+        assert_eq!(native_hosts.host_units[0].edition, "2024");
+        let graph = summarize_unit_derivation_graph_with_native(
+            &unit_graph,
+            &source_closure,
+            &plan_options,
+            Some(&native_units),
+            Some(&native_hosts),
+        )
+        .unwrap();
+        let host_derivation = graph.derivations.iter().find(|derivation| derivation.execution_kind == "host").unwrap();
+        assert_eq!(rustc_edition_arg(&host_derivation.derivation.args), "2024");
+    }
+
+    #[test]
     fn native_registry_source_planning_binds_declared_vendor_source() {
         let dir = TempDir::new().unwrap();
         let app_dir = dir.path().join("app");
@@ -8882,6 +9219,7 @@ mod tests {
             kind: "custom-build".to_string(),
             crate_name: "build_script_build".to_string(),
             source_path: "/test/dep-crate/build.rs".to_string(),
+            edition: "2021".to_string(),
         });
         let packages = vec![test_native_package(&app_id, "app", "lib", Vec::new()), dep];
         let source_closure = test_source_closure(&packages);
