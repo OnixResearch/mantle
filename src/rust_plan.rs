@@ -22,6 +22,19 @@ const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
 const BUILD_SCRIPT_OUT_DIR_ENV: &str = "OUT_DIR";
 const BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV: &str = "CARGO_MANIFEST_DIR";
 const BUILD_SCRIPT_CARGO_PKG_NAME_ENV: &str = "CARGO_PKG_NAME";
+const CARGO_PKG_AUTHORS_ENV: &str = "CARGO_PKG_AUTHORS";
+const CARGO_PKG_DESCRIPTION_ENV: &str = "CARGO_PKG_DESCRIPTION";
+const CARGO_PKG_HOMEPAGE_ENV: &str = "CARGO_PKG_HOMEPAGE";
+const CARGO_PKG_LICENSE_ENV: &str = "CARGO_PKG_LICENSE";
+const CARGO_PKG_LICENSE_FILE_ENV: &str = "CARGO_PKG_LICENSE_FILE";
+const CARGO_PKG_README_ENV: &str = "CARGO_PKG_README";
+const CARGO_PKG_REPOSITORY_ENV: &str = "CARGO_PKG_REPOSITORY";
+const CARGO_PKG_RUST_VERSION_ENV: &str = "CARGO_PKG_RUST_VERSION";
+const CARGO_PKG_VERSION_ENV: &str = "CARGO_PKG_VERSION";
+const CARGO_PKG_VERSION_MAJOR_ENV: &str = "CARGO_PKG_VERSION_MAJOR";
+const CARGO_PKG_VERSION_MINOR_ENV: &str = "CARGO_PKG_VERSION_MINOR";
+const CARGO_PKG_VERSION_PATCH_ENV: &str = "CARGO_PKG_VERSION_PATCH";
+const CARGO_PKG_VERSION_PRE_ENV: &str = "CARGO_PKG_VERSION_PRE";
 const BUILD_SCRIPT_RUSTC_ENV: &str = "RUSTC";
 const BUILD_SCRIPT_HOST_ENV: &str = "HOST";
 const BUILD_SCRIPT_TARGET_ENV: &str = "TARGET";
@@ -230,6 +243,7 @@ pub(crate) struct NativePackagePlanningSummary {
     pub(crate) version: String,
     pub(crate) manifest_path: String,
     pub(crate) links: Option<String>,
+    pub(crate) cargo_package_env: BTreeMap<String, String>,
     pub(crate) selected_features: Vec<String>,
     pub(crate) targets: Vec<NativeTargetPlanningSummary>,
     pub(crate) path_dependencies: Vec<NativePathDependencySummary>,
@@ -304,6 +318,7 @@ pub(crate) struct NativeRustUnitSummary {
     pub(crate) package_name: String,
     pub(crate) package_links: Option<String>,
     pub(crate) package_root: String,
+    pub(crate) cargo_package_env: BTreeMap<String, String>,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
     pub(crate) crate_name: String,
@@ -345,6 +360,7 @@ pub(crate) struct NativeHostUnitSummary {
     pub(crate) package_name: String,
     pub(crate) package_links: Option<String>,
     pub(crate) package_root: String,
+    pub(crate) cargo_package_env: BTreeMap<String, String>,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
     pub(crate) crate_name: String,
@@ -770,10 +786,26 @@ struct NativeManifestPackage {
     name: String,
     version: NativeManifestInheritedString,
     #[serde(default)]
+    authors: Option<toml::Value>,
+    #[serde(default)]
     edition: NativeManifestInheritedString,
     #[serde(default)]
     build: Option<toml::Value>,
+    #[serde(default)]
+    description: Option<toml::Value>,
+    #[serde(default)]
+    homepage: Option<toml::Value>,
+    #[serde(default)]
+    license: Option<toml::Value>,
+    #[serde(rename = "license-file", default)]
+    license_file: Option<toml::Value>,
     links: Option<String>,
+    #[serde(default)]
+    readme: Option<toml::Value>,
+    #[serde(default)]
+    repository: Option<toml::Value>,
+    #[serde(rename = "rust-version", default)]
+    rust_version: Option<toml::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -2299,6 +2331,7 @@ fn native_package_from_manifest(
         version: package_version.clone(),
         manifest_path: normalize_path_string(manifest_path),
         links: package.links.clone(),
+        cargo_package_env: native_cargo_package_env(package, &package_version),
         selected_features,
         targets,
         path_dependencies,
@@ -2308,6 +2341,50 @@ fn native_package_from_manifest(
         workspace_dependencies,
         source_digest,
     })
+}
+
+fn native_cargo_package_env(package: &NativeManifestPackage, package_version: &str) -> BTreeMap<String, String> {
+    let (major, minor, patch, pre) = cargo_package_version_components(package_version);
+    BTreeMap::from([
+        (CARGO_PKG_AUTHORS_ENV.to_string(), native_manifest_authors_env(&package.authors)),
+        (CARGO_PKG_DESCRIPTION_ENV.to_string(), native_manifest_string_env(&package.description)),
+        (CARGO_PKG_HOMEPAGE_ENV.to_string(), native_manifest_string_env(&package.homepage)),
+        (CARGO_PKG_LICENSE_ENV.to_string(), native_manifest_string_env(&package.license)),
+        (CARGO_PKG_LICENSE_FILE_ENV.to_string(), native_manifest_string_env(&package.license_file)),
+        (BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), package.name.clone()),
+        (CARGO_PKG_README_ENV.to_string(), native_manifest_string_env(&package.readme)),
+        (CARGO_PKG_REPOSITORY_ENV.to_string(), native_manifest_string_env(&package.repository)),
+        (CARGO_PKG_RUST_VERSION_ENV.to_string(), native_manifest_string_env(&package.rust_version)),
+        (CARGO_PKG_VERSION_ENV.to_string(), package_version.to_string()),
+        (CARGO_PKG_VERSION_MAJOR_ENV.to_string(), major),
+        (CARGO_PKG_VERSION_MINOR_ENV.to_string(), minor),
+        (CARGO_PKG_VERSION_PATCH_ENV.to_string(), patch),
+        (CARGO_PKG_VERSION_PRE_ENV.to_string(), pre),
+    ])
+}
+
+fn cargo_package_version_components(version: &str) -> (String, String, String, String) {
+    let (without_build, _) = version.split_once('+').unwrap_or((version, ""));
+    let (core, pre) = without_build.split_once('-').unwrap_or((without_build, ""));
+    let mut parts = core.split('.');
+    let major = parts.next().unwrap_or_default().to_string();
+    let minor = parts.next().unwrap_or_default().to_string();
+    let patch = parts.next().unwrap_or_default().to_string();
+    (major, minor, patch, pre.to_string())
+}
+
+fn native_manifest_string_env(value: &Option<toml::Value>) -> String {
+    value.as_ref().and_then(toml::Value::as_str).unwrap_or_default().to_string()
+}
+
+fn native_manifest_authors_env(value: &Option<toml::Value>) -> String {
+    let Some(value) = value else {
+        return String::new();
+    };
+    if let Some(author) = value.as_str() {
+        return author.to_string();
+    }
+    value.as_array().into_iter().flatten().filter_map(toml::Value::as_str).collect::<Vec<_>>().join(":")
 }
 
 fn native_package_edition(
@@ -3547,6 +3624,7 @@ fn summarize_native_unit_graph_planning(
                 package_name: package.name.clone(),
                 package_links: package.links.clone(),
                 package_root: package_root_from_manifest_path(&package.manifest_path),
+                cargo_package_env: package.cargo_package_env.clone(),
                 target_name: target.name.clone(),
                 target_kind: target.kind.clone(),
                 crate_name: target.crate_name.clone(),
@@ -3940,6 +4018,7 @@ fn summarize_native_host_unit_graph_planning(
                 package_name: package.name.clone(),
                 package_links: package.links.clone(),
                 package_root: package_root_from_manifest_path(&package.manifest_path),
+                cargo_package_env: package.cargo_package_env.clone(),
                 target_name: target.name.clone(),
                 target_kind: target.kind.clone(),
                 crate_name: target.crate_name.clone(),
@@ -4427,6 +4506,7 @@ fn native_unit_derivation(
 ) -> RustUnitDerivationSummary {
     debug_assert!(!unit.package_name.is_empty());
     debug_assert!(!unit.package_root.is_empty());
+    debug_assert!(!unit.cargo_package_env.is_empty());
     let mut args = vec![
         "--crate-name".to_string(),
         unit.crate_name.clone(),
@@ -4457,6 +4537,7 @@ fn native_unit_derivation(
     env.insert("PACKAGE_ID".to_string(), unit.package_id.clone());
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    append_cargo_package_env(&mut env, &unit.cargo_package_env);
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
     env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), unit.package_root.clone());
     if let Some(links) = &unit.package_links {
@@ -4505,6 +4586,7 @@ fn native_host_unit_derivation(
 ) -> RustUnitDerivationSummary {
     debug_assert!(!unit.package_name.is_empty());
     debug_assert!(!unit.package_root.is_empty());
+    debug_assert!(!unit.cargo_package_env.is_empty());
     let mut args = vec![
         "--crate-name".to_string(),
         unit.crate_name.clone(),
@@ -4537,6 +4619,7 @@ fn native_host_unit_derivation(
     env.insert("PACKAGE_ID".to_string(), unit.package_id.clone());
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    append_cargo_package_env(&mut env, &unit.cargo_package_env);
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
     env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), unit.package_root.clone());
     if let Some(links) = &unit.package_links {
@@ -4574,6 +4657,13 @@ fn native_host_unit_derivation(
             addressing_mode: "content-addressed".to_string(),
         },
         rustc_args_digest_blake3: args_digest,
+    }
+}
+
+fn append_cargo_package_env(env: &mut BTreeMap<String, String>, package_env: &BTreeMap<String, String>) {
+    for (key, value) in package_env {
+        debug_assert!(key.starts_with("CARGO_PKG_"));
+        env.insert(key.clone(), value.clone());
     }
 }
 
@@ -7137,6 +7227,7 @@ fn build_script_child_env(
 ) -> BTreeMap<String, String> {
     let mut env = BTreeMap::new();
     append_build_script_dependency_env(&mut env, &unit.derivation.env);
+    append_build_script_package_env(&mut env, &unit.derivation.env);
     env.insert(BUILD_SCRIPT_OUT_DIR_ENV.to_string(), normalize_path_string(out_dir));
     env.insert(
         BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(),
@@ -7162,6 +7253,14 @@ fn build_script_child_env(
 fn append_build_script_dependency_env(env: &mut BTreeMap<String, String>, source: &BTreeMap<String, String>) {
     for (key, value) in source {
         if key.starts_with(BUILD_SCRIPT_DEP_ENV_PREFIX) {
+            env.insert(key.clone(), value.clone());
+        }
+    }
+}
+
+fn append_build_script_package_env(env: &mut BTreeMap<String, String>, source: &BTreeMap<String, String>) {
+    for (key, value) in source {
+        if key.starts_with("CARGO_PKG_") {
             env.insert(key.clone(), value.clone());
         }
     }
@@ -8532,6 +8631,28 @@ mod tests {
         }
     }
 
+    fn test_cargo_package_env(name: &str, version: &str) -> BTreeMap<String, String> {
+        let package = NativeManifestPackage {
+            name: name.to_string(),
+            version: NativeManifestInheritedString {
+                value: Some(version.to_string()),
+                workspace: false,
+            },
+            authors: None,
+            edition: NativeManifestInheritedString::default(),
+            build: None,
+            description: None,
+            homepage: None,
+            license: None,
+            license_file: None,
+            links: None,
+            readme: None,
+            repository: None,
+            rust_version: None,
+        };
+        native_cargo_package_env(&package, version)
+    }
+
     fn test_native_package(
         package_id: &str,
         name: &str,
@@ -8544,6 +8665,7 @@ mod tests {
             version: "0.1.0".to_string(),
             manifest_path: format!("/test/{name}/Cargo.toml"),
             links: None,
+            cargo_package_env: test_cargo_package_env(name, "0.1.0"),
             selected_features: Vec::new(),
             targets: vec![NativeTargetPlanningSummary {
                 name: name.to_string(),
@@ -8687,6 +8809,7 @@ mod tests {
             package_name: "syn".to_string(),
             package_links: None,
             package_root: normalize_path_string(&dir.path().join("syn")),
+            cargo_package_env: test_cargo_package_env("syn", "0.1.0"),
             target_name: "syn".to_string(),
             target_kind: "lib".to_string(),
             crate_name: "syn".to_string(),
@@ -8726,6 +8849,7 @@ mod tests {
             package_name: "mac".to_string(),
             package_links: None,
             package_root: normalize_path_string(&dir.path().join("mac")),
+            cargo_package_env: test_cargo_package_env("mac", "0.1.0"),
             target_name: "mac".to_string(),
             target_kind: "proc-macro".to_string(),
             crate_name: "mac".to_string(),
@@ -8809,6 +8933,38 @@ mod tests {
     }
 
     #[test]
+    fn native_cargo_package_env_sets_version_components_and_empty_defaults() {
+        let manifest = toml::from_str::<NativeManifest>(
+            r#"
+[package]
+name = "aws-lc-sys"
+version = "0.39.1-alpha.2+build.5"
+authors = ["AWS", "Crypto"]
+repository = "https://github.com/aws/aws-lc-rs"
+"#,
+        )
+        .unwrap();
+        let package = manifest.package.as_ref().unwrap();
+
+        let env = native_cargo_package_env(package, "0.39.1-alpha.2+build.5");
+
+        assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), "aws-lc-sys");
+        assert_eq!(env.get(CARGO_PKG_VERSION_ENV).unwrap(), "0.39.1-alpha.2+build.5");
+        assert_eq!(env.get(CARGO_PKG_VERSION_MAJOR_ENV).unwrap(), "0");
+        assert_eq!(env.get(CARGO_PKG_VERSION_MINOR_ENV).unwrap(), "39");
+        assert_eq!(env.get(CARGO_PKG_VERSION_PATCH_ENV).unwrap(), "1");
+        assert_eq!(env.get(CARGO_PKG_VERSION_PRE_ENV).unwrap(), "alpha.2");
+        assert_eq!(env.get(CARGO_PKG_AUTHORS_ENV).unwrap(), "AWS:Crypto");
+        assert_eq!(env.get(CARGO_PKG_REPOSITORY_ENV).unwrap(), "https://github.com/aws/aws-lc-rs");
+        assert_eq!(env.get(CARGO_PKG_DESCRIPTION_ENV).unwrap(), "");
+        assert_eq!(env.get(CARGO_PKG_HOMEPAGE_ENV).unwrap(), "");
+        assert_eq!(env.get(CARGO_PKG_LICENSE_ENV).unwrap(), "");
+        assert_eq!(env.get(CARGO_PKG_LICENSE_FILE_ENV).unwrap(), "");
+        assert_eq!(env.get(CARGO_PKG_README_ENV).unwrap(), "");
+        assert_eq!(env.get(CARGO_PKG_RUST_VERSION_ENV).unwrap(), "");
+    }
+
+    #[test]
     fn native_host_derivation_carries_manifest_package_name_for_build_script_env() {
         let dir = TempDir::new().unwrap();
         let package_name = "hyphen-pkg".to_string();
@@ -8820,6 +8976,7 @@ mod tests {
             package_name: package_name.clone(),
             package_links: None,
             package_root: normalize_path_string(&dir.path().join("hyphen-pkg")),
+            cargo_package_env: test_cargo_package_env(&package_name, "1.2.3-alpha.1+build.5"),
             target_name: "build-script-build".to_string(),
             target_kind: "custom-build".to_string(),
             crate_name: "build_script_build".to_string(),
@@ -8846,6 +9003,8 @@ mod tests {
         let derivation = native_host_unit_derivation(&unit, &source_closure, &options(dir.path()));
 
         assert_eq!(derivation.derivation.env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
+        assert_eq!(derivation.derivation.env.get(CARGO_PKG_VERSION_ENV).unwrap(), "1.2.3-alpha.1+build.5");
+        assert_eq!(derivation.derivation.env.get(CARGO_PKG_VERSION_PRE_ENV).unwrap(), "alpha.1");
         assert_eq!(
             derivation.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(),
             &normalize_path_string(&dir.path().join("hyphen-pkg"))
@@ -8860,6 +9019,8 @@ mod tests {
             None,
         );
         assert_eq!(child_env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
+        assert_eq!(child_env.get(CARGO_PKG_VERSION_ENV).unwrap(), "1.2.3-alpha.1+build.5");
+        assert_eq!(child_env.get(CARGO_PKG_VERSION_PRE_ENV).unwrap(), "alpha.1");
     }
 
     #[test]
@@ -8882,6 +9043,7 @@ mod tests {
         ];
         unit.derivation.env.insert(BUILD_SCRIPT_TARGET_ENV.to_string(), target_triple.clone());
         unit.derivation.env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), package_name.clone());
+        unit.derivation.env.insert(CARGO_PKG_VERSION_ENV.to_string(), "9.8.7".to_string());
         let options = RustUnitExecutionOptions {
             rustc: rustc_path.clone(),
             output_root: dir.path().join("unit-out"),
@@ -8898,6 +9060,7 @@ mod tests {
         assert_eq!(env.get(BUILD_SCRIPT_OUT_DIR_ENV).unwrap(), &normalize_path_string(&out_dir));
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(), &normalize_path_string(&package_root));
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
+        assert_eq!(env.get(CARGO_PKG_VERSION_ENV).unwrap(), "9.8.7");
     }
 
     #[test]
