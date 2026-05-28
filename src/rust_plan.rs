@@ -27,6 +27,9 @@ const BUILD_SCRIPT_HOST_ENV: &str = "HOST";
 const BUILD_SCRIPT_TARGET_ENV: &str = "TARGET";
 const BUILD_SCRIPT_PROFILE_ENV: &str = "PROFILE";
 const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
+const RUSTC_CFG_FLAG: &str = "--cfg";
+const RUSTC_EXTERN_FLAG: &str = "--extern";
+const RUSTC_PROC_MACRO_EXTERN: &str = "proc_macro";
 const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
 const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
@@ -300,6 +303,7 @@ pub(crate) struct NativeRustUnitSummary {
     pub(crate) crate_name: String,
     pub(crate) source_path: String,
     pub(crate) edition: String,
+    pub(crate) selected_features: Vec<String>,
     pub(crate) crate_types: Vec<String>,
     pub(crate) mode: String,
     pub(crate) profile: String,
@@ -338,6 +342,7 @@ pub(crate) struct NativeHostUnitSummary {
     pub(crate) crate_name: String,
     pub(crate) source_path: String,
     pub(crate) edition: String,
+    pub(crate) selected_features: Vec<String>,
     pub(crate) crate_types: Vec<String>,
     pub(crate) mode: String,
     pub(crate) profile: String,
@@ -3503,6 +3508,7 @@ fn summarize_native_unit_graph_planning(
                 crate_name: target.crate_name.clone(),
                 source_path: target.source_path.clone(),
                 edition: target.edition.clone(),
+                selected_features: package.selected_features.clone(),
                 crate_types: vec![target.kind.clone()],
                 mode: "build".to_string(),
                 profile: options.profile.clone(),
@@ -3818,6 +3824,7 @@ fn summarize_native_host_unit_graph_planning(
         .iter()
         .map(|package| (package.package_id.clone(), package))
         .collect::<BTreeMap<_, _>>();
+    let selected_dependency_artifacts_by_package = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     let mut host_index = native_unit_graph_planning.units.len();
     for package in &native_package_target_planning.packages {
@@ -3836,16 +3843,19 @@ fn summarize_native_host_unit_graph_planning(
             .find(|registry_source| registry_source.package_id == package.package_id)
             .map(|registry_source| registry_source.source_digest.clone())
             .unwrap_or_else(|| source.source_digest.clone());
-        let host_dependency_artifacts = native_host_dependency_artifacts(
-            package,
-            &packages_by_id,
-            &native_package_target_planning.packages,
-            &mut blockers,
-        );
         for target in &package.targets {
             if !is_host_target_kind(&target.kind) {
                 continue;
             }
+            let host_dependency_artifacts = native_host_unit_dependency_artifacts(
+                package,
+                &target.kind,
+                selected_dependency_artifacts_by_package.get(&package.package_id),
+                &packages_by_id,
+                &native_package_target_planning.packages,
+                source_closure,
+                &mut blockers,
+            );
             let unit_id = rust_unit_id(host_index, &package.package_id, &target.name, &target.kind, "build");
             let artifact = RustHostArtifact {
                 package_id: package.package_id.clone(),
@@ -3867,6 +3877,7 @@ fn summarize_native_host_unit_graph_planning(
                 crate_name: target.crate_name.clone(),
                 source_path: target.source_path.clone(),
                 edition: target.edition.clone(),
+                selected_features: package.selected_features.clone(),
                 crate_types: normalized_crate_types(&[target.kind.clone()], &target.kind),
                 mode: "build".to_string(),
                 profile: options.profile.clone(),
@@ -3966,14 +3977,85 @@ fn summarize_native_host_unit_graph_planning(
     })
 }
 
-fn native_host_dependency_artifacts(
+fn native_host_unit_dependency_artifacts(
     package: &NativePackagePlanningSummary,
+    target_kind: &str,
+    selected_artifacts: Option<&BTreeSet<RustDependencyArtifact>>,
     packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
     packages: &[NativePackagePlanningSummary],
+    source_closure: &SourceClosureSummary,
+    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
+) -> Vec<RustDependencyArtifact> {
+    debug_assert!(is_host_target_kind(target_kind));
+    match target_kind {
+        "custom-build" => native_host_dependency_artifacts(
+            package,
+            &package.build_dependencies,
+            packages_by_id,
+            packages,
+            blockers,
+            "unresolved-build-dependency-edge",
+            "missing-native-build-dependency-fact",
+        ),
+        "proc-macro" => native_selected_host_dependency_artifacts(
+            package,
+            selected_artifacts,
+            packages_by_id,
+            source_closure,
+            blockers,
+        ),
+        _ => Vec::new(),
+    }
+}
+
+fn native_selected_host_dependency_artifacts(
+    package: &NativePackagePlanningSummary,
+    selected_artifacts: Option<&BTreeSet<RustDependencyArtifact>>,
+    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
+    source_closure: &SourceClosureSummary,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<RustDependencyArtifact> {
     let mut artifacts = Vec::new();
-    for dependency in &package.build_dependencies {
+    let Some(selected_artifacts) = selected_artifacts else {
+        return artifacts;
+    };
+    for artifact in selected_artifacts {
+        if packages_by_id.get(&artifact.package_id).is_none() {
+            blockers.push(native_host_blocker(
+                None,
+                Some(package.package_id.clone()),
+                "missing-native-proc-macro-dependency-fact",
+                &format!("proc-macro host dependency package {} has no native package fact", artifact.package_id),
+            ));
+            artifacts.push(artifact.clone());
+            continue;
+        }
+        if !source_closure.sources.iter().any(|source| source.package_id == artifact.package_id) {
+            blockers.push(native_host_blocker(
+                None,
+                Some(package.package_id.clone()),
+                "missing-source-input",
+                &format!("proc-macro host dependency package {} is absent from source closure", artifact.package_id),
+            ));
+        }
+        artifacts.push(artifact.clone());
+    }
+    artifacts.sort();
+    artifacts.dedup();
+    artifacts
+}
+
+fn native_host_dependency_artifacts(
+    package: &NativePackagePlanningSummary,
+    dependencies: &[NativePathDependencySummary],
+    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
+    packages: &[NativePackagePlanningSummary],
+    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
+    unresolved_class: &str,
+    missing_class: &str,
+) -> Vec<RustDependencyArtifact> {
+    let mut artifacts = Vec::new();
+    for dependency in dependencies {
         let Some(dependency_package) = packages
             .iter()
             .find(|candidate| manifest_path_strings_same(&candidate.manifest_path, &dependency.manifest_path))
@@ -3981,8 +4063,8 @@ fn native_host_dependency_artifacts(
             blockers.push(native_host_blocker(
                 None,
                 Some(package.package_id.clone()),
-                "unresolved-build-dependency-edge",
-                &format!("build dependency `{}` has no native package fact", dependency.name),
+                unresolved_class,
+                &format!("host dependency `{}` has no native package fact", dependency.name),
             ));
             continue;
         };
@@ -3990,8 +4072,8 @@ fn native_host_dependency_artifacts(
             blockers.push(native_host_blocker(
                 None,
                 Some(package.package_id.clone()),
-                "missing-native-build-dependency-fact",
-                &format!("build dependency `{}` cannot be resolved to a native package", dependency.name),
+                missing_class,
+                &format!("host dependency `{}` cannot be resolved to a native package", dependency.name),
             ));
             continue;
         }
@@ -4248,6 +4330,7 @@ fn native_unit_derivation(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
+    append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
     if unit.target_kind == "bin" {
         if let Some(linker) = resolve_tool_path("cc") {
             args.push("-C".to_string());
@@ -4319,12 +4402,17 @@ fn native_host_unit_derivation(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
+    append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
+    if unit.target_kind == "proc-macro" {
+        args.push(RUSTC_EXTERN_FLAG.to_string());
+        args.push(RUSTC_PROC_MACRO_EXTERN.to_string());
+    }
     if let Some(linker) = resolve_tool_path("cc") {
         args.push("-C".to_string());
         args.push(format!("linker={}", normalize_path_string(&linker)));
     }
     for dependency in &unit.dependency_artifacts {
-        args.push("--extern".to_string());
+        args.push(RUSTC_EXTERN_FLAG.to_string());
         args.push(format!("{}={}", dependency.name, dependency.artifact));
     }
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
@@ -4887,6 +4975,19 @@ fn rustc_crate_types(crate_types: &[String], target_kind: &str) -> Vec<String> {
         return vec!["bin".to_string()];
     }
     normalized_crate_types(crate_types, target_kind)
+}
+
+fn rustc_feature_cfg_arg(feature: &str) -> String {
+    debug_assert!(!feature.is_empty());
+    let escaped = feature.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("feature=\"{escaped}\"")
+}
+
+fn append_rustc_feature_cfg_args(args: &mut Vec<String>, selected_features: &[String]) {
+    for feature in selected_features {
+        args.push(RUSTC_CFG_FLAG.to_string());
+        args.push(rustc_feature_cfg_arg(feature));
+    }
 }
 
 fn rust_unit_id(index: usize, package_id: &str, target_name: &str, target_kind: &str, mode: &str) -> String {
@@ -8318,6 +8419,143 @@ mod tests {
         args.get(edition_index + 1).expect("missing edition value").as_str()
     }
 
+    fn has_ordered_arg_pair(args: &[String], flag: &str, value: &str) -> bool {
+        let mut previous_matches_flag = false;
+        for arg in args {
+            if previous_matches_flag && arg == value {
+                return true;
+            }
+            previous_matches_flag = arg == flag;
+        }
+        false
+    }
+
+    #[test]
+    fn native_unit_derivation_adds_selected_feature_cfg_args() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://syn#syn@0.1.0".to_string();
+        let mut unit = NativeRustUnitSummary {
+            unit_id: rust_unit_id(0, &package_id, "syn", "lib", "build"),
+            package_id: package_id.clone(),
+            package_name: "syn".to_string(),
+            target_name: "syn".to_string(),
+            target_kind: "lib".to_string(),
+            crate_name: "syn".to_string(),
+            source_path: dir.path().join("syn/src/lib.rs").display().to_string(),
+            edition: "2021".to_string(),
+            selected_features: vec!["parsing".to_string(), "visit-mut".to_string()],
+            crate_types: vec!["lib".to_string()],
+            mode: "build".to_string(),
+            profile: DEFAULT_CARGO_PROFILE.to_string(),
+            source_digest: test_source_digest(&package_id),
+            dependency_artifacts: Vec::new(),
+        };
+        let source_closure = SourceClosureSummary {
+            source_count: 1,
+            ready: true,
+            digest_blake3: "test-source-closure".to_string(),
+            sources: Vec::new(),
+            blockers: Vec::new(),
+        };
+
+        let feature_derivation = native_unit_derivation(&unit, Vec::new(), &source_closure, &options(dir.path()));
+        unit.selected_features.clear();
+        let default_derivation = native_unit_derivation(&unit, Vec::new(), &source_closure, &options(dir.path()));
+
+        assert!(has_ordered_arg_pair(&feature_derivation.derivation.args, RUSTC_CFG_FLAG, "feature=\"parsing\""));
+        assert!(has_ordered_arg_pair(&feature_derivation.derivation.args, RUSTC_CFG_FLAG, "feature=\"visit-mut\"",));
+        assert!(!has_ordered_arg_pair(&default_derivation.derivation.args, RUSTC_CFG_FLAG, "feature=\"parsing\""));
+    }
+
+    #[test]
+    fn native_host_derivation_adds_compiler_proc_macro_extern() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://mac#mac@0.1.0".to_string();
+        let mut unit = NativeHostUnitSummary {
+            unit_id: rust_unit_id(0, &package_id, "mac", "proc-macro", "build"),
+            package_id: package_id.clone(),
+            package_name: "mac".to_string(),
+            target_name: "mac".to_string(),
+            target_kind: "proc-macro".to_string(),
+            crate_name: "mac".to_string(),
+            source_path: dir.path().join("mac/src/lib.rs").display().to_string(),
+            edition: "2021".to_string(),
+            selected_features: Vec::new(),
+            crate_types: vec!["proc-macro".to_string()],
+            mode: "build".to_string(),
+            profile: DEFAULT_CARGO_PROFILE.to_string(),
+            source_digest: test_source_digest(&package_id),
+            artifact: test_host_artifact(&package_id, "proc-macro"),
+            dependency_artifacts: Vec::new(),
+            generated_metadata: None,
+        };
+        let source_closure = SourceClosureSummary {
+            source_count: 1,
+            ready: true,
+            digest_blake3: "test-source-closure".to_string(),
+            sources: Vec::new(),
+            blockers: Vec::new(),
+        };
+
+        let proc_macro_derivation = native_host_unit_derivation(&unit, &source_closure, &options(dir.path()));
+        unit.target_kind = "custom-build".to_string();
+        unit.crate_types = vec!["bin".to_string()];
+        let custom_build_derivation = native_host_unit_derivation(&unit, &source_closure, &options(dir.path()));
+
+        assert!(has_ordered_arg_pair(
+            &proc_macro_derivation.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            RUSTC_PROC_MACRO_EXTERN,
+        ));
+        assert!(!has_ordered_arg_pair(
+            &custom_build_derivation.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            RUSTC_PROC_MACRO_EXTERN,
+        ));
+    }
+
+    #[test]
+    fn native_host_dependencies_use_normal_deps_only_for_proc_macro_units() {
+        let dep_id = "path+file://proc-macro2#proc-macro2@0.1.0";
+        let macro_id = "path+file://async-stream-impl#async-stream-impl@0.1.0";
+        let dep_package = test_native_package(dep_id, "proc-macro2", "lib", Vec::new());
+        let dependency = NativePathDependencySummary {
+            name: "proc-macro2".to_string(),
+            manifest_path: dep_package.manifest_path.clone(),
+        };
+        let macro_package = test_native_package(macro_id, "async-stream-impl", "proc-macro", vec![dependency]);
+        let packages = vec![macro_package.clone(), dep_package.clone()];
+        let packages_by_id = packages.iter().map(|package| (package.package_id.clone(), package)).collect();
+        let source_closure = test_source_closure(&packages);
+        let selected_artifacts = BTreeSet::from([test_dependency_artifact(dep_id, "proc_macro2")]);
+        let mut blockers = Vec::new();
+
+        let proc_macro_deps = native_host_unit_dependency_artifacts(
+            &macro_package,
+            "proc-macro",
+            Some(&selected_artifacts),
+            &packages_by_id,
+            &packages,
+            &source_closure,
+            &mut blockers,
+        );
+        let custom_build_deps = native_host_unit_dependency_artifacts(
+            &macro_package,
+            "custom-build",
+            None,
+            &packages_by_id,
+            &packages,
+            &source_closure,
+            &mut blockers,
+        );
+
+        assert!(blockers.is_empty(), "{blockers:#?}");
+        assert_eq!(proc_macro_deps.len(), 1usize);
+        assert_eq!(proc_macro_deps[0].package_id, dep_id);
+        assert_eq!(proc_macro_deps[0].name, "proc_macro2");
+        assert!(custom_build_deps.is_empty());
+    }
+
     #[test]
     fn native_host_derivation_carries_manifest_package_name_for_build_script_env() {
         let dir = TempDir::new().unwrap();
@@ -8333,6 +8571,7 @@ mod tests {
             crate_name: "build_script_build".to_string(),
             source_path: source_path.display().to_string(),
             edition: "2021".to_string(),
+            selected_features: Vec::new(),
             crate_types: vec!["bin".to_string()],
             mode: "build".to_string(),
             profile: DEFAULT_CARGO_PROFILE.to_string(),
@@ -8557,6 +8796,43 @@ mod tests {
 
         assert_eq!(plan.target_dependency_indices.iter().copied().collect::<Vec<_>>(), vec![0usize]);
         assert_eq!(plan.host_edges.get(&1).cloned().unwrap_or_default(), vec![0usize]);
+    }
+
+    #[test]
+    fn combined_unit_topology_orders_proc_macro_dependency_lib_before_host_unit() {
+        let dependency_id = "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106";
+        let proc_macro_id = "registry+https://github.com/rust-lang/crates.io-index#async-stream-impl@0.3.6";
+        let target_consumer_id = "registry+https://github.com/rust-lang/crates.io-index#async-stream@0.3.6";
+        let dependency_lib = test_rust_derivation(0, dependency_id, "lib", "target", Vec::new());
+        let proc_macro = test_rust_derivation(1, proc_macro_id, "proc-macro", "host", vec![test_dependency_artifact(
+            dependency_id,
+            "proc_macro2",
+        )]);
+        let mut target_consumer = test_rust_derivation(2, target_consumer_id, "lib", "target", Vec::new());
+        target_consumer.consumed_host_artifacts = vec![test_host_artifact(proc_macro_id, "proc-macro")];
+        let graph = test_unit_derivation_graph(vec![dependency_lib, proc_macro, target_consumer]);
+        let mut lib_producers = BTreeMap::new();
+        lib_producers.insert(dependency_id.to_string(), 0usize);
+        let mut host_producers = BTreeMap::new();
+        host_producers.insert(proc_macro_id.to_string(), 1usize);
+        let mut proc_macro_producers = BTreeMap::new();
+        proc_macro_producers.insert(proc_macro_id.to_string(), 1usize);
+        let mut target_edges = BTreeMap::new();
+        target_edges.insert(0usize, Vec::new());
+        target_edges.insert(2usize, Vec::new());
+
+        let order = plan_combined_unit_topology_order(
+            &[0usize, 2usize],
+            &[1usize],
+            &lib_producers,
+            &host_producers,
+            &proc_macro_producers,
+            &target_edges,
+            &graph,
+        )
+        .unwrap();
+
+        assert_eq!(order, vec![0usize, 1usize, 2usize]);
     }
 
     #[test]
