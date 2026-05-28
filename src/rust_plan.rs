@@ -19,6 +19,13 @@ const DEFAULT_CARGO_PROFILE: &str = "dev";
 const DEFAULT_RUST_EDITION: &str = "2015";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
+const BUILD_SCRIPT_OUT_DIR_ENV: &str = "OUT_DIR";
+const BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV: &str = "CARGO_MANIFEST_DIR";
+const BUILD_SCRIPT_CARGO_PKG_NAME_ENV: &str = "CARGO_PKG_NAME";
+const BUILD_SCRIPT_RUSTC_ENV: &str = "RUSTC";
+const BUILD_SCRIPT_HOST_ENV: &str = "HOST";
+const BUILD_SCRIPT_TARGET_ENV: &str = "TARGET";
+const BUILD_SCRIPT_PROFILE_ENV: &str = "PROFILE";
 const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
 const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
 const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
@@ -6808,6 +6815,39 @@ fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<
     }
 }
 
+fn build_script_package_root(unit: &RustUnitDerivationSummary) -> Option<PathBuf> {
+    rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf))
+}
+
+fn absolute_path_from(path: &Path, base: &Path) -> PathBuf {
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    base.join(path)
+}
+
+fn build_script_child_env(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    out_dir: &Path,
+    package_root: Option<&Path>,
+) -> BTreeMap<String, String> {
+    let mut env = BTreeMap::new();
+    env.insert(BUILD_SCRIPT_OUT_DIR_ENV.to_string(), normalize_path_string(out_dir));
+    env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), rust_crate_name(&unit.target_name));
+    env.insert(BUILD_SCRIPT_RUSTC_ENV.to_string(), normalize_path_string(&options.rustc));
+    env.insert(BUILD_SCRIPT_HOST_ENV.to_string(), host_target_triple());
+    env.insert(
+        BUILD_SCRIPT_TARGET_ENV.to_string(),
+        unit.derivation.env.get(BUILD_SCRIPT_TARGET_ENV).cloned().unwrap_or_else(host_target_triple),
+    );
+    env.insert(BUILD_SCRIPT_PROFILE_ENV.to_string(), unit.profile.clone());
+    if let Some(root) = package_root {
+        env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), normalize_path_string(root));
+    }
+    env
+}
+
 fn run_build_script_metadata(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
@@ -6819,7 +6859,10 @@ fn run_build_script_metadata(
             message: format!("custom-build unit {} did not produce an executable", unit.unit_id),
         }));
     }
-    let out_dir = options.output_root.join(safe_path_component(&unit.unit_id)).join("out-dir");
+    let invocation_dir = std::env::current_dir()
+        .map_err(|err| RunError::Internal(format!("reading current directory for build-script execution: {err}")))?;
+    let output_root = absolute_path_from(&options.output_root, &invocation_dir);
+    let out_dir = output_root.join(safe_path_component(&unit.unit_id)).join("out-dir");
     if out_dir.exists() {
         fs::remove_dir_all(&out_dir).map_err(|err| {
             RunError::Internal(format!("removing prior build-script OUT_DIR {}: {err}", out_dir.display()))
@@ -6828,14 +6871,13 @@ fn run_build_script_metadata(
     fs::create_dir_all(&out_dir)
         .map_err(|err| RunError::Internal(format!("creating build-script OUT_DIR {}: {err}", out_dir.display())))?;
 
-    let mut command = Command::new(executable);
-    apply_rust_topology_child_env(&mut command, &BTreeMap::new());
-    command.env("OUT_DIR", &out_dir);
-    command.env("CARGO_PKG_NAME", rust_crate_name(&unit.target_name));
-    if let Some(src_path) =
-        rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf))
-    {
-        command.env("CARGO_MANIFEST_DIR", src_path);
+    let executable_path = executable.canonicalize().unwrap_or_else(|_| executable.to_path_buf());
+    let package_root = build_script_package_root(unit);
+    let mut command = Command::new(&executable_path);
+    let child_env = build_script_child_env(unit, options, &out_dir, package_root.as_deref());
+    apply_rust_topology_child_env(&mut command, &child_env);
+    if let Some(root) = &package_root {
+        command.current_dir(root);
     }
     let output = command
         .output()
@@ -8259,6 +8301,60 @@ mod tests {
     fn rustc_edition_arg(args: &[String]) -> &str {
         let edition_index = args.iter().position(|arg| arg == "--edition").expect("missing --edition flag");
         args.get(edition_index + 1).expect("missing edition value").as_str()
+    }
+
+    #[test]
+    fn build_script_child_env_sets_tool_target_and_manifest_dir() {
+        let dir = TempDir::new().unwrap();
+        let package_root = dir.path().join("package");
+        let source_path = package_root.join("build.rs");
+        let out_dir = dir.path().join("out");
+        let rustc_path = dir.path().join("bin/rustc");
+        let target_triple = "wasm32-unknown-unknown".to_string();
+        let mut unit = test_rust_derivation(0, "path+file://package#package@0.1.0", "custom-build", "host", Vec::new());
+        unit.target_name = "build-script-build".to_string();
+        unit.profile = "release".to_string();
+        unit.derivation.args = vec![
+            "--crate-name".to_string(),
+            "build_script_build".to_string(),
+            source_path.display().to_string(),
+        ];
+        unit.derivation.env.insert(BUILD_SCRIPT_TARGET_ENV.to_string(), target_triple.clone());
+        let options = RustUnitExecutionOptions {
+            rustc: rustc_path.clone(),
+            output_root: dir.path().join("unit-out"),
+        };
+
+        let root = build_script_package_root(&unit).expect("source path has package root");
+        let env = build_script_child_env(&unit, &options, &out_dir, Some(&root));
+
+        assert_eq!(root, package_root);
+        assert_eq!(env.get(BUILD_SCRIPT_RUSTC_ENV).unwrap(), &normalize_path_string(&rustc_path));
+        assert_eq!(env.get(BUILD_SCRIPT_TARGET_ENV).unwrap(), &target_triple);
+        assert_eq!(env.get(BUILD_SCRIPT_HOST_ENV).unwrap(), &host_target_triple());
+        assert_eq!(env.get(BUILD_SCRIPT_PROFILE_ENV).unwrap(), "release");
+        assert_eq!(env.get(BUILD_SCRIPT_OUT_DIR_ENV).unwrap(), &normalize_path_string(&out_dir));
+        assert_eq!(env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(), &normalize_path_string(&package_root));
+        assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), "build_script_build");
+    }
+
+    #[test]
+    fn build_script_child_env_omits_manifest_dir_without_source_arg() {
+        let dir = TempDir::new().unwrap();
+        let out_dir = dir.path().join("out");
+        let mut unit = test_rust_derivation(0, "path+file://package#package@0.1.0", "custom-build", "host", Vec::new());
+        unit.derivation.args.clear();
+        unit.derivation.env.clear();
+        let options = RustUnitExecutionOptions {
+            rustc: dir.path().join("rustc"),
+            output_root: dir.path().join("unit-out"),
+        };
+
+        let env = build_script_child_env(&unit, &options, &out_dir, build_script_package_root(&unit).as_deref());
+
+        assert!(!env.contains_key(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV));
+        assert_eq!(env.get(BUILD_SCRIPT_TARGET_ENV).unwrap(), &host_target_triple());
+        assert_eq!(env.get(BUILD_SCRIPT_PROFILE_ENV).unwrap(), DEFAULT_CARGO_PROFILE);
     }
 
     #[test]
