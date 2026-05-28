@@ -20,16 +20,18 @@ Does native Rust topology now provide deterministic Cargo profile env variables 
 
 ## Decision
 
-Accepted. Native build-script runtime env now derives bounded `OPT_LEVEL`, `DEBUG`, and `NUM_JOBS` values from the selected profile and passes them through `build_script_child_env()`. Focused tests cover dev/release profile env values and child env pass-through.
+Accepted. Native build-script runtime env now derives bounded `OPT_LEVEL`, `DEBUG`, and `NUM_JOBS` values from the selected profile and passes them through `build_script_child_env()`. Focused tests cover dev/release profile env values, child env pass-through, and a negative subprocess probe proving conflicting ambient process `OPT_LEVEL` / `DEBUG` / `NUM_JOBS` values do not override selected-profile values.
 
-Focused tests passed:
+Focused tests passed after post-review negative coverage hardening:
 
 ```text
-running 73 tests
+running 75 tests
 ...
 test rust_plan::tests::build_script_profile_env_derives_dev_and_release_defaults ... ok
+test rust_plan::tests::build_script_profile_env_child_ignores_ambient_process_env_probe ... ok
+test rust_plan::tests::build_script_child_env_ignores_ambient_profile_env ... ok
 ...
-test result: ok. 73 passed; 0 failed; 0 ignored; 0 measured; 427 filtered out; finished in 0.03s
+test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 427 filtered out; finished in 0.03s
 ```
 
 The committed clean self-probe moved past the prior `aws-lc-sys` missing `OPT_LEVEL` runtime failure:

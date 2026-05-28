@@ -8720,10 +8720,17 @@ fn normalize_path_string(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use std::ffi::OsStr;
+    use std::process::Command;
 
     use tempfile::TempDir;
 
     use super::*;
+
+    const PROFILE_ENV_CHILD_PROBE_ENV: &str = "MANTLE_PROFILE_ENV_CHILD_PROBE";
+    const PROFILE_ENV_CHILD_PROBE_VALUE: &str = "present";
+    const AMBIENT_OPT_LEVEL_VALUE: &str = "ambient-opt-level";
+    const AMBIENT_DEBUG_VALUE: &str = "ambient-debug";
+    const AMBIENT_NUM_JOBS_VALUE: &str = "999";
 
     struct FixedOracle {
         cargo_version: CargoOutput,
@@ -9297,6 +9304,56 @@ rust-version = "1.80"
         assert_eq!(release_env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
         assert_eq!(release_env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
         assert_eq!(release_env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
+    }
+
+    #[test]
+    fn build_script_child_env_ignores_ambient_profile_env() {
+        let output = Command::new(std::env::current_exe().expect("test binary path is available"))
+            .arg("rust_plan::tests::build_script_profile_env_child_ignores_ambient_process_env_probe")
+            .arg("--exact")
+            .arg("--nocapture")
+            .arg("--test-threads=1")
+            .env(PROFILE_ENV_CHILD_PROBE_ENV, PROFILE_ENV_CHILD_PROBE_VALUE)
+            .env(BUILD_SCRIPT_OPT_LEVEL_ENV, AMBIENT_OPT_LEVEL_VALUE)
+            .env(BUILD_SCRIPT_DEBUG_ENV, AMBIENT_DEBUG_VALUE)
+            .env(BUILD_SCRIPT_NUM_JOBS_ENV, AMBIENT_NUM_JOBS_VALUE)
+            .output()
+            .expect("child test process runs");
+
+        assert!(
+            output.status.success(),
+            "child stdout:\n{}\nchild stderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn build_script_profile_env_child_ignores_ambient_process_env_probe() {
+        if std::env::var_os(PROFILE_ENV_CHILD_PROBE_ENV).is_none() {
+            return;
+        }
+        assert_eq!(std::env::var(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), AMBIENT_OPT_LEVEL_VALUE);
+        assert_eq!(std::env::var(BUILD_SCRIPT_DEBUG_ENV).unwrap(), AMBIENT_DEBUG_VALUE);
+        assert_eq!(std::env::var(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), AMBIENT_NUM_JOBS_VALUE);
+
+        let dir = TempDir::new().unwrap();
+        let out_dir = dir.path().join("out");
+        let mut unit = test_rust_derivation(0, "path+file://package#package@0.1.0", "custom-build", "host", Vec::new());
+        unit.profile = CARGO_PROFILE_RELEASE.to_string();
+        let options = RustUnitExecutionOptions {
+            rustc: dir.path().join("rustc"),
+            output_root: dir.path().join("unit-out"),
+        };
+
+        let env = build_script_child_env(&unit, &options, &out_dir, None);
+
+        assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
+        assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
+        assert_eq!(env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
+        assert_ne!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), AMBIENT_OPT_LEVEL_VALUE);
+        assert_ne!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), AMBIENT_DEBUG_VALUE);
+        assert_ne!(env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), AMBIENT_NUM_JOBS_VALUE);
     }
 
     #[test]
