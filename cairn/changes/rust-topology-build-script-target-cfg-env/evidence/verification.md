@@ -13,10 +13,12 @@ Does native Rust topology now provide deterministic Cargo target cfg env variabl
 - Focused test command: `cargo test -p mantle --bin mantle rust_plan::`
 - Dirty self-probe artifact: `target/mantle-self-rust-plan-probe-after-target-cfg-dirty/receipt.json`
 - Dirty self-probe summary: `target/mantle-self-rust-plan-probe-after-target-cfg-dirty/blocker-summary.txt`
+- Clean self-probe artifact: `target/mantle-self-rust-plan-probe-after-c9bf3938-clean/receipt.json`
+- Clean self-probe summary: `target/mantle-self-rust-plan-probe-after-c9bf3938-clean/blocker-summary.txt`
 
 ## Decision
 
-Accepted for implementation checkpoint. Native build-script runtime env now derives bounded `CARGO_CFG_TARGET_*` values from the selected target triple and passes them through `build_script_child_env()`. Focused tests cover x86_64 Linux values, wasm unknown empty target-env behavior, and child env pass-through.
+Accepted. Native build-script runtime env now derives bounded `CARGO_CFG_TARGET_*` values from the selected target triple and passes them through `build_script_child_env()`. Focused tests cover x86_64 Linux values, wasm unknown empty target-env behavior, and child env pass-through.
 
 Focused tests passed:
 
@@ -29,12 +31,12 @@ test rust_plan::tests::build_script_target_cfg_env_uses_empty_env_for_wasm_unkno
 test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 427 filtered out; finished in 0.03s
 ```
 
-The dirty self-probe moved past the prior `aws-lc-sys` missing `CARGO_CFG_TARGET_ARCH` runtime failure:
+The committed clean self-probe moved past the prior `aws-lc-sys` missing `CARGO_CFG_TARGET_ARCH` runtime failure:
 
 ```text
-probe: target/mantle-self-rust-plan-probe-after-target-cfg-dirty/receipt.json
-head: a03daeeabf6e9d10d30ed13343d7e07a59a615d1
-git_status_short_bytes=20
+probe: target/mantle-self-rust-plan-probe-after-c9bf3938-clean/receipt.json
+head: c9bf393824242dfb7a05d5f3a0efa9fd29e3132d
+git_status_short_bytes=0
 
 probe_status=0
 topology_execution=blocked
@@ -59,4 +61,4 @@ Mantle agent.
 
 ## Next action
 
-Commit target cfg implementation, rerun clean self-probe from committed HEAD, then archive the Cairn change if validation stays clean. Next topology frontier is native build-script cc-rs profile env parity (`OPT_LEVEL` and likely adjacent Cargo build-script env vars).
+Archive the Cairn change if validation stays clean. Next topology frontier is native build-script cc-rs profile env parity (`OPT_LEVEL` and likely adjacent Cargo build-script env vars).

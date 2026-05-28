@@ -1,4 +1,4 @@
 - [x] [serial] Record current `aws-lc-sys` missing runtime `CARGO_CFG_TARGET_ARCH` blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_build_script_target_cfg_env]
 - [x] [serial] Add focused positive and negative tests for target cfg env derivation and build-script child env pass-through. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_target_cfg_env]
 - [x] [serial] Implement bounded `CARGO_CFG_*` target cfg env propagation into native build-script runtime env. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_build_script_target_cfg_env]
-- [ ] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_target_cfg_env]
+- [x] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_target_cfg_env]
