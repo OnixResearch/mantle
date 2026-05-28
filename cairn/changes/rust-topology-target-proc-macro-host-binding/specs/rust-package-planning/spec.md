@@ -20,6 +20,13 @@ WHEN Mantle prepares the target unit for rustc execution
 THEN Mantle MUST rewrite the placeholder to the produced host artifact path.
 AND Mantle MUST NOT add a duplicate `--extern` argument for the same proc-macro crate.
 
+#### Scenario: Transitive proc-macro metadata remains discoverable
+
+GIVEN a native target unit depends on a library whose metadata references a proc-macro host artifact
+WHEN Mantle prepares the dependent target unit for rustc execution
+THEN Mantle MUST add deterministic dependency search paths for produced proc-macro host artifact directories.
+AND Mantle MUST NOT add a direct proc-macro `--extern` argument unless the target consumes that host artifact directly.
+
 #### Scenario: Missing host artifact remains fail-closed
 
 GIVEN a native target unit consumes a proc-macro host artifact

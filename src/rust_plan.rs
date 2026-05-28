@@ -66,6 +66,7 @@ const PACKAGE_LINKS_ENV: &str = "MANTLE_PACKAGE_LINKS";
 const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
 const RUSTC_CFG_FLAG: &str = "--cfg";
 const RUSTC_EXTERN_FLAG: &str = "--extern";
+const RUSTC_EXTERN_ARG_PAIR_WIDTH: usize = 2;
 const RUSTC_PROC_MACRO_EXTERN: &str = "proc_macro";
 const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
 const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
@@ -6045,11 +6046,13 @@ pub(crate) fn execute_rust_unit_topology(
         }
 
         if is_supported_target_unit(unit) {
-            let mut executable_unit = bind_all_host_artifacts(unit, &produced_host_artifacts)?;
-            executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;
-            if !executable_unit.dependency_artifacts.is_empty() {
-                executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_target_artifacts)?;
-            }
+            let executable_unit = bind_target_unit_artifacts(
+                unit,
+                &produced_host_artifacts,
+                &produced_build_script_metadata,
+                &produced_target_artifacts,
+                &produced_proc_macro_artifacts,
+            )?;
             let receipt = execute_rust_unit(&executable_unit, options)?;
             if receipt.execution_status != "success" {
                 let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
@@ -7209,6 +7212,23 @@ fn bind_all_dependency_artifacts(
     Ok(bound)
 }
 
+fn bind_target_unit_artifacts(
+    unit: &RustUnitDerivationSummary,
+    produced_host_artifacts: &BTreeMap<String, PathBuf>,
+    produced_metadata: &BTreeMap<String, BuildScriptMetadataSummary>,
+    produced_target_artifacts: &BTreeMap<String, PathBuf>,
+    produced_proc_macro_artifacts: &BTreeMap<String, PathBuf>,
+) -> Result<RustUnitDerivationSummary, RunError> {
+    debug_assert!(is_supported_target_unit(unit));
+    let mut executable_unit = bind_all_host_artifacts(unit, produced_host_artifacts)?;
+    executable_unit = bind_all_build_script_metadata(&executable_unit, produced_metadata)?;
+    if !executable_unit.dependency_artifacts.is_empty() {
+        executable_unit = bind_all_dependency_artifacts(&executable_unit, produced_target_artifacts)?;
+    }
+    append_dependency_search_paths(&mut executable_unit, produced_proc_macro_artifacts);
+    Ok(executable_unit)
+}
+
 fn bind_all_host_artifacts(
     unit: &RustUnitDerivationSummary,
     produced_host_artifacts: &BTreeMap<String, PathBuf>,
@@ -7222,20 +7242,7 @@ fn bind_all_host_artifacts(
             ))
         })?;
         let produced_artifact_string = normalize_path_string(produced_artifact);
-        for artifact in &mut bound.consumed_host_artifacts {
-            if artifact.package_id == host_artifact.package_id
-                && artifact.target_name == host_artifact.target_name
-                && artifact.target_kind == host_artifact.target_kind
-                && artifact.artifact == host_artifact.artifact
-            {
-                artifact.artifact = produced_artifact_string.clone();
-            }
-        }
-        for input in &mut bound.derivation.inputs {
-            if input == &host_artifact.artifact {
-                *input = produced_artifact_string.clone();
-            }
-        }
+        bind_host_artifact_material(&mut bound, host_artifact, &produced_artifact_string);
         let host_crate_name = rust_crate_name(&host_artifact.target_name);
         let matching_dependencies = bound
             .dependency_artifacts
@@ -7248,8 +7255,58 @@ fn bind_all_host_artifacts(
         for dependency in matching_dependencies {
             bound = bind_dependency_artifact(&bound, &dependency, produced_artifact)?;
         }
+        if host_artifact.target_kind == "proc-macro" {
+            ensure_host_artifact_extern_arg(&mut bound.derivation.args, &host_crate_name, &produced_artifact_string);
+        }
     }
+    refresh_rustc_args_digest(&mut bound);
     Ok(bound)
+}
+
+fn bind_host_artifact_material(
+    unit: &mut RustUnitDerivationSummary,
+    host_artifact: &RustHostArtifact,
+    produced_artifact: &str,
+) {
+    debug_assert!(!host_artifact.package_id.is_empty());
+    debug_assert!(!host_artifact.artifact.is_empty());
+    debug_assert!(!produced_artifact.is_empty());
+    for artifact in &mut unit.consumed_host_artifacts {
+        if artifact.package_id == host_artifact.package_id
+            && artifact.target_name == host_artifact.target_name
+            && artifact.target_kind == host_artifact.target_kind
+            && artifact.artifact == host_artifact.artifact
+        {
+            artifact.artifact = produced_artifact.to_string();
+        }
+    }
+    for input in &mut unit.derivation.inputs {
+        if input == &host_artifact.artifact {
+            *input = produced_artifact.to_string();
+        }
+    }
+}
+
+fn ensure_host_artifact_extern_arg(args: &mut Vec<String>, crate_name: &str, produced_artifact: &str) {
+    debug_assert!(!crate_name.is_empty());
+    debug_assert!(!produced_artifact.is_empty());
+    let extern_arg = format!("{crate_name}={produced_artifact}");
+    if has_rustc_extern_arg(args, crate_name) {
+        return;
+    }
+    args.push(RUSTC_EXTERN_FLAG.to_string());
+    args.push(extern_arg);
+}
+
+fn has_rustc_extern_arg(args: &[String], crate_name: &str) -> bool {
+    debug_assert!(!crate_name.is_empty());
+    let crate_prefix = format!("{crate_name}=");
+    args.windows(RUSTC_EXTERN_ARG_PAIR_WIDTH)
+        .any(|window| window[0] == RUSTC_EXTERN_FLAG && window[1].starts_with(&crate_prefix))
+}
+
+fn refresh_rustc_args_digest(unit: &mut RustUnitDerivationSummary) {
+    unit.rustc_args_digest_blake3 = blake3::hash(unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
 }
 
 fn bind_all_build_script_metadata(
@@ -9614,6 +9671,159 @@ rust-version = "1.80"
 
         assert_eq!(plan.target_dependency_indices.iter().copied().collect::<Vec<_>>(), vec![0usize]);
         assert_eq!(plan.host_edges.get(&1).cloned().unwrap_or_default(), vec![0usize]);
+    }
+
+    #[test]
+    fn bind_all_host_artifacts_adds_proc_macro_extern_without_dependency_placeholder() {
+        let dir = TempDir::new().unwrap();
+        let target_id = "registry+https://github.com/rust-lang/crates.io-index#darling@0.20.11";
+        let proc_macro_id = "registry+https://github.com/rust-lang/crates.io-index#darling_macro@0.20.11";
+        let produced_path = dir.path().join("libdarling_macro.so");
+        std::fs::write(&produced_path, b"proc-macro").unwrap();
+        let mut unit = test_rust_derivation(0, target_id, "lib", "target", Vec::new());
+        unit.target_name = "darling".to_string();
+        unit.derivation.args = vec!["--crate-name".to_string(), "darling".to_string()];
+        let host_artifact = RustHostArtifact {
+            package_id: proc_macro_id.to_string(),
+            target_name: "darling_macro".to_string(),
+            target_kind: "proc-macro".to_string(),
+            artifact: "host-artifact:darling_macro".to_string(),
+            metadata_digest_blake3: None,
+        };
+        unit.derivation.inputs = vec![host_artifact.artifact.clone()];
+        unit.consumed_host_artifacts = vec![host_artifact];
+        let mut produced_host_artifacts = BTreeMap::new();
+        produced_host_artifacts.insert(proc_macro_id.to_string(), produced_path.clone());
+        let produced_path_string = normalize_path_string(&produced_path);
+
+        let bound = bind_all_host_artifacts(&unit, &produced_host_artifacts).unwrap();
+
+        assert!(has_ordered_arg_pair(
+            &bound.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            &format!("darling_macro={produced_path_string}")
+        ));
+        assert!(bound.derivation.inputs.contains(&produced_path_string));
+        assert_eq!(bound.consumed_host_artifacts[0].artifact, produced_path_string);
+        assert!(bound.dependency_artifacts.is_empty());
+        assert_ne!(bound.rustc_args_digest_blake3, unit.rustc_args_digest_blake3);
+    }
+
+    #[test]
+    fn bind_target_unit_artifacts_adds_proc_macro_search_path_for_transitive_metadata() {
+        let dir = TempDir::new().unwrap();
+        let target_id = "registry+https://github.com/rust-lang/crates.io-index#derive_builder_core@0.20.2";
+        let darling_id = "registry+https://github.com/rust-lang/crates.io-index#darling@0.20.11";
+        let proc_macro_id = "registry+https://github.com/rust-lang/crates.io-index#darling_macro@0.20.11";
+        let darling_path = dir.path().join("libdarling.rlib");
+        let proc_macro_path = dir.path().join("proc-macros/libdarling_macro.so");
+        std::fs::create_dir_all(proc_macro_path.parent().unwrap()).unwrap();
+        std::fs::write(&darling_path, b"darling").unwrap();
+        std::fs::write(&proc_macro_path, b"darling-macro").unwrap();
+        let mut unit =
+            test_rust_derivation(0, target_id, "lib", "target", vec![test_dependency_artifact(darling_id, "darling")]);
+        unit.target_name = "derive_builder_core".to_string();
+        unit.derivation.args = vec![
+            RUSTC_EXTERN_FLAG.to_string(),
+            format!("darling=artifact:{darling_id}:darling"),
+        ];
+        let mut produced_target_artifacts = BTreeMap::new();
+        produced_target_artifacts.insert(darling_id.to_string(), darling_path.clone());
+        let mut produced_proc_macro_artifacts = BTreeMap::new();
+        produced_proc_macro_artifacts.insert(proc_macro_id.to_string(), proc_macro_path.clone());
+        let proc_macro_search_path = format!("dependency={}", normalize_path_string(proc_macro_path.parent().unwrap()));
+
+        let bound = bind_target_unit_artifacts(
+            &unit,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &produced_target_artifacts,
+            &produced_proc_macro_artifacts,
+        )
+        .unwrap();
+
+        assert!(has_ordered_arg_pair(
+            &bound.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            &format!("darling={}", normalize_path_string(&darling_path))
+        ));
+        assert!(has_ordered_arg_pair(&bound.derivation.args, "-L", &proc_macro_search_path));
+        assert!(!has_rustc_extern_arg(&bound.derivation.args, "darling_macro"));
+        assert_ne!(bound.rustc_args_digest_blake3, unit.rustc_args_digest_blake3);
+    }
+
+    #[test]
+    fn bind_all_host_artifacts_does_not_add_extern_for_custom_build_artifact() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228";
+        let produced_path = dir.path().join("build_script_build");
+        std::fs::write(&produced_path, b"build-script").unwrap();
+        let mut unit = test_rust_derivation(0, package_id, "lib", "target", Vec::new());
+        let host_artifact = RustHostArtifact {
+            package_id: package_id.to_string(),
+            target_name: BUILD_SCRIPT_TARGET_NAME.to_string(),
+            target_kind: "custom-build".to_string(),
+            artifact: "host-artifact:build-script".to_string(),
+            metadata_digest_blake3: None,
+        };
+        unit.derivation.inputs = vec![host_artifact.artifact.clone()];
+        unit.consumed_host_artifacts = vec![host_artifact];
+        let mut produced_host_artifacts = BTreeMap::new();
+        produced_host_artifacts.insert(package_id.to_string(), produced_path.clone());
+        let produced_path_string = normalize_path_string(&produced_path);
+
+        let bound = bind_all_host_artifacts(&unit, &produced_host_artifacts).unwrap();
+
+        assert!(bound.derivation.inputs.contains(&produced_path_string));
+        assert_eq!(bound.consumed_host_artifacts[0].artifact, produced_path_string);
+        assert!(!has_rustc_extern_arg(&bound.derivation.args, "build_script_build"));
+        assert_eq!(bound.dependency_artifacts, Vec::<RustDependencyArtifact>::new());
+    }
+
+    #[test]
+    fn bind_all_host_artifacts_rewrites_existing_proc_macro_placeholder_without_duplicate() {
+        let dir = TempDir::new().unwrap();
+        let target_id = "registry+https://github.com/rust-lang/crates.io-index#darling@0.20.11";
+        let proc_macro_id = "registry+https://github.com/rust-lang/crates.io-index#darling_macro@0.20.11";
+        let produced_path = dir.path().join("libdarling_macro.so");
+        std::fs::write(&produced_path, b"proc-macro").unwrap();
+        let dependency = test_dependency_artifact(proc_macro_id, "darling_macro");
+        let mut unit = test_rust_derivation(0, target_id, "lib", "target", vec![dependency.clone()]);
+        unit.target_name = "darling".to_string();
+        unit.derivation.args = vec![
+            RUSTC_EXTERN_FLAG.to_string(),
+            format!("darling_macro={}", dependency.artifact),
+        ];
+        let host_artifact = RustHostArtifact {
+            package_id: proc_macro_id.to_string(),
+            target_name: "darling_macro".to_string(),
+            target_kind: "proc-macro".to_string(),
+            artifact: "host-artifact:darling_macro".to_string(),
+            metadata_digest_blake3: None,
+        };
+        unit.derivation.inputs = vec![dependency.artifact.clone(), host_artifact.artifact.clone()];
+        unit.consumed_host_artifacts = vec![host_artifact];
+        let mut produced_host_artifacts = BTreeMap::new();
+        produced_host_artifacts.insert(proc_macro_id.to_string(), produced_path.clone());
+        let produced_path_string = normalize_path_string(&produced_path);
+
+        let bound = bind_all_host_artifacts(&unit, &produced_host_artifacts).unwrap();
+        let extern_count = bound
+            .derivation
+            .args
+            .windows(RUSTC_EXTERN_ARG_PAIR_WIDTH)
+            .filter(|window| window[0] == RUSTC_EXTERN_FLAG && window[1].starts_with("darling_macro="))
+            .count();
+
+        assert_eq!(extern_count, 1);
+        assert!(has_ordered_arg_pair(
+            &bound.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            &format!("darling_macro={produced_path_string}")
+        ));
+        assert_eq!(bound.dependency_artifacts[0].artifact, produced_path_string);
+        assert!(!bound.derivation.args.iter().any(|arg| arg == &format!("darling_macro={}", dependency.artifact)));
+        assert_ne!(bound.rustc_args_digest_blake3, unit.rustc_args_digest_blake3);
     }
 
     #[test]

@@ -6,7 +6,8 @@ Native Rust topology now runs `aws-lc-sys` and `aws-lc-rs` build scripts success
 
 - Bind consumed proc-macro host artifacts into target rustc `--extern` surfaces even when Cargo's target-unit dependency artifact list omits a matching placeholder.
 - Preserve existing placeholder rewrite behavior when a matching dependency artifact is present.
-- Add focused positive and negative tests for host-artifact extern insertion and no-duplicate rewriting.
+- Add produced proc-macro host artifact directories as deterministic target dependency search paths so downstream rlib metadata remains loadable.
+- Add focused positive and negative tests for host-artifact extern insertion, no-duplicate rewriting, custom-build exclusion, and transitive search-path binding.
 - Record whether the self-probe moves past the `darling_macro` sysroot blocker.
 
 ## Impact

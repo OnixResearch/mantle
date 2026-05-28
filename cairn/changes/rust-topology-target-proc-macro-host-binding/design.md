@@ -16,7 +16,13 @@
 
 **Rationale:** Existing proc-macro tests and receipts with explicit dependency placeholders remain stable. The new behavior fills only the missing target rustc surface.
 
-### 3. Keep fail-closed material checks unchanged
+### 3. Add produced proc-macro search paths for target dependency metadata
+
+**Choice:** When preparing target units, add `-L dependency=<dir>` entries for produced proc-macro host artifact directories in addition to direct target dependency search paths.
+
+**Rationale:** A target library can depend on a normal library whose rlib metadata references a proc-macro dependency. `darling` compiles after direct `darling_macro` extern binding, but downstream `derive_builder_core` still needs the `darling_macro` host artifact directory available for rustc metadata loading.
+
+### 4. Keep fail-closed material checks unchanged
 
 **Choice:** Do not weaken host artifact digest checks or producer ordering. The target still blocks before rustc if the declared consumed host artifact is missing.
 
