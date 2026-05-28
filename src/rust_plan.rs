@@ -861,7 +861,7 @@ struct NativeManifestPackage {
 struct NativeManifestLib {
     name: Option<String>,
     path: Option<String>,
-    #[serde(rename = "proc-macro", default)]
+    #[serde(rename = "proc-macro", alias = "proc_macro", default)]
     proc_macro: bool,
 }
 
@@ -4001,10 +4001,12 @@ fn selected_host_unit_keys(unit_graph: &Value) -> BTreeSet<(String, String, Stri
             continue;
         };
         let kinds = target_string_array(target, "kind");
-        for target_kind in ["custom-build", "proc-macro"] {
-            if kinds.iter().any(|kind| kind == target_kind) {
-                keys.insert(host_unit_key(&package_id, &target_name, target_kind));
-            }
+        let crate_types = target_string_array(target, "crate_types");
+        let Some(target_kind) = classify_supported_cargo_target_kind(&kinds, &crate_types) else {
+            continue;
+        };
+        if is_host_target_kind(target_kind) {
+            keys.insert(host_unit_key(&package_id, &target_name, target_kind));
         }
     }
     keys
@@ -5299,17 +5301,9 @@ fn select_supported_target_kind(
     package_id: &str,
 ) -> Result<String, UnitDerivationBlocker> {
     let kinds = target_string_array(target, "kind");
-    if kinds.iter().any(|kind| kind == "custom-build") {
-        return Ok("custom-build".to_string());
-    }
-    if kinds.iter().any(|kind| kind == "proc-macro") {
-        return Ok("proc-macro".to_string());
-    }
-    if kinds.iter().any(|kind| kind == "lib" || kind == "rlib") {
-        return Ok("lib".to_string());
-    }
-    if kinds.iter().any(|kind| kind == "bin") {
-        return Ok("bin".to_string());
+    let crate_types = target_string_array(target, "crate_types");
+    if let Some(target_kind) = classify_supported_cargo_target_kind(&kinds, &crate_types) {
+        return Ok(target_kind.to_string());
     }
     let class = if kinds.is_empty() {
         "missing-target-kind"
@@ -5327,6 +5321,32 @@ fn select_supported_target_kind(
     Err(unit_blocker(index, Some(package_id.to_string()), class, &message))
 }
 
+fn classify_supported_cargo_target_kind(kinds: &[String], crate_types: &[String]) -> Option<&'static str> {
+    let proc_macro_crate_type = crate_types.iter().any(|crate_type| crate_type == "proc-macro");
+    let lib_shaped_kind = kinds.iter().any(|kind| kind == "lib" || kind == "rlib");
+    let classified = if kinds.iter().any(|kind| kind == "custom-build") {
+        Some("custom-build")
+    } else if kinds.iter().any(|kind| kind == "proc-macro") {
+        Some("proc-macro")
+    } else if proc_macro_crate_type && lib_shaped_kind {
+        Some("proc-macro")
+    } else if lib_shaped_kind {
+        Some("lib")
+    } else if kinds.iter().any(|kind| kind == "bin") {
+        Some("bin")
+    } else {
+        None
+    };
+    if proc_macro_crate_type && lib_shaped_kind {
+        debug_assert_ne!(classified, Some("lib"));
+        debug_assert_ne!(classified, Some("bin"));
+    }
+    if let Some(kind) = classified {
+        debug_assert!(!kind.is_empty());
+    }
+    classified
+}
+
 fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostArtifact>> {
     let mut artifacts: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     for (index, unit) in units.iter().enumerate() {
@@ -5340,13 +5360,13 @@ fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostAr
             continue;
         };
         let kinds = target_string_array(target, "kind");
-        let target_kind = if kinds.iter().any(|kind| kind == "custom-build") {
-            "custom-build"
-        } else if kinds.iter().any(|kind| kind == "proc-macro") {
-            "proc-macro"
-        } else {
+        let crate_types = target_string_array(target, "crate_types");
+        let Some(target_kind) = classify_supported_cargo_target_kind(&kinds, &crate_types) else {
             continue;
         };
+        if !is_host_target_kind(target_kind) {
+            continue;
+        }
         let target_name = target_string(target, "name").unwrap_or_else(|| format!("host-unit-{index}"));
         let metadata_digest_blake3 = (target_kind == "custom-build")
             .then(|| build_script_metadata_summary(&package_id, &target_name).digest_blake3);
@@ -9375,6 +9395,72 @@ mod tests {
     }
 
     #[test]
+    fn proc_macro_crate_type_only_overrides_lib_shaped_targets() {
+        let lib_kind = vec!["lib".to_string()];
+        let rlib_kind = vec!["rlib".to_string()];
+        let bin_kind = vec!["bin".to_string()];
+        let missing_kind = Vec::new();
+        let proc_macro_crate_type = vec!["proc-macro".to_string()];
+        let lib_crate_type = vec!["lib".to_string()];
+
+        assert_eq!(classify_supported_cargo_target_kind(&lib_kind, &proc_macro_crate_type), Some("proc-macro"));
+        assert_eq!(classify_supported_cargo_target_kind(&rlib_kind, &proc_macro_crate_type), Some("proc-macro"));
+        assert_eq!(classify_supported_cargo_target_kind(&lib_kind, &lib_crate_type), Some("lib"));
+        assert_eq!(classify_supported_cargo_target_kind(&bin_kind, &proc_macro_crate_type), Some("bin"));
+        assert_eq!(classify_supported_cargo_target_kind(&missing_kind, &proc_macro_crate_type), None);
+    }
+
+    #[test]
+    fn cargo_unit_derivation_promotes_proc_macro_crate_type_to_host_unit() {
+        let dir = TempDir::new().unwrap();
+        let proc_macro_id = "registry+https://github.com/rust-lang/crates.io-index#spez@0.1.2";
+        let lib_id = "registry+https://github.com/rust-lang/crates.io-index#ordinary@0.1.0";
+        let packages = vec![
+            test_native_package(proc_macro_id, "spez", "proc-macro", Vec::new()),
+            test_native_package(lib_id, "ordinary", "lib", Vec::new()),
+        ];
+        let source_closure = test_source_closure(&packages);
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": proc_macro_id,
+                    "target": {"name": "spez", "kind": ["lib"], "crate_types": ["proc-macro"], "src_path": "/test/spez/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": []
+                },
+                {
+                    "pkg_id": lib_id,
+                    "target": {"name": "ordinary", "kind": ["lib"], "crate_types": ["lib"], "src_path": "/test/ordinary/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": []
+                }
+            ]
+        });
+
+        let graph = summarize_cargo_unit_derivation_graph(&unit_graph, &source_closure, &options(dir.path())).unwrap();
+
+        assert!(graph.ready, "{:#?}", graph.blockers);
+        assert_eq!(graph.host_unit_count, 1usize);
+        assert_eq!(graph.host_artifact_count, 1usize);
+        let proc_macro = graph
+            .derivations
+            .iter()
+            .find(|unit| unit.package_id == proc_macro_id)
+            .expect("proc-macro unit present");
+        assert_eq!(proc_macro.target_kind, "proc-macro");
+        assert_eq!(proc_macro.execution_kind, "host");
+        assert!(has_ordered_arg_pair(&proc_macro.derivation.args, "--crate-type", "proc-macro"));
+        assert!(!has_ordered_arg_pair(&proc_macro.derivation.args, "--crate-type", "lib"));
+        let ordinary =
+            graph.derivations.iter().find(|unit| unit.package_id == lib_id).expect("ordinary lib unit present");
+        assert_eq!(ordinary.target_kind, "lib");
+        assert_eq!(ordinary.execution_kind, "target");
+        assert!(!ordinary.derivation.inputs.iter().any(|input| input.starts_with("host-artifact:")));
+    }
+
+    #[test]
     fn native_unit_derivation_adds_selected_feature_cfg_args() {
         let dir = TempDir::new().unwrap();
         let package_id = "path+file://syn#syn@0.1.0".to_string();
@@ -9672,6 +9758,66 @@ mod tests {
             .expect("app consumes selected proc macro");
         assert_eq!(app_consumer.consumed_host_artifacts.len(), 1usize);
         assert_eq!(app_consumer.consumed_host_artifacts[0].package_id, selected_macro_id);
+    }
+
+    #[test]
+    fn native_host_planning_selects_lib_kind_proc_macro_crate_type() {
+        let dir = TempDir::new().unwrap();
+        let app_id = "path+file://app#app@0.1.0";
+        let proc_macro_id = "path+file://spez#spez@0.1.2";
+        let mut app = test_native_package(app_id, "app", "lib", Vec::new());
+        let proc_macro = test_native_package(proc_macro_id, "spez", "proc-macro", Vec::new());
+        app.path_dependencies.push(NativePathDependencySummary {
+            name: "spez".to_string(),
+            manifest_path: proc_macro.manifest_path.clone(),
+        });
+        let package_planning = test_package_planning(vec![app, proc_macro]);
+        let source_closure = test_source_closure(&package_planning.packages);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": proc_macro_id,
+                    "target": {"name": "spez", "kind": ["lib"], "crate_types": ["proc-macro"], "src_path": "/test/spez/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": []
+                },
+                {
+                    "pkg_id": app_id,
+                    "target": {"name": "app", "kind": ["lib"], "crate_types": ["lib"], "src_path": "/test/app/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": [{"pkg_id": proc_macro_id, "extern_crate_name": "spez"}]
+                }
+            ]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        let native_hosts = summarize_native_host_unit_graph_planning(
+            &unit_graph,
+            &source_closure,
+            &empty_registry_planning(),
+            &package_planning,
+            &native_units,
+            &plan_options,
+        )
+        .unwrap();
+
+        assert!(native_hosts.ready, "{:#?}", native_hosts.blockers);
+        assert_eq!(native_hosts.host_units.len(), 1usize);
+        assert_eq!(native_hosts.host_units[0].package_id, proc_macro_id);
+        assert_eq!(native_hosts.host_units[0].target_kind, "proc-macro");
+        assert_eq!(native_hosts.target_consumers.len(), 1usize);
+        assert_eq!(native_hosts.target_consumers[0].package_id, app_id);
+        assert_eq!(native_hosts.target_consumers[0].consumed_host_artifacts.len(), 1usize);
+        assert_eq!(native_hosts.target_consumers[0].consumed_host_artifacts[0].package_id, proc_macro_id);
     }
 
     #[test]
@@ -11243,6 +11389,26 @@ rust-version = "1.80"
         )
         .unwrap();
         assert_eq!(rustc_edition_arg(&graph.derivations[0].derivation.args), DEFAULT_RUST_EDITION);
+    }
+
+    #[test]
+    fn native_manifest_proc_macro_alias_feeds_target_planning() {
+        let dir = TempDir::new().unwrap();
+        let manifest_path = dir.path().join("Cargo.toml");
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(
+            &manifest_path,
+            "[package]\nname = 'spez'\nversion = '0.1.2'\nedition = '2021'\n\n[lib]\nproc_macro = true\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("src/lib.rs"), "extern crate proc_macro;\n").unwrap();
+        let manifest = read_native_manifest(&manifest_path).unwrap();
+
+        let targets = native_targets_for_manifest(dir.path(), "spez", "0.1.2", "2021", &manifest).unwrap();
+
+        assert_eq!(targets.len(), 1usize);
+        assert_eq!(targets[0].name, "spez");
+        assert_eq!(targets[0].kind, "proc-macro");
     }
 
     #[test]
