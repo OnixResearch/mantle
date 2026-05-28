@@ -15,6 +15,8 @@ Does native Rust topology now provide deterministic Cargo target cfg env variabl
 - Dirty self-probe summary: `target/mantle-self-rust-plan-probe-after-target-cfg-dirty/blocker-summary.txt`
 - Clean self-probe artifact: `target/mantle-self-rust-plan-probe-after-c9bf3938-clean/receipt.json`
 - Clean self-probe summary: `target/mantle-self-rust-plan-probe-after-c9bf3938-clean/blocker-summary.txt`
+- Cairn validation command: `cairn validate --root .`
+- Whitespace check: `git diff --check`
 
 ## Decision
 
@@ -55,10 +57,27 @@ topology blocker:
 error occurred in cc-rs: environment variable OPT_LEVEL not defined
 ```
 
+Post-archive Cairn validation passed with no active changes:
+
+```json
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 1,
+  "valid": true
+}
+```
+
+`git diff --check` produced no output.
+
 ## Owner
 
 Mantle agent.
 
 ## Next action
 
-Archive the Cairn change if validation stays clean. Next topology frontier is native build-script cc-rs profile env parity (`OPT_LEVEL` and likely adjacent Cargo build-script env vars).
+Next topology frontier is native build-script cc-rs profile env parity (`OPT_LEVEL` and likely adjacent Cargo build-script env vars).
