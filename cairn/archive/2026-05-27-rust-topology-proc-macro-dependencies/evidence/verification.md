@@ -35,13 +35,43 @@ After updating the change to include feature cfg propagation:
 
 ## Self-probe oracle checkpoint
 
-- **Question:** Does committed HEAD `0e17e26b` move the proc-macro frontier past the old `async-stream-impl` unresolved `proc_macro` / dependency-import failure while preserving clean-tree evidence?
+- **Question:** Does committed implementation HEAD `0e17e26b` move the proc-macro frontier past the old `async-stream-impl` unresolved `proc_macro` / dependency-import failure while preserving clean-tree evidence?
 - **Inspected evidence:** pueue task `47`; `target/mantle-self-rust-plan-probe-after-0e17e26b-clean/head.txt`; `target/mantle-self-rust-plan-probe-after-0e17e26b-clean/git-status-short.txt`; `target/mantle-self-rust-plan-probe-after-0e17e26b-clean/receipt.json`; `target/mantle-self-rust-plan-probe-after-0e17e26b-clean/blocker-summary.txt`.
-- **Decision:** Yes. The probe is tied to clean commit `0e17e26b`, `async-stream-impl` executes successfully as a proc-macro host unit, its derivation carries selected dependencies (`proc_macro2`, `quote`, `syn`) and compiler `proc_macro`, and `syn` receives selected feature cfgs including `parsing` and `visit-mut`. The topology advances from 5 to 15 unit executions and 3 to 6 metadata runs. The next deterministic blocker is `aws-lc-rs` build-script metadata requiring `DEP_AWS_LC_...` include env.
+- **Decision:** Yes. The probe is tied to clean implementation commit `0e17e26b`, `async-stream-impl` executes successfully as a proc-macro host unit, its derivation carries selected dependencies (`proc_macro2`, `quote`, `syn`) and compiler `proc_macro`, and `syn` receives selected feature cfgs including `parsing` and `visit-mut`. The topology advances from 5 to 15 unit executions and 3 to 6 metadata runs. The next deterministic blocker is `aws-lc-rs` build-script metadata requiring `DEP_AWS_LC_...` include env.
 - **Owner:** coding agent.
 - **Next action:** create a separate bounded change for build-script dependency metadata/env propagation needed by `aws-lc-rs`.
 
-Checkpoint excerpt:
+## Final-head evidence addendum
+
+After archive and agent-note commits, pueue task `56` reran the same self-probe at final code-bearing HEAD `573bc89b`. Later evidence-only commits do not modify `src/rust_plan.rs` or accepted specs. Task `56` confirms the same decision at `573bc89b`: clean tree, `async-stream-impl` proc-macro success, 15 topology unit executions, 6 metadata runs, next blocker at `aws-lc-rs` build-script include env.
+
+A follow-up transcript also ran `git diff --check`; it produced no output, so whitespace checks passed.
+
+Final code-bearing HEAD probe excerpt from task `56`:
+
+```text
+probe: target/mantle-self-rust-plan-probe-after-573bc89b-clean/receipt.json
+head: 573bc89b43746188f10fd5f0c4c5d447fa287da9
+git_status_short_bytes=0
+
+probe_status=0
+topology_execution=blocked
+topology_unit_executions=15
+metadata_runs=6
+
+async-stream-impl unit execution:
+registry+https://github.com/rust-lang/crates.io-index#async-stream-impl@0.3.6 target=proc-macro status=success reason=
+
+blocker classes:
+      1 build-script-run-failed
+
+topology blocker:
+- build-script-run-failed:
+thread 'main' (732424) panicked at /home/brittonr/git/mantle/vendor-deps/aws-lc-rs/build.rs:110:5:
+missing DEP_AWS_LC_ include
+```
+
+Implementation checkpoint excerpt:
 
 ```text
 probe: target/mantle-self-rust-plan-probe-after-0e17e26b-clean/receipt.json
