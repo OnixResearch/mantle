@@ -3355,20 +3355,84 @@ fn native_dependency_source<'a>(
         return git_dependency_source(dependency_name, value, native_git_source_planning)
             .map(|source| Some(source.manifest_path.as_str()));
     }
-    Ok(registry_dependency_source(dependency_name, value, native_registry_source_planning)
-        .map(|source| source.manifest_path.as_str()))
+    registry_dependency_source(dependency_name, value, native_registry_source_planning)
+        .map(|source| source.map(|source| source.manifest_path.as_str()))
 }
 
 fn registry_dependency_source<'a>(
     dependency_name: &str,
     value: &toml::Value,
     native_registry_source_planning: &'a NativeRegistrySourcePlanningSummary,
-) -> Option<&'a NativeRegistrySourceSummary> {
+) -> Result<Option<&'a NativeRegistrySourceSummary>, DependencySourceResolutionError> {
+    debug_assert!(!dependency_name.is_empty());
     if !native_registry_source_planning.ready {
-        return None;
+        return Ok(None);
     }
     let package_name = dependency_package_name(dependency_name, value);
-    native_registry_source_planning.sources.iter().find(|source| source.name == package_name)
+    let candidates = native_registry_source_planning
+        .sources
+        .iter()
+        .filter(|source| source.name == package_name)
+        .collect::<Vec<_>>();
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+    if let Some(version_req) = dependency_version(value).map(str::trim).filter(|version| !version.is_empty()) {
+        let normalized_req = dependency_exact_version(version_req);
+        let matching = candidates
+            .iter()
+            .copied()
+            .filter(|source| registry_version_req_matches(version_req, &source.version))
+            .collect::<Vec<_>>();
+        if matching.len() == 1 {
+            return Ok(Some(matching[0]));
+        }
+        if version_req.starts_with('=') && candidates.len() > 1 {
+            return Err(dependency_source_error(
+                "missing-registry-dependency-version",
+                format!(
+                    "registry dependency `{dependency_name}` requested `{package_name}` version `{normalized_req}` but available versions are {}",
+                    registry_candidate_versions(&candidates)
+                ),
+            ));
+        }
+    }
+    Ok(Some(candidates[0]))
+}
+
+fn dependency_exact_version(version_req: &str) -> &str {
+    debug_assert!(!version_req.trim().is_empty());
+    version_req.strip_prefix('=').map(str::trim).unwrap_or(version_req.trim())
+}
+
+fn registry_version_req_matches(version_req: &str, source_version: &str) -> bool {
+    debug_assert!(!version_req.trim().is_empty());
+    debug_assert!(!source_version.is_empty());
+    let normalized_req = dependency_exact_version(version_req);
+    if normalized_req == source_version {
+        return true;
+    }
+    if version_req.trim().starts_with('=') {
+        return false;
+    }
+    registry_version_prefix_matches(normalized_req, source_version)
+}
+
+fn registry_version_prefix_matches(version_prefix: &str, source_version: &str) -> bool {
+    debug_assert!(!version_prefix.is_empty());
+    debug_assert!(!source_version.is_empty());
+    let Some(suffix) = source_version.strip_prefix(version_prefix) else {
+        return false;
+    };
+    suffix.starts_with('.') || suffix.starts_with('-') || suffix.starts_with('+')
+}
+
+fn registry_candidate_versions(candidates: &[&NativeRegistrySourceSummary]) -> String {
+    debug_assert!(!candidates.is_empty());
+    let mut versions = candidates.iter().map(|source| source.version.clone()).collect::<Vec<_>>();
+    versions.sort();
+    versions.dedup();
+    versions.join(", ")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9005,6 +9069,27 @@ mod tests {
         }
     }
 
+    fn test_registry_source(name: &str, version: &str, manifest_path: &Path) -> NativeRegistrySourceSummary {
+        let registry_source = "registry+https://github.com/rust-lang/crates.io-index";
+        NativeRegistrySourceSummary {
+            package_id: format!("{registry_source}#{name}@{version}"),
+            name: name.to_string(),
+            version: version.to_string(),
+            source: registry_source.to_string(),
+            source_class: "crates-io".to_string(),
+            checksum: blake3::hash(format!("{name}-{version}").as_bytes()).to_hex().to_string(),
+            vendor_root: normalize_path_string(manifest_path.parent().unwrap_or_else(|| Path::new("."))),
+            manifest_path: normalize_path_string(manifest_path),
+            source_digest: test_source_digest(&format!("{name}-{version}")),
+            lockfile_identity: LockPackageIdentity {
+                name: name.to_string(),
+                version: version.to_string(),
+                source: Some(registry_source.to_string()),
+                checksum: None,
+            },
+        }
+    }
+
     fn empty_git_planning() -> NativeGitSourcePlanningSummary {
         NativeGitSourcePlanningSummary {
             ready: true,
@@ -11232,6 +11317,50 @@ rust-version = "1.80"
         assert_eq!(package_planning.packages.len(), 2);
         let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
         assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&dep_dir.join("Cargo.toml")));
+    }
+
+    #[test]
+    fn registry_dependency_source_uses_exact_version_when_names_repeat() {
+        let dir = TempDir::new().unwrap();
+        let impl_1_manifest = dir.path().join("thiserror-impl-1.0.69/Cargo.toml");
+        let impl_2_manifest = dir.path().join("thiserror-impl-2.0.18/Cargo.toml");
+        let mut registry = empty_registry_planning();
+        registry.sources = vec![
+            test_registry_source("thiserror-impl", "1.0.69", &impl_1_manifest),
+            test_registry_source("thiserror-impl", "2.0.18", &impl_2_manifest),
+        ];
+        let dependency: toml::Value = toml::from_str("version = \"=2.0.18\"").unwrap();
+
+        let selected = registry_dependency_source("thiserror-impl", &dependency, &registry).unwrap().unwrap();
+
+        assert_eq!(selected.name, "thiserror-impl");
+        assert_eq!(selected.version, "2.0.18");
+        assert_eq!(selected.manifest_path, normalize_path_string(&impl_2_manifest));
+        assert_ne!(selected.manifest_path, normalize_path_string(&impl_1_manifest));
+
+        let prefix_dependency: toml::Value = toml::from_str("version = \"2.0\"").unwrap();
+        let prefix_selected =
+            registry_dependency_source("thiserror-impl", &prefix_dependency, &registry).unwrap().unwrap();
+        assert_eq!(prefix_selected.version, "2.0.18");
+        assert_eq!(prefix_selected.manifest_path, normalize_path_string(&impl_2_manifest));
+    }
+
+    #[test]
+    fn registry_dependency_source_rejects_missing_exact_same_name_version() {
+        let dir = TempDir::new().unwrap();
+        let mut registry = empty_registry_planning();
+        registry.sources = vec![
+            test_registry_source("thiserror-impl", "1.0.69", &dir.path().join("thiserror-impl-1.0.69/Cargo.toml")),
+            test_registry_source("thiserror-impl", "2.0.18", &dir.path().join("thiserror-impl-2.0.18/Cargo.toml")),
+        ];
+        let dependency: toml::Value = toml::from_str("version = \"=3.0.0\"").unwrap();
+
+        let err = registry_dependency_source("thiserror-impl", &dependency, &registry).unwrap_err();
+
+        assert_eq!(err.class, "missing-registry-dependency-version");
+        assert!(err.message.contains("thiserror-impl"));
+        assert!(err.message.contains("1.0.69"));
+        assert!(err.message.contains("2.0.18"));
     }
 
     #[test]
