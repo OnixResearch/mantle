@@ -70,6 +70,11 @@ const RUSTC_EXTERN_ARG_PAIR_WIDTH: usize = 2;
 const RUSTC_CAP_LINTS_FLAG: &str = "--cap-lints";
 const RUSTC_CAP_LINTS_ALLOW: &str = "allow";
 const RUSTC_PROC_MACRO_EXTERN: &str = "proc_macro";
+const RUSTC_LINK_LIB_KIND_STATIC: &str = "static";
+const RUSTC_LINK_LIB_KIND_DYLIB: &str = "dylib";
+const RUSTC_LINK_LIB_KIND_FRAMEWORK: &str = "framework";
+const RUSTC_LINK_LIB_MODIFIER_ENABLE: char = '+';
+const RUSTC_LINK_LIB_MODIFIER_DISABLE: char = '-';
 const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
 const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
@@ -7740,22 +7745,47 @@ fn validate_rustc_link_lib_metadata(value: &str, line_index: usize) -> Result<()
     if contains_metadata_whitespace(value) {
         return Err(malformed_build_script_metadata(line_index, "rustc-link-lib must not contain whitespace"));
     }
-    if value.contains(':') || value.contains(',') {
-        return Err(malformed_build_script_metadata(
-            line_index,
-            "rustc-link-lib modifiers and renames are not supported by this bounded rail",
-        ));
-    }
-    let name = if let Some((kind, name)) = value.split_once('=') {
-        if !matches!(kind, "static" | "dylib" | "framework") {
-            return Err(malformed_build_script_metadata(line_index, "unsupported rustc-link-lib kind"));
-        }
+    let name = if let Some((prefix, name)) = value.split_once('=') {
+        validate_rustc_link_lib_prefix(prefix, line_index)?;
         name
     } else {
         value
     };
-    if !is_safe_link_token(name) {
+    if name.contains(':') || name.contains(',') {
+        return Err(malformed_build_script_metadata(
+            line_index,
+            "rustc-link-lib renames and comma-separated names are not supported by this bounded rail",
+        ));
+    }
+    if !is_safe_link_name(name) {
         return Err(malformed_build_script_metadata(line_index, "rustc-link-lib name must be a safe token"));
+    }
+    Ok(())
+}
+
+fn validate_rustc_link_lib_prefix(prefix: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
+    let (kind, modifiers) = prefix.split_once(':').map_or((prefix, None), |(kind, modifiers)| (kind, Some(modifiers)));
+    if !rustc_link_lib_kind_is_supported(kind) {
+        return Err(malformed_build_script_metadata(line_index, "unsupported rustc-link-lib kind"));
+    }
+    if let Some(modifiers) = modifiers {
+        validate_rustc_link_lib_modifiers(modifiers, line_index)?;
+    }
+    Ok(())
+}
+
+fn rustc_link_lib_kind_is_supported(kind: &str) -> bool {
+    matches!(kind, RUSTC_LINK_LIB_KIND_STATIC | RUSTC_LINK_LIB_KIND_DYLIB | RUSTC_LINK_LIB_KIND_FRAMEWORK)
+}
+
+fn validate_rustc_link_lib_modifiers(modifiers: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
+    if modifiers.is_empty() {
+        return Err(malformed_build_script_metadata(line_index, "rustc-link-lib modifiers must not be empty"));
+    }
+    for modifier in modifiers.split(',') {
+        if !is_safe_link_modifier(modifier) {
+            return Err(malformed_build_script_metadata(line_index, "rustc-link-lib modifier must be a safe token"));
+        }
     }
     Ok(())
 }
@@ -7788,8 +7818,20 @@ fn contains_metadata_whitespace(value: &str) -> bool {
     value.chars().any(char::is_whitespace)
 }
 
-fn is_safe_link_token(value: &str) -> bool {
-    !value.is_empty() && value.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+fn is_safe_link_name(value: &str) -> bool {
+    !value.is_empty() && value.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '+'))
+}
+
+fn is_safe_link_modifier(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(prefix) = chars.next() else {
+        return false;
+    };
+    if prefix != RUSTC_LINK_LIB_MODIFIER_ENABLE && prefix != RUSTC_LINK_LIB_MODIFIER_DISABLE {
+        return false;
+    }
+    let token = chars.as_str();
+    !token.is_empty() && token.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
 }
 
 fn push_metadata_value(
@@ -9724,6 +9766,45 @@ rust-version = "1.80"
         assert_eq!(metadata.metadata.get("libcrypto").unwrap(), "aws_lc_0_39_1_crypto");
         assert!(!metadata.metadata.contains_key("warning"));
         assert!(!metadata.metadata.contains_key("rustc-check-cfg"));
+    }
+
+    #[test]
+    fn parse_build_script_metadata_accepts_bounded_link_lib_forms() {
+        let dir = TempDir::new().unwrap();
+        let stdout = "cargo:rustc-link-lib=stdc++\ncargo:rustc-link-lib=static=aws_lc_0_39_1_crypto\ncargo:rustc-link-lib=static:+whole-archive,-bundle=crypto_core\n";
+
+        let metadata = parse_build_script_metadata(stdout, dir.path()).expect("metadata parses");
+
+        assert_eq!(metadata.rustc_link_lib, vec![
+            "static:+whole-archive,-bundle=crypto_core".to_string(),
+            "static=aws_lc_0_39_1_crypto".to_string(),
+            "stdc++".to_string(),
+        ]);
+        assert!(metadata.rustc_link_search.is_empty());
+    }
+
+    #[test]
+    fn parse_build_script_metadata_rejects_unsafe_link_lib_forms() {
+        let dir = TempDir::new().unwrap();
+        let cases = [
+            ("cargo:rustc-link-lib=shared=crypto\n", "unsupported rustc-link-lib kind"),
+            (
+                "cargo:rustc-link-lib=static:/tmp/libcrypto.a\n",
+                "rustc-link-lib renames and comma-separated names are not supported",
+            ),
+            ("cargo:rustc-link-lib=static:whole-archive=crypto\n", "rustc-link-lib modifier must be a safe token"),
+            (
+                "cargo:rustc-link-lib=static=crypto:renamed\n",
+                "rustc-link-lib renames and comma-separated names are not supported",
+            ),
+            ("cargo:rustc-link-lib=static=/tmp/libcrypto.a\n", "rustc-link-lib name must be a safe token"),
+        ];
+
+        for (stdout, expected) in cases {
+            let err = parse_build_script_metadata(stdout, dir.path()).unwrap_err();
+            assert_eq!(err.class, "malformed-build-script-metadata");
+            assert!(err.message.contains(expected), "unexpected error: {}", err.message);
+        }
     }
 
     #[test]
