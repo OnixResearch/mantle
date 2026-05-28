@@ -43,12 +43,23 @@ cargo test -p mantle --bin mantle combined_unit_topology -- --nocapture
 Result:
 
 ```text
-running 2 tests
+running 3 tests
 test rust_plan::tests::combined_unit_topology_blocks_missing_target_host_artifact_producer ... ok
+test rust_plan::tests::combined_unit_topology_keeps_standalone_host_units ... ok
 test rust_plan::tests::combined_unit_topology_orders_target_host_and_proc_macro_edges ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 466 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 466 filtered out; finished in 0.00s
 ```
+
+## Review remediation
+
+Same-family review found the combined scheduler had stopped executing selected
+host units that were not reachable from target roots. The fix now seeds the
+combined DFS with both `host_indices` and `target_indices`, preserving prior
+selected-host execution coverage while keeping dependency edges authoritative.
+Regression coverage is
+`combined_unit_topology_keeps_standalone_host_units`, which asserts an
+unreachable selected host unit stays in the unified execution order.
 
 ## Self-probe blocker movement
 

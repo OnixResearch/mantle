@@ -5270,7 +5270,7 @@ fn plan_combined_unit_topology_order(
     let mut ordered_unit_indices = Vec::new();
     let mut temporary = BTreeSet::new();
     let mut permanent = BTreeSet::new();
-    for index in target_indices {
+    for index in host_indices.iter().chain(target_indices.iter()) {
         visit_target_topology_unit(
             *index,
             &combined_edges,
@@ -8240,6 +8240,35 @@ mod tests {
         .unwrap();
 
         assert_eq!(order, vec![2usize, 1usize, 0usize]);
+    }
+
+    #[test]
+    fn combined_unit_topology_keeps_standalone_host_units() {
+        let target_lib_id = "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228";
+        let standalone_host_id = "registry+https://github.com/rust-lang/crates.io-index#standalone-build@0.1.0";
+        let graph = test_unit_derivation_graph(vec![
+            test_rust_derivation(0, target_lib_id, "lib", "target", Vec::new()),
+            test_rust_derivation(1, standalone_host_id, "custom-build", "host", Vec::new()),
+        ]);
+        let mut lib_producers = BTreeMap::new();
+        lib_producers.insert(target_lib_id.to_string(), 0usize);
+        let mut host_producers = BTreeMap::new();
+        host_producers.insert(standalone_host_id.to_string(), 1usize);
+        let mut target_edges = BTreeMap::new();
+        target_edges.insert(0usize, Vec::new());
+
+        let order = plan_combined_unit_topology_order(
+            &[0usize],
+            &[1usize],
+            &lib_producers,
+            &host_producers,
+            &BTreeMap::new(),
+            &target_edges,
+            &graph,
+        )
+        .unwrap();
+
+        assert_eq!(order, vec![1usize, 0usize]);
     }
 
     #[test]
