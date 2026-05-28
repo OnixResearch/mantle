@@ -18,6 +18,9 @@ const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json
 const DEFAULT_CARGO_PROFILE: &str = "dev";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
+const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
+const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
+const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
 const GIT_SOURCE_DIGEST_ALGORITHM: &str = "git-revision";
 
@@ -6716,6 +6719,26 @@ fn bind_all_build_script_metadata(
     Ok(bound)
 }
 
+fn rust_topology_runtime_args(reviewable_args: &[String]) -> Vec<String> {
+    let mut has_link_self_contained = false;
+    let mut previous_is_codegen_flag = false;
+    for arg in reviewable_args {
+        if previous_is_codegen_flag && arg.starts_with(RUSTC_LINK_SELF_CONTAINED_OPTION) {
+            has_link_self_contained = true;
+        }
+        if arg.strip_prefix("-C").is_some_and(|option| option.starts_with(RUSTC_LINK_SELF_CONTAINED_OPTION)) {
+            has_link_self_contained = true;
+        }
+        previous_is_codegen_flag = arg == RUSTC_CODEGEN_OPTION_FLAG;
+    }
+    let mut runtime_args = reviewable_args.to_vec();
+    if !has_link_self_contained {
+        runtime_args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
+        runtime_args.push(RUSTC_EXTERNAL_LINKER_MODE_ARG.to_string());
+    }
+    runtime_args
+}
+
 fn rust_topology_child_env(
     explicit_env: &BTreeMap<String, String>,
     inherited_path: Option<OsString>,
@@ -7102,7 +7125,7 @@ fn execute_rust_unit(
         .map_err(|err| RunError::Internal(format!("creating Rust unit output {}: {err}", unit_output_dir.display())))?;
 
     let mut command = Command::new(&options.rustc);
-    command.args(&unit.derivation.args);
+    command.args(rust_topology_runtime_args(&unit.derivation.args));
     command.arg("--out-dir").arg(&unit_output_dir);
     apply_rust_topology_child_env(&mut command, &unit.derivation.env);
     let output = command
@@ -8177,6 +8200,46 @@ mod tests {
             derivations,
             blockers: Vec::new(),
         }
+    }
+
+    #[test]
+    fn rust_topology_runtime_args_disable_self_contained_linker_by_default() {
+        let args = vec!["--crate-name".to_string(), "demo".to_string()];
+
+        let runtime_args = rust_topology_runtime_args(&args);
+
+        assert_eq!(&runtime_args[..args.len()], &args[..]);
+        assert_eq!(runtime_args[args.len()], RUSTC_CODEGEN_OPTION_FLAG);
+        assert_eq!(runtime_args[args.len() + 1usize], RUSTC_EXTERNAL_LINKER_MODE_ARG);
+    }
+
+    #[test]
+    fn rust_topology_runtime_args_preserve_split_explicit_linker_mode() {
+        let args = vec![
+            RUSTC_CODEGEN_OPTION_FLAG.to_string(),
+            "link-self-contained=yes".to_string(),
+            "--crate-name".to_string(),
+            "demo".to_string(),
+        ];
+
+        let runtime_args = rust_topology_runtime_args(&args);
+
+        assert_eq!(runtime_args, args);
+        assert_eq!(runtime_args.iter().filter(|arg| arg.contains(RUSTC_LINK_SELF_CONTAINED_OPTION)).count(), 1usize);
+    }
+
+    #[test]
+    fn rust_topology_runtime_args_preserve_joined_explicit_linker_mode() {
+        let args = vec![
+            "-Clink-self-contained=no".to_string(),
+            "--crate-name".to_string(),
+            "demo".to_string(),
+        ];
+
+        let runtime_args = rust_topology_runtime_args(&args);
+
+        assert_eq!(runtime_args, args);
+        assert_eq!(runtime_args.iter().filter(|arg| arg.contains(RUSTC_LINK_SELF_CONTAINED_OPTION)).count(), 1usize);
     }
 
     #[test]
