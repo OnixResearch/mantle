@@ -81,3 +81,22 @@ Commands:
 ```
 
 Result: all three gates returned `verdict: PASS`.
+
+## Post-review final-tree oracle checkpoint
+
+- **Question:** Does the post-review implementation/test tree still move native topology past both the `object_store` / `rand` disambiguator blocker and the `SNIX_BUILD_SANDBOX_SHELL` compile-time-env blocker from a clean checkout?
+- **Inspected evidence:** pueue task `143`, `target/mantle-self-rust-plan-probe-post-review-clean/head.txt`, `target/mantle-self-rust-plan-probe-post-review-clean/git-status-short.txt`, `target/mantle-self-rust-plan-probe-post-review-clean/status.txt`, `target/mantle-self-rust-plan-probe-post-review-clean/stderr.txt`, and `target/mantle-self-rust-plan-probe-post-review-clean/blocker-summary.txt`.
+- **Decision:** The probe is tied to committed code `ca82932c1638f540983dfc038d2d78799ed707f7` with `git_status_short_bytes=0`. It reaches the same deterministic root `mantle` same-package self-dependency blocker, so both prior blockers remain cleared in the post-review code tree. This evidence-only follow-up changes archived verification text after the probe; no Rust implementation changed after `ca82932c`.
+- **Owner:** coding agent.
+- **Next action:** handle root package same-package self-dependency as the next native topology frontier in a separate Cairn change.
+
+Checkpoint excerpt:
+
+```text
+probe: target/mantle-self-rust-plan-probe-post-review-clean/receipt.json
+head: ca82932c1638f540983dfc038d2d78799ed707f7
+git_status_short_bytes=0
+probe_status=3
+receipt missing topology_execution
+error: unit 0:path+file:///home/brittonr/git/mantle#0.1.0:mantle:lib:build reached execution before dependency package path+file:///home/brittonr/git/mantle#0.1.0 was produced
+```

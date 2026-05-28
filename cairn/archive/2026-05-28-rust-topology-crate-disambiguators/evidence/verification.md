@@ -89,3 +89,22 @@ Commands:
 ```
 
 Result: all three gates returned `verdict: PASS`.
+
+## Post-review ambient-independence test
+
+Task-ID: V5
+Covers: rust_package_planning.native_crate_disambiguators
+
+Command:
+
+```sh
+export PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH
+export PKG_CONFIG_PATH=/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig
+export SNIX_BUILD_SANDBOX_SHELL=/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+cargo fmt -p mantle -- src/rust_plan.rs
+export CARGO_TARGET_DIR=/tmp/mantle-disambiguator-hardening-tests
+cargo test -p mantle --bin mantle native_unit_metadata_disambiguator_ignores_ambient_tool_roots -- --nocapture
+cargo test -p mantle --bin mantle rustc_metadata_disambiguator -- --nocapture
+```
+
+Result: `native_unit_metadata_disambiguator_ignores_ambient_tool_roots` passed and proves the metadata value is unchanged when `RustPlanOptions.root`, `cargo`, and `rustc` point at different temp roots. `rustc_metadata_disambiguator_distinguishes_same_crate_package_versions` still passed.
