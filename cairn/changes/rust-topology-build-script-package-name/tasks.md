@@ -1,6 +1,6 @@
 ## Phase 1: Implementation
 
-- [ ] [serial] Record current review finding and baseline focused test evidence. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_build_script_package_name_env]
-- [ ] [serial] Add focused positive and fallback tests for build-script `CARGO_PKG_NAME`. Evidence: `evidence/verification.md`, focused rust-plan tests. r[rust_package_planning.native_build_script_package_name_env]
-- [ ] [serial] Carry package-derived name into native derivation env and use it in `build_script_child_env`. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_build_script_package_name_env]
-- [ ] [serial] Run focused tests, self-probe, Cairn validation, and sync/archive readiness. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_package_name_env]
+- [x] [serial] Record current review finding and baseline focused test evidence. Evidence: `evidence/current-blocker.md`, pueue task `40`. r[rust_package_planning.native_build_script_package_name_env]
+- [x] [serial] Add focused positive and fallback tests for build-script `CARGO_PKG_NAME`. Evidence: `evidence/verification.md`, `build_script_child_env_sets_tool_target_and_manifest_package_name`, `build_script_child_env_omits_manifest_dir_without_source_arg`, `native_host_derivation_carries_manifest_package_name_for_build_script_env`. r[rust_package_planning.native_build_script_package_name_env]
+- [x] [serial] Carry package-derived name into native derivation env and use it in `build_script_child_env`. Evidence: `src/rust_plan.rs`, `NativeRustUnitSummary.package_name`, `NativeHostUnitSummary.package_name`, `native_host_unit_derivation`, `build_script_child_env`. r[rust_package_planning.native_build_script_package_name_env]
+- [x] [serial] Run focused tests, self-probe, Cairn validation, and sync/archive readiness. Evidence: `evidence/verification.md`; pueue task `44` preserved the proc-macro/dependency frontier and showed package-derived custom-build envs. r[rust_package_planning.native_build_script_package_name_env]
