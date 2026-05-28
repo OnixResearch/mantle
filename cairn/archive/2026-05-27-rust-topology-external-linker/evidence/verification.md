@@ -21,12 +21,13 @@ cargo test -p mantle --bin mantle rust_topology_runtime_args -- --nocapture
 Result:
 
 ```text
-running 3 tests
+running 4 tests
+test rust_plan::tests::rust_topology_runtime_args_ignore_near_match_linker_mode ... ok
 test rust_plan::tests::rust_topology_runtime_args_disable_self_contained_linker_by_default ... ok
-test rust_plan::tests::rust_topology_runtime_args_preserve_split_explicit_linker_mode ... ok
 test rust_plan::tests::rust_topology_runtime_args_preserve_joined_explicit_linker_mode ... ok
+test rust_plan::tests::rust_topology_runtime_args_preserve_split_explicit_linker_mode ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 472 filtered out; finished in 0.00s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 472 filtered out; finished in 0.00s
 ```
 
 ## Self-probe blocker movement
@@ -68,6 +69,43 @@ topology blocker:
 The stale rustup `ld-wrapper.sh` blocker is gone. Topology execution now builds
 and runs the first custom-build unit (`fuse-backend-rs`) and reaches the next
 Rust source/edition blocker in `vendor/nix-compat-derive`.
+
+## Review remediation
+
+Same-family review found `link-self-contained` detection was prefix-based. The
+fix now recognizes only exact `link-self-contained` and
+`link-self-contained=...` codegen options. The near-match regression
+`rust_topology_runtime_args_ignore_near_match_linker_mode` proves
+`link-self-containedness=...` does not suppress default
+`-C link-self-contained=no` injection.
+
+## Final self-probe oracle checkpoint
+
+Pueue task `13` was inspected after `8fcfeb96` was committed and pushed. The
+repo-local checkpoint is
+`target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/blocker-summary.txt`:
+
+```text
+probe: target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/receipt.json
+head: 8fcfeb966bb36ca9bfef4f002d6446f3e800dd1a
+git_status_short_bytes=0
+
+probe_status=0
+topology_execution=blocked
+topology_unit_executions=2
+metadata_runs=1
+
+blocker classes:
+      2 rustc-failed
+
+topology blocker:
+- rustc-failed: error: let chains are only allowed in Rust 2024 or later
+  --> ./vendor/nix-compat-derive/src/de.rs:39:8
+```
+
+Decision: the final clean probe for the external-linker implementation is tied
+to committed code `8fcfeb96` with a clean tree, and it verifies blocker movement
+from stale rustup `ld-wrapper.sh` to the next Rust-edition source issue.
 
 ## Decision
 

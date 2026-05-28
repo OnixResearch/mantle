@@ -6719,14 +6719,21 @@ fn bind_all_build_script_metadata(
     Ok(bound)
 }
 
+fn is_link_self_contained_codegen_option(option: &str) -> bool {
+    if option == RUSTC_LINK_SELF_CONTAINED_OPTION {
+        return true;
+    }
+    option.strip_prefix(RUSTC_LINK_SELF_CONTAINED_OPTION).is_some_and(|suffix| suffix.starts_with('='))
+}
+
 fn rust_topology_runtime_args(reviewable_args: &[String]) -> Vec<String> {
     let mut has_link_self_contained = false;
     let mut previous_is_codegen_flag = false;
     for arg in reviewable_args {
-        if previous_is_codegen_flag && arg.starts_with(RUSTC_LINK_SELF_CONTAINED_OPTION) {
+        if previous_is_codegen_flag && is_link_self_contained_codegen_option(arg) {
             has_link_self_contained = true;
         }
-        if arg.strip_prefix("-C").is_some_and(|option| option.starts_with(RUSTC_LINK_SELF_CONTAINED_OPTION)) {
+        if arg.strip_prefix("-C").is_some_and(is_link_self_contained_codegen_option) {
             has_link_self_contained = true;
         }
         previous_is_codegen_flag = arg == RUSTC_CODEGEN_OPTION_FLAG;
@@ -8240,6 +8247,22 @@ mod tests {
 
         assert_eq!(runtime_args, args);
         assert_eq!(runtime_args.iter().filter(|arg| arg.contains(RUSTC_LINK_SELF_CONTAINED_OPTION)).count(), 1usize);
+    }
+
+    #[test]
+    fn rust_topology_runtime_args_ignore_near_match_linker_mode() {
+        let args = vec![
+            RUSTC_CODEGEN_OPTION_FLAG.to_string(),
+            "link-self-containedness=yes".to_string(),
+            "--crate-name".to_string(),
+            "demo".to_string(),
+        ];
+
+        let runtime_args = rust_topology_runtime_args(&args);
+
+        assert_eq!(&runtime_args[..args.len()], &args[..]);
+        assert_eq!(runtime_args[args.len()], RUSTC_CODEGEN_OPTION_FLAG);
+        assert_eq!(runtime_args[args.len() + 1usize], RUSTC_EXTERNAL_LINKER_MODE_ARG);
     }
 
     #[test]
