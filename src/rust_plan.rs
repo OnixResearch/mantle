@@ -63,6 +63,8 @@ const CARGO_CFG_UNIX_ENV: &str = "CARGO_CFG_UNIX";
 const CARGO_CFG_WINDOWS_ENV: &str = "CARGO_CFG_WINDOWS";
 const BUILD_SCRIPT_DEP_ENV_PREFIX: &str = "DEP_";
 const BUILD_SCRIPT_TARGET_NAME: &str = "build-script-build";
+const BUILD_SCRIPT_BUILD_CRATE_NAME: &str = "build_script_build";
+const BUILD_SCRIPT_MAIN_CRATE_NAME: &str = "build_script_main";
 const PACKAGE_LINKS_ENV: &str = "MANTLE_PACKAGE_LINKS";
 const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
 const RUSTC_CFG_FLAG: &str = "--cfg";
@@ -7421,12 +7423,13 @@ fn bind_all_host_artifacts(
         })?;
         let produced_artifact_string = normalize_path_string(produced_artifact);
         bind_host_artifact_material(&mut bound, host_artifact, &produced_artifact_string);
+        let host_dependency_names = host_artifact_dependency_names(host_artifact);
         let host_crate_name = rust_crate_name(&host_artifact.target_name);
         let matching_dependencies = bound
             .dependency_artifacts
             .iter()
             .filter(|dependency| {
-                dependency.package_id == host_artifact.package_id && dependency.name == host_crate_name
+                dependency.package_id == host_artifact.package_id && host_dependency_names.contains(&dependency.name)
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -7439,6 +7442,17 @@ fn bind_all_host_artifacts(
     }
     refresh_rustc_args_digest(&mut bound);
     Ok(bound)
+}
+
+fn host_artifact_dependency_names(host_artifact: &RustHostArtifact) -> BTreeSet<String> {
+    debug_assert!(!host_artifact.target_name.is_empty());
+    debug_assert!(!host_artifact.target_kind.is_empty());
+    let mut names = BTreeSet::from([rust_crate_name(&host_artifact.target_name)]);
+    if host_artifact.target_kind == "custom-build" {
+        names.insert(BUILD_SCRIPT_BUILD_CRATE_NAME.to_string());
+        names.insert(BUILD_SCRIPT_MAIN_CRATE_NAME.to_string());
+    }
+    names
 }
 
 fn bind_host_artifact_material(
@@ -10369,6 +10383,100 @@ rust-version = "1.80"
         assert_eq!(bound.consumed_host_artifacts[0].artifact, produced_path_string);
         assert!(!has_rustc_extern_arg(&bound.derivation.args, "build_script_build"));
         assert_eq!(bound.dependency_artifacts, Vec::<RustDependencyArtifact>::new());
+    }
+
+    #[test]
+    fn bind_all_host_artifacts_rewrites_custom_build_main_alias_placeholder() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1";
+        let produced_path = dir.path().join(BUILD_SCRIPT_BUILD_CRATE_NAME);
+        std::fs::write(&produced_path, b"build-script").unwrap();
+        let dependency = RustDependencyArtifact {
+            package_id: package_id.to_string(),
+            name: BUILD_SCRIPT_MAIN_CRATE_NAME.to_string(),
+            artifact: format!("artifact:{package_id}:{BUILD_SCRIPT_MAIN_CRATE_NAME}"),
+        };
+        let mut unit = test_rust_derivation(0, package_id, "lib", "target", vec![dependency.clone()]);
+        unit.derivation.args = vec![
+            RUSTC_EXTERN_FLAG.to_string(),
+            format!("{BUILD_SCRIPT_MAIN_CRATE_NAME}={}", dependency.artifact),
+        ];
+        unit.derivation.inputs = vec![dependency.artifact.clone(), "host-artifact:build-script".to_string()];
+        unit.consumed_host_artifacts = vec![RustHostArtifact {
+            package_id: package_id.to_string(),
+            target_name: BUILD_SCRIPT_TARGET_NAME.to_string(),
+            target_kind: "custom-build".to_string(),
+            artifact: "host-artifact:build-script".to_string(),
+            metadata_digest_blake3: None,
+        }];
+        let mut produced_host_artifacts = BTreeMap::new();
+        produced_host_artifacts.insert(package_id.to_string(), produced_path.clone());
+        let produced_path_string = normalize_path_string(&produced_path);
+
+        let bound = bind_all_host_artifacts(&unit, &produced_host_artifacts).unwrap();
+
+        assert_eq!(bound.dependency_artifacts[0].artifact, produced_path_string);
+        assert!(bound.derivation.inputs.contains(&produced_path_string));
+        assert!(has_ordered_arg_pair(
+            &bound.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            &format!("{BUILD_SCRIPT_MAIN_CRATE_NAME}={produced_path_string}")
+        ));
+        assert!(
+            !bound
+                .derivation
+                .args
+                .iter()
+                .any(|arg| arg == &format!("{BUILD_SCRIPT_MAIN_CRATE_NAME}={}", dependency.artifact))
+        );
+        assert_ne!(bound.rustc_args_digest_blake3, unit.rustc_args_digest_blake3);
+    }
+
+    #[test]
+    fn bind_all_host_artifacts_leaves_unknown_custom_build_alias_placeholder() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1";
+        let unknown_alias = "custom_build_helper";
+        let produced_path = dir.path().join(BUILD_SCRIPT_BUILD_CRATE_NAME);
+        std::fs::write(&produced_path, b"build-script").unwrap();
+        let dependency = RustDependencyArtifact {
+            package_id: package_id.to_string(),
+            name: unknown_alias.to_string(),
+            artifact: format!("artifact:{package_id}:{unknown_alias}"),
+        };
+        let mut unit = test_rust_derivation(0, package_id, "lib", "target", vec![dependency.clone()]);
+        unit.derivation.args = vec![
+            RUSTC_EXTERN_FLAG.to_string(),
+            format!("{unknown_alias}={}", dependency.artifact),
+        ];
+        unit.derivation.inputs = vec![dependency.artifact.clone(), "host-artifact:build-script".to_string()];
+        unit.consumed_host_artifacts = vec![RustHostArtifact {
+            package_id: package_id.to_string(),
+            target_name: BUILD_SCRIPT_TARGET_NAME.to_string(),
+            target_kind: "custom-build".to_string(),
+            artifact: "host-artifact:build-script".to_string(),
+            metadata_digest_blake3: None,
+        }];
+        let mut produced_host_artifacts = BTreeMap::new();
+        produced_host_artifacts.insert(package_id.to_string(), produced_path.clone());
+        let produced_path_string = normalize_path_string(&produced_path);
+
+        let bound = bind_all_host_artifacts(&unit, &produced_host_artifacts).unwrap();
+
+        assert_ne!(bound.consumed_host_artifacts[0].artifact, unit.consumed_host_artifacts[0].artifact);
+        assert_eq!(bound.dependency_artifacts[0], dependency);
+        assert!(bound.derivation.inputs.contains(&produced_path_string));
+        assert!(bound.derivation.inputs.contains(&dependency.artifact));
+        assert!(has_ordered_arg_pair(
+            &bound.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            &format!("{unknown_alias}={}", dependency.artifact)
+        ));
+        assert!(!has_ordered_arg_pair(
+            &bound.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            &format!("{unknown_alias}={produced_path_string}")
+        ));
     }
 
     #[test]
