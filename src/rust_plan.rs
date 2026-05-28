@@ -26,6 +26,9 @@ const BUILD_SCRIPT_RUSTC_ENV: &str = "RUSTC";
 const BUILD_SCRIPT_HOST_ENV: &str = "HOST";
 const BUILD_SCRIPT_TARGET_ENV: &str = "TARGET";
 const BUILD_SCRIPT_PROFILE_ENV: &str = "PROFILE";
+const BUILD_SCRIPT_DEP_ENV_PREFIX: &str = "DEP_";
+const BUILD_SCRIPT_TARGET_NAME: &str = "build-script-build";
+const PACKAGE_LINKS_ENV: &str = "MANTLE_PACKAGE_LINKS";
 const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
 const RUSTC_CFG_FLAG: &str = "--cfg";
 const RUSTC_EXTERN_FLAG: &str = "--extern";
@@ -226,6 +229,7 @@ pub(crate) struct NativePackagePlanningSummary {
     pub(crate) name: String,
     pub(crate) version: String,
     pub(crate) manifest_path: String,
+    pub(crate) links: Option<String>,
     pub(crate) selected_features: Vec<String>,
     pub(crate) targets: Vec<NativeTargetPlanningSummary>,
     pub(crate) path_dependencies: Vec<NativePathDependencySummary>,
@@ -298,6 +302,8 @@ pub(crate) struct NativeRustUnitSummary {
     pub(crate) unit_id: String,
     pub(crate) package_id: String,
     pub(crate) package_name: String,
+    pub(crate) package_links: Option<String>,
+    pub(crate) package_root: String,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
     pub(crate) crate_name: String,
@@ -337,6 +343,8 @@ pub(crate) struct NativeHostUnitSummary {
     pub(crate) unit_id: String,
     pub(crate) package_id: String,
     pub(crate) package_name: String,
+    pub(crate) package_links: Option<String>,
+    pub(crate) package_root: String,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
     pub(crate) crate_name: String,
@@ -349,6 +357,7 @@ pub(crate) struct NativeHostUnitSummary {
     pub(crate) source_digest: SourceDigest,
     pub(crate) artifact: RustHostArtifact,
     pub(crate) dependency_artifacts: Vec<RustDependencyArtifact>,
+    pub(crate) metadata_dependencies: Vec<BuildScriptMetadataDependency>,
     pub(crate) generated_metadata: Option<BuildScriptMetadataSummary>,
 }
 
@@ -400,6 +409,7 @@ pub(crate) struct RustUnitDerivationSummary {
     pub(crate) source_digest: SourceDigest,
     pub(crate) dependency_artifacts: Vec<RustDependencyArtifact>,
     pub(crate) consumed_host_artifacts: Vec<RustHostArtifact>,
+    pub(crate) metadata_dependencies: Vec<BuildScriptMetadataDependency>,
     pub(crate) generated_metadata: Option<BuildScriptMetadataSummary>,
     pub(crate) derivation: ReviewableRustDerivation,
     pub(crate) rustc_args_digest_blake3: String,
@@ -422,6 +432,12 @@ pub(crate) struct RustHostArtifact {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct BuildScriptMetadataDependency {
+    pub(crate) package_id: String,
+    pub(crate) links: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct BuildScriptMetadataSummary {
     pub(crate) out_dir: String,
     pub(crate) rustc_cfg: Vec<String>,
@@ -429,6 +445,7 @@ pub(crate) struct BuildScriptMetadataSummary {
     pub(crate) rustc_link_lib: Vec<String>,
     pub(crate) rustc_link_search: Vec<String>,
     pub(crate) rerun_if_changed: Vec<String>,
+    pub(crate) metadata: BTreeMap<String, String>,
     pub(crate) digest_blake3: String,
 }
 
@@ -571,6 +588,7 @@ pub(crate) struct BuildScriptMetadataRunReceipt {
     pub(crate) rustc_link_lib: Vec<String>,
     pub(crate) rustc_link_search: Vec<String>,
     pub(crate) rerun_if_changed: Vec<String>,
+    pub(crate) metadata: BTreeMap<String, String>,
     pub(crate) out_dir_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) stdout_digest_blake3: String,
     pub(crate) metadata_digest_blake3: String,
@@ -753,6 +771,9 @@ struct NativeManifestPackage {
     version: NativeManifestInheritedString,
     #[serde(default)]
     edition: NativeManifestInheritedString,
+    #[serde(default)]
+    build: Option<toml::Value>,
+    links: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -798,7 +819,7 @@ struct NativeManifest {
     package: Option<NativeManifestPackage>,
     workspace: Option<NativeManifestWorkspace>,
     #[serde(default)]
-    build: Option<String>,
+    build: Option<toml::Value>,
     lib: Option<NativeManifestLib>,
     #[serde(default)]
     bin: Vec<NativeManifestBin>,
@@ -2277,6 +2298,7 @@ fn native_package_from_manifest(
         name: package.name.clone(),
         version: package_version.clone(),
         manifest_path: normalize_path_string(manifest_path),
+        links: package.links.clone(),
         selected_features,
         targets,
         path_dependencies,
@@ -2355,11 +2377,10 @@ fn native_targets_for_manifest(
     manifest: &NativeManifest,
 ) -> Result<Vec<NativeTargetPlanningSummary>, NativePackagePlanningBlocker> {
     let mut targets = Vec::new();
-    if let Some(build_script) =
-        manifest.build.as_deref().or_else(|| source_root.join("build.rs").is_file().then_some("build.rs"))
-    {
-        let path = source_root.join(build_script);
-        push_native_target(&mut targets, "build-script-build", "custom-build", &path, package_edition)?;
+    if let Some(build_script) = native_manifest_build_script(source_root, manifest) {
+        let path = source_root.join(&build_script);
+        let target_name = build_script_target_name(&build_script);
+        push_native_target(&mut targets, &target_name, "custom-build", &path, package_edition)?;
     }
     if let Some(lib) = &manifest.lib {
         let kind = if lib.proc_macro { "proc-macro" } else { "lib" };
@@ -2394,6 +2415,27 @@ fn native_targets_for_manifest(
     targets.sort();
     targets.dedup();
     Ok(targets)
+}
+
+fn package_root_from_manifest_path(manifest_path: &str) -> String {
+    Path::new(manifest_path).parent().map(normalize_path_string).unwrap_or_else(|| ".".to_string())
+}
+
+fn native_manifest_build_script(source_root: &Path, manifest: &NativeManifest) -> Option<String> {
+    let package_build = manifest.package.as_ref().and_then(|package| package.build.as_ref());
+    if let Some(value) = package_build.or(manifest.build.as_ref()) {
+        if value.as_bool() == Some(false) {
+            return None;
+        }
+        if let Some(path) = value.as_str() {
+            return Some(path.to_string());
+        }
+    }
+    source_root.join("build.rs").is_file().then(|| "build.rs".to_string())
+}
+
+fn build_script_target_name(_build_script: &str) -> String {
+    BUILD_SCRIPT_TARGET_NAME.to_string()
 }
 
 fn push_native_target(
@@ -3503,6 +3545,8 @@ fn summarize_native_unit_graph_planning(
                 unit_id,
                 package_id: package.package_id.clone(),
                 package_name: package.name.clone(),
+                package_links: package.links.clone(),
+                package_root: package_root_from_manifest_path(&package.manifest_path),
                 target_name: target.name.clone(),
                 target_kind: target.kind.clone(),
                 crate_name: target.crate_name.clone(),
@@ -3856,6 +3900,12 @@ fn summarize_native_host_unit_graph_planning(
                 source_closure,
                 &mut blockers,
             );
+            let metadata_dependencies = native_host_metadata_dependencies(
+                package,
+                &target.kind,
+                &native_package_target_planning.packages,
+                &mut blockers,
+            );
             let unit_id = rust_unit_id(host_index, &package.package_id, &target.name, &target.kind, "build");
             let artifact = RustHostArtifact {
                 package_id: package.package_id.clone(),
@@ -3872,6 +3922,8 @@ fn summarize_native_host_unit_graph_planning(
                 unit_id,
                 package_id: package.package_id.clone(),
                 package_name: package.name.clone(),
+                package_links: package.links.clone(),
+                package_root: package_root_from_manifest_path(&package.manifest_path),
                 target_name: target.name.clone(),
                 target_kind: target.kind.clone(),
                 crate_name: target.crate_name.clone(),
@@ -3884,6 +3936,7 @@ fn summarize_native_host_unit_graph_planning(
                 source_digest: source_digest.clone(),
                 artifact,
                 dependency_artifacts: host_dependency_artifacts.clone(),
+                metadata_dependencies,
                 generated_metadata,
             });
             host_index += 1;
@@ -3975,6 +4028,41 @@ fn summarize_native_host_unit_graph_planning(
             "not-full-host-scheduling-or-execution".to_string(),
         ],
     })
+}
+
+fn native_host_metadata_dependencies(
+    package: &NativePackagePlanningSummary,
+    target_kind: &str,
+    packages: &[NativePackagePlanningSummary],
+    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
+) -> Vec<BuildScriptMetadataDependency> {
+    if target_kind != "custom-build" {
+        return Vec::new();
+    }
+    let mut dependencies = Vec::new();
+    for dependency in package.path_dependencies.iter().chain(package.build_dependencies.iter()) {
+        let Some(dependency_package) = packages
+            .iter()
+            .find(|candidate| manifest_path_strings_same(&candidate.manifest_path, &dependency.manifest_path))
+        else {
+            blockers.push(native_host_blocker(
+                None,
+                Some(package.package_id.clone()),
+                "unresolved-linked-metadata-dependency-edge",
+                &format!("linked dependency `{}` has no native package fact", dependency.name),
+            ));
+            continue;
+        };
+        if let Some(links) = &dependency_package.links {
+            dependencies.push(BuildScriptMetadataDependency {
+                package_id: dependency_package.package_id.clone(),
+                links: links.clone(),
+            });
+        }
+    }
+    dependencies.sort();
+    dependencies.dedup();
+    dependencies
 }
 
 fn native_host_unit_dependency_artifacts(
@@ -4318,6 +4406,7 @@ fn native_unit_derivation(
     options: &RustPlanOptions,
 ) -> RustUnitDerivationSummary {
     debug_assert!(!unit.package_name.is_empty());
+    debug_assert!(!unit.package_root.is_empty());
     let mut args = vec![
         "--crate-name".to_string(),
         unit.crate_name.clone(),
@@ -4349,6 +4438,10 @@ fn native_unit_derivation(
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
+    env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), unit.package_root.clone());
+    if let Some(links) = &unit.package_links {
+        env.insert(PACKAGE_LINKS_ENV.to_string(), links.clone());
+    }
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
     }
@@ -4369,6 +4462,7 @@ fn native_unit_derivation(
         source_digest: unit.source_digest.clone(),
         dependency_artifacts: unit.dependency_artifacts.clone(),
         consumed_host_artifacts,
+        metadata_dependencies: Vec::new(),
         generated_metadata: None,
         derivation: ReviewableRustDerivation {
             name: derivation_name(&unit.target_name, native_unit_index(&unit.unit_id)),
@@ -4390,6 +4484,7 @@ fn native_host_unit_derivation(
     options: &RustPlanOptions,
 ) -> RustUnitDerivationSummary {
     debug_assert!(!unit.package_name.is_empty());
+    debug_assert!(!unit.package_root.is_empty());
     let mut args = vec![
         "--crate-name".to_string(),
         unit.crate_name.clone(),
@@ -4423,6 +4518,10 @@ fn native_host_unit_derivation(
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
+    env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), unit.package_root.clone());
+    if let Some(links) = &unit.package_links {
+        env.insert(PACKAGE_LINKS_ENV.to_string(), links.clone());
+    }
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
     }
@@ -4442,6 +4541,7 @@ fn native_host_unit_derivation(
         source_digest: unit.source_digest.clone(),
         dependency_artifacts: unit.dependency_artifacts.clone(),
         consumed_host_artifacts: Vec::new(),
+        metadata_dependencies: unit.metadata_dependencies.clone(),
         generated_metadata: unit.generated_metadata.clone(),
         derivation: ReviewableRustDerivation {
             name: derivation_name(&unit.target_name, native_unit_index(&unit.unit_id)),
@@ -4720,10 +4820,7 @@ fn summarize_unit_derivation(
             args.push(format!("linker={}", normalize_path_string(&linker)));
         }
     }
-    for feature in features {
-        args.push("--cfg".to_string());
-        args.push(format!("feature=\"{feature}\""));
-    }
+    append_rustc_feature_cfg_args(&mut args, &features);
     for dependency in &dependency_artifacts {
         args.push("--extern".to_string());
         args.push(format!("{}={}", dependency.name, dependency.artifact));
@@ -4757,6 +4854,7 @@ fn summarize_unit_derivation(
         source_digest: source.source_digest.clone(),
         dependency_artifacts,
         consumed_host_artifacts,
+        metadata_dependencies: Vec::new(),
         generated_metadata,
         derivation: ReviewableRustDerivation {
             name: derivation_name(&target_name, index),
@@ -4888,6 +4986,7 @@ fn build_script_metadata_summary(package_id: &str, target_name: &str) -> BuildSc
     let rustc_link_lib = Vec::new();
     let rustc_link_search = Vec::new();
     let rerun_if_changed = Vec::new();
+    let metadata = BTreeMap::new();
     #[derive(Serialize)]
     struct Hashable<'a> {
         out_dir: &'a str,
@@ -4896,6 +4995,7 @@ fn build_script_metadata_summary(package_id: &str, target_name: &str) -> BuildSc
         rustc_link_lib: &'a [String],
         rustc_link_search: &'a [String],
         rerun_if_changed: &'a [String],
+        metadata: &'a BTreeMap<String, String>,
     }
     let canonical = serde_json::to_vec(&Hashable {
         out_dir: &out_dir,
@@ -4904,6 +5004,7 @@ fn build_script_metadata_summary(package_id: &str, target_name: &str) -> BuildSc
         rustc_link_lib: &rustc_link_lib,
         rustc_link_search: &rustc_link_search,
         rerun_if_changed: &rerun_if_changed,
+        metadata: &metadata,
     })
     .unwrap_or_default();
     BuildScriptMetadataSummary {
@@ -4913,6 +5014,7 @@ fn build_script_metadata_summary(package_id: &str, target_name: &str) -> BuildSc
         rustc_link_lib,
         rustc_link_search,
         rerun_if_changed,
+        metadata,
         digest_blake3: blake3::hash(&canonical).to_hex().to_string(),
     }
 }
@@ -5404,6 +5506,24 @@ fn plan_combined_unit_topology_order(
     for (index, deps) in host_dependency_plan.host_edges {
         combined_edges.entry(index).or_default().extend(deps);
     }
+    let build_metadata_producers = build_script_metadata_producers(graph, host_indices);
+    for index in host_indices.iter().chain(target_indices.iter()) {
+        let unit = &graph.derivations[*index];
+        for metadata_dependency in &unit.metadata_dependencies {
+            let Some(producer_index) = build_metadata_producers.get(&metadata_dependency.package_id).copied() else {
+                return Err(RustUnitExecutionBlocker {
+                    class: "missing-build-script-metadata-producer".to_string(),
+                    message: format!(
+                        "no supported build-script metadata producer for linked dependency package {}",
+                        metadata_dependency.package_id
+                    ),
+                });
+            };
+            if producer_index != *index {
+                combined_edges.entry(*index).or_default().push(producer_index);
+            }
+        }
+    }
     for index in target_indices {
         let unit = &graph.derivations[*index];
         for host_artifact in &unit.consumed_host_artifacts {
@@ -5440,6 +5560,20 @@ fn plan_combined_unit_topology_order(
         )?;
     }
     Ok(ordered_unit_indices)
+}
+
+fn build_script_metadata_producers(
+    graph: &UnitDerivationGraphSummary,
+    host_indices: &[usize],
+) -> BTreeMap<String, usize> {
+    let mut producers = BTreeMap::new();
+    for index in host_indices {
+        let unit = &graph.derivations[*index];
+        if unit.target_kind == "custom-build" {
+            producers.entry(unit.package_id.clone()).or_insert(*index);
+        }
+    }
+    producers
 }
 
 pub(crate) fn execute_rust_unit_topology(
@@ -5587,6 +5721,7 @@ pub(crate) fn execute_rust_unit_topology(
                 produced_dependency_artifacts.extend(produced_proc_macro_artifacts.clone());
                 executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_dependency_artifacts)?;
             }
+            executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;
             let receipt = execute_rust_unit(&executable_unit, options)?;
             if receipt.execution_status != "success" {
                 let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
@@ -5599,7 +5734,7 @@ pub(crate) fn execute_rust_unit_topology(
             match produced_host_artifact_path(unit, options)? {
                 Ok(path) => {
                     if unit.target_kind == "custom-build" {
-                        match run_build_script_metadata(unit, options, &path)? {
+                        match run_build_script_metadata(&executable_unit, options, &path)? {
                             Ok(metadata_run) => {
                                 produced_build_script_metadata
                                     .insert(unit.package_id.clone(), build_script_metadata_from_run(&metadata_run));
@@ -5901,6 +6036,7 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
         source_digest: package.source_digest.clone(),
         dependency_artifacts,
         consumed_host_artifacts: Vec::new(),
+        metadata_dependencies: Vec::new(),
         generated_metadata: None,
         derivation: ReviewableRustDerivation {
             name: derivation_name(test_name, 0),
@@ -6842,6 +6978,15 @@ fn bind_all_build_script_metadata(
     produced_metadata: &BTreeMap<String, BuildScriptMetadataSummary>,
 ) -> Result<RustUnitDerivationSummary, RunError> {
     let mut bound = unit.clone();
+    for metadata_dependency in &unit.metadata_dependencies {
+        let metadata = produced_metadata.get(&metadata_dependency.package_id).ok_or_else(|| {
+            RunError::Internal(format!(
+                "unit {} reached execution before linked build-script metadata package {} was produced",
+                unit.unit_id, metadata_dependency.package_id
+            ))
+        })?;
+        append_dep_metadata_env(&mut bound.derivation.env, metadata_dependency, metadata);
+    }
     for host_artifact in &unit.consumed_host_artifacts {
         if host_artifact.target_kind != "custom-build" {
             continue;
@@ -6871,6 +7016,31 @@ fn bind_all_build_script_metadata(
     }
     bound.rustc_args_digest_blake3 = blake3::hash(bound.derivation.args.join("\0").as_bytes()).to_hex().to_string();
     Ok(bound)
+}
+
+fn append_dep_metadata_env(
+    env: &mut BTreeMap<String, String>,
+    dependency: &BuildScriptMetadataDependency,
+    metadata: &BuildScriptMetadataSummary,
+) {
+    let prefix = format!("{}{}", BUILD_SCRIPT_DEP_ENV_PREFIX, cargo_metadata_env_component(&dependency.links));
+    for (key, value) in &metadata.metadata {
+        let name = format!("{prefix}_{}", cargo_metadata_env_component(key));
+        env.insert(name, value.clone());
+    }
+}
+
+fn cargo_metadata_env_component(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 fn is_link_self_contained_codegen_option(option: &str) -> bool {
@@ -6925,7 +7095,11 @@ fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<
 }
 
 fn build_script_package_root(unit: &RustUnitDerivationSummary) -> Option<PathBuf> {
-    rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf))
+    unit.derivation
+        .env
+        .get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV)
+        .map(PathBuf::from)
+        .or_else(|| rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf)))
 }
 
 fn absolute_path_from(path: &Path, base: &Path) -> PathBuf {
@@ -6942,6 +7116,7 @@ fn build_script_child_env(
     package_root: Option<&Path>,
 ) -> BTreeMap<String, String> {
     let mut env = BTreeMap::new();
+    append_build_script_dependency_env(&mut env, &unit.derivation.env);
     env.insert(BUILD_SCRIPT_OUT_DIR_ENV.to_string(), normalize_path_string(out_dir));
     env.insert(
         BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(),
@@ -6962,6 +7137,14 @@ fn build_script_child_env(
         env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), normalize_path_string(root));
     }
     env
+}
+
+fn append_build_script_dependency_env(env: &mut BTreeMap<String, String>, source: &BTreeMap<String, String>) {
+    for (key, value) in source {
+        if key.starts_with(BUILD_SCRIPT_DEP_ENV_PREFIX) {
+            env.insert(key.clone(), value.clone());
+        }
+    }
 }
 
 fn run_build_script_metadata(
@@ -7030,6 +7213,7 @@ fn run_build_script_metadata(
         rustc_link_lib: metadata.rustc_link_lib,
         rustc_link_search: metadata.rustc_link_search,
         rerun_if_changed: metadata.rerun_if_changed,
+        metadata: metadata.metadata,
         out_dir_artifact_digests,
         stdout_digest_blake3: blake3::hash(&output.stdout).to_hex().to_string(),
         metadata_digest_blake3: metadata.digest_blake3,
@@ -7046,8 +7230,9 @@ fn parse_build_script_metadata(
     let mut rustc_link_lib = Vec::new();
     let mut rustc_link_search = Vec::new();
     let mut rerun_if_changed = Vec::new();
+    let mut metadata = BTreeMap::new();
     for (line_index, line) in stdout.lines().enumerate() {
-        let Some(payload) = line.strip_prefix("cargo:") else {
+        let Some(payload) = cargo_metadata_payload(line) else {
             continue;
         };
         if let Some(value) = payload.strip_prefix("rustc-cfg=") {
@@ -7068,6 +7253,11 @@ fn parse_build_script_metadata(
             push_metadata_value(&mut rustc_link_search, value, line_index)?;
         } else if let Some(value) = payload.strip_prefix("rerun-if-changed=") {
             push_metadata_value(&mut rerun_if_changed, value, line_index)?;
+        } else if cargo_metadata_directive_is_ignored(payload) {
+            continue;
+        } else if let Some((key, value)) = payload.split_once('=') {
+            validate_build_script_metadata_key(key, line_index)?;
+            metadata.insert(key.to_string(), value.to_string());
         }
     }
     rustc_cfg.sort();
@@ -7085,7 +7275,35 @@ fn parse_build_script_metadata(
         rustc_link_lib,
         rustc_link_search,
         rerun_if_changed,
+        metadata,
     )
+}
+
+fn cargo_metadata_payload(line: &str) -> Option<&str> {
+    line.strip_prefix("cargo::").or_else(|| line.strip_prefix("cargo:"))
+}
+
+fn cargo_metadata_directive_is_ignored(payload: &str) -> bool {
+    payload.starts_with("warning=")
+        || payload.starts_with("rerun-if-env-changed=")
+        || payload.starts_with("rustc-check-cfg=")
+        || payload.starts_with("rustc-link-arg=")
+}
+
+fn validate_build_script_metadata_key(key: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
+    if key.is_empty() {
+        return Err(malformed_build_script_metadata(line_index, "metadata key must not be empty"));
+    }
+    if key.starts_with("rustc-") || key.starts_with("rerun-") || key.starts_with("warning") {
+        return Err(malformed_build_script_metadata(line_index, "metadata key uses a reserved cargo prefix"));
+    }
+    if !key.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-')) {
+        return Err(malformed_build_script_metadata(
+            line_index,
+            "metadata key must contain only ASCII alnum, underscore, or hyphen",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_rustc_link_lib_metadata(value: &str, line_index: usize) -> Result<(), RustUnitExecutionBlocker> {
@@ -7173,6 +7391,7 @@ fn build_script_metadata_summary_from_parts(
     rustc_link_lib: Vec<String>,
     rustc_link_search: Vec<String>,
     rerun_if_changed: Vec<String>,
+    metadata: BTreeMap<String, String>,
 ) -> Result<BuildScriptMetadataSummary, RustUnitExecutionBlocker> {
     #[derive(Serialize)]
     struct Hashable<'a> {
@@ -7182,6 +7401,7 @@ fn build_script_metadata_summary_from_parts(
         rustc_link_lib: &'a [String],
         rustc_link_search: &'a [String],
         rerun_if_changed: &'a [String],
+        metadata: &'a BTreeMap<String, String>,
     }
     let canonical = serde_json::to_vec(&Hashable {
         out_dir: &out_dir,
@@ -7190,6 +7410,7 @@ fn build_script_metadata_summary_from_parts(
         rustc_link_lib: &rustc_link_lib,
         rustc_link_search: &rustc_link_search,
         rerun_if_changed: &rerun_if_changed,
+        metadata: &metadata,
     })
     .map_err(|err| RustUnitExecutionBlocker {
         class: "malformed-build-script-metadata".to_string(),
@@ -7202,6 +7423,7 @@ fn build_script_metadata_summary_from_parts(
         rustc_link_lib,
         rustc_link_search,
         rerun_if_changed,
+        metadata,
         digest_blake3: blake3::hash(&canonical).to_hex().to_string(),
     })
 }
@@ -7214,6 +7436,7 @@ fn build_script_metadata_from_run(run: &BuildScriptMetadataRunReceipt) -> BuildS
         rustc_link_lib: run.rustc_link_lib.clone(),
         rustc_link_search: run.rustc_link_search.clone(),
         rerun_if_changed: run.rerun_if_changed.clone(),
+        metadata: run.metadata.clone(),
         digest_blake3: run.metadata_digest_blake3.clone(),
     }
 }
@@ -7751,6 +7974,7 @@ fn dev_dependency_lib_derivation(
         source_digest: package.source_digest.clone(),
         dependency_artifacts: Vec::new(),
         consumed_host_artifacts: Vec::new(),
+        metadata_dependencies: Vec::new(),
         generated_metadata: None,
         derivation: ReviewableRustDerivation {
             name: derivation_name(&target.name, 0),
@@ -7910,6 +8134,7 @@ fn blocked_execution_receipt(
             source_digest,
             dependency_artifacts: Vec::new(),
             consumed_host_artifacts: Vec::new(),
+            metadata_dependencies: Vec::new(),
             generated_metadata: None,
             derivation: ReviewableRustDerivation {
                 name: String::new(),
@@ -8298,6 +8523,7 @@ mod tests {
             name: name.to_string(),
             version: "0.1.0".to_string(),
             manifest_path: format!("/test/{name}/Cargo.toml"),
+            links: None,
             selected_features: Vec::new(),
             targets: vec![NativeTargetPlanningSummary {
                 name: name.to_string(),
@@ -8369,6 +8595,7 @@ mod tests {
             source_digest: test_source_digest(package_id),
             dependency_artifacts: dependencies,
             consumed_host_artifacts: Vec::new(),
+            metadata_dependencies: Vec::new(),
             generated_metadata: None,
             derivation: ReviewableRustDerivation {
                 name: format!("unit-{index}"),
@@ -8438,6 +8665,8 @@ mod tests {
             unit_id: rust_unit_id(0, &package_id, "syn", "lib", "build"),
             package_id: package_id.clone(),
             package_name: "syn".to_string(),
+            package_links: None,
+            package_root: normalize_path_string(&dir.path().join("syn")),
             target_name: "syn".to_string(),
             target_kind: "lib".to_string(),
             crate_name: "syn".to_string(),
@@ -8475,6 +8704,8 @@ mod tests {
             unit_id: rust_unit_id(0, &package_id, "mac", "proc-macro", "build"),
             package_id: package_id.clone(),
             package_name: "mac".to_string(),
+            package_links: None,
+            package_root: normalize_path_string(&dir.path().join("mac")),
             target_name: "mac".to_string(),
             target_kind: "proc-macro".to_string(),
             crate_name: "mac".to_string(),
@@ -8487,6 +8718,7 @@ mod tests {
             source_digest: test_source_digest(&package_id),
             artifact: test_host_artifact(&package_id, "proc-macro"),
             dependency_artifacts: Vec::new(),
+            metadata_dependencies: Vec::new(),
             generated_metadata: None,
         };
         let source_closure = SourceClosureSummary {
@@ -8566,6 +8798,8 @@ mod tests {
             unit_id: rust_unit_id(0, &package_id, "build-script-build", "custom-build", "build"),
             package_id: package_id.clone(),
             package_name: package_name.clone(),
+            package_links: None,
+            package_root: normalize_path_string(&dir.path().join("hyphen-pkg")),
             target_name: "build-script-build".to_string(),
             target_kind: "custom-build".to_string(),
             crate_name: "build_script_build".to_string(),
@@ -8578,6 +8812,7 @@ mod tests {
             source_digest: test_source_digest(&package_id),
             artifact: test_host_artifact(&package_id, "custom-build"),
             dependency_artifacts: Vec::new(),
+            metadata_dependencies: Vec::new(),
             generated_metadata: Some(build_script_metadata_summary(&package_id, "build-script-build")),
         };
         let source_closure = SourceClosureSummary {
@@ -8591,6 +8826,10 @@ mod tests {
         let derivation = native_host_unit_derivation(&unit, &source_closure, &options(dir.path()));
 
         assert_eq!(derivation.derivation.env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
+        assert_eq!(
+            derivation.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(),
+            &normalize_path_string(&dir.path().join("hyphen-pkg"))
+        );
         let child_env = build_script_child_env(
             &derivation,
             &RustUnitExecutionOptions {
@@ -8659,6 +8898,59 @@ mod tests {
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &rust_crate_name(&unit.target_name));
         assert_eq!(env.get(BUILD_SCRIPT_TARGET_ENV).unwrap(), &host_target_triple());
         assert_eq!(env.get(BUILD_SCRIPT_PROFILE_ENV).unwrap(), DEFAULT_CARGO_PROFILE);
+    }
+
+    #[test]
+    fn parse_build_script_metadata_captures_link_metadata() {
+        let dir = TempDir::new().unwrap();
+        let stdout = "cargo:include=/tmp/aws-lc/include\ncargo:libcrypto=aws_lc_0_39_1_crypto\ncargo:warning=ignored\ncargo:rustc-check-cfg=cfg(universal)\n";
+
+        let metadata = parse_build_script_metadata(stdout, dir.path()).expect("metadata parses");
+
+        assert_eq!(metadata.metadata.get("include").unwrap(), "/tmp/aws-lc/include");
+        assert_eq!(metadata.metadata.get("libcrypto").unwrap(), "aws_lc_0_39_1_crypto");
+        assert!(!metadata.metadata.contains_key("warning"));
+        assert!(!metadata.metadata.contains_key("rustc-check-cfg"));
+    }
+
+    #[test]
+    fn parse_build_script_metadata_rejects_bad_custom_key() {
+        let dir = TempDir::new().unwrap();
+        let stdout = "cargo:bad.key=value\n";
+
+        let err = parse_build_script_metadata(stdout, dir.path()).unwrap_err();
+
+        assert_eq!(err.class, "malformed-build-script-metadata");
+        assert!(err.message.contains("metadata key"));
+    }
+
+    #[test]
+    fn bind_build_script_metadata_adds_dep_env_for_linked_dependency() {
+        let mut unit =
+            test_rust_derivation(0, "path+file://aws-lc-rs#aws-lc-rs@1.16.2", "custom-build", "host", Vec::new());
+        unit.metadata_dependencies.push(BuildScriptMetadataDependency {
+            package_id: "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.0".to_string(),
+            links: "aws_lc_0_39_1".to_string(),
+        });
+        let mut metadata = BTreeMap::new();
+        metadata.insert(
+            "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.0".to_string(),
+            BuildScriptMetadataSummary {
+                out_dir: "/tmp/out".to_string(),
+                rustc_cfg: Vec::new(),
+                rustc_env: BTreeMap::new(),
+                rustc_link_lib: Vec::new(),
+                rustc_link_search: Vec::new(),
+                rerun_if_changed: Vec::new(),
+                metadata: BTreeMap::from([("include".to_string(), "/tmp/aws-lc/include".to_string())]),
+                digest_blake3: "digest".to_string(),
+            },
+        );
+
+        let bound = bind_all_build_script_metadata(&unit, &metadata).expect("metadata binds");
+
+        assert_eq!(bound.derivation.env.get("DEP_AWS_LC_0_39_1_INCLUDE").unwrap(), "/tmp/aws-lc/include");
+        assert!(!bound.derivation.env.contains_key("DEP_AWS_LC_0_39_1_MISSING"));
     }
 
     #[test]
@@ -8873,6 +9165,80 @@ mod tests {
     }
 
     #[test]
+    fn combined_unit_topology_orders_linked_metadata_before_dependent_build_script() {
+        const LINKED_BUILD_INDEX: usize = 0;
+        const DEPENDENT_BUILD_INDEX: usize = 1;
+        const TARGET_INDEX: usize = 2;
+        let linked_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.0";
+        let dependent_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-rs@1.16.2";
+        let linked_build = test_rust_derivation(LINKED_BUILD_INDEX, linked_id, "custom-build", "host", Vec::new());
+        let mut dependent_build =
+            test_rust_derivation(DEPENDENT_BUILD_INDEX, dependent_id, "custom-build", "host", Vec::new());
+        dependent_build.metadata_dependencies.push(BuildScriptMetadataDependency {
+            package_id: linked_id.to_string(),
+            links: "aws_lc_0_39_1".to_string(),
+        });
+        let target_lib = test_rust_derivation(TARGET_INDEX, dependent_id, "lib", "target", Vec::new());
+        let graph = test_unit_derivation_graph(vec![linked_build, dependent_build, target_lib]);
+        let mut lib_producers = BTreeMap::new();
+        lib_producers.insert(dependent_id.to_string(), TARGET_INDEX);
+        let mut host_producers = BTreeMap::new();
+        host_producers.insert(linked_id.to_string(), LINKED_BUILD_INDEX);
+        host_producers.insert(dependent_id.to_string(), DEPENDENT_BUILD_INDEX);
+        let mut target_edges = BTreeMap::new();
+        target_edges.insert(TARGET_INDEX, Vec::new());
+
+        let order = plan_combined_unit_topology_order(
+            &[TARGET_INDEX],
+            &[LINKED_BUILD_INDEX, DEPENDENT_BUILD_INDEX],
+            &lib_producers,
+            &host_producers,
+            &BTreeMap::new(),
+            &target_edges,
+            &graph,
+        )
+        .unwrap();
+
+        assert_eq!(order, vec![LINKED_BUILD_INDEX, DEPENDENT_BUILD_INDEX, TARGET_INDEX]);
+    }
+
+    #[test]
+    fn combined_unit_topology_blocks_missing_linked_metadata_producer() {
+        const DEPENDENT_BUILD_INDEX: usize = 0;
+        const TARGET_INDEX: usize = 1;
+        let linked_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.0";
+        let dependent_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-rs@1.16.2";
+        let mut dependent_build =
+            test_rust_derivation(DEPENDENT_BUILD_INDEX, dependent_id, "custom-build", "host", Vec::new());
+        dependent_build.metadata_dependencies.push(BuildScriptMetadataDependency {
+            package_id: linked_id.to_string(),
+            links: "aws_lc_0_39_1".to_string(),
+        });
+        let target_lib = test_rust_derivation(TARGET_INDEX, dependent_id, "lib", "target", Vec::new());
+        let graph = test_unit_derivation_graph(vec![dependent_build, target_lib]);
+        let mut lib_producers = BTreeMap::new();
+        lib_producers.insert(dependent_id.to_string(), TARGET_INDEX);
+        let mut host_producers = BTreeMap::new();
+        host_producers.insert(dependent_id.to_string(), DEPENDENT_BUILD_INDEX);
+        let mut target_edges = BTreeMap::new();
+        target_edges.insert(TARGET_INDEX, Vec::new());
+
+        let err = plan_combined_unit_topology_order(
+            &[TARGET_INDEX],
+            &[DEPENDENT_BUILD_INDEX],
+            &lib_producers,
+            &host_producers,
+            &BTreeMap::new(),
+            &target_edges,
+            &graph,
+        )
+        .unwrap_err();
+
+        assert_eq!(err.class, "missing-build-script-metadata-producer");
+        assert!(err.message.contains(linked_id));
+    }
+
+    #[test]
     fn combined_unit_topology_keeps_standalone_host_units() {
         let target_lib_id = "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228";
         let standalone_host_id = "registry+https://github.com/rust-lang/crates.io-index#standalone-build@0.1.0";
@@ -8947,7 +9313,14 @@ mod tests {
     #[test]
     fn captures_normalized_oracle_receipt() {
         let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
         std::fs::write(dir.path().join("Cargo.lock"), "# lock\n").unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("src/lib.rs"), "pub fn demo() {}\n").unwrap();
         let manifest_path = dir.path().join("Cargo.toml");
         let metadata = format!(
             r#"{{"packages":[{{"id":"path+file://root#demo@0.1.0","name":"demo","version":"0.1.0","source":null,"manifest_path":"{}"}}],"workspace_root":"{}","workspace_members":["path+file://root#demo@0.1.0"]}}"#,
@@ -8964,10 +9337,13 @@ mod tests {
             )),
         };
 
-        let receipt = capture_rust_plan_with_oracle(&options(dir.path()), &oracle).unwrap();
+        let mut plan_options = options(dir.path());
+        plan_options.features.clear();
+        plan_options.no_default_features = false;
+        let receipt = capture_rust_plan_with_oracle(&plan_options, &oracle).unwrap();
 
         assert_eq!(receipt.schema_version, RECEIPT_SCHEMA_VERSION);
-        assert_eq!(receipt.invocation.features, vec!["a", "b"]);
+        assert!(receipt.invocation.features.is_empty());
         assert!(receipt.lockfile.blake3.len() >= 32);
         assert_eq!(receipt.package_count, 1);
         assert_eq!(receipt.packages[0].name, "demo");
@@ -8977,7 +9353,11 @@ mod tests {
         assert_eq!(receipt.source_closure.sources[0].source_digest.algorithm, PATH_SOURCE_DIGEST_ALGORITHM);
         assert_eq!(receipt.unit_graph.unit_count, 1);
         assert_eq!(receipt.unit_graph.root_count, 1);
-        assert!(receipt.unit_derivation_graph.ready);
+        assert!(
+            receipt.unit_derivation_graph.ready,
+            "unit derivation graph blockers: {:?}",
+            receipt.unit_derivation_graph.blockers
+        );
         assert_eq!(receipt.unit_derivation_graph.derivation_count, 1);
         let derivation = &receipt.unit_derivation_graph.derivations[0];
         assert_eq!(derivation.target_kind, "lib");
@@ -9072,6 +9452,43 @@ mod tests {
         assert_eq!(app.path_dependencies[0].name, "dep_crate");
         assert!(planning.non_claims.contains(&"not-full-cargo-compatibility".to_string()));
         assert_eq!(planning.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn native_manifest_package_build_path_and_false_control_targets() {
+        let dir = TempDir::new().unwrap();
+        let package_dir = dir.path().join("linked");
+        let disabled_dir = dir.path().join("disabled");
+        std::fs::create_dir_all(package_dir.join("builder")).unwrap();
+        std::fs::create_dir_all(package_dir.join("src")).unwrap();
+        std::fs::create_dir_all(disabled_dir.join("src")).unwrap();
+        std::fs::write(
+            package_dir.join("Cargo.toml"),
+            "[package]\nname = \"linked\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"builder/main.rs\"\nlinks = \"linked_native\"\n",
+        )
+        .unwrap();
+        std::fs::write(package_dir.join("builder/main.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(package_dir.join("src/lib.rs"), "pub fn linked() {}\n").unwrap();
+        std::fs::write(
+            disabled_dir.join("Cargo.toml"),
+            "[package]\nname = \"disabled\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = false\n",
+        )
+        .unwrap();
+        std::fs::write(disabled_dir.join("build.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(disabled_dir.join("src/lib.rs"), "pub fn disabled() {}\n").unwrap();
+        let linked_manifest = read_native_manifest(&package_dir.join("Cargo.toml")).unwrap();
+        let disabled_manifest = read_native_manifest(&disabled_dir.join("Cargo.toml")).unwrap();
+
+        let linked_targets =
+            native_targets_for_manifest(&package_dir, "linked", "0.1.0", "2021", &linked_manifest).unwrap();
+        let disabled_targets =
+            native_targets_for_manifest(&disabled_dir, "disabled", "0.1.0", "2021", &disabled_manifest).unwrap();
+
+        assert_eq!(linked_manifest.package.as_ref().unwrap().links.as_deref(), Some("linked_native"));
+        let build_target = linked_targets.iter().find(|target| target.kind == "custom-build").unwrap();
+        assert_eq!(build_target.name, BUILD_SCRIPT_TARGET_NAME);
+        assert!(build_target.source_path.ends_with("builder/main.rs"));
+        assert!(disabled_targets.iter().all(|target| target.kind != "custom-build"));
     }
 
     #[test]

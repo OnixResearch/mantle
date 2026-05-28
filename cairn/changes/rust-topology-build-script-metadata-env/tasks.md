@@ -1,4 +1,4 @@
-- [ ] [serial] Record current `aws-lc-rs` missing `DEP_AWS_LC_` blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_linked_build_script_metadata_env]
-- [ ] [serial] Add focused positive and negative tests for package build path parsing, metadata capture, DEP env construction, and host ordering. Evidence: `evidence/verification.md`. r[rust_package_planning.native_linked_build_script_metadata_env]
-- [ ] [serial] Implement linked build-script metadata propagation with bounded env export. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_linked_build_script_metadata_env]
+- [x] [serial] Record current `aws-lc-rs` missing `DEP_AWS_LC_` blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_linked_build_script_metadata_env]
+- [x] [serial] Add focused positive and negative tests for package build path parsing, metadata capture, DEP env construction, and host ordering. Evidence: `evidence/verification.md`. r[rust_package_planning.native_linked_build_script_metadata_env]
+- [x] [serial] Implement linked build-script metadata propagation with bounded env export. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_linked_build_script_metadata_env]
 - [ ] [serial] Run focused tests, self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_linked_build_script_metadata_env]

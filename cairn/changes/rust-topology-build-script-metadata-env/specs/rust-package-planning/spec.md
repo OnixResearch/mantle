@@ -9,7 +9,7 @@ r[rust_package_planning.native_linked_build_script_metadata_env] Mantle MUST pro
 GIVEN a native package manifest declares `[package] build = "builder/main.rs"`
 WHEN Mantle plans native package targets
 THEN Mantle MUST include a custom-build target for that package-level build script.
-AND Mantle MUST use deterministic Cargo-compatible target naming derived from the build script stem.
+AND Mantle MUST use the deterministic Cargo-compatible custom-build target name `build-script-build`.
 
 #### Scenario: Build-script metadata captures safe custom keys
 

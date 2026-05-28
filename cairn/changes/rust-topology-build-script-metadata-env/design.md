@@ -6,7 +6,7 @@ The functional core extends existing planning summaries and metadata parsing wit
 
 ## Approach
 
-1. Extend manifest parsing so `[package] build = "..."` creates a custom-build target with Cargo-compatible `build-script-<stem>` naming; `[package] links = "..."` is recorded on package facts.
+1. Extend manifest parsing so `[package] build = "..."` creates a custom-build target with Cargo-compatible `build-script-build` naming; `[package] links = "..."` is recorded on package facts.
 2. Extend build-script metadata parsing to store safe non-rustc `cargo:key=value` lines while continuing to handle rustc cfg/env/link/search and rerun directives.
 3. Add metadata dependency facts for custom-build units whose immediate normal dependencies have `links` metadata.
 4. In combined topology ordering, add host edges from dependent build scripts to linked dependency custom-build producers.
