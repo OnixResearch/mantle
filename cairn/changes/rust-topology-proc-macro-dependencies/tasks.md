@@ -1,0 +1,4 @@
+- [ ] [serial] Record current proc-macro unresolved-import blocker and baseline focused tests. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_proc_macro_host_dependency_binding]
+- [ ] [serial] Add focused positive and negative tests for proc-macro `proc_macro` extern, normal dependency artifacts, and ordering. Evidence: `evidence/verification.md`. r[rust_package_planning.native_proc_macro_host_dependency_binding]
+- [ ] [serial] Implement proc-macro host dependency binding without widening custom-build behavior. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_proc_macro_host_dependency_binding]
+- [ ] [serial] Run focused tests, self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_proc_macro_host_dependency_binding]
