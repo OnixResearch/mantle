@@ -1,0 +1,4 @@
+- [x] [serial] Record current unselected `jiff-static` host-unit blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_selected_host_units]
+- [x] [serial] Add positive and negative tests for selected vs unselected native host-unit planning. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_selected_host_units]
+- [x] [serial] Implement Cargo-selected host-unit filtering in native host planning. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_selected_host_units]
+- [ ] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_selected_host_units]

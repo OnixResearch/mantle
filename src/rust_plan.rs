@@ -3917,6 +3917,40 @@ fn selected_dependency_artifacts_by_package(
     artifacts_by_package
 }
 
+fn selected_host_unit_keys(unit_graph: &Value) -> BTreeSet<(String, String, String)> {
+    let mut keys = BTreeSet::new();
+    let Some(units) = unit_graph.get("units").and_then(Value::as_array) else {
+        return keys;
+    };
+    for unit in units {
+        let Some(package_id) = target_string(unit, "pkg_id") else {
+            continue;
+        };
+        let Some(target) = unit.get("target") else {
+            continue;
+        };
+        let Some(target_name) = target_string(target, "name") else {
+            continue;
+        };
+        let kinds = target_string_array(target, "kind");
+        for target_kind in ["custom-build", "proc-macro"] {
+            if kinds.iter().any(|kind| kind == target_kind) {
+                keys.insert(host_unit_key(&package_id, &target_name, target_kind));
+            }
+        }
+    }
+    keys
+}
+
+fn host_unit_key(package_id: &str, target_name: &str, target_kind: &str) -> (String, String, String) {
+    let normalized_target_name = if target_kind == "custom-build" {
+        BUILD_SCRIPT_TARGET_NAME
+    } else {
+        target_name
+    };
+    (package_id.to_string(), normalized_target_name.to_string(), target_kind.to_string())
+}
+
 fn selected_native_dependency_artifacts_by_package(
     native_units: &[NativeRustUnitSummary],
 ) -> BTreeMap<String, BTreeSet<RustDependencyArtifact>> {
@@ -4107,7 +4141,7 @@ fn summarize_native_host_unit_graph_planning(
     options: &RustPlanOptions,
 ) -> Result<NativeHostUnitGraphPlanningSummary, RunError> {
     let cargo_graph = summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?;
-    let cargo_host_oracle_digest = cargo_host_oracle_digest(&cargo_graph)?;
+    let cargo_host_oracle_digest = cargo_host_oracle_digest(&cargo_graph, unit_graph)?;
     let mut host_units = Vec::new();
     let mut target_consumers = Vec::new();
     let mut blockers = Vec::new();
@@ -4140,6 +4174,7 @@ fn summarize_native_host_unit_graph_planning(
     let selected_dependency_artifacts_by_package = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
     let selected_native_dependency_artifacts_by_package =
         selected_native_dependency_artifacts_by_package(&native_unit_graph_planning.units);
+    let selected_host_unit_keys = selected_host_unit_keys(unit_graph);
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     let mut host_index = native_unit_graph_planning.units.len();
     for package in &native_package_target_planning.packages {
@@ -4158,8 +4193,14 @@ fn summarize_native_host_unit_graph_planning(
             .find(|registry_source| registry_source.package_id == package.package_id)
             .map(|registry_source| registry_source.source_digest.clone())
             .unwrap_or_else(|| source.source_digest.clone());
-        let package_host_targets =
-            package.targets.iter().filter(|target| is_host_target_kind(&target.kind)).collect::<Vec<_>>();
+        let package_host_targets = package
+            .targets
+            .iter()
+            .filter(|target| is_host_target_kind(&target.kind))
+            .filter(|target| {
+                selected_host_unit_keys.contains(&host_unit_key(&package.package_id, &target.name, &target.kind))
+            })
+            .collect::<Vec<_>>();
         let package_host_artifacts = package_host_targets
             .iter()
             .enumerate()
@@ -4288,14 +4329,14 @@ fn summarize_native_host_unit_graph_planning(
                 || consumer.consumed_host_artifacts.iter().any(|artifact| artifact.package_id.starts_with("registry+"))
         })
     {
-        compare_native_host_units_to_cargo(&host_units, &target_consumers, &cargo_graph, &mut blockers);
+        compare_native_host_units_to_cargo(&host_units, &target_consumers, &cargo_graph, unit_graph, &mut blockers);
     }
     blockers.sort();
     blockers.dedup();
     let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
     let native_host_graph_digest = native_host_graph_digest(&host_units, &target_consumers, &blockers)?;
     let oracle_comparison_digest =
-        native_host_oracle_comparison_digest(&host_units, &target_consumers, &cargo_graph.derivations, &blockers)?;
+        native_host_oracle_comparison_digest(&host_units, &target_consumers, &cargo_graph, unit_graph, &blockers)?;
     Ok(NativeHostUnitGraphPlanningSummary {
         ready: blockers.is_empty(),
         comparison_status,
@@ -4481,6 +4522,7 @@ fn compare_native_host_units_to_cargo(
     host_units: &[NativeHostUnitSummary],
     target_consumers: &[NativeHostTargetConsumerSummary],
     cargo_graph: &UnitDerivationGraphSummary,
+    unit_graph: &Value,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) {
     if !cargo_graph.blockers.is_empty() {
@@ -4494,7 +4536,7 @@ fn compare_native_host_units_to_cargo(
         }
     }
     let native_facts = comparable_native_host_facts(host_units, target_consumers);
-    let cargo_facts = comparable_cargo_host_facts(&cargo_graph.derivations);
+    let cargo_facts = comparable_cargo_host_facts(cargo_graph, unit_graph);
     if native_facts != cargo_facts {
         blockers.push(native_host_blocker(
             None,
@@ -4542,22 +4584,16 @@ fn comparable_native_host_facts(
     facts
 }
 
-fn comparable_cargo_host_facts(units: &[RustUnitDerivationSummary]) -> Vec<String> {
-    let mut facts = units
-        .iter()
-        .filter(|unit| unit.execution_kind == "host")
-        .map(|unit| {
-            format!(
-                "host|{}|{}|{}|{}",
-                unit.package_id,
-                rust_crate_name(&unit.target_name),
-                unit.target_kind,
-                unit.mode
-            )
+fn comparable_cargo_host_facts(cargo_graph: &UnitDerivationGraphSummary, unit_graph: &Value) -> Vec<String> {
+    let mut facts = selected_host_unit_keys(unit_graph)
+        .into_iter()
+        .map(|(package_id, target_name, target_kind)| {
+            format!("host|{}|{}|{}|build", package_id, rust_crate_name(&target_name), target_kind)
         })
-        .collect::<Vec<_>>();
+        .collect::<BTreeSet<_>>();
     facts.extend(
-        units
+        cargo_graph
+            .derivations
             .iter()
             .filter(|unit| unit.execution_kind == "target" && !unit.consumed_host_artifacts.is_empty())
             .map(|unit| {
@@ -4583,12 +4619,11 @@ fn comparable_cargo_host_facts(units: &[RustUnitDerivationSummary]) -> Vec<Strin
                 )
             }),
     );
-    facts.sort();
-    facts
+    facts.into_iter().collect()
 }
 
-fn cargo_host_oracle_digest(cargo_graph: &UnitDerivationGraphSummary) -> Result<String, RunError> {
-    let canonical = serde_json::to_vec(&comparable_cargo_host_facts(&cargo_graph.derivations))
+fn cargo_host_oracle_digest(cargo_graph: &UnitDerivationGraphSummary, unit_graph: &Value) -> Result<String, RunError> {
+    let canonical = serde_json::to_vec(&comparable_cargo_host_facts(cargo_graph, unit_graph))
         .map_err(|err| RunError::Internal(format!("canonicalizing Cargo host-unit oracle facts: {err}")))?;
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
@@ -4616,7 +4651,8 @@ fn native_host_graph_digest(
 fn native_host_oracle_comparison_digest(
     host_units: &[NativeHostUnitSummary],
     target_consumers: &[NativeHostTargetConsumerSummary],
-    cargo_units: &[RustUnitDerivationSummary],
+    cargo_graph: &UnitDerivationGraphSummary,
+    unit_graph: &Value,
     blockers: &[NativeHostUnitGraphPlanningBlocker],
 ) -> Result<String, RunError> {
     #[derive(Serialize)]
@@ -4627,7 +4663,7 @@ fn native_host_oracle_comparison_digest(
     }
     let canonical = serde_json::to_vec(&Hashable {
         native_facts: comparable_native_host_facts(host_units, target_consumers),
-        cargo_facts: comparable_cargo_host_facts(cargo_units),
+        cargo_facts: comparable_cargo_host_facts(cargo_graph, unit_graph),
         blockers,
     })
     .map_err(|err| RunError::Internal(format!("canonicalizing native host-unit graph oracle comparison: {err}")))?;
@@ -9448,6 +9484,153 @@ mod tests {
 
         assert!(blockers.is_empty(), "{blockers:#?}");
         assert!(proc_macro_deps.is_empty());
+    }
+
+    #[test]
+    fn native_host_planning_follows_selected_host_units_only() {
+        let dir = TempDir::new().unwrap();
+        let app_id = "path+file://app#app@0.1.0";
+        let selected_macro_id = "path+file://selected-macro#selected-macro@0.1.0";
+        let unselected_macro_id = "path+file://jiff-static#jiff-static@0.2.23";
+        let quote_id = "path+file://quote#quote@1.0.0";
+        let mut app = test_native_package(app_id, "app", "lib", Vec::new());
+        let selected_macro = test_native_package(selected_macro_id, "selected-macro", "proc-macro", Vec::new());
+        let unselected_macro =
+            test_native_package(unselected_macro_id, "jiff-static", "proc-macro", vec![NativePathDependencySummary {
+                name: "quote".to_string(),
+                manifest_path: "/test/quote/Cargo.toml".to_string(),
+            }]);
+        let quote = test_native_package(quote_id, "quote", "lib", Vec::new());
+        app.path_dependencies.push(NativePathDependencySummary {
+            name: "selected-macro".to_string(),
+            manifest_path: selected_macro.manifest_path.clone(),
+        });
+        let package_planning =
+            test_package_planning(vec![app.clone(), selected_macro.clone(), unselected_macro, quote]);
+        let source_closure = test_source_closure(&package_planning.packages);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": quote_id,
+                    "target": {"name": "quote", "kind": ["lib"], "crate_types": ["lib"], "src_path": "/test/quote/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": []
+                },
+                {
+                    "pkg_id": selected_macro_id,
+                    "target": {"name": "selected-macro", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": "/test/selected-macro/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": [{"pkg_id": quote_id, "extern_crate_name": "quote"}]
+                },
+                {
+                    "pkg_id": app_id,
+                    "target": {"name": "app", "kind": ["lib"], "crate_types": ["lib"], "src_path": "/test/app/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": [{"pkg_id": selected_macro_id, "extern_crate_name": "selected_macro"}]
+                }
+            ]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        let native_hosts = summarize_native_host_unit_graph_planning(
+            &unit_graph,
+            &source_closure,
+            &empty_registry_planning(),
+            &package_planning,
+            &native_units,
+            &plan_options,
+        )
+        .unwrap();
+
+        assert!(native_hosts.ready, "{:#?}", native_hosts.blockers);
+        assert!(native_hosts.host_units.iter().any(|unit| unit.package_id == selected_macro_id));
+        assert!(!native_hosts.host_units.iter().any(|unit| unit.package_id == unselected_macro_id));
+        let selected_host = native_hosts
+            .host_units
+            .iter()
+            .find(|unit| unit.package_id == selected_macro_id)
+            .expect("selected host unit planned");
+        assert_eq!(selected_host.dependency_artifacts, vec![test_dependency_artifact(quote_id, "quote")]);
+        let app_consumer = native_hosts
+            .target_consumers
+            .iter()
+            .find(|consumer| consumer.package_id == app_id)
+            .expect("app consumes selected proc macro");
+        assert_eq!(app_consumer.consumed_host_artifacts.len(), 1usize);
+        assert_eq!(app_consumer.consumed_host_artifacts[0].package_id, selected_macro_id);
+    }
+
+    #[test]
+    fn native_host_planning_keeps_selected_same_package_build_script_for_proc_macro() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://rustversion#rustversion@1.0.0";
+        let mut package = test_native_package(package_id, "rustversion", "proc-macro", Vec::new());
+        package.targets.push(NativeTargetPlanningSummary {
+            name: BUILD_SCRIPT_TARGET_NAME.to_string(),
+            kind: "custom-build".to_string(),
+            crate_name: rust_crate_name(BUILD_SCRIPT_TARGET_NAME),
+            source_path: "/test/rustversion/build.rs".to_string(),
+            edition: "2021".to_string(),
+        });
+        let package_planning = test_package_planning(vec![package]);
+        let source_closure = test_source_closure(&package_planning.packages);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": package_id,
+                    "target": {"name": "build-script-main", "kind": ["custom-build"], "crate_types": ["bin"], "src_path": "/test/rustversion/build.rs", "edition": "2021"},
+                    "mode": "run-custom-build",
+                    "features": [],
+                    "deps": []
+                },
+                {
+                    "pkg_id": package_id,
+                    "target": {"name": "rustversion", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": "/test/rustversion/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": [{"pkg_id": package_id, "extern_crate_name": "build_script_build"}]
+                }
+            ]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        let native_hosts = summarize_native_host_unit_graph_planning(
+            &unit_graph,
+            &source_closure,
+            &empty_registry_planning(),
+            &package_planning,
+            &native_units,
+            &plan_options,
+        )
+        .unwrap();
+
+        assert!(native_hosts.ready, "{:#?}", native_hosts.blockers);
+        assert_eq!(native_hosts.host_units.len(), 2usize);
+        let proc_macro = native_hosts
+            .host_units
+            .iter()
+            .find(|unit| unit.target_kind == "proc-macro")
+            .expect("selected proc macro planned");
+        assert!(proc_macro.dependency_artifacts.is_empty());
+        assert_eq!(proc_macro.consumed_host_artifacts.len(), 1usize);
+        assert_eq!(proc_macro.consumed_host_artifacts[0].target_kind, "custom-build");
     }
 
     #[test]

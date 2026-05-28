@@ -776,3 +776,7 @@ cd nixtamal && nix-shell  # then dune build
 - Cargo unit-graph build-script edges can appear as `build_script_build` dependency artifacts on same-package proc-macro host units (for example `rustversion`). Do not pass that as a normal `--extern`; drop it from proc-macro dependency artifacts, order the same-package custom-build host unit first, and bind its generated metadata/`OUT_DIR` into the proc-macro host unit.
 
 - Native rust-plan link-lib metadata parser must allow safe `+` in link names (`stdc++`) and bounded kind modifiers like `static:+whole-archive,-bundle=name`; otherwise Cargo-accepted build-script output is misclassified as malformed metadata.
+
+- 2026-05-28: Native host planning must filter to Cargo-selected host units; planning every manifest-visible proc-macro fabricated an unselected `jiff-static` frontier. Use Cargo-derived `(package_id,target_name,target_kind)` host keys, not all host targets from metadata.
+
+- 2026-05-28: Cargo unit graph custom-build targets can be named `build-script-main` while Mantle metadata package targets use `build-script-build`. Selected-host filtering must normalize custom-build names before matching or linked packages like `aws-lc-sys` lose their metadata producer.
