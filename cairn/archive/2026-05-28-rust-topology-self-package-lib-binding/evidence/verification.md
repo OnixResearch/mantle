@@ -1,5 +1,9 @@
 # Verification
 
+## Review oracle checkpoint
+
+See `oracle-checkpoint.md` for human-route review evidence tying the implementation/test changes to commit `7f5e6da4`, the archive/spec sync to commit `87a7e328`, the push transcript, and the manual `1970-01-01` archive rename to `2026-05-28`.
+
 ## Baseline
 
 Task-ID: V0
