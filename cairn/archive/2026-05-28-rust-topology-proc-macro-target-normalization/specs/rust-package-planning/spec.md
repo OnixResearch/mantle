@@ -3,9 +3,8 @@
 ## ADDED Requirements
 
 ### Requirement: Native proc-macro host selection normalizes Cargo target-name spelling
-ID: rust_package_planning.native_proc_macro_target_name_normalization
 
-Native Rust host-unit planning MUST match Cargo-selected proc-macro host units by package id, proc-macro kind, and Rust crate-name spelling so manifest package-target names with hyphens match Cargo unit-graph target names with underscores.
+r[rust_package_planning.native_proc_macro_target_name_normalization] Native Rust host-unit planning MUST match Cargo-selected proc-macro host units by package id, proc-macro kind, and Rust crate-name spelling so manifest package-target names with hyphens match Cargo unit-graph target names with underscores.
 
 #### Scenario: selected hyphenated proc macro is planned
 

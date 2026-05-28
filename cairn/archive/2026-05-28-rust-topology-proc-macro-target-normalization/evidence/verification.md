@@ -36,4 +36,21 @@ Dirty self-probe result:
 - Previous curve25519 duplicate-import blocker is absent.
 - New remaining frontier: internal execution error before JSON receipt: `unit 62:registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1:aws_lc_sys:lib:build reached execution before dependency package registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1 was produced`.
 
-Clean post-commit self-probe pending.
+Clean self-probe:
+
+```sh
+pueue task 76: cargo run -q -p mantle --bin mantle -- --json rust-plan --root . --cargo /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo --rustc /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --target x86_64-unknown-linux-gnu --execute-topology --execution-output-root target/mantle-self-rust-plan-probe-after-695cd4d0-clean/execution
+```
+
+Clean self-probe result:
+
+- Probe root: `target/mantle-self-rust-plan-probe-after-695cd4d0-clean/`.
+- HEAD: `695cd4d052d04beeb1a6bf596cd955fd75819b4e`.
+- `git_status_short_bytes=0`.
+- Probe status: `3`.
+- `curve25519-dalek-derive@0.1.1` proc-macro execution: `success`.
+- `curve25519-dalek@4.1.3` custom-build execution: `success`.
+- `curve25519-dalek@4.1.3` lib execution: `success`.
+- Previous curve25519 duplicate-import blocker is absent.
+- New remaining frontier is unchanged from the dirty probe: internal execution error before JSON receipt, `aws_lc_sys:lib:build reached execution before dependency package registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1 was produced`.
+- Archive command emitted `cairn/archive/1970-01-01-rust-topology-proc-macro-target-normalization/`; it was manually renamed to `cairn/archive/2026-05-28-rust-topology-proc-macro-target-normalization/`, then `cairn validate --root .` passed.
