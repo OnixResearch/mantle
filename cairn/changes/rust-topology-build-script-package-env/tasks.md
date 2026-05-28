@@ -1,0 +1,4 @@
+- [ ] [serial] Record current `aws-lc-sys` missing compile-time `CARGO_PKG_VERSION` blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_build_script_package_metadata_env]
+- [ ] [serial] Add focused positive and negative tests for package metadata env derivation and build-script child env pass-through. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_package_metadata_env]
+- [ ] [serial] Implement bounded `CARGO_PKG_*` package metadata env propagation through native package/unit facts and rustc/build-script envs. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_build_script_package_metadata_env]
+- [ ] [serial] Run focused tests, self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_build_script_package_metadata_env]
