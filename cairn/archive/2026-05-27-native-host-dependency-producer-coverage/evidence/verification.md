@@ -102,6 +102,33 @@ The original `missing-host-dependency-producer` blocker for
 environment failure from clang wrapper lookup of `bash` inside the hermetic
 rustc child environment, matching the existing Mantle rust-plan test gotcha.
 
+Review remediation self-probe is pueue task `28`, output directory
+`target/mantle-self-rust-plan-probe-after-c3ccf629-clean/`. This probe was
+captured before evidence edits, at the reviewed implementation commit with a
+clean tree:
+
+```text
+head: c3ccf629a3943d3e5427ca8cc8711579e1f29a21
+git_status_short_bytes=0
+probe_status=0
+topology_execution=blocked
+source_closure=true
+native_registry_source_planning=true
+native_git_source_planning=true
+native_package_target_planning=true
+native_unit_graph_planning=true
+native_host_unit_graph_planning=true
+unit_derivation_graph=true
+topology_unit_executions=1
+metadata_runs=0
+
+blocker classes:
+      2 rustc-failed
+
+topology blocker:
+- rustc-failed: error: linking with `/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin/cc` failed: exit status: 1
+```
+
 ## Archive note
 
 `cairn archive native-host-dependency-producer-coverage --execute` created
