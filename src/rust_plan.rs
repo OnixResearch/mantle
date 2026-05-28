@@ -80,6 +80,8 @@ const RUSTC_LINK_LIB_MODIFIER_ENABLE: char = '+';
 const RUSTC_LINK_LIB_MODIFIER_DISABLE: char = '-';
 const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
 const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
+const RUSTC_METADATA_ARG_PREFIX: &str = "metadata=";
+const RUSTC_METADATA_HEX_CHARS: usize = 16;
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
 const GIT_SOURCE_DIGEST_ALGORITHM: &str = "git-revision";
 
@@ -4809,6 +4811,47 @@ fn summarize_native_unit_derivation_graph(
     })
 }
 
+fn append_rustc_metadata_args(args: &mut Vec<String>, metadata: &str) {
+    debug_assert!(!metadata.is_empty());
+    debug_assert!(metadata.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
+    args.push(format!("{RUSTC_METADATA_ARG_PREFIX}{metadata}"));
+}
+
+fn rustc_unit_metadata_disambiguator(
+    package_id: &str,
+    target_name: &str,
+    target_kind: &str,
+    mode: &str,
+    source_digest: &SourceDigest,
+    selected_features: &[String],
+    crate_types: &[String],
+) -> String {
+    debug_assert!(!package_id.is_empty());
+    debug_assert!(!target_name.is_empty());
+    debug_assert!(!target_kind.is_empty());
+    debug_assert!(!mode.is_empty());
+    debug_assert!(!source_digest.value.is_empty());
+    let mut features = selected_features.to_vec();
+    features.sort();
+    let mut crate_types = crate_types.to_vec();
+    crate_types.sort();
+    let material = [
+        package_id,
+        target_name,
+        target_kind,
+        mode,
+        source_digest.algorithm.as_str(),
+        source_digest.value.as_str(),
+        &features.join(","),
+        &crate_types.join(","),
+    ]
+    .join("\0");
+    let hex = blake3::hash(material.as_bytes()).to_hex().to_string();
+    debug_assert!(hex.len() >= RUSTC_METADATA_HEX_CHARS);
+    hex[..RUSTC_METADATA_HEX_CHARS].to_string()
+}
+
 fn native_unit_derivation(
     unit: &NativeRustUnitSummary,
     consumed_host_artifacts: Vec<RustHostArtifact>,
@@ -4830,6 +4873,18 @@ fn native_unit_derivation(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
+    append_rustc_metadata_args(
+        &mut args,
+        &rustc_unit_metadata_disambiguator(
+            &unit.package_id,
+            &unit.target_name,
+            &unit.target_kind,
+            &unit.mode,
+            &unit.source_digest,
+            &unit.selected_features,
+            &unit.crate_types,
+        ),
+    );
     append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
     append_cap_lints_args(&mut args, &unit.package_id, source_closure);
     if unit.target_kind == "bin" {
@@ -4911,6 +4966,18 @@ fn native_host_unit_derivation(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
+    append_rustc_metadata_args(
+        &mut args,
+        &rustc_unit_metadata_disambiguator(
+            &unit.package_id,
+            &unit.target_name,
+            &unit.target_kind,
+            &unit.mode,
+            &unit.source_digest,
+            &unit.selected_features,
+            &unit.crate_types,
+        ),
+    );
     append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
     append_cap_lints_args(&mut args, &unit.package_id, source_closure);
     if unit.target_kind == "proc-macro" {
@@ -9392,6 +9459,95 @@ mod tests {
             previous_matches_flag = arg == flag;
         }
         false
+    }
+
+    fn rustc_metadata_arg(args: &[String]) -> Option<&str> {
+        args.windows(2)
+            .find(|window| window[0] == RUSTC_CODEGEN_OPTION_FLAG && window[1].starts_with(RUSTC_METADATA_ARG_PREFIX))
+            .map(|window| window[1].as_str())
+    }
+
+    #[test]
+    fn rustc_metadata_disambiguator_distinguishes_same_crate_package_versions() {
+        let source_digest = test_source_digest("same-crate-source");
+        let crate_types = vec!["lib".to_string()];
+        let features = vec!["std".to_string()];
+        let first = rustc_unit_metadata_disambiguator(
+            "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.17",
+            "getrandom",
+            "lib",
+            "build",
+            &source_digest,
+            &features,
+            &crate_types,
+        );
+        let second = rustc_unit_metadata_disambiguator(
+            "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.4.2",
+            "getrandom",
+            "lib",
+            "build",
+            &source_digest,
+            &features,
+            &crate_types,
+        );
+
+        assert_eq!(first.len(), RUSTC_METADATA_HEX_CHARS);
+        assert_eq!(second.len(), RUSTC_METADATA_HEX_CHARS);
+        assert!(first.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert!(second.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn native_unit_derivation_emits_stable_metadata_disambiguator() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#bytes@1.11.1";
+        let mut unit = test_native_rust_unit(package_id, "bytes", "lib", dir.path());
+        unit.selected_features = vec!["serde".to_string(), "std".to_string()];
+        let source_closure = test_source_closure_with_kind(package_id, "bytes", SourceKind::Registry);
+        let first = native_unit_derivation(&unit, Vec::new(), &source_closure, &options(dir.path()));
+        let second = native_unit_derivation(&unit, Vec::new(), &source_closure, &options(dir.path()));
+        let expected = format!(
+            "{RUSTC_METADATA_ARG_PREFIX}{}",
+            rustc_unit_metadata_disambiguator(
+                &unit.package_id,
+                &unit.target_name,
+                &unit.target_kind,
+                &unit.mode,
+                &unit.source_digest,
+                &unit.selected_features,
+                &unit.crate_types,
+            )
+        );
+
+        assert_eq!(rustc_metadata_arg(&first.derivation.args), Some(expected.as_str()));
+        assert_eq!(rustc_metadata_arg(&second.derivation.args), Some(expected.as_str()));
+        assert_eq!(first.rustc_args_digest_blake3, second.rustc_args_digest_blake3);
+    }
+
+    #[test]
+    fn native_host_unit_derivation_emits_metadata_disambiguator() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#spez@0.1.2";
+        let unit = test_native_host_unit(package_id, "spez", "proc-macro", dir.path());
+        let source_closure = test_source_closure_with_kind(package_id, "spez", SourceKind::Registry);
+        let derivation = native_host_unit_derivation(&unit, &source_closure, &options(dir.path()));
+        let expected = format!(
+            "{RUSTC_METADATA_ARG_PREFIX}{}",
+            rustc_unit_metadata_disambiguator(
+                &unit.package_id,
+                &unit.target_name,
+                &unit.target_kind,
+                &unit.mode,
+                &unit.source_digest,
+                &unit.selected_features,
+                &unit.crate_types,
+            )
+        );
+
+        assert_eq!(rustc_metadata_arg(&derivation.derivation.args), Some(expected.as_str()));
+        assert!(has_ordered_arg_pair(&derivation.derivation.args, RUSTC_CODEGEN_OPTION_FLAG, expected.as_str()));
+        assert!(has_ordered_arg_pair(&derivation.derivation.args, RUSTC_EXTERN_FLAG, RUSTC_PROC_MACRO_EXTERN));
     }
 
     #[test]
