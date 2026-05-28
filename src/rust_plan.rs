@@ -294,6 +294,7 @@ pub(crate) struct NativeUnitGraphPlanningSummary {
 pub(crate) struct NativeRustUnitSummary {
     pub(crate) unit_id: String,
     pub(crate) package_id: String,
+    pub(crate) package_name: String,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
     pub(crate) crate_name: String,
@@ -331,6 +332,7 @@ pub(crate) struct NativeHostUnitGraphPlanningSummary {
 pub(crate) struct NativeHostUnitSummary {
     pub(crate) unit_id: String,
     pub(crate) package_id: String,
+    pub(crate) package_name: String,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
     pub(crate) crate_name: String,
@@ -3495,6 +3497,7 @@ fn summarize_native_unit_graph_planning(
             units.push(NativeRustUnitSummary {
                 unit_id,
                 package_id: package.package_id.clone(),
+                package_name: package.name.clone(),
                 target_name: target.name.clone(),
                 target_kind: target.kind.clone(),
                 crate_name: target.crate_name.clone(),
@@ -3858,6 +3861,7 @@ fn summarize_native_host_unit_graph_planning(
             host_units.push(NativeHostUnitSummary {
                 unit_id,
                 package_id: package.package_id.clone(),
+                package_name: package.name.clone(),
                 target_name: target.name.clone(),
                 target_kind: target.kind.clone(),
                 crate_name: target.crate_name.clone(),
@@ -4231,6 +4235,7 @@ fn native_unit_derivation(
     source_closure: &SourceClosureSummary,
     options: &RustPlanOptions,
 ) -> RustUnitDerivationSummary {
+    debug_assert!(!unit.package_name.is_empty());
     let mut args = vec![
         "--crate-name".to_string(),
         unit.crate_name.clone(),
@@ -4260,6 +4265,7 @@ fn native_unit_derivation(
     env.insert("PACKAGE_ID".to_string(), unit.package_id.clone());
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
     }
@@ -4300,6 +4306,7 @@ fn native_host_unit_derivation(
     source_closure: &SourceClosureSummary,
     options: &RustPlanOptions,
 ) -> RustUnitDerivationSummary {
+    debug_assert!(!unit.package_name.is_empty());
     let mut args = vec![
         "--crate-name".to_string(),
         unit.crate_name.clone(),
@@ -4327,6 +4334,7 @@ fn native_host_unit_derivation(
     env.insert("PACKAGE_ID".to_string(), unit.package_id.clone());
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
     }
@@ -6834,7 +6842,14 @@ fn build_script_child_env(
 ) -> BTreeMap<String, String> {
     let mut env = BTreeMap::new();
     env.insert(BUILD_SCRIPT_OUT_DIR_ENV.to_string(), normalize_path_string(out_dir));
-    env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), rust_crate_name(&unit.target_name));
+    env.insert(
+        BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(),
+        unit.derivation
+            .env
+            .get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV)
+            .cloned()
+            .unwrap_or_else(|| rust_crate_name(&unit.target_name)),
+    );
     env.insert(BUILD_SCRIPT_RUSTC_ENV.to_string(), normalize_path_string(&options.rustc));
     env.insert(BUILD_SCRIPT_HOST_ENV.to_string(), host_target_triple());
     env.insert(
@@ -8304,14 +8319,62 @@ mod tests {
     }
 
     #[test]
-    fn build_script_child_env_sets_tool_target_and_manifest_dir() {
+    fn native_host_derivation_carries_manifest_package_name_for_build_script_env() {
         let dir = TempDir::new().unwrap();
-        let package_root = dir.path().join("package");
+        let package_name = "hyphen-pkg".to_string();
+        let package_id = "path+file://hyphen-pkg#hyphen-pkg@0.1.0".to_string();
+        let source_path = dir.path().join("hyphen-pkg/build.rs");
+        let unit = NativeHostUnitSummary {
+            unit_id: rust_unit_id(0, &package_id, "build-script-build", "custom-build", "build"),
+            package_id: package_id.clone(),
+            package_name: package_name.clone(),
+            target_name: "build-script-build".to_string(),
+            target_kind: "custom-build".to_string(),
+            crate_name: "build_script_build".to_string(),
+            source_path: source_path.display().to_string(),
+            edition: "2021".to_string(),
+            crate_types: vec!["bin".to_string()],
+            mode: "build".to_string(),
+            profile: DEFAULT_CARGO_PROFILE.to_string(),
+            source_digest: test_source_digest(&package_id),
+            artifact: test_host_artifact(&package_id, "custom-build"),
+            dependency_artifacts: Vec::new(),
+            generated_metadata: Some(build_script_metadata_summary(&package_id, "build-script-build")),
+        };
+        let source_closure = SourceClosureSummary {
+            source_count: 1,
+            ready: true,
+            digest_blake3: "test-source-closure".to_string(),
+            sources: Vec::new(),
+            blockers: Vec::new(),
+        };
+
+        let derivation = native_host_unit_derivation(&unit, &source_closure, &options(dir.path()));
+
+        assert_eq!(derivation.derivation.env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
+        let child_env = build_script_child_env(
+            &derivation,
+            &RustUnitExecutionOptions {
+                rustc: dir.path().join("rustc"),
+                output_root: dir.path().join("unit-out"),
+            },
+            &dir.path().join("out"),
+            None,
+        );
+        assert_eq!(child_env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
+    }
+
+    #[test]
+    fn build_script_child_env_sets_tool_target_and_manifest_package_name() {
+        let dir = TempDir::new().unwrap();
+        let package_root = dir.path().join("hyphen-pkg");
         let source_path = package_root.join("build.rs");
         let out_dir = dir.path().join("out");
         let rustc_path = dir.path().join("bin/rustc");
         let target_triple = "wasm32-unknown-unknown".to_string();
-        let mut unit = test_rust_derivation(0, "path+file://package#package@0.1.0", "custom-build", "host", Vec::new());
+        let package_name = "hyphen-pkg".to_string();
+        let mut unit =
+            test_rust_derivation(0, "path+file://hyphen-pkg#hyphen-pkg@0.1.0", "custom-build", "host", Vec::new());
         unit.target_name = "build-script-build".to_string();
         unit.profile = "release".to_string();
         unit.derivation.args = vec![
@@ -8320,6 +8383,7 @@ mod tests {
             source_path.display().to_string(),
         ];
         unit.derivation.env.insert(BUILD_SCRIPT_TARGET_ENV.to_string(), target_triple.clone());
+        unit.derivation.env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), package_name.clone());
         let options = RustUnitExecutionOptions {
             rustc: rustc_path.clone(),
             output_root: dir.path().join("unit-out"),
@@ -8335,7 +8399,7 @@ mod tests {
         assert_eq!(env.get(BUILD_SCRIPT_PROFILE_ENV).unwrap(), "release");
         assert_eq!(env.get(BUILD_SCRIPT_OUT_DIR_ENV).unwrap(), &normalize_path_string(&out_dir));
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(), &normalize_path_string(&package_root));
-        assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), "build_script_build");
+        assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
     }
 
     #[test]
@@ -8353,6 +8417,7 @@ mod tests {
         let env = build_script_child_env(&unit, &options, &out_dir, build_script_package_root(&unit).as_deref());
 
         assert!(!env.contains_key(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV));
+        assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &rust_crate_name(&unit.target_name));
         assert_eq!(env.get(BUILD_SCRIPT_TARGET_ENV).unwrap(), &host_target_triple());
         assert_eq!(env.get(BUILD_SCRIPT_PROFILE_ENV).unwrap(), DEFAULT_CARGO_PROFILE);
     }
