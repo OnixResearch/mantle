@@ -3856,18 +3856,12 @@ fn summarize_native_unit_graph_planning(
                 continue;
             }
             let unit_id = rust_unit_id(unit_index, &package.package_id, &target.name, &target.kind, "build");
-            let mut target_dependency_artifacts = dependency_artifacts.clone();
-            if target.kind == "bin" {
-                if let Some(lib_target) = package.targets.iter().find(|candidate| candidate.kind == "lib") {
-                    target_dependency_artifacts.push(RustDependencyArtifact {
-                        package_id: package.package_id.clone(),
-                        name: lib_target.crate_name.clone(),
-                        artifact: format!("artifact:{}:{}", package.package_id, lib_target.crate_name),
-                    });
-                    target_dependency_artifacts.sort();
-                    target_dependency_artifacts.dedup();
-                }
-            }
+            let target_dependency_artifacts = native_target_dependency_artifacts(
+                &package.package_id,
+                &target.kind,
+                &dependency_artifacts,
+                &package.targets,
+            );
             units.push(NativeRustUnitSummary {
                 unit_id,
                 package_id: package.package_id.clone(),
@@ -3987,6 +3981,36 @@ fn selected_dependency_artifacts_by_package(
             .extend(derivation.dependency_artifacts.iter().cloned());
     }
     artifacts_by_package
+}
+
+fn native_target_dependency_artifacts(
+    package_id: &str,
+    target_kind: &str,
+    package_dependency_artifacts: &[RustDependencyArtifact],
+    package_targets: &[NativeTargetPlanningSummary],
+) -> Vec<RustDependencyArtifact> {
+    debug_assert!(!package_id.is_empty());
+    debug_assert!(!target_kind.is_empty());
+    let mut artifacts = package_dependency_artifacts
+        .iter()
+        .filter(|artifact| artifact.package_id != package_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    if target_kind == "bin" {
+        if let Some(lib_target) = package_targets.iter().find(|candidate| candidate.kind == "lib") {
+            artifacts.push(RustDependencyArtifact {
+                package_id: package_id.to_string(),
+                name: lib_target.crate_name.clone(),
+                artifact: format!("artifact:{package_id}:{}", lib_target.crate_name),
+            });
+        }
+    }
+    artifacts.sort();
+    artifacts.dedup();
+    if target_kind != "bin" {
+        debug_assert!(artifacts.iter().all(|artifact| artifact.package_id != package_id));
+    }
+    artifacts
 }
 
 fn selected_host_unit_keys(unit_graph: &Value) -> BTreeSet<(String, String, String)> {
@@ -12025,6 +12049,55 @@ rust-version = "1.80"
                 .iter()
                 .any(|unit| unit.package_id.contains("dep-crate@0.1.0") && unit.target_kind == "lib")
         );
+    }
+
+    #[test]
+    fn native_unit_graph_filters_package_self_dependency_from_lib_unit() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://app#app@0.1.0".to_string();
+        let mut package = test_native_package(&package_id, "app", "lib", Vec::new());
+        package.targets.push(NativeTargetPlanningSummary {
+            name: "app-bin".to_string(),
+            kind: "bin".to_string(),
+            crate_name: "app_bin".to_string(),
+            source_path: "/test/app/src/main.rs".to_string(),
+            edition: "2021".to_string(),
+        });
+        let package_planning = test_package_planning(vec![package]);
+        let source_closure = test_source_closure(&package_planning.packages);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": package_id,
+                    "target": {"name": "app", "kind": ["lib"], "crate_types": ["lib"], "src_path": "/test/app/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": []
+                },
+                {
+                    "pkg_id": package_id,
+                    "target": {"name": "app-bin", "kind": ["bin"], "crate_types": ["bin"], "src_path": "/test/app/src/main.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": [{"pkg_id": package_id, "extern_crate_name": "app"}]
+                }
+            ]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+
+        assert!(native_units.ready, "{:#?}", native_units.blockers);
+        let lib_unit = native_units.units.iter().find(|unit| unit.target_kind == "lib").expect("lib unit planned");
+        let bin_unit = native_units.units.iter().find(|unit| unit.target_kind == "bin").expect("bin unit planned");
+        assert!(lib_unit.dependency_artifacts.is_empty());
+        assert_eq!(bin_unit.dependency_artifacts, vec![test_dependency_artifact(&package_id, "app")]);
     }
 
     #[test]
