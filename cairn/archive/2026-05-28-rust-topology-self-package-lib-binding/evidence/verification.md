@@ -77,6 +77,27 @@ jq -r 'keys[], .topology_execution.execution_status, (.topology_execution.unit_e
 
 Result: the prior root `mantle` same-package self-dependency internal error is gone. The topology executes 602 units and reaches the next deterministic frontier: `crunch-system` cannot find selected normal dependency crate `crunch_glue`.
 
+## Clean topology probe
+
+Task-ID: V2b
+Covers: rust_package_planning.native_self_package_lib_binding
+
+Command: pueue task `181` launched the clean probe after commit `7f5e6da4055d5183c1922d297b62f119934ad221`; its shell summary trailer was incomplete, so the task itself failed after the probe wrote `target/mantle-self-rust-plan-probe-self-package-clean/receipt.json`. The checked summary was generated afterward from that receipt.
+
+Summary from `target/mantle-self-rust-plan-probe-self-package-clean/blocker-summary.txt`:
+
+```text
+probe: target/mantle-self-rust-plan-probe-self-package-clean/receipt.json
+head: 7f5e6da4055d5183c1922d297b62f119934ad221
+git_status_short_bytes=0
+probe_status=0
+topology_execution_status=blocked
+executions=602
+blocker={"class":"rustc-failed","message":"error[E0463]: can't find crate for `crunch_glue`\n --> /home/brittonr/git/mantle/crates/crunch-system/src/assembler.rs:4:5\n  |\n4 | use crunch_glue::CrunchDerivation;\n  |     ^^^^^^^^^^^ can't find crate\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0463`."}
+```
+
+Result: clean committed tree also passes the self-package frontier and reaches the same next deterministic `crunch_glue` binding frontier.
+
 ## Static checks
 
 Task-ID: V3
