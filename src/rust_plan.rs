@@ -19,6 +19,8 @@ const DEFAULT_CARGO_PROFILE: &str = "dev";
 const DEFAULT_RUST_EDITION: &str = "2015";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
+const SNIX_BUILD_SANDBOX_SHELL_ENV: &str = "SNIX_BUILD_SANDBOX_SHELL";
+const RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST: &[&str] = &[SNIX_BUILD_SANDBOX_SHELL_ENV];
 const BUILD_SCRIPT_OUT_DIR_ENV: &str = "OUT_DIR";
 const BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV: &str = "CARGO_MANIFEST_DIR";
 const BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV: &str = "CARGO_MANIFEST_LINKS";
@@ -7688,12 +7690,18 @@ fn rust_topology_runtime_args(reviewable_args: &[String]) -> Vec<String> {
 fn rust_topology_child_env(
     explicit_env: &BTreeMap<String, String>,
     inherited_path: Option<OsString>,
+    inherited_compile_env: &BTreeMap<String, OsString>,
 ) -> BTreeMap<String, OsString> {
     let mut env = BTreeMap::new();
     if let Some(path) = inherited_path {
         if !path.is_empty() {
             env.insert(RUST_TOPOLOGY_TOOL_PATH_ENV.to_string(), path);
         }
+    }
+    for (key, value) in inherited_compile_env {
+        debug_assert!(RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST.contains(&key.as_str()));
+        debug_assert!(!value.is_empty());
+        env.insert(key.clone(), value.clone());
     }
     for (key, value) in explicit_env {
         debug_assert!(!key.is_empty());
@@ -7702,9 +7710,35 @@ fn rust_topology_child_env(
     env
 }
 
+fn allowed_rust_topology_compile_env(candidates: &BTreeMap<String, OsString>) -> BTreeMap<String, OsString> {
+    let mut allowed = BTreeMap::new();
+    for key in RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST {
+        let Some(value) = candidates.get(*key) else {
+            continue;
+        };
+        if value.is_empty() {
+            continue;
+        }
+        allowed.insert((*key).to_string(), value.clone());
+    }
+    allowed
+}
+
+fn inherited_rust_topology_compile_env() -> BTreeMap<String, OsString> {
+    let candidates = RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST
+        .iter()
+        .filter_map(|key| std::env::var_os(key).map(|value| ((*key).to_string(), value)))
+        .collect::<BTreeMap<_, _>>();
+    allowed_rust_topology_compile_env(&candidates)
+}
+
 fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<String, String>) {
     command.env_clear();
-    for (key, value) in rust_topology_child_env(explicit_env, std::env::var_os(RUST_TOPOLOGY_TOOL_PATH_ENV)) {
+    for (key, value) in rust_topology_child_env(
+        explicit_env,
+        std::env::var_os(RUST_TOPOLOGY_TOOL_PATH_ENV),
+        &inherited_rust_topology_compile_env(),
+    ) {
         command.env(key, value);
     }
 }
@@ -10504,7 +10538,7 @@ rust-version = "1.80"
         let mut explicit = BTreeMap::new();
         explicit.insert("TARGET".to_string(), "x86_64-unknown-linux-gnu".to_string());
 
-        let env = rust_topology_child_env(&explicit, Some(OsString::from("/tool/bin:/bash/bin")));
+        let env = rust_topology_child_env(&explicit, Some(OsString::from("/tool/bin:/bash/bin")), &BTreeMap::new());
 
         assert_eq!(env.get(RUST_TOPOLOGY_TOOL_PATH_ENV), Some(&OsString::from("/tool/bin:/bash/bin")));
         assert_eq!(env.get("TARGET"), Some(&OsString::from("x86_64-unknown-linux-gnu")));
@@ -10514,7 +10548,7 @@ rust-version = "1.80"
     fn rust_topology_child_env_omits_empty_inherited_path() {
         let explicit = BTreeMap::new();
 
-        let env = rust_topology_child_env(&explicit, Some(OsString::new()));
+        let env = rust_topology_child_env(&explicit, Some(OsString::new()), &BTreeMap::new());
 
         assert!(!env.contains_key(RUST_TOPOLOGY_TOOL_PATH_ENV));
         assert!(env.is_empty());
@@ -10525,9 +10559,55 @@ rust-version = "1.80"
         let mut explicit = BTreeMap::new();
         explicit.insert(RUST_TOPOLOGY_TOOL_PATH_ENV.to_string(), "/derivation/bin".to_string());
 
-        let env = rust_topology_child_env(&explicit, Some(OsString::from("/caller/bin")));
+        let env = rust_topology_child_env(&explicit, Some(OsString::from("/caller/bin")), &BTreeMap::new());
 
         assert_eq!(env.get(RUST_TOPOLOGY_TOOL_PATH_ENV), Some(&OsString::from("/derivation/bin")));
+        assert_eq!(env.len(), 1usize);
+    }
+
+    #[test]
+    fn rust_topology_child_env_forwards_allowlisted_compile_env() {
+        let explicit = BTreeMap::new();
+        let inherited_compile_env = BTreeMap::from([(
+            SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(),
+            OsString::from("/nix/store/static-busybox/bin/busybox"),
+        )]);
+
+        let env = rust_topology_child_env(&explicit, None, &inherited_compile_env);
+
+        assert_eq!(
+            env.get(SNIX_BUILD_SANDBOX_SHELL_ENV),
+            Some(&OsString::from("/nix/store/static-busybox/bin/busybox"))
+        );
+        assert_eq!(env.len(), 1usize);
+    }
+
+    #[test]
+    fn rust_topology_child_env_prefers_explicit_compile_env() {
+        let mut explicit = BTreeMap::new();
+        explicit.insert(SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), "/explicit/busybox".to_string());
+        let inherited_compile_env =
+            BTreeMap::from([(SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), OsString::from("/ambient/busybox"))]);
+
+        let env = rust_topology_child_env(&explicit, None, &inherited_compile_env);
+
+        assert_eq!(env.get(SNIX_BUILD_SANDBOX_SHELL_ENV), Some(&OsString::from("/explicit/busybox")));
+        assert_eq!(env.len(), 1usize);
+    }
+
+    #[test]
+    fn allowed_rust_topology_compile_env_rejects_unrelated_ambient_env() {
+        let candidates = BTreeMap::from([
+            (SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), OsString::from("/busybox")),
+            ("LD_PRELOAD".to_string(), OsString::from("/tmp/inject.so")),
+            ("SECRET_TOKEN".to_string(), OsString::from("do-not-forward")),
+        ]);
+
+        let env = allowed_rust_topology_compile_env(&candidates);
+
+        assert_eq!(env.get(SNIX_BUILD_SANDBOX_SHELL_ENV), Some(&OsString::from("/busybox")));
+        assert!(!env.contains_key("LD_PRELOAD"));
+        assert!(!env.contains_key("SECRET_TOKEN"));
         assert_eq!(env.len(), 1usize);
     }
 
