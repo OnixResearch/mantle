@@ -15,6 +15,8 @@ Does native Rust topology now provide deterministic Cargo profile env variables 
 - Dirty self-probe summary: `target/mantle-self-rust-plan-probe-after-profile-env-dirty/blocker-summary.txt`
 - Clean self-probe artifact: `target/mantle-self-rust-plan-probe-after-689b44c4-clean/receipt.json`
 - Clean self-probe summary: `target/mantle-self-rust-plan-probe-after-689b44c4-clean/blocker-summary.txt`
+- Cairn validation command: `cairn validate --root .`
+- Whitespace check: `git diff --check`
 
 ## Decision
 
@@ -57,10 +59,27 @@ topology blocker:
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ```
 
+Post-archive Cairn validation passed with no active changes:
+
+```json
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 1,
+  "valid": true
+}
+```
+
+`git diff --check` produced no output.
+
 ## Owner
 
 Mantle agent.
 
 ## Next action
 
-Archive the Cairn change if validation stays clean. Next topology frontier is direct rustc proc-macro dependency binding for `darling` / `darling_macro`.
+Next topology frontier is direct rustc proc-macro dependency binding for `darling` / `darling_macro`.
