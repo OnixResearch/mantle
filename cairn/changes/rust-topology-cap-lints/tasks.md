@@ -1,0 +1,4 @@
+- [x] [serial] Record current `derive_builder_core` dependency lint-cap blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_dependency_cap_lints]
+- [ ] [serial] Add focused positive and negative tests for cap-lints derivation on registry/git vs path sources and host/target units. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_dependency_cap_lints]
+- [ ] [serial] Implement bounded `--cap-lints allow` propagation for non-local native Rust units. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_dependency_cap_lints]
+- [ ] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_dependency_cap_lints]
