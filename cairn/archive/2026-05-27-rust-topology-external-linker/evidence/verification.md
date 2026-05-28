@@ -7,7 +7,11 @@ Decision owner: coding agent
 
 ## Focused tests
 
-Command: pueue task `32`
+Original pueue task `32` covered the initial three runtime-arg tests before
+review remediation. The final four-test evidence below is from the direct rerun
+after adding `rust_topology_runtime_args_ignore_near_match_linker_mode`.
+
+Command:
 
 ```sh
 PATH=/run/current-system/sw/bin:/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:/etc/profiles/per-user/brittonr/bin:/usr/bin:/bin \
@@ -81,9 +85,25 @@ fix now recognizes only exact `link-self-contained` and
 
 ## Final self-probe oracle checkpoint
 
-Pueue task `13` was inspected after `8fcfeb96` was committed and pushed. The
-repo-local checkpoint is
-`target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/blocker-summary.txt`:
+- **Question:** Does the final committed external-linker implementation still
+  move topology execution past the stale rustup `ld-wrapper.sh` blocker, and was
+  the probe run from a clean tree?
+- **Inspected evidence:** pueue task `13`,
+  `target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/receipt.json`,
+  `target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/status.txt`,
+  `target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/git-status-short.txt`,
+  and the repo-local summary
+  `target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/blocker-summary.txt`.
+- **Decision:** The probe is tied to committed code `8fcfeb96` with a clean
+  tree, and it verifies blocker movement from stale rustup `ld-wrapper.sh` to
+  the next Rust-edition source issue.
+- **Owner:** coding agent.
+- **Next action:** pursue the new deterministic blocker separately by planning
+  how native topology should handle Rust 2024-only let-chain syntax in
+  `vendor/nix-compat-derive`, or record it as the next known topology frontier
+  if out of scope.
+
+Checkpoint excerpt:
 
 ```text
 probe: target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/receipt.json
@@ -102,10 +122,6 @@ topology blocker:
 - rustc-failed: error: let chains are only allowed in Rust 2024 or later
   --> ./vendor/nix-compat-derive/src/de.rs:39:8
 ```
-
-Decision: the final clean probe for the external-linker implementation is tied
-to committed code `8fcfeb96` with a clean tree, and it verifies blocker movement
-from stale rustup `ld-wrapper.sh` to the next Rust-edition source issue.
 
 ## Decision
 
