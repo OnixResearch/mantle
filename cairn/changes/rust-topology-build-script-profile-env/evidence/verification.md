@@ -13,10 +13,12 @@ Does native Rust topology now provide deterministic Cargo profile env variables 
 - Focused test command: `cargo test -p mantle --bin mantle rust_plan::`
 - Dirty self-probe artifact: `target/mantle-self-rust-plan-probe-after-profile-env-dirty/receipt.json`
 - Dirty self-probe summary: `target/mantle-self-rust-plan-probe-after-profile-env-dirty/blocker-summary.txt`
+- Clean self-probe artifact: `target/mantle-self-rust-plan-probe-after-689b44c4-clean/receipt.json`
+- Clean self-probe summary: `target/mantle-self-rust-plan-probe-after-689b44c4-clean/blocker-summary.txt`
 
 ## Decision
 
-Accepted for implementation checkpoint. Native build-script runtime env now derives bounded `OPT_LEVEL`, `DEBUG`, and `NUM_JOBS` values from the selected profile and passes them through `build_script_child_env()`. Focused tests cover dev/release profile env values and child env pass-through.
+Accepted. Native build-script runtime env now derives bounded `OPT_LEVEL`, `DEBUG`, and `NUM_JOBS` values from the selected profile and passes them through `build_script_child_env()`. Focused tests cover dev/release profile env values and child env pass-through.
 
 Focused tests passed:
 
@@ -28,12 +30,12 @@ test rust_plan::tests::build_script_profile_env_derives_dev_and_release_defaults
 test result: ok. 73 passed; 0 failed; 0 ignored; 0 measured; 427 filtered out; finished in 0.03s
 ```
 
-The dirty self-probe moved past the prior `aws-lc-sys` missing `OPT_LEVEL` runtime failure:
+The committed clean self-probe moved past the prior `aws-lc-sys` missing `OPT_LEVEL` runtime failure:
 
 ```text
-probe: target/mantle-self-rust-plan-probe-after-profile-env-dirty/receipt.json
-head: f4d19ee47de8f7a69b8c42698a0f1d20f4ec4199
-git_status_short_bytes=20
+probe: target/mantle-self-rust-plan-probe-after-689b44c4-clean/receipt.json
+head: 689b44c45ec81942d268f759220e13a09f31f0fe
+git_status_short_bytes=0
 
 probe_status=0
 topology_execution=blocked
@@ -61,4 +63,4 @@ Mantle agent.
 
 ## Next action
 
-Commit profile env implementation, rerun clean self-probe from committed HEAD, then archive the Cairn change if validation stays clean. Next topology frontier is direct rustc proc-macro dependency binding for `darling` / `darling_macro`.
+Archive the Cairn change if validation stays clean. Next topology frontier is direct rustc proc-macro dependency binding for `darling` / `darling_macro`.
