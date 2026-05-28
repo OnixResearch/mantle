@@ -85,18 +85,20 @@ fix now recognizes only exact `link-self-contained` and
 
 ## Final self-probe oracle checkpoint
 
-- **Question:** Does the final committed external-linker implementation still
+- **Question:** Does the current committed external-linker implementation still
   move topology execution past the stale rustup `ld-wrapper.sh` blocker, and was
   the probe run from a clean tree?
-- **Inspected evidence:** pueue task `13`,
-  `target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/receipt.json`,
-  `target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/status.txt`,
-  `target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/git-status-short.txt`,
+- **Inspected evidence:** pueue task `14`,
+  `target/mantle-self-rust-plan-probe-after-b3ed3a8e-clean/receipt.json`,
+  `target/mantle-self-rust-plan-probe-after-b3ed3a8e-clean/status.txt`,
+  `target/mantle-self-rust-plan-probe-after-b3ed3a8e-clean/git-status-short.txt`,
   and the repo-local summary
-  `target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/blocker-summary.txt`.
-- **Decision:** The probe is tied to committed code `8fcfeb96` with a clean
+  `target/mantle-self-rust-plan-probe-after-b3ed3a8e-clean/blocker-summary.txt`.
+- **Decision:** The probe is tied to committed code `b3ed3a8e` with a clean
   tree, and it verifies blocker movement from stale rustup `ld-wrapper.sh` to
-  the next Rust-edition source issue.
+  the next Rust-edition source issue. This follow-up evidence commit changes
+  only review documentation, so the `b3ed3a8e` implementation probe remains the
+  relevant execution checkpoint for the code under test.
 - **Owner:** coding agent.
 - **Next action:** pursue the new deterministic blocker separately by planning
   how native topology should handle Rust 2024-only let-chain syntax in
@@ -106,8 +108,8 @@ fix now recognizes only exact `link-self-contained` and
 Checkpoint excerpt:
 
 ```text
-probe: target/mantle-self-rust-plan-probe-after-8fcfeb96-clean/receipt.json
-head: 8fcfeb966bb36ca9bfef4f002d6446f3e800dd1a
+probe: target/mantle-self-rust-plan-probe-after-b3ed3a8e-clean/receipt.json
+head: b3ed3a8e415581d41b2f4896da7f2d51ed13001a
 git_status_short_bytes=0
 
 probe_status=0
