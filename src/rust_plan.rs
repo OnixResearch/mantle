@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -16,6 +17,7 @@ const RECEIPT_SCHEMA_VERSION: u32 = 1;
 const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
 const DEFAULT_CARGO_PROFILE: &str = "dev";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
+const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
 const GIT_SOURCE_DIGEST_ALGORITHM: &str = "git-revision";
 
@@ -6714,6 +6716,30 @@ fn bind_all_build_script_metadata(
     Ok(bound)
 }
 
+fn rust_topology_child_env(
+    explicit_env: &BTreeMap<String, String>,
+    inherited_path: Option<OsString>,
+) -> BTreeMap<String, OsString> {
+    let mut env = BTreeMap::new();
+    if let Some(path) = inherited_path {
+        if !path.is_empty() {
+            env.insert(RUST_TOPOLOGY_TOOL_PATH_ENV.to_string(), path);
+        }
+    }
+    for (key, value) in explicit_env {
+        debug_assert!(!key.is_empty());
+        env.insert(key.clone(), OsString::from(value));
+    }
+    env
+}
+
+fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<String, String>) {
+    command.env_clear();
+    for (key, value) in rust_topology_child_env(explicit_env, std::env::var_os(RUST_TOPOLOGY_TOOL_PATH_ENV)) {
+        command.env(key, value);
+    }
+}
+
 fn run_build_script_metadata(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
@@ -6735,7 +6761,7 @@ fn run_build_script_metadata(
         .map_err(|err| RunError::Internal(format!("creating build-script OUT_DIR {}: {err}", out_dir.display())))?;
 
     let mut command = Command::new(executable);
-    command.env_clear();
+    apply_rust_topology_child_env(&mut command, &BTreeMap::new());
     command.env("OUT_DIR", &out_dir);
     command.env("CARGO_PKG_NAME", rust_crate_name(&unit.target_name));
     if let Some(src_path) =
@@ -7078,10 +7104,7 @@ fn execute_rust_unit(
     let mut command = Command::new(&options.rustc);
     command.args(&unit.derivation.args);
     command.arg("--out-dir").arg(&unit_output_dir);
-    command.env_clear();
-    for (key, value) in &unit.derivation.env {
-        command.env(key, value);
-    }
+    apply_rust_topology_child_env(&mut command, &unit.derivation.env);
     let output = command
         .output()
         .map_err(|err| RunError::Internal(format!("executing rustc for unit {}: {err}", unit.unit_id)))?;
@@ -8154,6 +8177,38 @@ mod tests {
             derivations,
             blockers: Vec::new(),
         }
+    }
+
+    #[test]
+    fn rust_topology_child_env_preserves_non_empty_inherited_path() {
+        let mut explicit = BTreeMap::new();
+        explicit.insert("TARGET".to_string(), "x86_64-unknown-linux-gnu".to_string());
+
+        let env = rust_topology_child_env(&explicit, Some(OsString::from("/tool/bin:/bash/bin")));
+
+        assert_eq!(env.get(RUST_TOPOLOGY_TOOL_PATH_ENV), Some(&OsString::from("/tool/bin:/bash/bin")));
+        assert_eq!(env.get("TARGET"), Some(&OsString::from("x86_64-unknown-linux-gnu")));
+    }
+
+    #[test]
+    fn rust_topology_child_env_omits_empty_inherited_path() {
+        let explicit = BTreeMap::new();
+
+        let env = rust_topology_child_env(&explicit, Some(OsString::new()));
+
+        assert!(!env.contains_key(RUST_TOPOLOGY_TOOL_PATH_ENV));
+        assert!(env.is_empty());
+    }
+
+    #[test]
+    fn rust_topology_child_env_prefers_explicit_derivation_path() {
+        let mut explicit = BTreeMap::new();
+        explicit.insert(RUST_TOPOLOGY_TOOL_PATH_ENV.to_string(), "/derivation/bin".to_string());
+
+        let env = rust_topology_child_env(&explicit, Some(OsString::from("/caller/bin")));
+
+        assert_eq!(env.get(RUST_TOPOLOGY_TOOL_PATH_ENV), Some(&OsString::from("/derivation/bin")));
+        assert_eq!(env.len(), 1usize);
     }
 
     #[test]
