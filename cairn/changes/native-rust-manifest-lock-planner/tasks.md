@@ -14,8 +14,10 @@
   - Evidence: `cairn/changes/native-rust-manifest-lock-planner/evidence/filesystem-shell.md` records root/member manifest and lockfile text collection tests plus fail-closed missing-lockfile coverage.
 - [x] [serial] Add fail-closed blockers for unsupported manifest and lockfile surface. r[rust_package_planning.native_manifest_lock_planner]
   - Evidence: `cairn/changes/native-rust-manifest-lock-planner/evidence/unsupported-surface.md` records pure blocker coverage for supported input and patch/replace/target-table/unsupported-lock-source failures.
-- [ ] [serial] Add oracle comparison against Cargo metadata for supported fixtures. r[rust_package_planning.native_manifest_lock_planner]
+- [x] [serial] Add oracle comparison against Cargo metadata for supported fixtures. r[rust_package_planning.native_manifest_lock_planner]
+  - Evidence: `cairn/changes/native-rust-manifest-lock-planner/evidence/oracle-comparison.md` records supported-match and mismatch/missing-package oracle comparison fixtures.
 
 ## Verification
 
-- [ ] [serial] Run positive and negative parser tests, oracle comparison fixtures, and Cairn validation. r[rust_package_planning.native_manifest_lock_planner]
+- [x] [serial] Run positive and negative parser tests, oracle comparison fixtures, and Cairn validation. r[rust_package_planning.native_manifest_lock_planner]
+  - Evidence: `cairn/changes/native-rust-manifest-lock-planner/evidence/verification.md` records focused positive/negative parser, blocker, filesystem-shell, oracle comparison, and Cairn validation commands.

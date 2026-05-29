@@ -13815,6 +13815,61 @@ rust-version = "1.80"
     }
 
     #[test]
+    fn native_package_oracle_comparison_accepts_supported_fixture() {
+        let package_id = "path+native#app@0.1.0";
+        let native = test_native_package(package_id, "app", "lib", Vec::new());
+        let cargo = CargoPackage {
+            id: package_id.to_string(),
+            name: "app".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: native.manifest_path.clone(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
+        };
+        let required = vec![&cargo];
+        let mut blockers = Vec::new();
+
+        compare_native_packages_to_cargo(&[native], std::slice::from_ref(&cargo), &required, &mut blockers);
+
+        assert!(blockers.is_empty(), "{blockers:#?}");
+    }
+
+    #[test]
+    fn native_package_oracle_comparison_blocks_identity_mismatch_and_missing_cargo_package() {
+        let app_id = "path+native#app@0.1.0";
+        let dep_id = "path+native#dep@0.1.0";
+        let native = test_native_package(app_id, "app", "lib", Vec::new());
+        let app_cargo = CargoPackage {
+            id: app_id.to_string(),
+            name: "app".to_string(),
+            version: "0.2.0".to_string(),
+            source: None,
+            manifest_path: native.manifest_path.clone(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
+        };
+        let dep_cargo = CargoPackage {
+            id: dep_id.to_string(),
+            name: "dep".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: "/test/dep/Cargo.toml".to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
+        };
+        let all_cargo = vec![app_cargo, dep_cargo];
+        let required = all_cargo.iter().collect::<Vec<_>>();
+        let mut blockers = Vec::new();
+
+        compare_native_packages_to_cargo(&[native], &all_cargo, &required, &mut blockers);
+        let classes = blockers.iter().map(|blocker| blocker.class.as_str()).collect::<BTreeSet<_>>();
+
+        assert!(classes.contains("cargo-oracle-package-identity-mismatch"));
+        assert!(classes.contains("native-missing-cargo-package"));
+    }
+
+    #[test]
     fn collect_native_manifest_lock_texts_reads_root_member_manifests_and_lockfile() {
         let dir = TempDir::new().unwrap();
         let member_dir = dir.path().join("member");
