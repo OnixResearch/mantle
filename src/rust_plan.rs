@@ -2582,9 +2582,14 @@ fn native_package_version(
     Ok(workspace_version)
 }
 
+fn parse_native_manifest_text(path_label: &str, text: &str) -> Result<NativeManifest, String> {
+    debug_assert!(!path_label.is_empty());
+    toml::from_str(text).map_err(|err| format!("parsing manifest {path_label}: {err}"))
+}
+
 fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
     let text = fs::read_to_string(path).map_err(|err| format!("reading manifest {}: {err}", path.display()))?;
-    toml::from_str(&text).map_err(|err| format!("parsing manifest {}: {err}", path.display()))
+    parse_native_manifest_text(&path.display().to_string(), &text)
 }
 
 fn native_targets_for_manifest(
@@ -3969,8 +3974,9 @@ fn native_unit_from_cargo_derivation(
     let crate_name = rustc_crate_name_from_args(&cargo_unit.derivation.args)
         .unwrap_or_else(|| rust_crate_name(&cargo_unit.target_name));
     let source_path = native_source_path_for_cargo_unit(cargo_unit, package);
-    let edition =
-        rustc_edition_from_args(&cargo_unit.derivation.args).unwrap_or_else(|| DEFAULT_RUST_EDITION.to_string());
+    let edition = native_edition_for_cargo_unit(cargo_unit, package)
+        .or_else(|| rustc_edition_from_args(&cargo_unit.derivation.args))
+        .unwrap_or_else(|| DEFAULT_RUST_EDITION.to_string());
     let selected_features = rustc_feature_cfgs_from_args(&cargo_unit.derivation.args);
     NativeRustUnitSummary {
         unit_id: cargo_unit.unit_id.clone(),
@@ -3993,20 +3999,33 @@ fn native_unit_from_cargo_derivation(
     }
 }
 
+fn native_target_for_cargo_unit<'a>(
+    cargo_unit: &RustUnitDerivationSummary,
+    package: &'a NativePackagePlanningSummary,
+) -> Option<&'a NativeTargetPlanningSummary> {
+    package
+        .targets
+        .iter()
+        .find(|target| target.name == cargo_unit.target_name && target.kind == cargo_unit.target_kind)
+}
+
 fn native_source_path_for_cargo_unit(
     cargo_unit: &RustUnitDerivationSummary,
     package: &NativePackagePlanningSummary,
 ) -> String {
-    if let Some(target) = package
-        .targets
-        .iter()
-        .find(|target| target.name == cargo_unit.target_name && target.kind == cargo_unit.target_kind)
-    {
+    if let Some(target) = native_target_for_cargo_unit(cargo_unit, package) {
         return target.source_path.clone();
     }
     rustc_source_path(&cargo_unit.derivation.args)
         .map(|path| normalize_path_string(&rustc_artifact_path(&path)))
         .unwrap_or_else(|| cargo_unit.target_name.clone())
+}
+
+fn native_edition_for_cargo_unit(
+    cargo_unit: &RustUnitDerivationSummary,
+    package: &NativePackagePlanningSummary,
+) -> Option<String> {
+    native_target_for_cargo_unit(cargo_unit, package).map(|target| target.edition.clone())
 }
 
 fn rustc_feature_cfgs_from_args(args: &[String]) -> Vec<String> {
@@ -13547,6 +13566,78 @@ rust-version = "1.80"
         assert_eq!(app.path_dependencies[0].name, "dep_crate");
         assert!(planning.non_claims.contains(&"not-full-cargo-compatibility".to_string()));
         assert_eq!(planning.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn parse_native_manifest_text_extracts_core_workspace_package_target_and_dependency_facts() {
+        let manifest = parse_native_manifest_text(
+            "fixtures/Cargo.toml",
+            r#"
+[workspace]
+members = ["app", "crates/*"]
+
+[workspace.package]
+version = "1.2.3"
+edition = "2024"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"], default-features = false }
+
+[package]
+name = "app"
+version.workspace = true
+edition.workspace = true
+links = "app_native"
+
+[dependencies]
+local_dep = { path = "../local-dep" }
+serde = { workspace = true }
+
+[build-dependencies]
+build_helper = { path = "../build-helper" }
+
+[lib]
+name = "app_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "app-cli"
+path = "src/bin/app.rs"
+
+[target.'cfg(unix)'.dependencies]
+unix_dep = { path = "../unix-dep" }
+"#,
+        )
+        .unwrap();
+
+        let package = manifest.package.as_ref().unwrap();
+        let workspace = manifest.workspace.as_ref().unwrap();
+        assert_eq!(package.name, "app");
+        assert_eq!(package.links.as_deref(), Some("app_native"));
+        assert!(package.version.workspace);
+        assert!(package.edition.workspace);
+        assert_eq!(workspace.members, vec!["app".to_string(), "crates/*".to_string()]);
+        assert_eq!(workspace.package.version.as_deref(), Some("1.2.3"));
+        assert_eq!(workspace.package.edition.as_deref(), Some("2024"));
+        assert!(workspace.dependencies.contains_key("serde"));
+        assert!(manifest.dependencies.contains_key("local_dep"));
+        assert!(manifest.dependencies.contains_key("serde"));
+        assert!(manifest.build_dependencies.contains_key("build_helper"));
+        assert_eq!(manifest.lib.as_ref().unwrap().name.as_deref(), Some("app_core"));
+        assert_eq!(manifest.bin[0].name.as_deref(), Some("app-cli"));
+        assert!(manifest.target.contains_key("cfg(unix)"));
+    }
+
+    #[test]
+    fn parse_native_manifest_text_rejects_invalid_inherited_package_version() {
+        let err = parse_native_manifest_text(
+            "bad/Cargo.toml",
+            "[package]\nname = 'bad'\nversion = { workspace = true, unexpected = true }\n",
+        )
+        .unwrap_err();
+
+        assert!(err.contains("parsing manifest bad/Cargo.toml"));
+        assert!(err.contains("expected string or { workspace = true }"));
     }
 
     #[test]
