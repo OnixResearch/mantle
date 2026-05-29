@@ -1410,8 +1410,9 @@ pub(crate) fn default_profile() -> String {
 }
 
 fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<Vec<CargoPackage>, RunError> {
+    const MAX_NATIVE_PATH_PACKAGES: usize = 4096;
     let mut blockers = Vec::new();
-    let manifest_paths = native_workspace_manifest_paths(root, &mut blockers);
+    let mut queued = native_workspace_manifest_paths(root, &mut blockers).into_iter().collect::<VecDeque<_>>();
     if !blockers.is_empty() {
         let messages = blockers
             .iter()
@@ -1420,21 +1421,59 @@ fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<
             .join("; ");
         return Err(RunError::Internal(format!("native Cargo-free manifest discovery failed: {messages}")));
     }
+    let mut visited = BTreeSet::new();
     let mut packages = Vec::new();
-    for manifest_path in manifest_paths {
-        packages.push(native_path_cargo_package(root, &manifest_path, options)?);
+    while let Some(manifest_path) = queued.pop_front() {
+        let normalized_manifest = normalize_path_string(&manifest_path);
+        if !visited.insert(normalized_manifest) {
+            continue;
+        }
+        if visited.len() > MAX_NATIVE_PATH_PACKAGES {
+            return Err(RunError::Internal(format!(
+                "native Cargo-free manifest discovery exceeded {MAX_NATIVE_PATH_PACKAGES} path packages"
+            )));
+        }
+        let manifest = read_native_manifest(&manifest_path).map_err(RunError::Internal)?;
+        queued.extend(native_manifest_path_dependency_manifests(&manifest_path, &manifest));
+        packages.push(native_path_cargo_package_from_manifest(root, &manifest_path, &manifest, options)?);
     }
     packages.sort_by(|left, right| left.id.cmp(&right.id));
     packages.dedup_by(|left, right| left.id == right.id);
     Ok(packages)
 }
 
-fn native_path_cargo_package(
+fn native_manifest_path_dependency_manifests(manifest_path: &Path, manifest: &NativeManifest) -> Vec<PathBuf> {
+    let Some(source_root) = manifest_path.parent() else {
+        return Vec::new();
+    };
+    let mut manifests = Vec::new();
+    manifests.extend(native_dependency_table_path_manifests(source_root, &manifest.dependencies));
+    manifests.extend(native_dependency_table_path_manifests(source_root, &manifest.build_dependencies));
+    for target in manifest.target.values() {
+        manifests.extend(native_dependency_table_path_manifests(source_root, &target.dependencies));
+    }
+    manifests.sort();
+    manifests.dedup();
+    manifests
+}
+
+fn native_dependency_table_path_manifests(
+    source_root: &Path,
+    dependencies: &BTreeMap<String, toml::Value>,
+) -> Vec<PathBuf> {
+    dependencies
+        .values()
+        .filter_map(|dependency| dependency.get("path").and_then(toml::Value::as_str))
+        .map(|path| source_root.join(path).join("Cargo.toml"))
+        .collect()
+}
+
+fn native_path_cargo_package_from_manifest(
     root: &Path,
     manifest_path: &Path,
+    manifest: &NativeManifest,
     options: &RustPlanOptions,
 ) -> Result<CargoPackage, RunError> {
-    let manifest = read_native_manifest(manifest_path).map_err(RunError::Internal)?;
     let package = manifest.package.as_ref().ok_or_else(|| {
         RunError::Internal(format!("Cargo-free native package manifest lacks [package]: {}", manifest_path.display()))
     })?;
