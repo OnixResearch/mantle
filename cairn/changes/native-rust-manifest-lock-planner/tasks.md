@@ -12,7 +12,8 @@
   - Evidence: `cairn/changes/native-rust-manifest-lock-planner/evidence/lockfile-parser.md` records normalized source/checksum/revision/dependency-edge parsing and focused validation.
 - [x] [serial] Add filesystem shell that gathers manifests and lockfile text. r[rust_package_planning.native_manifest_lock_planner]
   - Evidence: `cairn/changes/native-rust-manifest-lock-planner/evidence/filesystem-shell.md` records root/member manifest and lockfile text collection tests plus fail-closed missing-lockfile coverage.
-- [ ] [serial] Add fail-closed blockers for unsupported manifest and lockfile surface. r[rust_package_planning.native_manifest_lock_planner]
+- [x] [serial] Add fail-closed blockers for unsupported manifest and lockfile surface. r[rust_package_planning.native_manifest_lock_planner]
+  - Evidence: `cairn/changes/native-rust-manifest-lock-planner/evidence/unsupported-surface.md` records pure blocker coverage for supported input and patch/replace/target-table/unsupported-lock-source failures.
 - [ ] [serial] Add oracle comparison against Cargo metadata for supported fixtures. r[rust_package_planning.native_manifest_lock_planner]
 
 ## Verification

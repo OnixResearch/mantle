@@ -993,6 +993,13 @@ struct NativeManifestLockInputTexts {
     lockfile: NativeTextInput,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct NativeManifestLockUnsupportedBlocker {
+    path: String,
+    class: String,
+    message: String,
+}
+
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
     capture_rust_plan_with_oracle(options, &ProcessCargoOracle)
 }
@@ -2709,6 +2716,126 @@ fn read_native_text_input(path: &Path, label: &str) -> Result<NativeTextInput, S
         path: normalize_path_string(path),
         text,
     })
+}
+
+fn native_manifest_lock_unsupported_blockers(
+    inputs: &NativeManifestLockInputTexts,
+) -> Vec<NativeManifestLockUnsupportedBlocker> {
+    let mut blockers = Vec::new();
+    for manifest in &inputs.manifests {
+        blockers.extend(native_manifest_unsupported_blockers(manifest));
+    }
+    blockers.extend(native_lockfile_unsupported_blockers(&inputs.lockfile));
+    blockers.sort();
+    blockers.dedup();
+    blockers
+}
+
+fn native_manifest_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
+    let mut blockers = Vec::new();
+    let parsed = match input.text.parse::<toml::Value>() {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            blockers.push(native_manifest_lock_blocker(
+                &input.path,
+                "malformed-manifest",
+                &format!("manifest failed TOML parsing: {err}"),
+            ));
+            return blockers;
+        }
+    };
+    if parsed.get("patch").is_some() {
+        blockers.push(native_manifest_lock_blocker(
+            &input.path,
+            "unsupported-manifest-patch",
+            "native manifest planning does not yet implement [patch] source overrides",
+        ));
+    }
+    if parsed.get("replace").is_some() {
+        blockers.push(native_manifest_lock_blocker(
+            &input.path,
+            "unsupported-manifest-replace",
+            "native manifest planning does not yet implement [replace] source overrides",
+        ));
+    }
+    blockers.extend(native_target_table_unsupported_blockers(&input.path, parsed.get("target")));
+    blockers
+}
+
+fn native_target_table_unsupported_blockers(
+    path: &str,
+    target_table: Option<&toml::Value>,
+) -> Vec<NativeManifestLockUnsupportedBlocker> {
+    let mut blockers = Vec::new();
+    let Some(targets) = target_table.and_then(toml::Value::as_table) else {
+        return blockers;
+    };
+    for (cfg, target) in targets {
+        let Some(table) = target.as_table() else {
+            blockers.push(native_manifest_lock_blocker(
+                path,
+                "unsupported-target-table",
+                &format!("target cfg `{cfg}` is not a table"),
+            ));
+            continue;
+        };
+        for key in table.keys() {
+            if key != "dependencies" {
+                blockers.push(native_manifest_lock_blocker(
+                    path,
+                    "unsupported-target-table",
+                    &format!("target cfg `{cfg}` key `{key}` is outside the supported dependency-only fragment"),
+                ));
+            }
+        }
+    }
+    blockers
+}
+
+fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
+    let mut blockers = Vec::new();
+    let facts = match parse_native_lockfile_text(&input.path, &input.text) {
+        Ok(facts) => facts,
+        Err(err) => {
+            blockers.push(native_manifest_lock_blocker(&input.path, "malformed-lockfile", &err));
+            return blockers;
+        }
+    };
+    for package in facts.packages {
+        if let Some(source) = package.source.as_deref() {
+            if !lock_source_supported(source) {
+                blockers.push(native_manifest_lock_blocker(
+                    &input.path,
+                    "unsupported-lockfile-source",
+                    &format!("lock package `{}` uses unsupported source `{source}`", package.name),
+                ));
+            }
+        }
+        for dependency in package.dependencies {
+            if dependency.name.is_empty() {
+                blockers.push(native_manifest_lock_blocker(
+                    &input.path,
+                    "unsupported-lockfile-dependency-edge",
+                    &format!("lock package `{}` has an empty dependency edge `{}`", package.name, dependency.raw),
+                ));
+            }
+        }
+    }
+    blockers
+}
+
+fn lock_source_supported(source: &str) -> bool {
+    source.starts_with("registry+") || source.starts_with("git+")
+}
+
+fn native_manifest_lock_blocker(path: &str, class: &str, message: &str) -> NativeManifestLockUnsupportedBlocker {
+    debug_assert!(!path.is_empty());
+    debug_assert!(!class.is_empty());
+    NativeManifestLockUnsupportedBlocker {
+        path: path.to_string(),
+        class: class.to_string(),
+        message: message.to_string(),
+    }
 }
 
 fn native_targets_for_manifest(
@@ -13723,6 +13850,46 @@ rust-version = "1.80"
 
         assert!(err.contains("reading native lockfile"));
         assert!(err.contains("Cargo.lock"));
+    }
+
+    #[test]
+    fn native_manifest_lock_unsupported_blockers_accept_supported_subset() {
+        let inputs = NativeManifestLockInputTexts {
+            manifests: vec![NativeTextInput {
+                path: "Cargo.toml".to_string(),
+                text: "[package]\nname = 'app'\nversion = '0.1.0'\n\n[target.'cfg(unix)'.dependencies]\ndep = { path = '../dep' }\n".to_string(),
+            }],
+            lockfile: NativeTextInput {
+                path: "Cargo.lock".to_string(),
+                text: "version = 3\n\n[[package]]\nname = 'dep'\nversion = '0.1.0'\n".to_string(),
+            },
+        };
+
+        let blockers = native_manifest_lock_unsupported_blockers(&inputs);
+
+        assert!(blockers.is_empty(), "{blockers:#?}");
+    }
+
+    #[test]
+    fn native_manifest_lock_unsupported_blockers_reject_patch_replace_target_build_and_unknown_lock_source() {
+        let inputs = NativeManifestLockInputTexts {
+            manifests: vec![NativeTextInput {
+                path: "Cargo.toml".to_string(),
+                text: "[package]\nname = 'app'\nversion = '0.1.0'\n\n[patch.crates-io]\nserde = { path = 'vendor/serde' }\n\n[replace]\n'old:0.1.0' = { path = 'vendor/old' }\n\n[target.'cfg(unix)'.build-dependencies]\nbuild = { path = '../build' }\n".to_string(),
+            }],
+            lockfile: NativeTextInput {
+                path: "Cargo.lock".to_string(),
+                text: "version = 3\n\n[[package]]\nname = 'weird'\nversion = '0.1.0'\nsource = 'sparse+https://example.invalid/index'\n".to_string(),
+            },
+        };
+
+        let blockers = native_manifest_lock_unsupported_blockers(&inputs);
+        let classes = blockers.iter().map(|blocker| blocker.class.as_str()).collect::<BTreeSet<_>>();
+
+        assert!(classes.contains("unsupported-manifest-patch"));
+        assert!(classes.contains("unsupported-manifest-replace"));
+        assert!(classes.contains("unsupported-target-table"));
+        assert!(classes.contains("unsupported-lockfile-source"));
     }
 
     #[test]
