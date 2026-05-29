@@ -3732,8 +3732,8 @@ fn registry_dependency_source<'a>(
             .copied()
             .filter(|source| registry_version_req_matches(version_req, &source.version))
             .collect::<Vec<_>>();
-        if matching.len() == 1 {
-            return Ok(Some(matching[0]));
+        if let Some(selected) = newest_registry_source(matching.as_slice()) {
+            return Ok(Some(selected));
         }
         if version_req.starts_with('=') && candidates.len() > 1 {
             return Err(dependency_source_error(
@@ -3763,7 +3763,106 @@ fn registry_version_req_matches(version_req: &str, source_version: &str) -> bool
     if version_req.trim().starts_with('=') {
         return false;
     }
+    if let Some(matches) = registry_semver_range_req_matches(normalized_req, source_version) {
+        return matches;
+    }
+    if let Some(matches) = registry_semver_caret_req_matches(normalized_req, source_version) {
+        return matches;
+    }
     registry_version_prefix_matches(normalized_req, source_version)
+}
+
+fn newest_registry_source<'a>(sources: &[&'a NativeRegistrySourceSummary]) -> Option<&'a NativeRegistrySourceSummary> {
+    sources
+        .iter()
+        .copied()
+        .max_by(|left, right| semver_sort_key(&left.version).cmp(&semver_sort_key(&right.version)))
+}
+
+fn semver_sort_key(version: &str) -> (u32, u32, u32) {
+    semver_components(version)
+        .map(|version| (version.major, version.minor, version.patch))
+        .unwrap_or((0, 0, 0))
+}
+
+fn registry_semver_range_req_matches(version_req: &str, source_version: &str) -> Option<bool> {
+    if !version_req.contains(',') && !version_req.contains('<') && !version_req.contains('>') {
+        return None;
+    }
+    let source = semver_components(source_version)?;
+    let mut saw_comparator = false;
+    for comparator in version_req.split(',').map(str::trim).filter(|part| !part.is_empty()) {
+        saw_comparator = true;
+        if !semver_comparator_matches(comparator, source)? {
+            return Some(false);
+        }
+    }
+    Some(saw_comparator)
+}
+
+fn semver_comparator_matches(comparator: &str, source: SemverComponents) -> Option<bool> {
+    let (operator, version) = if let Some(version) = comparator.strip_prefix(">=") {
+        (">=", version.trim())
+    } else if let Some(version) = comparator.strip_prefix("<=") {
+        ("<=", version.trim())
+    } else if let Some(version) = comparator.strip_prefix('>') {
+        (">", version.trim())
+    } else if let Some(version) = comparator.strip_prefix('<') {
+        ("<", version.trim())
+    } else if let Some(version) = comparator.strip_prefix('=') {
+        ("=", version.trim())
+    } else {
+        return None;
+    };
+    let required = semver_components(version)?;
+    let source_key = (source.major, source.minor, source.patch);
+    let required_key = (required.major, required.minor, required.patch);
+    Some(match operator {
+        ">=" => source_key >= required_key,
+        "<=" => source_key <= required_key,
+        ">" => source_key > required_key,
+        "<" => source_key < required_key,
+        "=" => source_key == required_key,
+        _ => false,
+    })
+}
+
+fn registry_semver_caret_req_matches(version_req: &str, source_version: &str) -> Option<bool> {
+    let req = semver_components(version_req)?;
+    let source = semver_components(source_version)?;
+    if !semver_source_meets_lower_bound(req, source) {
+        return Some(false);
+    }
+    if req.major > 0 {
+        return Some(source.major == req.major);
+    }
+    if req.minor > 0 {
+        return Some(source.major == 0 && source.minor == req.minor);
+    }
+    Some(source.major == 0 && source.minor == 0 && source.patch == req.patch)
+}
+
+#[derive(Clone, Copy)]
+struct SemverComponents {
+    major: u32,
+    minor: u32,
+    patch: u32,
+}
+
+fn semver_components(version: &str) -> Option<SemverComponents> {
+    const SEMVER_MAJOR_INDEX: usize = 0;
+    const SEMVER_MINOR_INDEX: usize = 1;
+    const SEMVER_PATCH_INDEX: usize = 2;
+    let core = version.split(['-', '+']).next()?;
+    let parts = core.split('.').collect::<Vec<_>>();
+    let major = parts.get(SEMVER_MAJOR_INDEX)?.parse::<u32>().ok()?;
+    let minor = parts.get(SEMVER_MINOR_INDEX).and_then(|part| part.parse::<u32>().ok()).unwrap_or(0);
+    let patch = parts.get(SEMVER_PATCH_INDEX).and_then(|part| part.parse::<u32>().ok()).unwrap_or(0);
+    Some(SemverComponents { major, minor, patch })
+}
+
+fn semver_source_meets_lower_bound(req: SemverComponents, source: SemverComponents) -> bool {
+    (source.major, source.minor, source.patch) >= (req.major, req.minor, req.patch)
 }
 
 fn registry_version_prefix_matches(version_prefix: &str, source_version: &str) -> bool {
@@ -4890,6 +4989,37 @@ fn summarize_native_host_unit_graph_planning(
     );
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     for package in &native_package_target_planning.packages {
+        let package_host_artifacts = package
+            .targets
+            .iter()
+            .filter(|target| is_host_target_kind(&target.kind))
+            .flat_map(|target| {
+                selected_host_units_by_key
+                    .get(&host_unit_key(&package.package_id, &target.name, &target.kind))
+                    .into_iter()
+                    .flatten()
+                    .cloned()
+                    .map(move |selected| RustHostArtifact {
+                        package_id: package.package_id.clone(),
+                        target_name: target.name.clone(),
+                        target_kind: target.kind.clone(),
+                        producer_unit_id: Some(selected.unit_id.clone()),
+                        artifact: format!(
+                            "host-artifact:{}:{}:{}",
+                            selected.unit_index, target.kind, target.crate_name
+                        ),
+                        metadata_digest_blake3: (target.kind == "custom-build")
+                            .then(|| build_script_metadata_summary(&package.package_id, &target.name).digest_blake3),
+                    })
+            })
+            .collect::<Vec<_>>();
+        artifacts_by_package.entry(package.package_id.clone()).or_default().extend(package_host_artifacts);
+    }
+    for artifacts in artifacts_by_package.values_mut() {
+        artifacts.sort();
+        artifacts.dedup();
+    }
+    for package in &native_package_target_planning.packages {
         let Some(source) = source_closure.sources.iter().find(|source| source.package_id == package.package_id) else {
             blockers.push(native_host_blocker(
                 None,
@@ -4940,8 +5070,26 @@ fn summarize_native_host_unit_graph_planning(
                 source_closure,
                 &mut blockers,
             );
-            let consumed_host_artifacts =
+            let mut consumed_host_artifacts =
                 selected_host_consumed_artifacts(unit_graph, selected, &package_host_artifacts);
+            let mut fallback_consumed_host_artifacts = fallback_host_consumed_host_artifacts(
+                &target.kind,
+                package,
+                &packages_by_manifest,
+                &artifacts_by_package,
+                &mut blockers,
+            );
+            if consumed_host_artifacts
+                .iter()
+                .any(|artifact| artifact.package_id == package.package_id && artifact.target_kind == "custom-build")
+            {
+                fallback_consumed_host_artifacts.retain(|artifact| {
+                    artifact.package_id != package.package_id || artifact.target_kind != "custom-build"
+                });
+            }
+            consumed_host_artifacts.extend(fallback_consumed_host_artifacts);
+            consumed_host_artifacts.sort();
+            consumed_host_artifacts.dedup();
             let metadata_dependencies = native_host_metadata_dependencies(
                 package,
                 &target.kind,
@@ -4952,7 +5100,6 @@ fn summarize_native_host_unit_graph_planning(
             );
             let generated_metadata = (target.kind == "custom-build")
                 .then(|| build_script_metadata_summary(&package.package_id, &target.name));
-            artifacts_by_package.entry(package.package_id.clone()).or_default().push(artifact.clone());
             host_units.push(NativeHostUnitSummary {
                 unit_id: selected.unit_id.clone(),
                 package_id: package.package_id.clone(),
@@ -5259,6 +5406,49 @@ fn selected_host_consumed_artifacts(
     consumed.sort();
     consumed.dedup();
     consumed
+}
+
+fn fallback_host_consumed_host_artifacts(
+    target_kind: &str,
+    package: &NativePackagePlanningSummary,
+    packages_by_manifest: &BTreeMap<String, &NativePackagePlanningSummary>,
+    artifacts_by_package: &BTreeMap<String, Vec<RustHostArtifact>>,
+    blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
+) -> Vec<RustHostArtifact> {
+    if target_kind != "proc-macro" {
+        return Vec::new();
+    }
+    let mut consumed_host_artifacts = artifacts_by_package
+        .get(&package.package_id)
+        .into_iter()
+        .flatten()
+        .filter(|artifact| artifact.target_kind == "custom-build")
+        .cloned()
+        .collect::<Vec<_>>();
+    for dependency in &package.path_dependencies {
+        let Some(dependency_package) = packages_by_manifest
+            .iter()
+            .find(|(manifest_path, _)| manifest_path_strings_same(manifest_path, &dependency.manifest_path))
+            .map(|(_, package)| *package)
+        else {
+            blockers.push(native_host_blocker(
+                None,
+                Some(package.package_id.clone()),
+                "unresolved-host-proc-macro-consumer-edge",
+                &format!("proc-macro dependency `{}` has no native package fact", dependency.name),
+            ));
+            continue;
+        };
+        consumed_host_artifacts.extend(
+            artifacts_by_package
+                .get(&dependency_package.package_id)
+                .into_iter()
+                .flatten()
+                .filter(|artifact| artifact.target_kind == "proc-macro")
+                .cloned(),
+        );
+    }
+    consumed_host_artifacts
 }
 
 fn matching_host_artifacts_for_dependency(
@@ -8883,7 +9073,14 @@ fn matching_produced_dependency_artifacts<'a>(
     artifacts: &'a [ProducedPackageArtifact],
     dependency: &RustDependencyArtifact,
 ) -> Vec<&'a ProducedPackageArtifact> {
-    artifacts.iter().filter(|artifact| artifact.crate_name == dependency.name).collect()
+    let exact = artifacts.iter().filter(|artifact| artifact.crate_name == dependency.name).collect::<Vec<_>>();
+    if !exact.is_empty() {
+        return exact;
+    }
+    match artifacts {
+        [single] => vec![single],
+        _ => Vec::new(),
+    }
 }
 
 fn append_selected_dependency_search_paths(
@@ -12116,6 +12313,68 @@ mod tests {
     }
 
     #[test]
+    fn native_host_planning_links_proc_macro_dependency_proc_macros_without_cargo_edges() {
+        let dir = TempDir::new().unwrap();
+        let macro_id = "path+file://strum_macros#strum_macros@0.1.0";
+        let rustversion_id = "path+file://rustversion#rustversion@1.0.0";
+        let rustversion = test_native_package(rustversion_id, "rustversion", "proc-macro", Vec::new());
+        let mut macro_package =
+            test_native_package(macro_id, "strum_macros", "proc-macro", vec![NativePathDependencySummary {
+                name: "rustversion".to_string(),
+                manifest_path: rustversion.manifest_path.clone(),
+            }]);
+        macro_package.targets[0].name = "strum_macros".to_string();
+        macro_package.targets[0].crate_name = "strum_macros".to_string();
+        let package_planning = test_package_planning(vec![macro_package, rustversion]);
+        let source_closure = test_source_closure(&package_planning.packages);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": rustversion_id,
+                    "target": {"name": "rustversion", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": "/test/rustversion/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": []
+                },
+                {
+                    "pkg_id": macro_id,
+                    "target": {"name": "strum_macros", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": "/test/strum_macros/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": []
+                }
+            ]
+        });
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        let native_hosts = summarize_native_host_unit_graph_planning(
+            &unit_graph,
+            &source_closure,
+            &empty_registry_planning(),
+            &package_planning,
+            &native_units,
+            &plan_options,
+        )
+        .unwrap();
+
+        assert!(native_hosts.ready, "{:#?}", native_hosts.blockers);
+        let macro_unit = native_hosts
+            .host_units
+            .iter()
+            .find(|unit| unit.package_id == macro_id)
+            .expect("macro host unit planned");
+        assert_eq!(macro_unit.consumed_host_artifacts.len(), 1usize);
+        assert_eq!(macro_unit.consumed_host_artifacts[0].package_id, rustversion_id);
+        assert_eq!(macro_unit.consumed_host_artifacts[0].target_kind, "proc-macro");
+    }
+
+    #[test]
     fn native_host_planning_preserves_duplicate_selected_proc_macro_unit_ids() {
         let dir = TempDir::new().unwrap();
         let app_id = "path+file://app#app@0.1.0";
@@ -13414,6 +13673,48 @@ rust-version = "1.80"
 
         assert_eq!(blocker.class, "ambiguous-dependency-producer");
         assert!(blocker.message.contains("package-only producer candidates"));
+    }
+
+    #[test]
+    fn package_only_dependency_artifacts_bind_single_renamed_crate_candidate() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#lock_api@0.4.14";
+        let produced_crate_name = "lock_api";
+        let dependency_crate_name = "lock_api_crate";
+        let produced_path = dir.path().join("liblock_api.rlib");
+        std::fs::write(&produced_path, b"lock-api").unwrap();
+        let producer = test_rust_derivation(0, package_id, "lib", "target", Vec::new());
+        let placeholder = format!("artifact:{package_id}:{dependency_crate_name}");
+        let dependency = RustDependencyArtifact {
+            package_id: package_id.to_string(),
+            name: dependency_crate_name.to_string(),
+            producer_unit_id: None,
+            artifact: placeholder.clone(),
+        };
+        let mut consumer = test_rust_derivation(1, "consumer", "lib", "target", vec![dependency]);
+        consumer.derivation.args = vec![
+            RUSTC_EXTERN_FLAG.to_string(),
+            format!("{dependency_crate_name}={placeholder}"),
+        ];
+        consumer.derivation.inputs = vec![placeholder];
+        let mut index = ProducedArtifactIndex::default();
+        index.record_unit(&producer, produced_path.clone());
+
+        let bound = bind_all_dependency_artifacts_with_index(&consumer, &index).unwrap();
+
+        let produced_path_string = normalize_path_string(&produced_path);
+        assert!(has_ordered_arg_pair(
+            &bound.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            &format!("{dependency_crate_name}={produced_path_string}")
+        ));
+        assert!(
+            !bound
+                .derivation
+                .args
+                .iter()
+                .any(|arg| arg.contains(produced_crate_name) && !arg.contains(dependency_crate_name))
+        );
     }
 
     #[test]
@@ -15020,6 +15321,39 @@ unix_dep = { path = "../unix-dep" }
             registry_dependency_source("thiserror-impl", &string_dependency, &registry).unwrap().unwrap();
         assert_eq!(string_selected.version, "2.0.18");
         assert_eq!(string_selected.manifest_path, normalize_path_string(&impl_2_manifest));
+    }
+
+    #[test]
+    fn registry_dependency_source_uses_default_caret_semver_compatibility() {
+        let dir = TempDir::new().unwrap();
+        let mut registry = empty_registry_planning();
+        registry.sources = vec![
+            test_registry_source("bitflags", "1.3.2", &dir.path().join("bitflags-1.3.2/Cargo.toml")),
+            test_registry_source("bitflags", "2.11.0", &dir.path().join("bitflags-2.11.0/Cargo.toml")),
+        ];
+        let dependency: toml::Value = toml::from_str("version = \"2.4.0\"").unwrap();
+
+        let selected = registry_dependency_source("bitflags", &dependency, &registry).unwrap().unwrap();
+
+        assert_eq!(selected.name, "bitflags");
+        assert_eq!(selected.version, "2.11.0");
+    }
+
+    #[test]
+    fn registry_dependency_source_uses_highest_matching_comparator_range() {
+        let dir = TempDir::new().unwrap();
+        let mut registry = empty_registry_planning();
+        registry.sources = vec![
+            test_registry_source("getrandom", "0.2.17", &dir.path().join("getrandom-0.2.17/Cargo.toml")),
+            test_registry_source("getrandom", "0.3.4", &dir.path().join("getrandom-0.3.4/Cargo.toml")),
+            test_registry_source("getrandom", "0.4.2", &dir.path().join("getrandom-0.4.2/Cargo.toml")),
+        ];
+        let dependency: toml::Value = toml::from_str("version = \">=0.3.0, <0.5\"").unwrap();
+
+        let selected = registry_dependency_source("getrandom", &dependency, &registry).unwrap().unwrap();
+
+        assert_eq!(selected.name, "getrandom");
+        assert_eq!(selected.version, "0.4.2");
     }
 
     #[test]
