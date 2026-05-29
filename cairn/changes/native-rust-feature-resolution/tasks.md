@@ -14,8 +14,10 @@
   - Evidence: `cairn/changes/native-rust-feature-resolution/evidence/feature-roles.md` records independent normal/build/host feature role resolution and no-leakage tests.
 - [x] [serial] Emit selected feature cfgs into native unit derivations. r[rust_package_planning.native_feature_resolution]
   - Evidence: `cairn/changes/native-rust-feature-resolution/evidence/feature-cfg-emission.md` records resolved feature-closure rustc cfg emission coverage.
-- [ ] [serial] Add fail-closed blockers for unsupported feature surfaces. r[rust_package_planning.native_feature_resolution]
+- [x] [serial] Add fail-closed blockers for unsupported feature surfaces. r[rust_package_planning.native_feature_resolution]
+  - Evidence: `cairn/changes/native-rust-feature-resolution/evidence/feature-blockers.md` records optional-dependency negative coverage plus malformed/unknown feature-entry blockers.
 
 ## Verification
 
-- [ ] [serial] Run resolver unit tests, optional dependency negative tests, oracle comparison fixtures, and Cairn validation. r[rust_package_planning.native_feature_resolution]
+- [x] [serial] Run resolver unit tests, optional dependency negative tests, oracle comparison fixtures, and Cairn validation. r[rust_package_planning.native_feature_resolution]
+  - Evidence: `cairn/changes/native-rust-feature-resolution/evidence/verification.md` records resolver, cfg emission, unit graph, manifest, oracle comparison, host graph, and Cairn validation commands.

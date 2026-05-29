@@ -11359,6 +11359,45 @@ mod tests {
     }
 
     #[test]
+    fn native_feature_resolver_leaves_optional_dependency_unselected_without_feature() {
+        let mut feature_defs = BTreeMap::new();
+        feature_defs.insert("default".to_string(), Vec::new());
+        let request = NativeFeatureResolutionRequest {
+            feature_defs,
+            optional_dependencies: BTreeSet::from(["serde".to_string()]),
+            explicit_features: Vec::new(),
+            all_features: false,
+            no_default_features: false,
+        };
+
+        let resolution = resolve_native_features(request);
+
+        assert!(resolution.blockers.is_empty(), "{:#?}", resolution.blockers);
+        assert_eq!(resolution.selected_features, vec!["default".to_string()]);
+        assert!(resolution.activated_optional_dependencies.is_empty());
+    }
+
+    #[test]
+    fn native_feature_resolver_blocks_malformed_feature_edges() {
+        let mut feature_defs = BTreeMap::new();
+        feature_defs.insert("default".to_string(), vec!["dep:".to_string(), "serde/".to_string()]);
+        let request = NativeFeatureResolutionRequest {
+            feature_defs,
+            optional_dependencies: BTreeSet::from(["serde".to_string()]),
+            explicit_features: Vec::new(),
+            all_features: false,
+            no_default_features: false,
+        };
+
+        let resolution = resolve_native_features(request);
+
+        assert_eq!(resolution.selected_features, vec!["default".to_string()]);
+        assert!(resolution.blockers.iter().any(|blocker| blocker.class == "unsupported-feature-entry"));
+        assert!(resolution.blockers.iter().any(|blocker| blocker.message.contains("dep:")));
+        assert!(resolution.blockers.iter().any(|blocker| blocker.message.contains("serde/")));
+    }
+
+    #[test]
     fn native_feature_role_resolver_keeps_normal_build_and_host_features_separate() {
         let mut normal_defs = BTreeMap::new();
         normal_defs.insert("default".to_string(), vec!["std".to_string()]);
