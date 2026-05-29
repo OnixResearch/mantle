@@ -474,6 +474,8 @@ pub(crate) struct RustUnitDerivationSummary {
 pub(crate) struct RustDependencyArtifact {
     pub(crate) package_id: String,
     pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) producer_unit_id: Option<String>,
     pub(crate) artifact: String,
 }
 
@@ -482,6 +484,8 @@ pub(crate) struct RustHostArtifact {
     pub(crate) package_id: String,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) producer_unit_id: Option<String>,
     pub(crate) artifact: String,
     pub(crate) metadata_digest_blake3: Option<String>,
 }
@@ -4003,6 +4007,7 @@ fn native_target_dependency_artifacts(
             artifacts.push(RustDependencyArtifact {
                 package_id: package_id.to_string(),
                 name: lib_target.crate_name.clone(),
+                producer_unit_id: None,
                 artifact: format!("artifact:{package_id}:{}", lib_target.crate_name),
             });
         }
@@ -4146,6 +4151,7 @@ fn native_dependency_artifacts(
         artifacts.push(RustDependencyArtifact {
             package_id: dependency_package.package_id.clone(),
             name: rust_crate_name(&dependency.name),
+            producer_unit_id: None,
             artifact: format!("artifact:{}:{}", dependency_package.package_id, rust_crate_name(&dependency.name)),
         });
     }
@@ -4313,6 +4319,12 @@ fn summarize_native_host_unit_graph_planning(
                     package_id: package.package_id.clone(),
                     target_name: target.name.clone(),
                     target_kind: target.kind.clone(),
+                    producer_unit_id: Some(rust_unit_variant_key(
+                        &package.package_id,
+                        &target.crate_name,
+                        &target.kind,
+                        "build",
+                    )),
                     artifact: format!("host-artifact:{artifact_index}:{}:{}", target.kind, target.crate_name),
                     metadata_digest_blake3: (target.kind == "custom-build")
                         .then(|| build_script_metadata_summary(&package.package_id, &target.name).digest_blake3),
@@ -4613,6 +4625,7 @@ fn native_host_dependency_artifacts(
         artifacts.push(RustDependencyArtifact {
             package_id: dependency_package.package_id.clone(),
             name: rust_crate_name(&dependency.name),
+            producer_unit_id: None,
             artifact: format!("artifact:{}:{}", dependency_package.package_id, rust_crate_name(&dependency.name)),
         });
     }
@@ -4819,6 +4832,7 @@ fn summarize_native_unit_derivation_graph(
             host_graph.host_units.iter().map(|unit| native_host_unit_derivation(unit, source_closure, options)),
         );
     }
+    derivations = dedupe_unit_derivations_by_variant(derivations);
     derivations.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
     let blockers = Vec::new();
     let digest_blake3 = unit_derivation_graph_digest(&derivations, &blockers)?;
@@ -4837,6 +4851,33 @@ fn summarize_native_unit_derivation_graph(
         derivations,
         blockers,
     })
+}
+
+fn dedupe_unit_derivations_by_variant(derivations: Vec<RustUnitDerivationSummary>) -> Vec<RustUnitDerivationSummary> {
+    let mut by_variant = BTreeMap::<String, RustUnitDerivationSummary>::new();
+    for derivation in derivations {
+        let key = if is_supported_target_unit(&derivation) {
+            rust_unit_variant_key_from_summary(&derivation)
+        } else {
+            derivation.unit_id.clone()
+        };
+        match by_variant.get(&key) {
+            Some(existing) if prefer_existing_derivation(existing, &derivation) => {}
+            _ => {
+                by_variant.insert(key, derivation);
+            }
+        }
+    }
+    by_variant.into_values().collect()
+}
+
+fn prefer_existing_derivation(existing: &RustUnitDerivationSummary, candidate: &RustUnitDerivationSummary) -> bool {
+    let existing_absolute = rustc_source_path(&existing.derivation.args).is_some_and(|path| path.is_absolute());
+    let candidate_absolute = rustc_source_path(&candidate.derivation.args).is_some_and(|path| path.is_absolute());
+    if existing_absolute != candidate_absolute {
+        return existing_absolute;
+    }
+    existing.unit_id >= candidate.unit_id
 }
 
 fn append_rustc_metadata_args(args: &mut Vec<String>, metadata: &str) {
@@ -5466,9 +5507,10 @@ fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostAr
         let metadata_digest_blake3 = (target_kind == "custom-build")
             .then(|| build_script_metadata_summary(&package_id, &target_name).digest_blake3);
         artifacts.entry(package_id.clone()).or_default().push(RustHostArtifact {
-            package_id,
+            package_id: package_id.clone(),
             target_name: target_name.clone(),
             target_kind: target_kind.to_string(),
+            producer_unit_id: rust_unit_variant_key_from_unit_value(unit),
             artifact: format!("host-artifact:{index}:{target_kind}:{}", rust_crate_name(&target_name)),
             metadata_digest_blake3,
         });
@@ -5580,6 +5622,7 @@ fn unit_dependency_artifacts(unit: &Value, units: &[Value]) -> Vec<RustDependenc
         artifacts.push(RustDependencyArtifact {
             package_id: package_id.to_string(),
             name,
+            producer_unit_id: dependency_producer_unit_id(dep, units),
             artifact,
         });
     }
@@ -5597,6 +5640,12 @@ fn dependency_package_id<'a>(dep: &'a Value, units: &'a [Value]) -> Option<&'a s
             let unit = units.get(usize::try_from(index).ok()?)?;
             unit.get("pkg_id").and_then(Value::as_str)
         })
+}
+
+fn dependency_producer_unit_id(dep: &Value, units: &[Value]) -> Option<String> {
+    let index = usize::try_from(dep.get("index")?.as_u64()?).ok()?;
+    let unit = units.get(index)?;
+    rust_unit_variant_key_from_unit_value(unit)
 }
 
 fn normalized_crate_types(crate_types: &[String], target_kind: &str) -> Vec<String> {
@@ -5656,6 +5705,49 @@ fn source_kind_needs_cap_lints(source_kind: &SourceKind) -> bool {
 
 fn rust_unit_id(index: usize, package_id: &str, target_name: &str, target_kind: &str, mode: &str) -> String {
     format!("{index}:{package_id}:{target_name}:{target_kind}:{mode}")
+}
+
+fn rust_unit_variant_key(package_id: &str, crate_name: &str, target_kind: &str, mode: &str) -> String {
+    debug_assert!(!package_id.is_empty());
+    debug_assert!(!crate_name.is_empty());
+    debug_assert!(!target_kind.is_empty());
+    debug_assert!(!mode.is_empty());
+    format!("variant:{package_id}:{crate_name}:{target_kind}:{mode}")
+}
+
+fn rust_unit_variant_key_from_unit_value(unit: &Value) -> Option<String> {
+    if is_custom_build_run_unit(unit) {
+        return None;
+    }
+    let package_id = target_string(unit, "pkg_id")?;
+    let target = unit.get("target")?;
+    let target_name = target_string(target, "name")?;
+    let kinds = target_string_array(target, "kind");
+    let crate_types = target_string_array(target, "crate_types");
+    let target_kind = classify_supported_cargo_target_kind(&kinds, &crate_types)?;
+    let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
+    if mode != "build" {
+        return None;
+    }
+    Some(rust_unit_variant_key(&package_id, &rust_crate_name(&target_name), target_kind, &mode))
+}
+
+fn rust_unit_variant_key_from_summary(unit: &RustUnitDerivationSummary) -> String {
+    rust_unit_variant_key(
+        &unit.package_id,
+        &rustc_crate_name_from_args(&unit.derivation.args).unwrap_or_else(|| rust_crate_name(&unit.target_name)),
+        &unit.target_kind,
+        &unit.mode,
+    )
+}
+
+fn rustc_crate_name_from_args(args: &[String]) -> Option<String> {
+    args.windows(RUSTC_EXTERN_ARG_PAIR_WIDTH).find_map(|window| {
+        if window[0] == "--crate-name" {
+            return Some(window[1].clone());
+        }
+        None
+    })
 }
 
 fn derivation_name(target_name: &str, index: usize) -> String {
@@ -5897,6 +5989,7 @@ pub(crate) fn execute_rust_target_unit_topology(
     }
 
     let selected_set = selected_indices.iter().copied().collect::<BTreeSet<_>>();
+    let unit_indices_by_id = rust_unit_indices_by_id(graph);
     let mut lib_producers = BTreeMap::new();
     for index in &selected_indices {
         let unit = &graph.derivations[*index];
@@ -5910,19 +6003,11 @@ pub(crate) fn execute_rust_target_unit_topology(
         let unit = &graph.derivations[*index];
         let mut deps = Vec::new();
         for dependency in &unit.dependency_artifacts {
-            let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
-                return target_topology_receipt(
-                    "blocked",
-                    Vec::new(),
-                    Some(RustUnitExecutionBlocker {
-                        class: "missing-dependency-producer".to_string(),
-                        message: format!(
-                            "no supported producer lib unit for dependency package {}",
-                            dependency.package_id
-                        ),
-                    }),
-                );
-            };
+            let producer_index =
+                match target_dependency_producer_index(dependency, graph, &unit_indices_by_id, &lib_producers) {
+                    Ok(index) => index,
+                    Err(blocker) => return target_topology_receipt("blocked", Vec::new(), Some(blocker)),
+                };
             if !selected_set.contains(&producer_index) {
                 return target_topology_receipt(
                     "blocked",
@@ -5957,17 +6042,23 @@ pub(crate) fn execute_rust_target_unit_topology(
     }
 
     let mut executions = Vec::new();
-    let mut produced_artifacts = BTreeMap::<String, PathBuf>::new();
-    let mut produced_search_artifacts = Vec::<PathBuf>::new();
+    let mut produced_artifacts = ProducedArtifactIndex::default();
     for index in ordered_indices {
         let unit = &graph.derivations[index];
         let mut executable_unit = if unit.dependency_artifacts.is_empty() {
             unit.clone()
         } else {
-            bind_all_dependency_artifacts(unit, &produced_artifacts)?
+            match bind_all_dependency_artifacts_with_index(unit, &produced_artifacts) {
+                Ok(bound) => bound,
+                Err(blocker) => return target_topology_receipt("blocked", executions, Some(blocker)),
+            }
         };
         if !unit.dependency_artifacts.is_empty() {
-            append_dependency_search_paths_from_paths(&mut executable_unit, produced_search_artifacts.iter());
+            if let Err(blocker) =
+                append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_artifacts)
+            {
+                return target_topology_receipt("blocked", executions, Some(blocker));
+            }
         }
         let receipt = execute_rust_unit(&executable_unit, options)?;
         if receipt.execution_status != "success" {
@@ -5981,8 +6072,7 @@ pub(crate) fn execute_rust_target_unit_topology(
         if unit.target_kind == "lib" {
             match produced_library_artifact_path(&executable_unit, options)? {
                 Ok(path) => {
-                    produced_search_artifacts.push(path.clone());
-                    produced_artifacts.insert(unit.package_id.clone(), path);
+                    produced_artifacts.record_unit(unit, path);
                 }
                 Err(blocker) => {
                     executions.push(receipt);
@@ -6002,6 +6092,49 @@ struct HostDependencyTopologyPlan {
     host_edges: BTreeMap<usize, Vec<usize>>,
 }
 
+fn rust_unit_indices_by_id(graph: &UnitDerivationGraphSummary) -> BTreeMap<String, usize> {
+    let mut indices = BTreeMap::new();
+    for (index, unit) in graph.derivations.iter().enumerate() {
+        indices.insert(unit.unit_id.clone(), index);
+        indices.insert(rust_unit_variant_key_from_summary(unit), index);
+    }
+    indices
+}
+
+fn target_dependency_producer_index(
+    dependency: &RustDependencyArtifact,
+    graph: &UnitDerivationGraphSummary,
+    unit_indices_by_id: &BTreeMap<String, usize>,
+    lib_producers: &BTreeMap<String, usize>,
+) -> Result<usize, RustUnitExecutionBlocker> {
+    if let Some(producer_unit_id) = &dependency.producer_unit_id {
+        let Some(index) = unit_indices_by_id.get(producer_unit_id).copied() else {
+            return Err(RustUnitExecutionBlocker {
+                class: "missing-dependency-producer".to_string(),
+                message: format!(
+                    "no selected producer unit {producer_unit_id} for dependency package {}",
+                    dependency.package_id
+                ),
+            });
+        };
+        let producer = &graph.derivations[index];
+        if is_supported_target_unit(producer) {
+            return Ok(index);
+        }
+        return Err(RustUnitExecutionBlocker {
+            class: "unsupported-dependency-producer".to_string(),
+            message: format!(
+                "selected producer unit {} for dependency package {} is not a supported target unit",
+                producer_unit_id, dependency.package_id
+            ),
+        });
+    }
+    lib_producers.get(&dependency.package_id).copied().ok_or_else(|| RustUnitExecutionBlocker {
+        class: "missing-dependency-producer".to_string(),
+        message: format!("no supported producer lib unit for dependency package {}", dependency.package_id),
+    })
+}
+
 fn plan_host_dependency_topology(
     host_indices: &[usize],
     lib_producers: &BTreeMap<String, usize>,
@@ -6009,12 +6142,43 @@ fn plan_host_dependency_topology(
     target_edges: &BTreeMap<usize, Vec<usize>>,
     graph: &UnitDerivationGraphSummary,
 ) -> Result<HostDependencyTopologyPlan, RustUnitExecutionBlocker> {
+    let unit_indices_by_id = rust_unit_indices_by_id(graph);
     let mut target_dependency_indices = BTreeSet::new();
     let mut host_edges = BTreeMap::<usize, Vec<usize>>::new();
     for index in host_indices {
         let unit = &graph.derivations[*index];
         let mut host_dependencies = Vec::new();
         for dependency in &unit.dependency_artifacts {
+            if let Some(producer_unit_id) = &dependency.producer_unit_id {
+                let Some(producer_index) = unit_indices_by_id.get(producer_unit_id).copied() else {
+                    return Err(RustUnitExecutionBlocker {
+                        class: "missing-host-dependency-producer".to_string(),
+                        message: format!(
+                            "no selected producer unit {} for host dependency package {}",
+                            producer_unit_id, dependency.package_id
+                        ),
+                    });
+                };
+                let producer = &graph.derivations[producer_index];
+                if is_supported_target_unit(producer) {
+                    collect_target_dependencies(producer_index, target_edges, &mut target_dependency_indices);
+                    host_dependencies.push(producer_index);
+                    continue;
+                }
+                if is_supported_host_unit(producer) {
+                    if producer_index != *index {
+                        host_dependencies.push(producer_index);
+                    }
+                    continue;
+                }
+                return Err(RustUnitExecutionBlocker {
+                    class: "unsupported-host-dependency-producer".to_string(),
+                    message: format!(
+                        "selected producer unit {} for host dependency package {} is not supported",
+                        producer_unit_id, dependency.package_id
+                    ),
+                });
+            }
             if let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() {
                 collect_target_dependencies(producer_index, target_edges, &mut target_dependency_indices);
                 host_dependencies.push(producer_index);
@@ -6233,6 +6397,7 @@ pub(crate) fn execute_rust_unit_topology(
     }
 
     let selected_set = target_indices.iter().copied().collect::<BTreeSet<_>>();
+    let unit_indices_by_id = rust_unit_indices_by_id(graph);
     let mut lib_producers = BTreeMap::new();
     for index in &target_indices {
         let unit = &graph.derivations[*index];
@@ -6245,23 +6410,17 @@ pub(crate) fn execute_rust_unit_topology(
         let unit = &graph.derivations[*index];
         let mut deps = Vec::new();
         for dependency in &unit.dependency_artifacts {
-            let Some(producer_index) = lib_producers.get(&dependency.package_id).copied() else {
-                if host_producers.contains_key(&dependency.package_id) {
-                    continue;
-                }
-                return topology_receipt(
-                    "blocked",
-                    Vec::new(),
-                    Vec::new(),
-                    Some(RustUnitExecutionBlocker {
-                        class: "missing-dependency-producer".to_string(),
-                        message: format!(
-                            "no supported target producer lib unit for dependency package {}",
-                            dependency.package_id
-                        ),
-                    }),
-                );
-            };
+            let producer_index =
+                match target_dependency_producer_index(dependency, graph, &unit_indices_by_id, &lib_producers) {
+                    Ok(index) => index,
+                    Err(blocker) => {
+                        if dependency.producer_unit_id.is_none() && host_producers.contains_key(&dependency.package_id)
+                        {
+                            continue;
+                        }
+                        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
+                    }
+                };
             if selected_set.contains(&producer_index) && producer_index != *index {
                 deps.push(producer_index);
             }
@@ -6287,26 +6446,31 @@ pub(crate) fn execute_rust_unit_topology(
     let mut executions = Vec::new();
     let mut build_script_metadata_runs = Vec::new();
     let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
-    let mut produced_target_search_artifacts = Vec::<PathBuf>::new();
+    let mut produced_target_artifact_index = ProducedArtifactIndex::default();
     let mut produced_host_artifacts = BTreeMap::<String, PathBuf>::new();
     let mut produced_proc_macro_artifacts = BTreeMap::<String, PathBuf>::new();
-    let mut produced_proc_macro_search_artifacts = Vec::<PathBuf>::new();
+    let mut produced_proc_macro_artifact_index = ProducedArtifactIndex::default();
     let mut produced_build_script_metadata = BTreeMap::<String, BuildScriptMetadataSummary>::new();
     for index in ordered_unit_indices {
         let unit = &graph.derivations[index];
         if is_supported_host_unit(unit) {
             let mut executable_unit = bind_all_host_artifacts(unit, &produced_host_artifacts)?;
+            let mut produced_dependency_artifacts = produced_target_artifact_index.clone();
+            produced_dependency_artifacts.extend_from(&produced_proc_macro_artifact_index);
             if !executable_unit.dependency_artifacts.is_empty() {
-                let mut produced_dependency_artifacts = produced_target_artifacts.clone();
-                produced_dependency_artifacts.extend(produced_proc_macro_artifacts.clone());
-                executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_dependency_artifacts)?;
+                match bind_all_dependency_artifacts_with_index(&executable_unit, &produced_dependency_artifacts) {
+                    Ok(bound) => executable_unit = bound,
+                    Err(blocker) => {
+                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+                    }
+                }
             }
             if !unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty() {
-                append_all_produced_dependency_search_paths(
-                    &mut executable_unit,
-                    &produced_target_search_artifacts,
-                    &produced_proc_macro_search_artifacts,
-                );
+                if let Err(blocker) =
+                    append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_dependency_artifacts)
+                {
+                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+                }
             }
             executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;
             let receipt = execute_rust_unit(&executable_unit, options)?;
@@ -6339,7 +6503,7 @@ pub(crate) fn execute_rust_unit_topology(
                         }
                     }
                     if unit.target_kind == "proc-macro" {
-                        produced_proc_macro_search_artifacts.push(path.clone());
+                        produced_proc_macro_artifact_index.record_unit(unit, path.clone());
                         produced_proc_macro_artifacts.insert(unit.package_id.clone(), path.clone());
                     }
                     produced_host_artifacts.insert(unit.package_id.clone(), path);
@@ -6354,19 +6518,24 @@ pub(crate) fn execute_rust_unit_topology(
         }
 
         if is_supported_target_unit(unit) {
-            let mut executable_unit = bind_target_unit_artifacts(
-                unit,
-                &produced_host_artifacts,
-                &produced_build_script_metadata,
-                &produced_target_artifacts,
-                &produced_proc_macro_artifacts,
-            )?;
+            let mut executable_unit = bind_all_host_artifacts(unit, &produced_host_artifacts)?;
+            executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;
+            let mut produced_dependency_artifacts = produced_target_artifact_index.clone();
+            produced_dependency_artifacts.extend_from(&produced_proc_macro_artifact_index);
+            if !executable_unit.dependency_artifacts.is_empty() {
+                match bind_all_dependency_artifacts_with_index(&executable_unit, &produced_dependency_artifacts) {
+                    Ok(bound) => executable_unit = bound,
+                    Err(blocker) => {
+                        return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+                    }
+                }
+            }
             if !unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty() {
-                append_all_produced_dependency_search_paths(
-                    &mut executable_unit,
-                    &produced_target_search_artifacts,
-                    &produced_proc_macro_search_artifacts,
-                );
+                if let Err(blocker) =
+                    append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_dependency_artifacts)
+                {
+                    return topology_receipt("blocked", executions, build_script_metadata_runs, Some(blocker));
+                }
             }
             let receipt = execute_rust_unit(&executable_unit, options)?;
             if receipt.execution_status != "success" {
@@ -6380,7 +6549,7 @@ pub(crate) fn execute_rust_unit_topology(
             if unit.target_kind == "lib" {
                 match produced_library_artifact_path(&executable_unit, options)? {
                     Ok(path) => {
-                        produced_target_search_artifacts.push(path.clone());
+                        produced_target_artifact_index.record_unit(unit, path.clone());
                         produced_target_artifacts.insert(unit.package_id.clone(), path);
                     }
                     Err(blocker) => {
@@ -6584,6 +6753,7 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
         dependency_artifacts.push(RustDependencyArtifact {
             package_id: producer.package_id.clone(),
             name: dev_dependency.name.clone(),
+            producer_unit_id: Some(producer.unit_id.clone()),
             artifact: format!("artifact:{}:{}", producer.package_id, dev_dependency.name),
         });
         dev_dependency_packages.push(producer.package_id.clone());
@@ -7202,8 +7372,9 @@ fn validate_native_host_artifact_topology_inputs(
         .iter()
         .filter(|unit| is_supported_target_unit(unit) && !unit.consumed_host_artifacts.is_empty())
         .map(|unit| {
+            let key = rust_unit_variant_key_from_summary(unit);
             let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
-            (unit.unit_id.clone(), (unit.package_id.clone(), artifacts))
+            (key, (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
         })
         .collect::<BTreeMap<_, _>>();
     let native_consumers = native_host_graph
@@ -7211,13 +7382,19 @@ fn validate_native_host_artifact_topology_inputs(
         .iter()
         .filter(|unit| !unit.consumed_host_artifacts.is_empty())
         .map(|unit| {
+            let key = rust_unit_variant_key(
+                &unit.package_id,
+                &rust_crate_name(&unit.target_name),
+                &unit.target_kind,
+                "build",
+            );
             let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
-            (unit.unit_id.clone(), (unit.package_id.clone(), artifacts))
+            (key, (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
         })
         .collect::<BTreeMap<_, _>>();
 
-    for (unit_id, (package_id, native_artifacts)) in &native_consumers {
-        let Some((_, graph_artifacts)) = graph_consumers.get_key_value(unit_id) else {
+    for (key, (unit_id, package_id, native_artifacts)) in &native_consumers {
+        let Some((_, graph_artifacts)) = graph_consumers.get_key_value(key) else {
             return Some(RustUnitExecutionBlocker {
                 class: "missing-native-host-consumer-derivation".to_string(),
                 message: format!(
@@ -7226,7 +7403,7 @@ fn validate_native_host_artifact_topology_inputs(
             });
         };
         for artifact in native_artifacts {
-            if !graph_artifacts.1.contains(artifact) {
+            if !graph_artifacts.2.contains(artifact) {
                 return Some(RustUnitExecutionBlocker {
                     class: "missing-native-host-artifact-binding".to_string(),
                     message: format!(
@@ -7237,8 +7414,8 @@ fn validate_native_host_artifact_topology_inputs(
             }
         }
     }
-    for (unit_id, (package_id, _)) in &graph_consumers {
-        if !native_consumers.contains_key(unit_id) {
+    for (key, (unit_id, package_id, _)) in &graph_consumers {
+        if !native_consumers.contains_key(key) {
             return Some(RustUnitExecutionBlocker {
                 class: "non-native-host-artifact-consumer".to_string(),
                 message: format!(
@@ -7509,6 +7686,52 @@ fn visit_target_topology_unit(
     Ok(())
 }
 
+#[derive(Debug, Clone, Default)]
+struct ProducedArtifactIndex {
+    by_unit_id: BTreeMap<String, PathBuf>,
+    by_package: BTreeMap<String, Vec<ProducedPackageArtifact>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProducedPackageArtifact {
+    unit_id: String,
+    target_kind: String,
+    path: PathBuf,
+}
+
+impl ProducedArtifactIndex {
+    fn record_unit(&mut self, unit: &RustUnitDerivationSummary, path: PathBuf) {
+        debug_assert!(!unit.unit_id.is_empty());
+        debug_assert!(!unit.package_id.is_empty());
+        debug_assert!(!unit.target_name.is_empty());
+        let artifact = ProducedPackageArtifact {
+            unit_id: unit.unit_id.clone(),
+            target_kind: unit.target_kind.clone(),
+            path: path.clone(),
+        };
+        self.by_unit_id.insert(unit.unit_id.clone(), path.clone());
+        self.by_unit_id.insert(rust_unit_variant_key_from_summary(unit), path);
+        let package_artifacts = self.by_package.entry(unit.package_id.clone()).or_default();
+        package_artifacts.retain(|candidate| candidate.unit_id != artifact.unit_id);
+        package_artifacts.push(artifact);
+        package_artifacts.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
+    }
+
+    fn extend_from(&mut self, other: &ProducedArtifactIndex) {
+        for (unit_id, path) in &other.by_unit_id {
+            self.by_unit_id.insert(unit_id.clone(), path.clone());
+        }
+        for (package_id, artifacts) in &other.by_package {
+            let package_artifacts = self.by_package.entry(package_id.clone()).or_default();
+            for artifact in artifacts {
+                package_artifacts.retain(|candidate| candidate.unit_id != artifact.unit_id);
+                package_artifacts.push(artifact.clone());
+            }
+            package_artifacts.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
+        }
+    }
+}
+
 fn bind_all_dependency_artifacts(
     unit: &RustUnitDerivationSummary,
     produced_artifacts: &BTreeMap<String, PathBuf>,
@@ -7530,6 +7753,189 @@ fn bind_all_dependency_artifacts(
     Ok(bound)
 }
 
+fn bind_all_dependency_artifacts_with_index(
+    unit: &RustUnitDerivationSummary,
+    produced_artifacts: &ProducedArtifactIndex,
+) -> Result<RustUnitDerivationSummary, RustUnitExecutionBlocker> {
+    let mut bound = unit.clone();
+    for dependency in &unit.dependency_artifacts {
+        if Path::new(&dependency.artifact).is_file() {
+            continue;
+        }
+        let produced_artifact = select_produced_dependency_artifact(unit, dependency, produced_artifacts)?;
+        bound = bind_dependency_artifact(&bound, dependency, produced_artifact).map_err(|err| {
+            RustUnitExecutionBlocker {
+                class: "dependency-binding-failed".to_string(),
+                message: err.to_string(),
+            }
+        })?;
+    }
+    Ok(bound)
+}
+
+fn select_produced_dependency_artifact<'a>(
+    unit: &RustUnitDerivationSummary,
+    dependency: &RustDependencyArtifact,
+    produced_artifacts: &'a ProducedArtifactIndex,
+) -> Result<&'a Path, RustUnitExecutionBlocker> {
+    if let Some(producer_unit_id) = &dependency.producer_unit_id {
+        return produced_artifacts.by_unit_id.get(producer_unit_id).map(PathBuf::as_path).ok_or_else(|| {
+            RustUnitExecutionBlocker {
+                class: "missing-dependency-producer".to_string(),
+                message: format!(
+                    "unit {} reached execution before selected dependency producer unit {} was produced",
+                    unit.unit_id, producer_unit_id
+                ),
+            }
+        });
+    }
+    let candidates = produced_artifacts
+        .by_package
+        .get(&dependency.package_id)
+        .map(|artifacts| artifacts.iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+    match candidates.as_slice() {
+        [] => Err(RustUnitExecutionBlocker {
+            class: "missing-dependency-producer".to_string(),
+            message: format!(
+                "unit {} reached execution before dependency package {} was produced",
+                unit.unit_id, dependency.package_id
+            ),
+        }),
+        [candidate] => Ok(candidate.path.as_path()),
+        _ => Err(RustUnitExecutionBlocker {
+            class: "ambiguous-dependency-producer".to_string(),
+            message: format!(
+                "unit {} dependency {} has {} package-only producer candidates for package {}",
+                unit.unit_id,
+                dependency.name,
+                candidates.len(),
+                dependency.package_id
+            ),
+        }),
+    }
+}
+
+fn append_selected_dependency_search_paths(
+    unit: &mut RustUnitDerivationSummary,
+    graph: &UnitDerivationGraphSummary,
+    produced_artifacts: &ProducedArtifactIndex,
+) -> Result<(), RustUnitExecutionBlocker> {
+    let search_artifacts = selected_dependency_search_artifacts(unit, graph, produced_artifacts)?;
+    append_dependency_search_paths_from_paths(unit, search_artifacts.iter());
+    Ok(())
+}
+
+fn selected_dependency_search_artifacts(
+    unit: &RustUnitDerivationSummary,
+    graph: &UnitDerivationGraphSummary,
+    produced_artifacts: &ProducedArtifactIndex,
+) -> Result<Vec<PathBuf>, RustUnitExecutionBlocker> {
+    let mut units_by_id = BTreeMap::new();
+    for candidate in &graph.derivations {
+        units_by_id.insert(candidate.unit_id.clone(), candidate);
+        units_by_id.insert(rust_unit_variant_key_from_summary(candidate), candidate);
+    }
+    let mut stack = Vec::new();
+    for dependency in &unit.dependency_artifacts {
+        stack.extend(dependency_producer_unit_ids(unit, dependency, produced_artifacts)?);
+    }
+    let mut visited = BTreeSet::new();
+    let mut paths = BTreeSet::new();
+    while let Some(unit_id) = stack.pop() {
+        if !visited.insert(unit_id.clone()) {
+            continue;
+        }
+        if visited.len() > graph.derivations.len() {
+            return Err(RustUnitExecutionBlocker {
+                class: "dependency-cycle".to_string(),
+                message: format!("dependency search closure for unit {} exceeded graph size", unit.unit_id),
+            });
+        }
+        if let Some(path) = produced_artifacts.by_unit_id.get(&unit_id) {
+            paths.insert(path.clone());
+        }
+        let Some(producer) = units_by_id.get(&unit_id) else {
+            continue;
+        };
+        for host_artifact in &producer.consumed_host_artifacts {
+            if host_artifact.target_kind == "proc-macro" {
+                if let Some(path) = select_produced_host_search_artifact(unit, host_artifact, produced_artifacts)? {
+                    paths.insert(path);
+                }
+            }
+        }
+        for dependency in &producer.dependency_artifacts {
+            stack.extend(dependency_producer_unit_ids(unit, dependency, produced_artifacts)?);
+        }
+    }
+    Ok(paths.into_iter().collect())
+}
+
+fn select_produced_host_search_artifact(
+    unit: &RustUnitDerivationSummary,
+    host_artifact: &RustHostArtifact,
+    produced_artifacts: &ProducedArtifactIndex,
+) -> Result<Option<PathBuf>, RustUnitExecutionBlocker> {
+    if let Some(producer_unit_id) = &host_artifact.producer_unit_id {
+        return Ok(produced_artifacts.by_unit_id.get(producer_unit_id).cloned());
+    }
+    let candidates = produced_artifacts
+        .by_package
+        .get(&host_artifact.package_id)
+        .map(|artifacts| {
+            artifacts
+                .iter()
+                .filter(|artifact| artifact.target_kind == host_artifact.target_kind)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    match candidates.as_slice() {
+        [] => Ok(None),
+        [candidate] => Ok(Some(candidate.path.clone())),
+        _ => Err(RustUnitExecutionBlocker {
+            class: "ambiguous-host-search-producer".to_string(),
+            message: format!(
+                "unit {} host artifact {} has {} package-only search candidates for package {}",
+                unit.unit_id,
+                host_artifact.target_kind,
+                candidates.len(),
+                host_artifact.package_id
+            ),
+        }),
+    }
+}
+
+fn dependency_producer_unit_ids(
+    unit: &RustUnitDerivationSummary,
+    dependency: &RustDependencyArtifact,
+    produced_artifacts: &ProducedArtifactIndex,
+) -> Result<Vec<String>, RustUnitExecutionBlocker> {
+    if let Some(producer_unit_id) = &dependency.producer_unit_id {
+        return Ok(vec![producer_unit_id.clone()]);
+    }
+    let candidates = produced_artifacts
+        .by_package
+        .get(&dependency.package_id)
+        .map(|artifacts| artifacts.iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+    match candidates.as_slice() {
+        [] => Ok(Vec::new()),
+        [candidate] => Ok(vec![candidate.unit_id.clone()]),
+        _ => Err(RustUnitExecutionBlocker {
+            class: "ambiguous-dependency-producer".to_string(),
+            message: format!(
+                "unit {} dependency {} has {} package-only search candidates for package {}",
+                unit.unit_id,
+                dependency.name,
+                candidates.len(),
+                dependency.package_id
+            ),
+        }),
+    }
+}
+
+#[cfg(test)]
 fn bind_target_unit_artifacts(
     unit: &RustUnitDerivationSummary,
     produced_host_artifacts: &BTreeMap<String, PathBuf>,
@@ -7559,7 +7965,7 @@ fn bind_all_host_artifacts(
                 unit.unit_id, host_artifact.package_id
             ))
         })?;
-        let produced_artifact_string = normalize_path_string(produced_artifact);
+        let produced_artifact_string = normalize_path_string(&rustc_artifact_path(produced_artifact));
         bind_host_artifact_material(&mut bound, host_artifact, &produced_artifact_string);
         let host_dependency_names = host_artifact_dependency_names(host_artifact);
         let host_crate_name = rust_crate_name(&host_artifact.target_name);
@@ -8224,6 +8630,7 @@ fn append_dependency_search_paths(
     append_dependency_search_paths_from_paths(unit, produced_artifacts.values());
 }
 
+#[cfg(test)]
 fn append_all_produced_dependency_search_paths(
     unit: &mut RustUnitDerivationSummary,
     produced_target_artifacts: &[PathBuf],
@@ -8243,7 +8650,8 @@ fn append_dependency_search_paths_from_paths<'a>(
     let mut new_search_args = BTreeSet::new();
     for produced_artifact in produced_artifacts {
         if let Some(parent) = produced_artifact.parent() {
-            let search_arg = format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(parent));
+            let search_arg =
+                format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(&rustc_artifact_path(parent)));
             if !existing_search_args.contains(&search_arg) {
                 new_search_args.insert(search_arg);
             }
@@ -8570,7 +8978,7 @@ fn bind_dependency_artifact(
     dependency: &RustDependencyArtifact,
     produced_artifact: &Path,
 ) -> Result<RustUnitDerivationSummary, RunError> {
-    let produced_artifact = normalize_path_string(produced_artifact);
+    let produced_artifact = normalize_path_string(&rustc_artifact_path(produced_artifact));
     let mut bound = consumer.clone();
     for artifact in &mut bound.dependency_artifacts {
         if artifact.package_id == dependency.package_id
@@ -9205,6 +9613,13 @@ fn sorted_strings(mut strings: Vec<String>) -> Vec<String> {
     strings
 }
 
+fn rustc_artifact_path(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(path)
+}
+
 fn normalize_path_string(path: &Path) -> String {
     path.components().as_path().to_string_lossy().replace('\\', "/")
 }
@@ -9538,6 +9953,7 @@ mod tests {
         RustDependencyArtifact {
             package_id: package_id.to_string(),
             name: name.to_string(),
+            producer_unit_id: None,
             artifact: format!("artifact:{package_id}:{name}"),
         }
     }
@@ -9547,6 +9963,7 @@ mod tests {
             package_id: package_id.to_string(),
             target_name: package_id.to_string(),
             target_kind: target_kind.to_string(),
+            producer_unit_id: None,
             artifact: format!("host-artifact:{package_id}:{target_kind}"),
             metadata_digest_blake3: None,
         }
@@ -10781,6 +11198,7 @@ rust-version = "1.80"
             package_id: proc_macro_id.to_string(),
             target_name: "darling_macro".to_string(),
             target_kind: "proc-macro".to_string(),
+            producer_unit_id: None,
             artifact: "host-artifact:darling_macro".to_string(),
             metadata_digest_blake3: None,
         };
@@ -10875,6 +11293,177 @@ rust-version = "1.80"
     }
 
     #[test]
+    fn target_dependency_producer_index_uses_selected_unit_variant() {
+        let package_id = "same-package";
+        let first_index = 0usize;
+        let selected_index = 1usize;
+        let first_unit = test_rust_derivation(first_index, package_id, "lib", "target", Vec::new());
+        let selected_unit = test_rust_derivation(selected_index, package_id, "lib", "target", Vec::new());
+        let dependency = RustDependencyArtifact {
+            package_id: package_id.to_string(),
+            name: rust_crate_name(package_id),
+            producer_unit_id: Some(selected_unit.unit_id.clone()),
+            artifact: format!("artifact:{package_id}:{}", rust_crate_name(package_id)),
+        };
+        let graph = test_unit_derivation_graph(vec![first_unit, selected_unit]);
+        let unit_indices_by_id = rust_unit_indices_by_id(&graph);
+        let mut package_first_lib_producers = BTreeMap::new();
+        package_first_lib_producers.insert(package_id.to_string(), first_index);
+
+        let producer_index =
+            target_dependency_producer_index(&dependency, &graph, &unit_indices_by_id, &package_first_lib_producers)
+                .unwrap();
+
+        assert_eq!(producer_index, selected_index);
+        assert_ne!(producer_index, package_first_lib_producers[package_id]);
+    }
+
+    #[test]
+    fn bind_dependency_artifacts_uses_selected_unit_variant() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "same-package";
+        let crate_name = rust_crate_name(package_id);
+        let earlier_path = dir.path().join("variant-a/libsame_package.rlib");
+        let selected_path = dir.path().join("variant-b/libsame_package.rlib");
+        std::fs::create_dir_all(earlier_path.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(selected_path.parent().unwrap()).unwrap();
+        std::fs::write(&earlier_path, b"earlier").unwrap();
+        std::fs::write(&selected_path, b"selected").unwrap();
+        let earlier_unit = test_rust_derivation(0, package_id, "lib", "target", Vec::new());
+        let selected_unit = test_rust_derivation(1, package_id, "lib", "target", Vec::new());
+        let placeholder = format!("artifact:{package_id}:{crate_name}");
+        let dependency = RustDependencyArtifact {
+            package_id: package_id.to_string(),
+            name: crate_name.clone(),
+            producer_unit_id: Some(selected_unit.unit_id.clone()),
+            artifact: placeholder.clone(),
+        };
+        let mut consumer = test_rust_derivation(2, "consumer", "lib", "target", vec![dependency]);
+        consumer.derivation.inputs = vec![placeholder.clone()];
+        consumer.derivation.args = vec![RUSTC_EXTERN_FLAG.to_string(), format!("{crate_name}={placeholder}")];
+        let mut index = ProducedArtifactIndex::default();
+        index.record_unit(&earlier_unit, earlier_path.clone());
+        index.record_unit(&selected_unit, selected_path.clone());
+
+        let bound = bind_all_dependency_artifacts_with_index(&consumer, &index).unwrap();
+
+        let selected_path_string = normalize_path_string(&selected_path);
+        let earlier_path_string = normalize_path_string(&earlier_path);
+        assert!(has_ordered_arg_pair(
+            &bound.derivation.args,
+            RUSTC_EXTERN_FLAG,
+            &format!("{crate_name}={selected_path_string}")
+        ));
+        assert!(bound.derivation.inputs.contains(&selected_path_string));
+        assert!(!bound.derivation.args.iter().any(|arg| arg.contains(&earlier_path_string)));
+        assert!(!bound.derivation.inputs.contains(&earlier_path_string));
+    }
+
+    #[test]
+    fn package_only_dependency_artifacts_fail_on_ambiguous_unit_variants() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "same-package";
+        let crate_name = rust_crate_name(package_id);
+        let first_path = dir.path().join("variant-a/libsame_package.rlib");
+        let second_path = dir.path().join("variant-b/libsame_package.rlib");
+        std::fs::create_dir_all(first_path.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(second_path.parent().unwrap()).unwrap();
+        std::fs::write(&first_path, b"first").unwrap();
+        std::fs::write(&second_path, b"second").unwrap();
+        let first_unit = test_rust_derivation(0, package_id, "lib", "target", Vec::new());
+        let second_unit = test_rust_derivation(1, package_id, "lib", "target", Vec::new());
+        let dependency = test_dependency_artifact(package_id, &crate_name);
+        let mut consumer = test_rust_derivation(2, "consumer", "lib", "target", vec![dependency]);
+        consumer.derivation.args = vec![
+            RUSTC_EXTERN_FLAG.to_string(),
+            format!("{crate_name}=artifact:{package_id}:{crate_name}"),
+        ];
+        let mut index = ProducedArtifactIndex::default();
+        index.record_unit(&first_unit, first_path);
+        index.record_unit(&second_unit, second_path);
+
+        let blocker = bind_all_dependency_artifacts_with_index(&consumer, &index).unwrap_err();
+
+        assert_eq!(blocker.class, "ambiguous-dependency-producer");
+        assert!(blocker.message.contains("package-only producer candidates"));
+    }
+
+    #[test]
+    fn selected_dependency_search_paths_follow_unit_variant_closure_only() {
+        let dir = TempDir::new().unwrap();
+        let producer_package = "same-package";
+        let leaf_package = "leaf-package";
+        let producer_crate_name = rust_crate_name(producer_package);
+        let leaf_crate_name = rust_crate_name(leaf_package);
+        let proc_macro_package = "macro-package";
+        let selected_path = dir.path().join("selected/libsame_package.rlib");
+        let unrelated_path = dir.path().join("unrelated/libsame_package.rlib");
+        let leaf_path = dir.path().join("leaf/libleaf_package.rlib");
+        let proc_macro_path = dir.path().join("macro/libmacro_package.so");
+        for path in [&selected_path, &unrelated_path, &leaf_path, &proc_macro_path] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"artifact").unwrap();
+        }
+        let leaf_unit = test_rust_derivation(0, leaf_package, "lib", "target", Vec::new());
+        let leaf_dependency = RustDependencyArtifact {
+            package_id: leaf_package.to_string(),
+            name: leaf_crate_name,
+            producer_unit_id: Some(leaf_unit.unit_id.clone()),
+            artifact: format!("artifact:{leaf_package}:{}", rust_crate_name(leaf_package)),
+        };
+        let mut selected_unit = test_rust_derivation(1, producer_package, "lib", "target", vec![leaf_dependency]);
+        selected_unit.consumed_host_artifacts = vec![RustHostArtifact {
+            package_id: proc_macro_package.to_string(),
+            target_name: proc_macro_package.to_string(),
+            target_kind: "proc-macro".to_string(),
+            producer_unit_id: Some(rust_unit_variant_key(
+                proc_macro_package,
+                &rust_crate_name(proc_macro_package),
+                "proc-macro",
+                "build",
+            )),
+            artifact: format!("host-artifact:{proc_macro_package}:proc-macro"),
+            metadata_digest_blake3: None,
+        }];
+        let unrelated_unit = test_rust_derivation(2, producer_package, "lib", "target", Vec::new());
+        let proc_macro_unit = test_rust_derivation(4, proc_macro_package, "proc-macro", "host", Vec::new());
+        let producer_dependency = RustDependencyArtifact {
+            package_id: producer_package.to_string(),
+            name: producer_crate_name.clone(),
+            producer_unit_id: Some(selected_unit.unit_id.clone()),
+            artifact: format!("artifact:{producer_package}:{producer_crate_name}"),
+        };
+        let mut consumer = test_rust_derivation(3, "consumer", "lib", "target", vec![producer_dependency]);
+        let graph = test_unit_derivation_graph(vec![
+            leaf_unit.clone(),
+            selected_unit.clone(),
+            unrelated_unit.clone(),
+            consumer.clone(),
+            proc_macro_unit.clone(),
+        ]);
+        let mut index = ProducedArtifactIndex::default();
+        index.record_unit(&leaf_unit, leaf_path.clone());
+        index.record_unit(&selected_unit, selected_path.clone());
+        index.record_unit(&unrelated_unit, unrelated_path.clone());
+        index.record_unit(&proc_macro_unit, proc_macro_path.clone());
+
+        append_selected_dependency_search_paths(&mut consumer, &graph, &index).unwrap();
+
+        let selected_search =
+            format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(selected_path.parent().unwrap()));
+        let leaf_search =
+            format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(leaf_path.parent().unwrap()));
+        let unrelated_search =
+            format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(unrelated_path.parent().unwrap()));
+        let proc_macro_search =
+            format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(proc_macro_path.parent().unwrap()));
+        assert!(has_ordered_arg_pair(&consumer.derivation.args, RUSTC_LINK_SEARCH_FLAG, &selected_search));
+        assert!(has_ordered_arg_pair(&consumer.derivation.args, RUSTC_LINK_SEARCH_FLAG, &leaf_search));
+        assert!(has_ordered_arg_pair(&consumer.derivation.args, RUSTC_LINK_SEARCH_FLAG, &proc_macro_search));
+        assert!(!has_ordered_arg_pair(&consumer.derivation.args, RUSTC_LINK_SEARCH_FLAG, &unrelated_search));
+    }
+
+    #[test]
     fn bind_all_host_artifacts_does_not_add_extern_for_custom_build_artifact() {
         let dir = TempDir::new().unwrap();
         let package_id = "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228";
@@ -10885,6 +11474,7 @@ rust-version = "1.80"
             package_id: package_id.to_string(),
             target_name: BUILD_SCRIPT_TARGET_NAME.to_string(),
             target_kind: "custom-build".to_string(),
+            producer_unit_id: None,
             artifact: "host-artifact:build-script".to_string(),
             metadata_digest_blake3: None,
         };
@@ -10911,6 +11501,7 @@ rust-version = "1.80"
         let dependency = RustDependencyArtifact {
             package_id: package_id.to_string(),
             name: BUILD_SCRIPT_MAIN_CRATE_NAME.to_string(),
+            producer_unit_id: None,
             artifact: format!("artifact:{package_id}:{BUILD_SCRIPT_MAIN_CRATE_NAME}"),
         };
         let mut unit = test_rust_derivation(0, package_id, "lib", "target", vec![dependency.clone()]);
@@ -10923,6 +11514,7 @@ rust-version = "1.80"
             package_id: package_id.to_string(),
             target_name: BUILD_SCRIPT_TARGET_NAME.to_string(),
             target_kind: "custom-build".to_string(),
+            producer_unit_id: None,
             artifact: "host-artifact:build-script".to_string(),
             metadata_digest_blake3: None,
         }];
@@ -10959,6 +11551,7 @@ rust-version = "1.80"
         let dependency = RustDependencyArtifact {
             package_id: package_id.to_string(),
             name: unknown_alias.to_string(),
+            producer_unit_id: None,
             artifact: format!("artifact:{package_id}:{unknown_alias}"),
         };
         let mut unit = test_rust_derivation(0, package_id, "lib", "target", vec![dependency.clone()]);
@@ -10971,6 +11564,7 @@ rust-version = "1.80"
             package_id: package_id.to_string(),
             target_name: BUILD_SCRIPT_TARGET_NAME.to_string(),
             target_kind: "custom-build".to_string(),
+            producer_unit_id: None,
             artifact: "host-artifact:build-script".to_string(),
             metadata_digest_blake3: None,
         }];
@@ -11014,6 +11608,7 @@ rust-version = "1.80"
             package_id: proc_macro_id.to_string(),
             target_name: "darling_macro".to_string(),
             target_kind: "proc-macro".to_string(),
+            producer_unit_id: None,
             artifact: "host-artifact:darling_macro".to_string(),
             metadata_digest_blake3: None,
         };
