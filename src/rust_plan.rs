@@ -11618,6 +11618,29 @@ mod tests {
     }
 
     #[test]
+    fn native_unit_derivation_emits_resolved_feature_closure_cfg_args() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://featureful#featureful@0.1.0";
+        let mut feature_defs = BTreeMap::new();
+        feature_defs.insert("default".to_string(), vec!["derive".to_string()]);
+        feature_defs.insert("derive".to_string(), vec!["printing".to_string()]);
+        feature_defs.insert("printing".to_string(), Vec::new());
+        let mut plan_options = options(dir.path());
+        plan_options.features.clear();
+        plan_options.no_default_features = false;
+        let selected_features = native_selected_features(&plan_options, &feature_defs, &BTreeSet::new());
+        let mut unit = test_native_rust_unit(package_id, "featureful", "lib", dir.path());
+        unit.selected_features = selected_features;
+        let source_closure = test_source_closure_with_kind(package_id, "featureful", SourceKind::Path);
+
+        let derivation = native_unit_derivation(&unit, Vec::new(), &source_closure, &plan_options);
+
+        assert!(has_ordered_arg_pair(&derivation.derivation.args, RUSTC_CFG_FLAG, "feature=\"default\""));
+        assert!(has_ordered_arg_pair(&derivation.derivation.args, RUSTC_CFG_FLAG, "feature=\"derive\""));
+        assert!(has_ordered_arg_pair(&derivation.derivation.args, RUSTC_CFG_FLAG, "feature=\"printing\""));
+    }
+
+    #[test]
     fn native_unit_derivation_caps_lints_for_registry_and_git_sources() {
         let dir = TempDir::new().unwrap();
         let registry_id = "registry+https://github.com/rust-lang/crates.io-index#derive_builder_core@0.20.2";
