@@ -417,6 +417,11 @@ enum Command {
         #[arg(long)]
         no_default_features: bool,
 
+        /// Use Mantle's native Rust planner/executor only; do not invoke Cargo as oracle or
+        /// orchestrator
+        #[arg(long)]
+        no_cargo_oracle: bool,
+
         /// Execute the first supported lib/bin unit from the captured explicit derivation graph
         #[arg(long, conflicts_with_all = ["execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_first_supported_unit: bool,
@@ -1957,6 +1962,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         features,
         all_features,
         no_default_features,
+        no_cargo_oracle,
         execute_first_supported_unit,
         execute_first_dependency_chain,
         execute_target_topology,
@@ -1980,6 +1986,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         features: features.clone(),
         all_features: *all_features,
         no_default_features: *no_default_features,
+        no_cargo_oracle: *no_cargo_oracle,
     };
     let receipt = rust_plan::capture_rust_plan(&options)?;
     if *execute_first_supported_unit {

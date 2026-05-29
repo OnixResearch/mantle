@@ -107,11 +107,21 @@ pub(crate) struct RustPlanOptions {
     pub(crate) features: Vec<String>,
     pub(crate) all_features: bool,
     pub(crate) no_default_features: bool,
+    pub(crate) no_cargo_oracle: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanCargoModeSummary {
+    pub(crate) no_cargo_oracle: bool,
+    pub(crate) compatibility_class: String,
+    pub(crate) blockers: Vec<String>,
+    pub(crate) non_claims: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct RustPlanReceipt {
     pub(crate) schema_version: u32,
+    pub(crate) cargo_mode: RustPlanCargoModeSummary,
     pub(crate) workspace_root: String,
     pub(crate) cargo_version: String,
     pub(crate) rustc_version_verbose: String,
@@ -1059,7 +1069,33 @@ enum NativeFeatureEntry {
 }
 
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
+    if options.no_cargo_oracle {
+        return capture_rust_plan_without_cargo(options);
+    }
     capture_rust_plan_with_oracle(options, &ProcessCargoOracle)
+}
+
+fn rust_plan_cargo_mode(no_cargo_oracle: bool, blockers: Vec<String>) -> RustPlanCargoModeSummary {
+    let compatibility_class = if no_cargo_oracle {
+        "cargo-free-native-path-topology-v1"
+    } else {
+        "cargo-oracle-assisted-v1"
+    };
+    let non_claims = if no_cargo_oracle {
+        vec![
+            "bounded-path-workspace-only".to_string(),
+            "not-full-cargo-feature-resolution".to_string(),
+            "not-registry-or-git-cargo-free-closure".to_string(),
+        ]
+    } else {
+        vec!["cargo-used-for-oracle-metadata-and-unit-graph".to_string()]
+    };
+    RustPlanCargoModeSummary {
+        no_cargo_oracle,
+        compatibility_class: compatibility_class.to_string(),
+        blockers,
+        non_claims,
+    }
 }
 
 fn capture_rust_plan_with_oracle(
@@ -1123,6 +1159,7 @@ fn capture_rust_plan_with_oracle(
 
     let mut receipt = RustPlanReceipt {
         schema_version: RECEIPT_SCHEMA_VERSION,
+        cargo_mode: rust_plan_cargo_mode(false, Vec::new()),
         workspace_root: normalize_path_string(Path::new(&metadata.workspace_root)),
         cargo_version: cargo_version.trim().to_string(),
         rustc_version_verbose: rustc_version_verbose.trim().to_string(),
@@ -1135,6 +1172,97 @@ fn capture_rust_plan_with_oracle(
             no_default_features: options.no_default_features,
         },
         package_count: metadata.packages.len(),
+        packages,
+        source_closure,
+        native_registry_source_planning,
+        native_git_source_planning,
+        native_package_target_planning,
+        native_unit_graph_planning,
+        native_host_unit_graph_planning,
+        unit_graph: summarize_unit_graph(unit_graph_value)?,
+        unit_derivation_graph,
+        receipt_hash: String::new(),
+    };
+    receipt.receipt_hash = receipt_hash(&receipt)?;
+    Ok(receipt)
+}
+
+fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
+    validate_options(options)?;
+
+    let rustc_version_verbose =
+        run_checked_text(ProcessCargoOracle.run_tool_version(&options.rustc, &["-vV"]), "rustc -vV")?;
+    let lock_packages = parse_lockfile_packages(&options.root)?;
+    let native_cargo_packages = native_path_cargo_packages(&options.root, options)?;
+    let workspace_members = native_cargo_packages.iter().map(|package| package.id.clone()).collect::<Vec<_>>();
+    let source_closure = summarize_source_closure(&native_cargo_packages, &lock_packages)?;
+    let lockfile = lockfile_identity(&options.root)?;
+    let native_registry_source_planning = empty_native_registry_source_planning(&lockfile);
+    let native_git_source_planning = empty_native_git_source_planning(&lockfile, &source_closure);
+    let unit_graph_value = empty_native_unit_graph_value();
+    let native_package_target_planning = summarize_native_package_target_planning(
+        &options.root,
+        options,
+        &unit_graph_value,
+        &native_cargo_packages,
+        &workspace_members,
+        &source_closure,
+        &native_registry_source_planning,
+        &native_git_source_planning,
+    )?;
+    let native_unit_graph_planning = summarize_native_unit_graph_planning(
+        &unit_graph_value,
+        &source_closure,
+        &native_package_target_planning,
+        options,
+    )?;
+    let native_host_unit_graph_planning = summarize_native_host_unit_graph_planning(
+        &unit_graph_value,
+        &source_closure,
+        &native_registry_source_planning,
+        &native_package_target_planning,
+        &native_unit_graph_planning,
+        options,
+    )?;
+    let unit_derivation_graph = summarize_unit_derivation_graph_with_native(
+        &unit_graph_value,
+        &source_closure,
+        options,
+        Some(&native_unit_graph_planning),
+        Some(&native_host_unit_graph_planning),
+    )?;
+    let packages = summarize_packages(native_cargo_packages.clone(), &workspace_members);
+    let mut blockers = Vec::new();
+    if !native_package_target_planning.ready {
+        blockers.push("native-package-target-planning-blocked".to_string());
+    }
+    if !native_unit_graph_planning.ready {
+        blockers.push("native-unit-graph-planning-blocked".to_string());
+    }
+    if !native_host_unit_graph_planning.ready {
+        blockers.push("native-host-unit-graph-planning-blocked".to_string());
+    }
+    if !unit_derivation_graph.ready {
+        blockers.push("unit-derivation-graph-blocked".to_string());
+    }
+    blockers.sort();
+    blockers.dedup();
+
+    let mut receipt = RustPlanReceipt {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        cargo_mode: rust_plan_cargo_mode(true, blockers),
+        workspace_root: normalize_path_string(&options.root),
+        cargo_version: "cargo-free:no-cargo-oracle".to_string(),
+        rustc_version_verbose: rustc_version_verbose.trim().to_string(),
+        lockfile,
+        invocation: RustPlanInvocation {
+            profile: options.profile.clone(),
+            targets: sorted_strings(options.targets.clone()),
+            features: sorted_strings(options.features.clone()),
+            all_features: options.all_features,
+            no_default_features: options.no_default_features,
+        },
+        package_count: native_cargo_packages.len(),
         packages,
         source_closure,
         native_registry_source_planning,
@@ -1279,6 +1407,126 @@ pub(crate) fn print_rust_plan_patch_source_topology_execution_receipt(
 
 pub(crate) fn default_profile() -> String {
     DEFAULT_CARGO_PROFILE.to_string()
+}
+
+fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<Vec<CargoPackage>, RunError> {
+    let mut blockers = Vec::new();
+    let manifest_paths = native_workspace_manifest_paths(root, &mut blockers);
+    if !blockers.is_empty() {
+        let messages = blockers
+            .iter()
+            .map(|blocker| format!("{}: {}", blocker.class, blocker.message))
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(RunError::Internal(format!("native Cargo-free manifest discovery failed: {messages}")));
+    }
+    let mut packages = Vec::new();
+    for manifest_path in manifest_paths {
+        packages.push(native_path_cargo_package(root, &manifest_path, options)?);
+    }
+    packages.sort_by(|left, right| left.id.cmp(&right.id));
+    packages.dedup_by(|left, right| left.id == right.id);
+    Ok(packages)
+}
+
+fn native_path_cargo_package(
+    root: &Path,
+    manifest_path: &Path,
+    options: &RustPlanOptions,
+) -> Result<CargoPackage, RunError> {
+    let manifest = read_native_manifest(manifest_path).map_err(RunError::Internal)?;
+    let package = manifest.package.as_ref().ok_or_else(|| {
+        RunError::Internal(format!("Cargo-free native package manifest lacks [package]: {}", manifest_path.display()))
+    })?;
+    let version = native_package_version(root, &package.name, &package.version).map_err(|blocker| {
+        RunError::Internal(format!(
+            "Cargo-free native package version failed for {}: {}",
+            package.name, blocker.message
+        ))
+    })?;
+    let edition = native_package_edition(root, &package.name, &package.edition).map_err(|blocker| {
+        RunError::Internal(format!(
+            "Cargo-free native package edition failed for {}: {}",
+            package.name, blocker.message
+        ))
+    })?;
+    let source_root = manifest_path.parent().ok_or_else(|| {
+        RunError::Internal(format!("Cargo-free manifest path has no parent: {}", manifest_path.display()))
+    })?;
+    let native_targets = native_targets_for_manifest(source_root, &package.name, &version, &edition, &manifest)
+        .map_err(|blocker| {
+            RunError::Internal(format!("Cargo-free native target planning failed: {}", blocker.message))
+        })?;
+    let targets = native_targets
+        .into_iter()
+        .map(|target| CargoTarget {
+            name: target.name,
+            kind: vec![target.kind],
+            src_path: target.source_path,
+        })
+        .collect::<Vec<_>>();
+    let selected_features = native_selected_features(
+        options,
+        &manifest.features,
+        &native_optional_dependency_names(&manifest.dependencies),
+    );
+    Ok(CargoPackage {
+        id: cargo_path_package_id(&package.name, &version),
+        name: package.name.clone(),
+        version,
+        source: None,
+        manifest_path: normalize_path_string(manifest_path),
+        targets,
+        features: BTreeMap::from([("default".to_string(), selected_features)]),
+    })
+}
+
+fn empty_native_unit_graph_value() -> Value {
+    serde_json::json!({"units": []})
+}
+
+fn empty_native_registry_source_planning(lockfile: &LockfileIdentity) -> NativeRegistrySourcePlanningSummary {
+    let sources = Vec::new();
+    let blockers = Vec::new();
+    let comparison_status = "cargo-free:no-registry-sources".to_string();
+    let digest_blake3 = native_registry_source_digest(&sources, &blockers, &comparison_status, &lockfile.blake3)
+        .unwrap_or_else(|_| blake3::hash(b"empty-native-registry-source-planning").to_hex().to_string());
+    NativeRegistrySourcePlanningSummary {
+        ready: true,
+        comparison_status,
+        lockfile_digest_blake3: lockfile.blake3.clone(),
+        digest_blake3,
+        sources,
+        blockers,
+        non_claims: vec!["registry-sources-not-supported-in-cargo-free-mode".to_string()],
+    }
+}
+
+fn empty_native_git_source_planning(
+    lockfile: &LockfileIdentity,
+    source_closure: &SourceClosureSummary,
+) -> NativeGitSourcePlanningSummary {
+    let sources = Vec::new();
+    let blockers = Vec::new();
+    let comparison_status = "cargo-free:no-git-sources".to_string();
+    let digest_blake3 = native_git_source_digest(
+        &sources,
+        &blockers,
+        &comparison_status,
+        &lockfile.blake3,
+        &source_closure.digest_blake3,
+    )
+    .unwrap_or_else(|_| blake3::hash(b"empty-native-git-source-planning").to_hex().to_string());
+    NativeGitSourcePlanningSummary {
+        ready: true,
+        comparison_status,
+        lockfile_digest_blake3: lockfile.blake3.clone(),
+        source_closure_digest_blake3: source_closure.digest_blake3.clone(),
+        digest_blake3,
+        sources,
+        blockers,
+        non_claims: vec!["git-sources-not-supported-in-cargo-free-mode".to_string()],
+    }
 }
 
 fn validate_options(options: &RustPlanOptions) -> Result<(), RunError> {
@@ -2248,7 +2496,11 @@ fn summarize_native_package_target_planning(
     native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
     native_git_source_planning: &NativeGitSourcePlanningSummary,
 ) -> Result<NativePackageTargetPlanningSummary, RunError> {
-    let cargo_oracle_identity = cargo_package_target_oracle_digest(cargo_packages, workspace_members)?;
+    let cargo_oracle_identity = if options.no_cargo_oracle {
+        "cargo-free:no-cargo-package-target-oracle".to_string()
+    } else {
+        cargo_package_target_oracle_digest(cargo_packages, workspace_members)?
+    };
     let selected_features_by_package = selected_features_by_package_from_unit_graph(unit_graph);
     let selected_package_ids = selected_package_ids_from_unit_graph(unit_graph);
     let mut blockers = Vec::new();
@@ -2304,10 +2556,18 @@ fn summarize_native_package_target_planning(
         }
     }
     native_packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
-    compare_native_packages_to_cargo(&native_packages, cargo_packages, &cargo_workspace_packages, &mut blockers);
+    if !options.no_cargo_oracle {
+        compare_native_packages_to_cargo(&native_packages, cargo_packages, &cargo_workspace_packages, &mut blockers);
+    }
     blockers.sort();
     blockers.dedup();
-    let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
+    let comparison_status = if options.no_cargo_oracle && blockers.is_empty() {
+        "cargo-free:no-oracle".to_string()
+    } else if blockers.is_empty() {
+        "matched".to_string()
+    } else {
+        "blocked".to_string()
+    };
     let digest_blake3 = native_package_target_digest(&native_packages, &blockers, &comparison_status)?;
     Ok(NativePackageTargetPlanningSummary {
         ready: blockers.is_empty(),
@@ -4379,8 +4639,16 @@ fn summarize_native_unit_graph_planning(
     native_package_target_planning: &NativePackageTargetPlanningSummary,
     options: &RustPlanOptions,
 ) -> Result<NativeUnitGraphPlanningSummary, RunError> {
-    let cargo_unit_graph_oracle_digest = cargo_unit_graph_oracle_digest(unit_graph)?;
-    let cargo_graph = summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?;
+    let cargo_unit_graph_oracle_digest = if options.no_cargo_oracle {
+        "cargo-free:no-cargo-unit-graph-oracle".to_string()
+    } else {
+        cargo_unit_graph_oracle_digest(unit_graph)?
+    };
+    let cargo_graph = if options.no_cargo_oracle {
+        empty_unit_derivation_graph()?
+    } else {
+        summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?
+    };
     let mut blockers = Vec::new();
     if !native_package_target_planning.ready {
         blockers.push(native_unit_blocker(
@@ -4443,10 +4711,18 @@ fn summarize_native_unit_graph_planning(
     add_missing_native_producer_blockers(&units, &packages_by_id, &mut blockers);
     blockers.sort();
     blockers.dedup();
-    compare_native_units_to_cargo(&units, &cargo_graph, &mut blockers);
+    if !options.no_cargo_oracle {
+        compare_native_units_to_cargo(&units, &cargo_graph, &mut blockers);
+    }
     blockers.sort();
     blockers.dedup();
-    let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
+    let comparison_status = if options.no_cargo_oracle && blockers.is_empty() {
+        "cargo-free:no-oracle".to_string()
+    } else if blockers.is_empty() {
+        "matched".to_string()
+    } else {
+        "blocked".to_string()
+    };
     let native_unit_graph_digest = native_unit_graph_digest(&units, &blockers)?;
     let oracle_comparison_digest = native_unit_oracle_comparison_digest(&units, &cargo_graph.derivations, &blockers)?;
     Ok(NativeUnitGraphPlanningSummary {
@@ -4948,8 +5224,16 @@ fn summarize_native_host_unit_graph_planning(
     native_unit_graph_planning: &NativeUnitGraphPlanningSummary,
     options: &RustPlanOptions,
 ) -> Result<NativeHostUnitGraphPlanningSummary, RunError> {
-    let cargo_graph = summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?;
-    let cargo_host_oracle_digest = cargo_host_oracle_digest(&cargo_graph, unit_graph)?;
+    let cargo_graph = if options.no_cargo_oracle {
+        empty_unit_derivation_graph()?
+    } else {
+        summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?
+    };
+    let cargo_host_oracle_digest = if options.no_cargo_oracle {
+        "cargo-free:no-cargo-host-oracle".to_string()
+    } else {
+        cargo_host_oracle_digest(&cargo_graph, unit_graph)?
+    };
     let mut host_units = Vec::new();
     let mut target_consumers = Vec::new();
     let mut blockers = Vec::new();
@@ -5169,7 +5453,8 @@ fn summarize_native_host_unit_graph_planning(
     host_units.dedup();
     target_consumers.sort();
     target_consumers.dedup();
-    if blockers.is_empty()
+    if !options.no_cargo_oracle
+        && blockers.is_empty()
         && !host_units.iter().any(|unit| unit.package_id.starts_with("registry+"))
         && !target_consumers.iter().any(|consumer| {
             consumer.package_id.starts_with("registry+")
@@ -5180,7 +5465,13 @@ fn summarize_native_host_unit_graph_planning(
     }
     blockers.sort();
     blockers.dedup();
-    let comparison_status = if blockers.is_empty() { "matched" } else { "blocked" }.to_string();
+    let comparison_status = if options.no_cargo_oracle && blockers.is_empty() {
+        "cargo-free:no-oracle".to_string()
+    } else if blockers.is_empty() {
+        "matched".to_string()
+    } else {
+        "blocked".to_string()
+    };
     let native_host_graph_digest = native_host_graph_digest(&host_units, &target_consumers, &blockers)?;
     let oracle_comparison_digest =
         native_host_oracle_comparison_digest(&host_units, &target_consumers, &cargo_graph, unit_graph, &blockers)?;
@@ -6815,6 +7106,20 @@ fn unit_blocker(index: usize, package_id: Option<String>, class: &str, message: 
         class: class.to_string(),
         message: message.to_string(),
     }
+}
+
+fn empty_unit_derivation_graph() -> Result<UnitDerivationGraphSummary, RunError> {
+    let derivations = Vec::new();
+    let blockers = Vec::new();
+    Ok(UnitDerivationGraphSummary {
+        derivation_count: 0,
+        host_unit_count: 0,
+        host_artifact_count: 0,
+        ready: true,
+        digest_blake3: unit_derivation_graph_digest(&derivations, &blockers)?,
+        derivations,
+        blockers,
+    })
 }
 
 fn unit_derivation_graph_digest(
@@ -11233,6 +11538,7 @@ mod tests {
             features: vec!["b".to_string(), "a".to_string()],
             all_features: false,
             no_default_features: true,
+            no_cargo_oracle: false,
         }
     }
 
