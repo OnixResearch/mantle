@@ -981,6 +981,18 @@ struct CargoLockPackageRecord {
     dependencies: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeTextInput {
+    path: String,
+    text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeManifestLockInputTexts {
+    manifests: Vec<NativeTextInput>,
+    lockfile: NativeTextInput,
+}
+
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
     capture_rust_plan_with_oracle(options, &ProcessCargoOracle)
 }
@@ -2247,13 +2259,22 @@ fn native_workspace_manifest_paths(root: &Path, blockers: &mut Vec<NativePackage
         ));
         return Vec::new();
     };
+    native_workspace_manifest_paths_from_root_manifest(root, &root_manifest_path, &root_manifest, blockers)
+}
+
+fn native_workspace_manifest_paths_from_root_manifest(
+    root: &Path,
+    root_manifest_path: &Path,
+    root_manifest: &NativeManifest,
+    blockers: &mut Vec<NativePackagePlanningBlocker>,
+) -> Vec<PathBuf> {
     let mut manifests = Vec::new();
     if root_manifest.package.is_some() {
-        manifests.push(root_manifest_path.clone());
+        manifests.push(root_manifest_path.to_path_buf());
     }
-    if let Some(workspace) = root_manifest.workspace {
-        for member in workspace.members {
-            if workspace_member_has_unsupported_glob(&member) {
+    if let Some(workspace) = root_manifest.workspace.as_ref() {
+        for member in &workspace.members {
+            if workspace_member_has_unsupported_glob(member) {
                 blockers.push(native_blocker(
                     None,
                     "unsupported-workspace-member-pattern",
@@ -2262,7 +2283,7 @@ fn native_workspace_manifest_paths(root: &Path, blockers: &mut Vec<NativePackage
                 continue;
             }
             if member.contains('*') {
-                match expand_workspace_member_glob(root, &member) {
+                match expand_workspace_member_glob(root, member) {
                     Ok(paths) => manifests.extend(paths),
                     Err(blocker) => blockers.push(blocker),
                 }
@@ -2654,6 +2675,40 @@ fn parse_native_manifest_text(path_label: &str, text: &str) -> Result<NativeMani
 fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
     let text = fs::read_to_string(path).map_err(|err| format!("reading manifest {}: {err}", path.display()))?;
     parse_native_manifest_text(&path.display().to_string(), &text)
+}
+
+fn collect_native_manifest_lock_texts(root: &Path) -> Result<NativeManifestLockInputTexts, String> {
+    let root_manifest_path = root.join("Cargo.toml");
+    let root_manifest_input = read_native_text_input(&root_manifest_path, "root manifest")?;
+    let root_manifest = parse_native_manifest_text(&root_manifest_input.path, &root_manifest_input.text)?;
+    let mut blockers = Vec::new();
+    let mut manifest_paths = vec![root_manifest_path.clone()];
+    manifest_paths.extend(native_workspace_manifest_paths_from_root_manifest(
+        root,
+        &root_manifest_path,
+        &root_manifest,
+        &mut blockers,
+    ));
+    if let Some(blocker) = blockers.first() {
+        return Err(format!("collecting native manifest inputs failed: {}: {}", blocker.class, blocker.message));
+    }
+    manifest_paths.sort();
+    manifest_paths.dedup();
+    let mut manifests = Vec::new();
+    for manifest_path in manifest_paths {
+        manifests.push(read_native_text_input(&manifest_path, "manifest")?);
+    }
+    let lockfile = read_native_text_input(&root.join("Cargo.lock"), "lockfile")?;
+    Ok(NativeManifestLockInputTexts { manifests, lockfile })
+}
+
+fn read_native_text_input(path: &Path, label: &str) -> Result<NativeTextInput, String> {
+    debug_assert!(!label.is_empty());
+    let text = fs::read_to_string(path).map_err(|err| format!("reading native {label} {}: {err}", path.display()))?;
+    Ok(NativeTextInput {
+        path: normalize_path_string(path),
+        text,
+    })
 }
 
 fn native_targets_for_manifest(
@@ -13630,6 +13685,44 @@ rust-version = "1.80"
         assert_eq!(app.path_dependencies[0].name, "dep_crate");
         assert!(planning.non_claims.contains(&"not-full-cargo-compatibility".to_string()));
         assert_eq!(planning.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn collect_native_manifest_lock_texts_reads_root_member_manifests_and_lockfile() {
+        let dir = TempDir::new().unwrap();
+        let member_dir = dir.path().join("member");
+        std::fs::create_dir_all(member_dir.join("src")).unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[workspace]\nmembers = ['member']\n\n[workspace.package]\nversion = '0.1.0'\n",
+        )
+        .unwrap();
+        std::fs::write(
+            member_dir.join("Cargo.toml"),
+            "[package]\nname = 'member'\nversion.workspace = true\n\n[lib]\npath = 'src/lib.rs'\n",
+        )
+        .unwrap();
+        std::fs::write(member_dir.join("src/lib.rs"), "pub fn member() {}\n").unwrap();
+        std::fs::write(dir.path().join("Cargo.lock"), "version = 3\n").unwrap();
+
+        let inputs = collect_native_manifest_lock_texts(dir.path()).unwrap();
+
+        assert_eq!(inputs.manifests.len(), 2usize);
+        assert!(inputs.manifests.iter().any(|input| input.path.ends_with("Cargo.toml")));
+        assert!(inputs.manifests.iter().any(|input| input.text.contains("name = 'member'")));
+        assert!(inputs.lockfile.path.ends_with("Cargo.lock"));
+        assert_eq!(inputs.lockfile.text, "version = 3\n");
+    }
+
+    #[test]
+    fn collect_native_manifest_lock_texts_fails_closed_on_missing_lockfile() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = 'solo'\nversion = '0.1.0'\n").unwrap();
+
+        let err = collect_native_manifest_lock_texts(dir.path()).unwrap_err();
+
+        assert!(err.contains("reading native lockfile"));
+        assert!(err.contains("Cargo.lock"));
     }
 
     #[test]
