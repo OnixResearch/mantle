@@ -3805,16 +3805,41 @@ fn summarize_native_unit_graph_planning(
         ));
     }
     let cargo_graph = summarize_cargo_unit_derivation_graph(unit_graph, source_closure, options)?;
-    let native_build_package_ids = native_build_unit_package_ids(&cargo_graph.derivations);
-    let selected_dependency_artifacts_by_package = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
     let packages_by_id = native_package_target_planning
         .packages
         .iter()
         .map(|package| (package.package_id.clone(), package))
         .collect::<BTreeMap<_, _>>();
-    let mut unit_index = 0usize;
+    for cargo_unit in cargo_graph.derivations.iter().filter(|unit| is_supported_target_unit(unit)) {
+        let Some(package) = packages_by_id.get(&cargo_unit.package_id).copied() else {
+            blockers.push(native_unit_blocker(
+                Some(cargo_unit.unit_id.clone()),
+                Some(cargo_unit.package_id.clone()),
+                "missing-native-package-fact",
+                "native target unit has no package fact",
+            ));
+            continue;
+        };
+        if !source_closure.sources.iter().any(|source| source.package_id == cargo_unit.package_id) {
+            blockers.push(native_unit_blocker(
+                Some(cargo_unit.unit_id.clone()),
+                Some(cargo_unit.package_id.clone()),
+                "missing-source-input",
+                "native unit package is absent from source closure",
+            ));
+            continue;
+        }
+        validate_cargo_unit_native_dependency_facts(cargo_unit, &packages_by_id, source_closure, &mut blockers);
+        units.push(native_unit_from_cargo_derivation(cargo_unit, package));
+    }
+    let selected_dependency_artifacts_by_package = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
+    let native_build_package_ids = native_build_unit_package_ids(&cargo_graph.derivations);
+    let mut supplemental_unit_index = cargo_graph.derivations.len();
     for package in &native_package_target_planning.packages {
         if !native_build_package_ids.contains(&package.package_id) {
+            continue;
+        }
+        if units.iter().any(|unit| unit.package_id == package.package_id && unit.target_kind == "lib") {
             continue;
         }
         if !source_closure.sources.iter().any(|source| source.package_id == package.package_id) {
@@ -3822,7 +3847,7 @@ fn summarize_native_unit_graph_planning(
                 None,
                 Some(package.package_id.clone()),
                 "missing-source-input",
-                "native unit package is absent from source closure",
+                "native dependency package is absent from source closure",
             ));
             continue;
         }
@@ -3844,54 +3869,32 @@ fn summarize_native_unit_graph_planning(
                     &mut blockers,
                 )
             };
-        let mut normal_targets =
-            package.targets.iter().filter(|target| !is_host_target_kind(&target.kind)).collect::<Vec<_>>();
-        normal_targets.sort_by(|left, right| {
-            target_build_order(&left.kind)
-                .cmp(&target_build_order(&right.kind))
-                .then_with(|| left.name.cmp(&right.name))
+        let Some(lib_target) = package.targets.iter().find(|target| target.kind == "lib") else {
+            continue;
+        };
+        units.push(NativeRustUnitSummary {
+            unit_id: rust_unit_id(supplemental_unit_index, &package.package_id, &lib_target.name, "lib", "build"),
+            package_id: package.package_id.clone(),
+            package_name: package.name.clone(),
+            package_links: package.links.clone(),
+            package_root: package_root_from_manifest_path(&package.manifest_path),
+            cargo_package_env: package.cargo_package_env.clone(),
+            target_name: lib_target.name.clone(),
+            target_kind: "lib".to_string(),
+            crate_name: lib_target.crate_name.clone(),
+            source_path: lib_target.source_path.clone(),
+            edition: lib_target.edition.clone(),
+            selected_features: package.selected_features.clone(),
+            crate_types: vec!["lib".to_string()],
+            mode: "build".to_string(),
+            profile: options.profile.clone(),
+            source_digest: package.source_digest.clone(),
+            dependency_artifacts,
         });
-        for target in normal_targets {
-            if target.kind != "lib" && target.kind != "bin" {
-                blockers.push(native_unit_blocker(
-                    None,
-                    Some(package.package_id.clone()),
-                    "unsupported-target-kind",
-                    "native unit graph fragment supports only lib/bin targets",
-                ));
-                continue;
-            }
-            let unit_id = rust_unit_id(unit_index, &package.package_id, &target.name, &target.kind, "build");
-            let target_dependency_artifacts = native_target_dependency_artifacts(
-                &package.package_id,
-                &target.kind,
-                &dependency_artifacts,
-                &package.targets,
-            );
-            units.push(NativeRustUnitSummary {
-                unit_id,
-                package_id: package.package_id.clone(),
-                package_name: package.name.clone(),
-                package_links: package.links.clone(),
-                package_root: package_root_from_manifest_path(&package.manifest_path),
-                cargo_package_env: package.cargo_package_env.clone(),
-                target_name: target.name.clone(),
-                target_kind: target.kind.clone(),
-                crate_name: target.crate_name.clone(),
-                source_path: target.source_path.clone(),
-                edition: target.edition.clone(),
-                selected_features: package.selected_features.clone(),
-                crate_types: vec![target.kind.clone()],
-                mode: "build".to_string(),
-                profile: options.profile.clone(),
-                source_digest: package.source_digest.clone(),
-                dependency_artifacts: target_dependency_artifacts,
-            });
-            unit_index += 1;
-        }
+        supplemental_unit_index += 1;
     }
     units.sort();
-    add_missing_native_producer_blockers(&units, &mut blockers);
+    add_missing_native_producer_blockers(&units, &packages_by_id, &mut blockers);
     blockers.sort();
     blockers.dedup();
     compare_native_units_to_cargo(&units, &cargo_graph, &mut blockers);
@@ -3917,12 +3920,104 @@ fn summarize_native_unit_graph_planning(
     })
 }
 
-fn target_build_order(kind: &str) -> usize {
-    match kind {
-        "lib" => 0,
-        "bin" => 1,
-        _ => 2,
+fn validate_cargo_unit_native_dependency_facts(
+    cargo_unit: &RustUnitDerivationSummary,
+    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
+    source_closure: &SourceClosureSummary,
+    blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
+) {
+    for dependency in &cargo_unit.dependency_artifacts {
+        let Some(dependency_package) = packages_by_id.get(&dependency.package_id).copied() else {
+            blockers.push(native_unit_blocker(
+                Some(cargo_unit.unit_id.clone()),
+                Some(cargo_unit.package_id.clone()),
+                "missing-native-package-fact",
+                &format!(
+                    "consumer package {} selected dependency package {} has no native package fact",
+                    cargo_unit.package_id, dependency.package_id
+                ),
+            ));
+            continue;
+        };
+        if dependency_package.targets.iter().all(|target| is_host_target_kind(&target.kind)) {
+            continue;
+        }
+        if !source_closure.sources.iter().any(|source| source.package_id == dependency.package_id) {
+            blockers.push(native_unit_blocker(
+                Some(cargo_unit.unit_id.clone()),
+                Some(cargo_unit.package_id.clone()),
+                "missing-source-input",
+                &format!(
+                    "consumer package {} selected dependency package {} is absent from source closure",
+                    cargo_unit.package_id, dependency.package_id
+                ),
+            ));
+        }
     }
+}
+
+fn native_unit_from_cargo_derivation(
+    cargo_unit: &RustUnitDerivationSummary,
+    package: &NativePackagePlanningSummary,
+) -> NativeRustUnitSummary {
+    debug_assert!(is_supported_target_unit(cargo_unit));
+    debug_assert_eq!(cargo_unit.package_id, package.package_id);
+    let crate_name = rustc_crate_name_from_args(&cargo_unit.derivation.args)
+        .unwrap_or_else(|| rust_crate_name(&cargo_unit.target_name));
+    let source_path = native_source_path_for_cargo_unit(cargo_unit, package);
+    let edition =
+        rustc_edition_from_args(&cargo_unit.derivation.args).unwrap_or_else(|| DEFAULT_RUST_EDITION.to_string());
+    let selected_features = rustc_feature_cfgs_from_args(&cargo_unit.derivation.args);
+    NativeRustUnitSummary {
+        unit_id: cargo_unit.unit_id.clone(),
+        package_id: cargo_unit.package_id.clone(),
+        package_name: package.name.clone(),
+        package_links: package.links.clone(),
+        package_root: package_root_from_manifest_path(&package.manifest_path),
+        cargo_package_env: package.cargo_package_env.clone(),
+        target_name: cargo_unit.target_name.clone(),
+        target_kind: cargo_unit.target_kind.clone(),
+        crate_name,
+        source_path,
+        edition,
+        selected_features,
+        crate_types: cargo_unit.crate_types.clone(),
+        mode: cargo_unit.mode.clone(),
+        profile: cargo_unit.profile.clone(),
+        source_digest: cargo_unit.source_digest.clone(),
+        dependency_artifacts: cargo_unit.dependency_artifacts.clone(),
+    }
+}
+
+fn native_source_path_for_cargo_unit(
+    cargo_unit: &RustUnitDerivationSummary,
+    package: &NativePackagePlanningSummary,
+) -> String {
+    if let Some(target) = package
+        .targets
+        .iter()
+        .find(|target| target.name == cargo_unit.target_name && target.kind == cargo_unit.target_kind)
+    {
+        return target.source_path.clone();
+    }
+    rustc_source_path(&cargo_unit.derivation.args)
+        .map(|path| normalize_path_string(&rustc_artifact_path(&path)))
+        .unwrap_or_else(|| cargo_unit.target_name.clone())
+}
+
+fn rustc_feature_cfgs_from_args(args: &[String]) -> Vec<String> {
+    let mut features = args
+        .windows(RUSTC_EXTERN_ARG_PAIR_WIDTH)
+        .filter_map(|window| {
+            if window[0] != "--cfg" {
+                return None;
+            }
+            window[1].strip_prefix("feature=\"").and_then(|value| value.strip_suffix('"')).map(str::to_string)
+        })
+        .collect::<Vec<_>>();
+    features.sort();
+    features.dedup();
+    features
 }
 
 fn native_build_unit_package_ids(cargo_derivations: &[RustUnitDerivationSummary]) -> BTreeSet<String> {
@@ -3952,15 +4047,26 @@ fn native_build_unit_package_ids(cargo_derivations: &[RustUnitDerivationSummary]
 
 fn add_missing_native_producer_blockers(
     units: &[NativeRustUnitSummary],
+    packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) {
     for unit in units {
         for dependency in &unit.dependency_artifacts {
-            let has_producer = units.iter().any(|producer| {
-                producer.package_id == dependency.package_id
-                    && producer.target_kind == "lib"
-                    && producer.mode == "build"
-            });
+            if packages_by_id
+                .get(&dependency.package_id)
+                .is_some_and(|package| package.targets.iter().all(|target| is_host_target_kind(&target.kind)))
+            {
+                continue;
+            }
+            let has_producer = if let Some(producer_unit_id) = &dependency.producer_unit_id {
+                units.iter().any(|producer| producer.unit_id == *producer_unit_id)
+            } else {
+                units.iter().any(|producer| {
+                    producer.package_id == dependency.package_id
+                        && producer.target_kind == "lib"
+                        && producer.mode == "build"
+                })
+            };
             if !has_producer {
                 blockers.push(native_unit_blocker(
                     Some(unit.unit_id.clone()),
@@ -3989,37 +4095,6 @@ fn selected_dependency_artifacts_by_package(
     artifacts_by_package
 }
 
-fn native_target_dependency_artifacts(
-    package_id: &str,
-    target_kind: &str,
-    package_dependency_artifacts: &[RustDependencyArtifact],
-    package_targets: &[NativeTargetPlanningSummary],
-) -> Vec<RustDependencyArtifact> {
-    debug_assert!(!package_id.is_empty());
-    debug_assert!(!target_kind.is_empty());
-    let mut artifacts = package_dependency_artifacts
-        .iter()
-        .filter(|artifact| artifact.package_id != package_id)
-        .cloned()
-        .collect::<Vec<_>>();
-    if target_kind == "bin" {
-        if let Some(lib_target) = package_targets.iter().find(|candidate| candidate.kind == "lib") {
-            artifacts.push(RustDependencyArtifact {
-                package_id: package_id.to_string(),
-                name: lib_target.crate_name.clone(),
-                producer_unit_id: None,
-                artifact: format!("artifact:{package_id}:{}", lib_target.crate_name),
-            });
-        }
-    }
-    artifacts.sort();
-    artifacts.dedup();
-    if target_kind != "bin" {
-        debug_assert!(artifacts.iter().all(|artifact| artifact.package_id != package_id));
-    }
-    artifacts
-}
-
 fn selected_host_unit_keys(unit_graph: &Value) -> BTreeSet<(String, String, String)> {
     let mut keys = BTreeSet::new();
     let Some(units) = unit_graph.get("units").and_then(Value::as_array) else {
@@ -4045,6 +4120,37 @@ fn selected_host_unit_keys(unit_graph: &Value) -> BTreeSet<(String, String, Stri
         }
     }
     keys
+}
+
+fn selected_host_unit_ids_by_key(unit_graph: &Value) -> BTreeMap<(String, String, String), String> {
+    let mut ids = BTreeMap::new();
+    let Some(units) = unit_graph.get("units").and_then(Value::as_array) else {
+        return ids;
+    };
+    for (index, unit) in units.iter().enumerate() {
+        let Some(package_id) = target_string(unit, "pkg_id") else {
+            continue;
+        };
+        let Some(target) = unit.get("target") else {
+            continue;
+        };
+        let Some(target_name) = target_string(target, "name") else {
+            continue;
+        };
+        let kinds = target_string_array(target, "kind");
+        let crate_types = target_string_array(target, "crate_types");
+        let Some(target_kind) = classify_supported_cargo_target_kind(&kinds, &crate_types) else {
+            continue;
+        };
+        if !is_host_target_kind(target_kind) {
+            continue;
+        }
+        let Some(unit_id) = rust_unit_id_from_unit_value(index, unit) else {
+            continue;
+        };
+        ids.insert(host_unit_key(&package_id, &target_name, target_kind), unit_id);
+    }
+    ids
 }
 
 fn host_unit_key(package_id: &str, target_name: &str, target_kind: &str) -> (String, String, String) {
@@ -4283,7 +4389,7 @@ fn summarize_native_host_unit_graph_planning(
     let selected_dependency_artifacts_by_package = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
     let selected_native_dependency_artifacts_by_package =
         selected_native_dependency_artifacts_by_package(&native_unit_graph_planning.units);
-    let selected_host_unit_keys = selected_host_unit_keys(unit_graph);
+    let selected_host_unit_ids_by_key = selected_host_unit_ids_by_key(unit_graph);
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     let mut host_index = native_unit_graph_planning.units.len();
     for package in &native_package_target_planning.packages {
@@ -4307,7 +4413,11 @@ fn summarize_native_host_unit_graph_planning(
             .iter()
             .filter(|target| is_host_target_kind(&target.kind))
             .filter(|target| {
-                selected_host_unit_keys.contains(&host_unit_key(&package.package_id, &target.name, &target.kind))
+                selected_host_unit_ids_by_key.contains_key(&host_unit_key(
+                    &package.package_id,
+                    &target.name,
+                    &target.kind,
+                ))
             })
             .collect::<Vec<_>>();
         let package_host_artifacts = package_host_targets
@@ -4315,16 +4425,15 @@ fn summarize_native_host_unit_graph_planning(
             .enumerate()
             .map(|(offset, target)| {
                 let artifact_index = host_index + offset;
+                let host_key = host_unit_key(&package.package_id, &target.name, &target.kind);
+                let producer_unit_id = selected_host_unit_ids_by_key.get(&host_key).cloned().unwrap_or_else(|| {
+                    rust_unit_id(artifact_index, &package.package_id, &target.name, &target.kind, "build")
+                });
                 RustHostArtifact {
                     package_id: package.package_id.clone(),
                     target_name: target.name.clone(),
                     target_kind: target.kind.clone(),
-                    producer_unit_id: Some(rust_unit_variant_key(
-                        &package.package_id,
-                        &target.crate_name,
-                        &target.kind,
-                        "build",
-                    )),
+                    producer_unit_id: Some(producer_unit_id),
                     artifact: format!("host-artifact:{artifact_index}:{}:{}", target.kind, target.crate_name),
                     metadata_digest_blake3: (target.kind == "custom-build")
                         .then(|| build_script_metadata_summary(&package.package_id, &target.name).digest_blake3),
@@ -4350,7 +4459,10 @@ fn summarize_native_host_unit_graph_planning(
                 &packages_by_id,
                 &mut blockers,
             );
-            let unit_id = rust_unit_id(host_unit_index, &package.package_id, &target.name, &target.kind, "build");
+            let host_key = host_unit_key(&package.package_id, &target.name, &target.kind);
+            let unit_id = selected_host_unit_ids_by_key.get(&host_key).cloned().unwrap_or_else(|| {
+                rust_unit_id(host_unit_index, &package.package_id, &target.name, &target.kind, "build")
+            });
             let artifact = package_host_artifacts[offset].clone();
             let generated_metadata = (target.kind == "custom-build")
                 .then(|| build_script_metadata_summary(&package.package_id, &target.name));
@@ -4433,6 +4545,7 @@ fn summarize_native_host_unit_graph_planning(
             });
         }
     }
+    host_units = dedupe_native_host_units_by_unit_id(host_units);
     host_units.sort();
     host_units.dedup();
     target_consumers.sort();
@@ -4467,6 +4580,28 @@ fn summarize_native_host_unit_graph_planning(
             "not-full-host-scheduling-or-execution".to_string(),
         ],
     })
+}
+
+fn dedupe_native_host_units_by_unit_id(host_units: Vec<NativeHostUnitSummary>) -> Vec<NativeHostUnitSummary> {
+    let mut by_unit_id = BTreeMap::<String, NativeHostUnitSummary>::new();
+    for host_unit in host_units {
+        match by_unit_id.get(&host_unit.unit_id) {
+            Some(existing) if native_host_unit_source_is_preferred(existing, &host_unit) => {}
+            _ => {
+                by_unit_id.insert(host_unit.unit_id.clone(), host_unit);
+            }
+        }
+    }
+    by_unit_id.into_values().collect()
+}
+
+fn native_host_unit_source_is_preferred(existing: &NativeHostUnitSummary, candidate: &NativeHostUnitSummary) -> bool {
+    let existing_absolute = Path::new(&existing.source_path).is_absolute();
+    let candidate_absolute = Path::new(&candidate.source_path).is_absolute();
+    if existing_absolute != candidate_absolute {
+        return existing_absolute;
+    }
+    existing <= candidate
 }
 
 fn native_host_metadata_dependencies(
@@ -4832,7 +4967,7 @@ fn summarize_native_unit_derivation_graph(
             host_graph.host_units.iter().map(|unit| native_host_unit_derivation(unit, source_closure, options)),
         );
     }
-    derivations = dedupe_unit_derivations_by_variant(derivations);
+    derivations = dedupe_unit_derivations_by_unit_id(derivations);
     derivations.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
     let blockers = Vec::new();
     let digest_blake3 = unit_derivation_graph_digest(&derivations, &blockers)?;
@@ -4853,31 +4988,30 @@ fn summarize_native_unit_derivation_graph(
     })
 }
 
-fn dedupe_unit_derivations_by_variant(derivations: Vec<RustUnitDerivationSummary>) -> Vec<RustUnitDerivationSummary> {
-    let mut by_variant = BTreeMap::<String, RustUnitDerivationSummary>::new();
+fn dedupe_unit_derivations_by_unit_id(derivations: Vec<RustUnitDerivationSummary>) -> Vec<RustUnitDerivationSummary> {
+    let mut by_unit_id = BTreeMap::<String, RustUnitDerivationSummary>::new();
     for derivation in derivations {
-        let key = if is_supported_target_unit(&derivation) {
-            rust_unit_variant_key_from_summary(&derivation)
-        } else {
-            derivation.unit_id.clone()
-        };
-        match by_variant.get(&key) {
-            Some(existing) if prefer_existing_derivation(existing, &derivation) => {}
+        match by_unit_id.get(&derivation.unit_id) {
+            Some(existing) if rust_derivation_source_is_preferred(existing, &derivation) => {}
             _ => {
-                by_variant.insert(key, derivation);
+                by_unit_id.insert(derivation.unit_id.clone(), derivation);
             }
         }
     }
-    by_variant.into_values().collect()
+    by_unit_id.into_values().collect()
 }
 
-fn prefer_existing_derivation(existing: &RustUnitDerivationSummary, candidate: &RustUnitDerivationSummary) -> bool {
+fn rust_derivation_source_is_preferred(
+    existing: &RustUnitDerivationSummary,
+    candidate: &RustUnitDerivationSummary,
+) -> bool {
     let existing_absolute = rustc_source_path(&existing.derivation.args).is_some_and(|path| path.is_absolute());
     let candidate_absolute = rustc_source_path(&candidate.derivation.args).is_some_and(|path| path.is_absolute());
     if existing_absolute != candidate_absolute {
         return existing_absolute;
     }
-    existing.unit_id >= candidate.unit_id
+    let _ = candidate;
+    true
 }
 
 fn append_rustc_metadata_args(args: &mut Vec<String>, metadata: &str) {
@@ -5510,7 +5644,7 @@ fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostAr
             package_id: package_id.clone(),
             target_name: target_name.clone(),
             target_kind: target_kind.to_string(),
-            producer_unit_id: rust_unit_variant_key_from_unit_value(unit),
+            producer_unit_id: rust_unit_id_from_unit_value(index, unit),
             artifact: format!("host-artifact:{index}:{target_kind}:{}", rust_crate_name(&target_name)),
             metadata_digest_blake3,
         });
@@ -5645,7 +5779,7 @@ fn dependency_package_id<'a>(dep: &'a Value, units: &'a [Value]) -> Option<&'a s
 fn dependency_producer_unit_id(dep: &Value, units: &[Value]) -> Option<String> {
     let index = usize::try_from(dep.get("index")?.as_u64()?).ok()?;
     let unit = units.get(index)?;
-    rust_unit_variant_key_from_unit_value(unit)
+    rust_unit_id_from_unit_value(index, unit)
 }
 
 fn normalized_crate_types(crate_types: &[String], target_kind: &str) -> Vec<String> {
@@ -5707,15 +5841,7 @@ fn rust_unit_id(index: usize, package_id: &str, target_name: &str, target_kind: 
     format!("{index}:{package_id}:{target_name}:{target_kind}:{mode}")
 }
 
-fn rust_unit_variant_key(package_id: &str, crate_name: &str, target_kind: &str, mode: &str) -> String {
-    debug_assert!(!package_id.is_empty());
-    debug_assert!(!crate_name.is_empty());
-    debug_assert!(!target_kind.is_empty());
-    debug_assert!(!mode.is_empty());
-    format!("variant:{package_id}:{crate_name}:{target_kind}:{mode}")
-}
-
-fn rust_unit_variant_key_from_unit_value(unit: &Value) -> Option<String> {
+fn rust_unit_id_from_unit_value(index: usize, unit: &Value) -> Option<String> {
     if is_custom_build_run_unit(unit) {
         return None;
     }
@@ -5729,21 +5855,21 @@ fn rust_unit_variant_key_from_unit_value(unit: &Value) -> Option<String> {
     if mode != "build" {
         return None;
     }
-    Some(rust_unit_variant_key(&package_id, &rust_crate_name(&target_name), target_kind, &mode))
-}
-
-fn rust_unit_variant_key_from_summary(unit: &RustUnitDerivationSummary) -> String {
-    rust_unit_variant_key(
-        &unit.package_id,
-        &rustc_crate_name_from_args(&unit.derivation.args).unwrap_or_else(|| rust_crate_name(&unit.target_name)),
-        &unit.target_kind,
-        &unit.mode,
-    )
+    Some(rust_unit_id(index, &package_id, &target_name, target_kind, &mode))
 }
 
 fn rustc_crate_name_from_args(args: &[String]) -> Option<String> {
     args.windows(RUSTC_EXTERN_ARG_PAIR_WIDTH).find_map(|window| {
         if window[0] == "--crate-name" {
+            return Some(window[1].clone());
+        }
+        None
+    })
+}
+
+fn rustc_edition_from_args(args: &[String]) -> Option<String> {
+    args.windows(RUSTC_EXTERN_ARG_PAIR_WIDTH).find_map(|window| {
+        if window[0] == "--edition" {
             return Some(window[1].clone());
         }
         None
@@ -6096,7 +6222,6 @@ fn rust_unit_indices_by_id(graph: &UnitDerivationGraphSummary) -> BTreeMap<Strin
     let mut indices = BTreeMap::new();
     for (index, unit) in graph.derivations.iter().enumerate() {
         indices.insert(unit.unit_id.clone(), index);
-        indices.insert(rust_unit_variant_key_from_summary(unit), index);
     }
     indices
 }
@@ -6118,13 +6243,13 @@ fn target_dependency_producer_index(
             });
         };
         let producer = &graph.derivations[index];
-        if is_supported_target_unit(producer) {
+        if is_supported_target_unit(producer) || is_supported_host_unit(producer) {
             return Ok(index);
         }
         return Err(RustUnitExecutionBlocker {
             class: "unsupported-dependency-producer".to_string(),
             message: format!(
-                "selected producer unit {} for dependency package {} is not a supported target unit",
+                "selected producer unit {} for dependency package {} is not a supported Rust unit",
                 producer_unit_id, dependency.package_id
             ),
         });
@@ -7372,9 +7497,8 @@ fn validate_native_host_artifact_topology_inputs(
         .iter()
         .filter(|unit| is_supported_target_unit(unit) && !unit.consumed_host_artifacts.is_empty())
         .map(|unit| {
-            let key = rust_unit_variant_key_from_summary(unit);
             let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
-            (key, (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
+            (unit.unit_id.clone(), (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
         })
         .collect::<BTreeMap<_, _>>();
     let native_consumers = native_host_graph
@@ -7382,14 +7506,8 @@ fn validate_native_host_artifact_topology_inputs(
         .iter()
         .filter(|unit| !unit.consumed_host_artifacts.is_empty())
         .map(|unit| {
-            let key = rust_unit_variant_key(
-                &unit.package_id,
-                &rust_crate_name(&unit.target_name),
-                &unit.target_kind,
-                "build",
-            );
             let artifacts = unit.consumed_host_artifacts.iter().cloned().collect::<BTreeSet<_>>();
-            (key, (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
+            (unit.unit_id.clone(), (unit.unit_id.clone(), unit.package_id.clone(), artifacts))
         })
         .collect::<BTreeMap<_, _>>();
 
@@ -7696,6 +7814,7 @@ struct ProducedArtifactIndex {
 struct ProducedPackageArtifact {
     unit_id: String,
     target_kind: String,
+    crate_name: String,
     path: PathBuf,
 }
 
@@ -7707,10 +7826,11 @@ impl ProducedArtifactIndex {
         let artifact = ProducedPackageArtifact {
             unit_id: unit.unit_id.clone(),
             target_kind: unit.target_kind.clone(),
+            crate_name: rustc_crate_name_from_args(&unit.derivation.args)
+                .unwrap_or_else(|| rust_crate_name(&unit.target_name)),
             path: path.clone(),
         };
         self.by_unit_id.insert(unit.unit_id.clone(), path.clone());
-        self.by_unit_id.insert(rust_unit_variant_key_from_summary(unit), path);
         let package_artifacts = self.by_package.entry(unit.package_id.clone()).or_default();
         package_artifacts.retain(|candidate| candidate.unit_id != artifact.unit_id);
         package_artifacts.push(artifact);
@@ -7792,7 +7912,7 @@ fn select_produced_dependency_artifact<'a>(
     let candidates = produced_artifacts
         .by_package
         .get(&dependency.package_id)
-        .map(|artifacts| artifacts.iter().collect::<Vec<_>>())
+        .map(|artifacts| matching_produced_dependency_artifacts(artifacts, dependency))
         .unwrap_or_default();
     match candidates.as_slice() {
         [] => Err(RustUnitExecutionBlocker {
@@ -7816,6 +7936,13 @@ fn select_produced_dependency_artifact<'a>(
     }
 }
 
+fn matching_produced_dependency_artifacts<'a>(
+    artifacts: &'a [ProducedPackageArtifact],
+    dependency: &RustDependencyArtifact,
+) -> Vec<&'a ProducedPackageArtifact> {
+    artifacts.iter().filter(|artifact| artifact.crate_name == dependency.name).collect()
+}
+
 fn append_selected_dependency_search_paths(
     unit: &mut RustUnitDerivationSummary,
     graph: &UnitDerivationGraphSummary,
@@ -7834,7 +7961,6 @@ fn selected_dependency_search_artifacts(
     let mut units_by_id = BTreeMap::new();
     for candidate in &graph.derivations {
         units_by_id.insert(candidate.unit_id.clone(), candidate);
-        units_by_id.insert(rust_unit_variant_key_from_summary(candidate), candidate);
     }
     let mut stack = Vec::new();
     for dependency in &unit.dependency_artifacts {
@@ -7917,7 +8043,7 @@ fn dependency_producer_unit_ids(
     let candidates = produced_artifacts
         .by_package
         .get(&dependency.package_id)
-        .map(|artifacts| artifacts.iter().collect::<Vec<_>>())
+        .map(|artifacts| matching_produced_dependency_artifacts(artifacts, dependency))
         .unwrap_or_default();
     match candidates.as_slice() {
         [] => Ok(Vec::new()),
@@ -11293,6 +11419,122 @@ rust-version = "1.80"
     }
 
     #[test]
+    fn unit_dependency_artifacts_preserve_selected_cargo_unit_id() {
+        let package_id = "same-package";
+        let crate_name = rust_crate_name(package_id);
+        let units = vec![
+            serde_json::json!({
+                "pkg_id": package_id,
+                "target": {
+                    "name": package_id,
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": "/same/src/lib.rs",
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "features": ["default"],
+                "deps": []
+            }),
+            serde_json::json!({
+                "pkg_id": package_id,
+                "target": {
+                    "name": package_id,
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": "/same/src/lib.rs",
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "features": ["alt"],
+                "deps": []
+            }),
+            serde_json::json!({
+                "pkg_id": "consumer",
+                "target": {
+                    "name": "consumer",
+                    "kind": ["lib"],
+                    "crate_types": ["lib"],
+                    "src_path": "/consumer/src/lib.rs",
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "deps": [{"index": 1, "extern_crate_name": crate_name}]
+            }),
+        ];
+
+        let artifacts = unit_dependency_artifacts(&units[2], &units);
+
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].producer_unit_id, Some(rust_unit_id(1, package_id, package_id, "lib", "build")));
+        assert_ne!(artifacts[0].producer_unit_id, Some(rust_unit_id(0, package_id, package_id, "lib", "build")));
+    }
+
+    #[test]
+    fn native_unit_graph_preserves_duplicate_cargo_unit_variants() {
+        let package_id = "same-package";
+        let package = test_native_package(package_id, package_id, "lib", Vec::new());
+        let package_planning = test_package_planning(vec![package.clone()]);
+        let source_closure = test_source_closure(&[package]);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(Path::new("/test"))
+        };
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": package_id,
+                    "target": {
+                        "name": package_id,
+                        "kind": ["lib"],
+                        "crate_types": ["lib"],
+                        "src_path": "/test/same-package/src/lib.rs",
+                        "edition": "2021"
+                    },
+                    "mode": "build",
+                    "features": ["default"],
+                    "deps": []
+                },
+                {
+                    "pkg_id": package_id,
+                    "target": {
+                        "name": package_id,
+                        "kind": ["lib"],
+                        "crate_types": ["lib"],
+                        "src_path": "/test/same-package/src/lib.rs",
+                        "edition": "2021"
+                    },
+                    "mode": "build",
+                    "features": ["alt"],
+                    "deps": []
+                }
+            ]
+        });
+
+        let native_graph =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+
+        assert!(native_graph.ready, "{:#?}", native_graph.blockers);
+        assert_eq!(native_graph.units.len(), 2);
+        assert!(
+            native_graph
+                .units
+                .iter()
+                .any(|unit| unit.unit_id == rust_unit_id(0, package_id, package_id, "lib", "build"))
+        );
+        assert!(
+            native_graph
+                .units
+                .iter()
+                .any(|unit| unit.unit_id == rust_unit_id(1, package_id, package_id, "lib", "build"))
+        );
+        assert!(native_graph.units.iter().any(|unit| unit.selected_features == vec!["default".to_string()]));
+        assert!(native_graph.units.iter().any(|unit| unit.selected_features == vec!["alt".to_string()]));
+    }
+
+    #[test]
     fn target_dependency_producer_index_uses_selected_unit_variant() {
         let package_id = "same-package";
         let first_index = 0usize;
@@ -11411,22 +11653,17 @@ rust-version = "1.80"
             producer_unit_id: Some(leaf_unit.unit_id.clone()),
             artifact: format!("artifact:{leaf_package}:{}", rust_crate_name(leaf_package)),
         };
+        let proc_macro_unit = test_rust_derivation(4, proc_macro_package, "proc-macro", "host", Vec::new());
         let mut selected_unit = test_rust_derivation(1, producer_package, "lib", "target", vec![leaf_dependency]);
         selected_unit.consumed_host_artifacts = vec![RustHostArtifact {
             package_id: proc_macro_package.to_string(),
             target_name: proc_macro_package.to_string(),
             target_kind: "proc-macro".to_string(),
-            producer_unit_id: Some(rust_unit_variant_key(
-                proc_macro_package,
-                &rust_crate_name(proc_macro_package),
-                "proc-macro",
-                "build",
-            )),
+            producer_unit_id: Some(proc_macro_unit.unit_id.clone()),
             artifact: format!("host-artifact:{proc_macro_package}:proc-macro"),
             metadata_digest_blake3: None,
         }];
         let unrelated_unit = test_rust_derivation(2, producer_package, "lib", "target", Vec::new());
-        let proc_macro_unit = test_rust_derivation(4, proc_macro_package, "proc-macro", "host", Vec::new());
         let producer_dependency = RustDependencyArtifact {
             package_id: producer_package.to_string(),
             name: producer_crate_name.clone(),
