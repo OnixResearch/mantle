@@ -68,6 +68,7 @@ const BUILD_SCRIPT_TARGET_NAME: &str = "build-script-build";
 const BUILD_SCRIPT_MAIN_TARGET_NAME: &str = "build-script-main";
 const BUILD_SCRIPT_BUILD_CRATE_NAME: &str = "build_script_build";
 const BUILD_SCRIPT_MAIN_CRATE_NAME: &str = "build_script_main";
+const UNIQUE_CANDIDATE_COUNT: usize = 1;
 const PACKAGE_LINKS_ENV: &str = "MANTLE_PACKAGE_LINKS";
 const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
 const RUSTC_CFG_FLAG: &str = "--cfg";
@@ -4105,14 +4106,19 @@ struct SelectedHostUnit {
     unit_index: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct SelectedHostBuildUnit {
+    unit_id: String,
+}
+
 fn selected_host_units_by_key(unit_graph: &Value) -> BTreeMap<(String, String, String), Vec<SelectedHostUnit>> {
     let mut units_by_key = BTreeMap::<(String, String, String), Vec<SelectedHostUnit>>::new();
     let Some(units) = unit_graph.get("units").and_then(Value::as_array) else {
         return units_by_key;
     };
-    let build_unit_ids = selected_host_build_unit_ids_by_key(units);
+    let build_units = selected_host_build_units_by_key(units);
     for (index, unit) in units.iter().enumerate() {
-        let Some(host_unit) = selected_host_unit_from_unit_value_with_build_map(index, unit, &build_unit_ids) else {
+        let Some(host_unit) = selected_host_unit_from_unit_value_with_build_map(index, unit, &build_units) else {
             continue;
         };
         units_by_key.entry(host_unit.key.clone()).or_default().push(host_unit);
@@ -4124,8 +4130,8 @@ fn selected_host_units_by_key(unit_graph: &Value) -> BTreeMap<(String, String, S
     units_by_key
 }
 
-fn selected_host_build_unit_ids_by_key(units: &[Value]) -> BTreeMap<(String, String, String), String> {
-    let mut build_unit_ids = BTreeMap::new();
+fn selected_host_build_units_by_key(units: &[Value]) -> BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>> {
+    let mut build_units = BTreeMap::<(String, String, String), Vec<SelectedHostBuildUnit>>::new();
     for (index, unit) in units.iter().enumerate() {
         let Some((package_id, target_name, target_kind)) = selected_host_unit_parts(unit) else {
             continue;
@@ -4135,21 +4141,25 @@ fn selected_host_build_unit_ids_by_key(units: &[Value]) -> BTreeMap<(String, Str
             continue;
         }
         let key = host_unit_key(&package_id, &target_name, target_kind);
-        build_unit_ids
-            .entry(key)
-            .or_insert_with(|| rust_unit_id(index, &package_id, &target_name, target_kind, "build"));
+        build_units.entry(key).or_default().push(SelectedHostBuildUnit {
+            unit_id: rust_unit_id(index, &package_id, &target_name, target_kind, "build"),
+        });
     }
-    build_unit_ids
+    for units in build_units.values_mut() {
+        units.sort();
+        units.dedup();
+    }
+    build_units
 }
 
 fn selected_host_unit_from_unit_value_with_build_map(
     index: usize,
     unit: &Value,
-    build_unit_ids: &BTreeMap<(String, String, String), String>,
+    build_units: &BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>>,
 ) -> Option<SelectedHostUnit> {
     let (package_id, target_name, target_kind) = selected_host_unit_parts(unit)?;
     let key = host_unit_key(&package_id, &target_name, target_kind);
-    let unit_id = host_unit_id_from_unit_value(index, &package_id, &target_name, target_kind, unit, build_unit_ids)?;
+    let unit_id = host_unit_id_from_unit_value(index, &package_id, &target_name, target_kind, unit, build_units)?;
     Some(SelectedHostUnit {
         key,
         unit_id,
@@ -4176,7 +4186,7 @@ fn host_unit_id_from_unit_value(
     target_name: &str,
     target_kind: &str,
     unit: &Value,
-    build_unit_ids: &BTreeMap<(String, String, String), String>,
+    build_units: &BTreeMap<(String, String, String), Vec<SelectedHostBuildUnit>>,
 ) -> Option<String> {
     let mode = target_string(unit, "mode").unwrap_or_else(|| "build".to_string());
     if mode == "build" {
@@ -4184,8 +4194,11 @@ fn host_unit_id_from_unit_value(
     }
     if target_kind == "custom-build" && mode == "run-custom-build" {
         let key = host_unit_key(package_id, target_name, target_kind);
-        if let Some(build_unit_id) = build_unit_ids.get(&key) {
-            return Some(build_unit_id.clone());
+        if let Some([build_unit]) = build_units.get(&key).map(Vec::as_slice) {
+            return Some(build_unit.unit_id.clone());
+        }
+        if build_units.get(&key).is_some() {
+            return None;
         }
         return Some(rust_unit_id(index, package_id, BUILD_SCRIPT_TARGET_NAME, target_kind, "build"));
     }
@@ -4429,6 +4442,10 @@ fn summarize_native_host_unit_graph_planning(
     let selected_native_dependency_artifacts_by_package =
         selected_native_dependency_artifacts_by_package(&native_unit_graph_planning.units);
     let selected_host_units_by_key = selected_host_units_by_key(unit_graph);
+    let custom_build_metadata_producer_unit_ids = custom_build_metadata_producers_by_package(
+        &native_package_target_planning.packages,
+        &selected_host_units_by_key,
+    );
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     for package in &native_package_target_planning.packages {
         let Some(source) = source_closure.sources.iter().find(|source| source.package_id == package.package_id) else {
@@ -4488,6 +4505,7 @@ fn summarize_native_host_unit_graph_planning(
                 &target.kind,
                 selected_native_dependency_artifacts_by_package.get(&package.package_id),
                 &packages_by_id,
+                &custom_build_metadata_producer_unit_ids,
                 &mut blockers,
             );
             let generated_metadata = (target.kind == "custom-build")
@@ -4680,6 +4698,7 @@ fn native_host_metadata_dependencies(
     target_kind: &str,
     selected_artifacts: Option<&BTreeSet<RustDependencyArtifact>>,
     packages_by_id: &BTreeMap<String, &NativePackagePlanningSummary>,
+    custom_build_metadata_producers_by_package: &BTreeMap<String, Vec<String>>,
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<BuildScriptMetadataDependency> {
     if target_kind != "custom-build" {
@@ -4703,16 +4722,60 @@ fn native_host_metadata_dependencies(
             continue;
         };
         if let Some(links) = &dependency_package.links {
+            let producer_unit_id =
+                match custom_build_metadata_producers_by_package.get(&dependency_package.package_id).map(Vec::as_slice)
+                {
+                    Some([producer_unit_id]) => Some(producer_unit_id.clone()),
+                    Some([]) | None => None,
+                    Some(candidates) => {
+                        blockers.push(native_host_blocker(
+                            None,
+                            Some(package.package_id.clone()),
+                            "ambiguous-build-script-metadata-producer",
+                            &format!(
+                                "selected linked dependency package {} has {} custom-build metadata producers",
+                                dependency_package.package_id,
+                                candidates.len()
+                            ),
+                        ));
+                        None
+                    }
+                };
             dependencies.push(BuildScriptMetadataDependency {
                 package_id: dependency_package.package_id.clone(),
                 links: links.clone(),
-                producer_unit_id: None,
+                producer_unit_id,
             });
         }
     }
     dependencies.sort();
     dependencies.dedup();
     dependencies
+}
+
+fn custom_build_metadata_producers_by_package(
+    packages: &[NativePackagePlanningSummary],
+    selected_host_units_by_key: &BTreeMap<(String, String, String), Vec<SelectedHostUnit>>,
+) -> BTreeMap<String, Vec<String>> {
+    let mut producers = BTreeMap::<String, Vec<String>>::new();
+    for package in packages {
+        for target in &package.targets {
+            if target.kind != "custom-build" {
+                continue;
+            }
+            let key = host_unit_key(&package.package_id, &target.name, &target.kind);
+            let selected_units = selected_host_units_by_key.get(&key).into_iter().flatten();
+            producers
+                .entry(package.package_id.clone())
+                .or_default()
+                .extend(selected_units.map(|selected| selected.unit_id.clone()));
+        }
+    }
+    for unit_ids in producers.values_mut() {
+        unit_ids.sort();
+        unit_ids.dedup();
+    }
+    producers
 }
 
 fn selected_host_consumed_artifacts(
@@ -4772,8 +4835,8 @@ fn matching_host_artifacts_for_dependency(
 fn host_dependency_producer_unit_id(dep: &Value, units: &[Value]) -> Option<String> {
     let index = usize::try_from(dep.get("index")?.as_u64()?).ok()?;
     let unit = units.get(index)?;
-    let build_unit_ids = selected_host_build_unit_ids_by_key(units);
-    let selected = selected_host_unit_from_unit_value_with_build_map(index, unit, &build_unit_ids)?;
+    let build_units = selected_host_build_units_by_key(units);
+    let selected = selected_host_unit_from_unit_value_with_build_map(index, unit, &build_units)?;
     Some(selected.unit_id)
 }
 
@@ -6648,34 +6711,44 @@ fn collapse_build_script_alias_producer_candidates(
     candidates: Vec<usize>,
     graph: &UnitDerivationGraphSummary,
 ) -> Vec<usize> {
-    let mut alias_candidates = Vec::new();
-    let mut non_alias_candidates = Vec::new();
+    let mut alias_candidates_by_name = BTreeMap::<String, Vec<usize>>::new();
+    let mut collapsed_candidates = Vec::new();
     for index in candidates {
         let unit = &graph.derivations[index];
         if is_build_script_target_alias(&unit.target_name) {
-            alias_candidates.push(index);
+            alias_candidates_by_name.entry(build_script_alias_name(unit)).or_default().push(index);
         } else {
-            non_alias_candidates.push(index);
+            collapsed_candidates.push(index);
         }
     }
-    let alias_target_names = alias_candidates
-        .iter()
-        .map(|index| build_script_alias_name(&graph.derivations[*index]))
-        .collect::<BTreeSet<_>>();
-    if alias_target_names.len() > 1usize {
-        alias_candidates = preferred_build_script_alias_candidate(alias_candidates, graph).into_iter().collect();
+    if should_collapse_build_script_alias_groups(&alias_candidates_by_name) {
+        if let Some(candidate) = preferred_build_script_alias_producer_candidate(&alias_candidates_by_name, graph) {
+            collapsed_candidates.push(candidate);
+        }
+    } else {
+        collapsed_candidates.extend(alias_candidates_by_name.into_values().flatten());
     }
-    non_alias_candidates.extend(alias_candidates);
-    non_alias_candidates.sort_unstable();
-    non_alias_candidates.dedup();
-    non_alias_candidates
+    collapsed_candidates.sort_unstable();
+    collapsed_candidates.dedup();
+    collapsed_candidates
 }
 
-fn preferred_build_script_alias_candidate(candidates: Vec<usize>, graph: &UnitDerivationGraphSummary) -> Option<usize> {
-    candidates.into_iter().min_by_key(|index| {
-        let unit = &graph.derivations[*index];
-        (build_script_alias_preference(&build_script_alias_name(unit)), unit.unit_id.clone())
-    })
+fn should_collapse_build_script_alias_groups<T>(alias_groups: &BTreeMap<String, Vec<T>>) -> bool {
+    alias_groups.len() > UNIQUE_CANDIDATE_COUNT
+        && alias_groups.values().all(|candidates| candidates.len() == UNIQUE_CANDIDATE_COUNT)
+}
+
+fn preferred_build_script_alias_producer_candidate(
+    alias_candidates_by_name: &BTreeMap<String, Vec<usize>>,
+    graph: &UnitDerivationGraphSummary,
+) -> Option<usize> {
+    alias_candidates_by_name
+        .values()
+        .filter_map(|candidates| candidates.first().copied())
+        .min_by_key(|index| {
+            let unit = &graph.derivations[*index];
+            (build_script_alias_preference(&build_script_alias_name(unit)), unit.unit_id.clone())
+        })
 }
 
 fn build_script_alias_name(unit: &RustUnitDerivationSummary) -> String {
@@ -8750,30 +8823,33 @@ fn select_package_build_script_metadata(
 fn collapse_build_script_alias_metadata_candidates(
     candidates: Vec<ProducedBuildScriptMetadata>,
 ) -> Vec<ProducedBuildScriptMetadata> {
-    let alias_target_names = candidates
-        .iter()
-        .filter(|candidate| is_build_script_target_alias(&candidate.target_name))
-        .map(|candidate| candidate.target_name.clone())
-        .collect::<BTreeSet<_>>();
-    if alias_target_names.len() <= 1usize {
-        return candidates;
+    let mut alias_candidates_by_name = BTreeMap::<String, Vec<ProducedBuildScriptMetadata>>::new();
+    let mut collapsed = Vec::new();
+    for candidate in candidates {
+        if is_build_script_target_alias(&candidate.target_name) {
+            alias_candidates_by_name.entry(candidate.target_name.clone()).or_default().push(candidate);
+        } else {
+            collapsed.push(candidate);
+        }
     }
-    let mut alias_candidates = candidates
-        .iter()
-        .filter(|candidate| is_build_script_target_alias(&candidate.target_name))
-        .cloned()
-        .collect::<Vec<_>>();
-    alias_candidates
-        .sort_by_key(|candidate| (build_script_alias_preference(&candidate.target_name), candidate.unit_id.clone()));
-    let mut collapsed = candidates
-        .into_iter()
-        .filter(|candidate| !is_build_script_target_alias(&candidate.target_name))
-        .collect::<Vec<_>>();
-    if let Some(preferred) = alias_candidates.into_iter().next() {
-        collapsed.push(preferred);
+    if should_collapse_build_script_alias_groups(&alias_candidates_by_name) {
+        if let Some(preferred) = preferred_build_script_alias_metadata_candidate(&alias_candidates_by_name) {
+            collapsed.push(preferred);
+        }
+    } else {
+        collapsed.extend(alias_candidates_by_name.into_values().flatten());
     }
     collapsed.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
     collapsed
+}
+
+fn preferred_build_script_alias_metadata_candidate(
+    alias_candidates_by_name: &BTreeMap<String, Vec<ProducedBuildScriptMetadata>>,
+) -> Option<ProducedBuildScriptMetadata> {
+    alias_candidates_by_name
+        .values()
+        .filter_map(|candidates| candidates.first().cloned())
+        .min_by_key(|candidate| (build_script_alias_preference(&candidate.target_name), candidate.unit_id.clone()))
 }
 
 fn apply_build_script_metadata_to_unit(unit: &mut RustUnitDerivationSummary, metadata: &BuildScriptMetadataSummary) {
@@ -11517,6 +11593,194 @@ mod tests {
     }
 
     #[test]
+    fn native_host_planning_binds_run_custom_build_alias_to_exact_unique_build_unit() {
+        const BUILD_INDEX: usize = 0;
+        const RUN_BUILD_INDEX: usize = 1;
+        const PROC_MACRO_INDEX: usize = 2;
+        let dir = TempDir::new().unwrap();
+        let helper_id = "path+file://build-helper-exact#build-helper-exact@0.1.0";
+        let mut helper = test_native_package(helper_id, "build-helper-exact", "proc-macro", Vec::new());
+        helper.targets.push(NativeTargetPlanningSummary {
+            name: BUILD_SCRIPT_TARGET_NAME.to_string(),
+            kind: "custom-build".to_string(),
+            crate_name: rust_crate_name(BUILD_SCRIPT_TARGET_NAME),
+            source_path: "/test/build-helper-exact/build.rs".to_string(),
+            edition: "2021".to_string(),
+        });
+        let package_planning = test_package_planning(vec![helper]);
+        let source_closure = test_source_closure(&package_planning.packages);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": helper_id,
+                    "target": {"name": "build-script-build", "kind": ["custom-build"], "crate_types": ["bin"], "src_path": "/test/build-helper-exact/build.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": ["only"],
+                    "deps": []
+                },
+                {
+                    "pkg_id": helper_id,
+                    "target": {"name": "build-script-build", "kind": ["custom-build"], "crate_types": ["bin"], "src_path": "/test/build-helper-exact/build.rs", "edition": "2021"},
+                    "mode": "run-custom-build",
+                    "features": ["only"],
+                    "deps": []
+                },
+                {
+                    "pkg_id": helper_id,
+                    "target": {"name": "build-helper-exact", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": "/test/build-helper-exact/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": [{"index": RUN_BUILD_INDEX, "extern_crate_name": "build_script_build"}]
+                }
+            ]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        let native_hosts = summarize_native_host_unit_graph_planning(
+            &unit_graph,
+            &source_closure,
+            &empty_registry_planning(),
+            &package_planning,
+            &native_units,
+            &plan_options,
+        )
+        .unwrap();
+
+        let exact_build_unit_id =
+            rust_unit_id(BUILD_INDEX, helper_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        let run_alias_unit_id =
+            rust_unit_id(RUN_BUILD_INDEX, helper_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "run-custom-build");
+        let exact_proc_macro_unit_id =
+            rust_unit_id(PROC_MACRO_INDEX, helper_id, "build-helper-exact", "proc-macro", "build");
+        let units = unit_graph.get("units").and_then(Value::as_array).expect("unit graph has units");
+        assert_eq!(
+            host_dependency_producer_unit_id(&serde_json::json!({"index": RUN_BUILD_INDEX}), units),
+            Some(exact_build_unit_id.clone())
+        );
+        assert!(native_hosts.ready, "{:#?}", native_hosts.blockers);
+        let custom_build_ids = native_hosts
+            .host_units
+            .iter()
+            .filter(|unit| unit.target_kind == "custom-build")
+            .map(|unit| unit.unit_id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(custom_build_ids, vec![exact_build_unit_id.clone()]);
+        assert!(!custom_build_ids.contains(&run_alias_unit_id));
+        let proc_macro = native_hosts
+            .host_units
+            .iter()
+            .find(|unit| unit.unit_id == exact_proc_macro_unit_id)
+            .expect("proc macro host unit planned");
+        assert_eq!(proc_macro.consumed_host_artifacts.len(), 1usize);
+        assert_eq!(proc_macro.consumed_host_artifacts[0].target_kind, "custom-build");
+        assert_eq!(proc_macro.consumed_host_artifacts[0].producer_unit_id, Some(exact_build_unit_id));
+    }
+
+    #[test]
+    fn native_host_planning_does_not_bind_run_custom_build_alias_to_first_duplicate() {
+        const FIRST_BUILD_INDEX: usize = 0;
+        const SECOND_BUILD_INDEX: usize = 1;
+        const RUN_BUILD_INDEX: usize = 2;
+        const EXPECTED_DUPLICATE_PRODUCER_COUNT: usize = 2;
+        let dir = TempDir::new().unwrap();
+        let helper_id = "path+file://build-helper#build-helper@0.1.0";
+        let mut helper = test_native_package(helper_id, "build-helper", "proc-macro", Vec::new());
+        helper.targets.push(NativeTargetPlanningSummary {
+            name: BUILD_SCRIPT_TARGET_NAME.to_string(),
+            kind: "custom-build".to_string(),
+            crate_name: rust_crate_name(BUILD_SCRIPT_TARGET_NAME),
+            source_path: "/test/build-helper/build.rs".to_string(),
+            edition: "2021".to_string(),
+        });
+        let package_planning = test_package_planning(vec![helper]);
+        let source_closure = test_source_closure(&package_planning.packages);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            ..options(dir.path())
+        };
+        let unit_graph = serde_json::json!({
+            "units": [
+                {
+                    "pkg_id": helper_id,
+                    "target": {"name": "build-script-build", "kind": ["custom-build"], "crate_types": ["bin"], "src_path": "/test/build-helper/build.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": ["first"],
+                    "deps": []
+                },
+                {
+                    "pkg_id": helper_id,
+                    "target": {"name": "build-script-build", "kind": ["custom-build"], "crate_types": ["bin"], "src_path": "/test/build-helper/build.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": ["second"],
+                    "deps": []
+                },
+                {
+                    "pkg_id": helper_id,
+                    "target": {"name": "build-script-build", "kind": ["custom-build"], "crate_types": ["bin"], "src_path": "/test/build-helper/build.rs", "edition": "2021"},
+                    "mode": "run-custom-build",
+                    "features": ["second"],
+                    "deps": []
+                },
+                {
+                    "pkg_id": helper_id,
+                    "target": {"name": "build-helper", "kind": ["proc-macro"], "crate_types": ["proc-macro"], "src_path": "/test/build-helper/src/lib.rs", "edition": "2021"},
+                    "mode": "build",
+                    "features": [],
+                    "deps": [{"index": RUN_BUILD_INDEX, "extern_crate_name": "build_script_build"}]
+                }
+            ]
+        });
+
+        let native_units =
+            summarize_native_unit_graph_planning(&unit_graph, &source_closure, &package_planning, &plan_options)
+                .unwrap();
+        let native_hosts = summarize_native_host_unit_graph_planning(
+            &unit_graph,
+            &source_closure,
+            &empty_registry_planning(),
+            &package_planning,
+            &native_units,
+            &plan_options,
+        )
+        .unwrap();
+
+        assert!(native_hosts.ready, "{:#?}", native_hosts.blockers);
+        let proc_macro = native_hosts
+            .host_units
+            .iter()
+            .find(|unit| unit.target_kind == "proc-macro")
+            .expect("proc macro host unit planned");
+        let producer_unit_ids = proc_macro
+            .consumed_host_artifacts
+            .iter()
+            .filter_map(|artifact| artifact.producer_unit_id.clone())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(producer_unit_ids.len(), EXPECTED_DUPLICATE_PRODUCER_COUNT);
+        assert!(producer_unit_ids.contains(&rust_unit_id(
+            FIRST_BUILD_INDEX,
+            helper_id,
+            BUILD_SCRIPT_TARGET_NAME,
+            "custom-build",
+            "build"
+        )));
+        assert!(producer_unit_ids.contains(&rust_unit_id(
+            SECOND_BUILD_INDEX,
+            helper_id,
+            BUILD_SCRIPT_TARGET_NAME,
+            "custom-build",
+            "build"
+        )));
+    }
+
+    #[test]
     fn native_cargo_package_env_sets_version_components_and_empty_defaults() {
         let manifest = toml::from_str::<NativeManifest>(
             r#"
@@ -12624,6 +12888,85 @@ rust-version = "1.80"
     }
 
     #[test]
+    fn build_script_metadata_producer_index_keeps_same_alias_duplicates_ambiguous() {
+        const FIRST_BUILD_INDEX: usize = 0;
+        const SECOND_BUILD_INDEX: usize = 1;
+        const MAIN_ALIAS_INDEX: usize = 2;
+        const CONSUMER_INDEX: usize = 3;
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#dupe-sys@0.1.0";
+        let mut first = test_rust_derivation(FIRST_BUILD_INDEX, package_id, "custom-build", "host", Vec::new());
+        let mut second = test_rust_derivation(SECOND_BUILD_INDEX, package_id, "custom-build", "host", Vec::new());
+        let mut main_alias = test_rust_derivation(MAIN_ALIAS_INDEX, package_id, "custom-build", "host", Vec::new());
+        first.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
+        first.unit_id = rust_unit_id(FIRST_BUILD_INDEX, package_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        second.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
+        second.unit_id =
+            rust_unit_id(SECOND_BUILD_INDEX, package_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        main_alias.target_name = BUILD_SCRIPT_MAIN_TARGET_NAME.to_string();
+        main_alias.unit_id =
+            rust_unit_id(MAIN_ALIAS_INDEX, package_id, BUILD_SCRIPT_MAIN_TARGET_NAME, "custom-build", "build");
+        let consumer = test_rust_derivation(
+            CONSUMER_INDEX,
+            "path+file://consumer#consumer@0.1.0",
+            "custom-build",
+            "host",
+            Vec::new(),
+        );
+        let graph = test_unit_derivation_graph(vec![first, second, main_alias, consumer.clone()]);
+        let producers =
+            build_script_metadata_producers(&graph, &[FIRST_BUILD_INDEX, SECOND_BUILD_INDEX, MAIN_ALIAS_INDEX]);
+        let dependency = BuildScriptMetadataDependency {
+            package_id: package_id.to_string(),
+            links: "dupe_native".to_string(),
+            producer_unit_id: None,
+        };
+
+        let err = select_build_script_metadata_producer_index(&consumer, &dependency, &producers, &graph).unwrap_err();
+
+        assert_eq!(err.class, "ambiguous-build-script-metadata-producer");
+        assert!(err.message.contains("candidate custom-build producers"));
+    }
+
+    #[test]
+    fn bind_build_script_metadata_with_index_keeps_same_alias_duplicates_ambiguous() {
+        const CONSUMER_INDEX: usize = 0;
+        const FIRST_BUILD_INDEX: usize = 1;
+        const SECOND_BUILD_INDEX: usize = 2;
+        const MAIN_ALIAS_INDEX: usize = 3;
+        let package_id = "registry+https://github.com/rust-lang/crates.io-index#dupe-sys@0.1.0";
+        let mut unit =
+            test_rust_derivation(CONSUMER_INDEX, "path+file://consumer#consumer@0.1.0", "lib", "target", Vec::new());
+        unit.consumed_host_artifacts = vec![RustHostArtifact {
+            package_id: package_id.to_string(),
+            target_name: BUILD_SCRIPT_TARGET_NAME.to_string(),
+            target_kind: "custom-build".to_string(),
+            producer_unit_id: None,
+            artifact: "host-artifact:dupe-sys-build".to_string(),
+            metadata_digest_blake3: None,
+        }];
+        let mut produced = ProducedBuildScriptMetadataIndex::default();
+        let mut first = test_rust_derivation(FIRST_BUILD_INDEX, package_id, "custom-build", "host", Vec::new());
+        let mut second = test_rust_derivation(SECOND_BUILD_INDEX, package_id, "custom-build", "host", Vec::new());
+        let mut main_alias = test_rust_derivation(MAIN_ALIAS_INDEX, package_id, "custom-build", "host", Vec::new());
+        first.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
+        first.unit_id = rust_unit_id(FIRST_BUILD_INDEX, package_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        second.target_name = BUILD_SCRIPT_TARGET_NAME.to_string();
+        second.unit_id =
+            rust_unit_id(SECOND_BUILD_INDEX, package_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        main_alias.target_name = BUILD_SCRIPT_MAIN_TARGET_NAME.to_string();
+        main_alias.unit_id =
+            rust_unit_id(MAIN_ALIAS_INDEX, package_id, BUILD_SCRIPT_MAIN_TARGET_NAME, "custom-build", "build");
+        produced.record_unit(&first, build_script_metadata_summary(package_id, BUILD_SCRIPT_TARGET_NAME));
+        produced.record_unit(&second, build_script_metadata_summary(package_id, BUILD_SCRIPT_TARGET_NAME));
+        produced.record_unit(&main_alias, build_script_metadata_summary(package_id, BUILD_SCRIPT_MAIN_TARGET_NAME));
+
+        let err = bind_all_build_script_metadata_with_index(&unit, &produced).unwrap_err();
+
+        assert_eq!(err.class, "ambiguous-build-script-metadata-producer");
+        assert!(err.message.contains("package-only candidates"));
+    }
+
+    #[test]
     fn bind_all_host_artifacts_leaves_unknown_custom_build_alias_placeholder() {
         let dir = TempDir::new().unwrap();
         let package_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1";
@@ -12859,6 +13202,9 @@ rust-version = "1.80"
             test_dependency_artifact(consumer_id, "aws_lc_rs"),
             test_dependency_artifact(linked_id, "aws_lc_sys"),
         ]);
+        let linked_producer_unit_id = rust_unit_id(0, linked_id, BUILD_SCRIPT_TARGET_NAME, "custom-build", "build");
+        let custom_build_metadata_producers_by_package =
+            BTreeMap::from([(linked_id.to_string(), vec![linked_producer_unit_id.clone()])]);
         let mut blockers = Vec::new();
 
         let dependencies = native_host_metadata_dependencies(
@@ -12866,13 +13212,14 @@ rust-version = "1.80"
             "custom-build",
             Some(&selected_artifacts),
             &packages_by_id,
+            &custom_build_metadata_producers_by_package,
             &mut blockers,
         );
 
         assert_eq!(dependencies, vec![BuildScriptMetadataDependency {
             package_id: linked_id.to_string(),
             links: "aws_lc_0_39_1".to_string(),
-            producer_unit_id: None,
+            producer_unit_id: Some(linked_producer_unit_id),
         }]);
         assert!(blockers.is_empty());
         assert!(dependencies.iter().all(|dependency| dependency.package_id != unselected_id));
@@ -12894,6 +13241,7 @@ rust-version = "1.80"
         let packages_by_id =
             packages.iter().map(|package| (package.package_id.clone(), package)).collect::<BTreeMap<_, _>>();
         let selected_artifacts = BTreeSet::new();
+        let custom_build_metadata_producers_by_package = BTreeMap::new();
         let mut blockers = Vec::new();
 
         let dependencies = native_host_metadata_dependencies(
@@ -12901,6 +13249,7 @@ rust-version = "1.80"
             "custom-build",
             Some(&selected_artifacts),
             &packages_by_id,
+            &custom_build_metadata_producers_by_package,
             &mut blockers,
         );
 
