@@ -74,6 +74,7 @@ const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
 const RUSTC_CFG_FLAG: &str = "--cfg";
 const RUSTC_EXTERN_FLAG: &str = "--extern";
 const RUSTC_EXTERN_ARG_PAIR_WIDTH: usize = 2;
+const NATIVE_FEATURE_RESOLUTION_MAX_STEPS: usize = 4096;
 const RUSTC_LINK_SEARCH_FLAG: &str = "-L";
 const RUSTC_DEPENDENCY_SEARCH_PREFIX: &str = "dependency=";
 const RUSTC_CAP_LINTS_FLAG: &str = "--cap-lints";
@@ -998,6 +999,43 @@ struct NativeManifestLockUnsupportedBlocker {
     path: String,
     class: String,
     message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeFeatureResolutionRequest {
+    feature_defs: BTreeMap<String, Vec<String>>,
+    optional_dependencies: BTreeSet<String>,
+    explicit_features: Vec<String>,
+    all_features: bool,
+    no_default_features: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeFeatureResolution {
+    selected_features: Vec<String>,
+    activated_optional_dependencies: Vec<String>,
+    dependency_feature_edges: Vec<NativeDependencyFeatureEdge>,
+    blockers: Vec<NativeFeatureResolutionBlocker>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct NativeDependencyFeatureEdge {
+    dependency: String,
+    feature: String,
+    weak: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct NativeFeatureResolutionBlocker {
+    class: String,
+    message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NativeFeatureEntry {
+    LocalFeature(String),
+    OptionalDependency(String),
+    DependencyFeature(NativeDependencyFeatureEdge),
 }
 
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
@@ -2404,10 +2442,11 @@ fn native_package_from_manifest(
     })?;
     let targets =
         native_targets_for_manifest(source_root, &package.name, &package_version, &package_edition, &manifest)?;
+    let optional_dependencies = native_optional_dependency_names(&manifest.dependencies);
     let selected_features = selected_features_by_package
         .get(&package_id)
         .cloned()
-        .unwrap_or_else(|| native_selected_features(options, &manifest.features));
+        .unwrap_or_else(|| native_selected_features(options, &manifest.features, &optional_dependencies));
     let active_target = active_rust_target(options);
     let (target_cfg_dependencies, selected_target_cfg_dependencies) = native_target_cfg_dependencies(
         source_root,
@@ -3060,6 +3099,14 @@ fn dependency_optional(value: &toml::Value) -> bool {
         .and_then(|table| table.get("optional"))
         .and_then(toml::Value::as_bool)
         .unwrap_or(false)
+}
+
+fn native_optional_dependency_names(dependencies: &BTreeMap<String, toml::Value>) -> BTreeSet<String> {
+    dependencies
+        .iter()
+        .filter(|(_, value)| dependency_optional(value))
+        .map(|(name, _)| name.clone())
+        .collect()
 }
 
 fn native_workspace_dependencies(
@@ -3897,17 +3944,157 @@ fn selected_features_by_package_from_unit_graph(unit_graph: &Value) -> BTreeMap<
         .collect()
 }
 
-fn native_selected_features(options: &RustPlanOptions, feature_defs: &BTreeMap<String, Vec<String>>) -> Vec<String> {
-    if options.all_features {
-        return sorted_strings(feature_defs.keys().cloned().collect());
+fn native_selected_features(
+    options: &RustPlanOptions,
+    feature_defs: &BTreeMap<String, Vec<String>>,
+    optional_dependencies: &BTreeSet<String>,
+) -> Vec<String> {
+    resolve_native_features(NativeFeatureResolutionRequest {
+        feature_defs: feature_defs.clone(),
+        optional_dependencies: optional_dependencies.clone(),
+        explicit_features: options.features.clone(),
+        all_features: options.all_features,
+        no_default_features: options.no_default_features,
+    })
+    .selected_features
+}
+
+fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFeatureResolution {
+    debug_assert!(!(request.all_features && !request.explicit_features.is_empty()));
+    let mut selected_features = BTreeSet::<String>::new();
+    let mut activated_optional_dependencies = BTreeSet::<String>::new();
+    let mut dependency_feature_edges = BTreeSet::<NativeDependencyFeatureEdge>::new();
+    let mut blockers = BTreeSet::<NativeFeatureResolutionBlocker>::new();
+    let mut queue = Vec::<String>::new();
+    seed_native_feature_queue(&request, &mut selected_features, &mut queue);
+    let mut cursor = 0usize;
+    while cursor < queue.len() {
+        if cursor >= NATIVE_FEATURE_RESOLUTION_MAX_STEPS {
+            blockers.insert(native_feature_blocker(
+                "feature-resolution-step-limit",
+                "native feature resolution exceeded bounded fixed-point step limit",
+            ));
+            break;
+        }
+        let feature = queue[cursor].clone();
+        cursor += 1;
+        let Some(entries) = request.feature_defs.get(&feature) else {
+            if request.optional_dependencies.contains(&feature) {
+                activated_optional_dependencies.insert(feature);
+            }
+            continue;
+        };
+        for entry in entries {
+            match parse_native_feature_entry(entry, &request.feature_defs, &request.optional_dependencies) {
+                Ok(NativeFeatureEntry::LocalFeature(feature)) => {
+                    push_native_feature(&feature, &mut selected_features, &mut queue);
+                }
+                Ok(NativeFeatureEntry::OptionalDependency(dependency)) => {
+                    activated_optional_dependencies.insert(dependency);
+                }
+                Ok(NativeFeatureEntry::DependencyFeature(edge)) => {
+                    dependency_feature_edges.insert(edge);
+                }
+                Err(blocker) => {
+                    blockers.insert(blocker);
+                }
+            }
+        }
     }
-    if !options.features.is_empty() {
-        return sorted_strings(options.features.clone());
+    NativeFeatureResolution {
+        selected_features: selected_features.into_iter().collect(),
+        activated_optional_dependencies: activated_optional_dependencies.into_iter().collect(),
+        dependency_feature_edges: dependency_feature_edges.into_iter().collect(),
+        blockers: blockers.into_iter().collect(),
     }
-    if options.no_default_features || !feature_defs.contains_key("default") {
-        return Vec::new();
+}
+
+fn seed_native_feature_queue(
+    request: &NativeFeatureResolutionRequest,
+    selected_features: &mut BTreeSet<String>,
+    queue: &mut Vec<String>,
+) {
+    if request.all_features {
+        for feature in request.feature_defs.keys() {
+            push_native_feature(feature, selected_features, queue);
+        }
+        for dependency in &request.optional_dependencies {
+            push_native_feature(dependency, selected_features, queue);
+        }
+        return;
     }
-    vec!["default".to_string()]
+    if !request.explicit_features.is_empty() {
+        for feature in sorted_strings(request.explicit_features.clone()) {
+            push_native_feature(&feature, selected_features, queue);
+        }
+        return;
+    }
+    if !request.no_default_features && request.feature_defs.contains_key("default") {
+        push_native_feature("default", selected_features, queue);
+    }
+}
+
+fn push_native_feature(feature: &str, selected_features: &mut BTreeSet<String>, queue: &mut Vec<String>) {
+    debug_assert!(!feature.is_empty());
+    if selected_features.insert(feature.to_string()) {
+        queue.push(feature.to_string());
+    }
+}
+
+fn parse_native_feature_entry(
+    entry: &str,
+    feature_defs: &BTreeMap<String, Vec<String>>,
+    optional_dependencies: &BTreeSet<String>,
+) -> Result<NativeFeatureEntry, NativeFeatureResolutionBlocker> {
+    debug_assert!(!entry.is_empty());
+    if let Some(dependency) = entry.strip_prefix("dep:") {
+        if dependency.is_empty() {
+            return Err(native_feature_blocker("unsupported-feature-entry", "empty dep: feature entry"));
+        }
+        return Ok(NativeFeatureEntry::OptionalDependency(dependency.to_string()));
+    }
+    if let Some(edge) = parse_native_dependency_feature_entry(entry)? {
+        return Ok(NativeFeatureEntry::DependencyFeature(edge));
+    }
+    if feature_defs.contains_key(entry) {
+        return Ok(NativeFeatureEntry::LocalFeature(entry.to_string()));
+    }
+    if optional_dependencies.contains(entry) {
+        return Ok(NativeFeatureEntry::OptionalDependency(entry.to_string()));
+    }
+    Err(native_feature_blocker(
+        "unknown-feature-entry",
+        &format!("feature entry `{entry}` references no known feature or optional dependency"),
+    ))
+}
+
+fn parse_native_dependency_feature_entry(
+    entry: &str,
+) -> Result<Option<NativeDependencyFeatureEdge>, NativeFeatureResolutionBlocker> {
+    let Some((dependency, feature)) = entry.split_once('/') else {
+        return Ok(None);
+    };
+    let (dependency, weak) = dependency.strip_suffix('?').map_or((dependency, false), |dependency| (dependency, true));
+    if dependency.is_empty() || feature.is_empty() {
+        return Err(native_feature_blocker(
+            "unsupported-feature-entry",
+            &format!("dependency feature entry `{entry}` is malformed"),
+        ));
+    }
+    Ok(Some(NativeDependencyFeatureEdge {
+        dependency: dependency.to_string(),
+        feature: feature.to_string(),
+        weak,
+    }))
+}
+
+fn native_feature_blocker(class: &str, message: &str) -> NativeFeatureResolutionBlocker {
+    debug_assert!(!class.is_empty());
+    debug_assert!(!message.is_empty());
+    NativeFeatureResolutionBlocker {
+        class: class.to_string(),
+        message: message.to_string(),
+    }
 }
 
 fn compare_native_packages_to_cargo(
@@ -11093,6 +11280,60 @@ mod tests {
         args.windows(2)
             .find(|window| window[0] == RUSTC_CODEGEN_OPTION_FLAG && window[1].starts_with(RUSTC_METADATA_ARG_PREFIX))
             .map(|window| window[1].as_str())
+    }
+
+    #[test]
+    fn native_feature_resolver_reaches_fixed_point_for_defaults_explicit_and_optional_dependencies() {
+        let mut feature_defs = BTreeMap::new();
+        feature_defs.insert("default".to_string(), vec!["std".to_string()]);
+        feature_defs.insert("std".to_string(), vec!["alloc".to_string(), "dep:serde".to_string()]);
+        feature_defs.insert("alloc".to_string(), Vec::new());
+        let request = NativeFeatureResolutionRequest {
+            feature_defs,
+            optional_dependencies: BTreeSet::from(["serde".to_string()]),
+            explicit_features: Vec::new(),
+            all_features: false,
+            no_default_features: false,
+        };
+
+        let resolution = resolve_native_features(request);
+
+        assert!(resolution.blockers.is_empty(), "{:#?}", resolution.blockers);
+        assert_eq!(resolution.selected_features, vec!["alloc".to_string(), "default".to_string(), "std".to_string()]);
+        assert_eq!(resolution.activated_optional_dependencies, vec!["serde".to_string()]);
+    }
+
+    #[test]
+    fn native_feature_resolver_models_dependency_feature_edges_and_rejects_unknown_entries() {
+        let mut feature_defs = BTreeMap::new();
+        feature_defs.insert("cli".to_string(), vec![
+            "dep:clap".to_string(),
+            "serde/derive".to_string(),
+            "optional?/fast".to_string(),
+        ]);
+        feature_defs.insert("broken".to_string(), vec!["missing".to_string()]);
+        let request = NativeFeatureResolutionRequest {
+            feature_defs,
+            optional_dependencies: BTreeSet::from(["clap".to_string()]),
+            explicit_features: vec!["cli".to_string(), "broken".to_string()],
+            all_features: false,
+            no_default_features: true,
+        };
+
+        let resolution = resolve_native_features(request);
+
+        assert_eq!(resolution.activated_optional_dependencies, vec!["clap".to_string()]);
+        assert!(resolution.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
+            dependency: "serde".to_string(),
+            feature: "derive".to_string(),
+            weak: false,
+        }));
+        assert!(resolution.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
+            dependency: "optional".to_string(),
+            feature: "fast".to_string(),
+            weak: true,
+        }));
+        assert!(resolution.blockers.iter().any(|blocker| blocker.class == "unknown-feature-entry"));
     }
 
     #[test]
