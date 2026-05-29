@@ -21,7 +21,12 @@ Covers: rust_package_planning.native_host_real_unit_identity
 ## Cairn validation
 
 - `/nix/store/vdn5zw29nd97ba6dzmfhp5vz6zbm1mkx-cairn-0.1.0/bin/cairn validate --root .`
-  - Result: `valid: true`, `changes: 8`, `specs_validated: 9`.
+  - Pre-archive result: `valid: true`, `changes: 8`, `specs_validated: 9`.
+- `/nix/store/vdn5zw29nd97ba6dzmfhp5vz6zbm1mkx-cairn-0.1.0/bin/cairn archive rust-topology-host-real-unit-identity --root . --execute`
+  - Tool created `cairn/archive/1970-01-01-rust-topology-host-real-unit-identity`; manually renamed to `cairn/archive/2026-05-29-rust-topology-host-real-unit-identity`.
+  - Archive only moved the change directory, so the ADDED requirement was manually copied into `cairn/specs/rust-package-planning/spec.md`.
+- `/nix/store/vdn5zw29nd97ba6dzmfhp5vz6zbm1mkx-cairn-0.1.0/bin/cairn validate --root .`
+  - Post-archive result: `valid: true`, `changes: 7`, `specs_validated: 8`.
 
 ## Dirty self-probe
 
