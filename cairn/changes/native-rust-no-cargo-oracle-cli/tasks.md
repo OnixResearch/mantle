@@ -2,7 +2,7 @@
 
 ## Spec
 
-- [ ] [serial] Add Cargo-free CLI requirement and design. r[rust_package_planning.no_cargo_oracle_cli]
+- [x] [serial] Add Cargo-free CLI requirement and design. r[rust_package_planning.no_cargo_oracle_cli]
 
 ## Implementation
 

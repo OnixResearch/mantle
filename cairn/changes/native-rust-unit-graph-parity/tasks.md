@@ -2,7 +2,7 @@
 
 ## Spec
 
-- [ ] [serial] Add native unit graph construction requirement and design. r[rust_package_planning.native_unit_graph]
+- [x] [serial] Add native unit graph construction requirement and design. r[rust_package_planning.native_unit_graph]
 
 ## Implementation
 

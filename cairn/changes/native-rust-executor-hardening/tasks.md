@@ -2,7 +2,7 @@
 
 ## Spec
 
-- [ ] [serial] Add native executor hardening requirement and design. r[rust_package_planning.native_executor_hardening]
+- [x] [serial] Add native executor hardening requirement and design. r[rust_package_planning.native_executor_hardening]
 
 ## Implementation
 

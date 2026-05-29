@@ -2,7 +2,7 @@
 
 ## Spec
 
-- [ ] [serial] Add host duplicate identity requirement and design. r[rust_package_planning.native_host_real_unit_identity]
+- [x] [serial] Add host duplicate identity requirement and design. r[rust_package_planning.native_host_real_unit_identity]
 
 ## Implementation
 

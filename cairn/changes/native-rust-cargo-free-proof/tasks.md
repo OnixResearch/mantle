@@ -2,7 +2,7 @@
 
 ## Spec
 
-- [ ] [serial] Add Cargo-free self-build proof requirement and design. r[rust_package_planning.cargo_free_self_build_proof]
+- [x] [serial] Add Cargo-free self-build proof requirement and design. r[rust_package_planning.cargo_free_self_build_proof]
 
 ## Implementation
 

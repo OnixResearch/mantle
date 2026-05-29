@@ -2,7 +2,7 @@
 
 ## Spec
 
-- [ ] [serial] Add native manifest/lockfile planner requirement and design. r[rust_package_planning.native_manifest_lock_planner]
+- [x] [serial] Add native manifest/lockfile planner requirement and design. r[rust_package_planning.native_manifest_lock_planner]
 
 ## Implementation
 

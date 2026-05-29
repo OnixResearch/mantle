@@ -2,7 +2,7 @@
 
 ## Spec
 
-- [ ] [serial] Add build-script runtime parity requirement and design. r[rust_package_planning.native_build_script_runtime]
+- [x] [serial] Add build-script runtime parity requirement and design. r[rust_package_planning.native_build_script_runtime]
 
 ## Implementation
 

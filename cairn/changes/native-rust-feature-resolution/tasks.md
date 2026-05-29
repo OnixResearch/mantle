@@ -2,7 +2,7 @@
 
 ## Spec
 
-- [ ] [serial] Add native feature resolution requirement and design. r[rust_package_planning.native_feature_resolution]
+- [x] [serial] Add native feature resolution requirement and design. r[rust_package_planning.native_feature_resolution]
 
 ## Implementation
 
