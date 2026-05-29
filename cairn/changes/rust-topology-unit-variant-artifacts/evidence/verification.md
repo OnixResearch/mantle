@@ -40,6 +40,20 @@ blocker_message=
 
 This proves the prior duplicate same-package producer frontier advanced: native topology executed successfully with unit-variant artifact binding/search paths.
 
+## Clean self-probe
+
+Command stored in pueue task 243 (`unit-variant-clean-self-probe`).
+
+Result from `pueue_log 243`:
+
+```text
+probe: target/mantle-self-rust-plan-probe-unit-variant-clean/receipt.json
+topology_execution_status=success
+executions=592
+blocker_class=
+blocker_message=
+```
+
 ## Cairn gates
 
 Command:
