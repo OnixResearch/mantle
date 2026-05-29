@@ -73,3 +73,7 @@ gate proposal: verdict=PASS
 gate design: verdict=PASS
 gate tasks: verdict=PASS
 ```
+
+## Archive note
+
+`cairn archive rust-topology-unit-variant-artifacts --root . --execute` produced `cairn/archive/1970-01-01-rust-topology-unit-variant-artifacts`. Per repo policy, the archive directory was manually renamed to `cairn/archive/2026-05-28-rust-topology-unit-variant-artifacts`, and the delta requirement was manually synced into `cairn/specs/rust-package-planning/spec.md` before final validation.
