@@ -942,6 +942,45 @@ struct LockPackage {
     checksum: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct NativeLockfileFacts {
+    packages: Vec<NativeLockfilePackageFact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+struct NativeLockfilePackageFact {
+    name: String,
+    version: String,
+    source: Option<String>,
+    checksum: Option<String>,
+    revision: Option<String>,
+    dependencies: Vec<NativeLockDependencyFact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+struct NativeLockDependencyFact {
+    raw: String,
+    name: String,
+    version: Option<String>,
+    source: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CargoLockfile {
+    #[serde(default)]
+    package: Vec<CargoLockPackageRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CargoLockPackageRecord {
+    name: String,
+    version: String,
+    source: Option<String>,
+    checksum: Option<String>,
+    #[serde(default)]
+    dependencies: Vec<String>,
+}
+
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
     capture_rust_plan_with_oracle(options, &ProcessCargoOracle)
 }
@@ -1308,63 +1347,88 @@ fn parse_lockfile_packages(root: &Path) -> Result<Vec<LockPackage>, RunError> {
     let text = fs::read_to_string(&path).map_err(|err| {
         RunError::Internal(format!("Rust plan requires a readable Cargo.lock at {}: {err}", path.display()))
     })?;
-    Ok(parse_lockfile_packages_text(&text))
+    let facts = parse_native_lockfile_text(&path.display().to_string(), &text).map_err(RunError::Internal)?;
+    Ok(lock_packages_from_facts(facts))
 }
 
-fn parse_lockfile_packages_text(text: &str) -> Vec<LockPackage> {
-    let mut packages = Vec::new();
-    let mut current = LockPackage {
-        name: String::new(),
-        version: String::new(),
-        source: None,
-        checksum: None,
-    };
-    let mut in_package = false;
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed == "[[package]]" {
-            push_lock_package(&mut packages, &mut current, in_package);
-            in_package = true;
-            continue;
-        }
-        if !in_package {
-            continue;
-        }
-        if let Some(value) = parse_lock_string_field(trimmed, "name") {
-            current.name = value;
-        } else if let Some(value) = parse_lock_string_field(trimmed, "version") {
-            current.version = value;
-        } else if let Some(value) = parse_lock_string_field(trimmed, "source") {
-            current.source = Some(value);
-        } else if let Some(value) = parse_lock_string_field(trimmed, "checksum") {
-            current.checksum = Some(value);
-        }
+fn parse_native_lockfile_text(path_label: &str, text: &str) -> Result<NativeLockfileFacts, String> {
+    debug_assert!(!path_label.is_empty());
+    let lockfile: CargoLockfile =
+        toml::from_str(text).map_err(|err| format!("parsing lockfile {path_label}: {err}"))?;
+    let mut packages = lockfile.package.into_iter().map(native_lock_package_fact).collect::<Vec<_>>();
+    packages.sort();
+    packages.dedup();
+    Ok(NativeLockfileFacts { packages })
+}
+
+fn native_lock_package_fact(package: CargoLockPackageRecord) -> NativeLockfilePackageFact {
+    debug_assert!(!package.name.is_empty());
+    debug_assert!(!package.version.is_empty());
+    let mut dependencies = package
+        .dependencies
+        .iter()
+        .map(|dependency| parse_lock_dependency_fact(dependency))
+        .collect::<Vec<_>>();
+    dependencies.sort();
+    dependencies.dedup();
+    NativeLockfilePackageFact {
+        name: package.name,
+        version: package.version,
+        revision: lock_source_revision(package.source.as_deref()),
+        source: package.source,
+        checksum: package.checksum,
+        dependencies,
     }
-    push_lock_package(&mut packages, &mut current, in_package);
-    packages.sort_by(|left, right| {
-        left.name
-            .cmp(&right.name)
-            .then(left.version.cmp(&right.version))
-            .then(left.source.cmp(&right.source))
-    });
-    packages
 }
 
-fn push_lock_package(packages: &mut Vec<LockPackage>, current: &mut LockPackage, in_package: bool) {
-    if in_package && !current.name.is_empty() && !current.version.is_empty() {
-        packages.push(current.clone());
+fn parse_lock_dependency_fact(raw: &str) -> NativeLockDependencyFact {
+    debug_assert!(!raw.is_empty());
+    let (name_and_version, source) = split_lock_dependency_source(raw);
+    let mut parts = name_and_version.split_whitespace().collect::<Vec<_>>();
+    let version = parts
+        .last()
+        .copied()
+        .filter(|candidate| lock_dependency_version_like(candidate))
+        .map(str::to_string);
+    if version.is_some() {
+        let _ = parts.pop();
     }
-    *current = LockPackage {
-        name: String::new(),
-        version: String::new(),
-        source: None,
-        checksum: None,
-    };
+    NativeLockDependencyFact {
+        raw: raw.to_string(),
+        name: parts.join(" "),
+        version,
+        source: source.map(str::to_string),
+    }
 }
 
-fn parse_lock_string_field(line: &str, key: &str) -> Option<String> {
-    let prefix = format!("{key} = \"");
-    line.strip_prefix(&prefix).and_then(|tail| tail.strip_suffix('"')).map(ToString::to_string)
+fn split_lock_dependency_source(raw: &str) -> (&str, Option<&str>) {
+    if let Some((name_and_version, source)) = raw.strip_suffix(')').and_then(|trimmed| trimmed.rsplit_once(" (")) {
+        return (name_and_version, Some(source));
+    }
+    (raw, None)
+}
+
+fn lock_dependency_version_like(candidate: &str) -> bool {
+    candidate.as_bytes().first().is_some_and(u8::is_ascii_digit) && candidate.contains('.')
+}
+
+fn lock_source_revision(source: Option<&str>) -> Option<String> {
+    source
+        .and_then(|source| source.split_once('#').map(|(_, revision)| revision.to_string()))
+        .filter(|revision| !revision.is_empty())
+}
+
+fn lock_packages_from_facts(facts: NativeLockfileFacts) -> Vec<LockPackage> {
+    facts
+        .packages
+        .into_iter()
+        .map(|package| LockPackage {
+            name: package.name,
+            version: package.version,
+            source: package.source,
+            checksum: package.checksum,
+        })
+        .collect()
 }
 
 fn find_lock_package<'a>(package: &CargoPackage, lock_packages: &'a [LockPackage]) -> Option<&'a LockPackage> {
@@ -13566,6 +13630,67 @@ rust-version = "1.80"
         assert_eq!(app.path_dependencies[0].name, "dep_crate");
         assert!(planning.non_claims.contains(&"not-full-cargo-compatibility".to_string()));
         assert_eq!(planning.digest_blake3.len(), 64);
+    }
+
+    #[test]
+    fn parse_native_lockfile_text_extracts_source_identities_revisions_checksums_and_edges() {
+        let facts = parse_native_lockfile_text(
+            "fixtures/Cargo.lock",
+            r#"
+version = 3
+
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+  "git-dep 0.2.0 (git+https://example.invalid/git-dep?rev=main#abcdef123456)",
+  "path-dep",
+  "serde 1.0.228 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "git-dep"
+version = "0.2.0"
+source = "git+https://example.invalid/git-dep?rev=main#abcdef123456"
+
+[[package]]
+name = "path-dep"
+version = "0.3.0"
+
+[[package]]
+name = "serde"
+version = "1.0.228"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(facts.packages.len(), 4usize);
+        let app = facts.packages.iter().find(|package| package.name == "app").unwrap();
+        assert_eq!(app.dependencies.len(), 3usize);
+        assert!(
+            app.dependencies
+                .iter()
+                .any(|dependency| dependency.name == "path-dep" && dependency.version.is_none())
+        );
+        assert!(app.dependencies.iter().any(|dependency| {
+            dependency.name == "serde"
+                && dependency.version.as_deref() == Some("1.0.228")
+                && dependency.source.as_deref() == Some("registry+https://github.com/rust-lang/crates.io-index")
+        }));
+        let git_dep = facts.packages.iter().find(|package| package.name == "git-dep").unwrap();
+        assert_eq!(git_dep.revision.as_deref(), Some("abcdef123456"));
+        let serde = facts.packages.iter().find(|package| package.name == "serde").unwrap();
+        assert_eq!(serde.checksum.as_deref(), Some("111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"));
+    }
+
+    #[test]
+    fn parse_native_lockfile_text_rejects_malformed_package_records() {
+        let err = parse_native_lockfile_text("bad/Cargo.lock", "[[package]]\nname = 'bad'\n").unwrap_err();
+
+        assert!(err.contains("parsing lockfile bad/Cargo.lock"));
+        assert!(err.contains("missing field `version`"));
     }
 
     #[test]
