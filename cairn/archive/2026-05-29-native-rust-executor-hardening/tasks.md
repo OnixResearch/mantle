@@ -19,4 +19,5 @@
 
 ## Verification
 
-- [ ] [serial] Run executor cache/rebuild tests, receipt replay tests, topology self-probe, and Cairn validation. r[rust_package_planning.native_executor_hardening]
+- [x] [serial] Run executor cache/rebuild tests, receipt replay tests, topology self-probe, and Cairn validation. r[rust_package_planning.native_executor_hardening]
+  - Evidence: focused executor/cache/rebuild/receipt tests passed in pueue tasks 414, 466, 467, and 468. Self-probe pueue task 471 wrote `target/mantle-self-rust-plan-probe-executor-hardening-clean/receipt.json` and blocked before executor work at `native-host-unit-graph-blocked` (`executions=0`, `metadata_runs=0`), which is outside this executor hardening slice. `cargo fmt --check -p mantle -- src/rust_plan.rs`, `cairn validate --root .`, and `git diff --check` passed.
