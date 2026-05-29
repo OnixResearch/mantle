@@ -785,6 +785,8 @@ cd nixtamal && nix-shell  # then dune build
 
 - 2026-05-28: Native registry dependency source resolution must be package-version-aware when vendored registry sources contain same-name versions (for example `thiserror` / `thiserror-impl` 1.x and 2.x). Name-only selection linked `thiserror@2.0.18` to `thiserror-impl@1.0.69` and produced `could not find __private` / `as_dyn_error` errors.
 
+- 2026-05-29: Native package/target planning must not parse every vendored registry/git source just because source planning can bind it. Filter registry/git manifest planning to packages selected by the current unit graph when that selection exists; otherwise unselected optional dependency surfaces like `plotters -> plotters-bitmap`, `quinn-proto -> fastbloom`, `rstest -> futures-timer`, and `wasm-metadata -> auditable-serde` fabricate `unsupported-non-path-dependency` blockers and keep Mantle self-probe from reaching unit/topology execution.
+
 - 2026-05-28: Cargo unit graph proc-macro target names can use crate-name underscore spelling while manifest-derived native targets keep hyphen package spelling (`curve25519_dalek_derive` vs `curve25519-dalek-derive`). Normalize proc-macro host keys with `rust_crate_name(...)` or selected proc macros are omitted; curve25519-dalek then compiles both AVX2/IFMA specialization imports unexpanded.
 
 - 2026-05-28: After proc-macro target-name normalization, dirty native topology gets past curve25519 and fails at `aws-lc-sys@0.39.1` with internal error `aws_lc_sys:lib:build reached execution before dependency package ... aws-lc-sys ... was produced`. Treat next frontier as same-package build-script artifact binding / self-dependency ordering, not as a proc-macro selection regression.

@@ -2249,6 +2249,7 @@ fn summarize_native_package_target_planning(
 ) -> Result<NativePackageTargetPlanningSummary, RunError> {
     let cargo_oracle_identity = cargo_package_target_oracle_digest(cargo_packages, workspace_members)?;
     let selected_features_by_package = selected_features_by_package_from_unit_graph(unit_graph);
+    let selected_package_ids = selected_package_ids_from_unit_graph(unit_graph);
     let mut blockers = Vec::new();
     let mut manifest_paths = native_workspace_manifest_paths(root, &mut blockers);
     manifest_paths.extend(
@@ -2259,12 +2260,22 @@ fn summarize_native_package_target_planning(
             .map(|source| PathBuf::from(&source.manifest_path)),
     );
     if native_registry_source_planning.ready {
-        manifest_paths
-            .extend(native_registry_source_planning.sources.iter().map(|source| PathBuf::from(&source.manifest_path)));
+        manifest_paths.extend(
+            native_registry_source_planning
+                .sources
+                .iter()
+                .filter(|source| selected_package_ids.is_empty() || selected_package_ids.contains(&source.package_id))
+                .map(|source| PathBuf::from(&source.manifest_path)),
+        );
     }
     if native_git_source_planning.ready {
-        manifest_paths
-            .extend(native_git_source_planning.sources.iter().map(|source| PathBuf::from(&source.manifest_path)));
+        manifest_paths.extend(
+            native_git_source_planning
+                .sources
+                .iter()
+                .filter(|source| selected_package_ids.is_empty() || selected_package_ids.contains(&source.package_id))
+                .map(|source| PathBuf::from(&source.manifest_path)),
+        );
     }
     manifest_paths.sort();
     manifest_paths.dedup();
@@ -3941,6 +3952,17 @@ fn normalized_git_source_url(source: &str) -> Option<&str> {
 
 fn dependency_path(value: &toml::Value) -> Option<&str> {
     value.as_table()?.get("path")?.as_str()
+}
+
+fn selected_package_ids_from_unit_graph(unit_graph: &Value) -> BTreeSet<String> {
+    unit_graph
+        .get("units")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|unit| unit.get("pkg_id").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect()
 }
 
 fn selected_features_by_package_from_unit_graph(unit_graph: &Value) -> BTreeMap<String, Vec<String>> {
