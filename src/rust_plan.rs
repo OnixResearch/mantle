@@ -1018,6 +1018,20 @@ struct NativeFeatureResolution {
     blockers: Vec<NativeFeatureResolutionBlocker>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeFeatureRoleResolutionRequest {
+    normal: NativeFeatureResolutionRequest,
+    build: NativeFeatureResolutionRequest,
+    host: NativeFeatureResolutionRequest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeFeatureRoleResolution {
+    normal: NativeFeatureResolution,
+    build: NativeFeatureResolution,
+    host: NativeFeatureResolution,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct NativeDependencyFeatureEdge {
     dependency: String,
@@ -4006,6 +4020,14 @@ fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFea
         activated_optional_dependencies: activated_optional_dependencies.into_iter().collect(),
         dependency_feature_edges: dependency_feature_edges.into_iter().collect(),
         blockers: blockers.into_iter().collect(),
+    }
+}
+
+fn resolve_native_feature_roles(request: NativeFeatureRoleResolutionRequest) -> NativeFeatureRoleResolution {
+    NativeFeatureRoleResolution {
+        normal: resolve_native_features(request.normal),
+        build: resolve_native_features(request.build),
+        host: resolve_native_features(request.host),
     }
 }
 
@@ -11334,6 +11356,54 @@ mod tests {
             weak: true,
         }));
         assert!(resolution.blockers.iter().any(|blocker| blocker.class == "unknown-feature-entry"));
+    }
+
+    #[test]
+    fn native_feature_role_resolver_keeps_normal_build_and_host_features_separate() {
+        let mut normal_defs = BTreeMap::new();
+        normal_defs.insert("default".to_string(), vec!["std".to_string()]);
+        normal_defs.insert("std".to_string(), Vec::new());
+        let mut build_defs = BTreeMap::new();
+        build_defs.insert("build-default".to_string(), vec!["dep:cc".to_string()]);
+        let mut host_defs = BTreeMap::new();
+        host_defs.insert("proc-macro".to_string(), vec!["syn/derive".to_string()]);
+        let request = NativeFeatureRoleResolutionRequest {
+            normal: NativeFeatureResolutionRequest {
+                feature_defs: normal_defs,
+                optional_dependencies: BTreeSet::new(),
+                explicit_features: Vec::new(),
+                all_features: false,
+                no_default_features: false,
+            },
+            build: NativeFeatureResolutionRequest {
+                feature_defs: build_defs,
+                optional_dependencies: BTreeSet::from(["cc".to_string()]),
+                explicit_features: vec!["build-default".to_string()],
+                all_features: false,
+                no_default_features: true,
+            },
+            host: NativeFeatureResolutionRequest {
+                feature_defs: host_defs,
+                optional_dependencies: BTreeSet::new(),
+                explicit_features: vec!["proc-macro".to_string()],
+                all_features: false,
+                no_default_features: true,
+            },
+        };
+
+        let resolution = resolve_native_feature_roles(request);
+
+        assert_eq!(resolution.normal.selected_features, vec!["default".to_string(), "std".to_string()]);
+        assert_eq!(resolution.build.selected_features, vec!["build-default".to_string()]);
+        assert_eq!(resolution.build.activated_optional_dependencies, vec!["cc".to_string()]);
+        assert_eq!(resolution.host.selected_features, vec!["proc-macro".to_string()]);
+        assert!(resolution.host.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
+            dependency: "syn".to_string(),
+            feature: "derive".to_string(),
+            weak: false,
+        }));
+        assert!(!resolution.normal.selected_features.contains(&"build-default".to_string()));
+        assert!(!resolution.build.selected_features.contains(&"std".to_string()));
     }
 
     #[test]
