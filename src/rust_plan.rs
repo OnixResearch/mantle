@@ -72,6 +72,8 @@ const RUSTC_CODEGEN_OPTION_FLAG: &str = "-C";
 const RUSTC_CFG_FLAG: &str = "--cfg";
 const RUSTC_EXTERN_FLAG: &str = "--extern";
 const RUSTC_EXTERN_ARG_PAIR_WIDTH: usize = 2;
+const RUSTC_LINK_SEARCH_FLAG: &str = "-L";
+const RUSTC_DEPENDENCY_SEARCH_PREFIX: &str = "dependency=";
 const RUSTC_CAP_LINTS_FLAG: &str = "--cap-lints";
 const RUSTC_CAP_LINTS_ALLOW: &str = "allow";
 const RUSTC_PROC_MACRO_EXTERN: &str = "proc_macro";
@@ -5956,13 +5958,17 @@ pub(crate) fn execute_rust_target_unit_topology(
 
     let mut executions = Vec::new();
     let mut produced_artifacts = BTreeMap::<String, PathBuf>::new();
+    let mut produced_search_artifacts = Vec::<PathBuf>::new();
     for index in ordered_indices {
         let unit = &graph.derivations[index];
-        let executable_unit = if unit.dependency_artifacts.is_empty() {
+        let mut executable_unit = if unit.dependency_artifacts.is_empty() {
             unit.clone()
         } else {
             bind_all_dependency_artifacts(unit, &produced_artifacts)?
         };
+        if !unit.dependency_artifacts.is_empty() {
+            append_dependency_search_paths_from_paths(&mut executable_unit, produced_search_artifacts.iter());
+        }
         let receipt = execute_rust_unit(&executable_unit, options)?;
         if receipt.execution_status != "success" {
             let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
@@ -5975,6 +5981,7 @@ pub(crate) fn execute_rust_target_unit_topology(
         if unit.target_kind == "lib" {
             match produced_library_artifact_path(&executable_unit, options)? {
                 Ok(path) => {
+                    produced_search_artifacts.push(path.clone());
                     produced_artifacts.insert(unit.package_id.clone(), path);
                 }
                 Err(blocker) => {
@@ -6280,8 +6287,10 @@ pub(crate) fn execute_rust_unit_topology(
     let mut executions = Vec::new();
     let mut build_script_metadata_runs = Vec::new();
     let mut produced_target_artifacts = BTreeMap::<String, PathBuf>::new();
+    let mut produced_target_search_artifacts = Vec::<PathBuf>::new();
     let mut produced_host_artifacts = BTreeMap::<String, PathBuf>::new();
     let mut produced_proc_macro_artifacts = BTreeMap::<String, PathBuf>::new();
+    let mut produced_proc_macro_search_artifacts = Vec::<PathBuf>::new();
     let mut produced_build_script_metadata = BTreeMap::<String, BuildScriptMetadataSummary>::new();
     for index in ordered_unit_indices {
         let unit = &graph.derivations[index];
@@ -6291,6 +6300,13 @@ pub(crate) fn execute_rust_unit_topology(
                 let mut produced_dependency_artifacts = produced_target_artifacts.clone();
                 produced_dependency_artifacts.extend(produced_proc_macro_artifacts.clone());
                 executable_unit = bind_all_dependency_artifacts(&executable_unit, &produced_dependency_artifacts)?;
+            }
+            if !unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty() {
+                append_all_produced_dependency_search_paths(
+                    &mut executable_unit,
+                    &produced_target_search_artifacts,
+                    &produced_proc_macro_search_artifacts,
+                );
             }
             executable_unit = bind_all_build_script_metadata(&executable_unit, &produced_build_script_metadata)?;
             let receipt = execute_rust_unit(&executable_unit, options)?;
@@ -6323,6 +6339,7 @@ pub(crate) fn execute_rust_unit_topology(
                         }
                     }
                     if unit.target_kind == "proc-macro" {
+                        produced_proc_macro_search_artifacts.push(path.clone());
                         produced_proc_macro_artifacts.insert(unit.package_id.clone(), path.clone());
                     }
                     produced_host_artifacts.insert(unit.package_id.clone(), path);
@@ -6337,13 +6354,20 @@ pub(crate) fn execute_rust_unit_topology(
         }
 
         if is_supported_target_unit(unit) {
-            let executable_unit = bind_target_unit_artifacts(
+            let mut executable_unit = bind_target_unit_artifacts(
                 unit,
                 &produced_host_artifacts,
                 &produced_build_script_metadata,
                 &produced_target_artifacts,
                 &produced_proc_macro_artifacts,
             )?;
+            if !unit.dependency_artifacts.is_empty() || !unit.consumed_host_artifacts.is_empty() {
+                append_all_produced_dependency_search_paths(
+                    &mut executable_unit,
+                    &produced_target_search_artifacts,
+                    &produced_proc_macro_search_artifacts,
+                );
+            }
             let receipt = execute_rust_unit(&executable_unit, options)?;
             if receipt.execution_status != "success" {
                 let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
@@ -6356,6 +6380,7 @@ pub(crate) fn execute_rust_unit_topology(
             if unit.target_kind == "lib" {
                 match produced_library_artifact_path(&executable_unit, options)? {
                     Ok(path) => {
+                        produced_target_search_artifacts.push(path.clone());
                         produced_target_artifacts.insert(unit.package_id.clone(), path);
                     }
                     Err(blocker) => {
@@ -8196,17 +8221,53 @@ fn append_dependency_search_paths(
     unit: &mut RustUnitDerivationSummary,
     produced_artifacts: &BTreeMap<String, PathBuf>,
 ) {
-    let mut search_args = BTreeSet::new();
-    for produced_artifact in produced_artifacts.values() {
+    append_dependency_search_paths_from_paths(unit, produced_artifacts.values());
+}
+
+fn append_all_produced_dependency_search_paths(
+    unit: &mut RustUnitDerivationSummary,
+    produced_target_artifacts: &[PathBuf],
+    produced_proc_macro_artifacts: &[PathBuf],
+) {
+    append_dependency_search_paths_from_paths(
+        unit,
+        produced_target_artifacts.iter().chain(produced_proc_macro_artifacts.iter()),
+    );
+}
+
+fn append_dependency_search_paths_from_paths<'a>(
+    unit: &mut RustUnitDerivationSummary,
+    produced_artifacts: impl IntoIterator<Item = &'a PathBuf>,
+) {
+    let existing_search_args = rustc_dependency_search_args(&unit.derivation.args);
+    let mut new_search_args = BTreeSet::new();
+    for produced_artifact in produced_artifacts {
         if let Some(parent) = produced_artifact.parent() {
-            search_args.insert(format!("dependency={}", normalize_path_string(parent)));
+            let search_arg = format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(parent));
+            if !existing_search_args.contains(&search_arg) {
+                new_search_args.insert(search_arg);
+            }
         }
     }
-    for search_arg in search_args {
-        unit.derivation.args.push("-L".to_string());
+    if new_search_args.is_empty() {
+        return;
+    }
+    for search_arg in new_search_args {
+        unit.derivation.args.push(RUSTC_LINK_SEARCH_FLAG.to_string());
         unit.derivation.args.push(search_arg);
     }
-    unit.rustc_args_digest_blake3 = blake3::hash(unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
+    refresh_rustc_args_digest(unit);
+}
+
+fn rustc_dependency_search_args(args: &[String]) -> BTreeSet<String> {
+    args.windows(RUSTC_EXTERN_ARG_PAIR_WIDTH)
+        .filter_map(|window| {
+            if window[0] == RUSTC_LINK_SEARCH_FLAG && window[1].starts_with(RUSTC_DEPENDENCY_SEARCH_PREFIX) {
+                return Some(window[1].clone());
+            }
+            None
+        })
+        .collect()
 }
 
 fn execute_rust_unit(
@@ -10783,6 +10844,34 @@ rust-version = "1.80"
         assert!(has_ordered_arg_pair(&bound.derivation.args, "-L", &proc_macro_search_path));
         assert!(!has_rustc_extern_arg(&bound.derivation.args, "darling_macro"));
         assert_ne!(bound.rustc_args_digest_blake3, unit.rustc_args_digest_blake3);
+    }
+
+    #[test]
+    fn append_all_produced_dependency_search_paths_keeps_duplicate_package_variant_dirs() {
+        let dir = TempDir::new().unwrap();
+        let earlier_variant = dir.path().join("variant-a/libcrunch_attestation_core.rlib");
+        let later_variant = dir.path().join("variant-b/libcrunch_attestation_core.rlib");
+        std::fs::create_dir_all(earlier_variant.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(later_variant.parent().unwrap()).unwrap();
+        std::fs::write(&earlier_variant, b"earlier").unwrap();
+        std::fs::write(&later_variant, b"later").unwrap();
+        let unit_index = 0usize;
+        let expected_search_path_count = 2usize;
+        let mut unit =
+            test_rust_derivation(unit_index, "path+file:///workspace/crunch-system#0.1.0", "lib", "target", Vec::new());
+        let earlier_search_path =
+            format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(earlier_variant.parent().unwrap()));
+        let later_search_path =
+            format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(later_variant.parent().unwrap()));
+        unit.derivation.args = vec![RUSTC_LINK_SEARCH_FLAG.to_string(), earlier_search_path.clone()];
+        let original_digest = unit.rustc_args_digest_blake3.clone();
+
+        append_all_produced_dependency_search_paths(&mut unit, &[earlier_variant.clone(), later_variant], &[]);
+
+        assert!(has_ordered_arg_pair(&unit.derivation.args, RUSTC_LINK_SEARCH_FLAG, &earlier_search_path));
+        assert!(has_ordered_arg_pair(&unit.derivation.args, RUSTC_LINK_SEARCH_FLAG, &later_search_path));
+        assert_eq!(rustc_dependency_search_args(&unit.derivation.args).len(), expected_search_path_count);
+        assert_ne!(unit.rustc_args_digest_blake3, original_digest);
     }
 
     #[test]
