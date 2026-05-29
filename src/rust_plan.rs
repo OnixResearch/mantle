@@ -6452,6 +6452,9 @@ fn unit_dependency_artifacts(unit: &Value, units: &[Value]) -> Vec<RustDependenc
         return artifacts;
     };
     for dep in deps {
+        if dependency_producer_target_kind(dep, units).is_some_and(|target_kind| is_host_target_kind(&target_kind)) {
+            continue;
+        }
         let Some(package_id) = dependency_package_id(dep, units) else {
             continue;
         };
@@ -6489,6 +6492,15 @@ fn dependency_producer_unit_id(dep: &Value, units: &[Value]) -> Option<String> {
     let index = usize::try_from(dep.get("index")?.as_u64()?).ok()?;
     let unit = units.get(index)?;
     rust_unit_id_from_unit_value(index, unit)
+}
+
+fn dependency_producer_target_kind(dep: &Value, units: &[Value]) -> Option<String> {
+    let index = usize::try_from(dep.get("index")?.as_u64()?).ok()?;
+    let unit = units.get(index)?;
+    let target = unit.get("target")?;
+    let kinds = target_string_array(target, "kind");
+    let crate_types = target_string_array(target, "crate_types");
+    classify_supported_cargo_target_kind(&kinds, &crate_types).map(str::to_string)
 }
 
 fn normalized_crate_types(crate_types: &[String], target_kind: &str) -> Vec<String> {
@@ -13226,6 +13238,42 @@ rust-version = "1.80"
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].producer_unit_id, Some(rust_unit_id(1, package_id, package_id, "lib", "build")));
         assert_ne!(artifacts[0].producer_unit_id, Some(rust_unit_id(0, package_id, package_id, "lib", "build")));
+    }
+
+    #[test]
+    fn unit_dependency_artifacts_skip_host_producer_edges() {
+        let package_id = "path+file:///workspace/build-link-crate#0.1.0";
+        let units = vec![
+            serde_json::json!({
+                "pkg_id": package_id,
+                "target": {
+                    "name": "build-script-build",
+                    "kind": ["custom-build"],
+                    "crate_types": ["bin"],
+                    "src_path": "/workspace/build-link-crate/build.rs",
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "deps": []
+            }),
+            serde_json::json!({
+                "pkg_id": package_id,
+                "target": {
+                    "name": "build-link-crate",
+                    "kind": ["bin"],
+                    "crate_types": ["bin"],
+                    "src_path": "/workspace/build-link-crate/src/main.rs",
+                    "edition": "2021"
+                },
+                "mode": "build",
+                "deps": [{"index": 0, "extern_crate_name": "build_script_build"}]
+            }),
+        ];
+
+        let artifacts = unit_dependency_artifacts(&units[1], &units);
+
+        assert!(artifacts.is_empty());
+        assert_eq!(dependency_producer_target_kind(&units[1]["deps"][0], &units), Some("custom-build".to_string()));
     }
 
     #[test]
