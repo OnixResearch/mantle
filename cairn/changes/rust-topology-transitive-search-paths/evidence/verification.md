@@ -67,6 +67,27 @@ blocker={"class":"rustc-failed","message":"error[E0463]: can't find crate for `c
 
 Result: the prior `crunch-system` / `crunch_glue` blocker is gone. The dirty probe advanced from 602 to 611 executed units and reached the next deterministic frontier in `crunch-build`: missing `crunch_store` plus colliding `snix_castore` crate identities.
 
+## Clean post-commit topology probe
+
+Task-ID: V3b
+Covers: rust_package_planning.native_transitive_search_paths
+
+Command: pueue task `194` (`transitive-search-post-commit-self-probe`) after implementation commit `28f26636a437031b4e3e345ab397ee9a72e2f556`.
+
+Summary from `target/mantle-self-rust-plan-probe-transitive-search-post-commit/blocker-summary.txt`:
+
+```text
+probe: target/mantle-self-rust-plan-probe-transitive-search-post-commit/receipt.json
+head: 28f26636a437031b4e3e345ab397ee9a72e2f556
+git_status_short_bytes=0
+probe_status=0
+topology_execution_status=blocked
+executions=611
+blocker={"class":"rustc-failed","message":"error[E0463]: can't find crate for `crunch_store`\n --> ./crates/crunch-build/src/ca_mapping.rs:5:9\n  |\n5 | pub use crunch_store::CaMappings;\n  |         ^^^^^^^^^^^^ can't find crate\n\nerror: found crates (`snix_castore` and `snix_castore`) with colliding StableCrateId values\n --> ./crates/crunch-build/src/fod.rs:5:5\n  |\n5 | use snix_castore::Node;\n  |     ^^^^^^^^^^^^\n"}
+```
+
+Result: the clean committed tree also passes the old `crunch_glue` frontier and reaches the same next deterministic `crunch-build` / `snix_castore` frontier.
+
 ## Static checks and Cairn gates
 
 Task-ID: V4
