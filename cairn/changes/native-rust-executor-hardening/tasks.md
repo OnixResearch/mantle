@@ -12,7 +12,8 @@
   - Evidence: existing `artifact_digests(...)` preflight blocks missing dependency/host artifacts before `rustc`, and successful dependency-chain receipts bind produced `.rlib` digests. Verified by pueue task 466: missing dependency artifact, missing host artifact, and produced dependency-chain tests all passed.
 - [x] [serial] Normalize deterministic blocker classes for stale, missing, and mismatched material. r[rust_package_planning.native_executor_hardening]
   - Evidence: missing source, source-closure, missing declared-output, and stale/mismatched cache cases emit deterministic blocker classes before dependent execution. Verified by pueue task 467; task 414 additionally covers env-mismatch stale cache.
-- [ ] [serial] Redact and stabilize rustc diagnostics in failure receipts. r[rust_package_planning.native_executor_hardening]
+- [x] [serial] Redact and stabilize rustc diagnostics in failure receipts. r[rust_package_planning.native_executor_hardening]
+  - Evidence: `redacted_diagnostic(...)` now uses named line bounds, strips NULs, redacts `/tmp`/`/var/tmp` paths, and preserves non-temp source context. Verified by pueue task 468: redaction positive/negative tests and supported-unit execution test passed.
 - [ ] [serial] Add positive cache-hit and negative stale-output tests. r[rust_package_planning.native_executor_hardening]
 
 ## Verification

@@ -90,6 +90,9 @@ const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
 const RUSTC_METADATA_ARG_PREFIX: &str = "metadata=";
 const RUSTC_METADATA_HEX_CHARS: usize = 16;
 const BLAKE3_HEX_CHARS: usize = 64;
+const REDACTED_DIAGNOSTIC_MAX_LINES: usize = 12;
+const REDACTED_DIAGNOSTIC_TEMP_PATH: &str = "<redacted-temp-path>";
+const TEMP_PATH_PREFIXES: &[&str] = &["/tmp/", "/var/tmp/"];
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
 const GIT_SOURCE_DIGEST_ALGORITHM: &str = "git-revision";
 
@@ -10891,12 +10894,43 @@ fn resolve_tool_path(tool: impl AsRef<Path>) -> Option<PathBuf> {
 
 fn redacted_diagnostic(stderr: &[u8]) -> String {
     let text = String::from_utf8_lossy(stderr);
-    let compact = text.lines().take(12).collect::<Vec<_>>().join("\n");
+    let compact = text.lines().take(REDACTED_DIAGNOSTIC_MAX_LINES).collect::<Vec<_>>().join("\n");
     if compact.is_empty() {
         "rustc exited with a nonzero status".to_string()
     } else {
-        compact.replace(' ', "")
+        redact_temp_paths(&compact.replace('\0', ""))
     }
+}
+
+fn redact_temp_paths(text: &str) -> String {
+    debug_assert!(!REDACTED_DIAGNOSTIC_TEMP_PATH.is_empty());
+    debug_assert!(!TEMP_PATH_PREFIXES.is_empty());
+    let mut redacted = String::with_capacity(text.len());
+    let mut cursor = 0usize;
+    while cursor < text.len() {
+        let Some((prefix_offset, prefix)) = next_temp_path_prefix(&text[cursor..]) else {
+            redacted.push_str(&text[cursor..]);
+            break;
+        };
+        let start = cursor + prefix_offset;
+        redacted.push_str(&text[cursor..start]);
+        redacted.push_str(REDACTED_DIAGNOSTIC_TEMP_PATH);
+        let path_start = start + prefix.len();
+        let path_tail = text[path_start..].find(temp_path_delimiter).map_or(text.len(), |offset| path_start + offset);
+        cursor = path_tail;
+    }
+    redacted
+}
+
+fn next_temp_path_prefix(text: &str) -> Option<(usize, &'static str)> {
+    TEMP_PATH_PREFIXES
+        .iter()
+        .filter_map(|prefix| text.find(prefix).map(|offset| (offset, *prefix)))
+        .min_by_key(|(offset, _prefix)| *offset)
+}
+
+fn temp_path_delimiter(ch: char) -> bool {
+    ch.is_whitespace() || matches!(ch, '"' | '\'' | '`' | ')' | '(' | '[' | ']')
 }
 
 fn summarize_unit_graph(unit_graph: Value) -> Result<UnitGraphSummary, RunError> {
@@ -16757,6 +16791,29 @@ checksum = "0123456789abcdef"
         assert_eq!(receipt.blocker.as_ref().unwrap().class, "missing-declared-output");
         assert_eq!(receipt.declared_outputs, Vec::<String>::new());
         assert!(receipt.output_artifact_digests.is_empty());
+    }
+
+    #[test]
+    fn redacted_diagnostic_limits_lines_and_redacts_temp_paths() {
+        let lines = (0..=REDACTED_DIAGNOSTIC_MAX_LINES)
+            .map(|index| format!("line-{index}: /tmp/mantle-secret-{index}/src/lib.rs:1:1\0"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let diagnostic = redacted_diagnostic(lines.as_bytes());
+
+        assert!(diagnostic.contains(REDACTED_DIAGNOSTIC_TEMP_PATH));
+        assert!(!diagnostic.contains("mantle-secret"));
+        assert!(!diagnostic.contains('\0'));
+        assert_eq!(diagnostic.lines().count(), REDACTED_DIAGNOSTIC_MAX_LINES);
+    }
+
+    #[test]
+    fn redacted_diagnostic_preserves_non_temp_context() {
+        let diagnostic = redacted_diagnostic(b"error: failed at /workspace/src/lib.rs\n");
+
+        assert!(diagnostic.contains("/workspace/src/lib.rs"));
+        assert!(!diagnostic.contains(REDACTED_DIAGNOSTIC_TEMP_PATH));
     }
 
     #[test]
