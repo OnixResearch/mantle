@@ -89,6 +89,7 @@ const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
 const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
 const RUSTC_METADATA_ARG_PREFIX: &str = "metadata=";
 const RUSTC_METADATA_HEX_CHARS: usize = 16;
+const BLAKE3_HEX_CHARS: usize = 64;
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
 const GIT_SOURCE_DIGEST_ALGORITHM: &str = "git-revision";
 
@@ -551,6 +552,7 @@ pub(crate) struct RustUnitExecutionReceipt {
     pub(crate) source_digest: SourceDigest,
     pub(crate) toolchain: RustToolchainIdentity,
     pub(crate) rustc_args_digest_blake3: String,
+    pub(crate) environment_digest_blake3: String,
     pub(crate) declared_outputs: Vec<String>,
     pub(crate) dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) host_artifact_digests: Vec<RustExecutionArtifactDigest>,
@@ -10036,10 +10038,12 @@ fn execute_rust_unit(
     let unit_output_dir = options.output_root.join(safe_path_component(&unit.unit_id));
     let dependency_artifact_digests = dependency_artifact_digests.unwrap();
     let host_artifact_digests = host_artifact_digests.unwrap();
+    let environment_digest_blake3 = rust_derivation_env_digest(&unit.derivation.env)?;
     if let Some(receipt) = try_reuse_rust_unit_outputs(
         unit,
         &unit_output_dir,
         toolchain.clone(),
+        environment_digest_blake3.clone(),
         dependency_artifact_digests.clone(),
         host_artifact_digests.clone(),
     )? {
@@ -10083,6 +10087,7 @@ fn execute_rust_unit(
         "success",
         "rebuilt-explicit-unit",
         toolchain,
+        environment_digest_blake3,
         dependency_artifact_digests,
         host_artifact_digests,
         output_artifact_digests,
@@ -10096,6 +10101,7 @@ fn try_reuse_rust_unit_outputs(
     unit: &RustUnitDerivationSummary,
     unit_output_dir: &Path,
     toolchain: RustToolchainIdentity,
+    environment_digest_blake3: String,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
 ) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
@@ -10112,6 +10118,7 @@ fn try_reuse_rust_unit_outputs(
             return stale_cached_output_receipt(
                 unit,
                 toolchain,
+                environment_digest_blake3.clone(),
                 dependency_artifact_digests,
                 host_artifact_digests,
                 Vec::new(),
@@ -10125,6 +10132,7 @@ fn try_reuse_rust_unit_outputs(
         return stale_cached_output_receipt(
             unit,
             toolchain,
+            environment_digest_blake3.clone(),
             dependency_artifact_digests,
             host_artifact_digests,
             current_output_artifact_digests,
@@ -10141,6 +10149,7 @@ fn try_reuse_rust_unit_outputs(
         && prior_receipt.source_digest == unit.source_digest
         && prior_receipt.toolchain == toolchain
         && prior_receipt.rustc_args_digest_blake3 == unit.rustc_args_digest_blake3
+        && prior_receipt.environment_digest_blake3 == environment_digest_blake3
         && prior_receipt.declared_outputs == expected_outputs
         && prior_receipt.dependency_artifact_digests == dependency_artifact_digests
         && prior_receipt.host_artifact_digests == host_artifact_digests
@@ -10150,6 +10159,7 @@ fn try_reuse_rust_unit_outputs(
         return stale_cached_output_receipt(
             unit,
             toolchain,
+            environment_digest_blake3.clone(),
             dependency_artifact_digests,
             host_artifact_digests,
             current_output_artifact_digests,
@@ -10162,6 +10172,7 @@ fn try_reuse_rust_unit_outputs(
         "success",
         "reused-explicit-unit-output",
         toolchain,
+        environment_digest_blake3,
         dependency_artifact_digests,
         host_artifact_digests,
         current_output_artifact_digests,
@@ -10174,6 +10185,7 @@ fn try_reuse_rust_unit_outputs(
 fn stale_cached_output_receipt(
     unit: &RustUnitDerivationSummary,
     toolchain: RustToolchainIdentity,
+    environment_digest_blake3: String,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     output_artifact_digests: Vec<RustExecutionArtifactDigest>,
@@ -10184,6 +10196,7 @@ fn stale_cached_output_receipt(
         "blocked",
         "not-run-stale-cached-output",
         toolchain,
+        environment_digest_blake3,
         dependency_artifact_digests,
         host_artifact_digests,
         output_artifact_digests,
@@ -10602,28 +10615,31 @@ fn blocked_execution_receipt(
         algorithm: "missing".to_string(),
         value: "missing".to_string(),
     };
-    let (unit_id, package_id, target_name, target_kind, source_digest, rustc_args_digest_blake3) = unit.map_or_else(
-        || {
-            (
-                "missing".to_string(),
-                "missing".to_string(),
-                "missing".to_string(),
-                "missing".to_string(),
-                fallback_source_digest.clone(),
-                "missing".to_string(),
-            )
-        },
-        |unit| {
-            (
-                unit.unit_id.clone(),
-                unit.package_id.clone(),
-                unit.target_name.clone(),
-                unit.target_kind.clone(),
-                unit.source_digest.clone(),
-                unit.rustc_args_digest_blake3.clone(),
-            )
-        },
-    );
+    let (unit_id, package_id, target_name, target_kind, source_digest, rustc_args_digest_blake3, derivation_env) = unit
+        .map_or_else(
+            || {
+                (
+                    "missing".to_string(),
+                    "missing".to_string(),
+                    "missing".to_string(),
+                    "missing".to_string(),
+                    fallback_source_digest.clone(),
+                    "missing".to_string(),
+                    BTreeMap::new(),
+                )
+            },
+            |unit| {
+                (
+                    unit.unit_id.clone(),
+                    unit.package_id.clone(),
+                    unit.target_name.clone(),
+                    unit.target_kind.clone(),
+                    unit.source_digest.clone(),
+                    unit.rustc_args_digest_blake3.clone(),
+                    unit.derivation.env.clone(),
+                )
+            },
+        );
     finalized_execution_receipt(
         &RustUnitDerivationSummary {
             unit_id,
@@ -10645,7 +10661,7 @@ fn blocked_execution_receipt(
                 system: String::new(),
                 args: Vec::new(),
                 outputs: Vec::new(),
-                env: BTreeMap::new(),
+                env: derivation_env.clone(),
                 inputs: Vec::new(),
                 addressing_mode: String::new(),
             },
@@ -10654,6 +10670,7 @@ fn blocked_execution_receipt(
         "blocked",
         "not-run-preflight-blocker",
         missing_toolchain_identity(),
+        rust_derivation_env_digest(&derivation_env)?,
         Vec::new(),
         Vec::new(),
         Vec::new(),
@@ -10676,6 +10693,7 @@ fn failed_execution_receipt(
         "failed",
         "rustc-exit-nonzero",
         toolchain,
+        rust_derivation_env_digest(&unit.derivation.env)?,
         dependency_artifact_digests,
         host_artifact_digests,
         Vec::new(),
@@ -10691,6 +10709,7 @@ fn finalized_execution_receipt(
     execution_status: &str,
     rebuild_reason: &str,
     toolchain: RustToolchainIdentity,
+    environment_digest_blake3: String,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     output_artifact_digests: Vec<RustExecutionArtifactDigest>,
@@ -10707,6 +10726,7 @@ fn finalized_execution_receipt(
         source_digest: unit.source_digest.clone(),
         toolchain,
         rustc_args_digest_blake3: unit.rustc_args_digest_blake3.clone(),
+        environment_digest_blake3,
         declared_outputs: sorted_strings(unit.derivation.outputs.clone()),
         dependency_artifact_digests,
         host_artifact_digests,
@@ -10716,6 +10736,14 @@ fn finalized_execution_receipt(
     };
     receipt.receipt_hash = rust_unit_execution_receipt_hash(&receipt)?;
     Ok(receipt)
+}
+
+fn rust_derivation_env_digest(env: &BTreeMap<String, String>) -> Result<String, RunError> {
+    let canonical = serde_json::to_vec(env)
+        .map_err(|err| RunError::Internal(format!("canonicalizing Rust unit environment digest: {err}")))?;
+    let digest = blake3::hash(&canonical).to_hex().to_string();
+    debug_assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
+    Ok(digest)
 }
 
 fn rust_unit_execution_receipt_hash(receipt: &RustUnitExecutionReceipt) -> Result<String, RunError> {
@@ -16320,6 +16348,11 @@ checksum = "0123456789abcdef"
         assert_eq!(receipt.rebuild_reason, "rebuilt-explicit-unit");
         assert_eq!(receipt.target_kind, "lib");
         assert_eq!(receipt.rustc_args_digest_blake3, graph.derivations[0].rustc_args_digest_blake3);
+        assert_eq!(
+            receipt.environment_digest_blake3,
+            rust_derivation_env_digest(&graph.derivations[0].derivation.env).unwrap()
+        );
+        assert_eq!(receipt.environment_digest_blake3.len(), BLAKE3_HEX_CHARS);
         assert_eq!(receipt.declared_outputs, vec!["out".to_string()]);
         assert_eq!(receipt.toolchain.tool, "rustc");
         assert!(!receipt.toolchain.version_verbose.is_empty());
@@ -16339,8 +16372,24 @@ checksum = "0123456789abcdef"
         assert_eq!(repeated.rebuild_reason, "reused-explicit-unit-output");
         assert_eq!(repeated.declared_outputs, receipt.declared_outputs);
         assert_eq!(repeated.toolchain, receipt.toolchain);
+        assert_eq!(repeated.environment_digest_blake3, receipt.environment_digest_blake3);
         assert_eq!(repeated.output_artifact_digests, receipt.output_artifact_digests);
-        assert_eq!(repeated.receipt_hash.len(), 64);
+        assert_eq!(repeated.receipt_hash.len(), BLAKE3_HEX_CHARS);
+
+        let mut changed_env_graph = graph.clone();
+        changed_env_graph.derivations[0]
+            .derivation
+            .env
+            .insert("MANTLE_TEST_ENV".to_string(), "changed".to_string());
+        let stale = execute_first_supported_rust_unit(&changed_env_graph, &RustUnitExecutionOptions {
+            rustc: PathBuf::from("rustc"),
+            output_root: dir.path().join("unit-out"),
+        })
+        .unwrap();
+        assert_eq!(stale.execution_status, "blocked");
+        assert_eq!(stale.rebuild_reason, "not-run-stale-cached-output");
+        assert_eq!(stale.blocker.as_ref().unwrap().class, "stale-cached-output");
+        assert_ne!(stale.environment_digest_blake3, receipt.environment_digest_blake3);
     }
 
     #[test]
