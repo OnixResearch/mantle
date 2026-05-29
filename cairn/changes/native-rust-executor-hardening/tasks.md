@@ -14,7 +14,8 @@
   - Evidence: missing source, source-closure, missing declared-output, and stale/mismatched cache cases emit deterministic blocker classes before dependent execution. Verified by pueue task 467; task 414 additionally covers env-mismatch stale cache.
 - [x] [serial] Redact and stabilize rustc diagnostics in failure receipts. r[rust_package_planning.native_executor_hardening]
   - Evidence: `redacted_diagnostic(...)` now uses named line bounds, strips NULs, redacts `/tmp`/`/var/tmp` paths, and preserves non-temp source context. Verified by pueue task 468: redaction positive/negative tests and supported-unit execution test passed.
-- [ ] [serial] Add positive cache-hit and negative stale-output tests. r[rust_package_planning.native_executor_hardening]
+- [x] [serial] Add positive cache-hit and negative stale-output tests. r[rust_package_planning.native_executor_hardening]
+  - Evidence: `executes_first_supported_lib_unit_from_derivation_graph` now asserts positive output reuse and negative env-mismatch stale-cache blocking; CLI stale-output coverage remains in `rust_plan_cli_blocks_stale_unified_topology_cached_output`. Verified by pueue tasks 414 and 467.
 
 ## Verification
 
