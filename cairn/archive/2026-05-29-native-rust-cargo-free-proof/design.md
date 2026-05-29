@@ -1,14 +1,14 @@
-# Design: Cargo-free self-build proof
+# Design: Bounded Cargo-free Rust topology proof
 
 ## Context
 
-Mantle's current self-probe shows direct rustc topology can build hundreds of units, but it still starts from Cargo oracle material. The proof must demonstrate the native planner path.
+Mantle's current self-probe shows direct rustc topology can build hundreds of units, but it still starts from Cargo oracle material. This proof demonstrates the native planner path on a generated multi-crate path workspace and explicitly does not claim Mantle/Crunch self-build evidence.
 
 ## Decisions
 
 ### 1. Separate fast preflight from full proof
 
-**Choice:** Provide a fast check for tools/fixtures and an explicit long-running proof for the full workspace.
+**Choice:** Provide a fast check for tools/fixtures and an explicit full bounded proof for the generated multi-crate path workspace.
 
 **Rationale:** Developers need quick feedback; release evidence needs the full run.
 
@@ -26,5 +26,5 @@ Mantle's current self-probe shows direct rustc topology can build hundreds of un
 
 ## Risks / Trade-offs
 
-- Full proof may be long and host-sensitive.
-- Initial proof may target a bounded workspace subset before full Cargo ecosystem parity.
+- Full bounded proof remains host-sensitive.
+- This proof intentionally targets a bounded workspace subset before full Cargo ecosystem parity or Mantle/Crunch self-build evidence.

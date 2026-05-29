@@ -2636,9 +2636,9 @@ GIVEN Cargo-free mode completes or blocks
 WHEN Mantle emits JSON receipt evidence
 THEN the receipt MUST state the Cargo-free mode, supported compatibility class, blockers, and non-claims.
 
-### Requirement: Cargo-free Rust self-build proof
+### Requirement: Bounded Cargo-free Rust topology proof
 
-r[rust_package_planning.cargo_free_self_build_proof] Mantle MUST provide audit-grade evidence for a Cargo-free Rust planning and topology execution proof on a meaningful workspace.
+r[rust_package_planning.cargo_free_topology_proof] Mantle MUST provide audit-grade evidence for a bounded Cargo-free Rust planning and topology execution proof on a generated multi-crate path workspace, and MUST NOT claim Mantle/Crunch self-build evidence from this bounded proof.
 
 #### Scenario: proof forbids Cargo planning
 
@@ -2657,4 +2657,5 @@ THEN it MUST write durable receipts, command streams, source identity, tool iden
 
 GIVEN the Cargo-free proof reports success
 WHEN final outputs are inspected
-THEN the audit bundle MUST include output artifact digests and an executable smoke check for the produced Mantle or Crunch binary.
+THEN the audit bundle MUST include output artifact digests and an executable smoke check for the produced proof-fixture binary.
+AND the audit bundle MUST name the bounded compatibility class and non-claims.

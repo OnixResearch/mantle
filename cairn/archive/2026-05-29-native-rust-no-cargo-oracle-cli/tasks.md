@@ -20,4 +20,4 @@
 ## Verification
 
 - [x] [serial] Run CLI tests, failing-Cargo-shim tests, Cargo-free smoke build, and Cairn validation. r[rust_package_planning.no_cargo_oracle_cli]
-  - Evidence: pueue task 501 ran `cargo test -p mantle --test rust_plan_cli rust_plan_cli_no_cargo_oracle_executes_path_workspace_without_invoking_cargo -- --nocapture`, `cargo test -p mantle --test rust_plan_cli rust_plan_cli_executes_vendored_registry_dependency_in_unified_topology -- --nocapture`, `cargo test -p mantle --bin mantle rust_plan::tests::native_unit_graph -- --nocapture`, and `cairn validate --root .` (`valid: true`).
+  - Evidence: `evidence/verification.md` records `cargo test -p mantle --test rust_plan_cli rust_plan_cli_no_cargo_oracle_executes_path_workspace_without_invoking_cargo -- --nocapture`, `cargo test -p mantle --test rust_plan_cli rust_plan_cli_executes_vendored_registry_dependency_in_unified_topology -- --nocapture`, `cargo test -p mantle --bin mantle rust_plan::tests::native_unit_graph -- --nocapture`, and `cairn validate --root .` (`valid: true`).
