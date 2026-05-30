@@ -206,12 +206,20 @@ run_cargo_free_topology() {
 }
 
 receipt_execution_status() {
-  jq -r '.topology_execution.execution_status // "missing"' "$bundle_dir/receipt.json"
+  if [[ ! -s "$bundle_dir/receipt.json" ]]; then
+    printf '%s\n' "missing"
+    return
+  fi
+  jq -r '.topology_execution.execution_status // "missing"' "$bundle_dir/receipt.json" 2>/dev/null || printf '%s\n' "invalid"
 }
 
 write_blocker_summary() {
+  if [[ ! -s "$bundle_dir/receipt.json" ]]; then
+    printf '%s\n' '[]' > "$bundle_dir/blocker-summary.json"
+    return
+  fi
   jq '[.topology_execution.unit_executions[]? | select(.execution_status != "success") | {unit_id,package_id,target_name,target_kind,execution_status,blocker}]' \
-    "$bundle_dir/receipt.json" > "$bundle_dir/blocker-summary.json"
+    "$bundle_dir/receipt.json" > "$bundle_dir/blocker-summary.json" 2>/dev/null || printf '%s\n' '[]' > "$bundle_dir/blocker-summary.json"
 }
 
 write_blocked_meta() {
