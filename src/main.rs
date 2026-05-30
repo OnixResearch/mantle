@@ -10,6 +10,7 @@ mod build_failure;
 mod build_log;
 mod build_plan;
 mod build_report;
+mod cargo_free_self_build;
 mod errors;
 mod fix;
 mod log_cmd;
@@ -381,6 +382,18 @@ enum Command {
         /// Internal: reuse the exact stage0-produced busybox binary in later proof stages.
         #[arg(long, hide = true)]
         bootstrap_busybox_path: Option<PathBuf>,
+
+        /// Build Mantle through native Rust topology execution without invoking Cargo.
+        #[arg(long)]
+        cargo_free: bool,
+
+        /// Output directory for --cargo-free binary and receipt evidence.
+        #[arg(long, requires = "cargo_free")]
+        out: Option<PathBuf>,
+
+        /// rustc executable for --cargo-free topology execution.
+        #[arg(long, default_value = "rustc", requires = "cargo_free")]
+        rustc: PathBuf,
     },
 
     /// Capture Cargo oracle metadata and unit graph as a normalized Rust package plan receipt
@@ -2310,6 +2323,9 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             source_store_path,
             bootstrap_bwrap_path,
             bootstrap_busybox_path,
+            cargo_free,
+            out,
+            rustc,
         } => run_self_build_command(
             ctx,
             *jobs,
@@ -2326,6 +2342,9 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             source_store_path.as_deref(),
             bootstrap_bwrap_path.as_deref(),
             bootstrap_busybox_path.as_deref(),
+            *cargo_free,
+            out.as_deref(),
+            rustc,
         ),
         _ => unreachable!("self-build helper called with non-self-build command"),
     }
@@ -2348,7 +2367,36 @@ fn run_self_build_command(
     source_store_path: Option<&std::path::Path>,
     bootstrap_bwrap_path: Option<&std::path::Path>,
     bootstrap_busybox_path: Option<&std::path::Path>,
+    cargo_free: bool,
+    out: Option<&std::path::Path>,
+    rustc: &std::path::Path,
 ) -> Result<(), RunError> {
+    if cargo_free {
+        validate_cargo_free_legacy_self_build_args(
+            jobs,
+            no_substitute,
+            no_verify,
+            signing_key,
+            trusted_public_keys,
+            trust_unsigned,
+            strict_hermetic,
+            impure,
+            source_root,
+            no_host_tools,
+            stage0_inventory,
+            source_store_path,
+            bootstrap_bwrap_path,
+            bootstrap_busybox_path,
+        )?;
+        let out_dir = out.ok_or_else(|| RunError::Build("--cargo-free requires --out <dir>".to_string()))?;
+        return cargo_free_self_build::cmd_cargo_free_self_build(cargo_free_self_build::CargoFreeSelfBuildOptions {
+            root: &current_dir_or_error()?,
+            out_dir,
+            rustc,
+            json: ctx.json,
+        });
+    }
+
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
     let hermeticity_mode = select_hermeticity_mode(strict_hermetic, impure)?;
     if let Some(manifest_path) = source_root {
@@ -2383,6 +2431,45 @@ fn run_self_build_command(
         bootstrap_source_root::BootstrapProviderMode::LegacyFetch,
     )
     .map(|_report| ())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_cargo_free_legacy_self_build_args(
+    jobs: Option<u32>,
+    no_substitute: bool,
+    no_verify: bool,
+    signing_key: Option<&Path>,
+    trusted_public_keys: &[String],
+    trust_unsigned: bool,
+    strict_hermetic: bool,
+    impure: bool,
+    source_root: Option<&Path>,
+    no_host_tools: bool,
+    stage0_inventory: Option<&Path>,
+    source_store_path: Option<&Path>,
+    bootstrap_bwrap_path: Option<&Path>,
+    bootstrap_busybox_path: Option<&Path>,
+) -> Result<(), RunError> {
+    let has_legacy_option = jobs.is_some()
+        || no_substitute
+        || no_verify
+        || signing_key.is_some()
+        || !trusted_public_keys.is_empty()
+        || trust_unsigned
+        || strict_hermetic
+        || impure
+        || source_root.is_some()
+        || no_host_tools
+        || stage0_inventory.is_some()
+        || source_store_path.is_some()
+        || bootstrap_bwrap_path.is_some()
+        || bootstrap_busybox_path.is_some();
+    if has_legacy_option {
+        return Err(RunError::Build(
+            "--cargo-free self-build cannot be combined with legacy stage0/store self-build options".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_stage0_inventory_args(no_host_tools: bool, stage0_inventory: Option<&Path>) -> Result<(), RunError> {
@@ -2947,6 +3034,41 @@ mod tests {
             strict_hermetic: false,
             ..
         }));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_cargo_free_out_dir() {
+        let args = Args::parse_from(["mantle", "self-build", "--cargo-free", "--out", "/tmp/mantle-out"]);
+        assert!(matches!(args.command, Command::SelfBuild {
+            cargo_free: true,
+            out: Some(_),
+            ..
+        }));
+    }
+
+    #[test]
+    fn cargo_free_self_build_rejects_legacy_options() {
+        let err = validate_cargo_free_legacy_self_build_args(
+            Some(1),
+            false,
+            false,
+            None,
+            &[],
+            false,
+            false,
+            false,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "error: build failed\n--cargo-free self-build cannot be combined with legacy stage0/store self-build options"
+        );
     }
 
     #[cfg(unix)]

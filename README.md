@@ -738,8 +738,14 @@ pinned fetched artifacts, mantle-built outputs, and host-convenience probes.
   bootstrap stage.
 - **Evidence today**: `mantle self-build --store /tmp/mantle-store -j 4 --no-substitute`
   builds the bootstrap chain `seed -> make -> dash -> binutils -> musl -> gcc -> busybox -> bwrap -> rust -> mantle`.
+- **Cargo-free topology mode**: `mantle self-build --cargo-free --out /tmp/mantle-cargo-free`
+  builds the Mantle binary through `rust-plan --no-cargo-oracle --execute-topology`,
+  writes the binary plus receipt evidence under `--out`, and fails if the Cargo
+  guard is invoked. Keep `--out` outside the source root so evidence does not
+  change native source digests.
 - **Not yet proven**: this first build still relies on host tooling and the
-  reduced seed provider, so it is not a host-tool-free or full-source bootstrap.
+  reduced seed provider, while Cargo-free topology mode is bounded Rust topology
+  evidence rather than release reproducibility or full Cargo compatibility.
 
 #### `./scripts/prove-self-hosting.sh`
 
@@ -1314,6 +1320,8 @@ mantle build --fix <file>        Build and rewrite FOD mismatches in source
 mantle eval <file.ncl>           Evaluate and print JSON
 mantle bootstrap [-o seed.ncl]   Generate a seed file (`--fetch` for Nix-free)
 mantle self-build                Rebuild mantle from source
+mantle self-build --cargo-free --out /tmp/mantle-out
+                                 Build mantle through Cargo-free Rust topology
 
 # Store, logs, attestations, release evidence
 mantle store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state
