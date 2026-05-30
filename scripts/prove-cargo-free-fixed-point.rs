@@ -32,6 +32,8 @@ const SCHEMA: &str = "mantle-cargo-free-fixed-point-proof-v1";
 const DEFAULT_BUNDLE_ROOT: &str = "mantle-cargo-free-fixed-point-proof";
 const CARGO_MARKER_FILE: &str = "cargo-was-invoked";
 const CARGO_SHIM_FILE: &str = "cargo-forbidden";
+const CARGO_SHIM_DIR: &str = "cargo-guard-bin";
+const CARGO_SHIM_NAME: &str = "cargo";
 const RECEIPT_FILE: &str = "receipt.json";
 const STDERR_FILE: &str = "stderr.txt";
 const STATUS_FILE: &str = "status.txt";
@@ -90,20 +92,36 @@ fn run() -> Result<(), String> {
     write_preflight(&bundle_dir, &root, &host_mantle, &rustc, jq.as_deref())?;
 
     let shared_execution_dir = bundle_dir.join(EXECUTION_DIR);
-    let stage1 = execute_stage(StageName::Stage1, &bundle_dir, &shared_execution_dir, &root, &host_mantle, &rustc)?;
+    let stage1 = match execute_stage(StageName::Stage1, &bundle_dir, &shared_execution_dir, &root, &host_mantle, &rustc)
+    {
+        Ok(stage) => stage,
+        Err(err) => {
+            let stage = setup_blocked_stage(StageName::Stage1, &bundle_dir, &shared_execution_dir, err);
+            write_meta(&bundle_dir, &root, &stage, None, FIXED_POINT_BLOCKED)?;
+            return Err(format!("stage1 blocked; see {}", stage.dir.display()));
+        }
+    };
     if !stage1.success {
         write_meta(&bundle_dir, &root, &stage1, None, FIXED_POINT_BLOCKED)?;
         return Err(format!("stage1 blocked; see {}", stage1.dir.display()));
     }
+    let Some(stage1_binary) = stage1.binary.as_deref() else {
+        let mut blocked = stage1;
+        blocked.success = false;
+        blocked.blocker = Some("stage1 succeeded without produced binary path".to_string());
+        write_meta(&bundle_dir, &root, &blocked, None, FIXED_POINT_BLOCKED)?;
+        return Err(format!("stage1 blocked; see {}", blocked.dir.display()));
+    };
 
-    let stage2 = execute_stage(
-        StageName::Stage2,
-        &bundle_dir,
-        &shared_execution_dir,
-        &root,
-        stage1.binary.as_deref().unwrap(),
-        &rustc,
-    )?;
+    let stage2 =
+        match execute_stage(StageName::Stage2, &bundle_dir, &shared_execution_dir, &root, stage1_binary, &rustc) {
+            Ok(stage) => stage,
+            Err(err) => {
+                let stage = setup_blocked_stage(StageName::Stage2, &bundle_dir, &shared_execution_dir, err);
+                write_meta(&bundle_dir, &root, &stage1, Some(&stage), FIXED_POINT_BLOCKED)?;
+                return Err(format!("stage2 blocked; see {}", stage.dir.display()));
+            }
+        };
     if !stage2.success {
         write_meta(&bundle_dir, &root, &stage1, Some(&stage2), FIXED_POINT_BLOCKED)?;
         return Err(format!("stage2 blocked; see {}", stage2.dir.display()));
@@ -203,6 +221,14 @@ struct StageResult {
     binary: Option<PathBuf>,
     binary_digest: Option<String>,
     smoke_status_code: Option<i32>,
+    blocker: Option<String>,
+}
+
+#[derive(Debug)]
+struct StageArtifact {
+    binary: PathBuf,
+    digest: String,
+    smoke_status_code: i32,
 }
 
 fn execute_stage(
@@ -220,19 +246,23 @@ fn execute_stage(
     fs::create_dir_all(&stage_dir).map_err(|err| format!("create {}: {err}", stage_dir.display()))?;
     reset_dir(execution_dir)?;
 
-    let cargo_marker = stage_dir.join(CARGO_MARKER_FILE);
-    let cargo_shim = stage_dir.join(CARGO_SHIM_FILE);
-    write_cargo_shim(&cargo_shim, &cargo_marker)?;
-
     let receipt_path = stage_dir.join(RECEIPT_FILE);
     let stderr_path = stage_dir.join(STDERR_FILE);
+    let cargo_marker = stage_dir.join(CARGO_MARKER_FILE);
+    let explicit_cargo_shim = stage_dir.join(CARGO_SHIM_FILE);
+    let cargo_path_dir = stage_dir.join(CARGO_SHIM_DIR);
+    let path_cargo_shim = cargo_path_dir.join(CARGO_SHIM_NAME);
+    write_cargo_shim(&explicit_cargo_shim, &cargo_marker)?;
+    write_cargo_shim(&path_cargo_shim, &cargo_marker)?;
+    let guarded_path = guarded_path(&cargo_path_dir)?;
+
     let output = Command::new(mantle_bin)
         .arg("--json")
         .arg("rust-plan")
         .arg("--root")
         .arg(root)
         .arg("--cargo")
-        .arg(&cargo_shim)
+        .arg(&explicit_cargo_shim)
         .arg("--rustc")
         .arg(rustc)
         .arg("--no-cargo-oracle")
@@ -240,58 +270,60 @@ fn execute_stage(
         .arg("--execution-output-root")
         .arg(execution_dir)
         .current_dir(root)
-        .output()
-        .map_err(|err| format!("run {} for {}: {err}", mantle_bin.display(), stage.as_str()))?;
+        .env("CARGO", &path_cargo_shim)
+        .env("PATH", guarded_path)
+        .output();
 
-    fs::write(&receipt_path, &output.stdout).map_err(|err| format!("write {}: {err}", receipt_path.display()))?;
-    fs::write(&stderr_path, &output.stderr).map_err(|err| format!("write {}: {err}", stderr_path.display()))?;
-    fs::write(stage_dir.join(STATUS_FILE), status_text(output.status.code()))
-        .map_err(|err| format!("write status for {}: {err}", stage.as_str()))?;
+    let output = match output {
+        Ok(output) => output,
+        Err(err) => {
+            let blocker = format!("launch {} for {}: {err}", mantle_bin.display(), stage.as_str());
+            let _ = fs::write(&stderr_path, format!("{blocker}\n"));
+            let _ = fs::write(stage_dir.join(STATUS_FILE), "launch-failed\n");
+            return Ok(blocked_stage(
+                stage,
+                stage_dir,
+                execution_dir,
+                receipt_path,
+                stderr_path,
+                "launch-failed",
+                None,
+                blocker,
+            ));
+        }
+    };
 
-    let receipt = parse_receipt(&receipt_path).ok();
-    let execution_status = receipt
-        .as_ref()
-        .and_then(|value| value.pointer("/topology_execution/execution_status"))
-        .and_then(Value::as_str)
-        .unwrap_or("missing")
-        .to_string();
+    let mut blocker = None;
+    record_file_write(&receipt_path, &output.stdout, &mut blocker);
+    record_file_write(&stderr_path, &output.stderr, &mut blocker);
+    record_file_write(&stage_dir.join(STATUS_FILE), status_text(output.status.code()).as_bytes(), &mut blocker);
+
+    let receipt = parse_stage_receipt(&receipt_path, output.status.success(), &mut blocker);
+    let execution_status = receipt_execution_status(receipt.as_ref());
     let unit_count = receipt.as_ref().map(unit_count).unwrap_or_default();
     let failed_unit_count = receipt.as_ref().map(failed_unit_count).unwrap_or_default();
     let cargo_marker_absent = !cargo_marker.exists();
+    if !cargo_marker_absent {
+        blocker = stage_command_blocker(output.status.code(), &execution_status, cargo_marker_absent);
+    } else if blocker.is_none() {
+        blocker = stage_command_blocker(output.status.code(), &execution_status, cargo_marker_absent);
+    }
+
     let mut binary = None;
     let mut binary_digest = None;
     let mut smoke_status_code = None;
-
-    let stage_succeeded = output.status.success() && execution_status == "success" && cargo_marker_absent;
-    if stage_succeeded {
-        let value = receipt.as_ref().ok_or_else(|| format!("{} succeeded without JSON receipt", stage.as_str()))?;
-        let found = mantle_binary_from_receipt(value, execution_dir)?;
-        let produced = stage_dir.join(PRODUCED_MANTLE_FILE);
-        fs::copy(&found, &produced)
-            .map_err(|err| format!("copy {} to {}: {err}", found.display(), produced.display()))?;
-        require_executable(&produced)?;
-        let digest = blake3_file(&produced)?;
-        smoke_status_code = Some(run_smoke(&produced, &stage_dir)?);
-        if smoke_status_code != Some(0) {
-            return Ok(StageResult {
-                name: stage.as_str(),
-                dir: stage_dir,
-                execution_dir: execution_dir.to_path_buf(),
-                receipt_path,
-                stderr_path,
-                status_code: output.status.code(),
-                execution_status,
-                cargo_marker_absent,
-                success: false,
-                unit_count,
-                failed_unit_count,
-                binary: Some(produced),
-                binary_digest: Some(digest),
-                smoke_status_code,
-            });
+    if blocker.is_none() {
+        match materialize_stage_artifact(receipt.as_ref(), execution_dir, &stage_dir) {
+            Ok(artifact) => {
+                if artifact.smoke_status_code != 0 {
+                    blocker = Some(format!("smoke check exited with {}", artifact.smoke_status_code));
+                }
+                smoke_status_code = Some(artifact.smoke_status_code);
+                binary_digest = Some(artifact.digest);
+                binary = Some(artifact.binary);
+            }
+            Err(err) => blocker = Some(err),
         }
-        binary = Some(produced);
-        binary_digest = Some(digest);
     }
 
     Ok(StageResult {
@@ -303,13 +335,50 @@ fn execute_stage(
         status_code: output.status.code(),
         execution_status,
         cargo_marker_absent,
-        success: stage_succeeded,
+        success: blocker.is_none(),
         unit_count,
         failed_unit_count,
         binary,
         binary_digest,
         smoke_status_code,
+        blocker,
     })
+}
+
+fn blocked_stage(
+    stage: StageName,
+    stage_dir: PathBuf,
+    execution_dir: &Path,
+    receipt_path: PathBuf,
+    stderr_path: PathBuf,
+    execution_status: &str,
+    status_code: Option<i32>,
+    blocker: String,
+) -> StageResult {
+    StageResult {
+        name: stage.as_str(),
+        dir: stage_dir,
+        execution_dir: execution_dir.to_path_buf(),
+        receipt_path,
+        stderr_path,
+        status_code,
+        execution_status: execution_status.to_string(),
+        cargo_marker_absent: true,
+        success: false,
+        unit_count: 0,
+        failed_unit_count: 0,
+        binary: None,
+        binary_digest: None,
+        smoke_status_code: None,
+        blocker: Some(blocker),
+    }
+}
+
+fn setup_blocked_stage(stage: StageName, bundle_dir: &Path, execution_dir: &Path, blocker: String) -> StageResult {
+    let stage_dir = bundle_dir.join(stage.as_str());
+    let receipt_path = stage_dir.join(RECEIPT_FILE);
+    let stderr_path = stage_dir.join(STDERR_FILE);
+    blocked_stage(stage, stage_dir, execution_dir, receipt_path, stderr_path, "setup-failed", None, blocker)
 }
 
 fn print_usage() {
@@ -359,6 +428,81 @@ fn reset_dir(path: &Path) -> Result<(), String> {
         fs::remove_dir_all(path).map_err(|err| format!("remove {}: {err}", path.display()))?;
     }
     fs::create_dir_all(path).map_err(|err| format!("create {}: {err}", path.display()))
+}
+
+fn guarded_path(cargo_path_dir: &Path) -> Result<OsString, String> {
+    debug_assert!(cargo_path_dir.components().count() > 0);
+    let mut paths = vec![cargo_path_dir.to_path_buf()];
+    if let Some(path) = env::var_os("PATH") {
+        paths.extend(env::split_paths(&path));
+    }
+    env::join_paths(paths).map_err(|err| format!("construct guarded PATH: {err}"))
+}
+
+fn record_file_write(path: &Path, bytes: &[u8], blocker: &mut Option<String>) {
+    if blocker.is_some() {
+        let _ = fs::write(path, bytes);
+        return;
+    }
+    if let Err(err) = fs::write(path, bytes) {
+        *blocker = Some(format!("write {}: {err}", path.display()));
+    }
+}
+
+fn parse_stage_receipt(path: &Path, command_succeeded: bool, blocker: &mut Option<String>) -> Option<Value> {
+    match parse_receipt(path) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            if command_succeeded && blocker.is_none() {
+                *blocker = Some(err);
+            }
+            None
+        }
+    }
+}
+
+fn receipt_execution_status(receipt: Option<&Value>) -> String {
+    receipt
+        .and_then(|value| value.pointer("/topology_execution/execution_status"))
+        .and_then(Value::as_str)
+        .unwrap_or("missing")
+        .to_string()
+}
+
+fn stage_command_blocker(
+    status_code: Option<i32>,
+    execution_status: &str,
+    cargo_marker_absent: bool,
+) -> Option<String> {
+    if !cargo_marker_absent {
+        return Some("cargo guard was invoked".to_string());
+    }
+    if status_code != Some(0) {
+        return Some(format!("stage command exited with {}", status_text(status_code).trim_end()));
+    }
+    if execution_status != "success" {
+        return Some(format!("topology execution status was {execution_status}"));
+    }
+    None
+}
+
+fn materialize_stage_artifact(
+    receipt: Option<&Value>,
+    execution_dir: &Path,
+    stage_dir: &Path,
+) -> Result<StageArtifact, String> {
+    let value = receipt.ok_or("stage succeeded without JSON receipt")?;
+    let found = mantle_binary_from_receipt(value, execution_dir)?;
+    let produced = stage_dir.join(PRODUCED_MANTLE_FILE);
+    fs::copy(&found, &produced).map_err(|err| format!("copy {} to {}: {err}", found.display(), produced.display()))?;
+    require_executable(&produced)?;
+    let digest = blake3_file(&produced)?;
+    let smoke_status_code = run_smoke(&produced, stage_dir)?;
+    Ok(StageArtifact {
+        binary: produced,
+        digest,
+        smoke_status_code,
+    })
 }
 
 fn resolve_mantle_bin(explicit: Option<&Path>) -> Result<PathBuf, String> {
@@ -582,6 +726,7 @@ fn stage_json(stage: &StageResult) -> Value {
         "binary": stage.binary,
         "binary_blake3": stage.binary_digest,
         "smoke_status_code": stage.smoke_status_code,
+        "blocker": stage.blocker,
     })
 }
 

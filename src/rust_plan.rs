@@ -19,6 +19,8 @@ const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json
 const DEFAULT_CARGO_PROFILE: &str = "dev";
 const DEFAULT_RUST_EDITION: &str = "2015";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
+const PATH_SOURCE_DIGEST_SKIP_ANYWHERE: &[&str] = &[".agent", ".git", ".jj", ".pi", "target"];
+const PATH_SOURCE_DIGEST_SKIP_AT_ROOT: &[&str] = &["cairn"];
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
 const SNIX_BUILD_SANDBOX_SHELL_ENV: &str = "SNIX_BUILD_SANDBOX_SHELL";
 const RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST: &[&str] = &[SNIX_BUILD_SANDBOX_SHELL_ENV];
@@ -2060,30 +2062,41 @@ fn hash_path_source_tree(root: &Path) -> Result<String, String> {
     Ok(hasher.finalize().to_hex().to_string())
 }
 
-fn collect_source_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+fn collect_source_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+    collect_source_files_inner(root, root, files)?;
+    files.sort();
+    Ok(())
+}
+
+fn collect_source_files_inner(root: &Path, directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = fs::read_dir(directory)
         .map_err(|err| format!("reading path source directory {}: {err}", directory.display()))?;
     for entry in entries {
         let entry = entry.map_err(|err| format!("reading path source directory {}: {err}", directory.display()))?;
         let path = entry.path();
         let file_name = entry.file_name();
-        if should_skip_source_entry(file_name.as_os_str()) {
+        if should_skip_source_entry(root, directory, file_name.as_os_str()) {
             continue;
         }
         let file_type =
             entry.file_type().map_err(|err| format!("reading path source metadata {}: {err}", path.display()))?;
         if file_type.is_dir() {
-            collect_source_files(&path, files)?;
+            collect_source_files_inner(root, &path, files)?;
         } else if file_type.is_file() {
             files.push(path);
         }
     }
-    files.sort();
     Ok(())
 }
 
-fn should_skip_source_entry(file_name: &OsStr) -> bool {
-    matches!(file_name.to_str(), Some(".git" | "target"))
+fn should_skip_source_entry(root: &Path, directory: &Path, file_name: &OsStr) -> bool {
+    let Some(name) = file_name.to_str() else {
+        return false;
+    };
+    if PATH_SOURCE_DIGEST_SKIP_ANYWHERE.contains(&name) {
+        return true;
+    }
+    directory == root && PATH_SOURCE_DIGEST_SKIP_AT_ROOT.contains(&name)
 }
 
 fn source_closure_digest(
@@ -15472,6 +15485,29 @@ rust-version = "1.80"
         assert!(derivation.derivation.args.contains(&"feature=\"serde\"".to_string()));
         assert_eq!(derivation.rustc_args_digest_blake3.len(), 64);
         assert_eq!(receipt.receipt_hash.len(), 64);
+    }
+
+    #[test]
+    fn path_source_digest_ignores_root_metadata_without_hiding_source_changes() {
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join("src/cairn")).unwrap();
+        std::fs::create_dir_all(dir.path().join("cairn/evidence")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n").unwrap();
+        std::fs::write(dir.path().join("src/lib.rs"), "pub fn demo() -> u32 { 1 }\n").unwrap();
+        std::fs::write(dir.path().join("src/cairn/mod.rs"), "pub fn nested() -> u32 { 1 }\n").unwrap();
+        std::fs::write(dir.path().join("cairn/evidence/proof.md"), "external proof A\n").unwrap();
+
+        let original = hash_path_source_tree(dir.path()).unwrap();
+        std::fs::write(dir.path().join("cairn/evidence/proof.md"), "external proof B\n").unwrap();
+        let metadata_changed = hash_path_source_tree(dir.path()).unwrap();
+        std::fs::write(dir.path().join("src/cairn/mod.rs"), "pub fn nested() -> u32 { 2 }\n").unwrap();
+        let nested_source_changed = hash_path_source_tree(dir.path()).unwrap();
+        std::fs::write(dir.path().join("src/lib.rs"), "pub fn demo() -> u32 { 2 }\n").unwrap();
+        let root_source_changed = hash_path_source_tree(dir.path()).unwrap();
+
+        assert_eq!(original, metadata_changed);
+        assert_ne!(original, nested_source_changed);
+        assert_ne!(nested_source_changed, root_source_changed);
     }
 
     #[test]

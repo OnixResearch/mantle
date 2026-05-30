@@ -32,6 +32,25 @@
 - `cairn archive cargo-free-fixed-point-proof --execute --root .` initially wrote `cairn/archive/1970-01-01-cargo-free-fixed-point-proof`; renamed it to `cairn/archive/2026-05-30-cargo-free-fixed-point-proof`.
 - The archive move did not sync the delta requirement into the canonical spec; appended the archived rust-package-planning delta to `cairn/specs/rust-package-planning/spec.md` manually, then reran `cairn validate --root .` with `valid=true`.
 
+## Review Fix Evidence
+
+- Synthetic post-command blocker: fake Mantle executable exited 0 with an empty receipt.
+  - Bundle: `/tmp/mantle-fp-blocker-meta-final2.veosVY`.
+  - Result: proof exited non-zero and wrote `meta.json` with `status=blocked`, `stage1.success=false`, `stage1.execution_status=missing`, and blocker `/tmp/mantle-fp-blocker-meta-final2.veosVY/stage1/receipt.json is empty`.
+- Synthetic ambient Cargo probe: fake Mantle executable ran `cargo --version` without using `--cargo`.
+  - Bundle: `/tmp/mantle-fp-cargo-meta-final2.o3Y1FO`.
+  - Result: proof exited non-zero, wrote `meta.json` with `status=blocked`, `stage1.cargo_marker_absent=false`, blocker `cargo guard was invoked`, and wrote `stage1/cargo-was-invoked`.
+- Source-digest metadata exclusion:
+  - Commands: `cargo test -p mantle --bin mantle rust_plan::tests::path_source_digest_ignores_root_metadata_without_hiding_source_changes -- --nocapture`; `cargo build -p mantle --bin mantle`.
+  - Result: focused digest test passed; host Mantle binary rebuilt so stage1 and stage2 use the same path-source digest semantics.
+- Hardened full proof rerun: `pueue_log 62 --full`.
+  - Bundle: `/tmp/mantle-cargo-free-fixed-point-proof/run-final2-20260530T051100Z`.
+  - Result: `status=success`, `fixed_point=true`.
+  - Stage1: 599 units, 0 failed, blocker null, Cargo marker absent.
+  - Stage2: 599 units, 0 failed, blocker null, Cargo marker absent.
+  - Shared binary BLAKE3: `90c5ca1e91207c38d85131e7c988af61cb4477c0053f0042fae6a6989f95cf99`.
+  - Repo-local receipt summary: `evidence/fixed-point-receipt-summary.json`.
+
 ## Successful Fixed-point Proof
 
 - `pueue_log 46 --full`
