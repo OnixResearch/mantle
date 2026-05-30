@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROOF_SCHEMA="mantle-cargo-free-rust-plan-proof-v1"
+PROOF_SCHEMA="mantle-cargo-free-rust-plan-proof-v2"
 DEFAULT_PROOF_ROOT="target/cargo-free-rust-plan-proof"
+SELF_BUILD_PROOF_ROOT="target/no-cargo-self-build-probe"
 EXPECTED_SMOKE_STDOUT="42"
+FIRST_MATCH_LINES=1
+PROOF_BLOCKED_EXIT=1
 
 usage() {
   cat <<'USAGE'
-usage: scripts/prove-cargo-free-rust-plan.sh [--check|--full] [--bundle-dir DIR] [--mantle-bin PATH]
+usage: scripts/prove-cargo-free-rust-plan.sh [--check|--full|--self-build] [--bundle-dir DIR] [--mantle-bin PATH] [--root DIR]
 
-Runs a bounded Cargo-free Rust planning/topology proof. --check validates tools only.
+Runs bounded Cargo-free Rust planning/topology proofs. --check validates tools only.
 --full creates a two-crate path workspace, runs rust-plan --no-cargo-oracle with a failing Cargo shim,
 and writes an audit bundle with receipts, streams, tool/source identity, output digests, and smoke output.
+--self-build runs the same Cargo-forbidden path against the checked-out Mantle workspace and smoke-checks
+its produced mantle CLI with --help. This is not Crunch fixed-point or release reproducibility evidence.
 USAGE
 }
 
 mode="check"
 bundle_dir=""
 mantle_bin="${MANTLE_BIN:-}"
+root_dir="${MANTLE_PROOF_ROOT:-.}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,12 +35,20 @@ while [[ $# -gt 0 ]]; do
       mode="full"
       shift
       ;;
+    --self-build)
+      mode="self-build"
+      shift
+      ;;
     --bundle-dir)
       bundle_dir="${2:?--bundle-dir requires a path}"
       shift 2
       ;;
     --mantle-bin)
       mantle_bin="${2:?--mantle-bin requires a path}"
+      shift 2
+      ;;
+    --root)
+      root_dir="${2:?--root requires a path}"
       shift 2
       ;;
     -h|--help)
@@ -50,7 +64,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$bundle_dir" ]]; then
-  bundle_dir="$DEFAULT_PROOF_ROOT/run-$(date -u +%Y%m%dT%H%M%SZ)"
+  case "$mode" in
+    self-build)
+      bundle_dir="$SELF_BUILD_PROOF_ROOT/run-$(date -u +%Y%m%dT%H%M%SZ)"
+      ;;
+    *)
+      bundle_dir="$DEFAULT_PROOF_ROOT/run-$(date -u +%Y%m%dT%H%M%SZ)"
+      ;;
+  esac
 fi
 
 resolve_mantle_bin() {
@@ -84,14 +105,16 @@ require_tool() {
 
 write_preflight() {
   local mantle_path="$1"
+  local proof_root="$2"
   mkdir -p "$bundle_dir"
   jq -n \
     --arg schema "$PROOF_SCHEMA" \
     --arg mode "$mode" \
+    --arg root "$proof_root" \
     --arg mantle_bin "$mantle_path" \
     --arg rustc "$(command -v rustc)" \
     --arg jq "$(command -v jq)" \
-    '{schema:$schema, mode:$mode, tools:{mantle:$mantle_bin,rustc:$rustc,jq:$jq}}' \
+    '{schema:$schema, mode:$mode, root:$root, tools:{mantle:$mantle_bin,rustc:$rustc,jq:$jq}}' \
     > "$bundle_dir/preflight.json"
 }
 
@@ -152,25 +175,25 @@ TOML
   printf '%s\n' "$app"
 }
 
-run_full_proof() {
-  local mantle_path="$1"
-  local work_dir="$bundle_dir/work"
-  local execution_dir="$bundle_dir/execution"
-  local cargo_shim="$bundle_dir/cargo-forbidden"
-  local cargo_marker="$bundle_dir/cargo-was-invoked"
-  mkdir -p "$work_dir" "$execution_dir"
-  local app_dir
-  app_dir="$(write_fixture "$work_dir")"
+write_cargo_shim() {
+  local cargo_shim="$1"
+  local cargo_marker="$2"
   cat > "$cargo_shim" <<SH
 #!/bin/sh
 printf invoked > "$cargo_marker"
 exit 99
 SH
   chmod +x "$cargo_shim"
+}
 
+run_cargo_free_topology() {
+  local mantle_path="$1"
+  local proof_root="$2"
+  local execution_dir="$3"
+  local cargo_shim="$4"
   set +e
   "$mantle_path" --json rust-plan \
-    --root "$app_dir" \
+    --root "$proof_root" \
     --cargo "$cargo_shim" \
     --no-cargo-oracle \
     --execute-topology \
@@ -180,25 +203,105 @@ SH
   local status=$?
   set -e
   printf '%s\n' "$status" > "$bundle_dir/status.txt"
-  if [[ "$status" -ne 0 ]]; then
-    jq -n \
-      --arg schema "$PROOF_SCHEMA" \
-      --arg status "blocked" \
-      --arg receipt "$bundle_dir/receipt.json" \
-      --arg stderr "$bundle_dir/stderr.txt" \
-      '{schema:$schema,status:$status,receipt:$receipt,stderr:$stderr}' \
-      > "$bundle_dir/meta.json"
-    exit "$status"
+}
+
+receipt_execution_status() {
+  jq -r '.topology_execution.execution_status // "missing"' "$bundle_dir/receipt.json"
+}
+
+write_blocker_summary() {
+  jq '[.topology_execution.unit_executions[]? | select(.execution_status != "success") | {unit_id,package_id,target_name,target_kind,execution_status,blocker}]' \
+    "$bundle_dir/receipt.json" > "$bundle_dir/blocker-summary.json"
+}
+
+write_blocked_meta() {
+  local proof_root="$1"
+  local cargo_marker="$2"
+  write_blocker_summary
+  jq -n \
+    --arg schema "$PROOF_SCHEMA" \
+    --arg status "blocked" \
+    --arg workspace "$proof_root" \
+    --arg receipt "$bundle_dir/receipt.json" \
+    --arg stderr "$bundle_dir/stderr.txt" \
+    --arg cargo_forbidden_marker_absent "$([[ ! -e "$cargo_marker" ]] && printf true || printf false)" \
+    '{schema:$schema,status:$status,workspace:$workspace,receipt:$receipt,stderr:$stderr,cargo_forbidden_marker_absent:($cargo_forbidden_marker_absent == "true")}' \
+    > "$bundle_dir/meta.json"
+}
+
+write_non_claims() {
+  cat > "$bundle_dir/non-claims.txt" <<'TXT'
+This proof does not claim Crunch fixed-point self-hosting.
+This proof does not claim source-built bootstrap closure provenance.
+This proof does not claim release-quality reproducibility.
+This proof does not claim network source fetching.
+TXT
+}
+
+write_output_digests() {
+  jq '.topology_execution.unit_executions[].output_artifact_digests[]?' \
+    "$bundle_dir/receipt.json" > "$bundle_dir/output-digests.json"
+}
+
+find_first_executable() {
+  local execution_dir="$1"
+  find "$execution_dir" -type f -perm -u+x ! -name '*.json' ! -name '*.rlib' | sort | head -n "$FIRST_MATCH_LINES"
+}
+
+find_named_executable() {
+  local execution_dir="$1"
+  local executable_name="$2"
+  find "$execution_dir" -type f -perm -u+x -name "$executable_name" | sort | head -n "$FIRST_MATCH_LINES"
+}
+
+write_success_meta() {
+  local proof_root="$1"
+  local execution_dir="$2"
+  local binary="$3"
+  local smoke_stdout_expected="$4"
+  jq -n \
+    --arg schema "$PROOF_SCHEMA" \
+    --arg status "success" \
+    --arg workspace "$proof_root" \
+    --arg receipt "$bundle_dir/receipt.json" \
+    --arg execution "$execution_dir" \
+    --arg binary "$binary" \
+    --arg smoke_stdout "$smoke_stdout_expected" \
+    --arg cargo_forbidden_marker_absent "true" \
+    '{schema:$schema,status:$status,workspace:$workspace,receipt:$receipt,execution:$execution,binary:$binary,smoke_stdout:$smoke_stdout,cargo_forbidden_marker_absent:($cargo_forbidden_marker_absent == "true")}' \
+    > "$bundle_dir/meta.json"
+}
+
+run_full_proof() {
+  local mantle_path="$1"
+  local work_dir="$bundle_dir/work"
+  local execution_dir="$bundle_dir/execution"
+  local cargo_shim="$bundle_dir/cargo-forbidden"
+  local cargo_marker="$bundle_dir/cargo-was-invoked"
+  mkdir -p "$work_dir" "$execution_dir"
+  local app_dir
+  app_dir="$(write_fixture "$work_dir")"
+  write_cargo_shim "$cargo_shim" "$cargo_marker"
+  run_cargo_free_topology "$mantle_path" "$app_dir" "$execution_dir" "$cargo_shim"
+  local status
+  status="$(cat "$bundle_dir/status.txt")"
+  local execution_status
+  execution_status="$(receipt_execution_status)"
+  if [[ "$status" -ne 0 || "$execution_status" != "success" ]]; then
+    write_blocked_meta "$app_dir" "$cargo_marker"
+    if [[ "$status" -ne 0 ]]; then
+      exit "$status"
+    fi
+    exit "$PROOF_BLOCKED_EXIT"
   fi
   if [[ -e "$cargo_marker" ]]; then
     echo "Cargo shim was invoked during Cargo-free proof" >&2
     exit 1
   fi
 
-  jq '.topology_execution.unit_executions[].output_artifact_digests[]?' \
-    "$bundle_dir/receipt.json" > "$bundle_dir/output-digests.json"
+  write_output_digests
   local binary
-  binary="$(find "$execution_dir" -type f -perm -u+x ! -name '*.json' ! -name '*.rlib' | sort | head -n 1)"
+  binary="$(find_first_executable "$execution_dir")"
   if [[ -z "$binary" ]]; then
     echo "proof produced no executable output" >&2
     exit 1
@@ -210,17 +313,51 @@ SH
     echo "unexpected smoke stdout: $smoke_stdout" >&2
     exit 1
   fi
-  jq -n \
-    --arg schema "$PROOF_SCHEMA" \
-    --arg status "success" \
-    --arg workspace "$app_dir" \
-    --arg receipt "$bundle_dir/receipt.json" \
-    --arg execution "$execution_dir" \
-    --arg binary "$binary" \
-    --arg smoke_stdout "$EXPECTED_SMOKE_STDOUT" \
-    --arg cargo_forbidden_marker_absent "true" \
-    '{schema:$schema,status:$status,workspace:$workspace,receipt:$receipt,execution:$execution,binary:$binary,smoke_stdout:$smoke_stdout,cargo_forbidden_marker_absent:($cargo_forbidden_marker_absent == "true")}' \
-    > "$bundle_dir/meta.json"
+  write_blocker_summary
+  write_non_claims
+  write_success_meta "$app_dir" "$execution_dir" "$binary" "$EXPECTED_SMOKE_STDOUT"
+}
+
+run_self_build_proof() {
+  local mantle_path="$1"
+  local proof_root="$2"
+  local execution_dir="$bundle_dir/execution"
+  local cargo_shim="$bundle_dir/cargo-forbidden"
+  local cargo_marker="$bundle_dir/cargo-was-invoked"
+  mkdir -p "$execution_dir"
+  write_cargo_shim "$cargo_shim" "$cargo_marker"
+  run_cargo_free_topology "$mantle_path" "$proof_root" "$execution_dir" "$cargo_shim"
+  local status
+  status="$(cat "$bundle_dir/status.txt")"
+  local execution_status
+  execution_status="$(receipt_execution_status)"
+  if [[ "$status" -ne 0 || "$execution_status" != "success" ]]; then
+    write_blocked_meta "$proof_root" "$cargo_marker"
+    if [[ "$status" -ne 0 ]]; then
+      exit "$status"
+    fi
+    exit "$PROOF_BLOCKED_EXIT"
+  fi
+  if [[ -e "$cargo_marker" ]]; then
+    echo "Cargo shim was invoked during Cargo-free self-build proof" >&2
+    exit 1
+  fi
+
+  write_output_digests
+  local binary
+  binary="$(find_named_executable "$execution_dir" mantle)"
+  if [[ -z "$binary" ]]; then
+    echo "self-build proof produced no mantle executable output" >&2
+    exit 1
+  fi
+  "$binary" --help > "$bundle_dir/smoke-stdout.txt" 2> "$bundle_dir/smoke-stderr.txt"
+  if ! grep -q 'Mantle build system' "$bundle_dir/smoke-stdout.txt"; then
+    echo "self-build smoke output did not look like mantle --help" >&2
+    exit 1
+  fi
+  write_blocker_summary
+  write_non_claims
+  write_success_meta "$proof_root" "$execution_dir" "$binary" "Mantle build system"
 }
 
 require_tool jq
@@ -230,7 +367,7 @@ if [[ ! -x "$mantle_bin" ]]; then
   echo "mantle binary is not executable: $mantle_bin" >&2
   exit 1
 fi
-write_preflight "$mantle_bin"
+write_preflight "$mantle_bin" "$root_dir"
 
 case "$mode" in
   check)
@@ -239,6 +376,10 @@ case "$mode" in
   full)
     run_full_proof "$mantle_bin"
     echo "cargo-free proof OK: $bundle_dir"
+    ;;
+  self-build)
+    run_self_build_proof "$mantle_bin" "$root_dir"
+    echo "cargo-free self-build proof OK: $bundle_dir"
     ;;
   *)
     echo "unsupported mode: $mode" >&2

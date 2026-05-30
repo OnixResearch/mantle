@@ -76,6 +76,8 @@ const RUSTC_CFG_FLAG: &str = "--cfg";
 const RUSTC_EXTERN_FLAG: &str = "--extern";
 const RUSTC_EXTERN_ARG_PAIR_WIDTH: usize = 2;
 const NATIVE_FEATURE_RESOLUTION_MAX_STEPS: usize = 4096;
+const NATIVE_LOCK_REACHABILITY_MAX_STEPS: usize = 8192;
+const NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS: usize = 4096;
 const RUSTC_LINK_SEARCH_FLAG: &str = "-L";
 const RUSTC_DEPENDENCY_SEARCH_PREFIX: &str = "dependency=";
 const RUSTC_CAP_LINTS_FLAG: &str = "--cap-lints";
@@ -94,6 +96,8 @@ const BLAKE3_HEX_CHARS: usize = 64;
 const REDACTED_DIAGNOSTIC_MAX_LINES: usize = 12;
 const REDACTED_DIAGNOSTIC_TEMP_PATH: &str = "<redacted-temp-path>";
 const TEMP_PATH_PREFIXES: &[&str] = &["/tmp/", "/var/tmp/"];
+const CARGO_REGISTRY_SOURCE_PREFIX: &str = "registry+";
+const CARGO_GIT_SOURCE_PREFIX: &str = "git+";
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
 const GIT_SOURCE_DIGEST_ALGORITHM: &str = "git-revision";
 
@@ -1064,7 +1068,7 @@ struct NativeFeatureResolutionBlocker {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum NativeFeatureEntry {
     LocalFeature(String),
-    OptionalDependency(String),
+    OptionalDependency { dependency: String, expose_feature: bool },
     DependencyFeature(NativeDependencyFeatureEdge),
 }
 
@@ -1085,7 +1089,8 @@ fn rust_plan_cargo_mode(no_cargo_oracle: bool, blockers: Vec<String>) -> RustPla
         vec![
             "bounded-path-workspace-only".to_string(),
             "not-full-cargo-feature-resolution".to_string(),
-            "not-registry-or-git-cargo-free-closure".to_string(),
+            "declared-vendor-and-captured-git-only".to_string(),
+            "not-network-or-ambient-cargo-source-resolution".to_string(),
         ]
     } else {
         vec!["cargo-used-for-oracle-metadata-and-unit-graph".to_string()]
@@ -1192,13 +1197,31 @@ fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlan
 
     let rustc_version_verbose =
         run_checked_text(ProcessCargoOracle.run_tool_version(&options.rustc, &["-vV"]), "rustc -vV")?;
-    let lock_packages = parse_lockfile_packages(&options.root)?;
-    let native_cargo_packages = native_path_cargo_packages(&options.root, options)?;
-    let workspace_members = native_cargo_packages.iter().map(|package| package.id.clone()).collect::<Vec<_>>();
-    let source_closure = summarize_source_closure(&native_cargo_packages, &lock_packages)?;
+    let lockfile_facts = parse_lockfile_facts(&options.root)?;
+    let lock_packages = lock_packages_from_facts(&lockfile_facts);
+    let native_path_packages = native_path_cargo_packages(&options.root, options)?;
+    let workspace_members = native_path_packages.iter().map(|package| package.id.clone()).collect::<Vec<_>>();
+    let lock_source_packages = native_reachable_lock_source_cargo_packages(
+        &options.root,
+        &lockfile_facts,
+        &lock_packages,
+        &native_path_packages,
+    );
+    let mut registry_input_packages = native_path_packages.clone();
+    registry_input_packages.extend(lock_source_packages.clone());
+    registry_input_packages.sort_by(|left, right| left.id.cmp(&right.id));
+    registry_input_packages.dedup_by(|left, right| left.id == right.id);
     let lockfile = lockfile_identity(&options.root)?;
-    let native_registry_source_planning = empty_native_registry_source_planning(&lockfile);
-    let native_git_source_planning = empty_native_git_source_planning(&lockfile, &source_closure);
+    let native_registry_source_planning =
+        summarize_native_registry_source_planning(&options.root, &registry_input_packages, &lock_packages, &lockfile)?;
+    let mut native_cargo_packages = native_path_packages;
+    native_cargo_packages.extend(native_registry_cargo_packages_from_sources(&native_registry_source_planning.sources));
+    native_cargo_packages.extend(native_git_cargo_packages_from_lock(&lock_source_packages));
+    native_cargo_packages.sort_by(|left, right| left.id.cmp(&right.id));
+    native_cargo_packages.dedup_by(|left, right| left.id == right.id);
+    let source_closure = summarize_source_closure(&native_cargo_packages, &lock_packages)?;
+    let native_git_source_planning =
+        summarize_native_git_source_planning(&native_cargo_packages, &lock_packages, &lockfile, &source_closure)?;
     let unit_graph_value = empty_native_unit_graph_value();
     let native_package_target_planning = summarize_native_package_target_planning(
         &options.root,
@@ -1442,6 +1465,162 @@ fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<
     Ok(packages)
 }
 
+fn native_reachable_lock_source_cargo_packages(
+    root: &Path,
+    facts: &NativeLockfileFacts,
+    lock_packages: &[LockPackage],
+    root_packages: &[CargoPackage],
+) -> Vec<CargoPackage> {
+    let reachable = reachable_lock_package_keys(facts, root_packages);
+    let mut packages = native_lock_source_cargo_packages(root, lock_packages)
+        .into_iter()
+        .filter(|package| {
+            reachable.contains(&lock_package_key(&package.name, &package.version, package.source.as_deref()))
+        })
+        .collect::<Vec<_>>();
+    packages.sort_by(|left, right| left.id.cmp(&right.id));
+    packages.dedup_by(|left, right| left.id == right.id);
+    packages
+}
+
+fn reachable_lock_package_keys(
+    facts: &NativeLockfileFacts,
+    root_packages: &[CargoPackage],
+) -> BTreeSet<(String, String, Option<String>)> {
+    let package_by_key = facts
+        .packages
+        .iter()
+        .map(|package| (lock_package_key(&package.name, &package.version, package.source.as_deref()), package))
+        .collect::<BTreeMap<_, _>>();
+    let mut reachable = BTreeSet::new();
+    let mut queue = Vec::new();
+    for package in root_packages {
+        let key = lock_package_key(&package.name, &package.version, package.source.as_deref());
+        if package_by_key.contains_key(&key) && reachable.insert(key.clone()) {
+            queue.push(key);
+        }
+    }
+    let mut cursor = 0usize;
+    while cursor < queue.len() {
+        if cursor >= NATIVE_LOCK_REACHABILITY_MAX_STEPS {
+            break;
+        }
+        let key = queue[cursor].clone();
+        cursor += 1;
+        let Some(package) = package_by_key.get(&key) else {
+            continue;
+        };
+        for dependency in &package.dependencies {
+            for dependency_key in lock_dependency_matching_keys(facts, dependency) {
+                if reachable.insert(dependency_key.clone()) {
+                    queue.push(dependency_key);
+                }
+            }
+        }
+    }
+    reachable
+}
+
+fn lock_dependency_matching_keys(
+    facts: &NativeLockfileFacts,
+    dependency: &NativeLockDependencyFact,
+) -> Vec<(String, String, Option<String>)> {
+    let mut keys = facts
+        .packages
+        .iter()
+        .filter(|package| package.name == dependency.name)
+        .filter(|package| dependency.version.as_ref().is_none_or(|version| package.version == *version))
+        .filter(|package| dependency.source.as_ref().is_none_or(|source| package.source.as_ref() == Some(source)))
+        .map(|package| lock_package_key(&package.name, &package.version, package.source.as_deref()))
+        .collect::<Vec<_>>();
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+fn lock_package_key(name: &str, version: &str, source: Option<&str>) -> (String, String, Option<String>) {
+    (name.to_string(), version.to_string(), source.map(ToString::to_string))
+}
+
+fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage]) -> Vec<CargoPackage> {
+    let mut vendor_blockers = Vec::new();
+    let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
+    let mut packages = lock_packages
+        .iter()
+        .filter_map(|package| native_lock_source_cargo_package(&vendor_roots, package))
+        .collect::<Vec<_>>();
+    packages.sort_by(|left, right| left.id.cmp(&right.id));
+    packages.dedup_by(|left, right| left.id == right.id);
+    packages
+}
+
+fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPackage) -> Option<CargoPackage> {
+    let source = package.source.as_ref()?;
+    let kind = source_kind(Some(source));
+    if !matches!(kind, SourceKind::Registry | SourceKind::Git) {
+        return None;
+    }
+    let manifest_path = locate_declared_vendor_manifest(vendor_roots, &package.name, &package.version)
+        .map(|path| normalize_path_string(&path))
+        .unwrap_or_default();
+    Some(CargoPackage {
+        id: cargo_source_package_id(source, &package.name, &package.version),
+        name: package.name.clone(),
+        version: package.version.clone(),
+        source: Some(source.clone()),
+        manifest_path,
+        targets: Vec::new(),
+        features: BTreeMap::new(),
+    })
+}
+
+fn native_registry_cargo_packages_from_sources(sources: &[NativeRegistrySourceSummary]) -> Vec<CargoPackage> {
+    let mut packages = sources
+        .iter()
+        .map(|source| CargoPackage {
+            id: source.package_id.clone(),
+            name: source.name.clone(),
+            version: source.version.clone(),
+            source: Some(source.source.clone()),
+            manifest_path: source.manifest_path.clone(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
+        })
+        .collect::<Vec<_>>();
+    packages.sort_by(|left, right| left.id.cmp(&right.id));
+    packages.dedup_by(|left, right| left.id == right.id);
+    packages
+}
+
+fn native_git_cargo_packages_from_lock(lock_source_packages: &[CargoPackage]) -> Vec<CargoPackage> {
+    let mut packages = lock_source_packages
+        .iter()
+        .filter(|package| source_kind(package.source.as_deref()) == SourceKind::Git)
+        .cloned()
+        .collect::<Vec<_>>();
+    packages.sort_by(|left, right| left.id.cmp(&right.id));
+    packages.dedup_by(|left, right| left.id == right.id);
+    packages
+}
+
+fn locate_declared_vendor_manifest(vendor_roots: &[PathBuf], name: &str, version: &str) -> Option<PathBuf> {
+    for vendor_root in vendor_roots {
+        let versioned = vendor_root.join(format!("{name}-{version}")).join("Cargo.toml");
+        if versioned.is_file() {
+            return Some(versioned);
+        }
+        let unversioned = vendor_root.join(name).join("Cargo.toml");
+        if unversioned.is_file() {
+            return Some(unversioned);
+        }
+    }
+    None
+}
+
+fn cargo_source_package_id(source: &str, name: &str, version: &str) -> String {
+    format!("{source}#{name}@{version}")
+}
+
 fn native_manifest_path_dependency_manifests(manifest_path: &Path, manifest: &NativeManifest) -> Vec<PathBuf> {
     let Some(source_root) = manifest_path.parent() else {
         return Vec::new();
@@ -1522,50 +1701,6 @@ fn native_path_cargo_package_from_manifest(
 
 fn empty_native_unit_graph_value() -> Value {
     serde_json::json!({"units": []})
-}
-
-fn empty_native_registry_source_planning(lockfile: &LockfileIdentity) -> NativeRegistrySourcePlanningSummary {
-    let sources = Vec::new();
-    let blockers = Vec::new();
-    let comparison_status = "cargo-free:no-registry-sources".to_string();
-    let digest_blake3 = native_registry_source_digest(&sources, &blockers, &comparison_status, &lockfile.blake3)
-        .unwrap_or_else(|_| blake3::hash(b"empty-native-registry-source-planning").to_hex().to_string());
-    NativeRegistrySourcePlanningSummary {
-        ready: true,
-        comparison_status,
-        lockfile_digest_blake3: lockfile.blake3.clone(),
-        digest_blake3,
-        sources,
-        blockers,
-        non_claims: vec!["registry-sources-not-supported-in-cargo-free-mode".to_string()],
-    }
-}
-
-fn empty_native_git_source_planning(
-    lockfile: &LockfileIdentity,
-    source_closure: &SourceClosureSummary,
-) -> NativeGitSourcePlanningSummary {
-    let sources = Vec::new();
-    let blockers = Vec::new();
-    let comparison_status = "cargo-free:no-git-sources".to_string();
-    let digest_blake3 = native_git_source_digest(
-        &sources,
-        &blockers,
-        &comparison_status,
-        &lockfile.blake3,
-        &source_closure.digest_blake3,
-    )
-    .unwrap_or_else(|_| blake3::hash(b"empty-native-git-source-planning").to_hex().to_string());
-    NativeGitSourcePlanningSummary {
-        ready: true,
-        comparison_status,
-        lockfile_digest_blake3: lockfile.blake3.clone(),
-        source_closure_digest_blake3: source_closure.digest_blake3.clone(),
-        digest_blake3,
-        sources,
-        blockers,
-        non_claims: vec!["git-sources-not-supported-in-cargo-free-mode".to_string()],
-    }
 }
 
 fn validate_options(options: &RustPlanOptions) -> Result<(), RunError> {
@@ -1707,12 +1842,16 @@ fn summarize_source_closure(
 }
 
 fn parse_lockfile_packages(root: &Path) -> Result<Vec<LockPackage>, RunError> {
+    let facts = parse_lockfile_facts(root)?;
+    Ok(lock_packages_from_facts(&facts))
+}
+
+fn parse_lockfile_facts(root: &Path) -> Result<NativeLockfileFacts, RunError> {
     let path = root.join("Cargo.lock");
     let text = fs::read_to_string(&path).map_err(|err| {
         RunError::Internal(format!("Rust plan requires a readable Cargo.lock at {}: {err}", path.display()))
     })?;
-    let facts = parse_native_lockfile_text(&path.display().to_string(), &text).map_err(RunError::Internal)?;
-    Ok(lock_packages_from_facts(facts))
+    parse_native_lockfile_text(&path.display().to_string(), &text).map_err(RunError::Internal)
 }
 
 fn parse_native_lockfile_text(path_label: &str, text: &str) -> Result<NativeLockfileFacts, String> {
@@ -1782,15 +1921,15 @@ fn lock_source_revision(source: Option<&str>) -> Option<String> {
         .filter(|revision| !revision.is_empty())
 }
 
-fn lock_packages_from_facts(facts: NativeLockfileFacts) -> Vec<LockPackage> {
+fn lock_packages_from_facts(facts: &NativeLockfileFacts) -> Vec<LockPackage> {
     facts
         .packages
-        .into_iter()
+        .iter()
         .map(|package| LockPackage {
-            name: package.name,
-            version: package.version,
-            source: package.source,
-            checksum: package.checksum,
+            name: package.name.clone(),
+            version: package.version.clone(),
+            source: package.source.clone(),
+            checksum: package.checksum.clone(),
         })
         .collect()
 }
@@ -1814,8 +1953,8 @@ fn lock_source_matches(lock_source: Option<&str>, metadata_source: Option<&str>)
 fn source_kind(source: Option<&str>) -> SourceKind {
     match source {
         None => SourceKind::Path,
-        Some(source) if source.starts_with("registry+") => SourceKind::Registry,
-        Some(source) if source.starts_with("git+") => SourceKind::Git,
+        Some(source) if source.starts_with(CARGO_REGISTRY_SOURCE_PREFIX) => SourceKind::Registry,
+        Some(source) if source.starts_with(CARGO_GIT_SOURCE_PREFIX) => SourceKind::Git,
         Some(_) => SourceKind::Other,
     }
 }
@@ -2010,7 +2149,7 @@ fn summarize_native_registry_source_planning(
             ));
             continue;
         };
-        if !source.starts_with("registry+") {
+        if !source.starts_with(CARGO_REGISTRY_SOURCE_PREFIX) {
             blockers.push(native_registry_blocker(
                 Some(package.id.clone()),
                 "unsupported-registry-source-kind",
@@ -2383,7 +2522,7 @@ fn bind_captured_git_source(
     let source = lock_identity.source.clone().or_else(|| package.source.clone()).ok_or_else(|| {
         native_git_blocker(Some(package_id.clone()), "missing-git-source", "git package lacks lockfile source material")
     })?;
-    if !source.starts_with("git+") {
+    if !source.starts_with(CARGO_GIT_SOURCE_PREFIX) {
         return Err(native_git_blocker(
             Some(package_id),
             "unsupported-git-source-kind",
@@ -2540,7 +2679,7 @@ fn summarize_native_package_target_planning(
     } else {
         cargo_package_target_oracle_digest(cargo_packages, workspace_members)?
     };
-    let selected_features_by_package = selected_features_by_package_from_unit_graph(unit_graph);
+    let mut selected_features_by_package = selected_features_by_package_from_unit_graph(unit_graph);
     let selected_package_ids = selected_package_ids_from_unit_graph(unit_graph);
     let mut blockers = Vec::new();
     let mut manifest_paths = native_workspace_manifest_paths(root, &mut blockers);
@@ -2556,7 +2695,7 @@ fn summarize_native_package_target_planning(
             native_registry_source_planning
                 .sources
                 .iter()
-                .filter(|source| selected_package_ids.is_empty() || selected_package_ids.contains(&source.package_id))
+                .filter(|source| !selected_package_ids.is_empty() && selected_package_ids.contains(&source.package_id))
                 .map(|source| PathBuf::from(&source.manifest_path)),
         );
     }
@@ -2565,22 +2704,29 @@ fn summarize_native_package_target_planning(
             native_git_source_planning
                 .sources
                 .iter()
-                .filter(|source| selected_package_ids.is_empty() || selected_package_ids.contains(&source.package_id))
+                .filter(|source| !selected_package_ids.is_empty() && selected_package_ids.contains(&source.package_id))
                 .map(|source| PathBuf::from(&source.manifest_path)),
         );
     }
     manifest_paths.sort();
     manifest_paths.dedup();
     let workspace_member_set: BTreeSet<&str> = workspace_members.iter().map(String::as_str).collect();
-    let cargo_workspace_packages = cargo_packages
-        .iter()
-        .filter(|package| {
-            workspace_member_set.contains(package.id.as_str())
-                || manifest_paths.iter().any(|path| manifest_paths_same(&package.manifest_path, path))
-        })
-        .collect::<Vec<_>>();
     let mut native_packages = Vec::new();
-    for manifest_path in manifest_paths {
+    let mut visited_manifest_paths = BTreeSet::new();
+    let mut queued_manifest_paths = VecDeque::from(manifest_paths);
+    while let Some(manifest_path) = queued_manifest_paths.pop_front() {
+        if visited_manifest_paths.len() >= NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS {
+            blockers.push(native_blocker(
+                None,
+                "native-package-manifest-reachability-limit",
+                "native package planning exceeded bounded manifest reachability limit",
+            ));
+            break;
+        }
+        let normalized_manifest_path = normalize_path_string(&manifest_path);
+        if !visited_manifest_paths.insert(normalized_manifest_path) {
+            continue;
+        }
         match native_package_from_manifest(
             root,
             &manifest_path,
@@ -2590,10 +2736,32 @@ fn summarize_native_package_target_planning(
             native_git_source_planning,
             &selected_features_by_package,
         ) {
-            Ok(package) => native_packages.push(package),
+            Ok(package) => {
+                queue_native_dependency_manifest_paths(
+                    root,
+                    &package,
+                    source_closure,
+                    native_registry_source_planning,
+                    native_git_source_planning,
+                    &mut queued_manifest_paths,
+                    &mut visited_manifest_paths,
+                    &mut selected_features_by_package,
+                    &mut blockers,
+                );
+                upsert_native_package(&mut native_packages, package);
+            }
             Err(blocker) => blockers.push(blocker),
         }
     }
+    let cargo_workspace_packages = cargo_packages
+        .iter()
+        .filter(|package| {
+            workspace_member_set.contains(package.id.as_str())
+                || native_packages.iter().any(|native_package| {
+                    manifest_paths_same(&package.manifest_path, Path::new(&native_package.manifest_path))
+                })
+        })
+        .collect::<Vec<_>>();
     native_packages.sort_by(|left, right| left.manifest_path.cmp(&right.manifest_path));
     if !options.no_cargo_oracle {
         compare_native_packages_to_cargo(&native_packages, cargo_packages, &cargo_workspace_packages, &mut blockers);
@@ -2622,6 +2790,397 @@ fn summarize_native_package_target_planning(
             "not-cargo-free-build-scheduling".to_string(),
         ],
     })
+}
+
+fn queue_native_dependency_manifest_paths(
+    root: &Path,
+    package: &NativePackagePlanningSummary,
+    source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    queued_manifest_paths: &mut VecDeque<PathBuf>,
+    visited_manifest_paths: &mut BTreeSet<String>,
+    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    blockers: &mut Vec<NativePackagePlanningBlocker>,
+) {
+    let dependencies = package.path_dependencies.iter().chain(package.build_dependencies.iter()).collect::<Vec<_>>();
+    for dependency in &dependencies {
+        queued_manifest_paths.push_back(PathBuf::from(&dependency.manifest_path));
+    }
+    let manifest = match read_native_manifest(Path::new(&package.manifest_path)) {
+        Ok(manifest) => manifest,
+        Err(message) => {
+            blockers.push(native_blocker(
+                Some(package.package_id.clone()),
+                "unreadable-dependency-feature-manifest",
+                &message,
+            ));
+            return;
+        }
+    };
+    queue_dependency_feature_requests(
+        root,
+        &package.package_id,
+        &manifest.dependencies,
+        &dependencies,
+        source_closure,
+        native_registry_source_planning,
+        native_git_source_planning,
+        queued_manifest_paths,
+        visited_manifest_paths,
+        selected_features_by_package,
+        blockers,
+    );
+    queue_dependency_feature_requests(
+        root,
+        &package.package_id,
+        &manifest.build_dependencies,
+        &dependencies,
+        source_closure,
+        native_registry_source_planning,
+        native_git_source_planning,
+        queued_manifest_paths,
+        visited_manifest_paths,
+        selected_features_by_package,
+        blockers,
+    );
+    queue_target_cfg_dependency_feature_requests(
+        root,
+        package,
+        &manifest.target,
+        &dependencies,
+        source_closure,
+        native_registry_source_planning,
+        native_git_source_planning,
+        queued_manifest_paths,
+        visited_manifest_paths,
+        selected_features_by_package,
+        blockers,
+    );
+    queue_parent_feature_dependency_requests(
+        root,
+        &package.package_id,
+        &package.selected_features,
+        &manifest.features,
+        &dependencies,
+        source_closure,
+        native_registry_source_planning,
+        native_git_source_planning,
+        queued_manifest_paths,
+        visited_manifest_paths,
+        selected_features_by_package,
+        blockers,
+    );
+}
+
+fn queue_target_cfg_dependency_feature_requests(
+    root: &Path,
+    package: &NativePackagePlanningSummary,
+    target_tables: &BTreeMap<String, NativeManifestTarget>,
+    selected_dependencies: &[&NativePathDependencySummary],
+    source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    queued_manifest_paths: &mut VecDeque<PathBuf>,
+    visited_manifest_paths: &mut BTreeSet<String>,
+    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    blockers: &mut Vec<NativePackagePlanningBlocker>,
+) {
+    let selected_names = package
+        .target_cfg_dependencies
+        .iter()
+        .filter(|dependency| dependency.decision == "selected")
+        .map(|dependency| dependency.name.as_str())
+        .collect::<BTreeSet<_>>();
+    if selected_names.is_empty() {
+        return;
+    }
+    for target in target_tables.values() {
+        let selected_target_dependencies = target
+            .dependencies
+            .iter()
+            .filter(|(name, _value)| selected_names.contains(name.as_str()))
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect::<BTreeMap<_, _>>();
+        queue_dependency_feature_requests(
+            root,
+            &package.package_id,
+            &selected_target_dependencies,
+            selected_dependencies,
+            source_closure,
+            native_registry_source_planning,
+            native_git_source_planning,
+            queued_manifest_paths,
+            visited_manifest_paths,
+            selected_features_by_package,
+            blockers,
+        );
+    }
+}
+
+fn upsert_native_package(
+    native_packages: &mut Vec<NativePackagePlanningSummary>,
+    package: NativePackagePlanningSummary,
+) {
+    let Some(existing) = native_packages.iter_mut().find(|existing| existing.package_id == package.package_id) else {
+        native_packages.push(package);
+        return;
+    };
+    *existing = package;
+}
+
+fn queue_dependency_feature_requests(
+    root: &Path,
+    package_id: &str,
+    dependency_table: &BTreeMap<String, toml::Value>,
+    selected_dependencies: &[&NativePathDependencySummary],
+    source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    queued_manifest_paths: &mut VecDeque<PathBuf>,
+    visited_manifest_paths: &mut BTreeSet<String>,
+    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    blockers: &mut Vec<NativePackagePlanningBlocker>,
+) {
+    for (name, value) in dependency_table {
+        let Some(dependency) = selected_dependencies.iter().find(|dependency| dependency.name == *name) else {
+            continue;
+        };
+        let dependency_manifest_path = PathBuf::from(&dependency.manifest_path);
+        match selected_features_for_dependency(&dependency_manifest_path, value) {
+            Ok(features) => merge_dependency_feature_request(
+                root,
+                dependency_manifest_path,
+                features,
+                source_closure,
+                native_registry_source_planning,
+                native_git_source_planning,
+                queued_manifest_paths,
+                visited_manifest_paths,
+                selected_features_by_package,
+            ),
+            Err(message) => blockers.push(native_blocker(
+                Some(package_id.to_string()),
+                "unsupported-dependency-feature-request",
+                &message,
+            )),
+        }
+    }
+}
+
+fn queue_parent_feature_dependency_requests(
+    root: &Path,
+    package_id: &str,
+    selected_parent_features: &[String],
+    parent_feature_defs: &BTreeMap<String, Vec<String>>,
+    selected_dependencies: &[&NativePathDependencySummary],
+    source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    queued_manifest_paths: &mut VecDeque<PathBuf>,
+    visited_manifest_paths: &mut BTreeSet<String>,
+    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    blockers: &mut Vec<NativePackagePlanningBlocker>,
+) {
+    let forwarded_features = forwarded_dependency_features(selected_parent_features, parent_feature_defs);
+    for dependency in selected_dependencies {
+        let Some(features) = forwarded_features.get(&dependency.name) else {
+            continue;
+        };
+        let dependency_manifest_path = PathBuf::from(&dependency.manifest_path);
+        match selected_features_for_forwarded_dependency(&dependency_manifest_path, features) {
+            Ok(selected_features) => merge_dependency_feature_request(
+                root,
+                dependency_manifest_path,
+                selected_features,
+                source_closure,
+                native_registry_source_planning,
+                native_git_source_planning,
+                queued_manifest_paths,
+                visited_manifest_paths,
+                selected_features_by_package,
+            ),
+            Err(message) => blockers.push(native_blocker(
+                Some(package_id.to_string()),
+                "unsupported-forwarded-dependency-feature-request",
+                &message,
+            )),
+        }
+    }
+}
+
+fn forwarded_dependency_features(
+    selected_parent_features: &[String],
+    parent_feature_defs: &BTreeMap<String, Vec<String>>,
+) -> BTreeMap<String, Vec<String>> {
+    let mut forwarded = BTreeMap::new();
+    for parent_feature in selected_parent_features {
+        let Some(entries) = parent_feature_defs.get(parent_feature) else {
+            continue;
+        };
+        for entry in entries {
+            let Some((dependency, feature)) = forwarded_dependency_feature_entry(entry) else {
+                continue;
+            };
+            let features: &mut Vec<String> = forwarded.entry(dependency).or_default();
+            features.push(feature);
+        }
+    }
+    for features in forwarded.values_mut() {
+        features.sort();
+        features.dedup();
+    }
+    forwarded
+}
+
+fn forwarded_dependency_feature_entry(entry: &str) -> Option<(String, String)> {
+    let (dependency, feature) = entry.split_once('/')?;
+    let dependency = dependency.trim_start_matches("dep:").trim_end_matches('?');
+    if dependency.is_empty() || feature.is_empty() {
+        return None;
+    }
+    Some((dependency.to_string(), feature.to_string()))
+}
+
+fn merge_dependency_feature_request(
+    root: &Path,
+    dependency_manifest_path: PathBuf,
+    features: Vec<String>,
+    source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
+    queued_manifest_paths: &mut VecDeque<PathBuf>,
+    visited_manifest_paths: &mut BTreeSet<String>,
+    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+) {
+    let dependency_package_id = dependency_package_id_for_manifest(
+        root,
+        &dependency_manifest_path,
+        source_closure,
+        native_registry_source_planning,
+        native_git_source_planning,
+    );
+    if merge_selected_features(selected_features_by_package, dependency_package_id, features) {
+        visited_manifest_paths.remove(&normalize_path_string(&dependency_manifest_path));
+        queued_manifest_paths.push_back(dependency_manifest_path);
+    }
+}
+
+fn dependency_package_id_for_manifest(
+    root: &Path,
+    manifest_path: &Path,
+    source_closure: &SourceClosureSummary,
+    native_registry_source_planning: &NativeRegistrySourcePlanningSummary,
+    native_git_source_planning: &NativeGitSourcePlanningSummary,
+) -> String {
+    if let Some(source) = source_closure
+        .sources
+        .iter()
+        .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+    {
+        return source.package_id.clone();
+    }
+    if let Some(source) = native_registry_source_planning
+        .sources
+        .iter()
+        .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+    {
+        return source.package_id.clone();
+    }
+    if let Some(source) = native_git_source_planning
+        .sources
+        .iter()
+        .find(|source| manifest_paths_same(&source.manifest_path, manifest_path))
+    {
+        return source.package_id.clone();
+    }
+    match read_native_manifest(manifest_path) {
+        Ok(manifest) => manifest
+            .package
+            .as_ref()
+            .and_then(|package| {
+                native_package_version(root, &package.name, &package.version)
+                    .ok()
+                    .map(|version| cargo_path_package_id(&package.name, &version))
+            })
+            .unwrap_or_else(|| normalize_path_string(manifest_path)),
+        Err(_) => normalize_path_string(manifest_path),
+    }
+}
+
+fn selected_features_for_dependency(manifest_path: &Path, value: &toml::Value) -> Result<Vec<String>, String> {
+    let mut explicit_features = dependency_feature_list(value)?;
+    let no_default_features = !dependency_default_features_enabled(value);
+    if !no_default_features {
+        explicit_features.push("default".to_string());
+    }
+    selected_features_for_dependency_request(manifest_path, explicit_features, no_default_features)
+}
+
+fn selected_features_for_forwarded_dependency(
+    manifest_path: &Path,
+    features: &[String],
+) -> Result<Vec<String>, String> {
+    selected_features_for_dependency_request(manifest_path, features.to_vec(), true)
+}
+
+fn selected_features_for_dependency_request(
+    manifest_path: &Path,
+    mut explicit_features: Vec<String>,
+    no_default_features: bool,
+) -> Result<Vec<String>, String> {
+    let manifest = read_native_manifest(manifest_path)?;
+    let optional_dependencies = native_optional_dependency_names(&manifest.dependencies);
+    explicit_features.sort();
+    explicit_features.dedup();
+    Ok(resolve_native_features(NativeFeatureResolutionRequest {
+        feature_defs: manifest.features,
+        optional_dependencies,
+        explicit_features,
+        all_features: false,
+        no_default_features,
+    })
+    .selected_features)
+}
+
+fn dependency_default_features_enabled(value: &toml::Value) -> bool {
+    value
+        .as_table()
+        .and_then(|table| table.get("default-features").or_else(|| table.get("default_features")))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true)
+}
+
+fn dependency_feature_list(value: &toml::Value) -> Result<Vec<String>, String> {
+    let Some(features) = value.as_table().and_then(|table| table.get("features")) else {
+        return Ok(Vec::new());
+    };
+    let Some(array) = features.as_array() else {
+        return Err("dependency features must be an array of strings".to_string());
+    };
+    let mut result = Vec::new();
+    for feature in array {
+        let Some(feature) = feature.as_str() else {
+            return Err("dependency features must be strings".to_string());
+        };
+        result.push(feature.to_string());
+    }
+    result.sort();
+    result.dedup();
+    Ok(result)
+}
+
+fn merge_selected_features(
+    selected_features_by_package: &mut BTreeMap<String, Vec<String>>,
+    package_id: String,
+    features: Vec<String>,
+) -> bool {
+    let entry = selected_features_by_package.entry(package_id).or_default();
+    let old_features = entry.clone();
+    entry.extend(features);
+    entry.sort();
+    entry.dedup();
+    *entry != old_features
 }
 
 fn native_workspace_manifest_paths(root: &Path, blockers: &mut Vec<NativePackagePlanningBlocker>) -> Vec<PathBuf> {
@@ -3194,7 +3753,7 @@ fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeMa
 }
 
 fn lock_source_supported(source: &str) -> bool {
-    source.starts_with("registry+") || source.starts_with("git+")
+    source.starts_with(CARGO_REGISTRY_SOURCE_PREFIX) || source.starts_with(CARGO_GIT_SOURCE_PREFIX)
 }
 
 fn native_manifest_lock_blocker(path: &str, class: &str, message: &str) -> NativeManifestLockUnsupportedBlocker {
@@ -3325,6 +3884,8 @@ fn native_path_dependencies(
                     .map_err(|err| native_blocker(package_id.clone(), err.class, &err.message))?;
             if let Some(source) = resolved {
                 PathBuf::from(source)
+            } else if dependency_optional(value) {
+                continue;
             } else {
                 return Err(native_blocker(
                     package_id,
@@ -3989,7 +4550,14 @@ fn optional_dependency_selected(
 }
 
 fn feature_entry_selects_dependency(entry: &str, dependency_name: &str) -> bool {
-    entry == dependency_name || entry == format!("dep:{dependency_name}")
+    if entry == dependency_name || entry == format!("dep:{dependency_name}") {
+        return true;
+    }
+    let Some((entry_dependency, _feature)) = entry.split_once('/') else {
+        return false;
+    };
+    let entry_dependency = entry_dependency.trim_start_matches("dep:").trim_end_matches('?');
+    entry_dependency == dependency_name
 }
 
 fn native_dependency_source<'a>(
@@ -4432,8 +5000,14 @@ fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFea
                 Ok(NativeFeatureEntry::LocalFeature(feature)) => {
                     push_native_feature(&feature, &mut selected_features, &mut queue);
                 }
-                Ok(NativeFeatureEntry::OptionalDependency(dependency)) => {
-                    activated_optional_dependencies.insert(dependency);
+                Ok(NativeFeatureEntry::OptionalDependency {
+                    dependency,
+                    expose_feature,
+                }) => {
+                    activated_optional_dependencies.insert(dependency.clone());
+                    if expose_feature {
+                        push_native_feature(&dependency, &mut selected_features, &mut queue);
+                    }
                 }
                 Ok(NativeFeatureEntry::DependencyFeature(edge)) => {
                     dependency_feature_edges.insert(edge);
@@ -4502,7 +5076,10 @@ fn parse_native_feature_entry(
         if dependency.is_empty() {
             return Err(native_feature_blocker("unsupported-feature-entry", "empty dep: feature entry"));
         }
-        return Ok(NativeFeatureEntry::OptionalDependency(dependency.to_string()));
+        return Ok(NativeFeatureEntry::OptionalDependency {
+            dependency: dependency.to_string(),
+            expose_feature: false,
+        });
     }
     if let Some(edge) = parse_native_dependency_feature_entry(entry)? {
         return Ok(NativeFeatureEntry::DependencyFeature(edge));
@@ -4511,7 +5088,10 @@ fn parse_native_feature_entry(
         return Ok(NativeFeatureEntry::LocalFeature(entry.to_string()));
     }
     if optional_dependencies.contains(entry) {
-        return Ok(NativeFeatureEntry::OptionalDependency(entry.to_string()));
+        return Ok(NativeFeatureEntry::OptionalDependency {
+            dependency: entry.to_string(),
+            expose_feature: true,
+        });
     }
     Err(native_feature_blocker(
         "unknown-feature-entry",
@@ -4992,6 +5572,26 @@ struct SelectedHostBuildUnit {
     unit_id: String,
 }
 
+fn native_selected_host_units_by_key(
+    packages: &[NativePackagePlanningSummary],
+) -> BTreeMap<(String, String, String), Vec<SelectedHostUnit>> {
+    let mut units_by_key = BTreeMap::<(String, String, String), Vec<SelectedHostUnit>>::new();
+    let mut unit_index = 0usize;
+    for package in packages {
+        for target in package.targets.iter().filter(|target| is_host_target_kind(&target.kind)) {
+            let key = host_unit_key(&package.package_id, &target.name, &target.kind);
+            let unit_id = rust_unit_id(unit_index, &package.package_id, &target.name, &target.kind, "build");
+            units_by_key.entry(key.clone()).or_default().push(SelectedHostUnit {
+                key,
+                unit_id,
+                unit_index,
+            });
+            unit_index = unit_index.saturating_add(1);
+        }
+    }
+    units_by_key
+}
+
 fn selected_host_units_by_key(unit_graph: &Value) -> BTreeMap<(String, String, String), Vec<SelectedHostUnit>> {
     let mut units_by_key = BTreeMap::<(String, String, String), Vec<SelectedHostUnit>>::new();
     let Some(units) = unit_graph.get("units").and_then(Value::as_array) else {
@@ -5305,7 +5905,11 @@ fn summarize_native_host_unit_graph_planning(
     let selected_dependency_artifacts_by_package = selected_dependency_artifacts_by_package(&cargo_graph.derivations);
     let selected_native_dependency_artifacts_by_package =
         selected_native_dependency_artifacts_by_package(&native_unit_graph_planning.units);
-    let selected_host_units_by_key = selected_host_units_by_key(unit_graph);
+    let selected_host_units_by_key = if options.no_cargo_oracle {
+        native_selected_host_units_by_key(&native_package_target_planning.packages)
+    } else {
+        selected_host_units_by_key(unit_graph)
+    };
     let custom_build_metadata_producer_unit_ids = custom_build_metadata_producers_by_package(
         &native_package_target_planning.packages,
         &selected_host_units_by_key,
@@ -5842,13 +6446,27 @@ fn native_host_unit_dependency_artifacts(
             "unresolved-build-dependency-edge",
             "missing-native-build-dependency-fact",
         ),
-        "proc-macro" => native_selected_host_dependency_artifacts(
-            package,
-            selected_artifacts,
-            packages_by_id,
-            source_closure,
-            blockers,
-        ),
+        "proc-macro" => {
+            if selected_artifacts.is_some() {
+                native_selected_host_dependency_artifacts(
+                    package,
+                    selected_artifacts,
+                    packages_by_id,
+                    source_closure,
+                    blockers,
+                )
+            } else {
+                native_host_dependency_artifacts(
+                    package,
+                    &package.path_dependencies,
+                    packages_by_id,
+                    packages,
+                    blockers,
+                    "unresolved-proc-macro-dependency-edge",
+                    "missing-native-proc-macro-dependency-fact",
+                )
+            }
+        }
         _ => Vec::new(),
     }
 }
@@ -11967,6 +12585,25 @@ mod tests {
     }
 
     #[test]
+    fn native_feature_resolver_exposes_bare_optional_dependency_as_cfg_feature() {
+        let mut feature_defs = BTreeMap::new();
+        feature_defs.insert("derive".to_string(), vec!["serde_derive".to_string()]);
+        let request = NativeFeatureResolutionRequest {
+            feature_defs,
+            optional_dependencies: BTreeSet::from(["serde_derive".to_string()]),
+            explicit_features: vec!["derive".to_string()],
+            all_features: false,
+            no_default_features: true,
+        };
+
+        let resolution = resolve_native_features(request);
+
+        assert!(resolution.blockers.is_empty(), "{:#?}", resolution.blockers);
+        assert_eq!(resolution.selected_features, vec!["derive".to_string(), "serde_derive".to_string()]);
+        assert_eq!(resolution.activated_optional_dependencies, vec!["serde_derive".to_string()]);
+    }
+
+    #[test]
     fn native_feature_resolver_blocks_malformed_feature_edges() {
         let mut feature_defs = BTreeMap::new();
         feature_defs.insert("default".to_string(), vec!["dep:".to_string(), "serde/".to_string()]);
@@ -15634,6 +16271,104 @@ unix_dep = { path = "../unix-dep" }
         assert_eq!(package_planning.packages.len(), 2);
         let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
         assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&dep_dir.join("Cargo.toml")));
+    }
+
+    #[test]
+    fn no_cargo_capture_binds_declared_vendored_registry_source() {
+        const DEP_CHECKSUM: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        let dep_dir = dir.path().join("vendor-deps/dep-crate-0.1.0");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(dep_dir.join("src")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"app\"]\n").unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep-crate = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { dep_crate::dep() }\n").unwrap();
+        std::fs::write(
+            dep_dir.join("Cargo.toml"),
+            "[package]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(dep_dir.join("src/lib.rs"), "pub fn dep() -> u32 { 7 }\n").unwrap();
+        std::fs::write(dep_dir.join(".cargo-checksum.json"), format!(r#"{{"package":"{DEP_CHECKSUM}","files":{{}}}}"#))
+            .unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.lock"),
+            format!(
+                "# This file is automatically @generated by Cargo.\nversion = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\ndependencies = [\n \"dep-crate\",\n]\n\n[[package]]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{DEP_CHECKSUM}\"\n",
+            ),
+        )
+        .unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            no_cargo_oracle: true,
+            ..options(dir.path())
+        };
+
+        let receipt = capture_rust_plan(&plan_options).unwrap();
+
+        assert!(receipt.cargo_mode.no_cargo_oracle);
+        assert!(
+            receipt.native_registry_source_planning.ready,
+            "{:#?}",
+            receipt.native_registry_source_planning.blockers
+        );
+        assert_eq!(receipt.native_registry_source_planning.sources.len(), 1);
+        assert_eq!(receipt.native_registry_source_planning.sources[0].checksum, DEP_CHECKSUM);
+        assert!(
+            receipt.native_package_target_planning.ready,
+            "{:#?}",
+            receipt.native_package_target_planning.blockers
+        );
+        assert!(receipt.native_unit_graph_planning.ready, "{:#?}", receipt.native_unit_graph_planning.blockers);
+        assert!(receipt.unit_derivation_graph.ready, "{:#?}", receipt.unit_derivation_graph.blockers);
+    }
+
+    #[test]
+    fn no_cargo_capture_blocks_missing_vendored_registry_source() {
+        const DEP_CHECKSUM: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let dir = TempDir::new().unwrap();
+        let app_dir = dir.path().join("app");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers = [\"app\"]\n").unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep-crate = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { 1 }\n").unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.lock"),
+            format!(
+                "# This file is automatically @generated by Cargo.\nversion = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\ndependencies = [\n \"dep-crate\",\n]\n\n[[package]]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{DEP_CHECKSUM}\"\n",
+            ),
+        )
+        .unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            no_cargo_oracle: true,
+            ..options(dir.path())
+        };
+
+        let receipt = capture_rust_plan(&plan_options).unwrap();
+
+        assert!(receipt.cargo_mode.no_cargo_oracle);
+        assert!(!receipt.native_registry_source_planning.ready);
+        assert!(
+            receipt
+                .native_registry_source_planning
+                .blockers
+                .iter()
+                .any(|blocker| blocker.class == "missing-declared-vendor-root")
+        );
+        assert!(!receipt.unit_derivation_graph.ready);
+        assert!(receipt.cargo_mode.blockers.contains(&"native-package-target-planning-blocked".to_string()));
     }
 
     #[test]
