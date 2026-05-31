@@ -22,6 +22,8 @@ const FETCH_MAX_BYTES: u64 = 512 * 1024 * 1024;
 const FETCH_MAX_RETRIES: u32 = 3;
 const FETCH_RETRY_BASE_DELAY_MS: u64 = 2000;
 const BUILD_PHASE_COUNT: u32 = 5;
+const MAKEINFO_ENV: &str = "MAKEINFO";
+const MAKEINFO_DISABLED: &str = "true";
 
 const ARTIFACT_LINUX_HEADERS: &str = "linux-headers";
 const ARTIFACT_MUSL: &str = "musl";
@@ -636,6 +638,7 @@ fn build_binutils(
         Command::new(&configure)
             .current_dir(build_dir)
             .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
             .env("CC", host_cc)
             .env("CXX", host_cxx)
             .args([
@@ -650,12 +653,22 @@ fn build_binutils(
 
     run_build_cmd(
         "binutils-build",
-        Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg(format!("-j{jobs}")),
+        Command::new("make")
+            .current_dir(build_dir)
+            .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
+            .arg(format!("-j{jobs}"))
+            .arg(format!("{MAKEINFO_ENV}={MAKEINFO_DISABLED}")),
     )?;
 
     run_build_cmd(
         "binutils-install",
-        Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg("install"),
+        Command::new("make")
+            .current_dir(build_dir)
+            .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
+            .arg("install")
+            .arg(format!("{MAKEINFO_ENV}={MAKEINFO_DISABLED}")),
     )
 }
 
@@ -697,6 +710,7 @@ fn build_gcc_stage1(
         Command::new(&configure)
             .current_dir(build_dir)
             .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
             .env("CC", host_cc)
             .env("CXX", host_cxx)
             .args([
@@ -724,7 +738,9 @@ fn build_gcc_stage1(
         Command::new("make")
             .current_dir(build_dir)
             .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
             .arg(format!("-j{jobs}"))
+            .arg(format!("{MAKEINFO_ENV}={MAKEINFO_DISABLED}"))
             .args(["all-gcc", "all-target-libgcc"]),
     )?;
 
@@ -733,6 +749,8 @@ fn build_gcc_stage1(
         Command::new("make")
             .current_dir(build_dir)
             .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
+            .arg(format!("{MAKEINFO_ENV}={MAKEINFO_DISABLED}"))
             .args(["install-gcc", "install-target-libgcc"]),
     )
 }
@@ -798,6 +816,7 @@ fn build_gcc_stage2(
         Command::new(&configure)
             .current_dir(build_dir)
             .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
             .env("CC", host_cc)
             .env("CXX", host_cxx)
             .args([
@@ -814,12 +833,22 @@ fn build_gcc_stage2(
 
     run_build_cmd(
         "gcc-stage2-build",
-        Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg(format!("-j{jobs}")),
+        Command::new("make")
+            .current_dir(build_dir)
+            .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
+            .arg(format!("-j{jobs}"))
+            .arg(format!("{MAKEINFO_ENV}={MAKEINFO_DISABLED}")),
     )?;
 
     run_build_cmd(
         "gcc-stage2-install",
-        Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg("install"),
+        Command::new("make")
+            .current_dir(build_dir)
+            .env("PATH", clean_path)
+            .env(MAKEINFO_ENV, MAKEINFO_DISABLED)
+            .arg("install")
+            .arg(format!("{MAKEINFO_ENV}={MAKEINFO_DISABLED}")),
     )
 }
 
