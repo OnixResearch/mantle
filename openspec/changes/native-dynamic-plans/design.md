@@ -39,6 +39,10 @@ Mantle's native model treats dynamic derivations as declared build-plan data pro
 
 **Required fields:**
 
+Every field shown below is required in the JSON object. Nullable fields are
+required-present with an explicit `null` when empty; missing `goal_hint`,
+`nar_blake3`, or `fixed_output` is an ABI error.
+
 ```text
 DynamicPlanV1 {
   schema: "mantle-plan-v1",
@@ -113,7 +117,7 @@ DynamicInput =
 - `MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES = 64`
 - `BLAKE3_HEX_BYTES = 64`
 
-**Canonicalization:** Decode JSON into owned Rust structs, reject unknown fields, normalize set-like collections, then serialize compact JSON from canonical structs. Canonical order is: sources by `id`, units by `id`, roots by `id`, outputs by name, `dynamic_plan_outputs` by name, environment/provenance by key, and inputs by `(kind, source/unit/path, output)`. Ordered command arguments remain in original order. The accepted plan digest is BLAKE3 over those canonical bytes.
+**Canonicalization:** Decode JSON into owned Rust structs, reject unknown fields, reject duplicate output names within each unit, normalize set-like collections, then serialize compact JSON from canonical structs. Canonical order is: sources by `id`, units by `id`, roots by `id`, outputs by name, `dynamic_plan_outputs` by name, environment/provenance by key, and inputs by `(kind, source/unit/path, output)`. Ordered command arguments remain in original order. The accepted plan digest is BLAKE3 over those canonical bytes.
 
 **Rationale:** JSON is easy for Nickel and Rust tools to emit now. Canonical Rust-side bytes avoid formatting/key-order drift while keeping the scheduler independent of Nickel.
 
@@ -140,7 +144,7 @@ DynamicInput =
 - Dynamic plans carry no trusted-key, substitute, `trust_unsigned`, or remote-cache fields beyond the literal inheritance policy; unknown policy fields are rejected.
 - Store paths in `builder` and `DynamicInput::StorePath` must use the active logical store prefix.
 - `DynamicInput::Source` may reference only a top-level `DeclaredSourceInput` in the same accepted plan.
-- `DeclaredSourceInput.path` must use the active logical store prefix, and `nar_blake3` must be absent or a valid lowercase BLAKE3 hex digest; the registration shell later rejects the source if local PathInfo/castore cannot satisfy the declared path/digest.
+- `DeclaredSourceInput.path` must use the active logical store prefix, and `nar_blake3` must be present as `null` or a valid lowercase BLAKE3 hex digest; the registration shell later rejects the source if local PathInfo/castore cannot satisfy the declared path/digest.
 - `DynamicInput::UnitOutput` may reference only a unit in the same accepted plan and an output declared by that unit.
 - Absolute paths outside the active logical store prefix are rejected in v1.
 - A nested dynamic unit may declare its own `dynamic_plan_outputs`, but total graph growth is still bounded by worker goal limits and the named plan limits.
@@ -165,7 +169,7 @@ DynamicInput =
 
 ```text
 DynamicPlanReportRow {
-  mode: "native-plan-v1" | "compat-nix-drv",
+  mode: "native" | "compat-nix-drv",
   producer_goal_id: String,
   output_name: String,
   plan_artifact_path: Option<StorePathString>,
@@ -177,7 +181,7 @@ DynamicPlanReportRow {
 }
 ```
 
-Rows are sorted by `(producer_goal_id, output_name, mode)`. Accepted unit IDs are sorted. Compatibility `.drv` discovery keeps its existing behavior but reports `mode = "compat-nix-drv"`.
+Rows are sorted by `(producer_goal_id, output_name, mode)`. Accepted unit IDs are sorted. Compatibility `.drv` discovery keeps its existing behavior but reports `mode = "compat-nix-drv"`; native `mantle-plan-v1` rows report `mode = "native"`.
 
 Artifact-path rules: accepted plans and rejected declared outputs that produced a build output record `plan_artifact_path` as that output's logical store path. Missing declared outputs record no artifact path because no output artifact exists.
 
@@ -196,7 +200,7 @@ Digest rules: accepted plans record both `raw_artifact_digest` and `canonical_pl
 ## Validation Plan
 
 - Pure positive tests for valid `mantle-plan-v1` decode, canonical digest, and unit extraction.
-- Pure negative tests for unknown schema, unknown fields, duplicate IDs, empty required fields, undeclared dependencies, over-limit collections, invalid output names, invalid store-prefix references, absolute host paths, nesting-depth violations, and policy-widening fields.
+- Pure negative tests for unknown schema, unknown fields, duplicate IDs, duplicate output names, empty required fields, missing-versus-null nullable fields (`goal_hint`, `nar_blake3`, `fixed_output`), undeclared dependencies, over-limit collections, invalid output names, invalid store-prefix references, absolute host paths, nesting-depth violations, and policy-widening fields.
 - Worker integration test where one producer emits a valid plan and the discovered unit builds in the same run.
 - Worker integration tests where missing, non-regular, oversized, invalid, undeclared, and policy-widening outputs fail closed or are ignored as specified.
 - Report/provenance test proving producer goal ID, output name, plan artifact path when present, scheduler action, native-vs-compat labels, sorted unit IDs, and deterministic digest recording.

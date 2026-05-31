@@ -5,7 +5,7 @@ The build engine MUST define a native `mantle-plan-v1` ABI as Mantle-owned typed
 ID: build.engine.dynamic.plans.abi
 
 
-The ABI validator MUST enforce named implementation limits for plan size, unit count, dependency count, output count, environment count, string bytes, and nesting depth. The validator MUST reject unknown schema versions, duplicate unit IDs, duplicate output names, empty required fields, invalid store-prefix references, undeclared dependency references, absolute host paths outside declared source/store inputs, and any plan whose canonical form cannot be hashed with BLAKE3.
+The ABI validator MUST enforce named implementation limits for plan size, unit count, dependency count, output count, environment count, string bytes, and nesting depth. The validator MUST require the nullable fields `producer.goal_hint`, `sources[].nar_blake3`, and `units[].derivation.fixed_output` to be present as either `null` or a valid value. The validator MUST reject unknown schema versions, duplicate unit IDs, duplicate output names, empty required fields, missing required-nullable fields, invalid store-prefix references, undeclared dependency references, absolute host paths outside declared source/store inputs, and any plan whose canonical form cannot be hashed with BLAKE3.
 
 #### Scenario: Valid plan decodes
 
