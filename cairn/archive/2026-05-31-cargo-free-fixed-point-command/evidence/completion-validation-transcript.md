@@ -158,3 +158,35 @@ Observed output:
   "verdict": "PASS"
 }
 ```
+
+## Post-archive validation
+
+Commands run from repo root after archive commit `9ca75bed`:
+
+```sh
+git status --short
+CAIRN=$(ls /nix/store/*-cairn-0.1.0/bin/cairn 2>/dev/null | sort | tail -1)
+"$CAIRN" validate --root .
+find cairn/changes -mindepth 1 -maxdepth 1 -type d ! -name archive -printf '%f\n' | sort
+rg -n '^- \[ \]' cairn/archive/2026-05-31-cargo-free-fixed-point-command/tasks.md || true
+```
+
+Observed output:
+
+```text
+--- status before ---
+--- post-archive validate ---
+{
+  "change_issues": [],
+  "changes": 1,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 2,
+  "valid": true
+}
+--- active changes ---
+onix-module-eval-boundary
+--- archived cargo-free task unchecked scan ---
+```
