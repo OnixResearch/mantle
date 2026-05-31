@@ -3073,6 +3073,7 @@ mod tests {
             )]),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            native_dynamic_plans: Vec::new(),
         };
 
         let actual =
@@ -3110,6 +3111,7 @@ mod tests {
             ]),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            native_dynamic_plans: Vec::new(),
         };
 
         let err =

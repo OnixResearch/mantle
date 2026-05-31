@@ -64,5 +64,6 @@ pub use signing::sign_pathinfo;
 pub use signing::verify_pathinfo_signatures;
 pub use worker::EvalMessage;
 pub use worker::FailedGoal;
+pub use worker::NativeDynamicPlanReport;
 pub use worker::Worker;
 pub use worker::WorkerResult;

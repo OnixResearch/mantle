@@ -16,6 +16,7 @@ pub use crunch_build::HermeticityAuditEvent;
 pub use crunch_build::HermeticityAuditKind;
 pub use crunch_build::HermeticityMode;
 use crunch_build::KeyPair;
+use crunch_build::NativeDynamicPlanReport;
 use crunch_build::Worker;
 use crunch_eval::session::RootForceExecutionPolicy;
 use crunch_glue::ConversionCache;
@@ -56,6 +57,7 @@ pub struct PipelineResult {
     pub root_labels: HashMap<String, String>,
     pub hermeticity_mode: HermeticityMode,
     pub hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+    pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -230,6 +232,7 @@ async fn build_linux(
         failed: worker_result.failed,
         hermeticity_mode: config.hermeticity_mode,
         hermeticity_audit_events,
+        native_dynamic_plans: worker_result.native_dynamic_plans,
     })
 }
 
@@ -431,6 +434,7 @@ fn build_preflight_failure(
         root_labels: build_root_labels(&root_drv_paths, &config.store_dir),
         hermeticity_mode: config.hermeticity_mode,
         hermeticity_audit_events: Vec::new(),
+        native_dynamic_plans: Vec::new(),
     })
 }
 

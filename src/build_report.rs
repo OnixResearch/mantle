@@ -20,6 +20,7 @@ pub struct BuildJsonReport {
     pub store_dir: String,
     pub hermeticity_mode: String,
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
+    pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub diagnostic_persistence_failures: Vec<DiagnosticPersistenceFailure>,
     pub counts: BuildJsonCounts,
     pub outcomes: Vec<BuildJsonOutcome>,
@@ -39,6 +40,19 @@ pub struct BuildJsonCounts {
 pub struct BuildJsonHermeticityAuditEvent {
     pub kind: String,
     pub detail: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonNativeDynamicPlan {
+    pub mode: String,
+    pub producer_key: String,
+    pub output_name: String,
+    pub plan_artifact_path: Option<String>,
+    pub raw_artifact_digest: Option<String>,
+    pub canonical_plan_digest: Option<String>,
+    pub accepted_unit_ids: Vec<String>,
+    pub rejection_reason: Option<String>,
+    pub scheduler_action: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -118,6 +132,7 @@ fn build_json_report(
             actual_sri: mismatch.actual_sri.clone(),
         })
         .collect();
+    let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
 
     BuildJsonReport {
         schema: "crunch-build-report-v1",
@@ -127,12 +142,34 @@ fn build_json_report(
         store_dir: config.store_dir.clone(),
         hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
         hermeticity_audit_events,
+        native_dynamic_plans,
         diagnostic_persistence_failures: diagnostic_persistence_failures.to_vec(),
         counts,
         outcomes: outcome_reports,
         failed: failure_reports,
         fod_mismatches,
     }
+}
+
+fn build_native_dynamic_plan_reports(result: &PipelineResult, store_dir: &str) -> Vec<BuildJsonNativeDynamicPlan> {
+    result
+        .native_dynamic_plans
+        .iter()
+        .map(|row| BuildJsonNativeDynamicPlan {
+            mode: row.mode.clone(),
+            producer_key: row.producer_key.clone(),
+            output_name: row.output_name.clone(),
+            plan_artifact_path: row
+                .plan_artifact_path
+                .as_ref()
+                .map(|path| path.to_absolute_path_with_prefix(store_dir)),
+            raw_artifact_digest: row.raw_artifact_digest.clone(),
+            canonical_plan_digest: row.canonical_plan_digest.clone(),
+            accepted_unit_ids: row.accepted_unit_ids.clone(),
+            rejection_reason: row.rejection_reason.clone(),
+            scheduler_action: row.scheduler_action.clone(),
+        })
+        .collect()
 }
 
 fn build_counts(outcomes: &[BuildJsonOutcome], failed: &[BuildFailureEnvelope]) -> BuildJsonCounts {
@@ -310,6 +347,7 @@ mod tests {
             root_labels: HashMap::from([(drv_key.clone(), "demo".to_string())]),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            native_dynamic_plans: Vec::new(),
         };
 
         let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
@@ -364,6 +402,7 @@ mod tests {
             root_labels: HashMap::from([(drv_key.clone(), "demo".to_string())]),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            native_dynamic_plans: Vec::new(),
         };
 
         let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
@@ -435,6 +474,17 @@ mod tests {
                 crunch_pipeline::HermeticityAuditKind::HostToolFallback,
                 "using external bwrap",
             )],
+            native_dynamic_plans: vec![crunch_build::NativeDynamicPlanReport {
+                mode: "native".to_string(),
+                producer_key: drv_key_for(&config.store_dir, &drv_path),
+                output_name: "plan".to_string(),
+                plan_artifact_path: Some(output_path.clone()),
+                raw_artifact_digest: Some("raw-digest".to_string()),
+                canonical_plan_digest: Some("canonical-digest".to_string()),
+                accepted_unit_ids: vec!["unit.build".to_string()],
+                rejection_reason: None,
+                scheduler_action: "registered-roots".to_string(),
+            }],
         };
 
         let report = build_json_report(&config, &result, logs_dir.path(), &[]);
@@ -443,6 +493,15 @@ mod tests {
         assert_eq!(report.hermeticity_mode, "practical");
         assert_eq!(report.hermeticity_audit_events.len(), 1);
         assert_eq!(report.hermeticity_audit_events[0].kind, "host-tool-fallback");
+        assert_eq!(report.native_dynamic_plans.len(), 1);
+        assert_eq!(report.native_dynamic_plans[0].mode, "native");
+        assert_eq!(report.native_dynamic_plans[0].output_name, "plan");
+        assert_eq!(report.native_dynamic_plans[0].scheduler_action, "registered-roots");
+        assert_eq!(report.native_dynamic_plans[0].accepted_unit_ids, vec!["unit.build".to_string()]);
+        assert_eq!(
+            report.native_dynamic_plans[0].plan_artifact_path.as_deref(),
+            Some(output_path.to_absolute_path_with_prefix(&config.store_dir).as_str())
+        );
         assert_eq!(report.outcomes.len(), 1);
         assert_eq!(report.outcomes[0].outputs.len(), 1);
         assert_eq!(report.outcomes[0].outputs[0].artifact_attestation.logical_path, logical_path);
@@ -522,6 +581,7 @@ mod tests {
                 crunch_pipeline::HermeticityAuditKind::ImpureModeSelected,
                 "explicit --impure mode permits ambient host dependencies",
             )],
+            native_dynamic_plans: Vec::new(),
         };
 
         let diagnostic_failures = vec![crate::build_log::DiagnosticPersistenceFailure::write_build_log(
@@ -545,6 +605,7 @@ mod tests {
                     "kind": "impure-mode-selected",
                     "detail": "explicit --impure mode permits ambient host dependencies",
                 }],
+                "native_dynamic_plans": [],
                 "diagnostic_persistence_failures": [{
                     "operation": "write-build-log",
                     "artifact": "build-log",

@@ -103,6 +103,21 @@ pub struct WorkerResult {
     pub outcomes: Vec<BuildOutcome>,
     /// Root goals that failed (build error or dep failure).
     pub failed: Vec<FailedGoal>,
+    /// Native dynamic-plan accepted/rejected rows discovered during the run.
+    pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeDynamicPlanReport {
+    pub mode: String,
+    pub producer_key: String,
+    pub output_name: String,
+    pub plan_artifact_path: Option<StorePath<String>>,
+    pub raw_artifact_digest: Option<String>,
+    pub canonical_plan_digest: Option<String>,
+    pub accepted_unit_ids: Vec<String>,
+    pub rejection_reason: Option<String>,
+    pub scheduler_action: String,
 }
 
 /// Native dynamic plan accepted from a declared producer output.
@@ -199,6 +214,66 @@ fn accepted_native_plan(
         accepted_unit_ids,
         plan,
     }
+}
+
+fn native_plan_report_from_accepted(accepted: &NativeDynamicPlanAccepted) -> NativeDynamicPlanReport {
+    NativeDynamicPlanReport {
+        mode: "native".to_string(),
+        producer_key: accepted.producer_key.clone(),
+        output_name: accepted.output_name.clone(),
+        plan_artifact_path: Some(accepted.plan_artifact_path.clone()),
+        raw_artifact_digest: Some(accepted.raw_artifact_digest.clone()),
+        canonical_plan_digest: Some(accepted.canonical_plan_digest.clone()),
+        accepted_unit_ids: accepted.accepted_unit_ids.clone(),
+        rejection_reason: None,
+        scheduler_action: "registered-roots".to_string(),
+    }
+}
+
+fn native_plan_report_from_rejection(rejected: &NativeDynamicPlanRejection) -> NativeDynamicPlanReport {
+    NativeDynamicPlanReport {
+        mode: "native".to_string(),
+        producer_key: rejected.producer_key.clone(),
+        output_name: rejected.output_name.clone(),
+        plan_artifact_path: rejected.plan_artifact_path.clone(),
+        raw_artifact_digest: rejected.raw_artifact_digest.clone(),
+        canonical_plan_digest: None,
+        accepted_unit_ids: Vec::new(),
+        rejection_reason: Some(format!("{}: {}", rejected.kind.as_str(), rejected.detail)),
+        scheduler_action: "rejected".to_string(),
+    }
+}
+
+fn native_plan_reports_from_scan(scan: &NativeDynamicPlanScan) -> Vec<NativeDynamicPlanReport> {
+    let mut reports = Vec::with_capacity(scan.accepted.len().saturating_add(scan.rejected.len()));
+    reports.extend(scan.accepted.iter().map(native_plan_report_from_accepted));
+    reports.extend(scan.rejected.iter().map(native_plan_report_from_rejection));
+    sort_native_dynamic_plan_reports(&mut reports);
+    reports
+}
+
+fn finish_worker_result(
+    outcomes: Vec<BuildOutcome>,
+    failed: Vec<FailedGoal>,
+    mut native_dynamic_plans: Vec<NativeDynamicPlanReport>,
+) -> WorkerResult {
+    sort_native_dynamic_plan_reports(&mut native_dynamic_plans);
+    WorkerResult {
+        outcomes,
+        failed,
+        native_dynamic_plans,
+    }
+}
+
+fn sort_native_dynamic_plan_reports(reports: &mut [NativeDynamicPlanReport]) {
+    reports.sort_by(|left, right| {
+        (&left.producer_key, &left.output_name, &left.mode, &left.scheduler_action).cmp(&(
+            &right.producer_key,
+            &right.output_name,
+            &right.mode,
+            &right.scheduler_action,
+        ))
+    });
 }
 
 fn native_plan_rejection(
@@ -468,6 +543,7 @@ struct WorkerLoopState<'a> {
     pending_meta: HashMap<String, PreparedBuild>,
     outcomes: &'a mut Vec<BuildOutcome>,
     failed: &'a mut Vec<FailedGoal>,
+    native_dynamic_plans: &'a mut Vec<NativeDynamicPlanReport>,
     completed_count: u32,
 }
 
@@ -635,6 +711,7 @@ impl Worker {
 
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
+        let mut native_dynamic_plans: Vec<NativeDynamicPlanReport> = Vec::new();
         let mut state = WorkerLoopState {
             sem: Arc::new(Semaphore::new(
                 usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?,
@@ -643,6 +720,7 @@ impl Worker {
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
             failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
             completed_count: 0,
         };
         let iteration_count_max: u32 = total_goals.saturating_mul(4).max(16);
@@ -657,7 +735,7 @@ impl Worker {
                     failed = state.failed.len(),
                     "worker finished"
                 );
-                return Ok(WorkerResult { outcomes, failed });
+                return Ok(finish_worker_result(outcomes, failed, native_dynamic_plans));
             }
 
             if state.join_set.is_empty() {
@@ -697,6 +775,7 @@ impl Worker {
     {
         let mut outcomes: Vec<BuildOutcome> = Vec::new();
         let mut failed: Vec<FailedGoal> = Vec::new();
+        let mut native_dynamic_plans: Vec<NativeDynamicPlanReport> = Vec::new();
         let mut state = WorkerLoopState {
             sem: Arc::new(Semaphore::new(
                 usize::try_from(self.max_jobs).map_err(|e| Error::Store(format!("max_jobs overflow: {e}")))?,
@@ -705,6 +784,7 @@ impl Worker {
             pending_meta: HashMap::new(),
             outcomes: &mut outcomes,
             failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
             completed_count: 0,
         };
         let mut is_eval_done = false;
@@ -727,7 +807,7 @@ impl Worker {
                     roots = self.registry.root_count(),
                     "worker streaming finished"
                 );
-                return Ok(WorkerResult { outcomes, failed });
+                return Ok(finish_worker_result(outcomes, failed, native_dynamic_plans));
             }
 
             self.wait_for_event(&mut is_eval_done, rx, builder, known_paths, &mut state).await?;
@@ -909,6 +989,7 @@ impl Worker {
             .await?;
         self.log_native_dynamic_plan_scan(&native_scan);
         self.register_accepted_native_dynamic_plans(&native_scan, known_paths)?;
+        state.native_dynamic_plans.extend(native_plan_reports_from_scan(&native_scan));
 
         self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths, &declared_native_outputs)
             .await?;
@@ -2676,6 +2757,33 @@ mod tests {
         assert!(by_output.values().all(|rejection| rejection.producer_key == producer_abs));
     }
 
+    fn native_report_row(producer_key: &str, output_name: &str) -> NativeDynamicPlanReport {
+        NativeDynamicPlanReport {
+            mode: "native".to_string(),
+            producer_key: producer_key.to_string(),
+            output_name: output_name.to_string(),
+            plan_artifact_path: None,
+            raw_artifact_digest: None,
+            canonical_plan_digest: None,
+            accepted_unit_ids: Vec::new(),
+            rejection_reason: None,
+            scheduler_action: "registered-roots".to_string(),
+        }
+    }
+
+    #[test]
+    fn native_dynamic_plan_reports_are_deterministically_sorted() {
+        let result = finish_worker_result(Vec::new(), Vec::new(), vec![
+            native_report_row("/store/z.drv", "plan-b"),
+            native_report_row("/store/a.drv", "plan-a"),
+        ]);
+
+        assert_eq!(result.native_dynamic_plans[0].producer_key, "/store/a.drv");
+        assert_eq!(result.native_dynamic_plans[0].output_name, "plan-a");
+        assert_eq!(result.native_dynamic_plans[1].producer_key, "/store/z.drv");
+        assert_eq!(result.native_dynamic_plans[1].output_name, "plan-b");
+    }
+
     #[tokio::test]
     async fn native_dynamic_plan_valid_output_schedules_root_unit_in_same_run() {
         let bs = MemoryBlobService::default();
@@ -2705,6 +2813,13 @@ mod tests {
         let recorded = calls.lock().unwrap();
 
         assert!(result.failed.is_empty());
+        assert_eq!(result.native_dynamic_plans.len(), 1);
+        assert_eq!(result.native_dynamic_plans[0].mode, "native");
+        assert_eq!(result.native_dynamic_plans[0].output_name, "plan");
+        assert_eq!(result.native_dynamic_plans[0].scheduler_action, "registered-roots");
+        assert_eq!(result.native_dynamic_plans[0].accepted_unit_ids, vec!["unit.main".to_string()]);
+        assert!(result.native_dynamic_plans[0].canonical_plan_digest.is_some());
+        assert!(result.native_dynamic_plans[0].rejection_reason.is_none());
         assert_eq!(recorded.len(), 2, "producer and one dynamic root should build: {recorded:?}");
         assert!(recorded.iter().any(|args| args.iter().any(|arg| arg.contains("native-scheduler"))));
         assert!(recorded.iter().any(|args| args.iter().any(|arg| arg == "--build")));
@@ -2739,6 +2854,11 @@ mod tests {
         let recorded = calls.lock().unwrap();
 
         assert!(result.failed.is_empty());
+        assert_eq!(result.native_dynamic_plans.len(), 1);
+        assert_eq!(result.native_dynamic_plans[0].mode, "native");
+        assert_eq!(result.native_dynamic_plans[0].scheduler_action, "rejected");
+        assert!(result.native_dynamic_plans[0].accepted_unit_ids.is_empty());
+        assert!(result.native_dynamic_plans[0].rejection_reason.as_deref().unwrap_or("").contains("invalid-plan"));
         assert_eq!(recorded.len(), 1, "rejected native plan must not schedule units: {recorded:?}");
         assert!(recorded[0].iter().any(|arg| arg.contains("native-rejected")));
     }
