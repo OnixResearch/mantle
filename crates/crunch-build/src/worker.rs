@@ -11,6 +11,7 @@
 //! The Worker borrows `&mut Builder` for I/O — it never does I/O itself.
 //! Goal state transitions are validated by the pure `Goal` API.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -24,6 +25,9 @@ use tracing::debug;
 use tracing::info;
 
 use crate::Error;
+use crate::dynamic_plan::CanonicalDynamicPlanV1;
+use crate::dynamic_plan::MAX_DYNAMIC_PLAN_BYTES;
+use crate::dynamic_plan::decode_validated_plan_v1;
 use crate::goal::Goal;
 use crate::goal::GoalRegistry;
 use crate::goal::GoalState;
@@ -85,6 +89,115 @@ pub struct WorkerResult {
     pub outcomes: Vec<BuildOutcome>,
     /// Root goals that failed (build error or dep failure).
     pub failed: Vec<FailedGoal>,
+}
+
+/// Native dynamic plan accepted from a declared producer output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeDynamicPlanAccepted {
+    pub producer_key: String,
+    pub output_name: String,
+    pub plan_artifact_path: StorePath<String>,
+    pub raw_artifact_digest: String,
+    pub canonical_plan_digest: String,
+    pub accepted_unit_ids: Vec<String>,
+    pub plan: CanonicalDynamicPlanV1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeDynamicPlanRejectionKind {
+    MissingOutput,
+    NonRegularOutput,
+    PlanTooLarge,
+    InvalidPlan,
+    ReadFailed,
+}
+
+impl NativeDynamicPlanRejectionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::MissingOutput => "missing-output",
+            Self::NonRegularOutput => "non-regular-output",
+            Self::PlanTooLarge => "plan-too-large",
+            Self::InvalidPlan => "invalid-plan",
+            Self::ReadFailed => "read-failed",
+        }
+    }
+}
+
+/// Native dynamic plan rejection tied to a producer output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeDynamicPlanRejection {
+    pub producer_key: String,
+    pub output_name: String,
+    pub plan_artifact_path: Option<StorePath<String>>,
+    pub raw_artifact_digest: Option<String>,
+    pub kind: NativeDynamicPlanRejectionKind,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NativeDynamicPlanScan {
+    pub accepted: Vec<NativeDynamicPlanAccepted>,
+    pub rejected: Vec<NativeDynamicPlanRejection>,
+}
+
+enum NativeDynamicPlanOutputScan {
+    Accepted(NativeDynamicPlanAccepted),
+    Rejected(NativeDynamicPlanRejection),
+}
+
+impl NativeDynamicPlanScan {
+    fn is_empty(&self) -> bool {
+        self.accepted.is_empty() && self.rejected.is_empty()
+    }
+}
+
+fn node_file_size(node: &snix_castore::Node) -> Option<u64> {
+    match node {
+        snix_castore::Node::File { size, .. } => Some(*size),
+        snix_castore::Node::Directory { .. } | snix_castore::Node::Symlink { .. } => None,
+    }
+}
+
+fn blake3_hex(bytes: &[u8]) -> String {
+    blake3::hash(bytes).to_hex().to_string()
+}
+
+fn accepted_native_plan(
+    producer_key: &str,
+    output_name: &str,
+    plan_artifact_path: StorePath<String>,
+    raw_artifact_digest: String,
+    plan: CanonicalDynamicPlanV1,
+) -> NativeDynamicPlanAccepted {
+    let accepted_unit_ids = plan.plan.units.iter().map(|unit| unit.id.clone()).collect();
+    NativeDynamicPlanAccepted {
+        producer_key: producer_key.to_string(),
+        output_name: output_name.to_string(),
+        plan_artifact_path,
+        raw_artifact_digest,
+        canonical_plan_digest: plan.digest.clone(),
+        accepted_unit_ids,
+        plan,
+    }
+}
+
+fn native_plan_rejection(
+    producer_key: &str,
+    output_name: &str,
+    plan_artifact_path: Option<StorePath<String>>,
+    raw_artifact_digest: Option<String>,
+    kind: NativeDynamicPlanRejectionKind,
+    detail: String,
+) -> NativeDynamicPlanRejection {
+    NativeDynamicPlanRejection {
+        producer_key: producer_key.to_string(),
+        output_name: output_name.to_string(),
+        plan_artifact_path,
+        raw_artifact_digest,
+        kind,
+        detail,
+    }
 }
 
 /// Mutable loop state shared across worker helper methods.
@@ -519,9 +632,167 @@ impl Worker {
             }
         };
 
-        self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths).await?;
+        self.handle_completed_outcome(drv_key, outcome, builder, known_paths, state).await
+    }
+
+    async fn handle_completed_outcome<BServ>(
+        &mut self,
+        drv_key: &str,
+        outcome: BuildOutcome,
+        builder: &Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        state: &mut WorkerLoopState<'_>,
+    ) -> Result<(), Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let declared_native_outputs = self.declared_native_dynamic_outputs(&outcome, known_paths);
+        let native_scan = self
+            .scan_native_dynamic_plans(drv_key, &outcome, builder, known_paths.store_dir(), &declared_native_outputs)
+            .await?;
+        self.log_native_dynamic_plan_scan(&native_scan);
+
+        self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths, &declared_native_outputs)
+            .await?;
 
         self.complete_goal(drv_key, outcome, state.outcomes, state.failed)
+    }
+
+    fn declared_native_dynamic_outputs(
+        &self,
+        outcome: &BuildOutcome,
+        known_paths: &DerivationRegistry,
+    ) -> BTreeSet<String> {
+        let drv_abs = outcome.drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+        let Some(entry) = known_paths.get_by_drv_path(&drv_abs) else {
+            return BTreeSet::new();
+        };
+        entry.dynamic_plan_outputs.iter().cloned().collect()
+    }
+
+    async fn scan_native_dynamic_plans<BServ>(
+        &self,
+        producer_key: &str,
+        outcome: &BuildOutcome,
+        builder: &Builder<BServ>,
+        store_prefix: &str,
+        declared_outputs: &BTreeSet<String>,
+    ) -> Result<NativeDynamicPlanScan, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let mut scan = NativeDynamicPlanScan::default();
+        for output_name in declared_outputs {
+            match self
+                .scan_declared_native_dynamic_output(producer_key, output_name, outcome, builder, store_prefix)
+                .await?
+            {
+                NativeDynamicPlanOutputScan::Accepted(accepted) => scan.accepted.push(accepted),
+                NativeDynamicPlanOutputScan::Rejected(rejected) => scan.rejected.push(rejected),
+            }
+        }
+        Ok(scan)
+    }
+
+    async fn scan_declared_native_dynamic_output<BServ>(
+        &self,
+        producer_key: &str,
+        output_name: &str,
+        outcome: &BuildOutcome,
+        builder: &Builder<BServ>,
+        store_prefix: &str,
+    ) -> Result<NativeDynamicPlanOutputScan, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let Some(path_info) = outcome.outputs.get(output_name) else {
+            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
+                producer_key,
+                output_name,
+                None,
+                None,
+                NativeDynamicPlanRejectionKind::MissingOutput,
+                "declared dynamic-plan output is missing from build result".to_string(),
+            )));
+        };
+
+        let Some(size) = node_file_size(&path_info.node) else {
+            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
+                producer_key,
+                output_name,
+                Some(path_info.store_path.clone()),
+                None,
+                NativeDynamicPlanRejectionKind::NonRegularOutput,
+                "declared dynamic-plan output is not a regular file".to_string(),
+            )));
+        };
+
+        if size > MAX_DYNAMIC_PLAN_BYTES {
+            return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
+                producer_key,
+                output_name,
+                Some(path_info.store_path.clone()),
+                None,
+                NativeDynamicPlanRejectionKind::PlanTooLarge,
+                format!("declared dynamic-plan output is {size} bytes; limit is {MAX_DYNAMIC_PLAN_BYTES}"),
+            )));
+        }
+
+        let content = match builder.read_blob(&path_info.node).await {
+            Ok(content) => content,
+            Err(err) => {
+                return Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
+                    producer_key,
+                    output_name,
+                    Some(path_info.store_path.clone()),
+                    None,
+                    NativeDynamicPlanRejectionKind::ReadFailed,
+                    err.to_string(),
+                )));
+            }
+        };
+        let raw_digest = blake3_hex(&content);
+        match decode_validated_plan_v1(&content, store_prefix) {
+            Ok(plan) => Ok(NativeDynamicPlanOutputScan::Accepted(accepted_native_plan(
+                producer_key,
+                output_name,
+                path_info.store_path.clone(),
+                raw_digest,
+                plan,
+            ))),
+            Err(err) => Ok(NativeDynamicPlanOutputScan::Rejected(native_plan_rejection(
+                producer_key,
+                output_name,
+                Some(path_info.store_path.clone()),
+                Some(raw_digest),
+                NativeDynamicPlanRejectionKind::InvalidPlan,
+                err.to_string(),
+            ))),
+        }
+    }
+
+    fn log_native_dynamic_plan_scan(&self, scan: &NativeDynamicPlanScan) {
+        if scan.is_empty() {
+            return;
+        }
+        for accepted in &scan.accepted {
+            info!(
+                producer = %accepted.producer_key,
+                output = %accepted.output_name,
+                plan_digest = %accepted.canonical_plan_digest,
+                accepted_units = accepted.accepted_unit_ids.len(),
+                "accepted native dynamic plan output"
+            );
+        }
+        for rejected in &scan.rejected {
+            tracing::warn!(
+                producer = %rejected.producer_key,
+                output = %rejected.output_name,
+                reason = %rejected.kind.as_str(),
+                detail = %rejected.detail,
+                "rejected native dynamic plan output"
+            );
+        }
     }
 
     /// Inspect build outputs for `.drv` files. If found, parse and
@@ -532,11 +803,12 @@ impl Worker {
         outcome: &BuildOutcome,
         builder: &Builder<BServ>,
         known_paths: &mut DerivationRegistry,
+        native_dynamic_outputs: &BTreeSet<String>,
     ) -> Result<(), Error>
     where
         BServ: BuildService + 'static,
     {
-        let discovered = self.scan_dynamic_derivations(outcome, builder, known_paths).await?;
+        let discovered = self.scan_dynamic_derivations(outcome, builder, known_paths, native_dynamic_outputs).await?;
         if discovered.is_empty() {
             return Ok(());
         }
@@ -550,12 +822,16 @@ impl Worker {
         outcome: &BuildOutcome,
         builder: &Builder<BServ>,
         known_paths: &mut DerivationRegistry,
+        native_dynamic_outputs: &BTreeSet<String>,
     ) -> Result<Vec<crate::dynamic::DynamicDrv>, Error>
     where
         BServ: BuildService + 'static,
     {
         let mut discovered: Vec<crate::dynamic::DynamicDrv> = Vec::with_capacity(outcome.outputs.len());
         for (output_name, path_info) in &outcome.outputs {
+            if native_dynamic_outputs.contains(output_name) {
+                continue;
+            }
             if !crate::dynamic::is_drv_output(&path_info.store_path, &path_info.node) {
                 continue;
             }
@@ -645,7 +921,7 @@ impl Worker {
         while let Some(drv_key) = self.ready_queue.pop_front() {
             let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
             let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root).await;
-            self.handle_prepare_result(&drv_key, prepare_result, builder, state)?;
+            self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
             dispatched = dispatched.saturating_add(1);
         }
         Ok(dispatched)
@@ -668,18 +944,21 @@ impl Worker {
         Ok((goal.drv_path.clone(), goal.is_root, derivation))
     }
 
-    fn handle_prepare_result<BServ>(
+    async fn handle_prepare_result<BServ>(
         &mut self,
         drv_key: &str,
         prepare_result: Result<PrepareResult, Error>,
         builder: &Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
         state: &mut WorkerLoopState<'_>,
     ) -> Result<(), Error>
     where
         BServ: BuildService + 'static,
     {
         match prepare_result {
-            Ok(PrepareResult::Done(outcome)) => self.complete_goal(drv_key, outcome, state.outcomes, state.failed),
+            Ok(PrepareResult::Done(outcome)) => {
+                self.handle_completed_outcome(drv_key, outcome, builder, known_paths, state).await
+            }
             Err(err) => {
                 let err_msg = format!("{err}");
                 tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
@@ -1271,15 +1550,107 @@ mod tests {
 
     use std::path::PathBuf;
 
+    use snix_castore::B3Digest;
+    use snix_castore::Node;
+    use snix_castore::blobservice::BlobService;
     use snix_castore::blobservice::MemoryBlobService;
+    use snix_store::path_info::PathInfo;
+    use tokio::io::AsyncWriteExt;
 
+    use crate::dynamic_plan::MAX_DYNAMIC_PLAN_BYTES;
     use crate::orchestrate::Builder;
     use crate::test_support::MockBuildService;
     use crate::test_support::build_and_register;
+    use crate::test_support::build_and_register_multi;
     use crate::test_support::test_keypair;
     use crate::test_support::test_pis;
     use crate::test_support::test_trusted_keys;
     use crate::test_support::tmp_ds;
+
+    const TEST_NATIVE_PLAN_STORE_PATH: &str = "/nix/store/00000000000000000000000000000000-dynplan";
+
+    fn make_test_builder(bs: MemoryBlobService) -> Builder<MockBuildService> {
+        let ds = tmp_ds();
+        let (mock, _) = MockBuildService::new(bs.clone());
+        Builder::new(
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+    }
+
+    async fn put_test_blob(bs: &MemoryBlobService, content: &[u8]) -> Node {
+        let mut writer = BlobService::open_write(bs).await;
+        writer.write_all(content).await.unwrap();
+        let digest = writer.close().await.unwrap();
+        Node::File {
+            digest,
+            size: content.len() as u64,
+            executable: false,
+        }
+    }
+
+    fn test_path_info(name: &str, node: Node) -> PathInfo {
+        PathInfo {
+            store_path: fake_sp(name),
+            node,
+            references: vec![],
+            nar_size: 0,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        }
+    }
+
+    fn valid_native_plan_bytes() -> Vec<u8> {
+        format!(
+            r#"{{
+  "schema": "mantle-plan-v1",
+  "producer": {{ "logical_name": "producer", "goal_hint": null }},
+  "sources": [],
+  "units": [{{
+    "id": "unit.main",
+    "derivation": {{
+      "name": "unit-main",
+      "builder": "{TEST_NATIVE_PLAN_STORE_PATH}/bin/builder",
+      "system": "x86_64-linux",
+      "args": ["--build"],
+      "outputs": ["out"],
+      "env": {{}},
+      "inputs": [],
+      "fixed_output": null,
+      "addressing_mode": "content-addressed",
+      "sandbox": "native",
+      "dynamic_plan_outputs": []
+    }},
+    "requested_outputs": ["out"],
+    "policy": {{
+      "sandbox": "inherit",
+      "substitutions": "inherit",
+      "store_prefix": "inherit",
+      "host_paths": "none"
+    }}
+  }}],
+  "roots": ["unit.main"],
+  "provenance": {{}}
+}}"#,
+        )
+        .into_bytes()
+    }
+
+    fn declare_native_plan_output(kp: &mut DerivationRegistry, sp: &StorePath<String>, output_name: &str) {
+        let abs = sp.to_absolute_path();
+        let entry = kp.get_by_drv_path_mut(&abs).unwrap();
+        entry.dynamic_plan_outputs = vec![output_name.to_string()];
+    }
 
     #[tokio::test]
     async fn run_single_leaf_builds_once() {
@@ -1833,6 +2204,161 @@ mod tests {
         assert_eq!(recorded.len(), 3);
         let shared_builds = recorded.iter().filter(|a| a.iter().any(|s| s.contains("shared"))).count();
         assert_eq!(shared_builds, 1);
+    }
+
+    // ── Native dynamic plan scanning tests ─────────────────
+
+    #[tokio::test]
+    async fn native_dynamic_plan_declared_output_is_accepted() {
+        let bs = MemoryBlobService::default();
+        let builder = make_test_builder(bs.clone());
+        let plan_node = put_test_blob(&bs, &valid_native_plan_bytes()).await;
+
+        let mut kp = DerivationRegistry::default();
+        let (producer_sp, _) = build_and_register_multi("native-producer", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer_sp, "plan");
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("plan".to_string(), test_path_info("native-plan", plan_node));
+        let outcome = BuildOutcome {
+            drv_path: producer_sp.clone(),
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+
+        let worker = Worker::new(1);
+        let declared = worker.declared_native_dynamic_outputs(&outcome, &kp);
+        let scan = worker
+            .scan_native_dynamic_plans(&producer_sp.to_absolute_path(), &outcome, &builder, kp.store_dir(), &declared)
+            .await
+            .unwrap();
+
+        assert_eq!(declared, BTreeSet::from(["plan".to_string()]));
+        assert_eq!(scan.accepted.len(), 1);
+        assert!(scan.rejected.is_empty());
+        assert_eq!(scan.accepted[0].output_name, "plan");
+        assert_eq!(scan.accepted[0].accepted_unit_ids, vec!["unit.main".to_string()]);
+        assert_eq!(scan.accepted[0].canonical_plan_digest.len(), crate::dynamic_plan::BLAKE3_HEX_BYTES);
+    }
+
+    #[tokio::test]
+    async fn native_dynamic_plan_undeclared_output_is_ignored() {
+        let bs = MemoryBlobService::default();
+        let builder = make_test_builder(bs.clone());
+        let plan_node = put_test_blob(&bs, &valid_native_plan_bytes()).await;
+
+        let mut kp = DerivationRegistry::default();
+        let (producer_sp, _) = build_and_register_multi("native-ignored", &["out", "plan"], &[], &mut kp);
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("plan".to_string(), test_path_info("ignored-plan", plan_node));
+        let outcome = BuildOutcome {
+            drv_path: producer_sp.clone(),
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+
+        let worker = Worker::new(1);
+        let declared = worker.declared_native_dynamic_outputs(&outcome, &kp);
+        let scan = worker
+            .scan_native_dynamic_plans(&producer_sp.to_absolute_path(), &outcome, &builder, kp.store_dir(), &declared)
+            .await
+            .unwrap();
+
+        assert!(declared.is_empty());
+        assert!(scan.is_empty());
+    }
+
+    #[tokio::test]
+    async fn native_dynamic_plan_declared_output_rejections_are_structured() {
+        let bs = MemoryBlobService::default();
+        let builder = make_test_builder(bs.clone());
+        let bad_node = put_test_blob(&bs, b"{not-json").await;
+        let large_node = Node::File {
+            digest: B3Digest::from(&[0u8; 32]),
+            size: MAX_DYNAMIC_PLAN_BYTES + 1,
+            executable: false,
+        };
+        let dir_node = Node::Directory {
+            digest: B3Digest::from(&[1u8; 32]),
+            size: 0,
+        };
+
+        let mut kp = DerivationRegistry::default();
+        let output_names = &["out", "missing", "dir", "large", "bad"];
+        let (producer_sp, _) = build_and_register_multi("native-reject", output_names, &[], &mut kp);
+        let producer_abs = producer_sp.to_absolute_path();
+        kp.get_by_drv_path_mut(&producer_abs).unwrap().dynamic_plan_outputs = vec![
+            "missing".to_string(),
+            "dir".to_string(),
+            "large".to_string(),
+            "bad".to_string(),
+        ];
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("dir".to_string(), test_path_info("dir-plan", dir_node));
+        outputs.insert("large".to_string(), test_path_info("large-plan", large_node));
+        outputs.insert("bad".to_string(), test_path_info("bad-plan", bad_node));
+        let outcome = BuildOutcome {
+            drv_path: producer_sp.clone(),
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+
+        let worker = Worker::new(1);
+        let declared = worker.declared_native_dynamic_outputs(&outcome, &kp);
+        let scan = worker
+            .scan_native_dynamic_plans(&producer_abs, &outcome, &builder, kp.store_dir(), &declared)
+            .await
+            .unwrap();
+        let by_output: BTreeMap<String, &NativeDynamicPlanRejection> =
+            scan.rejected.iter().map(|rejection| (rejection.output_name.clone(), rejection)).collect();
+
+        assert!(scan.accepted.is_empty());
+        assert_eq!(by_output.len(), 4);
+        assert_eq!(by_output["missing"].kind, NativeDynamicPlanRejectionKind::MissingOutput);
+        assert_eq!(by_output["dir"].kind, NativeDynamicPlanRejectionKind::NonRegularOutput);
+        assert_eq!(by_output["large"].kind, NativeDynamicPlanRejectionKind::PlanTooLarge);
+        assert_eq!(by_output["bad"].kind, NativeDynamicPlanRejectionKind::InvalidPlan);
+        assert!(by_output["bad"].raw_artifact_digest.is_some());
+        assert!(by_output["large"].raw_artifact_digest.is_none());
+        assert!(by_output.values().all(|rejection| rejection.producer_key == producer_abs));
+    }
+
+    #[tokio::test]
+    async fn declared_native_dynamic_output_is_not_compat_drv_discovery() {
+        let bs = MemoryBlobService::default();
+        let builder = make_test_builder(bs.clone());
+        let mut inner_kp = DerivationRegistry::default();
+        let (_, inner_drv) = build_and_register("native-skip-inner", &[], &mut inner_kp);
+        let drv_node = put_test_blob(&bs, &inner_drv.to_aterm_bytes()).await;
+
+        let mut kp = DerivationRegistry::default();
+        let (producer_sp, _) = build_and_register_multi("native-skip-compat", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer_sp, "plan");
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("plan".to_string(), test_path_info("declared-plan.drv", drv_node));
+        let outcome = BuildOutcome {
+            drv_path: producer_sp.clone(),
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+
+        let worker = Worker::new(1);
+        let declared = worker.declared_native_dynamic_outputs(&outcome, &kp);
+        let discovered = worker.scan_dynamic_derivations(&outcome, &builder, &mut kp, &declared).await.unwrap();
+
+        assert_eq!(declared, BTreeSet::from(["plan".to_string()]));
+        assert!(discovered.is_empty(), "declared native output must not fall through to .drv compatibility");
     }
 
     // ── Dynamic derivation integration tests ─────────────────
