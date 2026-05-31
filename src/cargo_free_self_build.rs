@@ -1271,6 +1271,7 @@ fn write_fixed_point_preflight(
         "bundle_dir": plan.bundle_dir,
         "shared_execution_dir": plan.shared_execution_dir,
         "rustc_compatibility": compatibility,
+        "source_built_toolchain_closure": crate::source_toolchain_closure::absent_source_built_toolchain_closure(),
     });
     let bytes = serde_json::to_vec_pretty(&value).map_err(|err| internal(format!("serialize preflight: {err}")))?;
     write_bytes(&plan.preflight_path, &bytes)

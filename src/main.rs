@@ -33,6 +33,7 @@ mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
 mod shell_cmd;
+mod source_toolchain_closure;
 mod store_cmd;
 mod structured_refactor;
 mod transcript_cmd;
