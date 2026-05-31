@@ -11,11 +11,18 @@
 //! The Worker borrows `&mut Builder` for I/O — it never does I/O itself.
 //! Goal state transitions are validated by the pure `Goal` API.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use bstr::BString;
+use nix_compat::derivation::Derivation;
+use nix_compat::derivation::Output;
+use nix_compat::nixhash::CAHash;
+use nix_compat::nixhash::HashAlgo;
+use nix_compat::nixhash::NixHash;
 use nix_compat::store_path::StorePath;
 use snix_build::buildservice::BuildService;
 use tokio::sync::Semaphore;
@@ -25,7 +32,14 @@ use tracing::debug;
 use tracing::info;
 
 use crate::Error;
+use crate::dynamic_plan::AddressingMode;
 use crate::dynamic_plan::CanonicalDynamicPlanV1;
+use crate::dynamic_plan::DeclaredSourceInput;
+use crate::dynamic_plan::DynamicInput;
+use crate::dynamic_plan::DynamicUnit;
+use crate::dynamic_plan::FixedOutputHashAlgo;
+use crate::dynamic_plan::FixedOutputMode;
+use crate::dynamic_plan::FixedOutputSpec;
 use crate::dynamic_plan::MAX_DYNAMIC_PLAN_BYTES;
 use crate::dynamic_plan::decode_validated_plan_v1;
 use crate::goal::Goal;
@@ -146,6 +160,11 @@ enum NativeDynamicPlanOutputScan {
     Rejected(NativeDynamicPlanRejection),
 }
 
+struct RegisteredNativeDynamicPlan {
+    root_drv_paths: Vec<StorePath<String>>,
+    unit_drv_paths: BTreeMap<String, StorePath<String>>,
+}
+
 impl NativeDynamicPlanScan {
     fn is_empty(&self) -> bool {
         self.accepted.is_empty() && self.rejected.is_empty()
@@ -198,6 +217,244 @@ fn native_plan_rejection(
         kind,
         detail,
     }
+}
+
+fn parse_dynamic_store_path(path: &str, store_dir: &str) -> Result<StorePath<String>, Error> {
+    StorePath::from_absolute_path_with_prefix(path.as_bytes(), store_dir)
+        .map_err(|_| Error::Store(format!("native dynamic plan store path is invalid for prefix {store_dir}: {path}")))
+}
+
+fn dynamic_sources_by_id(
+    sources: &[DeclaredSourceInput],
+    store_dir: &str,
+) -> Result<BTreeMap<String, StorePath<String>>, Error> {
+    let mut by_id = BTreeMap::new();
+    for source in sources {
+        let path = parse_dynamic_store_path(&source.path, store_dir)?;
+        by_id.insert(source.id.clone(), path);
+    }
+    Ok(by_id)
+}
+
+fn parse_dynamic_fixed_output(spec: &FixedOutputSpec) -> Result<CAHash, Error> {
+    let algo_name = match spec.algo {
+        FixedOutputHashAlgo::Sha256 => "sha256",
+        FixedOutputHashAlgo::Sha512 => "sha512",
+        FixedOutputHashAlgo::Sha1 => "sha1",
+        FixedOutputHashAlgo::Md5 => "md5",
+        FixedOutputHashAlgo::Blake3 => "blake3",
+    };
+    let algo: HashAlgo = algo_name
+        .parse()
+        .map_err(|_| Error::Store(format!("unsupported native dynamic fixed-output hash algorithm: {algo_name}")))?;
+    let hash = if spec.hash.contains('-') {
+        NixHash::from_sri(&spec.hash)
+            .map_err(|err| Error::Store(format!("invalid native dynamic fixed-output SRI hash: {err}")))?
+    } else {
+        let digest = data_encoding::HEXLOWER
+            .decode(spec.hash.as_bytes())
+            .map_err(|err| Error::Store(format!("invalid native dynamic fixed-output hex hash: {err}")))?;
+        NixHash::from_algo_and_digest(algo, &digest)
+            .map_err(|err| Error::Store(format!("invalid native dynamic fixed-output digest: {err}")))?
+    };
+    match spec.mode {
+        FixedOutputMode::Flat => Ok(CAHash::Flat(hash)),
+        FixedOutputMode::Recursive => Ok(CAHash::Nar(hash)),
+    }
+}
+
+fn dynamic_plan_outputs_are_declared(unit: &DynamicUnit) -> bool {
+    let outputs: BTreeSet<&str> = unit.derivation.outputs.iter().map(String::as_str).collect();
+    unit.derivation.dynamic_plan_outputs.iter().all(|output| outputs.contains(output.as_str()))
+}
+
+fn unit_output_dependencies_registered(unit: &DynamicUnit, registered: &BTreeMap<String, StorePath<String>>) -> bool {
+    unit.derivation.inputs.iter().all(|input| match input {
+        DynamicInput::UnitOutput { unit, .. } => registered.contains_key(unit),
+        DynamicInput::StorePath { .. } | DynamicInput::Source { .. } => true,
+    })
+}
+
+fn register_native_dynamic_plan_units(
+    accepted: &NativeDynamicPlanAccepted,
+    known_paths: &mut DerivationRegistry,
+) -> Result<RegisteredNativeDynamicPlan, Error> {
+    let store_dir = known_paths.store_dir().to_string();
+    let sources = dynamic_sources_by_id(&accepted.plan.plan.sources, &store_dir)?;
+    let units_by_id: BTreeMap<String, &DynamicUnit> =
+        accepted.plan.plan.units.iter().map(|unit| (unit.id.clone(), unit)).collect();
+    let mut pending: BTreeSet<String> = units_by_id.keys().cloned().collect();
+    let mut registered = BTreeMap::new();
+    let iteration_limit = accepted.plan.plan.units.len();
+
+    for _ in 0..iteration_limit {
+        if pending.is_empty() {
+            break;
+        }
+        let ready_units: Vec<String> = pending
+            .iter()
+            .filter(|unit_id| unit_output_dependencies_registered(units_by_id[unit_id.as_str()], &registered))
+            .cloned()
+            .collect();
+        if ready_units.is_empty() {
+            break;
+        }
+        for unit_id in ready_units {
+            let unit = units_by_id[unit_id.as_str()];
+            let drv_path = register_native_dynamic_unit(unit, &sources, &registered, known_paths, &store_dir)?;
+            registered.insert(unit_id.clone(), drv_path);
+            pending.remove(&unit_id);
+        }
+    }
+
+    if !pending.is_empty() {
+        return Err(Error::Store(format!(
+            "native dynamic plan '{}' has unresolved unit dependencies: {}",
+            accepted.canonical_plan_digest,
+            pending.into_iter().collect::<Vec<_>>().join(", ")
+        )));
+    }
+
+    let mut root_drv_paths = Vec::with_capacity(accepted.plan.plan.roots.len());
+    for root in &accepted.plan.plan.roots {
+        let drv_path = registered
+            .get(root)
+            .ok_or_else(|| Error::Store(format!("native dynamic plan root was not registered: {root}")))?;
+        root_drv_paths.push(drv_path.clone());
+    }
+
+    Ok(RegisteredNativeDynamicPlan {
+        root_drv_paths,
+        unit_drv_paths: registered,
+    })
+}
+
+fn register_native_dynamic_unit(
+    unit: &DynamicUnit,
+    sources: &BTreeMap<String, StorePath<String>>,
+    registered_units: &BTreeMap<String, StorePath<String>>,
+    known_paths: &mut DerivationRegistry,
+    store_dir: &str,
+) -> Result<StorePath<String>, Error> {
+    if !dynamic_plan_outputs_are_declared(unit) {
+        return Err(Error::Store(format!(
+            "native dynamic unit '{}' declares dynamic_plan_outputs outside outputs",
+            unit.id
+        )));
+    }
+
+    let mut derivation = build_native_dynamic_derivation(unit, sources, registered_units, store_dir)?;
+    for parent_drv_path in derivation.input_derivations.keys() {
+        let parent_abs = parent_drv_path.to_absolute_path_with_prefix(store_dir);
+        if known_paths.get_hdm_by_drv_path(&parent_abs).is_none() {
+            return Err(Error::Store(format!(
+                "native dynamic unit '{}' references unregistered parent derivation {parent_abs}",
+                unit.id
+            )));
+        }
+    }
+
+    let hdm = derivation.hash_derivation_modulo(|parent_drv_path| {
+        known_paths
+            .get_hdm_by_drv_path(&parent_drv_path.to_absolute_path_with_prefix(store_dir))
+            .unwrap_or([0u8; 32])
+    });
+    let is_ca = matches!(unit.derivation.addressing_mode, AddressingMode::ContentAddressed)
+        && unit.derivation.fixed_output.is_none();
+    derivation
+        .calculate_output_paths_with_store_dir(&unit.derivation.name, &hdm, store_dir)
+        .map_err(|err| Error::Store(format!("computing native dynamic output paths for '{}': {err}", unit.id)))?;
+    if is_ca {
+        for output in derivation.outputs.values_mut() {
+            output.path = None;
+        }
+    }
+    let drv_path = derivation
+        .calculate_derivation_path_with_store_dir(&unit.derivation.name, store_dir)
+        .map_err(|err| Error::Store(format!("computing native dynamic derivation path for '{}': {err}", unit.id)))?;
+    known_paths.insert_with_dynamic_plan_outputs(
+        drv_path.clone(),
+        hdm,
+        derivation,
+        is_ca,
+        unit.derivation.dynamic_plan_outputs.clone(),
+        None,
+    );
+    Ok(drv_path)
+}
+
+fn build_native_dynamic_derivation(
+    unit: &DynamicUnit,
+    sources: &BTreeMap<String, StorePath<String>>,
+    registered_units: &BTreeMap<String, StorePath<String>>,
+    store_dir: &str,
+) -> Result<Derivation, Error> {
+    let ca_hash = unit.derivation.fixed_output.as_ref().map(parse_dynamic_fixed_output).transpose()?;
+    let outputs = unit
+        .derivation
+        .outputs
+        .iter()
+        .map(|output_name| {
+            (output_name.clone(), Output {
+                path: None,
+                ca_hash: if output_name == "out" { ca_hash.clone() } else { None },
+            })
+        })
+        .collect();
+    let mut environment: BTreeMap<String, BString> =
+        unit.derivation.env.iter().map(|(key, value)| (key.clone(), value.as_bytes().into())).collect();
+    environment.insert("system".to_string(), unit.derivation.system.as_bytes().into());
+    environment.insert("builder".to_string(), unit.derivation.builder.as_bytes().into());
+    environment.insert("name".to_string(), unit.derivation.name.as_bytes().into());
+    environment.extend(unit.derivation.outputs.iter().map(|output_name| (output_name.clone(), BString::from(""))));
+    environment.insert("outputs".to_string(), unit.derivation.outputs.join(" ").as_bytes().into());
+
+    let (input_derivations, input_sources) = resolve_native_dynamic_inputs(unit, sources, registered_units, store_dir)?;
+    Ok(Derivation {
+        arguments: unit.derivation.args.clone(),
+        builder: unit.derivation.builder.clone(),
+        environment,
+        input_derivations,
+        input_sources,
+        outputs,
+        system: unit.derivation.system.clone(),
+    })
+}
+
+fn resolve_native_dynamic_inputs(
+    unit: &DynamicUnit,
+    sources: &BTreeMap<String, StorePath<String>>,
+    registered_units: &BTreeMap<String, StorePath<String>>,
+    store_dir: &str,
+) -> Result<(BTreeMap<StorePath<String>, BTreeSet<String>>, BTreeSet<StorePath<String>>), Error> {
+    let mut input_derivations: BTreeMap<StorePath<String>, BTreeSet<String>> = BTreeMap::new();
+    let mut input_sources = BTreeSet::new();
+    for input in &unit.derivation.inputs {
+        match input {
+            DynamicInput::StorePath { path } => {
+                input_sources.insert(parse_dynamic_store_path(path, store_dir)?);
+            }
+            DynamicInput::Source { source } => {
+                let path = sources.get(source).ok_or_else(|| {
+                    Error::Store(format!("native dynamic unit '{}' references unknown source {source}", unit.id))
+                })?;
+                input_sources.insert(path.clone());
+            }
+            DynamicInput::UnitOutput {
+                unit: dependency,
+                output,
+            } => {
+                let drv_path = registered_units.get(dependency).ok_or_else(|| {
+                    Error::Store(format!(
+                        "native dynamic unit '{}' references unregistered dynamic unit {dependency}",
+                        unit.id
+                    ))
+                })?;
+                input_derivations.entry(drv_path.clone()).or_default().insert(output.clone());
+            }
+        }
+    }
+    Ok((input_derivations, input_sources))
 }
 
 /// Mutable loop state shared across worker helper methods.
@@ -651,6 +908,7 @@ impl Worker {
             .scan_native_dynamic_plans(drv_key, &outcome, builder, known_paths.store_dir(), &declared_native_outputs)
             .await?;
         self.log_native_dynamic_plan_scan(&native_scan);
+        self.register_accepted_native_dynamic_plans(&native_scan, known_paths)?;
 
         self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths, &declared_native_outputs)
             .await?;
@@ -793,6 +1051,24 @@ impl Worker {
                 "rejected native dynamic plan output"
             );
         }
+    }
+
+    fn register_accepted_native_dynamic_plans(
+        &mut self,
+        scan: &NativeDynamicPlanScan,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<(), Error> {
+        for accepted in &scan.accepted {
+            let registered = register_native_dynamic_plan_units(accepted, known_paths)?;
+            for root_drv_path in registered.root_drv_paths {
+                self.want(&root_drv_path, known_paths, true)?;
+            }
+            debug_assert!(
+                registered.unit_drv_paths.len() >= accepted.plan.plan.roots.len(),
+                "registered native dynamic units must cover all roots"
+            );
+        }
+        Ok(())
     }
 
     /// Inspect build outputs for `.drv` files. If found, parse and
@@ -1646,6 +1922,75 @@ mod tests {
         .into_bytes()
     }
 
+    fn native_plan_with_dep_and_unused_bytes() -> Vec<u8> {
+        format!(
+            r#"{{
+  "schema": "mantle-plan-v1",
+  "producer": {{ "logical_name": "producer", "goal_hint": null }},
+  "sources": [],
+  "units": [
+    {{
+      "id": "unit.dep",
+      "derivation": {{
+        "name": "unit-dep",
+        "builder": "{TEST_NATIVE_PLAN_STORE_PATH}/bin/builder",
+        "system": "x86_64-linux",
+        "args": ["--dep"],
+        "outputs": ["out"],
+        "env": {{}},
+        "inputs": [],
+        "fixed_output": null,
+        "addressing_mode": "content-addressed",
+        "sandbox": "native",
+        "dynamic_plan_outputs": []
+      }},
+      "requested_outputs": ["out"],
+      "policy": {{ "sandbox": "inherit", "substitutions": "inherit", "store_prefix": "inherit", "host_paths": "none" }}
+    }},
+    {{
+      "id": "unit.root",
+      "derivation": {{
+        "name": "unit-root",
+        "builder": "{TEST_NATIVE_PLAN_STORE_PATH}/bin/builder",
+        "system": "x86_64-linux",
+        "args": ["--root"],
+        "outputs": ["out"],
+        "env": {{}},
+        "inputs": [{{ "kind": "unit_output", "unit": "unit.dep", "output": "out" }}],
+        "fixed_output": null,
+        "addressing_mode": "content-addressed",
+        "sandbox": "native",
+        "dynamic_plan_outputs": []
+      }},
+      "requested_outputs": ["out"],
+      "policy": {{ "sandbox": "inherit", "substitutions": "inherit", "store_prefix": "inherit", "host_paths": "none" }}
+    }},
+    {{
+      "id": "unit.unused",
+      "derivation": {{
+        "name": "unit-unused",
+        "builder": "{TEST_NATIVE_PLAN_STORE_PATH}/bin/builder",
+        "system": "x86_64-linux",
+        "args": ["--unused"],
+        "outputs": ["out"],
+        "env": {{}},
+        "inputs": [],
+        "fixed_output": null,
+        "addressing_mode": "content-addressed",
+        "sandbox": "native",
+        "dynamic_plan_outputs": []
+      }},
+      "requested_outputs": ["out"],
+      "policy": {{ "sandbox": "inherit", "substitutions": "inherit", "store_prefix": "inherit", "host_paths": "none" }}
+    }}
+  ],
+  "roots": ["unit.root"],
+  "provenance": {{}}
+}}"#,
+        )
+        .into_bytes()
+    }
+
     fn declare_native_plan_output(kp: &mut DerivationRegistry, sp: &StorePath<String>, output_name: &str) {
         let abs = sp.to_absolute_path();
         let entry = kp.get_by_drv_path_mut(&abs).unwrap();
@@ -2329,6 +2674,123 @@ mod tests {
         assert!(by_output["bad"].raw_artifact_digest.is_some());
         assert!(by_output["large"].raw_artifact_digest.is_none());
         assert!(by_output.values().all(|rejection| rejection.producer_key == producer_abs));
+    }
+
+    #[tokio::test]
+    async fn native_dynamic_plan_valid_output_schedules_root_unit_in_same_run() {
+        let bs = MemoryBlobService::default();
+        let mut drv_outputs = StdHashMap::new();
+        drv_outputs.insert("native-scheduler".to_string(), valid_native_plan_bytes());
+        let (mock, calls) = DrvProducingMockBuildService::new(bs.clone(), drv_outputs);
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+
+        let mut kp = DerivationRegistry::default();
+        let (producer_sp, _) = build_and_register_multi("native-scheduler", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer_sp, "plan");
+
+        let mut worker = Worker::new(1);
+        worker.want(&producer_sp, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        let recorded = calls.lock().unwrap();
+
+        assert!(result.failed.is_empty());
+        assert_eq!(recorded.len(), 2, "producer and one dynamic root should build: {recorded:?}");
+        assert!(recorded.iter().any(|args| args.iter().any(|arg| arg.contains("native-scheduler"))));
+        assert!(recorded.iter().any(|args| args.iter().any(|arg| arg == "--build")));
+    }
+
+    #[tokio::test]
+    async fn native_dynamic_plan_rejected_output_schedules_no_units() {
+        let bs = MemoryBlobService::default();
+        let mut drv_outputs = StdHashMap::new();
+        drv_outputs.insert("native-rejected".to_string(), b"{not-json".to_vec());
+        let (mock, calls) = DrvProducingMockBuildService::new(bs.clone(), drv_outputs);
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+
+        let mut kp = DerivationRegistry::default();
+        let (producer_sp, _) = build_and_register_multi("native-rejected", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer_sp, "plan");
+
+        let mut worker = Worker::new(1);
+        worker.want(&producer_sp, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        let recorded = calls.lock().unwrap();
+
+        assert!(result.failed.is_empty());
+        assert_eq!(recorded.len(), 1, "rejected native plan must not schedule units: {recorded:?}");
+        assert!(recorded[0].iter().any(|arg| arg.contains("native-rejected")));
+    }
+
+    #[tokio::test]
+    async fn native_dynamic_plan_registers_all_units_but_wants_only_roots() {
+        let bs = MemoryBlobService::default();
+        let builder = make_test_builder(bs.clone());
+        let plan_node = put_test_blob(&bs, &native_plan_with_dep_and_unused_bytes()).await;
+
+        let mut kp = DerivationRegistry::default();
+        let (producer_sp, _) = build_and_register_multi("native-registration", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &producer_sp, "plan");
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("plan".to_string(), test_path_info("native-registration-plan", plan_node));
+        let outcome = BuildOutcome {
+            drv_path: producer_sp.clone(),
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+        let worker = Worker::new(1);
+        let declared = worker.declared_native_dynamic_outputs(&outcome, &kp);
+        let scan = worker
+            .scan_native_dynamic_plans(&producer_sp.to_absolute_path(), &outcome, &builder, kp.store_dir(), &declared)
+            .await
+            .unwrap();
+        let registered = register_native_dynamic_plan_units(&scan.accepted[0], &mut kp).unwrap();
+
+        let mut dynamic_worker = Worker::new(1);
+        for root in &registered.root_drv_paths {
+            dynamic_worker.want(root, &kp, true).unwrap();
+        }
+        let mut dynamic_builder = make_test_builder(bs);
+        let result = dynamic_worker.run(&mut dynamic_builder, &mut kp).await.unwrap();
+
+        assert!(registered.unit_drv_paths.contains_key("unit.dep"));
+        assert!(registered.unit_drv_paths.contains_key("unit.root"));
+        assert!(registered.unit_drv_paths.contains_key("unit.unused"));
+        assert_eq!(registered.root_drv_paths.len(), 1);
+        assert!(result.failed.is_empty());
+        assert_eq!(result.outcomes.len(), 1);
+        assert!(dynamic_worker.registry().get(&registered.unit_drv_paths["unit.dep"].to_absolute_path()).is_some());
+        assert!(dynamic_worker.registry().get(&registered.unit_drv_paths["unit.root"].to_absolute_path()).is_some());
+        assert!(
+            dynamic_worker
+                .registry()
+                .get(&registered.unit_drv_paths["unit.unused"].to_absolute_path())
+                .is_none()
+        );
     }
 
     #[tokio::test]
