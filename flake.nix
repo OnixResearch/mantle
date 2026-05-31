@@ -43,11 +43,10 @@
         # Common source filtering. The Rust workspace embeds Nickel stdlib files
         # from ./lib with include_str!, bootstrap tests read checked Nickel
         # definitions from ./bootstrap, benchmark checks read checked example
-        # workloads from ./examples, the executable transcript tests read
-        # checked Markdown fixtures from ./tests/fixtures, and the first checked
-        # operator walkthrough lives with the system-config example. Keep these
-        # directories alongside normal Cargo sources for Nix-built checks. The
-        # bootstrap blocker inventory gate also needs scripts/ and OpenSpec
+        # workloads from ./examples, and the executable transcript tests read
+        # checked Markdown fixtures from ./tests/fixtures. Keep these directories
+        # alongside normal Cargo sources for Nix-built checks. The bootstrap
+        # blocker inventory gate also needs scripts/ and OpenSpec
         # bootstrap text so flake checks inspect the same repo-controlled
         # sources as the local script.
         src = pkgs.lib.cleanSourceWith {

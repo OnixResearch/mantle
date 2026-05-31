@@ -448,21 +448,3 @@ fn checked_fast_fixtures_parse_through_transcript_runner() {
         .unwrap();
     assert!(status.success(), "doctor-success fixture must execute through the runner");
 }
-
-#[cfg(unix)]
-#[test]
-fn checked_operator_walkthrough_runs_through_transcript_runner() {
-    let dir = TempDir::new().unwrap();
-    let output = output_path(&dir, "system-config-walkthrough");
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let status = ProcessCommand::new(env!("CARGO_BIN_EXE_crunch"))
-        .args(["transcript", "run", "examples/system-config/README.md"])
-        .arg("--output")
-        .arg(&output)
-        .arg("--mantle-bin")
-        .arg(env!("CARGO_BIN_EXE_mantle"))
-        .current_dir(repo_root)
-        .status()
-        .unwrap();
-    assert!(status.success(), "system-config operator walkthrough must stay executable");
-}

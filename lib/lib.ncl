@@ -42,10 +42,6 @@ let fetch = import "fetch.ncl" in
   # Project outputs contract. Apply with: record | crunch.Project
   Project = import "project_outputs.ncl",
 
-  # System config contracts
-  SystemModule = import "system_module.ncl",
-  Inventory = import "inventory.ncl",
-
   # Output selection
   select
     | doc "Select a single output from a multi-output derivation. Returns a record suitable for the `inputs` array."

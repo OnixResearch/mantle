@@ -17,8 +17,6 @@ const STDLIB_FILES: &[(&str, &str)] = &[
     ("helpers.ncl", include_str!("../../../lib/helpers.ncl")),
     ("project.ncl", include_str!("../../../lib/project.ncl")),
     ("project_outputs.ncl", include_str!("../../../lib/project_outputs.ncl")),
-    ("inventory.ncl", include_str!("../../../lib/inventory.ncl")),
-    ("system_module.ncl", include_str!("../../../lib/system_module.ncl")),
     ("seed.ncl", include_str!("../../../lib/seed.ncl")),
 ];
 

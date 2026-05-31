@@ -14404,8 +14404,13 @@ rust-version = "1.80"
         std::fs::write(&later_variant, b"later").unwrap();
         let unit_index = 0usize;
         let expected_search_path_count = 2usize;
-        let mut unit =
-            test_rust_derivation(unit_index, "path+file:///workspace/crunch-system#0.1.0", "lib", "target", Vec::new());
+        let mut unit = test_rust_derivation(
+            unit_index,
+            "path+file:///workspace/duplicate-variant-crate#0.1.0",
+            "lib",
+            "target",
+            Vec::new(),
+        );
         let earlier_search_path =
             format!("{RUSTC_DEPENDENCY_SEARCH_PREFIX}{}", normalize_path_string(earlier_variant.parent().unwrap()));
         let later_search_path =

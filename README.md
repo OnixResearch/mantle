@@ -1279,33 +1279,17 @@ The lockfile (`mantle.lock`) stores resolved revisions and NAR hashes.
 hashing) and updates both `mantle.lock` and `.mantle/inputs.ncl`
 (generated Nickel bindings).
 
-## System configuration
+## Build-tool boundary
 
-`mantle` now has a native system-configuration pipeline for Nickel module
-inventories.
+Mantle is a build tool, not a NixOS-style module layer. Frontends such as Onix
+own their inventory, module ABI, role/tag expansion, settings validation,
+upstream/provider topology, and artifact/package policy. They should lower that
+module-layer state into concrete derivations, build plans, source inputs, or
+opaque evaluated data before invoking Mantle.
 
-```bash
-# Dry-run a checked-in example inventory to merged derivations
-mantle system eval examples/system-config/inventory.ncl
-
-# Stop after merged fragments instead of assembling derivations
-mantle system eval examples/system-config/inventory.ncl --stop-after fragments
-
-# Build the assembled machine derivations
-mantle system build examples/system-config/inventory.ncl
-```
-
-The default module directory is `./modules` next to the inventory file, and the
-checked-in example inventory uses `examples/system-config/modules/`. `mantle
-system eval` supports `--machine <name>` filters, `--assembler <name>` backend
-overrides, and `--format json|nickel` output selection (`nickel` is reserved but
-not implemented yet). `mantle system build` reuses the standard mantle build
-pipeline and, under `--json`, returns a machine-level envelope whose successful
-machine entries embed the existing `crunch-build-report-v1` payloads.
-
-For module shape, inventory schema, and authoring examples, see
-[`docs/system-config.md`](docs/system-config.md) and
-[`examples/system-config/README.md`](examples/system-config/README.md).
+Mantle's stable handoff surface is build shaped: `mantle eval` for derivation
+JSON, `mantle build` for realization, `mantle build --plan` for per-root action
+planning, store commands for local state, and build reports for results.
 
 ## CLI
 
@@ -1340,9 +1324,6 @@ mantle shell [name]              Enter or execute inside a dev shell
 mantle develop [name]            Deprecated alias for `mantle shell`
 mantle run [target] [-- args...] Build and execute a package binary (`.#name`, bare project package, or .ncl file)
 
-# System configuration
-mantle system eval <inventory>   Evaluate a module inventory to fragments or derivations
-mantle system build <inventory>  Build a module inventory through the system pipeline
 ```
 
 ### Global flags
