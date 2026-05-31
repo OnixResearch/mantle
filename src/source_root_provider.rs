@@ -6,15 +6,15 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::bootstrap_source_root::DIGEST_ALGORITHM_BLAKE3;
 use crate::bootstrap_source_root::DigestSpec;
 use crate::bootstrap_source_root::ManifestDiagnostic;
-use crate::bootstrap_source_root::ProviderDependencyTrace;
-use crate::bootstrap_source_root::SourceRootManifest;
-use crate::bootstrap_source_root::DIGEST_ALGORITHM_BLAKE3;
 use crate::bootstrap_source_root::PROVIDER_DYNAMIC_LINKER;
 use crate::bootstrap_source_root::PROVIDER_METADATA_ROLE;
 use crate::bootstrap_source_root::PROVIDER_NAME;
 use crate::bootstrap_source_root::PROVIDER_TARGET;
+use crate::bootstrap_source_root::ProviderDependencyTrace;
+use crate::bootstrap_source_root::SourceRootManifest;
 
 const TARGET: &str = "x86_64-linux-musl";
 const FETCH_TIMEOUT_SECS: u64 = 600;
@@ -31,7 +31,7 @@ const ARTIFACT_GMP: &str = "gmp";
 const ARTIFACT_MPFR: &str = "mpfr";
 const ARTIFACT_MPC: &str = "mpc";
 
-const REQUIRED_ARTIFACTS: &[&str] = &[
+pub(crate) const REQUIRED_ARTIFACTS: &[&str] = &[
     ARTIFACT_LINUX_HEADERS,
     ARTIFACT_MUSL,
     ARTIFACT_BINUTILS,
@@ -52,7 +52,11 @@ pub(crate) struct ProviderMaterialization {
 #[derive(Debug)]
 pub(crate) enum MaterializationError {
     Fetch(String),
-    DigestMismatch { artifact: String, expected: String, actual: String },
+    DigestMismatch {
+        artifact: String,
+        expected: String,
+        actual: String,
+    },
     Extract(String),
     Patch(String),
     Build(String),
@@ -65,7 +69,11 @@ impl std::fmt::Display for MaterializationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Fetch(msg) => write!(f, "fetch: {msg}"),
-            Self::DigestMismatch { artifact, expected, actual } => {
+            Self::DigestMismatch {
+                artifact,
+                expected,
+                actual,
+            } => {
                 write!(f, "digest mismatch for {artifact}: expected {expected}, got {actual}")
             }
             Self::Extract(msg) => write!(f, "extract: {msg}"),
@@ -91,6 +99,9 @@ pub(crate) fn materialize_source_root_provider(
     assert!(output_dir.is_absolute() || !output_dir.as_os_str().is_empty());
     assert!(scratch_dir.is_absolute() || !scratch_dir.as_os_str().is_empty());
 
+    crate::bootstrap_source_root::validate_source_root_manifest(manifest).map_err(MaterializationError::Validate)?;
+    reject_declared_patches(manifest)?;
+
     let manifest_digest = crate::bootstrap_source_root::source_root_manifest_digest(manifest_bytes);
     let artifact_map = index_artifacts(manifest)?;
 
@@ -101,7 +112,14 @@ pub(crate) fn materialize_source_root_provider(
     let sysroot_dir = prefix_dir.join(TARGET);
     let staging_dir = scratch_dir.join("staging");
 
-    for dir in [&downloads_dir, &sources_dir, &build_dir, &prefix_dir, &sysroot_dir, &staging_dir] {
+    for dir in [
+        &downloads_dir,
+        &sources_dir,
+        &build_dir,
+        &prefix_dir,
+        &sysroot_dir,
+        &staging_dir,
+    ] {
         fs::create_dir_all(dir).map_err(|e| MaterializationError::Extract(format!("mkdir {}: {e}", dir.display())))?;
     }
 
@@ -110,32 +128,25 @@ pub(crate) fn materialize_source_root_provider(
     let mut fetched_hashes = Vec::new();
 
     for name in REQUIRED_ARTIFACTS {
-        let artifact = artifact_map.get(*name).ok_or_else(|| MaterializationError::MissingArtifact(name.to_string()))?;
+        let artifact =
+            artifact_map.get(*name).ok_or_else(|| MaterializationError::MissingArtifact(name.to_string()))?;
         if verbose {
             eprintln!("  [fetch] {name}: {}", artifact.source);
         }
-        let archive_path = fetch_and_verify(
-            &artifact.source,
-            &artifact.digest,
-            &downloads_dir.join(format!("{name}.archive")),
-        )?;
+        let archive_path =
+            fetch_and_verify(&artifact.source, &artifact.digest, &downloads_dir.join(format!("{name}.archive")))?;
         fetched_urls.push(artifact.source.clone());
         fetched_hashes.push(artifact.digest.value.clone());
 
         if verbose {
             eprintln!("  [extract] {name}: kind={}", artifact.extraction_kind);
         }
-        extract_archive(&archive_path, &artifact.extraction_kind, artifact.strip_prefix.as_deref(), &sources_dir.join(name))?;
-    }
-
-    // Phase 0b: Apply patches in order.
-    let mut sorted_patches: Vec<_> = manifest.patches.iter().collect();
-    sorted_patches.sort_by_key(|p| p.apply_order);
-    for patch in &sorted_patches {
-        if verbose {
-            eprintln!("  [patch] {}: order={}", patch.name, patch.apply_order);
-        }
-        apply_patch(&patch.name, &sources_dir)?;
+        extract_archive(
+            &archive_path,
+            &artifact.extraction_kind,
+            artifact.strip_prefix.as_deref(),
+            &sources_dir.join(name),
+        )?;
     }
 
     let jobs = available_parallelism();
@@ -328,13 +339,7 @@ fn fetch_and_verify(url: &str, expected_digest: &DigestSpec, dest: &Path) -> Res
         };
 
         let mut body = Vec::new();
-        match response
-            .into_body()
-            .with_config()
-            .limit(FETCH_MAX_BYTES)
-            .reader()
-            .read_to_end(&mut body)
-        {
+        match response.into_body().with_config().limit(FETCH_MAX_BYTES).reader().read_to_end(&mut body) {
             Ok(_) => {}
             Err(e) => {
                 last_err = format!("{url}: reading body: {e}");
@@ -415,21 +420,26 @@ fn extract_archive(
     Ok(())
 }
 
-fn apply_patch(patch_name: &str, sources_dir: &Path) -> Result<(), MaterializationError> {
-    // TODO: Implement patch application when patches are declared in the manifest.
-    // For the initial source-root provider with upstream unpatched sources,
-    // this is a no-op placeholder. Once patches are added to the manifest,
-    // this must apply them with `patch -p1` in the correct source directory.
-    let _ = (patch_name, sources_dir);
+fn reject_declared_patches(manifest: &SourceRootManifest) -> Result<(), MaterializationError> {
+    if !manifest.patches.is_empty() {
+        return Err(MaterializationError::Patch(
+            "source-root provider patch materialization is not implemented; declared patches would be a placeholder"
+                .to_string(),
+        ));
+    }
+    for artifact in &manifest.artifacts {
+        if !artifact.patches.is_empty() {
+            return Err(MaterializationError::Patch(format!(
+                "source-root provider artifact {} declares patches but patch materialization is not implemented",
+                artifact.name
+            )));
+        }
+    }
     Ok(())
 }
 
 fn available_parallelism() -> u32 {
-    std::thread::available_parallelism()
-        .map(|n| n.get() as u32)
-        .unwrap_or(1)
-        .min(32)
-        .max(1)
+    std::thread::available_parallelism().map(|n| n.get() as u32).unwrap_or(1).min(32).max(1)
 }
 
 /// Discover a 64-bit host C compiler and build a clean PATH for provider
@@ -439,10 +449,7 @@ fn find_host_cc() -> Result<HostCompiler, MaterializationError> {
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     // NixOS gcc-wrapper paths from the running system closure.
-    if let Ok(out) = Command::new("nix-store")
-        .args(["-qR", "/run/current-system"])
-        .output()
-    {
+    if let Ok(out) = Command::new("nix-store").args(["-qR", "/run/current-system"]).output() {
         for line in String::from_utf8_lossy(&out.stdout).lines() {
             if line.contains("gcc-wrapper") && !line.contains("-man") {
                 let p = PathBuf::from(line.trim()).join("bin/gcc");
@@ -485,7 +492,9 @@ fn find_host_cc() -> Result<HostCompiler, MaterializationError> {
 
     for cc_path in &candidates {
         // Must be x86_64.
-        let Ok(out) = Command::new(cc_path).arg("-dumpmachine").output() else { continue };
+        let Ok(out) = Command::new(cc_path).arg("-dumpmachine").output() else {
+            continue;
+        };
         let triple = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !triple.contains("x86_64") {
             continue;
@@ -517,9 +526,7 @@ fn find_host_cc() -> Result<HostCompiler, MaterializationError> {
             .map(|d| d.join("g++"))
             .filter(|p| p.is_file())
             .or_else(|| cc_dir.as_ref().map(|d| d.join("c++")).filter(|p| p.is_file()))
-            .unwrap_or_else(|| {
-                which_cmd("g++").or_else(|| which_cmd("c++")).unwrap_or_else(|| PathBuf::from("g++"))
-            });
+            .unwrap_or_else(|| which_cmd("g++").or_else(|| which_cmd("c++")).unwrap_or_else(|| PathBuf::from("g++")));
 
         let clean_path = build_clean_provider_path(cc_dir.as_deref());
         return Ok(HostCompiler {
@@ -558,11 +565,7 @@ fn build_clean_provider_path(cc_dir: Option<&Path>) -> String {
         dirs.push(d.display().to_string());
     }
     // Essential system tool directories.
-    for d in [
-        "/run/current-system/sw/bin",
-        "/usr/bin",
-        "/bin",
-    ] {
+    for d in ["/run/current-system/sw/bin", "/usr/bin", "/bin"] {
         if Path::new(d).is_dir() && !dirs.iter().any(|existing| existing == d) {
             dirs.push(d.to_string());
         }
@@ -602,15 +605,15 @@ fn run_build_cmd(label: &str, cmd: &mut Command) -> Result<(), MaterializationEr
 fn install_linux_headers(src: &Path, sysroot: &Path, clean_path: &str) -> Result<(), MaterializationError> {
     assert!(src.exists(), "Linux source not extracted");
     let include_dir = sysroot.join("include");
-    fs::create_dir_all(&include_dir)
-        .map_err(|e| MaterializationError::Build(format!("mkdir sysroot/include: {e}")))?;
+    fs::create_dir_all(&include_dir).map_err(|e| MaterializationError::Build(format!("mkdir sysroot/include: {e}")))?;
 
     run_build_cmd(
         "linux-headers",
-        Command::new("make")
-            .current_dir(src)
-            .env("PATH", clean_path)
-            .args(["ARCH=x86_64", &format!("INSTALL_HDR_PATH={}", sysroot.display()), "headers_install"]),
+        Command::new("make").current_dir(src).env("PATH", clean_path).args([
+            "ARCH=x86_64",
+            &format!("INSTALL_HDR_PATH={}", sysroot.display()),
+            "headers_install",
+        ]),
     )
 }
 
@@ -625,8 +628,7 @@ fn build_binutils(
     clean_path: &str,
 ) -> Result<(), MaterializationError> {
     assert!(src.exists(), "binutils source not extracted");
-    fs::create_dir_all(build_dir)
-        .map_err(|e| MaterializationError::Build(format!("mkdir binutils build: {e}")))?;
+    fs::create_dir_all(build_dir).map_err(|e| MaterializationError::Build(format!("mkdir binutils build: {e}")))?;
 
     let configure = src.join("configure");
     run_build_cmd(
@@ -651,15 +653,14 @@ fn build_binutils(
         Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg(format!("-j{jobs}")),
     )?;
 
-    run_build_cmd("binutils-install", Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg("install"))
+    run_build_cmd(
+        "binutils-install",
+        Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg("install"),
+    )
 }
 
 fn symlink_gcc_prereqs(sources_dir: &Path, gcc_src: &Path) -> Result<(), MaterializationError> {
-    for (name, dir_name) in [
-        (ARTIFACT_GMP, "gmp"),
-        (ARTIFACT_MPFR, "mpfr"),
-        (ARTIFACT_MPC, "mpc"),
-    ] {
+    for (name, dir_name) in [(ARTIFACT_GMP, "gmp"), (ARTIFACT_MPFR, "mpfr"), (ARTIFACT_MPC, "mpc")] {
         let src = sources_dir.join(name);
         let dst = gcc_src.join(dir_name);
         if dst.exists() || dst.is_symlink() {
@@ -688,8 +689,7 @@ fn build_gcc_stage1(
     clean_path: &str,
 ) -> Result<(), MaterializationError> {
     assert!(src.exists(), "GCC source not extracted");
-    fs::create_dir_all(build_dir)
-        .map_err(|e| MaterializationError::Build(format!("mkdir gcc-stage1 build: {e}")))?;
+    fs::create_dir_all(build_dir).map_err(|e| MaterializationError::Build(format!("mkdir gcc-stage1 build: {e}")))?;
 
     let configure = src.join("configure");
     run_build_cmd(
@@ -746,8 +746,7 @@ fn build_musl(
     clean_path: &str,
 ) -> Result<(), MaterializationError> {
     assert!(src.exists(), "musl source not extracted");
-    fs::create_dir_all(build_dir)
-        .map_err(|e| MaterializationError::Build(format!("mkdir musl build: {e}")))?;
+    fs::create_dir_all(build_dir).map_err(|e| MaterializationError::Build(format!("mkdir musl build: {e}")))?;
 
     let gcc_path = prefix.join("bin").join(format!("{TARGET}-gcc"));
     let ar_path = prefix.join("bin").join(format!("{TARGET}-ar"));
@@ -766,10 +765,7 @@ fn build_musl(
         Command::new(&configure)
             .current_dir(build_dir)
             .env("PATH", clean_path)
-            .args([
-                &format!("--host={TARGET}"),
-                &format!("--prefix={}", sysroot.display()),
-            ])
+            .args([&format!("--host={TARGET}"), &format!("--prefix={}", sysroot.display())])
             .env("CC", &gcc_path)
             .env("AR", &ar_path)
             .env("RANLIB", &ranlib_path),
@@ -794,8 +790,7 @@ fn build_gcc_stage2(
     clean_path: &str,
 ) -> Result<(), MaterializationError> {
     assert!(src.exists(), "GCC source not extracted");
-    fs::create_dir_all(build_dir)
-        .map_err(|e| MaterializationError::Build(format!("mkdir gcc-stage2 build: {e}")))?;
+    fs::create_dir_all(build_dir).map_err(|e| MaterializationError::Build(format!("mkdir gcc-stage2 build: {e}")))?;
 
     let configure = src.join("configure");
     run_build_cmd(
@@ -822,14 +817,13 @@ fn build_gcc_stage2(
         Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg(format!("-j{jobs}")),
     )?;
 
-    run_build_cmd("gcc-stage2-install", Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg("install"))
+    run_build_cmd(
+        "gcc-stage2-install",
+        Command::new("make").current_dir(build_dir).env("PATH", clean_path).arg("install"),
+    )
 }
 
-fn normalize_into_seed_contract(
-    prefix: &Path,
-    sysroot: &Path,
-    staging: &Path,
-) -> Result<(), MaterializationError> {
+fn normalize_into_seed_contract(prefix: &Path, sysroot: &Path, staging: &Path) -> Result<(), MaterializationError> {
     let staging_bin = staging.join("bin");
     let staging_lib = staging.join("lib");
     let staging_libexec = staging.join("libexec");
@@ -837,7 +831,14 @@ fn normalize_into_seed_contract(
     let staging_sysroot_include = staging_sysroot.join("include");
     let staging_sysroot_lib = staging_sysroot.join("lib");
 
-    for dir in [&staging_bin, &staging_lib, &staging_libexec, &staging_sysroot, &staging_sysroot_include, &staging_sysroot_lib] {
+    for dir in [
+        &staging_bin,
+        &staging_lib,
+        &staging_libexec,
+        &staging_sysroot,
+        &staging_sysroot_include,
+        &staging_sysroot_lib,
+    ] {
         fs::create_dir_all(dir).map_err(|e| MaterializationError::Normalize(format!("mkdir: {e}")))?;
     }
 
@@ -881,7 +882,14 @@ fn normalize_into_seed_contract(
     // Ensure key contract libraries are in the sysroot lib.
     // GCC installs libgcc_s/libstdc++ into deep subdirs like
     // lib/gcc/<target>/<version>/ — search recursively.
-    for lib in ["libgcc_s.so", "libgcc_s.so.1", "libc.so", "libstdc++.a", "libstdc++.so", "libsupc++.a"] {
+    for lib in [
+        "libgcc_s.so",
+        "libgcc_s.so.1",
+        "libc.so",
+        "libstdc++.a",
+        "libstdc++.so",
+        "libsupc++.a",
+    ] {
         let in_sysroot = staging_sysroot_lib.join(lib);
         if !in_sysroot.exists() {
             if let Some(found) = find_file_recursive(&staging_lib, lib) {
@@ -941,14 +949,11 @@ fn make_binaries_self_contained(staging: &Path) -> Result<(), MaterializationErr
     for interp in &interpreters {
         let interp_path = Path::new(interp);
         if !interp_path.exists() {
-            return Err(MaterializationError::Normalize(format!(
-                "ELF interpreter {interp} not found on host"
-            )));
+            return Err(MaterializationError::Normalize(format!("ELF interpreter {interp} not found on host")));
         }
         let fname = interp_path.file_name().unwrap().to_str().unwrap().to_string();
         let dest = host_runtime_dir.join(&fname);
-        fs::copy(interp_path, &dest)
-            .map_err(|e| MaterializationError::Normalize(format!("copy {interp}: {e}")))?;
+        fs::copy(interp_path, &dest).map_err(|e| MaterializationError::Normalize(format!("copy {interp}: {e}")))?;
         use std::os::unix::fs::PermissionsExt;
         let mut perms = fs::metadata(&dest)
             .map_err(|e| MaterializationError::Normalize(format!("stat {}: {e}", dest.display())))?
@@ -1040,8 +1045,7 @@ fn walkdir(dir: &Path) -> Result<Vec<PathBuf>, MaterializationError> {
         }
         Ok(())
     }
-    walk(dir, &mut result)
-        .map_err(|e| MaterializationError::Normalize(format!("walkdir {}: {e}", dir.display())))?;
+    walk(dir, &mut result).map_err(|e| MaterializationError::Normalize(format!("walkdir {}: {e}", dir.display())))?;
     Ok(result)
 }
 
@@ -1079,9 +1083,8 @@ fn wrap_elf_dir(dir: &Path, interp_filename: &str) -> Result<(), Materialization
              while [ ! -d \"$_r/host-runtime\" ] && [ \"$_r\" != \"/\" ]; do _r=\"${{_r%/*}}\"; done\n\
              exec \"$_r/host-runtime/{interp_filename}\" --library-path \"$_r/host-runtime\" --argv0 \"$0\" \"$_d/{real_name}\" \"$@\"\n"
         );
-        fs::write(&entry, wrapper.as_bytes()).map_err(|e| {
-            MaterializationError::Normalize(format!("write wrapper {}: {e}", entry.display()))
-        })?;
+        fs::write(&entry, wrapper.as_bytes())
+            .map_err(|e| MaterializationError::Normalize(format!("write wrapper {}: {e}", entry.display())))?;
         use std::os::unix::fs::PermissionsExt;
         let mut perms = fs::metadata(&entry)
             .map_err(|e| MaterializationError::Normalize(format!("stat {}: {e}", entry.display())))?
@@ -1093,10 +1096,7 @@ fn wrap_elf_dir(dir: &Path, interp_filename: &str) -> Result<(), Materialization
     Ok(())
 }
 
-fn resolve_and_copy_libs(
-    bin_dir: &Path,
-    dest: &Path,
-) -> Result<(), MaterializationError> {
+fn resolve_and_copy_libs(bin_dir: &Path, dest: &Path) -> Result<(), MaterializationError> {
     for entry in walkdir(bin_dir)? {
         if !entry.is_file() {
             continue;
@@ -1122,10 +1122,7 @@ fn resolve_and_copy_libs(
                         let lib_dest = dest.join(lib_name);
                         if !lib_dest.exists() {
                             fs::copy(lib_path, &lib_dest).map_err(|e| {
-                                MaterializationError::Normalize(format!(
-                                    "copy lib {}: {e}",
-                                    lib_path.display()
-                                ))
+                                MaterializationError::Normalize(format!("copy lib {}: {e}", lib_path.display()))
                             })?;
                         }
                     }
@@ -1136,17 +1133,29 @@ fn resolve_and_copy_libs(
     Ok(())
 }
 
-
-
 fn is_retained_unprefixed_tool(name: &str) -> bool {
-    matches!(name, "ar" | "as" | "ld" | "ld.bfd" | "nm" | "objcopy" | "objdump" | "ranlib" | "readelf" | "size" | "strings" | "strip")
+    matches!(
+        name,
+        "ar" | "as"
+            | "ld"
+            | "ld.bfd"
+            | "nm"
+            | "objcopy"
+            | "objdump"
+            | "ranlib"
+            | "readelf"
+            | "size"
+            | "strings"
+            | "strip"
+    )
 }
 
 fn copy_file_or_link(src: &Path, dst: &Path) -> Result<(), MaterializationError> {
     if let Ok(target) = fs::read_link(src) {
         if target.is_relative() {
-            std::os::unix::fs::symlink(&target, dst)
-                .map_err(|e| MaterializationError::Normalize(format!("symlink {} -> {}: {e}", dst.display(), target.display())))?;
+            std::os::unix::fs::symlink(&target, dst).map_err(|e| {
+                MaterializationError::Normalize(format!("symlink {} -> {}: {e}", dst.display(), target.display()))
+            })?;
             return Ok(());
         }
     }
@@ -1161,7 +1170,9 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<(), MaterializationError> {
     }
     fs::create_dir_all(dst).map_err(|e| MaterializationError::Normalize(format!("mkdir {}: {e}", dst.display())))?;
 
-    for entry in fs::read_dir(src).map_err(|e| MaterializationError::Normalize(format!("readdir {}: {e}", src.display())))? {
+    for entry in
+        fs::read_dir(src).map_err(|e| MaterializationError::Normalize(format!("readdir {}: {e}", src.display())))?
+    {
         let entry = entry.map_err(|e| MaterializationError::Normalize(format!("readdir entry: {e}")))?;
         let entry_dst = dst.join(entry.file_name());
         let ft = entry.file_type().map_err(|e| MaterializationError::Normalize(format!("filetype: {e}")))?;
@@ -1175,27 +1186,29 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<(), MaterializationError> {
 }
 
 fn drop_unwanted_components(staging: &Path) -> Result<(), MaterializationError> {
-    let removals = [
-        "share/locale",
-        "share/man",
-        "share/info",
-    ];
+    let removals = ["share/locale", "share/man", "share/info"];
     for rel in &removals {
         let path = staging.join(rel);
         if path.exists() {
-            fs::remove_dir_all(&path)
-                .map_err(|e| MaterializationError::Normalize(format!("removing {rel}: {e}")))?;
+            fs::remove_dir_all(&path).map_err(|e| MaterializationError::Normalize(format!("removing {rel}: {e}")))?;
         }
     }
 
     let bin = staging.join("bin");
     if bin.is_dir() {
         let unwanted_bin = [
-            "lto-dump", "gcov", "gcov-dump", "gcov-tool",
-            &format!("{TARGET}-gfortran"), "gfortran",
-            "ld.gold", &format!("{TARGET}-ld.gold"),
-            "dwp", &format!("{TARGET}-dwp"),
-            "gprof", &format!("{TARGET}-gprof"),
+            "lto-dump",
+            "gcov",
+            "gcov-dump",
+            "gcov-tool",
+            &format!("{TARGET}-gfortran"),
+            "gfortran",
+            "ld.gold",
+            &format!("{TARGET}-ld.gold"),
+            "dwp",
+            &format!("{TARGET}-dwp"),
+            "gprof",
+            &format!("{TARGET}-gprof"),
         ];
         for name in &unwanted_bin {
             let path = bin.join(name);
@@ -1205,9 +1218,7 @@ fn drop_unwanted_components(staging: &Path) -> Result<(), MaterializationError> 
         }
     }
 
-    let unwanted_libs = [
-        "libgfortran.a", "libgfortran.so",
-    ];
+    let unwanted_libs = ["libgfortran.a", "libgfortran.so"];
     let lib = staging.join("lib");
     if lib.is_dir() {
         for name in &unwanted_libs {
@@ -1230,10 +1241,7 @@ fn validate_seed_contract_layout(staging: &Path) -> Result<(), MaterializationEr
         format!("{TARGET}/lib/libgcc_s.so.1"),
         format!("{TARGET}/lib/libc.so"),
     ];
-    let required_dirs = [
-        format!("{TARGET}/include"),
-        format!("{TARGET}/include/linux"),
-    ];
+    let required_dirs = [format!("{TARGET}/include"), format!("{TARGET}/include/linux")];
 
     for rel in &required_files {
         let path = staging.join(rel);
@@ -1259,13 +1267,12 @@ fn validate_seed_contract_layout(staging: &Path) -> Result<(), MaterializationEr
 /// `ld`, etc. in `<prefix>/<target>/bin/`, not on PATH.
 fn create_target_bin_forwarders(staging: &Path) -> Result<(), MaterializationError> {
     let target_bin = staging.join(TARGET).join("bin");
-    fs::create_dir_all(&target_bin)
-        .map_err(|e| MaterializationError::Normalize(format!("mkdir {TARGET}/bin: {e}")))?;
+    fs::create_dir_all(&target_bin).map_err(|e| MaterializationError::Normalize(format!("mkdir {TARGET}/bin: {e}")))?;
 
     let prefix_with_dash = format!("{TARGET}-");
     let bin_dir = staging.join("bin");
-    let entries = fs::read_dir(&bin_dir)
-        .map_err(|e| MaterializationError::Normalize(format!("read bin for forwarders: {e}")))?;
+    let entries =
+        fs::read_dir(&bin_dir).map_err(|e| MaterializationError::Normalize(format!("read bin for forwarders: {e}")))?;
 
     let mut count: u32 = 0;
     for entry in entries.flatten() {
@@ -1276,9 +1283,7 @@ fn create_target_bin_forwarders(staging: &Path) -> Result<(), MaterializationErr
                 continue; // skip .elf hidden files
             }
             let forwarder_path = target_bin.join(unprefixed);
-            let script = format!(
-                "#!/bin/sh\nexec \"${{0%/*}}/../../bin/{name_str}\" \"$@\"\n"
-            );
+            let script = format!("#!/bin/sh\nexec \"${{0%/*}}/../../bin/{name_str}\" \"$@\"\n");
             fs::write(&forwarder_path, &script)
                 .map_err(|e| MaterializationError::Normalize(format!("write forwarder {unprefixed}: {e}")))?;
             #[cfg(unix)]
@@ -1327,7 +1332,8 @@ fn write_source_root_provider_json(staging: &Path, manifest_digest: &str) -> Res
     let json_path = meta_dir.join("provider.json");
     let content = serde_json::to_string_pretty(&provider_json)
         .map_err(|e| MaterializationError::Normalize(format!("serializing provider.json: {e}")))?;
-    fs::write(&json_path, &content).map_err(|e| MaterializationError::Normalize(format!("writing provider.json: {e}")))?;
+    fs::write(&json_path, &content)
+        .map_err(|e| MaterializationError::Normalize(format!("writing provider.json: {e}")))?;
     Ok(())
 }
 
@@ -1422,6 +1428,50 @@ mod tests {
     use super::*;
     use crate::bootstrap_source_root::REQUIRED_PROVIDER_TOOL_ROLES;
 
+    const TEST_BLAKE3_HEX_LEN: usize = 64;
+    const FIRST_PATCH_ORDER: u32 = 1;
+
+    fn digest_fixture(nibble: char) -> DigestSpec {
+        DigestSpec {
+            algorithm: DIGEST_ALGORITHM_BLAKE3.to_string(),
+            value: nibble.to_string().repeat(TEST_BLAKE3_HEX_LEN),
+            non_blake3_reason: None,
+        }
+    }
+
+    fn patchless_manifest_fixture() -> SourceRootManifest {
+        SourceRootManifest {
+            version: Some(crate::bootstrap_source_root::SOURCE_ROOT_MANIFEST_VERSION),
+            artifacts: REQUIRED_ARTIFACTS
+                .iter()
+                .map(|name| crate::bootstrap_source_root::SourceArtifact {
+                    name: (*name).to_string(),
+                    source: format!("https://example.invalid/{name}.tar.gz"),
+                    digest: digest_fixture('a'),
+                    extraction: crate::bootstrap_source_root::ExtractionRule {
+                        kind: "tar.gz".to_string(),
+                        strip_prefix: Some((*name).to_string()),
+                    },
+                    provenance: "fixture source".to_string(),
+                    patches: Vec::new(),
+                })
+                .collect(),
+            patches: Vec::new(),
+            network_trust_roots: Vec::new(),
+            trust_notes: Vec::new(),
+            expected_outputs: REQUIRED_PROVIDER_TOOL_ROLES
+                .iter()
+                .map(|role| crate::bootstrap_source_root::ExpectedProviderOutput {
+                    name: (*role).to_string(),
+                    kind: "file-or-directory".to_string(),
+                    digest: digest_fixture('c'),
+                    provenance: "fixture output".to_string(),
+                    contract_role: (*role).to_string(),
+                })
+                .collect(),
+        }
+    }
+
     #[test]
     fn index_artifacts_rejects_missing_required() {
         let manifest = SourceRootManifest {
@@ -1437,6 +1487,27 @@ mod tests {
     }
 
     #[test]
+    fn source_root_materialization_rejects_declared_patches_before_fetch() {
+        let mut manifest = patchless_manifest_fixture();
+        manifest.patches.push(crate::bootstrap_source_root::SourcePatch {
+            name: "fix.patch".to_string(),
+            digest: digest_fixture('b'),
+            provenance: "fixture patch".to_string(),
+            apply_order: FIRST_PATCH_ORDER,
+        });
+        manifest.artifacts[0].patches.push("fix.patch".to_string());
+        let bytes = serde_json::to_vec(&manifest).unwrap();
+        let scratch = tempfile::tempdir().unwrap();
+        let output = scratch.path().join("provider-output");
+
+        let err = materialize_source_root_provider(&manifest, &bytes, &output, scratch.path(), false).unwrap_err();
+
+        assert!(matches!(err, MaterializationError::Patch(_)));
+        assert!(err.to_string().contains("placeholder") || err.to_string().contains("not implemented"));
+        assert!(!output.exists(), "patch rejection must happen before materializing output");
+    }
+
+    #[test]
     fn available_parallelism_returns_bounded_value() {
         let jobs = available_parallelism();
         assert!(jobs >= 1);
@@ -1448,7 +1519,19 @@ mod tests {
         assert_eq!(
             ["tar.gz", "tar.xz", "tar.bz2", "tar", "tgz", "txz", "tbz2"]
                 .iter()
-                .filter(|k| matches!(k.as_ref(), "tar.gz" | "tar.gzip" | "tgz" | "tar.xz" | "tar.lzma" | "txz" | "tar.bz2" | "tar.bzip2" | "tbz2" | "tar"))
+                .filter(|k| matches!(
+                    k.as_ref(),
+                    "tar.gz"
+                        | "tar.gzip"
+                        | "tgz"
+                        | "tar.xz"
+                        | "tar.lzma"
+                        | "txz"
+                        | "tar.bz2"
+                        | "tar.bzip2"
+                        | "tbz2"
+                        | "tar"
+                ))
                 .count(),
             7
         );
@@ -1473,9 +1556,7 @@ mod tests {
 
         let json_path = staging.path().join("share/crunch-bootstrap/provider.json");
         assert!(json_path.exists());
-        let content: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(&json_path).unwrap(),
-        ).unwrap();
+        let content: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&json_path).unwrap()).unwrap();
 
         assert_eq!(content["name"].as_str().unwrap(), PROVIDER_NAME);
         assert_eq!(content["target"].as_str().unwrap(), PROVIDER_TARGET);
@@ -1485,10 +1566,7 @@ mod tests {
         assert!(content["reduction"]["retained_tools"].is_array());
         assert!(content["reduction"]["dropped_components"].is_array());
         assert!(content["notes"].is_array());
-        assert_eq!(
-            content["source_root"]["manifest_digest"].as_str().unwrap(),
-            manifest_digest
-        );
+        assert_eq!(content["source_root"]["manifest_digest"].as_str().unwrap(), manifest_digest);
     }
 
     #[test]
@@ -1497,9 +1575,7 @@ mod tests {
         write_source_root_provider_json(staging.path(), "test").unwrap();
 
         let json_path = staging.path().join("share/crunch-bootstrap/provider.json");
-        let content: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(&json_path).unwrap(),
-        ).unwrap();
+        let content: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&json_path).unwrap()).unwrap();
 
         let retained: Vec<&str> = content["reduction"]["retained_tools"]
             .as_array()
@@ -1509,10 +1585,7 @@ mod tests {
             .collect();
 
         for role in REQUIRED_PROVIDER_TOOL_ROLES {
-            assert!(
-                retained.contains(role),
-                "source-root provider.json must list role {role} in retained_tools"
-            );
+            assert!(retained.contains(role), "source-root provider.json must list role {role} in retained_tools");
         }
     }
 
@@ -1574,10 +1647,7 @@ mod tests {
 
         let err = validate_seed_contract_layout(staging.path()).unwrap_err();
         let msg = err.to_string();
-        assert!(
-            msg.contains("include"),
-            "should report missing include dir, got: {msg}"
-        );
+        assert!(msg.contains("include"), "should report missing include dir, got: {msg}");
     }
 
     #[test]
@@ -1588,7 +1658,13 @@ mod tests {
 
         let tool_roles: Vec<&str> = REQUIRED_PROVIDER_TOOL_ROLES
             .iter()
-            .filter(|r| !r.contains('/') && !r.ends_with("-include") && !r.ends_with("-libgcc_s.so.1") && !r.ends_with("-libc.so") && !r.ends_with("-cxx-runtime"))
+            .filter(|r| {
+                !r.contains('/')
+                    && !r.ends_with("-include")
+                    && !r.ends_with("-libgcc_s.so.1")
+                    && !r.ends_with("-libc.so")
+                    && !r.ends_with("-cxx-runtime")
+            })
             .copied()
             .collect();
         for tool in &tool_roles {
@@ -1611,10 +1687,7 @@ mod tests {
         let roles = discover_emitted_roles(staging.path()).unwrap();
 
         for required in REQUIRED_PROVIDER_TOOL_ROLES {
-            assert!(
-                roles.contains(&required.to_string()),
-                "emitted roles must include {required}, got: {roles:?}"
-            );
+            assert!(roles.contains(&required.to_string()), "emitted roles must include {required}, got: {roles:?}");
         }
     }
 
@@ -1625,15 +1698,11 @@ mod tests {
         let staging = tempfile::tempdir().unwrap();
         write_source_root_provider_json(staging.path(), "test").unwrap();
         let json_path = staging.path().join("share/crunch-bootstrap/provider.json");
-        let source_root: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(&json_path).unwrap(),
-        ).unwrap();
+        let source_root: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&json_path).unwrap()).unwrap();
 
         for field in &required_fields {
-            assert!(
-                !source_root[field].is_null(),
-                "source-root provider.json must have field '{field}'"
-            );
+            assert!(!source_root[field].is_null(), "source-root provider.json must have field '{field}'");
         }
 
         let reduction_fields = ["retained_tools", "dropped_components"];
@@ -1650,15 +1719,10 @@ mod tests {
         let staging = tempfile::tempdir().unwrap();
         write_source_root_provider_json(staging.path(), "test-digest-hex").unwrap();
         let json_path = staging.path().join("share/crunch-bootstrap/provider.json");
-        let content: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(&json_path).unwrap(),
-        ).unwrap();
+        let content: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&json_path).unwrap()).unwrap();
 
         assert!(content["source_root"].is_object());
-        assert_eq!(
-            content["source_root"]["manifest_digest"].as_str().unwrap(),
-            "test-digest-hex"
-        );
+        assert_eq!(content["source_root"]["manifest_digest"].as_str().unwrap(), "test-digest-hex");
         assert!(
             content.get("raw").is_none() || content["raw"].is_null(),
             "source-root provider must not have a 'raw' field (that's legacy)"

@@ -33,6 +33,7 @@ mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
 mod shell_cmd;
+mod source_root_provider;
 mod source_toolchain_closure;
 mod store_cmd;
 mod structured_refactor;
@@ -1713,6 +1714,8 @@ fn run_build_command(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SourceRootManifestCheck {
+    manifest: bootstrap_source_root::SourceRootManifest,
+    manifest_bytes: Vec<u8>,
     manifest_digest: String,
     expected_output_role_count: u32,
 }
@@ -1728,33 +1731,121 @@ fn validate_source_root_manifest_file(manifest_path: &Path) -> Result<SourceRoot
         bootstrap_source_root::parse_source_root_manifest_bytes(&manifest_bytes).map_err(RunError::Internal)?;
     let validation = bootstrap_source_root::validate_source_root_manifest(&manifest)
         .map_err(|errors| RunError::Internal(bootstrap_source_root::format_diagnostics(&errors)))?;
-    let empty_provider_trace = bootstrap_source_root::ProviderDependencyTrace {
-        urls: Vec::new(),
-        hashes: Vec::new(),
-        emitted_output_roles: Vec::new(),
-        provider_metadata: Vec::new(),
-    };
-    bootstrap_source_root::validate_provider_dependency_trace(&manifest, &empty_provider_trace)
-        .map_err(|errors| RunError::Internal(bootstrap_source_root::format_diagnostics(&errors)))?;
     let expected_output_role_count = u32::try_from(validation.expected_output_roles.len()).map_err(|_| {
         RunError::Internal("source-root manifest expected output role count overflowed u32".to_string())
     })?;
     let manifest_digest = bootstrap_source_root::source_root_manifest_digest(&manifest_bytes);
     Ok(SourceRootManifestCheck {
+        manifest,
+        manifest_bytes,
         manifest_digest,
         expected_output_role_count,
     })
 }
 
-fn bootstrap_source_root_provider(output: &Path, manifest_path: &Path) -> Result<(), RunError> {
+fn bootstrap_source_root_provider(
+    output: &Path,
+    manifest_path: &Path,
+    store_dir: &Path,
+    verbose: bool,
+) -> Result<(), RunError> {
+    if !store_dir.exists() {
+        return Err(RunError::Internal(format!(
+            "store directory {} does not exist.\nCreate it with: sudo mkdir -p {0} && sudo chown $USER {0}",
+            store_dir.display()
+        )));
+    }
     let checked = validate_source_root_manifest_file(manifest_path)?;
-    Err(RunError::Build(format!(
-        "{}: manifest_digest={} expected_output_roles={} output={}",
-        bootstrap_source_root::SOURCE_ROOT_BLOCKED_REASON,
-        checked.manifest_digest,
-        checked.expected_output_role_count,
-        output.display()
-    )))
+    let scratch = tempfile::Builder::new()
+        .prefix("mantle-source-root-")
+        .tempdir_in(store_dir)
+        .map_err(|err| RunError::Internal(format!("creating source-root scratch in {}: {err}", store_dir.display())))?;
+    let provisional_output = scratch.path().join("provider-output");
+    let materialized = source_root_provider::materialize_source_root_provider(
+        &checked.manifest,
+        &checked.manifest_bytes,
+        &provisional_output,
+        scratch.path(),
+        verbose,
+    )
+    .map_err(|err| RunError::Build(format!("source-root provider materialization failed: {err}")))?;
+    if materialized.manifest_digest != checked.manifest_digest {
+        return Err(RunError::Internal(
+            "source-root provider manifest digest drifted during materialization".to_string(),
+        ));
+    }
+    let store_name = source_root_provider_store_name(&materialized.output_digest)?;
+    let final_output = store_dir.join(store_name);
+    if final_output.exists() {
+        if !final_output.is_dir() {
+            return Err(RunError::Build(format!(
+                "source-root provider output path exists but is not a directory: {}",
+                final_output.display()
+            )));
+        }
+        fs::remove_dir_all(&materialized.output_path).map_err(|err| {
+            RunError::Internal(format!(
+                "removing duplicate source-root output {}: {err}",
+                materialized.output_path.display()
+            ))
+        })?;
+    } else {
+        fs::rename(&materialized.output_path, &final_output).map_err(|err| {
+            RunError::Internal(format!(
+                "moving source-root provider {} to {}: {err}",
+                materialized.output_path.display(),
+                final_output.display()
+            ))
+        })?;
+    }
+
+    let logical_path = final_output.display().to_string();
+    let seed_ncl =
+        bootstrap::generate_source_root_seed_ncl(&logical_path, &checked.manifest_digest, &materialized.output_digest);
+    fs::write(output, seed_ncl).map_err(|err| RunError::Internal(format!("writing {}: {err}", output.display())))?;
+    eprintln!("Materialized source-root provider {}", final_output.display());
+    eprintln!("  manifest_digest: {}", checked.manifest_digest);
+    eprintln!("  output_digest: {}", materialized.output_digest);
+    eprintln!("  expected_output_roles: {}", checked.expected_output_role_count);
+    eprintln!("  dependency_trace_urls: {}", materialized.dependency_trace.urls.len());
+    eprintln!("Wrote {}", output.display());
+    Ok(())
+}
+
+const SOURCE_ROOT_STORE_DIGEST_BYTES: usize = 20;
+#[cfg(test)]
+const NIX_BASE32_STORE_HASH_CHARS: usize = 32;
+#[cfg(test)]
+const FIRST_SOURCE_ROOT_PATCH_ORDER: u32 = 1;
+const HEX_CHARS_PER_BYTE: usize = 2;
+const HEX_RADIX: u32 = 16;
+
+fn source_root_provider_store_name(output_digest_hex: &str) -> Result<String, RunError> {
+    let digest_bytes = decode_blake3_hex(output_digest_hex)?;
+    let hash_part = nix_compat::nixbase32::encode(&digest_bytes[..SOURCE_ROOT_STORE_DIGEST_BYTES]);
+    Ok(format!("{hash_part}-{}", bootstrap_source_root::PROVIDER_NAME))
+}
+
+fn decode_blake3_hex(value: &str) -> Result<[u8; blake3::OUT_LEN], RunError> {
+    if value.len() != blake3::OUT_LEN * HEX_CHARS_PER_BYTE {
+        return Err(RunError::Internal(format!(
+            "source-root provider output digest must be {} lowercase hex chars",
+            blake3::OUT_LEN * HEX_CHARS_PER_BYTE
+        )));
+    }
+    let mut bytes = [0u8; blake3::OUT_LEN];
+    for (idx, byte) in bytes.iter_mut().enumerate() {
+        let start = idx * HEX_CHARS_PER_BYTE;
+        let end = start + HEX_CHARS_PER_BYTE;
+        let pair = &value[start..end];
+        if !pair.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+            return Err(RunError::Internal("source-root provider output digest must be lowercase hex".to_string()));
+        }
+        *byte = u8::from_str_radix(pair, HEX_RADIX).map_err(|err| {
+            RunError::Internal(format!("parsing source-root provider output digest byte {idx}: {err}"))
+        })?;
+    }
+    Ok(bytes)
 }
 
 fn load_stage0_inventory_policy(path: &Path) -> Result<protected_exec::ProtectedExecPolicy, RunError> {
@@ -1827,7 +1918,7 @@ fn run_bootstrap_command(
         }
         bootstrap_source_root::BootstrapProviderMode::SourceRoot => {
             let manifest_path = source_root.expect("source-root mode must carry manifest path");
-            bootstrap_source_root_provider(output, manifest_path)
+            bootstrap_source_root_provider(output, manifest_path, &ctx.store, ctx.verbose)
         }
         bootstrap_source_root::BootstrapProviderMode::StagexLineage => {
             let manifest_path = stagex_lineage.expect("stagex-lineage mode must carry manifest path");
@@ -2966,6 +3057,88 @@ mod tests {
             strict_hermetic: false,
             ..
         }));
+    }
+
+    #[test]
+    fn source_root_provider_store_name_uses_nix_store_hash_shape() {
+        let digest = blake3::hash(b"source-root-provider").to_hex().to_string();
+        let name = source_root_provider_store_name(&digest).unwrap();
+        let (hash, suffix) = name.split_once('-').unwrap();
+
+        assert_eq!(hash.len(), NIX_BASE32_STORE_HASH_CHARS);
+        assert_eq!(suffix, bootstrap_source_root::PROVIDER_NAME);
+    }
+
+    #[test]
+    fn source_root_provider_store_name_rejects_bad_digest() {
+        let err = source_root_provider_store_name("ABC").unwrap_err().to_string();
+
+        assert!(err.contains("source-root provider output digest"));
+    }
+
+    #[test]
+    fn bootstrap_source_root_provider_reaches_materializer_and_fails_closed_on_patches() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("store");
+        fs::create_dir(&store).unwrap();
+        let manifest_path = dir.path().join("source-root.json");
+        let output = dir.path().join("seed.ncl");
+        fs::write(&manifest_path, source_root_manifest_with_patch_json().to_string()).unwrap();
+
+        let err = bootstrap_source_root_provider(&output, &manifest_path, &store, false).unwrap_err().to_string();
+
+        assert!(err.contains("source-root provider materialization failed"));
+        assert!(err.contains("patch"));
+        assert!(err.contains("not implemented") || err.contains("placeholder"));
+        assert!(!err.contains(bootstrap_source_root::SOURCE_ROOT_BLOCKED_REASON));
+        assert!(!output.exists());
+    }
+
+    fn source_root_manifest_with_patch_json() -> serde_json::Value {
+        let digest_a = blake3::hash(b"artifact").to_hex().to_string();
+        let digest_b = blake3::hash(b"patch").to_hex().to_string();
+        let digest_c = blake3::hash(b"output").to_hex().to_string();
+        let patch_name = "fix.patch";
+        let artifacts: Vec<_> = source_root_provider::REQUIRED_ARTIFACTS
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let patches = if index == 0 { vec![patch_name] } else { Vec::new() };
+                serde_json::json!({
+                    "name": name,
+                    "source": format!("https://example.invalid/{name}.tar.gz"),
+                    "digest": {"algorithm": "blake3", "value": digest_a},
+                    "extraction": {"kind": "tar.gz", "strip_prefix": name},
+                    "provenance": "fixture source",
+                    "patches": patches,
+                })
+            })
+            .collect();
+        let expected_outputs: Vec<_> = bootstrap_source_root::REQUIRED_PROVIDER_TOOL_ROLES
+            .iter()
+            .map(|role| {
+                serde_json::json!({
+                    "name": role,
+                    "kind": "file-or-directory",
+                    "digest": {"algorithm": "blake3", "value": digest_c},
+                    "provenance": "fixture output",
+                    "contract_role": role,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "version": bootstrap_source_root::SOURCE_ROOT_MANIFEST_VERSION,
+            "artifacts": artifacts,
+            "patches": [{
+                "name": patch_name,
+                "digest": {"algorithm": "blake3", "value": digest_b},
+                "provenance": "fixture patch",
+                "apply_order": FIRST_SOURCE_ROOT_PATCH_ORDER,
+            }],
+            "network_trust_roots": [],
+            "trust_notes": [],
+            "expected_outputs": expected_outputs,
+        })
     }
 
     #[test]

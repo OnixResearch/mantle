@@ -475,11 +475,20 @@ fn validate_emitted_roles(
     expected_roles: &BTreeSet<&str>,
     errors: &mut Vec<ManifestDiagnostic>,
 ) {
+    let emitted_roles: BTreeSet<&str> = trace.emitted_output_roles.iter().map(String::as_str).collect();
     for role in &trace.emitted_output_roles {
         if !expected_roles.contains(role.as_str()) {
             errors.push(ManifestDiagnostic::new(
                 "dependency_trace.emitted_output_roles",
                 format!("unexpected provider output role {role}"),
+            ));
+        }
+    }
+    for role in expected_roles.iter().copied() {
+        if !emitted_roles.contains(role) {
+            errors.push(ManifestDiagnostic::new(
+                "dependency_trace.emitted_output_roles",
+                format!("missing provider output role {role}"),
             ));
         }
     }
@@ -946,5 +955,30 @@ mod tests {
         };
         let errors = validate_provider_dependency_trace(&manifest, &trace).unwrap_err();
         assert_error_contains(&errors, "unexpected provider output role");
+    }
+
+    #[test]
+    fn provider_trace_requires_all_expected_output_roles() {
+        let manifest = sample_manifest();
+        let trace = ProviderDependencyTrace {
+            urls: vec![SAMPLE_SOURCE_URL.to_string()],
+            hashes: Vec::new(),
+            emitted_output_roles: vec![PROVIDER_METADATA_ROLE.to_string()],
+            provider_metadata: Vec::new(),
+        };
+        let errors = validate_provider_dependency_trace(&manifest, &trace).unwrap_err();
+        assert_error_contains(&errors, "missing provider output role");
+    }
+
+    #[test]
+    fn provider_trace_accepts_exact_expected_output_roles() {
+        let manifest = sample_manifest();
+        let trace = ProviderDependencyTrace {
+            urls: vec![SAMPLE_SOURCE_URL.to_string()],
+            hashes: Vec::new(),
+            emitted_output_roles: REQUIRED_PROVIDER_TOOL_ROLES.iter().map(|role| (*role).to_string()).collect(),
+            provider_metadata: vec!["manifest_digest=test".to_string()],
+        };
+        validate_provider_dependency_trace(&manifest, &trace).unwrap();
     }
 }
