@@ -456,8 +456,10 @@ Building derivations (not just compiling crunch) requires:
 
 ## Verification Evidence Rules
 
-When claiming test results in commit messages or completion summaries:
+When claiming test results, status, completion, or feature support in commit messages, evidence files, status replies, or final summaries:
 
+- **No proof, no claim.** Produce or inspect current evidence before making the claim. If evidence is absent, say "not proven" or describe only the narrower thing that was proven.
+- **Post-archive validation claims require archived evidence.** If a final response or commit says post-archive Cairn validation passed, append that exact post-archive command output to the archived change evidence transcript before committing or finalizing.
 - **Run the command in the same tool call** that produces the summary.
   Use `Bash` with a timeout for fast tests, `pueue_run` + `pueue_log`
   for slow ones. The tool output IS the evidence.
