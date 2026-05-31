@@ -6,12 +6,14 @@ Covers: r[build_tool_boundary.onix_owns_module_lowering]
 ## Referenced Onix change
 
 Repository: `/home/brittonr/git/onix-modules`
-Change: `cairn/changes/onix-mantle-module-lowering`
-Head commit: `6e5681cdd42eca360e23c500a38a12624f79e69c`
+Archived change: `cairn/archive/2026-05-31-onix-mantle-module-lowering`
+Archive commit: `79d53dc05adac932977515b7454fbf39ed49c6e1`
+Verification commit: `6e5681cdd42eca360e23c500a38a12624f79e69c`
 
 Relevant Onix commits inspected:
 
 ```text
+79d53dc05adac932977515b7454fbf39ed49c6e1 archive Onix Mantle lowering after parity proof
 6e5681cdd42eca360e23c500a38a12624f79e69c prove Mantle lowering before assembler work
 b90dc6a65ef6de3db1aa2327966f87ba3b8076a5 keep Nix as reference backend until Mantle parity
 0a8210b104987a818572368f94a2e694e3c9fe98 separate Onix and Mantle diagnostic layers
@@ -30,7 +32,7 @@ af180bb421087aa30e45c087dc057ebd9c36638b invoke real Onix service impls before M
 - Nix remains the default/reference backend while Mantle remains opt-in/fail-closed until parity and assembler evidence exists.
 - Focused positive and negative tests cover real output, normalized Nix-reference fragments, invalid settings, unknown dependencies, failed providers, raw handoff, and synthetic output.
 
-## Validation transcript
+## Pre-archive validation transcript
 
 Command:
 
@@ -77,6 +79,38 @@ af180bb421087aa30e45c087dc057ebd9c36638b invoke real Onix service impls before M
 }
 ```
 
+## Onix archive validation transcript
+
+Command:
+
+```sh
+cd /home/brittonr/git/onix-modules
+git rev-parse HEAD
+test -d cairn/archive/2026-05-31-onix-mantle-module-lowering && echo archive-present
+git log --oneline -3 --decorate --no-abbrev-commit
+/nix/store/bs92xsdsf6a8bfkrlfc6ryisqh0vx8j8-cairn-0.1.0/bin/cairn validate --root .
+```
+
+Output:
+
+```text
+79d53dc05adac932977515b7454fbf39ed49c6e1
+archive-present
+79d53dc05adac932977515b7454fbf39ed49c6e1 (HEAD -> main) archive Onix Mantle lowering after parity proof
+6e5681cdd42eca360e23c500a38a12624f79e69c prove Mantle lowering before assembler work
+b90dc6a65ef6de3db1aa2327966f87ba3b8076a5 keep Nix as reference backend until Mantle parity
+{
+  "change_issues": [],
+  "changes": 7,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 38,
+  "valid": true
+}
+```
+
 ## Boundary conclusion
 
-Mantle can now reference Onix-owned lowering evidence without claiming Mantle owns module semantics. The remaining Mantle-side boundary stays build-tool-shaped: Mantle receives derivations, build plans, source inputs, store/build requests, build reports, diagnostics, or opaque evaluated frontend data.
+Mantle can now reference archived Onix-owned lowering evidence without claiming Mantle owns module semantics. The remaining Mantle-side boundary stays build-tool-shaped: Mantle receives derivations, build plans, source inputs, store/build requests, build reports, diagnostics, or opaque evaluated frontend data.

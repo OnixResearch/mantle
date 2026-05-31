@@ -29,3 +29,35 @@ Output:
   "valid": true
 }
 ```
+
+## Review-fix validation
+
+After resolving the final dirty-state checkpoint and updating the Onix archive reference, validation was rerun.
+
+Command:
+
+```sh
+/nix/store/bs92xsdsf6a8bfkrlfc6ryisqh0vx8j8-cairn-0.1.0/bin/cairn validate --root .
+git diff --check
+git status --short --branch
+```
+
+Output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 3,
+  "valid": true
+}
+## main...origin/main [ahead 3]
+ M cairn/archive/2026-05-31-onix-module-eval-boundary/evidence/archive-validation-transcript.md
+ M cairn/archive/2026-05-31-onix-module-eval-boundary/evidence/onix-lowering-validation.md
+ M cairn/archive/2026-05-31-onix-module-eval-boundary/evidence/oracle-checkpoints.md
+ M cairn/archive/2026-05-31-onix-module-eval-boundary/tasks.md
+```
