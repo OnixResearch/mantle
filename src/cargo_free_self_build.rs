@@ -1,4 +1,6 @@
+use std::collections::BTreeMap;
 use std::env;
+use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
@@ -27,6 +29,8 @@ const CARGO_SHIM_FILE: &str = "cargo-forbidden";
 const CARGO_SHIM_DIR: &str = "cargo-guard-bin";
 const CARGO_SHIM_NAME: &str = "cargo";
 const CARGO_MARKER_FILE: &str = "cargo-was-invoked";
+const C_COMPILER_ALIAS: &str = "cc";
+const PKG_CONFIG_ALIAS: &str = "pkg-config";
 const PRODUCED_MANTLE_FILE: &str = "mantle";
 const MANTLE_TARGET_NAME: &str = "mantle";
 const MANTLE_TARGET_KIND: &str = "bin";
@@ -61,6 +65,7 @@ const BLOCKED_SMOKE_STDOUT: &str = "not run: blocked before binary\n";
 const BLOCKED_SMOKE_STDERR_PREFIX: &str = "not run: blocked before binary";
 const SOURCE_DIGEST_FIELD: &str = "source_digest";
 const SOURCE_DIGEST_ALGORITHM_FIELD: &str = "algorithm";
+const RUSTC_SYSROOT_PRINT_ARG: &str = "sysroot";
 const SOURCE_DIGEST_VALUE_FIELD: &str = "value";
 const SUCCESS_EXIT_CODE: i32 = 0;
 const FALLBACK_ERROR_EXIT_CODE: i32 = 1;
@@ -79,6 +84,20 @@ pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) rustc: &'a Path,
     pub(crate) toolchain_closure: Option<&'a Path>,
     pub(crate) json: bool,
+}
+
+#[derive(Clone, Debug)]
+struct LoadedToolchainClosure {
+    status: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    manifest_path: Option<PathBuf>,
+    manifest: Option<crate::source_toolchain_closure::ToolchainClosureManifest>,
+}
+
+#[derive(Clone, Debug)]
+struct ExecutionToolchain {
+    rustc: PathBuf,
+    path_env: OsString,
+    status: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
 }
 
 #[derive(Debug)]
@@ -265,9 +284,11 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     write_non_claims(&paths.out_dir)?;
     write_cargo_shim(&paths.explicit_cargo_shim, &paths.marker_path)?;
     write_cargo_shim(&paths.path_cargo_shim, &paths.marker_path)?;
-    let toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
+    let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
+    let execution_toolchain =
+        prepare_execution_toolchain(&paths.guard_path_dir, options.rustc, &loaded_toolchain_closure)?;
 
-    let mut child = run_rust_plan_child(&paths, options.rustc)?;
+    let mut child = run_rust_plan_child(&paths, &execution_toolchain.rustc, &execution_toolchain.path_env)?;
     let produced = if child.blocker.is_none() {
         materialize_or_block(&paths, &mut child)?
     } else {
@@ -276,7 +297,7 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     if child.blocker.is_some() && produced.is_none() {
         write_blocked_smoke_outputs(&paths, child.blocker.as_deref())?;
     }
-    let summary = summarize(&paths, &child, produced.as_ref(), toolchain_closure);
+    let summary = summarize(&paths, &child, produced.as_ref(), execution_toolchain.status);
     write_summary(&paths.meta_path, &summary)?;
     print_summary(&summary, options.json)?;
 
@@ -291,20 +312,24 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let bundle_dir = absolutize(&root, options.out_dir);
     ensure_outside_root(&bundle_dir, &root)?;
     prepare_fixed_point_output_dir(&bundle_dir)?;
-    let toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
-    let compatibility = prepare_rustc_compatibility(&bundle_dir, options.rustc)?;
+    let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
+    let compatibility_rustc = prepare_rustc_for_compatibility(options.rustc, &loaded_toolchain_closure)?;
+    let compatibility = prepare_rustc_compatibility(&bundle_dir, &compatibility_rustc)?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc)?;
+    let toolchain_status =
+        enforce_fixed_point_toolchain(&compatibility.summary.stage_rustc, &loaded_toolchain_closure)?;
     write_fixed_point_non_claims(&plan.bundle_dir)?;
-    write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_closure)?;
+    write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_status)?;
 
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
-    let stage1 = execute_fixed_point_stage(&plan.stages[FIXED_POINT_STAGE1_INDEX], &host_mantle)?;
+    let stage1 =
+        execute_fixed_point_stage(&plan.stages[FIXED_POINT_STAGE1_INDEX], &host_mantle, &loaded_toolchain_closure)?;
     if !stage1.success {
         return finish_fixed_point(
             options.json,
             &plan,
             &compatibility.summary,
-            &toolchain_closure,
+            &toolchain_status,
             stage1,
             None,
             BLOCKED_STATUS,
@@ -316,26 +341,27 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
             options.json,
             &plan,
             &compatibility.summary,
-            &toolchain_closure,
+            &toolchain_status,
             stage1,
             None,
             BLOCKED_STATUS,
         );
     };
-    let stage2 = execute_fixed_point_stage(&plan.stages[FIXED_POINT_STAGE2_INDEX], stage1_binary)?;
+    let stage2 =
+        execute_fixed_point_stage(&plan.stages[FIXED_POINT_STAGE2_INDEX], stage1_binary, &loaded_toolchain_closure)?;
     if !stage2.success {
         return finish_fixed_point(
             options.json,
             &plan,
             &compatibility.summary,
-            &toolchain_closure,
+            &toolchain_status,
             stage1,
             Some(stage2),
             BLOCKED_STATUS,
         );
     }
     let status = fixed_point_status(&stage1, &stage2)?;
-    finish_fixed_point(options.json, &plan, &compatibility.summary, &toolchain_closure, stage1, Some(stage2), status)
+    finish_fixed_point(options.json, &plan, &compatibility.summary, &toolchain_status, stage1, Some(stage2), status)
 }
 
 fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
@@ -647,9 +673,8 @@ fn ensure_outside_root(out_dir: &Path, root: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
-fn run_rust_plan_child(paths: &BuildPaths, rustc: &Path) -> Result<ChildRun, RunError> {
+fn run_rust_plan_child(paths: &BuildPaths, rustc: &Path, path_env: &OsStr) -> Result<ChildRun, RunError> {
     let current_exe = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
-    let guarded_path = guarded_path(&paths.guard_path_dir)?;
     let output = Command::new(&current_exe)
         .arg("--json")
         .arg("rust-plan")
@@ -665,7 +690,7 @@ fn run_rust_plan_child(paths: &BuildPaths, rustc: &Path) -> Result<ChildRun, Run
         .arg(&paths.execution_dir)
         .current_dir(&paths.root)
         .env("CARGO", &paths.path_cargo_shim)
-        .env("PATH", guarded_path)
+        .env("PATH", path_env)
         .output()
         .map_err(|err| internal(format!("launch {} rust-plan: {err}", current_exe.display())))?;
 
@@ -698,14 +723,18 @@ fn child_blocker(status_code: Option<i32>, execution_status: &str, cargo_marker_
     None
 }
 
-fn execute_fixed_point_stage(stage: &FixedPointStagePlan, mantle_bin: &Path) -> Result<FixedPointStageRun, RunError> {
+fn execute_fixed_point_stage(
+    stage: &FixedPointStagePlan,
+    mantle_bin: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+) -> Result<FixedPointStageRun, RunError> {
     prepare_fixed_point_stage(stage)?;
-    let guarded_path = guarded_path(&stage.guard_path_dir)?;
+    let path_env = execution_path_env(&stage.guard_path_dir, toolchain_closure)?;
     let output = Command::new(mantle_bin)
         .args(&stage.command.args)
         .current_dir(&stage.command.current_dir)
         .env("CARGO", &stage.command.cargo_env_value)
-        .env("PATH", guarded_path)
+        .env("PATH", path_env)
         .output();
     let output = match output {
         Ok(output) => output,
@@ -1192,6 +1221,287 @@ fn write_blocked_fixed_point_smoke_outputs(stage: &FixedPointStagePlan, blocker:
     write_text(&stage.smoke_stderr_path, &format!("{BLOCKED_SMOKE_STDERR_PREFIX}: {blocker}\n"))
 }
 
+fn prepare_execution_toolchain(
+    guard_path_dir: &Path,
+    requested_rustc: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+) -> Result<ExecutionToolchain, RunError> {
+    let Some(manifest) = &toolchain_closure.manifest else {
+        return Ok(ExecutionToolchain {
+            rustc: requested_rustc.to_path_buf(),
+            path_env: guarded_path(guard_path_dir)?,
+            status: toolchain_closure.status.clone(),
+        });
+    };
+    let rustc = resolve_executable(requested_rustc, "rustc")?;
+    let status = enforce_receipt_bound_toolchain(&rustc, toolchain_closure, manifest)?;
+    Ok(ExecutionToolchain {
+        rustc,
+        path_env: execution_path_env(guard_path_dir, toolchain_closure)?,
+        status,
+    })
+}
+
+fn prepare_rustc_for_compatibility(
+    requested_rustc: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+) -> Result<PathBuf, RunError> {
+    let Some(manifest) = &toolchain_closure.manifest else {
+        return Ok(requested_rustc.to_path_buf());
+    };
+    let rustc = resolve_executable(requested_rustc, "rustc")?;
+    enforce_observed_toolchain_subset(manifest, &[observed_file_tool(
+        crate::source_toolchain_closure::ToolchainRole::Rustc,
+        &rustc,
+    )?])?;
+    Ok(rustc)
+}
+
+fn enforce_fixed_point_toolchain(
+    stage_rustc: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
+    let Some(manifest) = &toolchain_closure.manifest else {
+        return Ok(toolchain_closure.status.clone());
+    };
+    enforce_receipt_bound_toolchain(stage_rustc, toolchain_closure, manifest)
+}
+
+fn enforce_receipt_bound_toolchain(
+    rustc: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
+    let manifest_path = toolchain_closure
+        .manifest_path
+        .clone()
+        .ok_or_else(|| internal("toolchain closure manifest path missing during enforcement".to_string()))?;
+    let observed = observed_toolchain_inputs(rustc, manifest)?;
+    let validation = enforce_observed_toolchain_subset(manifest, &observed)?;
+    Ok(crate::source_toolchain_closure::enforced_source_built_toolchain_closure(manifest_path, &validation))
+}
+
+fn enforce_observed_toolchain_subset(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    observed: &[crate::source_toolchain_closure::ToolchainObservedInput],
+) -> Result<crate::source_toolchain_closure::ToolchainClosureValidation, RunError> {
+    crate::source_toolchain_closure::enforce_observed_toolchain_inputs(manifest, observed)
+        .map_err(|err| RunError::Build(format!("source-built toolchain closure blocked: {}", err.message())))
+}
+
+fn observed_toolchain_inputs(
+    rustc: &Path,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<Vec<crate::source_toolchain_closure::ToolchainObservedInput>, RunError> {
+    use crate::source_toolchain_closure::ToolchainRole;
+    let mut observed = Vec::new();
+    observed.push(observed_file_tool(ToolchainRole::Rustc, rustc)?);
+    observed.push(observed_sysroot_tool(rustc)?);
+    for role in [ToolchainRole::Linker, ToolchainRole::CCompiler] {
+        let member = single_member_for_role(manifest, role)?;
+        observed.push(observed_member_tool(member)?);
+    }
+    for member in optional_tool_members(manifest) {
+        observed.push(observed_member_tool(member)?);
+    }
+    Ok(observed)
+}
+
+fn observed_file_tool(
+    role: crate::source_toolchain_closure::ToolchainRole,
+    path: &Path,
+) -> Result<crate::source_toolchain_closure::ToolchainObservedInput, RunError> {
+    let path = canonicalize_toolchain_path(path, role)?;
+    require_executable(&path)?;
+    Ok(crate::source_toolchain_closure::ToolchainObservedInput {
+        role,
+        execution_path: path_to_string(&path)?,
+        content_digest_blake3: Some(blake3_file(&path)?),
+    })
+}
+
+fn observed_member_tool(
+    member: &crate::source_toolchain_closure::ToolchainClosureMember,
+) -> Result<crate::source_toolchain_closure::ToolchainObservedInput, RunError> {
+    observed_file_tool(member.role, Path::new(&member.execution_path))
+}
+
+fn observed_sysroot_tool(rustc: &Path) -> Result<crate::source_toolchain_closure::ToolchainObservedInput, RunError> {
+    let sysroot = rustc_reported_sysroot(rustc)?;
+    Ok(crate::source_toolchain_closure::ToolchainObservedInput {
+        role: crate::source_toolchain_closure::ToolchainRole::Sysroot,
+        execution_path: path_to_string(&sysroot)?,
+        content_digest_blake3: None,
+    })
+}
+
+fn rustc_reported_sysroot(rustc: &Path) -> Result<PathBuf, RunError> {
+    let output = Command::new(rustc).arg("--print").arg(RUSTC_SYSROOT_PRINT_ARG).output().map_err(|err| {
+        RunError::Build(format!("source-built toolchain closure blocked: rustc --print sysroot failed: {err}"))
+    })?;
+    if !output.status.success() {
+        return Err(RunError::Build(format!(
+            "source-built toolchain closure blocked: rustc --print sysroot exited with {}",
+            status_text(output.status.code()).trim_end()
+        )));
+    }
+    let text = String::from_utf8(output.stdout).map_err(|err| {
+        RunError::Build(format!("source-built toolchain closure blocked: rustc sysroot was not UTF-8: {err}"))
+    })?;
+    let sysroot = PathBuf::from(text.trim());
+    fs::canonicalize(&sysroot).map_err(|err| {
+        RunError::Build(format!(
+            "source-built toolchain closure blocked: canonicalize rustc sysroot {}: {err}",
+            sysroot.display()
+        ))
+    })
+}
+
+fn single_member_for_role(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    role: crate::source_toolchain_closure::ToolchainRole,
+) -> Result<&crate::source_toolchain_closure::ToolchainClosureMember, RunError> {
+    let members = manifest.members.iter().filter(|member| member.role == role).collect::<Vec<_>>();
+    match members.as_slice() {
+        [member] => Ok(member),
+        [] => Err(RunError::Build(format!("source-built toolchain closure blocked: missing {role:?} member"))),
+        _ => Err(RunError::Build(format!("source-built toolchain closure blocked: multiple {role:?} members"))),
+    }
+}
+
+fn optional_tool_members(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Vec<&crate::source_toolchain_closure::ToolchainClosureMember> {
+    use crate::source_toolchain_closure::ToolchainRole;
+    manifest
+        .members
+        .iter()
+        .filter(|member| matches!(member.role, ToolchainRole::PkgConfig | ToolchainRole::NativeHelper))
+        .collect()
+}
+
+fn execution_path_env(cargo_path_dir: &Path, toolchain_closure: &LoadedToolchainClosure) -> Result<OsString, RunError> {
+    let Some(manifest) = &toolchain_closure.manifest else {
+        return guarded_path(cargo_path_dir);
+    };
+    write_toolchain_path_aliases(cargo_path_dir, manifest)?;
+    env::join_paths([cargo_path_dir]).map_err(|err| internal(format!("construct receipt-bound PATH: {err}")))
+}
+
+fn write_toolchain_path_aliases(
+    guard_path_dir: &Path,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<(), RunError> {
+    let aliases = toolchain_path_aliases(manifest)?;
+    for (alias, target) in aliases {
+        let link = guard_path_dir.join(alias);
+        if link.file_name() == Some(OsStr::new(CARGO_SHIM_NAME)) {
+            return Err(RunError::Build("source-built toolchain closure blocked: Cargo must stay guarded".to_string()));
+        }
+        remove_owned_path(&link)?;
+        symlink_toolchain_alias(&target, &link)?;
+    }
+    Ok(())
+}
+
+fn toolchain_path_aliases(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<BTreeMap<String, PathBuf>, RunError> {
+    let mut aliases = BTreeMap::new();
+    for member in executable_path_members(manifest) {
+        let target = canonicalize_toolchain_path(Path::new(&member.execution_path), member.role)?;
+        require_executable(&target)?;
+        add_toolchain_alias(&mut aliases, path_file_name(&target)?, &target)?;
+        add_role_aliases(&mut aliases, member.role, &target)?;
+    }
+    Ok(aliases)
+}
+
+fn executable_path_members(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Vec<&crate::source_toolchain_closure::ToolchainClosureMember> {
+    use crate::source_toolchain_closure::ToolchainRole;
+    manifest
+        .members
+        .iter()
+        .filter(|member| {
+            matches!(
+                member.role,
+                ToolchainRole::Rustc
+                    | ToolchainRole::Linker
+                    | ToolchainRole::CCompiler
+                    | ToolchainRole::CxxCompiler
+                    | ToolchainRole::PkgConfig
+                    | ToolchainRole::NativeHelper
+            )
+        })
+        .collect()
+}
+
+fn add_role_aliases(
+    aliases: &mut BTreeMap<String, PathBuf>,
+    role: crate::source_toolchain_closure::ToolchainRole,
+    target: &Path,
+) -> Result<(), RunError> {
+    use crate::source_toolchain_closure::ToolchainRole;
+    match role {
+        ToolchainRole::CCompiler => add_toolchain_alias(aliases, C_COMPILER_ALIAS.to_string(), target),
+        ToolchainRole::PkgConfig => add_toolchain_alias(aliases, PKG_CONFIG_ALIAS.to_string(), target),
+        _ => Ok(()),
+    }
+}
+
+fn add_toolchain_alias(aliases: &mut BTreeMap<String, PathBuf>, alias: String, target: &Path) -> Result<(), RunError> {
+    if let Some(existing) = aliases.get(&alias) {
+        if existing != target {
+            return Err(RunError::Build(format!(
+                "source-built toolchain closure blocked: PATH alias {alias} has conflicting targets"
+            )));
+        }
+        return Ok(());
+    }
+    aliases.insert(alias, target.to_path_buf());
+    Ok(())
+}
+
+fn canonicalize_toolchain_path(
+    path: &Path,
+    role: crate::source_toolchain_closure::ToolchainRole,
+) -> Result<PathBuf, RunError> {
+    fs::canonicalize(path).map_err(|err| {
+        RunError::Build(format!(
+            "source-built toolchain closure blocked: canonicalize {role:?} {}: {err}",
+            path.display()
+        ))
+    })
+}
+
+fn path_file_name(path: &Path) -> Result<String, RunError> {
+    let name = path.file_name().and_then(OsStr::to_str).ok_or_else(|| {
+        RunError::Build(format!("source-built toolchain closure blocked: invalid tool path {}", path.display()))
+    })?;
+    Ok(name.to_string())
+}
+
+fn path_to_string(path: &Path) -> Result<String, RunError> {
+    path.to_str().map(ToOwned::to_owned).ok_or_else(|| {
+        RunError::Build(format!("source-built toolchain closure blocked: non-UTF-8 path {}", path.display()))
+    })
+}
+
+#[cfg(unix)]
+fn symlink_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
+    std::os::unix::fs::symlink(target, link)
+        .map_err(|err| internal(format!("symlink {} -> {}: {err}", link.display(), target.display())))
+}
+
+#[cfg(not(unix))]
+fn symlink_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
+    fs::copy(target, link)
+        .map_err(|err| internal(format!("copy {} -> {}: {err}", target.display(), link.display())))?;
+    set_executable(link)
+}
+
 fn guarded_path(cargo_path_dir: &Path) -> Result<OsString, RunError> {
     let mut paths = vec![cargo_path_dir.to_path_buf()];
     if let Some(path) = env::var_os("PATH") {
@@ -1299,11 +1609,13 @@ fn fixed_point_non_claims() -> Vec<&'static str> {
     ]
 }
 
-fn load_source_built_toolchain_closure(
-    manifest_path: Option<&Path>,
-) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
+fn load_source_built_toolchain_closure(manifest_path: Option<&Path>) -> Result<LoadedToolchainClosure, RunError> {
     let Some(manifest_path) = manifest_path else {
-        return Ok(crate::source_toolchain_closure::absent_source_built_toolchain_closure());
+        return Ok(LoadedToolchainClosure {
+            status: crate::source_toolchain_closure::absent_source_built_toolchain_closure(),
+            manifest_path: None,
+            manifest: None,
+        });
     };
     let manifest_bytes = fs::read(manifest_path)
         .map_err(|err| RunError::Build(format!("read --toolchain-closure {}: {err}", manifest_path.display())))?;
@@ -1313,10 +1625,14 @@ fn load_source_built_toolchain_closure(
         crate::source_toolchain_closure::validate_toolchain_closure_manifest(&manifest).map_err(|err| {
             RunError::Build(format!("invalid --toolchain-closure {}: {}", manifest_path.display(), err.message()))
         })?;
-    Ok(crate::source_toolchain_closure::validated_source_built_toolchain_closure(
-        manifest_path.to_path_buf(),
-        &validation,
-    ))
+    Ok(LoadedToolchainClosure {
+        status: crate::source_toolchain_closure::validated_source_built_toolchain_closure(
+            manifest_path.to_path_buf(),
+            &validation,
+        ),
+        manifest_path: Some(manifest_path.to_path_buf()),
+        manifest: Some(manifest),
+    })
 }
 
 fn write_fixed_point_preflight(
@@ -1500,5 +1816,256 @@ mod tests {
         let err = plan_fixed_point_paths(Path::new("repo"), Path::new("/tmp/proof"), Path::new("rustc")).unwrap_err();
         assert!(err.message().contains("absolute source root"));
         assert!(err.message().contains("repo"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_path_env_omits_ambient_path_entries() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest);
+        let guard_dir = dir.path().join("guard-bin");
+        fs::create_dir_all(&guard_dir).unwrap();
+
+        let path_env = execution_path_env(&guard_dir, &closure).unwrap();
+        let path_entries = env::split_paths(&path_env).collect::<Vec<_>>();
+
+        assert_eq!(path_entries, vec![guard_dir.clone()]);
+        assert!(guard_dir.join(C_COMPILER_ALIAS).exists());
+        assert!(!path_env.to_string_lossy().contains("/nix/var/nix/profiles"));
+        assert!(!path_env.to_string_lossy().contains("/run/current-system/sw"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_enforcement_rejects_sysroot_leakage() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let leaked_sysroot = dir.path().join("leaked-sysroot");
+        fs::create_dir_all(&leaked_sysroot).unwrap();
+        let rustc_script = rustc_sysroot_script(&leaked_sysroot);
+        write_fake_executable(&tools.rustc, &rustc_script);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
+
+        let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
+
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("Sysroot"));
+        assert!(err.message().contains(path_to_string(&leaked_sysroot).unwrap().as_str()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_enforcement_rejects_linker_digest_mismatch() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, Some(("ld", fake_digest())));
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
+
+        let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
+
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("Linker"));
+        assert!(err.message().contains("digest mismatch"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_enforcement_rejects_c_compiler_digest_mismatch() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, Some(("c-compiler", fake_digest())));
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
+
+        let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
+
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("CCompiler"));
+        assert!(err.message().contains("digest mismatch"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_enforcement_rejects_pkg_config_digest_mismatch() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, true);
+        let manifest = fake_toolchain_manifest(&tools, Some((PKG_CONFIG_ALIAS, fake_digest())));
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
+
+        let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
+
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("PkgConfig"));
+        assert!(err.message().contains("digest mismatch"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_path_aliases_expose_declared_pkg_config_only() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, true);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let aliases = toolchain_path_aliases(&manifest).unwrap();
+
+        let pkg_config = tools.pkg_config.as_ref().unwrap();
+        assert!(aliases.contains_key(PKG_CONFIG_ALIAS));
+        assert_eq!(aliases.get(PKG_CONFIG_ALIAS), Some(pkg_config));
+        assert!(!aliases.contains_key("nix"));
+        assert!(!aliases.contains_key("nix-store"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_path_aliases_reject_undeclared_nix_profile_tools() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let profile_dir = dir.path().join("nix-profile-bin");
+        fs::create_dir_all(&profile_dir).unwrap();
+        write_fake_executable(&profile_dir.join("nix"), "#!/bin/sh\nexit 99\n");
+        write_fake_executable(&profile_dir.join("nix-store"), "#!/bin/sh\nexit 99\n");
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let guard_dir = dir.path().join("guard-bin");
+        fs::create_dir_all(&guard_dir).unwrap();
+
+        write_toolchain_path_aliases(&guard_dir, &manifest).unwrap();
+        let aliases = toolchain_path_aliases(&manifest).unwrap();
+
+        assert!(profile_dir.join("nix").is_file());
+        assert!(!aliases.contains_key("nix"));
+        assert!(!aliases.contains_key("nix-store"));
+        assert!(!guard_dir.join("nix").exists());
+        assert!(!guard_dir.join("nix-store").exists());
+    }
+
+    #[cfg(unix)]
+    #[derive(Debug)]
+    struct FakeToolchain {
+        rustc: PathBuf,
+        linker: PathBuf,
+        c_compiler: PathBuf,
+        sysroot: PathBuf,
+        pkg_config: Option<PathBuf>,
+    }
+
+    #[cfg(unix)]
+    fn fake_toolchain(dir: &tempfile::TempDir, include_pkg_config: bool) -> FakeToolchain {
+        let tool_dir = dir.path().join("toolchain").join("bin");
+        let sysroot = dir.path().join("toolchain").join("sysroot");
+        fs::create_dir_all(&tool_dir).unwrap();
+        fs::create_dir_all(&sysroot).unwrap();
+        let rustc = tool_dir.join("rustc");
+        let linker = tool_dir.join("ld");
+        let c_compiler = tool_dir.join("cc");
+        write_fake_executable(&rustc, &rustc_sysroot_script(&sysroot));
+        write_fake_executable(&linker, "#!/bin/sh\nexit 0\n");
+        write_fake_executable(&c_compiler, "#!/bin/sh\nexit 0\n");
+        let pkg_config = include_pkg_config.then(|| {
+            let path = tool_dir.join(PKG_CONFIG_ALIAS);
+            write_fake_executable(&path, "#!/bin/sh\nexit 0\n");
+            path
+        });
+        FakeToolchain {
+            rustc,
+            linker,
+            c_compiler,
+            sysroot,
+            pkg_config,
+        }
+    }
+
+    #[cfg(unix)]
+    fn fake_toolchain_manifest(
+        tools: &FakeToolchain,
+        override_digest: Option<(&str, String)>,
+    ) -> crate::source_toolchain_closure::ToolchainClosureManifest {
+        use crate::source_toolchain_closure::*;
+        let mut members = vec![
+            fake_member(ToolchainRole::Rustc, "rustc", &tools.rustc, override_digest.as_ref()),
+            fake_member(ToolchainRole::Linker, "ld", &tools.linker, override_digest.as_ref()),
+            fake_member(ToolchainRole::CCompiler, "c-compiler", &tools.c_compiler, override_digest.as_ref()),
+            fake_member(ToolchainRole::Sysroot, "sysroot", &tools.sysroot, override_digest.as_ref()),
+        ];
+        if let Some(pkg_config) = &tools.pkg_config {
+            members.push(fake_member(ToolchainRole::PkgConfig, PKG_CONFIG_ALIAS, pkg_config, override_digest.as_ref()));
+        }
+        ToolchainClosureManifest {
+            schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA.to_string(),
+            members,
+            seed_exceptions: Vec::new(),
+        }
+    }
+
+    #[cfg(unix)]
+    fn fake_member(
+        role: crate::source_toolchain_closure::ToolchainRole,
+        name: &str,
+        path: &Path,
+        override_digest: Option<&(&str, String)>,
+    ) -> crate::source_toolchain_closure::ToolchainClosureMember {
+        use crate::source_toolchain_closure::*;
+        let content_digest_blake3 = override_digest
+            .filter(|(target_name, _digest)| *target_name == name)
+            .map(|(_target_name, digest)| digest.clone())
+            .unwrap_or_else(|| {
+                if path.is_file() {
+                    blake3_file(path).unwrap()
+                } else {
+                    fake_digest()
+                }
+            });
+        ToolchainClosureMember {
+            role,
+            name: name.to_string(),
+            execution_path: path_to_string(path).unwrap(),
+            content_digest_blake3,
+            trust: ToolchainTrust::SourceBuilt,
+            source: Some(ToolchainSourceIdentity {
+                kind: ToolchainSourceKind::Generated,
+                name: format!("{name}-source"),
+                digest_blake3: fake_digest(),
+            }),
+            build_receipt: Some(ToolchainBuildReceiptIdentity {
+                kind: ToolchainBuildReceiptKind::MantleRustTopology,
+                name: format!("{name}-receipt"),
+                digest_blake3: fake_digest(),
+            }),
+        }
+    }
+
+    #[cfg(unix)]
+    fn loaded_toolchain_closure(
+        manifest_path: PathBuf,
+        manifest: crate::source_toolchain_closure::ToolchainClosureManifest,
+    ) -> LoadedToolchainClosure {
+        let validation = crate::source_toolchain_closure::validate_toolchain_closure_manifest(&manifest).unwrap();
+        LoadedToolchainClosure {
+            status: crate::source_toolchain_closure::validated_source_built_toolchain_closure(
+                manifest_path.clone(),
+                &validation,
+            ),
+            manifest_path: Some(manifest_path),
+            manifest: Some(manifest),
+        }
+    }
+
+    #[cfg(unix)]
+    fn write_fake_executable(path: &Path, contents: &str) {
+        write_text(path, contents).unwrap();
+        set_executable(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn rustc_sysroot_script(sysroot: &Path) -> String {
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--print\" ] && [ \"$2\" = \"{RUSTC_SYSROOT_PRINT_ARG}\" ]; then\n  printf '%s\\n' {}\n  exit 0\nfi\nexit 0\n",
+            shell_quote(sysroot)
+        )
+    }
+
+    #[cfg(unix)]
+    fn fake_digest() -> String {
+        "abababababababababababababababababababababababababababababababab".to_string()
     }
 }

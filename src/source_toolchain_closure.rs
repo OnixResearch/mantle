@@ -18,6 +18,7 @@ pub(crate) const SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA: &str = "mantle-source-bu
 const ABSENT_CLOSURE_STATUS: &str = "not-provided";
 pub(crate) const SOURCE_BUILT_NON_CLAIM: &str = "not-source-built-toolchain-closure";
 const VALIDATED_NOT_ENFORCED_STATUS: &str = "validated-not-enforced";
+const VALIDATED_ENFORCED_STATUS: &str = "validated-enforced";
 const POLICY_DIGEST_CONTEXT: &str = "mantle-source-built-toolchain-policy-digest-v1";
 const MAX_TOOLCHAIN_MEMBERS: usize = 128;
 const MAX_SEED_EXCEPTIONS: usize = 32;
@@ -129,6 +130,13 @@ pub(crate) struct ToolchainClosureValidation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ToolchainObservedInput {
+    pub(crate) role: ToolchainRole,
+    pub(crate) execution_path: String,
+    pub(crate) content_digest_blake3: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ToolchainClosureError {
     kind: ToolchainClosureErrorKind,
     message: String,
@@ -149,6 +157,7 @@ pub(crate) enum ToolchainClosureErrorKind {
     MissingSource,
     MissingBuildReceipt,
     MissingSeedException,
+    HostToolLeakage,
     Serialization,
 }
 
@@ -170,9 +179,24 @@ pub(crate) fn validated_source_built_toolchain_closure(
     manifest_path: PathBuf,
     validation: &ToolchainClosureValidation,
 ) -> SourceBuiltToolchainClosureStatus {
+    source_built_toolchain_closure_status(manifest_path, validation, VALIDATED_NOT_ENFORCED_STATUS)
+}
+
+pub(crate) fn enforced_source_built_toolchain_closure(
+    manifest_path: PathBuf,
+    validation: &ToolchainClosureValidation,
+) -> SourceBuiltToolchainClosureStatus {
+    source_built_toolchain_closure_status(manifest_path, validation, VALIDATED_ENFORCED_STATUS)
+}
+
+fn source_built_toolchain_closure_status(
+    manifest_path: PathBuf,
+    validation: &ToolchainClosureValidation,
+    status: &'static str,
+) -> SourceBuiltToolchainClosureStatus {
     SourceBuiltToolchainClosureStatus {
         schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
-        status: VALIDATED_NOT_ENFORCED_STATUS,
+        status,
         claim: false,
         non_claim: SOURCE_BUILT_NON_CLAIM,
         manifest_path: Some(manifest_path),
@@ -187,15 +211,19 @@ pub(crate) fn validate_toolchain_closure_manifest(
     manifest: &ToolchainClosureManifest,
 ) -> Result<ToolchainClosureValidation, ToolchainClosureError> {
     let normalized = normalize_manifest(manifest)?;
-    let policy_digest_blake3 = digest_normalized_manifest(&normalized)?;
-    let source_built_member_count =
-        normalized.members.iter().filter(|member| member.trust == ToolchainTrust::SourceBuilt).count();
-    Ok(ToolchainClosureValidation {
-        policy_digest_blake3,
-        member_count: normalized.members.len(),
-        source_built_member_count,
-        seed_exception_count: normalized.seed_exceptions.len(),
-    })
+    validation_from_normalized_manifest(&normalized)
+}
+
+pub(crate) fn enforce_observed_toolchain_inputs(
+    manifest: &ToolchainClosureManifest,
+    observed: &[ToolchainObservedInput],
+) -> Result<ToolchainClosureValidation, ToolchainClosureError> {
+    let normalized = normalize_manifest(manifest)?;
+    validate_observed_inputs(observed)?;
+    for input in observed {
+        require_observed_input_declared(&normalized, input)?;
+    }
+    validation_from_normalized_manifest(&normalized)
 }
 
 impl ToolchainClosureError {
@@ -226,6 +254,55 @@ fn normalize_manifest(manifest: &ToolchainClosureManifest) -> Result<ToolchainCl
     normalized.members.sort_by_key(member_sort_key);
     normalized.seed_exceptions.sort_by_key(seed_sort_key);
     Ok(normalized)
+}
+
+fn validation_from_normalized_manifest(
+    manifest: &ToolchainClosureManifest,
+) -> Result<ToolchainClosureValidation, ToolchainClosureError> {
+    let policy_digest_blake3 = digest_normalized_manifest(manifest)?;
+    let source_built_member_count =
+        manifest.members.iter().filter(|member| member.trust == ToolchainTrust::SourceBuilt).count();
+    Ok(ToolchainClosureValidation {
+        policy_digest_blake3,
+        member_count: manifest.members.len(),
+        source_built_member_count,
+        seed_exception_count: manifest.seed_exceptions.len(),
+    })
+}
+
+fn validate_observed_inputs(observed: &[ToolchainObservedInput]) -> Result<(), ToolchainClosureError> {
+    for input in observed {
+        validate_absolute_path("observed execution_path", &input.execution_path)?;
+        if let Some(digest) = &input.content_digest_blake3 {
+            validate_blake3_hex("observed content_digest_blake3", digest)?;
+        }
+    }
+    Ok(())
+}
+
+fn require_observed_input_declared(
+    manifest: &ToolchainClosureManifest,
+    input: &ToolchainObservedInput,
+) -> Result<(), ToolchainClosureError> {
+    let role_path_match = manifest
+        .members
+        .iter()
+        .find(|member| member.role == input.role && member.execution_path == input.execution_path);
+    let Some(member) = role_path_match else {
+        return Err(error(
+            ToolchainClosureErrorKind::HostToolLeakage,
+            format!("host-tool-leakage: {:?} uses undeclared path {}", input.role, input.execution_path),
+        ));
+    };
+    if let Some(digest) = &input.content_digest_blake3 {
+        if member.content_digest_blake3 != *digest {
+            return Err(error(
+                ToolchainClosureErrorKind::HostToolLeakage,
+                format!("host-tool-leakage: {:?} digest mismatch for {}", input.role, input.execution_path),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_schema(schema: &str) -> Result<(), ToolchainClosureError> {
@@ -470,6 +547,66 @@ mod tests {
     }
 
     #[test]
+    fn enforced_closure_status_still_keeps_claim_disabled_until_real_proof_lands() {
+        let manifest = valid_manifest();
+        let validation = validate_toolchain_closure_manifest(&manifest).unwrap();
+
+        let status = enforced_source_built_toolchain_closure(PathBuf::from("/tmp/toolchain.json"), &validation);
+
+        assert_eq!(status.schema, SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
+        assert_eq!(status.status, VALIDATED_ENFORCED_STATUS);
+        assert!(!status.claim);
+        assert_eq!(status.non_claim, SOURCE_BUILT_NON_CLAIM);
+        assert_eq!(status.policy_digest_blake3, Some(validation.policy_digest_blake3));
+    }
+
+    #[test]
+    fn enforcement_accepts_declared_observed_toolchain_inputs() {
+        let manifest = valid_manifest();
+        let observed = vec![
+            observed(ToolchainRole::Rustc, "/toolchain/rustc", DIGEST_A),
+            observed(ToolchainRole::CCompiler, "/toolchain/cc", DIGEST_C),
+            ToolchainObservedInput {
+                role: ToolchainRole::Sysroot,
+                execution_path: "/toolchain/sysroot".to_string(),
+                content_digest_blake3: None,
+            },
+        ];
+
+        let validation = enforce_observed_toolchain_inputs(&manifest, &observed).unwrap();
+
+        assert_eq!(validation.member_count, REQUIRED_TOOLCHAIN_ROLES.len());
+        assert_eq!(validation.source_built_member_count, REQUIRED_TOOLCHAIN_ROLES.len());
+    }
+
+    #[test]
+    fn enforcement_rejects_undeclared_host_rustc_path() {
+        let manifest = valid_manifest();
+        let observed = vec![observed(
+            ToolchainRole::Rustc,
+            "/home/user/.rustup/toolchains/nightly/bin/rustc",
+            DIGEST_A,
+        )];
+
+        let err = enforce_observed_toolchain_inputs(&manifest, &observed).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::HostToolLeakage);
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("Rustc"));
+    }
+
+    #[test]
+    fn enforcement_rejects_declared_path_with_digest_mismatch() {
+        let manifest = valid_manifest();
+        let observed = vec![observed(ToolchainRole::Rustc, "/toolchain/rustc", DIGEST_B)];
+
+        let err = enforce_observed_toolchain_inputs(&manifest, &observed).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::HostToolLeakage);
+        assert!(err.message().contains("digest mismatch"));
+    }
+
+    #[test]
     fn validator_rejects_source_built_member_without_receipt() {
         let mut manifest = valid_manifest();
         manifest.members[0].build_receipt = None;
@@ -594,6 +731,14 @@ mod tests {
             reason: "stage0 bootstrap seed".to_string(),
             content_digest_blake3: seed_digest,
         });
+    }
+
+    fn observed(role: ToolchainRole, execution_path: &str, digest: &str) -> ToolchainObservedInput {
+        ToolchainObservedInput {
+            role,
+            execution_path: execution_path.to_string(),
+            content_digest_blake3: Some(digest.to_string()),
+        }
     }
 
     fn member(

@@ -102,28 +102,61 @@ fn write_fixed_point_fixture(dir: &TempDir, source: &str) -> std::path::PathBuf 
 fn write_toolchain_closure_manifest(dir: &TempDir, include_sysroot: bool) -> std::path::PathBuf {
     let path = dir.path().join("toolchain-closure.json");
     let mut members = vec![
-        toolchain_member("rustc", "rustc", DIGEST_A, DIGEST_B),
-        toolchain_member("linker", "ld", DIGEST_B, DIGEST_C),
-        toolchain_member("c-compiler", "cc", DIGEST_C, DIGEST_D),
+        toolchain_member("rustc", "rustc", "/toolchain/rustc", DIGEST_A, DIGEST_B),
+        toolchain_member("linker", "ld", "/toolchain/ld", DIGEST_B, DIGEST_C),
+        toolchain_member("c-compiler", "cc", "/toolchain/cc", DIGEST_C, DIGEST_D),
     ];
     if include_sysroot {
-        members.push(toolchain_member("sysroot", "sysroot", DIGEST_D, DIGEST_E));
+        members.push(toolchain_member("sysroot", "sysroot", "/toolchain/sysroot", DIGEST_D, DIGEST_E));
     }
+    write_toolchain_manifest_value(&path, members);
+    path
+}
+
+fn write_matching_toolchain_closure_manifest(dir: &TempDir) -> std::path::PathBuf {
+    let path = dir.path().join("matching-toolchain-closure.json");
+    let rustc = resolve_on_path("rustc");
+    let members = matching_toolchain_members(&rustc);
+    write_toolchain_manifest_value(&path, members);
+    path
+}
+
+fn write_mismatched_rustc_toolchain_closure_manifest(dir: &TempDir) -> std::path::PathBuf {
+    let path = dir.path().join("mismatched-rustc-toolchain-closure.json");
+    let rustc = std::path::PathBuf::from("/toolchain/not-the-host-rustc");
+    let members = matching_toolchain_members(&rustc);
+    write_toolchain_manifest_value(&path, members);
+    path
+}
+
+fn matching_toolchain_members(rustc_member_path: &std::path::Path) -> Vec<Value> {
+    let actual_rustc = resolve_on_path("rustc");
+    let cc = resolve_on_path("cc");
+    let sysroot = rustc_sysroot(&actual_rustc);
+    let cc_digest = blake3_file(&cc);
+    vec![
+        toolchain_member("rustc", "rustc", &path_string(rustc_member_path), &blake3_file(&actual_rustc), DIGEST_B),
+        toolchain_member("linker", "cc-linker", &path_string(&cc), &cc_digest, DIGEST_C),
+        toolchain_member("c-compiler", "cc", &path_string(&cc), &cc_digest, DIGEST_D),
+        toolchain_member("sysroot", "rustc-sysroot", &path_string(&sysroot), DIGEST_E, DIGEST_F),
+    ]
+}
+
+fn write_toolchain_manifest_value(path: &std::path::Path, members: Vec<Value>) {
     let manifest = serde_json::json!({
         "schema": "mantle-source-built-toolchain-closure-v1",
         "members": members,
         "seed_exceptions": []
     });
     let bytes = serde_json::to_vec_pretty(&manifest).unwrap();
-    std::fs::write(&path, bytes).unwrap();
-    path
+    std::fs::write(path, bytes).unwrap();
 }
 
-fn toolchain_member(role: &str, name: &str, content_digest: &str, receipt_digest: &str) -> Value {
+fn toolchain_member(role: &str, name: &str, execution_path: &str, content_digest: &str, receipt_digest: &str) -> Value {
     serde_json::json!({
         "role": role,
         "name": name,
-        "execution_path": format!("/toolchain/{name}"),
+        "execution_path": execution_path,
         "content_digest_blake3": content_digest,
         "trust": "source-built",
         "source": {
@@ -140,7 +173,7 @@ fn toolchain_member(role: &str, name: &str, content_digest: &str, receipt_digest
 }
 
 fn assert_validated_toolchain_closure(closure: &Value, manifest: &std::path::Path) {
-    assert_eq!(closure["status"], "validated-not-enforced");
+    assert_eq!(closure["status"], "validated-enforced");
     assert_eq!(closure["claim"], false);
     assert_eq!(closure["non_claim"], "not-source-built-toolchain-closure");
     assert_eq!(closure["manifest_path"], manifest.to_string_lossy().as_ref());
@@ -172,6 +205,31 @@ fn write_executable(path: &std::path::Path, contents: &str) {
     std::fs::write(path, contents).unwrap();
     let permissions = std::fs::Permissions::from_mode(EXECUTABLE_PERMISSIONS);
     std::fs::set_permissions(path, permissions).unwrap();
+}
+
+fn resolve_on_path(name: &str) -> std::path::PathBuf {
+    let path = std::env::var_os("PATH").expect("PATH should be set for CLI tests");
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.is_file())
+        .and_then(|candidate| std::fs::canonicalize(candidate).ok())
+        .unwrap_or_else(|| panic!("{name} should resolve on PATH"))
+}
+
+fn rustc_sysroot(rustc: &std::path::Path) -> std::path::PathBuf {
+    let output = std::process::Command::new(rustc).arg("--print").arg("sysroot").output().unwrap();
+    assert!(output.status.success(), "rustc --print sysroot should succeed");
+    let text = String::from_utf8(output.stdout).unwrap();
+    std::fs::canonicalize(text.trim()).unwrap()
+}
+
+fn blake3_file(path: &std::path::Path) -> String {
+    let bytes = std::fs::read(path).unwrap();
+    blake3::hash(&bytes).to_hex().to_string()
+}
+
+fn path_string(path: &std::path::Path) -> String {
+    path.to_str().expect("test tool paths should be UTF-8").to_string()
 }
 
 #[test]
@@ -211,11 +269,11 @@ fn cargo_free_self_build_builds_tiny_mantle_fixture() {
 }
 
 #[test]
-fn cargo_free_self_build_validates_toolchain_closure_manifest_without_claiming_enforcement() {
+fn cargo_free_self_build_enforces_matching_toolchain_closure_manifest_without_claiming_proof() {
     let dir = TempDir::new().unwrap();
     let root = write_tiny_mantle_fixture(&dir);
     let out_dir = dir.path().join("cargo-free-out");
-    let manifest = write_toolchain_closure_manifest(&dir, true);
+    let manifest = write_matching_toolchain_closure_manifest(&dir);
 
     let output = mantle_cmd()
         .current_dir(&root)
@@ -272,6 +330,34 @@ fn cargo_free_self_build_rejects_invalid_toolchain_closure_manifest() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("invalid --toolchain-closure"), "{stderr}");
     assert!(stderr.contains("missing required toolchain role Sysroot"), "{stderr}");
+    assert!(!out_dir.join("mantle").exists());
+}
+
+#[test]
+fn cargo_free_self_build_rejects_undeclared_host_rustc_before_unit_execution() {
+    let dir = TempDir::new().unwrap();
+    let root = write_tiny_mantle_fixture(&dir);
+    let out_dir = dir.path().join("cargo-free-out");
+    let manifest = write_mismatched_rustc_toolchain_closure_manifest(&dir);
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--toolchain-closure")
+        .arg(&manifest)
+        .output()
+        .expect("cargo-free self-build CLI should run");
+
+    assert!(!output.status.success(), "stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("source-built toolchain closure blocked"), "{stderr}");
+    assert!(stderr.contains("host-tool-leakage"), "{stderr}");
+    assert!(stderr.contains("Rustc"), "{stderr}");
+    assert!(!out_dir.join("receipt.json").exists());
     assert!(!out_dir.join("mantle").exists());
 }
 
@@ -350,11 +436,11 @@ fn cargo_free_fixed_point_builds_tiny_mantle_fixture() {
 }
 
 #[test]
-fn cargo_free_fixed_point_validates_toolchain_closure_manifest_without_claiming_enforcement() {
+fn cargo_free_fixed_point_enforces_matching_toolchain_closure_manifest_without_claiming_proof() {
     let dir = TempDir::new().unwrap();
     let root = write_fixed_point_fixture(&dir, FIXED_POINT_SUCCESS_SOURCE);
     let out_dir = dir.path().join("cargo-free-fixed-point-out");
-    let manifest = write_toolchain_closure_manifest(&dir, true);
+    let manifest = write_matching_toolchain_closure_manifest(&dir);
 
     let output = mantle_cmd()
         .current_dir(&root)
