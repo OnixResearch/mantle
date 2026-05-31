@@ -132,3 +132,7 @@ Output:
   "verdict": "PASS"
 }
 ```
+
+## Review repair note
+
+The post-task-update check above proved Cairn syntax/gating, not I4 completion. Same-family review found the I4 checkbox overclaimed because this evidence has no positive real source-root materialization transcript. I4 was unchecked again, and `evidence/source-root-provider-i4-oracle-checkpoint.md` records the completion decision.
