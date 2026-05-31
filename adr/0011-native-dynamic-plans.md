@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-05-30)
+Accepted (2026-05-31)
 
 ## Context
 
@@ -32,7 +32,9 @@ limits, scheduling, and provenance. Steel may become an optional plan producer i
 a later ADR, but it is not part of the core dynamic-plan dependency chain.
 
 The existing `.drv` output detector may remain as labeled compatibility/debug
-behavior. It must not define the native ABI.
+behavior. It must not define the native ABI. Operator-facing reports must label
+native plan rows with `mode = "native"`; any `.drv`-based discovery stays a
+compatibility/debug path, not the core interface.
 
 ## Consequences
 
@@ -42,8 +44,9 @@ which producer emitted which plan digest and which units were accepted or
 rejected.
 
 The native ABI needs explicit versioning, bounds, policy inheritance rules, and
-negative tests. First implementation should therefore start with the pure plan
-validator before touching worker scheduling.
+negative tests. The implemented flow starts with pure plan validation, then
+threads accepted/rejected plan rows through worker results, pipeline results, and
+JSON build reports before touching operator documentation.
 
 Compatibility with Nix dynamic derivation path calculations is no longer the
 goal for this native path. Any `.drv` support must be documented and reported as

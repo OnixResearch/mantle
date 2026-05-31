@@ -436,9 +436,29 @@ via `JoinSet` + `Semaphore`. Roots arrive over an mpsc channel, so the
 Worker can start building leaf deps while later roots are still being
 processed.
 
-The goal system is extensible: substitution goals, dynamic derivations
-(build outputs that are .drv files), and remote build dispatch can be
-added without restructuring the scheduler.
+The goal system is extensible: substitution goals, native dynamic plans,
+and remote build dispatch can be added without restructuring the scheduler.
+
+### Native Dynamic Plans
+
+Mantle's core dynamic-build API is `mantle-plan-v1`: a bounded canonical JSON
+artifact produced by a sandboxed build output that was explicitly declared in
+the producing derivation's `dynamic_plan_outputs` list. After the producer
+finishes, the worker reads only those declared outputs, validates the plan,
+records BLAKE3 raw/canonical digests, registers accepted units, and calls
+`want()` only for the plan roots. The existing lazy scheduler then builds the
+root dependency closure in the same run.
+
+Native plan report rows appear in JSON build reports under
+`native_dynamic_plans`. Each row identifies the producer derivation key, declared
+output name, plan artifact path when present, digest fields, accepted unit IDs,
+rejection reason when validation fails, scheduler action, and `mode = "native"`.
+
+Build outputs that happen to look like `.drv` files are still supported as a
+compatibility/debug discovery path. That path is separate from the native ABI:
+undeclared plan-looking outputs are ignored by native plan scanning, and `.drv`
+discovery must be treated as compatibility behavior rather than Mantle's core
+dynamic-plan interface.
 
 ## Crate Layout
 
