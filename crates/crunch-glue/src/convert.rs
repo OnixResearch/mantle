@@ -16,6 +16,7 @@ use crate::error::Error;
 use crate::types::CrunchDerivation;
 use crate::types::FixedOutput;
 use crate::types::Input;
+use crate::types::validate_dynamic_plan_outputs;
 
 /// Maximum derivation dependency depth before we bail out.
 /// Prevents stack overflow from pathological or accidental deep graphs.
@@ -57,11 +58,18 @@ fn convert_with_depth(
     debug_assert!(!drv.name.is_empty(), "derivation name must not be empty");
     debug_assert!(!drv.builder.is_empty(), "derivation builder must not be empty");
     debug_assert!(!drv.outputs.is_empty(), "derivation must have at least one output");
+    validate_dynamic_plan_outputs(&drv.outputs, &drv.dynamic_plan_outputs).map_err(Error::InvalidDynamicPlanOutputs)?;
 
     let identity = derivation_identity(drv);
 
     if let Some(converted) = known_paths.get_completed_identity(&identity) {
-        return Ok(converted);
+        if converted.dynamic_plan_outputs != drv.dynamic_plan_outputs {
+            return Err(Error::InvalidDynamicPlanOutputs(format!(
+                "conflicting dynamic_plan_outputs for derivation identity '{}'",
+                drv.name
+            )));
+        }
+        return Ok((converted.drv_path, converted.derivation));
     }
 
     // Cycle detection
@@ -73,7 +81,12 @@ fn convert_with_depth(
 
     known_paths.end_conversion(&identity);
     if let Ok((drv_path, nix_drv)) = &result {
-        known_paths.insert_completed_identity(identity, drv_path.clone(), nix_drv.clone());
+        known_paths.insert_completed_identity(
+            identity,
+            drv_path.clone(),
+            nix_drv.clone(),
+            drv.dynamic_plan_outputs.clone(),
+        );
     }
     result
 }
@@ -225,6 +238,14 @@ fn finalize_and_register(
 
     let aterm_bytes = nix_drv.to_aterm_bytes();
     let aterm_hash = *blake3::hash(&aterm_bytes).as_bytes();
+    if let Some(existing) = known_paths.get_by_aterm_hash(&aterm_hash) {
+        if existing.dynamic_plan_outputs != drv.dynamic_plan_outputs {
+            return Err(Error::InvalidDynamicPlanOutputs(format!(
+                "conflicting dynamic_plan_outputs for derivation '{}'",
+                drv.name
+            )));
+        }
+    }
 
     known_paths.insert_ca(crate::conversion_cache::InsertCaEntry {
         aterm_hash,
@@ -232,6 +253,7 @@ fn finalize_and_register(
         hdm,
         derivation: nix_drv.clone(),
         content_addressed: is_ca,
+        dynamic_plan_outputs: drv.dynamic_plan_outputs.clone(),
         provenance_claims: drv.provenance.clone(),
     });
 
@@ -302,6 +324,7 @@ mod tests {
             system: "x86_64-linux".to_string(),
             args: vec![],
             outputs: vec!["out".to_string()],
+            dynamic_plan_outputs: vec![],
             env: Default::default(),
             inputs: vec![],
             fixed_output: None,
@@ -449,6 +472,35 @@ mod tests {
     }
 
     // ── Phase 3: inputs and dependencies ──────────────────────────────
+
+    #[test]
+    fn convert_rejects_programmatic_undeclared_dynamic_plan_output() {
+        let drv = CrunchDerivation {
+            dynamic_plan_outputs: vec!["plan".to_string()],
+            ..minimal_drv("bad-plan-output", "/bin/sh")
+        };
+        let mut kp = ConversionCache::default();
+        let err = convert(&drv, &mut kp).unwrap_err().to_string();
+        assert!(err.contains("invalid dynamic plan outputs"), "error should name dynamic-plan validation: {err}");
+        assert!(err.contains("dynamic_plan_outputs entry 'plan'"), "error should name bad output: {err}");
+    }
+
+    #[test]
+    fn convert_rejects_conflicting_dynamic_plan_metadata_for_cached_identity() {
+        let without_plan = CrunchDerivation {
+            outputs: vec!["out".to_string(), "plan".to_string()],
+            ..minimal_drv("same-identity", "/bin/sh")
+        };
+        let with_plan = CrunchDerivation {
+            dynamic_plan_outputs: vec!["plan".to_string()],
+            ..without_plan.clone()
+        };
+
+        let mut kp = ConversionCache::default();
+        convert(&without_plan, &mut kp).unwrap();
+        let err = convert(&with_plan, &mut kp).unwrap_err().to_string();
+        assert!(err.contains("conflicting dynamic_plan_outputs"), "error should reject conflict: {err}");
+    }
 
     #[test]
     fn source_input_wires_to_input_sources() {

@@ -76,6 +76,10 @@ let MkDerivationArgs = {
     | doc "Output names."
     | default = ["out"],
 
+  dynamic_plan_outputs | Array String
+    | doc "Output names that may contain native mantle-plan-v1 dynamic build plans. Each name must also appear in outputs."
+    | default = [],
+
   env | { _ : String }
     | doc "Extra environment variables."
     | default = {},
@@ -248,6 +252,7 @@ let rec mk_derivation_with_shell = fun shell attrs =>
     builder = the_builder,
     args = ["-c", the_script],
     outputs = resolved.outputs,
+    dynamic_plan_outputs = resolved.dynamic_plan_outputs,
     env = build_env & path_env & src_env & resolved.env,
     inputs = src_inputs @ all_inputs,
     pname | not_exported = resolved.pname,

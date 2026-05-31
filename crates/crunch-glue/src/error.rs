@@ -26,6 +26,9 @@ pub enum Error {
     #[error("deserialization error: {0}")]
     Serde(String),
 
+    #[error("invalid dynamic plan outputs: {0}")]
+    InvalidDynamicPlanOutputs(String),
+
     #[error("invalid output selection: derivation '{drv_name}' has no output '{output}' (available: {available})")]
     InvalidOutputSelection {
         drv_name: String,

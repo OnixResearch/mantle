@@ -28,6 +28,10 @@ let { FixedOutput } = import "fixed_output.ncl" in
     | doc "Output names. Each gets its own store path."
     | default = ["out"],
 
+  dynamic_plan_outputs | Array String
+    | doc "Output names that may contain native mantle-plan-v1 dynamic build plans. Each name must also appear in outputs."
+    | default = [],
+
   env | { _ : String }
     | doc "Environment variables set during the build. Output paths and system are auto-populated by the glue layer."
     | default = {},

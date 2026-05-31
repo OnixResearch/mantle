@@ -173,6 +173,7 @@ fn make_raw_fetch_derivation(raw: &FetchSeedRawArtifact) -> crunch_glue::CrunchD
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env,
         inputs: vec![],
         fixed_output: Some(crunch_glue::FixedOutput {

@@ -418,6 +418,66 @@ mod tests {
     }
 
     #[test]
+    fn derivation_contract_defaults_dynamic_plan_outputs() {
+        let import_paths = vec![stdlib::stdlib_import_path().unwrap().into_os_string()];
+        let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"
+let Derivation = import "derivation.ncl" in
+{
+  name = "contract-default",
+  builder = "/bin/sh",
+} | Derivation
+"#,
+            &import_paths,
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 1);
+        assert!(roots[0].1.dynamic_plan_outputs.is_empty());
+    }
+
+    #[test]
+    fn derivation_contract_accepts_declared_dynamic_plan_outputs() {
+        let import_paths = vec![stdlib::stdlib_import_path().unwrap().into_os_string()];
+        let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"
+let Derivation = import "derivation.ncl" in
+{
+  name = "contract-plan",
+  builder = "/bin/sh",
+  outputs = ["out", "plan"],
+  dynamic_plan_outputs = ["plan"],
+} | Derivation
+"#,
+            &import_paths,
+        )
+        .unwrap();
+
+        assert_eq!(roots[0].1.outputs, vec!["out".to_string(), "plan".to_string()]);
+        assert_eq!(roots[0].1.dynamic_plan_outputs, vec!["plan".to_string()]);
+    }
+
+    #[test]
+    fn derivation_deserialization_rejects_undeclared_dynamic_plan_output() {
+        let import_paths = vec![stdlib::stdlib_import_path().unwrap().into_os_string()];
+        let err = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
+            r#"
+let Derivation = import "derivation.ncl" in
+{
+  name = "contract-bad-plan",
+  builder = "/bin/sh",
+  outputs = ["out"],
+  dynamic_plan_outputs = ["plan"],
+} | Derivation
+"#,
+            &import_paths,
+        )
+        .unwrap_err();
+        let rendered = err.to_string();
+        assert!(rendered.contains("dynamic_plan_outputs entry 'plan'"), "error should name bad output: {rendered}");
+    }
+
+    #[test]
     fn eval_str_and_extract_named_roots_package_set_preserves_keys() {
         let roots = evaluate_str_and_extract_named_roots::<CrunchDerivation>(
             r#"{

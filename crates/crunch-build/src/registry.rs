@@ -26,6 +26,7 @@ pub struct RegistryEntry {
     /// Whether this is a content-addressed derivation (output paths
     /// resolved after build).
     pub content_addressed: bool,
+    pub dynamic_plan_outputs: Vec<String>,
     pub provenance_claims: Option<Claims>,
     /// Resolved output paths for CA derivations. Populated by
     /// `resolve_output()` after the build completes.
@@ -86,8 +87,32 @@ impl DerivationRegistry {
         content_addressed: bool,
         provenance_claims: Option<Claims>,
     ) {
+        self.insert_with_dynamic_plan_outputs(
+            drv_path,
+            hdm,
+            derivation,
+            content_addressed,
+            Vec::new(),
+            provenance_claims,
+        );
+    }
+
+    /// Register a derivation with native dynamic-plan output metadata.
+    pub fn insert_with_dynamic_plan_outputs(
+        &mut self,
+        drv_path: StorePath<String>,
+        hdm: [u8; 32],
+        derivation: impl Into<Arc<Derivation>>,
+        content_addressed: bool,
+        dynamic_plan_outputs: Vec<String>,
+        provenance_claims: Option<Claims>,
+    ) {
         let derivation = derivation.into();
         debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
+        debug_assert!(
+            dynamic_plan_outputs.iter().all(|output| derivation.outputs.contains_key(output)),
+            "dynamic plan outputs must be declared derivation outputs"
+        );
         debug_assert!(
             u32::try_from(self.entries.len()).is_ok_and(|n| n < MAX_ENTRIES),
             "registry exceeds MAX_ENTRIES ({MAX_ENTRIES})"
@@ -100,6 +125,7 @@ impl DerivationRegistry {
             hash_derivation_modulo: hdm,
             derivation,
             content_addressed,
+            dynamic_plan_outputs,
             provenance_claims,
             resolved_outputs: HashMap::new(),
         });
@@ -172,9 +198,16 @@ impl Default for DerivationRegistry {
 /// The caller iterates the cache and feeds entries here. The registry
 /// and cache never see each other directly.
 pub fn populate_registry<I>(registry: &mut DerivationRegistry, entries: I)
-where I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool, Option<Claims>)> {
-    for (drv_path, hdm, derivation, content_addressed, provenance_claims) in entries {
-        registry.insert(drv_path, hdm, derivation, content_addressed, provenance_claims);
+where I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool, Vec<String>, Option<Claims>)> {
+    for (drv_path, hdm, derivation, content_addressed, dynamic_plan_outputs, provenance_claims) in entries {
+        registry.insert_with_dynamic_plan_outputs(
+            drv_path,
+            hdm,
+            derivation,
+            content_addressed,
+            dynamic_plan_outputs,
+            provenance_claims,
+        );
     }
 }
 
@@ -225,6 +258,25 @@ mod tests {
         assert_eq!(entry.drv_path, sp);
         assert_eq!(entry.hash_derivation_modulo, hdm);
         assert!(!entry.content_addressed);
+        assert!(entry.dynamic_plan_outputs.is_empty());
+    }
+
+    #[test]
+    fn insert_with_dynamic_plan_outputs_preserves_metadata() {
+        let mut reg = DerivationRegistry::default();
+        let sp = fake_sp("plan.drv");
+        let hdm = [7u8; 32];
+        let mut drv = dummy_derivation();
+        drv.outputs.insert("plan".to_string(), Output {
+            path: None,
+            ca_hash: None,
+        });
+
+        reg.insert_with_dynamic_plan_outputs(sp.clone(), hdm, drv, false, vec!["plan".to_string()], None);
+
+        let entry = reg.get_by_drv_path(&sp.to_absolute_path()).unwrap();
+        assert_eq!(entry.dynamic_plan_outputs, vec!["plan".to_string()]);
+        assert!(entry.derivation.outputs.contains_key("plan"));
     }
 
     #[test]
@@ -329,8 +381,8 @@ mod tests {
         let mut reg = DerivationRegistry::default();
 
         let entries = vec![
-            (fake_sp("a.drv"), [1u8; 32], dummy_derivation(), false, None),
-            (fake_sp("b.drv"), [2u8; 32], dummy_derivation(), true, None),
+            (fake_sp("a.drv"), [1u8; 32], dummy_derivation(), false, Vec::new(), None),
+            (fake_sp("b.drv"), [2u8; 32], dummy_derivation(), true, vec!["out".to_string()], None),
         ];
 
         populate_registry(&mut reg, entries);

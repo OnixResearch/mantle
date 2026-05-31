@@ -18,7 +18,7 @@ use nix_compat::store_path::StorePath;
 /// Prevents unbounded memory growth if callers forget to drain.
 const MAX_PENDING: u32 = 16_384;
 
-pub type PendingEntry = (StorePath<String>, [u8; 32], Derivation, bool, Option<Claims>);
+pub type PendingEntry = (StorePath<String>, [u8; 32], Derivation, bool, Vec<String>, Option<Claims>);
 
 pub struct InsertCaEntry {
     pub aterm_hash: [u8; 32],
@@ -26,6 +26,7 @@ pub struct InsertCaEntry {
     pub hdm: [u8; 32],
     pub derivation: Derivation,
     pub content_addressed: bool,
+    pub dynamic_plan_outputs: Vec<String>,
     pub provenance_claims: Option<Claims>,
 }
 
@@ -43,7 +44,7 @@ pub struct ConversionCache {
     ///
     /// This is intentionally separate from the ATerm-hash cache: recursive conversion
     /// needs a cheap pre-order memoization key before the ATerm bytes are available.
-    completed_by_identity: HashMap<String, (StorePath<String>, Derivation)>,
+    completed_by_identity: HashMap<String, CompletedConversion>,
     /// Store directory prefix (e.g. "/nix/store" or "/opt/crunch").
     store_dir: String,
     /// Entries added since the last `drain_pending()`. Enables
@@ -52,6 +53,13 @@ pub struct ConversionCache {
 }
 
 /// A derivation entry produced during conversion.
+#[derive(Clone)]
+pub struct CompletedConversion {
+    pub drv_path: StorePath<String>,
+    pub derivation: Derivation,
+    pub dynamic_plan_outputs: Vec<String>,
+}
+
 pub struct ConversionEntry {
     pub drv_path: StorePath<String>,
     pub hash_derivation_modulo: [u8; 32],
@@ -59,6 +67,7 @@ pub struct ConversionEntry {
     /// Whether this is a content-addressed derivation (output paths
     /// resolved after build).
     pub content_addressed: bool,
+    pub dynamic_plan_outputs: Vec<String>,
     pub provenance_claims: Option<Claims>,
 }
 
@@ -88,6 +97,7 @@ impl ConversionCache {
             hdm,
             derivation,
             content_addressed: false,
+            dynamic_plan_outputs: Vec::new(),
             provenance_claims: None,
         });
     }
@@ -96,6 +106,10 @@ impl ConversionCache {
     pub fn insert_ca(&mut self, entry: InsertCaEntry) {
         debug_assert!(!entry.derivation.outputs.is_empty(), "derivation must have at least one output");
         debug_assert!(entry.aterm_hash != [0u8; 32], "aterm_hash must not be all zeros");
+        debug_assert!(
+            entry.dynamic_plan_outputs.iter().all(|output| entry.derivation.outputs.contains_key(output)),
+            "dynamic plan outputs must be declared derivation outputs"
+        );
 
         let drv_path_str = entry.drv_path.to_absolute_path_with_prefix(&self.store_dir);
         self.hdm_by_drv_path.insert(drv_path_str.clone(), entry.hdm);
@@ -105,6 +119,7 @@ impl ConversionCache {
             entry.hdm,
             entry.derivation.clone(),
             entry.content_addressed,
+            entry.dynamic_plan_outputs.clone(),
             entry.provenance_claims.clone(),
         ));
         debug_assert!(
@@ -118,6 +133,7 @@ impl ConversionCache {
             hash_derivation_modulo: entry.hdm,
             derivation: entry.derivation,
             content_addressed: entry.content_addressed,
+            dynamic_plan_outputs: entry.dynamic_plan_outputs,
             provenance_claims: entry.provenance_claims,
         });
 
@@ -154,19 +170,29 @@ impl ConversionCache {
     }
 
     /// Look up a completed conversion by the pre-order identity key.
-    pub fn get_completed_identity(&self, identity: &str) -> Option<(StorePath<String>, Derivation)> {
+    pub fn get_completed_identity(&self, identity: &str) -> Option<CompletedConversion> {
         self.completed_by_identity.get(identity).cloned()
     }
 
     /// Remember a completed conversion by the pre-order identity key.
-    pub fn insert_completed_identity(&mut self, identity: String, drv_path: StorePath<String>, derivation: Derivation) {
-        self.completed_by_identity.insert(identity, (drv_path, derivation));
+    pub fn insert_completed_identity(
+        &mut self,
+        identity: String,
+        drv_path: StorePath<String>,
+        derivation: Derivation,
+        dynamic_plan_outputs: Vec<String>,
+    ) {
+        self.completed_by_identity.insert(identity, CompletedConversion {
+            drv_path,
+            derivation,
+            dynamic_plan_outputs,
+        });
     }
 
     /// Iterate all entries for populating a `DerivationRegistry`.
     ///
-    /// Yields `(drv_path, hdm, derivation, content_addressed)` for
-    /// each registered derivation.
+    /// Yields `(drv_path, hdm, derivation, content_addressed, dynamic_plan_outputs,
+    /// provenance_claims)` for each registered derivation.
     pub fn iter_entries(&self) -> impl Iterator<Item = PendingEntry> + '_ {
         self.by_aterm_hash.values().map(|e| {
             (
@@ -174,6 +200,7 @@ impl ConversionCache {
                 e.hash_derivation_modulo,
                 e.derivation.clone(),
                 e.content_addressed,
+                e.dynamic_plan_outputs.clone(),
                 e.provenance_claims.clone(),
             )
         })
@@ -345,6 +372,7 @@ mod tests {
             hdm: [20u8; 32],
             derivation: dummy_derivation("b"),
             content_addressed: true,
+            dynamic_plan_outputs: vec!["out".to_string()],
             provenance_claims: None,
         });
 
@@ -352,7 +380,7 @@ mod tests {
         assert_eq!(entries.len(), 2);
 
         // One should be CA, one not.
-        let ca_count = entries.iter().filter(|(_, _, _, ca, _)| *ca).count();
+        let ca_count = entries.iter().filter(|(_, _, _, ca, _, _)| *ca).count();
         assert_eq!(ca_count, 1);
     }
 
@@ -403,10 +431,12 @@ mod tests {
             hdm: [10u8; 32],
             derivation: dummy_derivation("ca"),
             content_addressed: true,
+            dynamic_plan_outputs: vec!["out".to_string()],
             provenance_claims: None,
         });
         let batch = cc.drain_pending();
         assert_eq!(batch.len(), 1);
         assert!(batch[0].3, "CA flag should be true");
+        assert_eq!(batch[0].4, vec!["out".to_string()]);
     }
 }

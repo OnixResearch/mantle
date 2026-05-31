@@ -32,6 +32,7 @@ pub struct CrunchDerivation {
     pub system: String,
     pub args: Vec<String>,
     pub outputs: Vec<String>,
+    pub dynamic_plan_outputs: Vec<String>,
     pub env: HashMap<String, String>,
     pub inputs: Vec<Input>,
     pub fixed_output: Option<FixedOutput>,
@@ -46,6 +47,7 @@ struct RawCrunchDerivation {
     system: Option<NickelString>,
     args: Option<Vec<String>>,
     outputs: Option<Vec<String>>,
+    dynamic_plan_outputs: Option<Vec<String>>,
     env: Option<HashMap<String, String>>,
     inputs: Option<Vec<Input>>,
     fixed_output: Option<FixedOutput>,
@@ -57,12 +59,16 @@ impl<'de> Deserialize<'de> for CrunchDerivation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let raw = RawCrunchDerivation::deserialize(deserializer)?;
+        let outputs = raw.outputs.unwrap_or_else(default_outputs);
+        let dynamic_plan_outputs = raw.dynamic_plan_outputs.unwrap_or_else(Vec::new);
+        validate_dynamic_plan_outputs(&outputs, &dynamic_plan_outputs).map_err(de::Error::custom)?;
         Ok(Self {
             name: raw.name,
             builder: raw.builder,
             system: raw.system.map(|value| value.0).unwrap_or_else(default_system),
             args: raw.args.unwrap_or_else(Vec::new),
-            outputs: raw.outputs.unwrap_or_else(default_outputs),
+            outputs,
+            dynamic_plan_outputs,
             env: raw.env.unwrap_or_else(HashMap::new),
             inputs: raw.inputs.unwrap_or_else(Vec::new),
             fixed_output: raw.fixed_output,
@@ -82,6 +88,23 @@ fn default_system() -> String {
 
 fn default_outputs() -> Vec<String> {
     vec!["out".to_string()]
+}
+
+pub fn validate_dynamic_plan_outputs(outputs: &[String], dynamic_plan_outputs: &[String]) -> Result<(), String> {
+    let output_set = outputs.iter().map(String::as_str).collect::<std::collections::BTreeSet<_>>();
+    let mut seen = std::collections::BTreeSet::new();
+    for output in dynamic_plan_outputs {
+        if !seen.insert(output.as_str()) {
+            return Err(format!("duplicate dynamic_plan_outputs entry '{output}'"));
+        }
+        if !output_set.contains(output.as_str()) {
+            return Err(format!(
+                "dynamic_plan_outputs entry '{output}' is not declared in outputs [{}]",
+                outputs.join(", ")
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// An input is either a derivation to be built, a pre-existing store path,
@@ -109,6 +132,7 @@ struct RawInputRecord {
     system: String,
     args: Vec<String>,
     outputs: Vec<String>,
+    dynamic_plan_outputs: Vec<String>,
     env: HashMap<String, String>,
     inputs: Vec<Input>,
     fixed_output: Option<FixedOutput>,
@@ -125,6 +149,7 @@ struct RawInputRecordFields {
     system: Option<NickelString>,
     args: Option<Vec<String>>,
     outputs: Option<Vec<String>>,
+    dynamic_plan_outputs: Option<Vec<String>>,
     env: Option<HashMap<String, String>>,
     inputs: Option<Vec<Input>>,
     fixed_output: Option<FixedOutput>,
@@ -136,6 +161,9 @@ impl<'de> Deserialize<'de> for RawInputRecord {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let raw = RawInputRecordFields::deserialize(deserializer)?;
+        let outputs = raw.outputs.unwrap_or_else(default_outputs);
+        let dynamic_plan_outputs = raw.dynamic_plan_outputs.unwrap_or_else(Vec::new);
+        validate_dynamic_plan_outputs(&outputs, &dynamic_plan_outputs).map_err(de::Error::custom)?;
         Ok(Self {
             drv: raw.drv,
             output: raw.output,
@@ -143,7 +171,8 @@ impl<'de> Deserialize<'de> for RawInputRecord {
             builder: raw.builder,
             system: raw.system.map(|value| value.0).unwrap_or_else(default_system),
             args: raw.args.unwrap_or_else(Vec::new),
-            outputs: raw.outputs.unwrap_or_else(default_outputs),
+            outputs,
+            dynamic_plan_outputs,
             env: raw.env.unwrap_or_else(HashMap::new),
             inputs: raw.inputs.unwrap_or_else(Vec::new),
             fixed_output: raw.fixed_output,
@@ -174,6 +203,7 @@ impl RawInputRecord {
             system: self.system,
             args: self.args,
             outputs: self.outputs,
+            dynamic_plan_outputs: self.dynamic_plan_outputs,
             env: self.env,
             inputs: self.inputs,
             fixed_output: self.fixed_output,

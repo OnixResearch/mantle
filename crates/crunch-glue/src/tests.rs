@@ -10,6 +10,7 @@ fn minimal_drv(name: &str, builder: &str) -> CrunchDerivation {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![],
         fixed_output: None,
@@ -92,6 +93,69 @@ fn provenance_claims_do_not_change_derivation_hash_by_default() {
 }
 
 #[test]
+fn dynamic_plan_outputs_deserialize_when_declared_outputs_exist() {
+    let json = r#"{
+        "name": "plan-producer",
+        "builder": "/bin/sh",
+        "outputs": ["out", "plan"],
+        "dynamic_plan_outputs": ["plan"]
+    }"#;
+
+    let drv: CrunchDerivation = serde_json::from_str(json).unwrap();
+    assert_eq!(drv.outputs, vec!["out".to_string(), "plan".to_string()]);
+    assert_eq!(drv.dynamic_plan_outputs, vec!["plan".to_string()]);
+}
+
+#[test]
+fn dynamic_plan_outputs_reject_undeclared_output() {
+    let json = r#"{
+        "name": "bad-plan-producer",
+        "builder": "/bin/sh",
+        "outputs": ["out"],
+        "dynamic_plan_outputs": ["plan"]
+    }"#;
+
+    let err = serde_json::from_str::<CrunchDerivation>(json).unwrap_err().to_string();
+    assert!(err.contains("dynamic_plan_outputs entry 'plan'"), "error should name bad output: {err}");
+    assert!(err.contains("outputs [out]"), "error should list declared outputs: {err}");
+}
+
+#[test]
+fn dynamic_plan_outputs_reject_duplicate_name() {
+    let json = r#"{
+        "name": "dup-plan-producer",
+        "builder": "/bin/sh",
+        "outputs": ["out", "plan"],
+        "dynamic_plan_outputs": ["plan", "plan"]
+    }"#;
+
+    let err = serde_json::from_str::<CrunchDerivation>(json).unwrap_err().to_string();
+    assert!(err.contains("duplicate dynamic_plan_outputs entry 'plan'"), "error should name duplicate: {err}");
+}
+
+#[test]
+fn dynamic_plan_outputs_do_not_change_derivation_hash_by_default() {
+    let plain = minimal_drv("plan-hash", "/bin/sh");
+    let mut declared = minimal_drv("plan-hash", "/bin/sh");
+    declared.outputs = vec!["out".to_string(), "plan".to_string()];
+    declared.dynamic_plan_outputs = vec!["plan".to_string()];
+
+    let mut without_plan_metadata = declared.clone();
+    without_plan_metadata.dynamic_plan_outputs = Vec::new();
+
+    let mut plain_cache = ConversionCache::default();
+    let (plain_path, plain_drv) = convert(&without_plan_metadata, &mut plain_cache).unwrap();
+    let mut declared_cache = ConversionCache::default();
+    let (declared_path, declared_drv) = convert(&declared, &mut declared_cache).unwrap();
+
+    assert_eq!(plain_path, declared_path, "dynamic plan metadata should not change drv path by default");
+    assert_eq!(plain_drv, declared_drv, "dynamic plan metadata should not affect nix derivation hashing inputs");
+    assert!(plain.dynamic_plan_outputs.is_empty());
+    let entry = declared_cache.get_by_drv_path(&declared_path.to_absolute_path()).unwrap();
+    assert_eq!(entry.dynamic_plan_outputs, vec!["plan".to_string()]);
+}
+
+#[test]
 fn convert_with_source_input() {
     let drv = CrunchDerivation {
         name: "hello".to_string(),
@@ -99,6 +163,7 @@ fn convert_with_source_input() {
         system: "x86_64-linux".to_string(),
         args: vec!["-c".to_string(), "echo hi > $out".to_string()],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![Input::Source(
             "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash".to_string(),
@@ -124,6 +189,7 @@ fn convert_with_derivation_input() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![],
         fixed_output: None,
@@ -137,6 +203,7 @@ fn convert_with_derivation_input() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(dep))],
         fixed_output: None,
@@ -162,6 +229,7 @@ fn convert_fixed_output_sha256() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![],
         fixed_output: Some(FixedOutput {
@@ -189,6 +257,7 @@ fn convert_multiple_outputs() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string(), "lib".to_string(), "dev".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![],
         fixed_output: None,
@@ -221,6 +290,7 @@ fn convert_diamond_dependency() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![],
         fixed_output: None,
@@ -234,6 +304,7 @@ fn convert_diamond_dependency() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(d.clone()))],
         fixed_output: None,
@@ -247,6 +318,7 @@ fn convert_diamond_dependency() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(d))],
         fixed_output: None,
@@ -260,6 +332,7 @@ fn convert_diamond_dependency() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(b)), Input::Derivation(Box::new(c))],
         fixed_output: None,
@@ -288,6 +361,7 @@ fn convert_circular_dependency_detected() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![], // can't nest itself due to ownership, but identity match triggers
         fixed_output: None,
@@ -302,6 +376,7 @@ fn convert_circular_dependency_detected() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![Input::Derivation(Box::new(inner))],
         fixed_output: None,
@@ -328,6 +403,7 @@ fn convert_user_env_preserved() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env,
         inputs: vec![],
         fixed_output: None,
@@ -353,6 +429,7 @@ fn convert_invalid_source_path() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![Input::Source("/tmp/not-a-store-path".to_string())],
         fixed_output: None,
@@ -373,6 +450,7 @@ fn convert_invalid_hash_algo() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: Default::default(),
         inputs: vec![],
         fixed_output: Some(FixedOutput {

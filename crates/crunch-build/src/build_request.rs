@@ -732,6 +732,7 @@ mod tests {
             system: "x86_64-linux".to_string(),
             args: vec![],
             outputs: outputs.iter().map(|s| s.to_string()).collect(),
+            dynamic_plan_outputs: vec![],
             env: Default::default(),
             inputs: vec![],
             fixed_output: None,

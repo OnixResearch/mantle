@@ -65,6 +65,7 @@ fn cache_hit_skips_build() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: HashMap::new(),
         inputs: vec![],
         fixed_output: None,
@@ -140,6 +141,7 @@ fn fod_hash_mismatch_error() {
         system: "x86_64-linux".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: HashMap::new(),
         inputs: vec![],
         fixed_output: Some(crunch_glue::FixedOutput {
@@ -192,6 +194,7 @@ fn end_to_end_trivial_build() {
             "mkdir -p $out && echo 'built by crunch' > $out/result.txt".to_string(),
         ],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: HashMap::new(),
         inputs: vec![],
         fixed_output: None,
@@ -303,6 +306,7 @@ fn end_to_end_ca_build() {
             "mkdir -p $out && echo 'ca-built' > $out/result.txt".to_string(),
         ],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: HashMap::new(),
         inputs: vec![],
         fixed_output: None,
@@ -586,6 +590,7 @@ fn fetchurl_downloads_and_verifies_hash() {
         system: "builtin".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: {
             let mut e = HashMap::new();
             e.insert("url".to_string(), source_url);
@@ -676,6 +681,7 @@ fn fetch_tarball_unpacks_and_strips_prefix() {
         system: "builtin".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: {
             let mut e = HashMap::new();
             e.insert("url".to_string(), tarball_url);
@@ -749,6 +755,7 @@ fn fetchgit_downloads_requested_revision_and_verifies_recursive_hash() {
         system: "builtin".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: {
             let mut e = HashMap::new();
             e.insert("url".to_string(), repo_url);
@@ -814,6 +821,7 @@ fn fetchgit_wrong_recursive_hash_reports_mismatch() {
         system: "builtin".to_string(),
         args: vec![],
         outputs: vec!["out".to_string()],
+        dynamic_plan_outputs: vec![],
         env: {
             let mut e = HashMap::new();
             e.insert("url".to_string(), repo_url);
