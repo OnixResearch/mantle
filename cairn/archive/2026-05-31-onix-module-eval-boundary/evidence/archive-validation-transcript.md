@@ -30,9 +30,9 @@ Output:
 }
 ```
 
-## Review-fix validation
+## Review-fix pre-commit validation
 
-After resolving the final dirty-state checkpoint and updating the Onix archive reference, validation was rerun.
+After resolving the final dirty-state checkpoint and updating the Onix archive reference, validation was rerun. The status output in this block is intentionally pre-commit and therefore shows the evidence files dirty.
 
 Command:
 
@@ -60,4 +60,20 @@ Output:
  M cairn/archive/2026-05-31-onix-module-eval-boundary/evidence/onix-lowering-validation.md
  M cairn/archive/2026-05-31-onix-module-eval-boundary/evidence/oracle-checkpoints.md
  M cairn/archive/2026-05-31-onix-module-eval-boundary/tasks.md
+```
+
+## Review-fix post-commit status
+
+Command, run before this evidence-only correction:
+
+```sh
+git rev-parse --short HEAD
+git status --short --branch
+```
+
+Output:
+
+```text
+b4c79963
+## main...origin/main [ahead 4]
 ```

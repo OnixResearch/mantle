@@ -86,6 +86,7 @@ Command:
 ```sh
 cd /home/brittonr/git/onix-modules
 git rev-parse HEAD
+git status --short --branch
 test -d cairn/archive/2026-05-31-onix-mantle-module-lowering && echo archive-present
 git log --oneline -3 --decorate --no-abbrev-commit
 /nix/store/bs92xsdsf6a8bfkrlfc6ryisqh0vx8j8-cairn-0.1.0/bin/cairn validate --root .
@@ -95,6 +96,7 @@ Output:
 
 ```text
 79d53dc05adac932977515b7454fbf39ed49c6e1
+## main...origin/main [ahead 8]
 archive-present
 79d53dc05adac932977515b7454fbf39ed49c6e1 (HEAD -> main) archive Onix Mantle lowering after parity proof
 6e5681cdd42eca360e23c500a38a12624f79e69c prove Mantle lowering before assembler work
