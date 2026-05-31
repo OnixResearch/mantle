@@ -233,6 +233,7 @@ pub fn validate_plan_v1(plan: &DynamicPlanV1, store_prefix: &str) -> Result<(), 
     validate_units(&plan.units, store_prefix)?;
     validate_roots(&plan.roots)?;
     validate_provenance(&plan.provenance, store_prefix)?;
+    validate_plan_graph(plan)?;
     canonical_plan_v1_bytes(plan)?;
     Ok(())
 }
@@ -480,6 +481,156 @@ fn validate_provenance(provenance: &BTreeMap<String, String>, store_prefix: &str
         validate_no_absolute_host_path("provenance value", value, store_prefix)?;
     }
     Ok(())
+}
+
+fn validate_plan_graph(plan: &DynamicPlanV1) -> Result<(), DynamicPlanError> {
+    let source_ids = collect_source_ids(&plan.sources)?;
+    let unit_outputs = collect_unit_outputs(&plan.units)?;
+
+    validate_root_graph(&plan.roots, &unit_outputs)?;
+    validate_input_graph(&plan.units, &source_ids, &unit_outputs)?;
+    validate_unit_dependency_cycles(&plan.units)?;
+
+    assert_eq!(unit_outputs.len(), plan.units.len());
+    assert!(plan.roots.is_empty() || !unit_outputs.is_empty());
+
+    Ok(())
+}
+
+fn collect_source_ids<'a>(sources: &'a [DeclaredSourceInput]) -> Result<BTreeSet<&'a str>, DynamicPlanError> {
+    let mut source_ids = BTreeSet::new();
+    for source in sources {
+        if !source_ids.insert(source.id.as_str()) {
+            return invalid_scalar("source id", &source.id, "contains duplicate source id");
+        }
+    }
+    assert_eq!(source_ids.len(), sources.len());
+    Ok(source_ids)
+}
+
+fn collect_unit_outputs<'a>(
+    units: &'a [DynamicUnit],
+) -> Result<BTreeMap<&'a str, BTreeSet<&'a str>>, DynamicPlanError> {
+    let mut unit_outputs = BTreeMap::new();
+    for unit in units {
+        let output_names = unit.derivation.outputs.iter().map(String::as_str).collect::<BTreeSet<_>>();
+        if unit_outputs.insert(unit.id.as_str(), output_names).is_some() {
+            return invalid_scalar("unit id", &unit.id, "contains duplicate unit id");
+        }
+    }
+    assert_eq!(unit_outputs.len(), units.len());
+    Ok(unit_outputs)
+}
+
+fn validate_root_graph(
+    roots: &[UnitId],
+    unit_outputs: &BTreeMap<&str, BTreeSet<&str>>,
+) -> Result<(), DynamicPlanError> {
+    if roots.is_empty() {
+        return invalid_scalar("roots", "", "must not be empty");
+    }
+
+    let mut seen_roots = BTreeSet::new();
+    for root in roots {
+        if !seen_roots.insert(root.as_str()) {
+            return invalid_scalar("roots", root, "contains duplicate root");
+        }
+        if !unit_outputs.contains_key(root.as_str()) {
+            return invalid_scalar("roots", root, "references unknown unit");
+        }
+    }
+    assert_eq!(seen_roots.len(), roots.len());
+    Ok(())
+}
+
+fn validate_input_graph(
+    units: &[DynamicUnit],
+    source_ids: &BTreeSet<&str>,
+    unit_outputs: &BTreeMap<&str, BTreeSet<&str>>,
+) -> Result<(), DynamicPlanError> {
+    for unit in units {
+        for input in &unit.derivation.inputs {
+            match input {
+                DynamicInput::StorePath { .. } => {}
+                DynamicInput::Source { source } => {
+                    if !source_ids.contains(source.as_str()) {
+                        return invalid_scalar("source dependency", source, "references undeclared source input");
+                    }
+                }
+                DynamicInput::UnitOutput { unit, output } => {
+                    let Some(outputs) = unit_outputs.get(unit.as_str()) else {
+                        return invalid_scalar("unit output dependency", unit, "references unknown unit");
+                    };
+                    if !outputs.contains(output.as_str()) {
+                        return invalid_scalar("unit output dependency", output, "references unknown output");
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_unit_dependency_cycles(units: &[DynamicUnit]) -> Result<(), DynamicPlanError> {
+    let mut remaining_dependencies = build_unit_dependency_sets(units);
+    let dependents = build_dependents_by_dependency(&remaining_dependencies);
+    let mut ready = remaining_dependencies
+        .iter()
+        .filter_map(|(unit, dependencies)| dependencies.is_empty().then_some(*unit))
+        .collect::<BTreeSet<_>>();
+    let mut processed_count = 0usize;
+
+    while let Some(unit) = ready.pop_first() {
+        processed_count = processed_count.saturating_add(1);
+        if let Some(unit_dependents) = dependents.get(unit) {
+            for dependent in unit_dependents {
+                let Some(dependencies) = remaining_dependencies.get_mut(dependent) else {
+                    continue;
+                };
+                dependencies.remove(unit);
+                if dependencies.is_empty() {
+                    ready.insert(*dependent);
+                }
+            }
+        }
+    }
+
+    if processed_count != units.len() {
+        let cycle_member = remaining_dependencies
+            .iter()
+            .find_map(|(unit, dependencies)| (!dependencies.is_empty()).then_some(*unit))
+            .unwrap_or("<unknown>");
+        return invalid_scalar("unit dependency graph", cycle_member, "contains dependency cycle");
+    }
+    assert_eq!(processed_count, units.len());
+    Ok(())
+}
+
+fn build_unit_dependency_sets<'a>(units: &'a [DynamicUnit]) -> BTreeMap<&'a str, BTreeSet<&'a str>> {
+    let mut dependencies_by_unit = BTreeMap::new();
+    for unit in units {
+        let mut dependencies = BTreeSet::new();
+        for input in &unit.derivation.inputs {
+            if let DynamicInput::UnitOutput { unit: dependency, .. } = input {
+                dependencies.insert(dependency.as_str());
+            }
+        }
+        dependencies_by_unit.insert(unit.id.as_str(), dependencies);
+    }
+    assert_eq!(dependencies_by_unit.len(), units.len());
+    dependencies_by_unit
+}
+
+fn build_dependents_by_dependency<'a>(
+    dependencies_by_unit: &BTreeMap<&'a str, BTreeSet<&'a str>>,
+) -> BTreeMap<&'a str, BTreeSet<&'a str>> {
+    let mut dependents = BTreeMap::new();
+    for (unit, dependencies) in dependencies_by_unit {
+        for dependency in dependencies {
+            dependents.entry(*dependency).or_insert_with(BTreeSet::new).insert(*unit);
+        }
+    }
+    dependents
 }
 
 fn validate_policy_literal(field: &'static str, value: &str, expected: &'static str) -> Result<(), DynamicPlanError> {
@@ -1121,6 +1272,67 @@ mod tests {
         let mut duplicate_plan_output = valid_plan();
         duplicate_plan_output.units[0].derivation.dynamic_plan_outputs.push("plan".to_string());
         expect_invalid_scalar(validate_err(&duplicate_plan_output), "dynamic plan outputs");
+    }
+
+    #[test]
+    fn validate_rejects_empty_duplicate_and_unknown_roots() {
+        let mut empty_roots = valid_plan();
+        empty_roots.roots.clear();
+        expect_invalid_scalar(validate_err(&empty_roots), "roots");
+
+        let mut duplicate_roots = valid_plan();
+        duplicate_roots.roots.push("unit.main".to_string());
+        expect_invalid_scalar(validate_err(&duplicate_roots), "roots");
+
+        let mut unknown_root = valid_plan();
+        unknown_root.roots[0] = "unit.missing".to_string();
+        expect_invalid_scalar(validate_err(&unknown_root), "roots");
+    }
+
+    #[test]
+    fn validate_rejects_duplicate_unit_and_source_ids() {
+        let mut duplicate_units = valid_plan();
+        duplicate_units.units.push(duplicate_units.units[0].clone());
+        expect_invalid_scalar(validate_err(&duplicate_units), "unit id");
+
+        let mut duplicate_sources = valid_plan();
+        duplicate_sources.sources.push(duplicate_sources.sources[0].clone());
+        expect_invalid_scalar(validate_err(&duplicate_sources), "source id");
+    }
+
+    #[test]
+    fn validate_rejects_undeclared_source_and_unit_output_refs() {
+        let mut undeclared_source = valid_plan();
+        undeclared_source.units[0].derivation.inputs[0] = DynamicInput::Source {
+            source: "src.missing".to_string(),
+        };
+        expect_invalid_scalar(validate_err(&undeclared_source), "source dependency");
+
+        let mut unknown_unit = valid_plan();
+        unknown_unit.units[0].derivation.inputs.push(DynamicInput::UnitOutput {
+            unit: "unit.missing".to_string(),
+            output: "out".to_string(),
+        });
+        expect_invalid_scalar(validate_err(&unknown_unit), "unit output dependency");
+
+        let mut unknown_output = plan_with_extra_collections();
+        unknown_output.units[1].derivation.inputs[0] = DynamicInput::UnitOutput {
+            unit: "unit.main".to_string(),
+            output: "missing".to_string(),
+        };
+        expect_invalid_scalar(validate_err(&unknown_output), "unit output dependency");
+    }
+
+    #[test]
+    fn validate_rejects_unit_output_dependency_cycles() {
+        let mut plan = plan_with_extra_collections();
+        plan.units[0].derivation.inputs.push(DynamicInput::UnitOutput {
+            unit: "unit.extra".to_string(),
+            output: "out".to_string(),
+        });
+
+        let err = validate_err(&plan);
+        expect_invalid_scalar(err, "unit dependency graph");
     }
 
     #[test]
