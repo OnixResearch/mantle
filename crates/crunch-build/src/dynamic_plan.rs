@@ -1,8 +1,9 @@
 //! Native dynamic build-plan ABI.
 //!
-//! This module is the pure Rust core for `mantle-plan-v1` decoding and
-//! scalar grammar checks. It deliberately performs no store I/O, no worker
-//! mutation, and no scheduler registration.
+//! This module is the pure Rust core for `mantle-plan-v1` decoding,
+//! canonicalization, BLAKE3 digesting, and scalar grammar checks. It
+//! deliberately performs no store I/O, no worker mutation, and no scheduler
+//! registration.
 
 use std::collections::BTreeMap;
 
@@ -23,7 +24,7 @@ pub const MAX_DYNAMIC_PLAN_STRING_BYTES: u32 = 16_384;
 pub const MAX_DYNAMIC_PLAN_NESTING_DEPTH: u32 = 16;
 pub const MAX_DYNAMIC_PLAN_ID_BYTES: u32 = 128;
 pub const MAX_DYNAMIC_PLAN_OUTPUT_NAME_BYTES: u32 = 64;
-pub const BLAKE3_HEX_BYTES: u32 = 64;
+pub const BLAKE3_HEX_BYTES: usize = 64;
 pub const MANTLE_PLAN_V1_SCHEMA: &str = "mantle-plan-v1";
 pub const STORE_PATH_KIND: &str = "store_path";
 pub const SOURCE_KIND: &str = "source";
@@ -54,6 +55,16 @@ pub enum DynamicPlanError {
         value: String,
         reason: &'static str,
     },
+
+    #[error("serializing canonical mantle-plan-v1 JSON: {message}")]
+    CanonicalJson { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonicalDynamicPlanV1 {
+    pub plan: DynamicPlanV1,
+    pub bytes: Vec<u8>,
+    pub digest: Blake3Hex,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,10 +189,104 @@ pub fn decode_plan_v1(bytes: &[u8]) -> Result<DynamicPlanV1, DynamicPlanError> {
     })
 }
 
+pub fn decode_canonical_plan_v1(bytes: &[u8]) -> Result<CanonicalDynamicPlanV1, DynamicPlanError> {
+    let plan = decode_plan_v1(bytes)?;
+    let canonical = canonicalize_plan_v1(&plan);
+    let canonical_bytes = canonical_plan_v1_bytes(&canonical)?;
+    let digest = blake3_hex_digest(&canonical_bytes);
+
+    assert!(!canonical_bytes.is_empty());
+    assert_eq!(digest.len(), BLAKE3_HEX_BYTES);
+
+    Ok(CanonicalDynamicPlanV1 {
+        plan: canonical,
+        bytes: canonical_bytes,
+        digest,
+    })
+}
+
+pub fn canonical_plan_v1_bytes(plan: &DynamicPlanV1) -> Result<Vec<u8>, DynamicPlanError> {
+    let canonical = canonicalize_plan_v1(plan);
+    let bytes = serde_json::to_vec(&canonical).map_err(|err| DynamicPlanError::CanonicalJson {
+        message: err.to_string(),
+    })?;
+
+    let actual_bytes = len_as_u64(bytes.len());
+    if actual_bytes > MAX_DYNAMIC_PLAN_BYTES {
+        return Err(DynamicPlanError::PlanTooLarge {
+            actual_bytes,
+            max_bytes: MAX_DYNAMIC_PLAN_BYTES,
+        });
+    }
+
+    assert!(!bytes.is_empty());
+
+    Ok(bytes)
+}
+
+pub fn canonical_plan_v1_digest(plan: &DynamicPlanV1) -> Result<Blake3Hex, DynamicPlanError> {
+    let bytes = canonical_plan_v1_bytes(plan)?;
+    let digest = blake3_hex_digest(&bytes);
+
+    assert_eq!(digest.len(), BLAKE3_HEX_BYTES);
+    assert!(validate_blake3_hex(&digest).is_ok());
+
+    Ok(digest)
+}
+
+pub fn canonicalize_plan_v1(plan: &DynamicPlanV1) -> DynamicPlanV1 {
+    let source_count = plan.sources.len();
+    let unit_count = plan.units.len();
+    let root_count = plan.roots.len();
+
+    let mut canonical = plan.clone();
+    canonical.sources.sort_by(|left, right| left.id.cmp(&right.id));
+    canonical.units.sort_by(|left, right| left.id.cmp(&right.id));
+    canonical.roots.sort();
+    canonical.units = canonical.units.into_iter().map(canonicalize_unit).collect();
+
+    assert_eq!(canonical.sources.len(), source_count);
+    assert_eq!(canonical.units.len(), unit_count);
+    assert_eq!(canonical.roots.len(), root_count);
+
+    canonical
+}
+
 fn decode_plan_json_value(bytes: &[u8]) -> Result<Value, DynamicPlanError> {
     serde_json::from_slice(bytes).map_err(|err| DynamicPlanError::JsonDecode {
         message: err.to_string(),
     })
+}
+
+fn canonicalize_unit(mut unit: DynamicUnit) -> DynamicUnit {
+    let requested_output_count = unit.requested_outputs.len();
+    let input_count = unit.derivation.inputs.len();
+
+    unit.requested_outputs.sort();
+    unit.derivation.outputs.sort();
+    unit.derivation.dynamic_plan_outputs.sort();
+    unit.derivation
+        .inputs
+        .sort_by(|left, right| dynamic_input_sort_key(left).cmp(&dynamic_input_sort_key(right)));
+
+    assert_eq!(unit.requested_outputs.len(), requested_output_count);
+    assert_eq!(unit.derivation.inputs.len(), input_count);
+
+    unit
+}
+
+fn dynamic_input_sort_key(input: &DynamicInput) -> (&'static str, &str, &str) {
+    match input {
+        DynamicInput::StorePath { path } => (STORE_PATH_KIND, path.as_str(), ""),
+        DynamicInput::Source { source } => (SOURCE_KIND, source.as_str(), ""),
+        DynamicInput::UnitOutput { unit, output } => (UNIT_OUTPUT_KIND, unit.as_str(), output.as_str()),
+    }
+}
+
+fn blake3_hex_digest(bytes: &[u8]) -> Blake3Hex {
+    let digest = blake3::hash(bytes).to_hex().to_string();
+    assert_eq!(digest.len(), BLAKE3_HEX_BYTES);
+    digest
 }
 
 fn require_nullable_fields_present(value: &Value) -> Result<(), DynamicPlanError> {
@@ -250,7 +355,7 @@ pub fn validate_output_name(value: &str) -> Result<(), DynamicPlanError> {
 
 pub fn validate_blake3_hex(value: &str) -> Result<(), DynamicPlanError> {
     let byte_len = len_as_u64(value.len());
-    if byte_len != u64::from(BLAKE3_HEX_BYTES) {
+    if byte_len != len_as_u64(BLAKE3_HEX_BYTES) {
         return invalid_scalar("blake3 hex", value, "must be exactly 64 lowercase hex bytes");
     }
     if !value.chars().all(is_lower_hex_char) {
@@ -382,9 +487,101 @@ mod tests {
         )
     }
 
+    fn valid_plan_key_order_variant_json() -> String {
+        format!(
+            r#"{{
+  "provenance": {{ "generator": "test" }},
+  "roots": ["unit.main"],
+  "units": [{{
+    "policy": {{
+      "host_paths": "none",
+      "store_prefix": "inherit",
+      "substitutions": "inherit",
+      "sandbox": "inherit"
+    }},
+    "requested_outputs": ["out"],
+    "derivation": {{
+      "dynamic_plan_outputs": ["plan"],
+      "sandbox": "native",
+      "addressing_mode": "content-addressed",
+      "fixed_output": null,
+      "inputs": [
+        {{ "path": "{TEST_STORE_PATH}", "kind": "store_path" }},
+        {{ "source": "src.main", "kind": "source" }}
+      ],
+      "env": {{ "KEY": "VALUE" }},
+      "outputs": ["out"],
+      "args": ["--build"],
+      "system": "x86_64-linux",
+      "builder": "{TEST_STORE_PATH}/bin/builder",
+      "name": "unit-main"
+    }},
+    "id": "unit.main"
+  }}],
+  "sources": [{{ "nar_blake3": "{TEST_BLAKE3_HEX}", "path": "{TEST_STORE_PATH}", "id": "src.main" }}],
+  "producer": {{ "goal_hint": "goal-a", "logical_name": "resolver" }},
+  "schema": "mantle-plan-v1"
+}}"#,
+        )
+    }
+
+    fn valid_plan() -> DynamicPlanV1 {
+        decode_plan_v1(valid_plan_json().as_bytes()).unwrap()
+    }
+
+    fn plan_with_extra_collections() -> DynamicPlanV1 {
+        let mut plan = valid_plan();
+        plan.sources.push(DeclaredSourceInput {
+            id: "src.extra".to_string(),
+            path: TEST_STORE_PATH.to_string(),
+            nar_blake3: None,
+        });
+        plan.roots.push("unit.extra".to_string());
+        plan.provenance.insert("zeta".to_string(), "last".to_string());
+        plan.provenance.insert("alpha".to_string(), "first".to_string());
+        plan.units.push(DynamicUnit {
+            id: "unit.extra".to_string(),
+            derivation: DynamicDerivation {
+                name: "unit-extra".to_string(),
+                builder: TEST_STORE_PATH.to_string(),
+                system: "x86_64-linux".to_string(),
+                args: vec!["--extra".to_string()],
+                outputs: vec!["out".to_string(), "dev".to_string()],
+                env: std::collections::BTreeMap::from([
+                    ("ZED".to_string(), "last".to_string()),
+                    ("ALPHA".to_string(), "first".to_string()),
+                ]),
+                inputs: vec![
+                    DynamicInput::UnitOutput {
+                        unit: "unit.main".to_string(),
+                        output: "out".to_string(),
+                    },
+                    DynamicInput::StorePath {
+                        path: TEST_STORE_PATH.to_string(),
+                    },
+                    DynamicInput::Source {
+                        source: "src.extra".to_string(),
+                    },
+                ],
+                fixed_output: None,
+                addressing_mode: AddressingMode::ContentAddressed,
+                sandbox: SandboxMode::Native,
+                dynamic_plan_outputs: vec!["plan_b".to_string(), "plan_a".to_string()],
+            },
+            requested_outputs: vec!["out".to_string(), "dev".to_string()],
+            policy: DynamicUnitPolicy {
+                sandbox: INHERIT_POLICY_VALUE.to_string(),
+                substitutions: INHERIT_POLICY_VALUE.to_string(),
+                store_prefix: INHERIT_POLICY_VALUE.to_string(),
+                host_paths: NO_HOST_PATHS_POLICY_VALUE.to_string(),
+            },
+        });
+        plan
+    }
+
     #[test]
     fn decode_accepts_valid_plan_shape() {
-        let plan = decode_plan_v1(valid_plan_json().as_bytes()).unwrap();
+        let plan = valid_plan();
 
         assert_eq!(plan.schema, MANTLE_PLAN_V1_SCHEMA);
         assert_eq!(plan.producer.logical_name, "resolver");
@@ -392,6 +589,84 @@ mod tests {
         assert_eq!(plan.units.len(), 1);
         assert_eq!(plan.roots, vec!["unit.main"]);
         assert_eq!(plan.units[0].derivation.sandbox, SandboxMode::Native);
+    }
+
+    #[test]
+    fn canonical_bytes_are_compact_json() {
+        let plan = valid_plan();
+        let bytes = canonical_plan_v1_bytes(&plan).unwrap();
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        let decoded: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(decoded["schema"], MANTLE_PLAN_V1_SCHEMA);
+        assert!(!text.contains('\n'));
+        assert!(!text.contains(": "));
+        assert!(!text.contains(", "));
+    }
+
+    #[test]
+    fn canonical_digest_ignores_formatting_and_object_key_order() {
+        let left = valid_plan();
+        let right = decode_plan_v1(valid_plan_key_order_variant_json().as_bytes()).unwrap();
+
+        let left_bytes = canonical_plan_v1_bytes(&left).unwrap();
+        let right_bytes = canonical_plan_v1_bytes(&right).unwrap();
+        let left_digest = canonical_plan_v1_digest(&left).unwrap();
+        let right_digest = canonical_plan_v1_digest(&right).unwrap();
+        let direct_digest = blake3::hash(&left_bytes).to_hex().to_string();
+
+        assert_eq!(left_bytes, right_bytes);
+        assert_eq!(left_digest, right_digest);
+        assert_eq!(left_digest, direct_digest);
+        assert_eq!(left_digest.len(), BLAKE3_HEX_BYTES);
+        assert!(validate_blake3_hex(&left_digest).is_ok());
+    }
+
+    #[test]
+    fn canonicalization_sorts_set_like_collections() {
+        let left = plan_with_extra_collections();
+        let mut right = left.clone();
+        right.sources.reverse();
+        right.units.reverse();
+        right.roots.reverse();
+        for unit in &mut right.units {
+            unit.requested_outputs.reverse();
+            unit.derivation.outputs.reverse();
+            unit.derivation.dynamic_plan_outputs.reverse();
+            unit.derivation.inputs.reverse();
+        }
+
+        let raw_left = serde_json::to_vec(&left).unwrap();
+        let raw_right = serde_json::to_vec(&right).unwrap();
+        let canonical_left = canonical_plan_v1_bytes(&left).unwrap();
+        let canonical_right = canonical_plan_v1_bytes(&right).unwrap();
+        let canonical = canonicalize_plan_v1(&right);
+
+        assert_ne!(raw_left, raw_right);
+        assert_eq!(canonical_left, canonical_right);
+        assert_eq!(canonical_plan_v1_digest(&left).unwrap(), canonical_plan_v1_digest(&right).unwrap());
+        assert_eq!(canonical.sources[0].id, "src.extra");
+        assert_eq!(canonical.units[0].id, "unit.extra");
+        assert_eq!(canonical.roots, vec!["unit.extra", "unit.main"]);
+        assert_eq!(canonical.units[0].requested_outputs, vec!["dev", "out"]);
+        assert_eq!(canonical.units[0].derivation.outputs, vec!["dev", "out"]);
+        assert_eq!(canonical.units[0].derivation.dynamic_plan_outputs, vec!["plan_a", "plan_b"]);
+        assert_eq!(canonical.units[0].derivation.inputs[0], DynamicInput::Source {
+            source: "src.extra".to_string()
+        });
+    }
+
+    #[test]
+    fn decode_canonical_plan_returns_canonical_plan_bytes_and_digest() {
+        let decoded = decode_canonical_plan_v1(valid_plan_key_order_variant_json().as_bytes()).unwrap();
+        let canonical_bytes = canonical_plan_v1_bytes(&decoded.plan).unwrap();
+        let canonical_digest = canonical_plan_v1_digest(&decoded.plan).unwrap();
+
+        assert_eq!(decoded.bytes, canonical_bytes);
+        assert_eq!(decoded.digest, canonical_digest);
+        assert_eq!(decoded.plan.units[0].derivation.inputs[0], DynamicInput::Source {
+            source: "src.main".to_string()
+        });
     }
 
     #[test]
