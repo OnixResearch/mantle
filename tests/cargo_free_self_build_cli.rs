@@ -11,6 +11,7 @@ const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 const DIGEST_E: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const DIGEST_F: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 const REQUIRED_TOOLCHAIN_MEMBER_COUNT: u64 = 4;
+const SOURCE_BUILT_WITH_SEED_MEMBER_COUNT: u64 = REQUIRED_TOOLCHAIN_MEMBER_COUNT - 1;
 const BLAKE3_HEX_CHAR_COUNT: usize = DIGEST_A.len();
 const FIXED_POINT_SUCCESS_SOURCE: &str = r##"
 use std::env;
@@ -121,11 +122,49 @@ fn write_matching_toolchain_closure_manifest(dir: &TempDir) -> std::path::PathBu
     path
 }
 
+fn write_matching_seed_exception_toolchain_closure_manifest(dir: &TempDir) -> std::path::PathBuf {
+    let path = dir.path().join("matching-seed-toolchain-closure.json");
+    let rustc = resolve_on_path("rustc");
+    let cc = resolve_on_path("cc");
+    let sysroot = rustc_sysroot(&rustc);
+    let cc_digest = blake3_file(&cc);
+    let members = vec![
+        toolchain_member("rustc", "rustc", &path_string(&rustc), &blake3_file(&rustc), DIGEST_B),
+        toolchain_member("linker", "cc-linker", &path_string(&cc), &cc_digest, DIGEST_C),
+        toolchain_member("c-compiler", "cc", &path_string(&cc), &cc_digest, DIGEST_D),
+        seed_exception_toolchain_member("sysroot", "rustc-sysroot", &path_string(&sysroot), DIGEST_E),
+    ];
+    let seed_exceptions = vec![serde_json::json!({
+        "name": "rustc-sysroot",
+        "reason": "documented bootstrap trust root",
+        "content_digest_blake3": DIGEST_E,
+    })];
+    write_toolchain_manifest_value_with_seeds(&path, members, seed_exceptions);
+    path
+}
+
 fn write_mismatched_rustc_toolchain_closure_manifest(dir: &TempDir) -> std::path::PathBuf {
     let path = dir.path().join("mismatched-rustc-toolchain-closure.json");
     let rustc = std::path::PathBuf::from("/toolchain/not-the-host-rustc");
     let members = matching_toolchain_members(&rustc);
     write_toolchain_manifest_value(&path, members);
+    path
+}
+
+fn write_placeholder_seed_toolchain_closure_manifest(dir: &TempDir) -> std::path::PathBuf {
+    let path = dir.path().join("placeholder-seed-toolchain-closure.json");
+    let members = vec![
+        toolchain_member("rustc", "rustc", "/toolchain/rustc", DIGEST_A, DIGEST_B),
+        toolchain_member("linker", "ld", "/toolchain/ld", DIGEST_B, DIGEST_C),
+        toolchain_member("c-compiler", "cc", "/toolchain/cc", DIGEST_C, DIGEST_D),
+        seed_exception_toolchain_member("sysroot", "stage0-sysroot", "/toolchain/sysroot", DIGEST_D),
+    ];
+    let seed_exceptions = vec![serde_json::json!({
+        "name": "stage0-sysroot",
+        "reason": "TODO placeholder source-root contract",
+        "content_digest_blake3": DIGEST_D,
+    })];
+    write_toolchain_manifest_value_with_seeds(&path, members, seed_exceptions);
     path
 }
 
@@ -143,10 +182,14 @@ fn matching_toolchain_members(rustc_member_path: &std::path::Path) -> Vec<Value>
 }
 
 fn write_toolchain_manifest_value(path: &std::path::Path, members: Vec<Value>) {
+    write_toolchain_manifest_value_with_seeds(path, members, Vec::new());
+}
+
+fn write_toolchain_manifest_value_with_seeds(path: &std::path::Path, members: Vec<Value>, seed_exceptions: Vec<Value>) {
     let manifest = serde_json::json!({
         "schema": "mantle-source-built-toolchain-closure-v1",
         "members": members,
-        "seed_exceptions": []
+        "seed_exceptions": seed_exceptions,
     });
     let bytes = serde_json::to_vec_pretty(&manifest).unwrap();
     std::fs::write(path, bytes).unwrap();
@@ -172,13 +215,37 @@ fn toolchain_member(role: &str, name: &str, execution_path: &str, content_digest
     })
 }
 
+fn seed_exception_toolchain_member(role: &str, name: &str, execution_path: &str, content_digest: &str) -> Value {
+    serde_json::json!({
+        "role": role,
+        "name": name,
+        "execution_path": execution_path,
+        "content_digest_blake3": content_digest,
+        "trust": "seed-exception",
+    })
+}
+
 fn assert_validated_toolchain_closure(closure: &Value, manifest: &std::path::Path) {
+    assert_validated_toolchain_closure_counts(closure, manifest, REQUIRED_TOOLCHAIN_MEMBER_COUNT, 0);
+}
+
+fn assert_validated_seed_toolchain_closure(closure: &Value, manifest: &std::path::Path) {
+    assert_validated_toolchain_closure_counts(closure, manifest, SOURCE_BUILT_WITH_SEED_MEMBER_COUNT, 1);
+}
+
+fn assert_validated_toolchain_closure_counts(
+    closure: &Value,
+    manifest: &std::path::Path,
+    source_built_member_count: u64,
+    seed_exception_count: u64,
+) {
     assert_eq!(closure["status"], "validated-enforced");
     assert_eq!(closure["claim"], false);
     assert_eq!(closure["non_claim"], "not-source-built-toolchain-closure");
     assert_eq!(closure["manifest_path"], manifest.to_string_lossy().as_ref());
     assert_eq!(closure["member_count"], REQUIRED_TOOLCHAIN_MEMBER_COUNT);
-    assert_eq!(closure["seed_exception_count"], 0);
+    assert_eq!(closure["source_built_member_count"], source_built_member_count);
+    assert_eq!(closure["seed_exception_count"], seed_exception_count);
     assert_eq!(closure["policy_digest_blake3"].as_str().unwrap().len(), BLAKE3_HEX_CHAR_COUNT);
 }
 
@@ -308,6 +375,42 @@ fn cargo_free_self_build_enforces_matching_toolchain_closure_manifest_without_cl
 }
 
 #[test]
+fn cargo_free_self_build_reports_seed_exception_accounting_without_claiming_proof() {
+    let dir = TempDir::new().unwrap();
+    let root = write_tiny_mantle_fixture(&dir);
+    let out_dir = dir.path().join("cargo-free-out");
+    let manifest = write_matching_seed_exception_toolchain_closure_manifest(&dir);
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--toolchain-closure")
+        .arg(&manifest)
+        .output()
+        .expect("cargo-free self-build CLI should run");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary: Value = serde_json::from_slice(&output.stdout).expect("summary JSON should parse");
+    assert_eq!(summary["status"], "success");
+    assert_validated_seed_toolchain_closure(&summary["source_built_toolchain_closure"], &manifest);
+    assert!(
+        summary["non_claims"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::from("not-source-built-toolchain-closure"))
+    );
+}
+
+#[test]
 fn cargo_free_self_build_rejects_invalid_toolchain_closure_manifest() {
     let dir = TempDir::new().unwrap();
     let root = write_tiny_mantle_fixture(&dir);
@@ -330,6 +433,33 @@ fn cargo_free_self_build_rejects_invalid_toolchain_closure_manifest() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("invalid --toolchain-closure"), "{stderr}");
     assert!(stderr.contains("missing required toolchain role Sysroot"), "{stderr}");
+    assert!(!out_dir.join("mantle").exists());
+}
+
+#[test]
+fn cargo_free_self_build_rejects_placeholder_seed_exception_manifest() {
+    let dir = TempDir::new().unwrap();
+    let root = write_tiny_mantle_fixture(&dir);
+    let out_dir = dir.path().join("cargo-free-out");
+    let manifest = write_placeholder_seed_toolchain_closure_manifest(&dir);
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--toolchain-closure")
+        .arg(&manifest)
+        .output()
+        .expect("cargo-free self-build CLI should run");
+
+    assert!(!output.status.success(), "stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("invalid --toolchain-closure"), "{stderr}");
+    assert!(stderr.contains("seed reason contains disallowed seed marker 'placeholder'"), "{stderr}");
+    assert!(!out_dir.join("receipt.json").exists());
     assert!(!out_dir.join("mantle").exists());
 }
 
@@ -466,6 +596,12 @@ fn cargo_free_fixed_point_enforces_matching_toolchain_closure_manifest_without_c
     let summary: Value = serde_json::from_slice(&output.stdout).expect("summary JSON should parse");
     let closure = &summary["source_built_toolchain_closure"];
     assert_validated_toolchain_closure(closure, &manifest);
+    assert!(
+        summary["non_claims"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::from("not-source-built-toolchain-closure"))
+    );
 
     let policy_digest = closure["policy_digest_blake3"].as_str().unwrap();
     assert_eq!(

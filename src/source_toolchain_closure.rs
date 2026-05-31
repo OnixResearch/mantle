@@ -30,6 +30,7 @@ const REQUIRED_TOOLCHAIN_ROLES: [ToolchainRole; 4] = [
     ToolchainRole::CCompiler,
     ToolchainRole::Sysroot,
 ];
+const DISALLOWED_SEED_EXCEPTION_MARKERS: [&str; 3] = ["placeholder", "todo", "unverified"];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct SourceBuiltToolchainClosureStatus {
@@ -157,6 +158,7 @@ pub(crate) enum ToolchainClosureErrorKind {
     MissingSource,
     MissingBuildReceipt,
     MissingSeedException,
+    PlaceholderSeedException,
     HostToolLeakage,
     Serialization,
 }
@@ -333,6 +335,8 @@ fn validate_seeds(seeds: &[ToolchainSeedException]) -> Result<BTreeSet<(String, 
     for seed in seeds {
         validate_non_empty("seed name", &seed.name)?;
         validate_non_empty("seed reason", &seed.reason)?;
+        validate_seed_exception_text("seed name", &seed.name)?;
+        validate_seed_exception_text("seed reason", &seed.reason)?;
         validate_blake3_hex("seed content_digest_blake3", &seed.content_digest_blake3)?;
         if !keys.insert((seed.name.clone(), seed.content_digest_blake3.clone())) {
             return Err(error(ToolchainClosureErrorKind::DuplicateSeed, format!("duplicate seed '{}'", seed.name)));
@@ -444,6 +448,45 @@ fn validate_non_empty(label: &str, value: &str) -> Result<(), ToolchainClosureEr
     Err(error(ToolchainClosureErrorKind::EmptyField, format!("{label} is empty")))
 }
 
+fn validate_seed_exception_text(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
+    let normalized = value.to_ascii_lowercase();
+    for marker in DISALLOWED_SEED_EXCEPTION_MARKERS {
+        if contains_disallowed_seed_exception_marker(&normalized, marker) {
+            return Err(error(
+                ToolchainClosureErrorKind::PlaceholderSeedException,
+                format!("{label} contains disallowed seed marker '{marker}'"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn contains_disallowed_seed_exception_marker(value: &str, marker: &str) -> bool {
+    debug_assert!(!marker.is_empty());
+    let mut search_start = 0;
+    while let Some(relative_start) = value[search_start..].find(marker) {
+        let marker_start = search_start + relative_start;
+        let marker_end = marker_start + marker.len();
+        if has_marker_boundaries(value, marker_start, marker_end) {
+            return true;
+        }
+        search_start = marker_end;
+    }
+    false
+}
+
+fn has_marker_boundaries(value: &str, marker_start: usize, marker_end: usize) -> bool {
+    debug_assert!(marker_start <= marker_end);
+    debug_assert!(marker_end <= value.len());
+    let before = value[..marker_start].chars().next_back();
+    let after = value[marker_end..].chars().next();
+    !is_seed_marker_word_char(before) && !is_seed_marker_word_char(after)
+}
+
+fn is_seed_marker_word_char(value: Option<char>) -> bool {
+    value.is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
 fn validate_absolute_path(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
     validate_non_empty(label, value)?;
     if Path::new(value).is_absolute() {
@@ -502,6 +545,7 @@ mod tests {
     const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
     const DIGEST_E: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
     const DIGEST_F: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    const TWO_SEED_EXCEPTION_COUNT: usize = 2;
 
     #[test]
     fn absent_closure_status_preserves_current_non_claim() {
@@ -528,6 +572,65 @@ mod tests {
         assert_eq!(original.source_built_member_count, REQUIRED_TOOLCHAIN_ROLES.len());
         assert_eq!(original.seed_exception_count, 0);
         assert_eq!(original.policy_digest_blake3, reordered.policy_digest_blake3);
+    }
+
+    #[test]
+    fn json_fixture_parses_seed_exception_and_counts_source_built_members() {
+        let manifest = serde_json::from_value::<ToolchainClosureManifest>(serde_json::json!({
+            "schema": SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
+            "members": [
+                member_json("rustc", "rustc", "/toolchain/rustc", DIGEST_A, DIGEST_B, "source-built"),
+                member_json("linker", "ld", "/toolchain/ld", DIGEST_B, DIGEST_C, "source-built"),
+                member_json("c-compiler", "cc", "/toolchain/cc", DIGEST_C, DIGEST_D, "source-built"),
+                seed_member_json("sysroot", "stage0-sysroot", "/toolchain/sysroot", DIGEST_D),
+            ],
+            "seed_exceptions": [{
+                "name": "stage0-sysroot",
+                "reason": "documented bootstrap trust root",
+                "content_digest_blake3": DIGEST_D,
+            }]
+        }))
+        .unwrap();
+
+        let validation = validate_toolchain_closure_manifest(&manifest).unwrap();
+
+        assert_eq!(validation.member_count, REQUIRED_TOOLCHAIN_ROLES.len());
+        assert_eq!(validation.source_built_member_count, REQUIRED_TOOLCHAIN_ROLES.len() - 1);
+        assert_eq!(validation.seed_exception_count, 1);
+        assert_eq!(validation.policy_digest_blake3.len(), BLAKE3_HEX_CHAR_COUNT);
+    }
+
+    #[test]
+    fn seed_exception_policy_digest_is_order_independent_and_accounted() {
+        let mut manifest = valid_manifest();
+        make_seed_member(&mut manifest, 0);
+        make_seed_member(&mut manifest, 1);
+        let mut reordered = manifest.clone();
+        reordered.members.reverse();
+        reordered.seed_exceptions.reverse();
+
+        let original = validate_toolchain_closure_manifest(&manifest).unwrap();
+        let sorted = validate_toolchain_closure_manifest(&reordered).unwrap();
+
+        assert_eq!(original.policy_digest_blake3, sorted.policy_digest_blake3);
+        assert_eq!(original.member_count, REQUIRED_TOOLCHAIN_ROLES.len());
+        assert_eq!(original.source_built_member_count, REQUIRED_TOOLCHAIN_ROLES.len() - TWO_SEED_EXCEPTION_COUNT);
+        assert_eq!(original.seed_exception_count, TWO_SEED_EXCEPTION_COUNT);
+    }
+
+    #[test]
+    fn policy_digest_changes_when_seed_exception_reason_changes() {
+        let mut manifest = valid_manifest();
+        make_seed_member(&mut manifest, 0);
+        let mut changed = manifest.clone();
+        changed.seed_exceptions[0].reason = "documented different trust root".to_string();
+
+        let original = validate_toolchain_closure_manifest(&manifest).unwrap();
+        let changed = validate_toolchain_closure_manifest(&changed).unwrap();
+
+        assert_ne!(original.policy_digest_blake3, changed.policy_digest_blake3);
+        assert_eq!(original.seed_exception_count, changed.seed_exception_count);
+        assert_eq!(original.member_count, changed.member_count);
     }
 
     #[test]
@@ -643,6 +746,46 @@ mod tests {
     }
 
     #[test]
+    fn validator_allows_seed_reason_with_marker_letters_inside_larger_word() {
+        let mut manifest = valid_manifest();
+        make_seed_member(&mut manifest, 0);
+        manifest.seed_exceptions[0].reason = "autodoc bootstrap trust root".to_string();
+
+        let validation = validate_toolchain_closure_manifest(&manifest).unwrap();
+
+        assert_eq!(validation.member_count, REQUIRED_TOOLCHAIN_ROLES.len());
+        assert_eq!(validation.source_built_member_count, REQUIRED_TOOLCHAIN_ROLES.len() - 1);
+        assert_eq!(validation.seed_exception_count, 1);
+    }
+
+    #[test]
+    fn validator_rejects_placeholder_seed_exception_reason() {
+        let mut manifest = valid_manifest();
+        make_seed_member(&mut manifest, 0);
+        manifest.seed_exceptions[0].reason = "TODO placeholder source-root contract".to_string();
+
+        let err = validate_toolchain_closure_manifest(&manifest).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::PlaceholderSeedException);
+        assert!(err.message().contains("seed reason"));
+        assert!(err.message().contains("placeholder"));
+    }
+
+    #[test]
+    fn validator_rejects_unverified_seed_exception_name() {
+        let mut manifest = valid_manifest();
+        make_seed_member(&mut manifest, 0);
+        manifest.seed_exceptions[0].name = "unverified-stage0-seed".to_string();
+        manifest.members[0].name = "unverified-stage0-seed".to_string();
+
+        let err = validate_toolchain_closure_manifest(&manifest).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::PlaceholderSeedException);
+        assert!(err.message().contains("seed name"));
+        assert!(err.message().contains("unverified"));
+    }
+
+    #[test]
     fn validator_rejects_invalid_optional_source_on_seed_member() {
         let mut manifest = valid_manifest();
         make_seed_member(&mut manifest, 0);
@@ -718,6 +861,48 @@ mod tests {
             ],
             seed_exceptions: Vec::new(),
         }
+    }
+
+    fn member_json(
+        role: &str,
+        name: &str,
+        execution_path: &str,
+        content_digest_blake3: &str,
+        receipt_digest_blake3: &str,
+        trust: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "role": role,
+            "name": name,
+            "execution_path": execution_path,
+            "content_digest_blake3": content_digest_blake3,
+            "trust": trust,
+            "source": {
+                "kind": "tarball",
+                "name": format!("{name}-source"),
+                "digest_blake3": DIGEST_F,
+            },
+            "build_receipt": {
+                "kind": "mantle-rust-topology",
+                "name": format!("{name}-receipt"),
+                "digest_blake3": receipt_digest_blake3,
+            },
+        })
+    }
+
+    fn seed_member_json(
+        role: &str,
+        name: &str,
+        execution_path: &str,
+        content_digest_blake3: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "role": role,
+            "name": name,
+            "execution_path": execution_path,
+            "content_digest_blake3": content_digest_blake3,
+            "trust": "seed-exception",
+        })
     }
 
     fn make_seed_member(manifest: &mut ToolchainClosureManifest, member_index: usize) {
