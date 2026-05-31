@@ -77,6 +77,7 @@ pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) root: &'a Path,
     pub(crate) out_dir: &'a Path,
     pub(crate) rustc: &'a Path,
+    pub(crate) toolchain_closure: Option<&'a Path>,
     pub(crate) json: bool,
 }
 
@@ -210,6 +211,7 @@ struct FixedPointSummary {
     stage1: FixedPointStageSummary,
     stage2: Option<FixedPointStageSummary>,
     rustc_compatibility: RustcCompatibilitySummary,
+    source_built_toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     blocker: Option<String>,
     non_claims: Vec<&'static str>,
 }
@@ -253,6 +255,7 @@ struct SelfBuildSummary {
     failed_unit_count: u64,
     smoke_status_code: Option<i32>,
     blocker: Option<String>,
+    source_built_toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     non_claims: Vec<&'static str>,
 }
 
@@ -262,6 +265,7 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     write_non_claims(&paths.out_dir)?;
     write_cargo_shim(&paths.explicit_cargo_shim, &paths.marker_path)?;
     write_cargo_shim(&paths.path_cargo_shim, &paths.marker_path)?;
+    let toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
 
     let mut child = run_rust_plan_child(&paths, options.rustc)?;
     let produced = if child.blocker.is_none() {
@@ -272,7 +276,7 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     if child.blocker.is_some() && produced.is_none() {
         write_blocked_smoke_outputs(&paths, child.blocker.as_deref())?;
     }
-    let summary = summarize(&paths, &child, produced.as_ref());
+    let summary = summarize(&paths, &child, produced.as_ref(), toolchain_closure);
     write_summary(&paths.meta_path, &summary)?;
     print_summary(&summary, options.json)?;
 
@@ -287,26 +291,51 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let bundle_dir = absolutize(&root, options.out_dir);
     ensure_outside_root(&bundle_dir, &root)?;
     prepare_fixed_point_output_dir(&bundle_dir)?;
+    let toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
     let compatibility = prepare_rustc_compatibility(&bundle_dir, options.rustc)?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc)?;
     write_fixed_point_non_claims(&plan.bundle_dir)?;
-    write_fixed_point_preflight(&plan, &compatibility.summary)?;
+    write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_closure)?;
 
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let stage1 = execute_fixed_point_stage(&plan.stages[FIXED_POINT_STAGE1_INDEX], &host_mantle)?;
     if !stage1.success {
-        return finish_fixed_point(options.json, &plan, &compatibility.summary, stage1, None, BLOCKED_STATUS);
+        return finish_fixed_point(
+            options.json,
+            &plan,
+            &compatibility.summary,
+            &toolchain_closure,
+            stage1,
+            None,
+            BLOCKED_STATUS,
+        );
     }
     let Some(stage1_binary) = stage1.binary.as_deref() else {
         let stage1 = blocked_fixed_point_stage(stage1, "stage1 succeeded without produced binary path".to_string());
-        return finish_fixed_point(options.json, &plan, &compatibility.summary, stage1, None, BLOCKED_STATUS);
+        return finish_fixed_point(
+            options.json,
+            &plan,
+            &compatibility.summary,
+            &toolchain_closure,
+            stage1,
+            None,
+            BLOCKED_STATUS,
+        );
     };
     let stage2 = execute_fixed_point_stage(&plan.stages[FIXED_POINT_STAGE2_INDEX], stage1_binary)?;
     if !stage2.success {
-        return finish_fixed_point(options.json, &plan, &compatibility.summary, stage1, Some(stage2), BLOCKED_STATUS);
+        return finish_fixed_point(
+            options.json,
+            &plan,
+            &compatibility.summary,
+            &toolchain_closure,
+            stage1,
+            Some(stage2),
+            BLOCKED_STATUS,
+        );
     }
     let status = fixed_point_status(&stage1, &stage2)?;
-    finish_fixed_point(options.json, &plan, &compatibility.summary, stage1, Some(stage2), status)
+    finish_fixed_point(options.json, &plan, &compatibility.summary, &toolchain_closure, stage1, Some(stage2), status)
 }
 
 fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
@@ -854,11 +883,12 @@ fn finish_fixed_point(
     json_mode: bool,
     plan: &FixedPointPlan,
     compatibility: &RustcCompatibilitySummary,
+    toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     stage1: FixedPointStageRun,
     stage2: Option<FixedPointStageRun>,
     status: &str,
 ) -> Result<(), RunError> {
-    let summary = fixed_point_summary(plan, compatibility, &stage1, stage2.as_ref(), status);
+    let summary = fixed_point_summary(plan, compatibility, toolchain_closure, &stage1, stage2.as_ref(), status);
     write_summary(&plan.meta_path, &summary)?;
     print_fixed_point_summary(&summary, json_mode)?;
     if status == SUCCESS_STATUS {
@@ -870,6 +900,7 @@ fn finish_fixed_point(
 fn fixed_point_summary(
     plan: &FixedPointPlan,
     compatibility: &RustcCompatibilitySummary,
+    toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     stage1: &FixedPointStageRun,
     stage2: Option<&FixedPointStageRun>,
     status: &str,
@@ -889,6 +920,7 @@ fn fixed_point_summary(
             wrapper: compatibility.wrapper.clone(),
             wrapper_blake3: compatibility.wrapper_blake3.clone(),
         },
+        source_built_toolchain_closure: toolchain_closure.clone(),
         blocker: fixed_point_blocker(stage1, stage2, status),
         non_claims: fixed_point_non_claims(),
     }
@@ -1043,7 +1075,12 @@ fn is_successful_mantle_unit(unit: &Value) -> bool {
         && unit.get("execution_status").and_then(Value::as_str) == Some(SUCCESS_STATUS)
 }
 
-fn summarize(paths: &BuildPaths, child: &ChildRun, produced: Option<&ProducedBinary>) -> SelfBuildSummary {
+fn summarize(
+    paths: &BuildPaths,
+    child: &ChildRun,
+    produced: Option<&ProducedBinary>,
+    toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> SelfBuildSummary {
     let receipt = child.receipt.as_ref();
     SelfBuildSummary {
         schema: SCHEMA,
@@ -1068,6 +1105,7 @@ fn summarize(paths: &BuildPaths, child: &ChildRun, produced: Option<&ProducedBin
         failed_unit_count: receipt.map(failed_unit_count).unwrap_or_default(),
         smoke_status_code: produced.and_then(|value| value.smoke_status_code),
         blocker: child.blocker.clone(),
+        source_built_toolchain_closure: toolchain_closure,
         non_claims: vec![
             "not-crunch-bootstrap",
             "not-release-reproducibility",
@@ -1261,9 +1299,30 @@ fn fixed_point_non_claims() -> Vec<&'static str> {
     ]
 }
 
+fn load_source_built_toolchain_closure(
+    manifest_path: Option<&Path>,
+) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
+    let Some(manifest_path) = manifest_path else {
+        return Ok(crate::source_toolchain_closure::absent_source_built_toolchain_closure());
+    };
+    let manifest_bytes = fs::read(manifest_path)
+        .map_err(|err| RunError::Build(format!("read --toolchain-closure {}: {err}", manifest_path.display())))?;
+    let manifest = serde_json::from_slice::<crate::source_toolchain_closure::ToolchainClosureManifest>(&manifest_bytes)
+        .map_err(|err| RunError::Build(format!("parse --toolchain-closure {}: {err}", manifest_path.display())))?;
+    let validation =
+        crate::source_toolchain_closure::validate_toolchain_closure_manifest(&manifest).map_err(|err| {
+            RunError::Build(format!("invalid --toolchain-closure {}: {}", manifest_path.display(), err.message()))
+        })?;
+    Ok(crate::source_toolchain_closure::validated_source_built_toolchain_closure(
+        manifest_path.to_path_buf(),
+        &validation,
+    ))
+}
+
 fn write_fixed_point_preflight(
     plan: &FixedPointPlan,
     compatibility: &RustcCompatibilitySummary,
+    toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
 ) -> Result<(), RunError> {
     let value = json!({
         "schema": plan.schema,
@@ -1271,7 +1330,7 @@ fn write_fixed_point_preflight(
         "bundle_dir": plan.bundle_dir,
         "shared_execution_dir": plan.shared_execution_dir,
         "rustc_compatibility": compatibility,
-        "source_built_toolchain_closure": crate::source_toolchain_closure::absent_source_built_toolchain_closure(),
+        "source_built_toolchain_closure": toolchain_closure,
     });
     let bytes = serde_json::to_vec_pretty(&value).map_err(|err| internal(format!("serialize preflight: {err}")))?;
     write_bytes(&plan.preflight_path, &bytes)

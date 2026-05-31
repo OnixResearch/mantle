@@ -4,6 +4,14 @@ use tempfile::TempDir;
 
 #[cfg(unix)]
 const EXECUTABLE_PERMISSIONS: u32 = 0o755;
+const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+const DIGEST_E: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+const DIGEST_F: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+const REQUIRED_TOOLCHAIN_MEMBER_COUNT: u64 = 4;
+const BLAKE3_HEX_CHAR_COUNT: usize = DIGEST_A.len();
 const FIXED_POINT_SUCCESS_SOURCE: &str = r##"
 use std::env;
 use std::fs;
@@ -91,6 +99,56 @@ fn write_fixed_point_fixture(dir: &TempDir, source: &str) -> std::path::PathBuf 
     write_mantle_fixture(dir, source)
 }
 
+fn write_toolchain_closure_manifest(dir: &TempDir, include_sysroot: bool) -> std::path::PathBuf {
+    let path = dir.path().join("toolchain-closure.json");
+    let mut members = vec![
+        toolchain_member("rustc", "rustc", DIGEST_A, DIGEST_B),
+        toolchain_member("linker", "ld", DIGEST_B, DIGEST_C),
+        toolchain_member("c-compiler", "cc", DIGEST_C, DIGEST_D),
+    ];
+    if include_sysroot {
+        members.push(toolchain_member("sysroot", "sysroot", DIGEST_D, DIGEST_E));
+    }
+    let manifest = serde_json::json!({
+        "schema": "mantle-source-built-toolchain-closure-v1",
+        "members": members,
+        "seed_exceptions": []
+    });
+    let bytes = serde_json::to_vec_pretty(&manifest).unwrap();
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+fn toolchain_member(role: &str, name: &str, content_digest: &str, receipt_digest: &str) -> Value {
+    serde_json::json!({
+        "role": role,
+        "name": name,
+        "execution_path": format!("/toolchain/{name}"),
+        "content_digest_blake3": content_digest,
+        "trust": "source-built",
+        "source": {
+            "kind": "tarball",
+            "name": format!("{name}-source"),
+            "digest_blake3": DIGEST_F
+        },
+        "build_receipt": {
+            "kind": "mantle-rust-topology",
+            "name": format!("{name}-receipt"),
+            "digest_blake3": receipt_digest
+        }
+    })
+}
+
+fn assert_validated_toolchain_closure(closure: &Value, manifest: &std::path::Path) {
+    assert_eq!(closure["status"], "validated-not-enforced");
+    assert_eq!(closure["claim"], false);
+    assert_eq!(closure["non_claim"], "not-source-built-toolchain-closure");
+    assert_eq!(closure["manifest_path"], manifest.to_string_lossy().as_ref());
+    assert_eq!(closure["member_count"], REQUIRED_TOOLCHAIN_MEMBER_COUNT);
+    assert_eq!(closure["seed_exception_count"], 0);
+    assert_eq!(closure["policy_digest_blake3"].as_str().unwrap().len(), BLAKE3_HEX_CHAR_COUNT);
+}
+
 fn write_mantle_fixture(dir: &TempDir, source: &str) -> std::path::PathBuf {
     let root = dir.path().join("tiny-mantle");
     std::fs::create_dir_all(root.join("src")).unwrap();
@@ -150,6 +208,71 @@ fn cargo_free_self_build_builds_tiny_mantle_fixture() {
     assert!(out_dir.join("receipt.json").is_file());
     assert!(out_dir.join("meta.json").is_file());
     assert!(!out_dir.join("cargo-was-invoked").exists());
+}
+
+#[test]
+fn cargo_free_self_build_validates_toolchain_closure_manifest_without_claiming_enforcement() {
+    let dir = TempDir::new().unwrap();
+    let root = write_tiny_mantle_fixture(&dir);
+    let out_dir = dir.path().join("cargo-free-out");
+    let manifest = write_toolchain_closure_manifest(&dir, true);
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--toolchain-closure")
+        .arg(&manifest)
+        .output()
+        .expect("cargo-free self-build CLI should run");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary: Value = serde_json::from_slice(&output.stdout).expect("summary JSON should parse");
+    assert_eq!(summary["schema"], "mantle-cargo-free-self-build-v1");
+    assert_eq!(summary["status"], "success");
+    assert_validated_toolchain_closure(&summary["source_built_toolchain_closure"], &manifest);
+    assert!(
+        summary["non_claims"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::from("not-source-built-toolchain-closure"))
+    );
+    assert!(out_dir.join("mantle").is_file());
+    assert!(!out_dir.join("cargo-was-invoked").exists());
+}
+
+#[test]
+fn cargo_free_self_build_rejects_invalid_toolchain_closure_manifest() {
+    let dir = TempDir::new().unwrap();
+    let root = write_tiny_mantle_fixture(&dir);
+    let out_dir = dir.path().join("cargo-free-out");
+    let manifest = write_toolchain_closure_manifest(&dir, false);
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--toolchain-closure")
+        .arg(&manifest)
+        .output()
+        .expect("cargo-free self-build CLI should run");
+
+    assert!(!output.status.success(), "stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("invalid --toolchain-closure"), "{stderr}");
+    assert!(stderr.contains("missing required toolchain role Sysroot"), "{stderr}");
+    assert!(!out_dir.join("mantle").exists());
 }
 
 #[cfg(unix)]
@@ -224,6 +347,67 @@ fn cargo_free_fixed_point_builds_tiny_mantle_fixture() {
     assert!(out_dir.join("toolchain/compatibility.json").is_file());
     assert!(!out_dir.join("stage1/cargo-was-invoked").exists());
     assert!(!out_dir.join("stage2/cargo-was-invoked").exists());
+}
+
+#[test]
+fn cargo_free_fixed_point_validates_toolchain_closure_manifest_without_claiming_enforcement() {
+    let dir = TempDir::new().unwrap();
+    let root = write_fixed_point_fixture(&dir, FIXED_POINT_SUCCESS_SOURCE);
+    let out_dir = dir.path().join("cargo-free-fixed-point-out");
+    let manifest = write_toolchain_closure_manifest(&dir, true);
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--fixed-point")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--toolchain-closure")
+        .arg(&manifest)
+        .output()
+        .expect("cargo-free fixed-point CLI should run");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary: Value = serde_json::from_slice(&output.stdout).expect("summary JSON should parse");
+    let closure = &summary["source_built_toolchain_closure"];
+    assert_validated_toolchain_closure(closure, &manifest);
+
+    let preflight: Value = serde_json::from_slice(&std::fs::read(out_dir.join("preflight.json")).unwrap()).unwrap();
+    assert_eq!(preflight["source_built_toolchain_closure"], *closure);
+}
+
+#[test]
+fn cargo_free_fixed_point_rejects_invalid_toolchain_closure_manifest() {
+    let dir = TempDir::new().unwrap();
+    let root = write_fixed_point_fixture(&dir, FIXED_POINT_SUCCESS_SOURCE);
+    let out_dir = dir.path().join("cargo-free-fixed-point-out");
+    let manifest = write_toolchain_closure_manifest(&dir, false);
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--fixed-point")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--toolchain-closure")
+        .arg(&manifest)
+        .output()
+        .expect("cargo-free fixed-point CLI should run");
+
+    assert!(!output.status.success(), "stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("invalid --toolchain-closure"), "{stderr}");
+    assert!(stderr.contains("missing required toolchain role Sysroot"), "{stderr}");
+    assert!(!out_dir.join("stage1/mantle").exists());
 }
 
 #[cfg(unix)]

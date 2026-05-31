@@ -9,13 +9,15 @@
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::Path;
+use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
 
 pub(crate) const SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA: &str = "mantle-source-built-toolchain-closure-v1";
 const ABSENT_CLOSURE_STATUS: &str = "not-provided";
-const SOURCE_BUILT_NON_CLAIM: &str = "not-source-built-toolchain-closure";
+pub(crate) const SOURCE_BUILT_NON_CLAIM: &str = "not-source-built-toolchain-closure";
+const VALIDATED_NOT_ENFORCED_STATUS: &str = "validated-not-enforced";
 const POLICY_DIGEST_CONTEXT: &str = "mantle-source-built-toolchain-policy-digest-v1";
 const MAX_TOOLCHAIN_MEMBERS: usize = 128;
 const MAX_SEED_EXCEPTIONS: usize = 32;
@@ -34,6 +36,11 @@ pub(crate) struct SourceBuiltToolchainClosureStatus {
     pub(crate) status: &'static str,
     pub(crate) claim: bool,
     pub(crate) non_claim: &'static str,
+    pub(crate) manifest_path: Option<PathBuf>,
+    pub(crate) policy_digest_blake3: Option<String>,
+    pub(crate) member_count: Option<usize>,
+    pub(crate) source_built_member_count: Option<usize>,
+    pub(crate) seed_exception_count: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,6 +158,28 @@ pub(crate) fn absent_source_built_toolchain_closure() -> SourceBuiltToolchainClo
         status: ABSENT_CLOSURE_STATUS,
         claim: false,
         non_claim: SOURCE_BUILT_NON_CLAIM,
+        manifest_path: None,
+        policy_digest_blake3: None,
+        member_count: None,
+        source_built_member_count: None,
+        seed_exception_count: None,
+    }
+}
+
+pub(crate) fn validated_source_built_toolchain_closure(
+    manifest_path: PathBuf,
+    validation: &ToolchainClosureValidation,
+) -> SourceBuiltToolchainClosureStatus {
+    SourceBuiltToolchainClosureStatus {
+        schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
+        status: VALIDATED_NOT_ENFORCED_STATUS,
+        claim: false,
+        non_claim: SOURCE_BUILT_NON_CLAIM,
+        manifest_path: Some(manifest_path),
+        policy_digest_blake3: Some(validation.policy_digest_blake3.clone()),
+        member_count: Some(validation.member_count),
+        source_built_member_count: Some(validation.source_built_member_count),
+        seed_exception_count: Some(validation.seed_exception_count),
     }
 }
 
@@ -405,6 +434,8 @@ mod tests {
         assert_eq!(status.status, ABSENT_CLOSURE_STATUS);
         assert!(!status.claim);
         assert_eq!(status.non_claim, SOURCE_BUILT_NON_CLAIM);
+        assert!(status.manifest_path.is_none());
+        assert!(status.policy_digest_blake3.is_none());
     }
 
     #[test]
@@ -420,6 +451,22 @@ mod tests {
         assert_eq!(original.source_built_member_count, REQUIRED_TOOLCHAIN_ROLES.len());
         assert_eq!(original.seed_exception_count, 0);
         assert_eq!(original.policy_digest_blake3, reordered.policy_digest_blake3);
+    }
+
+    #[test]
+    fn validated_closure_status_keeps_claim_disabled_until_enforcement_lands() {
+        let manifest = valid_manifest();
+        let validation = validate_toolchain_closure_manifest(&manifest).unwrap();
+
+        let status = validated_source_built_toolchain_closure(PathBuf::from("/tmp/toolchain.json"), &validation);
+
+        assert_eq!(status.schema, SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
+        assert_eq!(status.status, VALIDATED_NOT_ENFORCED_STATUS);
+        assert!(!status.claim);
+        assert_eq!(status.non_claim, SOURCE_BUILT_NON_CLAIM);
+        assert_eq!(status.manifest_path, Some(PathBuf::from("/tmp/toolchain.json")));
+        assert_eq!(status.policy_digest_blake3, Some(validation.policy_digest_blake3));
+        assert_eq!(status.member_count, Some(REQUIRED_TOOLCHAIN_ROLES.len()));
     }
 
     #[test]

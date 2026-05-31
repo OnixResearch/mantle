@@ -44,9 +44,29 @@ dae72235
 dae72235-reachable-from-origin-main
 ```
 
+### Follow-up implementation push
+
+After review fixes, the local implementation commit was amended to `59f59a60` and pushed before the next implementation slice began.
+
+Command:
+
+```text
+git push origin main && git status --short --branch && git rev-parse --short HEAD && git rev-parse --short origin/main
+```
+
+Output:
+
+```text
+To github.com:OnixResearch/mantle.git
+   dae72235..59f59a60  main -> main
+## main...origin/main
+59f59a60
+59f59a60
+```
+
 ## Decision
 
-The setup commit `dae72235` is present at `origin/main`. The later implementation commit `5a7ba3c0` was local-only at the time of this checkpoint.
+The setup commit `dae72235` and implementation commit `59f59a60` are both present at `origin/main`.
 
 ## Owner
 

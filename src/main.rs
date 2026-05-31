@@ -388,6 +388,10 @@ enum Command {
         /// rustc executable for --cargo-free topology execution.
         #[arg(long, default_value = "rustc", requires = "cargo_free")]
         rustc: PathBuf,
+
+        /// Source-built toolchain closure manifest for --cargo-free proof input validation.
+        #[arg(long, requires = "cargo_free")]
+        toolchain_closure: Option<PathBuf>,
     },
 
     /// Capture Cargo oracle metadata and unit graph as a normalized Rust package plan receipt
@@ -2243,6 +2247,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             fixed_point,
             out,
             rustc,
+            toolchain_closure,
         } => run_self_build_command(
             ctx,
             *jobs,
@@ -2263,6 +2268,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             *fixed_point,
             out.as_deref(),
             rustc,
+            toolchain_closure.as_deref(),
         ),
         _ => unreachable!("self-build helper called with non-self-build command"),
     }
@@ -2289,6 +2295,7 @@ fn run_self_build_command(
     fixed_point: bool,
     out: Option<&std::path::Path>,
     rustc: &std::path::Path,
+    toolchain_closure: Option<&std::path::Path>,
 ) -> Result<(), RunError> {
     if cargo_free {
         validate_cargo_free_legacy_self_build_args(
@@ -2313,6 +2320,7 @@ fn run_self_build_command(
             root: &root,
             out_dir,
             rustc,
+            toolchain_closure,
             json: ctx.json,
         };
         if fixed_point {
@@ -2987,6 +2995,33 @@ mod tests {
             out: Some(_),
             ..
         }));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_cargo_free_toolchain_closure_manifest() {
+        let args = Args::parse_from([
+            "mantle",
+            "self-build",
+            "--cargo-free",
+            "--out",
+            "/tmp/mantle-out",
+            "--toolchain-closure",
+            "/tmp/toolchain.json",
+        ]);
+        assert!(matches!(args.command, Command::SelfBuild {
+            cargo_free: true,
+            toolchain_closure: Some(_),
+            ..
+        }));
+    }
+
+    #[test]
+    fn self_build_cli_rejects_toolchain_closure_without_cargo_free() {
+        let err =
+            Args::try_parse_from(["mantle", "self-build", "--toolchain-closure", "/tmp/toolchain.json"]).unwrap_err();
+        let rendered = err.to_string();
+        assert!(rendered.contains("--cargo-free"));
+        assert!(rendered.contains("required"));
     }
 
     #[test]

@@ -40,10 +40,10 @@ SNIX_BUILD_SANDBOX_SHELL=/nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-sta
 
 Formatter output ended after checking package targets without errors.
 
-Source-built closure focused tests after review fix:
+Source-built closure focused tests after review fix and CLI-slice status coverage:
 
 ```text
-running 10 tests
+running 11 tests
 test source_toolchain_closure::tests::absent_closure_status_preserves_current_non_claim ... ok
 test source_toolchain_closure::tests::validator_rejects_invalid_digest_shape ... ok
 test source_toolchain_closure::tests::validator_rejects_invalid_optional_source_on_seed_member ... ok
@@ -53,9 +53,10 @@ test source_toolchain_closure::tests::validator_rejects_missing_required_role ..
 test source_toolchain_closure::tests::validator_rejects_seed_member_without_seed_exception ... ok
 test source_toolchain_closure::tests::validator_rejects_source_built_member_without_receipt ... ok
 test source_toolchain_closure::tests::validator_accepts_explicit_seed_exception ... ok
+test source_toolchain_closure::tests::validated_closure_status_keeps_claim_disabled_until_enforcement_lands ... ok
 test source_toolchain_closure::tests::valid_manifest_yields_stable_order_independent_policy_digest ... ok
 
-test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 590 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 592 filtered out; finished in 0.00s
 ```
 
 Existing Cargo-free unit tests:
