@@ -1099,7 +1099,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_validated_rejects_derivation_sandbox_widening() {
+    fn decode_rejects_non_native_derivation_sandbox() {
         let mut value: serde_json::Value = serde_json::from_str(&valid_plan_json()).unwrap();
         value["units"][0]["derivation"]["sandbox"] = serde_json::json!("host");
 

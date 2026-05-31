@@ -15,7 +15,9 @@ test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 396 filtered out; f
 
 ## Review gap closure
 
-- Added explicit `DynamicDerivation.sandbox` validation call and a negative decode/validate test for non-`native` sandbox JSON.
+- Added explicit `DynamicDerivation.sandbox` validation call.
+- Documented sandbox enforcement boundary: `SandboxMode` is a closed serde enum, so non-`native` sandbox JSON is rejected during decode before the validator can receive a widened enum value; validator logic accepts only the decoded `Native` variant.
+- Added a negative decode test for non-`native` sandbox JSON.
 - Added duplicate output-name rejection for unit outputs, requested outputs, and dynamic plan outputs, with focused negative tests.
 
 ## cargo fmt --check -p crunch-build
@@ -50,7 +52,7 @@ test dynamic_plan::tests::source_id_uses_unit_id_grammar ... ok
 test dynamic_plan::tests::decode_requires_nullable_fixed_output_field ... ok
 test dynamic_plan::tests::canonical_digest_ignores_formatting_and_object_key_order ... ok
 test dynamic_plan::tests::decode_requires_nullable_goal_hint_field ... ok
-test dynamic_plan::tests::decode_validated_rejects_derivation_sandbox_widening ... ok
+test dynamic_plan::tests::decode_rejects_non_native_derivation_sandbox ... ok
 test dynamic_plan::tests::decode_requires_nullable_source_digest_field ... ok
 test dynamic_plan::tests::decode_rejects_unknown_top_level_field ... ok
 test dynamic_plan::tests::store_path_string_accepts_store_path_and_suffix ... ok
