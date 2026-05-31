@@ -18,6 +18,13 @@ WHEN Mantle validates the request
 THEN Mantle MUST fail or route the request to an explicitly external module-layer tool
 AND it MUST NOT silently interpret raw Onix roles, tags, providers, packages, artifacts, or upstream exports.
 
+#### Scenario: implementation surface is guarded against module-layer coupling
+
+GIVEN Mantle implementation or public handoff files change
+WHEN boundary tests scan the CLI, stdlib, workspace metadata, implementation sources, docs, and examples
+THEN they MUST reject reintroduced in-tree module-layer surfaces such as `mantle system`, `crunch-system`, `SystemModule`, Onix module repos, or NixOS module evaluators
+AND they MUST keep accepted frontend handoff examples build-shaped.
+
 ### Requirement: Onix-owned module lowering
 
 r[build_tool_boundary.onix_owns_module_lowering] Onix or an Onix-owned adapter MUST own module ABI, module implementation invocation, settings validation, upstream/provider topology, package/artifact selection, and lowering into Mantle build inputs.

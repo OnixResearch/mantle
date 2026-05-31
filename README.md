@@ -1289,7 +1289,10 @@ opaque evaluated data before invoking Mantle.
 
 Mantle's stable handoff surface is build shaped: `mantle eval` for derivation
 JSON, `mantle build` for realization, `mantle build --plan` for per-root action
-planning, store commands for local state, and build reports for results.
+planning, store commands for local state, and build reports for results. ADR
+[`0010`](adr/0010-keep-mantle-build-tool-boundary.md) records this as an
+architecture boundary, and the CLI boundary tests guard against reintroducing an
+in-tree module layer.
 
 ## CLI
 

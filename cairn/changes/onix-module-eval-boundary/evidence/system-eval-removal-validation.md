@@ -16,7 +16,7 @@ Removed Mantle's in-tree system/module layer from the build tool surface:
 - `mantle system` CLI wiring from `src/main.rs`
 - `crunch-system` workspace/package dependencies from `Cargo.toml` / `Cargo.lock`
 
-Added `tests/removed_system_cli.rs` to assert the CLI no longer exposes `system`, `mantle system eval ...` is rejected, raw inventory/module-shaped Nickel is rejected by `mantle build --plan`, and public docs/stdlib references stay clean.
+Added `tests/removed_system_cli.rs` to assert the CLI no longer exposes `system`, `mantle system eval ...` is rejected, a frontend-produced build-shaped input reaches build planning, raw inventory/module-shaped Nickel is rejected by `mantle build --plan`, public docs/stdlib references stay clean, and implementation sources do not gain Onix/NixOS-style module-layer coupling.
 
 ## Commands and results
 
@@ -47,16 +47,18 @@ SNIX_BUILD_SANDBOX_SHELL=/bin/sh \
 cargo test -p mantle --test removed_system_cli -- --nocapture
 ```
 
-Result from pueue task 107:
+Result from pueue task 112:
 
 ```text
-running 4 tests
+running 6 tests
 test system_eval_is_not_a_supported_subcommand ... ok
 test help_succeeds_without_system_subcommand ... ok
 test public_docs_and_stdlib_do_not_reference_system_eval_surface ... ok
 test raw_module_inventory_is_rejected_as_build_plan_input ... ok
+test external_frontend_can_hand_mantle_build_shaped_input ... ok
+test implementation_surface_does_not_gain_module_layer_coupling ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
 ```
 
 ### Stdlib embedding test
