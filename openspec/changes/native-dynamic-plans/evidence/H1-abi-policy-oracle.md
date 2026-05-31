@@ -10,8 +10,8 @@ Question: Should native dynamic derivations depend on Steel or Nix `.drv` semant
 
 Inspected evidence:
 - User direction in this session: “okay no steel now.”
-- Existing compatibility implementation: `crates/crunch-build/src/dynamic.rs` parses `.drv` ATerm outputs.
-- Existing scheduler support: `crates/crunch-build/src/worker.rs` can call `want()` mid-run and register dynamic goals.
+- Existing compatibility implementation: Mantle build crate path `crates/crunch-build/src/dynamic.rs` parses `.drv` ATerm outputs.
+- Existing scheduler support: Mantle build crate path `crates/crunch-build/src/worker.rs` can call `want()` mid-run and register dynamic goals.
 - Existing architecture boundary: `adr/0010-keep-mantle-build-tool-boundary.md` keeps Mantle build-shaped and frontend-neutral.
 
 Decision: Use Rust-validated `mantle-plan-v1` canonical JSON as the native ABI. Exclude Steel and Nix IFD. Keep `.drv` detection as labeled compatibility behavior. Require exact `dynamic_plan_outputs` declarations. Include v1 declared source inputs as top-level store-prefix paths with optional BLAKE3 NAR digests, referenced by unit inputs. For v1, dynamic units inherit producer sandbox/trust/store-prefix policy and any widening syntax is rejected.

@@ -33,7 +33,7 @@ Mantle needs a native dynamic-plan model so self-hosting bootstrap stages, packa
 
 ## Impact
 
-- **Files**: `crates/crunch-build/src/`, `crates/crunch-glue/src/`, `crates/crunch-pipeline/src/`, `crates/crunch-eval/src/`, `lib/*.ncl`, `src/build_report.rs`, tests, docs.
+- **Files**: Mantle build/eval/glue/pipeline crates (current exact paths: `crates/crunch-build/src/`, `crates/crunch-glue/src/`, `crates/crunch-pipeline/src/`, `crates/crunch-eval/src/`), `lib/*.ncl`, `src/build_report.rs`, tests, docs.
 - **APIs**: new Rust dynamic-plan structs and validation errors; Nickel derivation contract gains declared dynamic-plan outputs.
 - **Dependencies**: no new runtime language dependency; no Steel.
 - **Testing**: pure ABI positive/negative tests, scheduler integration tests, declared-output fail-closed tests, report/provenance assertions, and compatibility tests proving old `.drv` detection stays separate.

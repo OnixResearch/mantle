@@ -48,6 +48,15 @@ All projects are in the Nix/Nickel ecosystem.
 
 `nickel` is the language. `organist` uses Nickel for project config. `json-schema-to-nickel` generates Nickel contracts from JSON Schema. `nixtamal` includes Nickel schema files (`ncl/` dir). These projects share concepts but are versioned independently.
 
+## Mantle Naming
+
+The project-facing name is Mantle. Prefer Mantle in prose, OpenSpec/Cairn text,
+README/docs, evidence summaries, and final responses. Keep `crunch-*` only when
+naming exact crate/package identifiers, paths, binary-compatibility surfaces, or
+commands that still require those names (for example `cargo test -p crunch-build`).
+When touching nearby text, opportunistically rephrase stale Crunch references to
+Mantle without renaming actual crates/paths unless that rename is the task.
+
 ## Documentation
 
 ### adios
