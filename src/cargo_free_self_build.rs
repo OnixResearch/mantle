@@ -66,6 +66,7 @@ const BLOCKED_SMOKE_STDERR_PREFIX: &str = "not run: blocked before binary";
 const SOURCE_DIGEST_FIELD: &str = "source_digest";
 const SOURCE_DIGEST_ALGORITHM_FIELD: &str = "algorithm";
 const RUSTC_SYSROOT_PRINT_ARG: &str = "sysroot";
+const TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD: &str = "source_built_toolchain_closure_policy_digest_blake3";
 const SOURCE_DIGEST_VALUE_FIELD: &str = "value";
 const SUCCESS_EXIT_CODE: i32 = 0;
 const FALLBACK_ERROR_EXIT_CODE: i32 = 1;
@@ -210,6 +211,7 @@ struct FixedPointStageRun {
     binary: Option<PathBuf>,
     binary_blake3: Option<String>,
     smoke_status_code: Option<i32>,
+    source_built_toolchain_closure_policy_digest_blake3: Option<String>,
     blocker: Option<String>,
 }
 
@@ -252,6 +254,7 @@ struct FixedPointStageSummary {
     binary: Option<PathBuf>,
     binary_blake3: Option<String>,
     smoke_status_code: Option<i32>,
+    source_built_toolchain_closure_policy_digest_blake3: Option<String>,
     blocker: Option<String>,
 }
 
@@ -322,8 +325,13 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_status)?;
 
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
-    let stage1 =
-        execute_fixed_point_stage(&plan.stages[FIXED_POINT_STAGE1_INDEX], &host_mantle, &loaded_toolchain_closure)?;
+    let stage_policy_digest = toolchain_status.policy_digest_blake3.as_deref();
+    let stage1 = execute_fixed_point_stage(
+        &plan.stages[FIXED_POINT_STAGE1_INDEX],
+        &host_mantle,
+        &loaded_toolchain_closure,
+        stage_policy_digest,
+    )?;
     if !stage1.success {
         return finish_fixed_point(
             options.json,
@@ -347,8 +355,12 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
             BLOCKED_STATUS,
         );
     };
-    let stage2 =
-        execute_fixed_point_stage(&plan.stages[FIXED_POINT_STAGE2_INDEX], stage1_binary, &loaded_toolchain_closure)?;
+    let stage2 = execute_fixed_point_stage(
+        &plan.stages[FIXED_POINT_STAGE2_INDEX],
+        stage1_binary,
+        &loaded_toolchain_closure,
+        stage_policy_digest,
+    )?;
     if !stage2.success {
         return finish_fixed_point(
             options.json,
@@ -727,6 +739,7 @@ fn execute_fixed_point_stage(
     stage: &FixedPointStagePlan,
     mantle_bin: &Path,
     toolchain_closure: &LoadedToolchainClosure,
+    policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
     prepare_fixed_point_stage(stage)?;
     let path_env = execution_path_env(&stage.guard_path_dir, toolchain_closure)?;
@@ -738,13 +751,13 @@ fn execute_fixed_point_stage(
         .output();
     let output = match output {
         Ok(output) => output,
-        Err(err) => return blocked_fixed_point_launch(stage, mantle_bin, err),
+        Err(err) => return blocked_fixed_point_launch(stage, mantle_bin, err, policy_digest_blake3),
     };
     let mut blocker = None;
     record_file_write(&stage.receipt_path, &output.stdout, &mut blocker);
     record_file_write(&stage.stderr_path, &output.stderr, &mut blocker);
     record_file_write(&stage.status_path, status_text(output.status.code()).as_bytes(), &mut blocker);
-    fixed_point_stage_from_output(stage, output.status.code(), blocker)
+    fixed_point_stage_from_output(stage, output.status.code(), blocker, policy_digest_blake3)
 }
 
 fn prepare_fixed_point_stage(stage: &FixedPointStagePlan) -> Result<(), RunError> {
@@ -761,20 +774,23 @@ fn blocked_fixed_point_launch(
     stage: &FixedPointStagePlan,
     mantle_bin: &Path,
     err: std::io::Error,
+    policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
     let blocker = format!("launch {} for {}: {err}", mantle_bin.display(), stage.name);
     write_text(&stage.stderr_path, &format!("{blocker}\n"))?;
     write_text(&stage.status_path, "launch-failed\n")?;
     write_blocked_fixed_point_smoke_outputs(stage, &blocker)?;
-    Ok(blocked_fixed_point_stage_from_plan(stage, "launch-failed", None, blocker))
+    Ok(blocked_fixed_point_stage_from_plan(stage, "launch-failed", None, blocker, policy_digest_blake3))
 }
 
 fn fixed_point_stage_from_output(
     stage: &FixedPointStagePlan,
     status_code: Option<i32>,
     mut blocker: Option<String>,
+    policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
-    let receipt = parse_receipt(&stage.receipt_path, status_code == Some(SUCCESS_EXIT_CODE))?;
+    let mut receipt = parse_receipt(&stage.receipt_path, status_code == Some(SUCCESS_EXIT_CODE))?;
+    annotate_fixed_point_stage_receipt(&stage.receipt_path, receipt.as_mut(), policy_digest_blake3)?;
     let execution_status = receipt_execution_status(receipt.as_ref());
     let cargo_marker_absent = !stage.cargo_marker_path.exists();
     if blocker.is_none() {
@@ -793,6 +809,7 @@ fn fixed_point_stage_from_output(
         cargo_marker_absent,
         blocker,
         produced,
+        policy_digest_blake3,
     )
 }
 
@@ -804,6 +821,7 @@ fn fixed_point_stage_with_artifact(
     cargo_marker_absent: bool,
     mut blocker: Option<String>,
     produced: Option<FixedPointStageArtifact>,
+    policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
     if let Some(produced) = produced.as_ref() {
         if produced.smoke_status_code != SUCCESS_EXIT_CODE {
@@ -829,8 +847,29 @@ fn fixed_point_stage_with_artifact(
         binary: produced.as_ref().map(|value| value.binary.clone()),
         binary_blake3: produced.as_ref().map(|value| value.digest.clone()),
         smoke_status_code: produced.as_ref().map(|value| value.smoke_status_code),
+        source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
         blocker,
     })
+}
+
+fn annotate_fixed_point_stage_receipt(
+    receipt_path: &Path,
+    receipt: Option<&mut Value>,
+    policy_digest_blake3: Option<&str>,
+) -> Result<(), RunError> {
+    let Some(policy_digest_blake3) = policy_digest_blake3 else {
+        return Ok(());
+    };
+    let Some(receipt) = receipt else {
+        return Ok(());
+    };
+    let Some(object) = receipt.as_object_mut() else {
+        return Err(internal("fixed-point stage receipt is not a JSON object".to_string()));
+    };
+    object.insert(TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD.to_string(), Value::String(policy_digest_blake3.to_string()));
+    let bytes = serde_json::to_vec_pretty(receipt)
+        .map_err(|err| internal(format!("serialize annotated fixed-point stage receipt: {err}")))?;
+    write_bytes(receipt_path, &bytes)
 }
 
 fn materialize_fixed_point_stage_artifact(
@@ -871,6 +910,7 @@ fn blocked_fixed_point_stage_from_plan(
     execution_status: &str,
     status_code: Option<i32>,
     blocker: String,
+    policy_digest_blake3: Option<&str>,
 ) -> FixedPointStageRun {
     FixedPointStageRun {
         name: stage.name,
@@ -888,11 +928,17 @@ fn blocked_fixed_point_stage_from_plan(
         binary: None,
         binary_blake3: None,
         smoke_status_code: None,
+        source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
         blocker: Some(blocker),
     }
 }
 
 fn fixed_point_status(stage1: &FixedPointStageRun, stage2: &FixedPointStageRun) -> Result<&'static str, RunError> {
+    if stage1.source_built_toolchain_closure_policy_digest_blake3
+        != stage2.source_built_toolchain_closure_policy_digest_blake3
+    {
+        return Ok(MISMATCH_STATUS);
+    }
     let stage1_digest = stage1
         .binary_blake3
         .as_deref()
@@ -972,6 +1018,9 @@ fn stage_summary(stage: &FixedPointStageRun) -> FixedPointStageSummary {
         binary: stage.binary.clone(),
         binary_blake3: stage.binary_blake3.clone(),
         smoke_status_code: stage.smoke_status_code,
+        source_built_toolchain_closure_policy_digest_blake3: stage
+            .source_built_toolchain_closure_policy_digest_blake3
+            .clone(),
         blocker: stage.blocker.clone(),
     }
 }
@@ -988,6 +1037,12 @@ fn fixed_point_blocker(
         return Some(format!("stage2 blocked: {blocker}"));
     }
     if status == MISMATCH_STATUS {
+        if stage2.is_some_and(|stage2| {
+            stage1.source_built_toolchain_closure_policy_digest_blake3
+                != stage2.source_built_toolchain_closure_policy_digest_blake3
+        }) {
+            return Some("stage1/stage2 toolchain closure policy digests differ".to_string());
+        }
         return Some("stage1/stage2 Mantle binary digests differ".to_string());
     }
     None
@@ -1698,6 +1753,9 @@ fn internal(message: String) -> RunError {
 mod tests {
     use super::*;
 
+    const FIXED_POINT_TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const FIXED_POINT_TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
     #[test]
     fn safe_path_component_replaces_unsafe_path_bytes() {
         assert_eq!(safe_path_component("unit:with/slash"), "unit_with_slash");
@@ -1816,6 +1874,56 @@ mod tests {
         let err = plan_fixed_point_paths(Path::new("repo"), Path::new("/tmp/proof"), Path::new("rustc")).unwrap_err();
         assert!(err.message().contains("absolute source root"));
         assert!(err.message().contains("repo"));
+    }
+
+    #[test]
+    fn fixed_point_status_accepts_matching_policy_digest() {
+        let stage1 = fixed_point_stage_run(STAGE1_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_B));
+        let stage2 = fixed_point_stage_run(STAGE2_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_B));
+
+        let status = fixed_point_status(&stage1, &stage2).unwrap();
+        let blocker = fixed_point_blocker(&stage1, Some(&stage2), status);
+
+        assert_eq!(status, SUCCESS_STATUS);
+        assert!(blocker.is_none());
+    }
+
+    #[test]
+    fn fixed_point_status_rejects_policy_digest_mismatch_before_success() {
+        let stage1 = fixed_point_stage_run(STAGE1_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
+        let stage2 = fixed_point_stage_run(STAGE2_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_B));
+
+        let status = fixed_point_status(&stage1, &stage2).unwrap();
+        let blocker = fixed_point_blocker(&stage1, Some(&stage2), status).unwrap();
+
+        assert_eq!(status, MISMATCH_STATUS);
+        assert_eq!(blocker, "stage1/stage2 toolchain closure policy digests differ");
+    }
+
+    fn fixed_point_stage_run(
+        name: &'static str,
+        binary_digest: &str,
+        policy_digest: Option<&str>,
+    ) -> FixedPointStageRun {
+        FixedPointStageRun {
+            name,
+            dir: PathBuf::from(format!("/tmp/{name}")),
+            execution_dir: PathBuf::from("/tmp/execution"),
+            receipt_path: PathBuf::from(format!("/tmp/{name}/receipt.json")),
+            stderr_path: PathBuf::from(format!("/tmp/{name}/stderr.txt")),
+            status_path: PathBuf::from(format!("/tmp/{name}/status.txt")),
+            status_code: Some(SUCCESS_EXIT_CODE),
+            execution_status: SUCCESS_STATUS.to_string(),
+            cargo_marker_absent: true,
+            success: true,
+            unit_count: 1,
+            failed_unit_count: 0,
+            binary: Some(PathBuf::from(format!("/tmp/{name}/mantle"))),
+            binary_blake3: Some(binary_digest.to_string()),
+            smoke_status_code: Some(SUCCESS_EXIT_CODE),
+            source_built_toolchain_closure_policy_digest_blake3: policy_digest.map(ToOwned::to_owned),
+            blocker: None,
+        }
     }
 
     #[cfg(unix)]

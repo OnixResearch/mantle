@@ -427,6 +427,8 @@ fn cargo_free_fixed_point_builds_tiny_mantle_fixture() {
     assert_eq!(summary["stage1"]["cargo_marker_absent"], true);
     assert_eq!(summary["stage2"]["cargo_marker_absent"], true);
     assert_eq!(summary["stage1"]["binary_blake3"], summary["stage2"]["binary_blake3"]);
+    assert!(summary["stage1"]["source_built_toolchain_closure_policy_digest_blake3"].is_null());
+    assert!(summary["stage2"]["source_built_toolchain_closure_policy_digest_blake3"].is_null());
     assert!(out_dir.join("stage1/mantle").is_file());
     assert!(out_dir.join("stage2/mantle").is_file());
     assert!(out_dir.join("preflight.json").is_file());
@@ -465,8 +467,24 @@ fn cargo_free_fixed_point_enforces_matching_toolchain_closure_manifest_without_c
     let closure = &summary["source_built_toolchain_closure"];
     assert_validated_toolchain_closure(closure, &manifest);
 
+    let policy_digest = closure["policy_digest_blake3"].as_str().unwrap();
+    assert_eq!(
+        summary["stage1"]["source_built_toolchain_closure_policy_digest_blake3"].as_str(),
+        Some(policy_digest)
+    );
+    assert_eq!(
+        summary["stage2"]["source_built_toolchain_closure_policy_digest_blake3"].as_str(),
+        Some(policy_digest)
+    );
+
     let preflight: Value = serde_json::from_slice(&std::fs::read(out_dir.join("preflight.json")).unwrap()).unwrap();
     assert_eq!(preflight["source_built_toolchain_closure"], *closure);
+    let stage1_receipt: Value =
+        serde_json::from_slice(&std::fs::read(out_dir.join("stage1/receipt.json")).unwrap()).unwrap();
+    let stage2_receipt: Value =
+        serde_json::from_slice(&std::fs::read(out_dir.join("stage2/receipt.json")).unwrap()).unwrap();
+    assert_eq!(stage1_receipt["source_built_toolchain_closure_policy_digest_blake3"].as_str(), Some(policy_digest));
+    assert_eq!(stage2_receipt["source_built_toolchain_closure_policy_digest_blake3"].as_str(), Some(policy_digest));
 }
 
 #[test]
