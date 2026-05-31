@@ -49,7 +49,7 @@ const RUSTC_WRAPPER_FILE: &str = "rustc-normalized";
 const COMPATIBILITY_FILE: &str = "compatibility.json";
 const RUSTC_PROBE_DIR: &str = "rustc-probe";
 const RUSTC_PROBE_SOURCE_FILE: &str = "probe.rs";
-const RUSTC_PROBE_SOURCE: &str = "pub fn mantle_rustc_probe() {}\n";
+const RUSTC_PROBE_SOURCE: &str = "fn main() {}\n";
 const LINK_SELF_CONTAINED_PROBE_ARG: &str = "link-self-contained=no";
 const LINK_SELF_CONTAINED_JOINED_ARG: &str = "-Clink-self-contained=no";
 const RUSTC_BOOTSTRAP_ENV: &str = "RUSTC_BOOTSTRAP";
@@ -496,7 +496,8 @@ fn resolve_executable(path: &Path, name: &str) -> Result<PathBuf, RunError> {
     if path.components().count() == 1 && !path.is_absolute() {
         return resolve_executable_on_path(path, name);
     }
-    let resolved = fs::canonicalize(path).map_err(|err| internal(format!("canonicalize {name} {}: {err}", path.display())))?;
+    let resolved =
+        fs::canonicalize(path).map_err(|err| internal(format!("canonicalize {name} {}: {err}", path.display())))?;
     require_executable(&resolved)?;
     Ok(resolved)
 }
@@ -530,7 +531,7 @@ fn rustc_accepts_link_self_contained_no(rustc: &Path, toolchain_dir: &Path) -> b
     }
     let success = Command::new(rustc)
         .arg("--crate-type")
-        .arg("lib")
+        .arg("bin")
         .arg("-C")
         .arg(LINK_SELF_CONTAINED_PROBE_ARG)
         .arg(&probe_source)
@@ -726,7 +727,15 @@ fn fixed_point_stage_from_output(
     } else {
         None
     };
-    fixed_point_stage_with_artifact(stage, status_code, receipt.as_ref(), execution_status, cargo_marker_absent, blocker, produced)
+    fixed_point_stage_with_artifact(
+        stage,
+        status_code,
+        receipt.as_ref(),
+        execution_status,
+        cargo_marker_absent,
+        blocker,
+        produced,
+    )
 }
 
 fn fixed_point_stage_with_artifact(
@@ -1142,10 +1151,7 @@ fn write_blocked_smoke_outputs(paths: &BuildPaths, blocker: Option<&str>) -> Res
 
 fn write_blocked_fixed_point_smoke_outputs(stage: &FixedPointStagePlan, blocker: &str) -> Result<(), RunError> {
     write_text(&stage.smoke_stdout_path, BLOCKED_SMOKE_STDOUT)?;
-    write_text(
-        &stage.smoke_stderr_path,
-        &format!("{BLOCKED_SMOKE_STDERR_PREFIX}: {blocker}\n"),
-    )
+    write_text(&stage.smoke_stderr_path, &format!("{BLOCKED_SMOKE_STDERR_PREFIX}: {blocker}\n"))
 }
 
 fn guarded_path(cargo_path_dir: &Path) -> Result<OsString, RunError> {
@@ -1255,7 +1261,10 @@ fn fixed_point_non_claims() -> Vec<&'static str> {
     ]
 }
 
-fn write_fixed_point_preflight(plan: &FixedPointPlan, compatibility: &RustcCompatibilitySummary) -> Result<(), RunError> {
+fn write_fixed_point_preflight(
+    plan: &FixedPointPlan,
+    compatibility: &RustcCompatibilitySummary,
+) -> Result<(), RunError> {
     let value = json!({
         "schema": plan.schema,
         "root": plan.root,
@@ -1413,6 +1422,17 @@ mod tests {
         let err = plan_fixed_point_paths(root, out_dir, rustc).unwrap_err();
         assert!(err.message().contains("inside source root"));
         assert!(err.message().contains("choose /tmp"));
+    }
+
+    #[test]
+    fn rustc_wrapper_script_strips_link_self_contained_runtime_args() {
+        let script = rustc_wrapper_script(Path::new("/toolchain/bin/rustc"));
+
+        assert!(script.contains(LINK_SELF_CONTAINED_PROBE_ARG));
+        assert!(script.contains(LINK_SELF_CONTAINED_JOINED_ARG));
+        assert!(script.contains(RUSTC_BOOTSTRAP_ENV));
+        assert!(script.contains(REAL_RUSTC_ENV));
+        assert!(script.contains("exec"));
     }
 
     #[test]
