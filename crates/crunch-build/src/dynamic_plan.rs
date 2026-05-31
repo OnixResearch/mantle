@@ -6,6 +6,7 @@
 //! registration.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use nix_compat::store_path::StorePath;
 use serde::Deserialize;
@@ -378,7 +379,7 @@ fn validate_units(units: &[DynamicUnit], store_prefix: &str) -> Result<(), Dynam
     for unit in units {
         validate_unit_id(&unit.id)?;
         validate_dynamic_derivation(&unit.derivation, store_prefix)?;
-        validate_output_names(&unit.requested_outputs)?;
+        validate_output_names("requested outputs", &unit.requested_outputs)?;
         validate_unit_policy(&unit.policy)?;
     }
     Ok(())
@@ -389,11 +390,12 @@ fn validate_dynamic_derivation(derivation: &DynamicDerivation, store_prefix: &st
     validate_store_path_string(&derivation.builder, store_prefix)?;
     validate_required_string("system", &derivation.system, store_prefix)?;
     validate_argument_strings(&derivation.args, store_prefix)?;
-    validate_output_names(&derivation.outputs)?;
+    validate_output_names("unit outputs", &derivation.outputs)?;
     validate_environment(&derivation.env, store_prefix)?;
     validate_inputs(&derivation.inputs, store_prefix)?;
     validate_fixed_output(derivation.fixed_output.as_ref(), store_prefix)?;
-    validate_output_names(&derivation.dynamic_plan_outputs)?;
+    validate_sandbox_mode(&derivation.sandbox)?;
+    validate_output_names("dynamic plan outputs", &derivation.dynamic_plan_outputs)?;
     Ok(())
 }
 
@@ -439,9 +441,19 @@ fn validate_fixed_output(fixed_output: Option<&FixedOutputSpec>, store_prefix: &
     Ok(())
 }
 
-fn validate_output_names(outputs: &[String]) -> Result<(), DynamicPlanError> {
+fn validate_sandbox_mode(sandbox: &SandboxMode) -> Result<(), DynamicPlanError> {
+    match sandbox {
+        SandboxMode::Native => Ok(()),
+    }
+}
+
+fn validate_output_names(field: &'static str, outputs: &[String]) -> Result<(), DynamicPlanError> {
+    let mut seen = BTreeSet::new();
     for output in outputs {
         validate_output_name(output)?;
+        if !seen.insert(output.as_str()) {
+            return invalid_scalar(field, output, "contains duplicate output name");
+        }
     }
     Ok(())
 }
@@ -1084,6 +1096,31 @@ mod tests {
             field: "policy host paths",
             ..
         }));
+    }
+
+    #[test]
+    fn decode_validated_rejects_derivation_sandbox_widening() {
+        let mut value: serde_json::Value = serde_json::from_str(&valid_plan_json()).unwrap();
+        value["units"][0]["derivation"]["sandbox"] = serde_json::json!("host");
+
+        let err = decode_validated_plan_v1(value.to_string().as_bytes(), TEST_STORE_PREFIX).unwrap_err();
+        assert!(matches!(err, DynamicPlanError::JsonDecode { .. }));
+        assert!(err.to_string().contains("unknown variant"));
+    }
+
+    #[test]
+    fn validate_rejects_duplicate_output_names() {
+        let mut duplicate_unit_output = valid_plan();
+        duplicate_unit_output.units[0].derivation.outputs.push("out".to_string());
+        expect_invalid_scalar(validate_err(&duplicate_unit_output), "unit outputs");
+
+        let mut duplicate_requested_output = valid_plan();
+        duplicate_requested_output.units[0].requested_outputs.push("out".to_string());
+        expect_invalid_scalar(validate_err(&duplicate_requested_output), "requested outputs");
+
+        let mut duplicate_plan_output = valid_plan();
+        duplicate_plan_output.units[0].derivation.dynamic_plan_outputs.push("plan".to_string());
+        expect_invalid_scalar(validate_err(&duplicate_plan_output), "dynamic plan outputs");
     }
 
     #[test]
