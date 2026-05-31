@@ -387,6 +387,10 @@ enum Command {
         #[arg(long)]
         cargo_free: bool,
 
+        /// Run the bounded Cargo-free stage1/stage2 fixed-point proof.
+        #[arg(long, requires = "cargo_free")]
+        fixed_point: bool,
+
         /// Output directory for --cargo-free binary and receipt evidence.
         #[arg(long, requires = "cargo_free")]
         out: Option<PathBuf>,
@@ -2324,6 +2328,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             bootstrap_bwrap_path,
             bootstrap_busybox_path,
             cargo_free,
+            fixed_point,
             out,
             rustc,
         } => run_self_build_command(
@@ -2343,6 +2348,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             bootstrap_bwrap_path.as_deref(),
             bootstrap_busybox_path.as_deref(),
             *cargo_free,
+            *fixed_point,
             out.as_deref(),
             rustc,
         ),
@@ -2368,6 +2374,7 @@ fn run_self_build_command(
     bootstrap_bwrap_path: Option<&std::path::Path>,
     bootstrap_busybox_path: Option<&std::path::Path>,
     cargo_free: bool,
+    fixed_point: bool,
     out: Option<&std::path::Path>,
     rustc: &std::path::Path,
 ) -> Result<(), RunError> {
@@ -2389,12 +2396,17 @@ fn run_self_build_command(
             bootstrap_busybox_path,
         )?;
         let out_dir = out.ok_or_else(|| RunError::Build("--cargo-free requires --out <dir>".to_string()))?;
-        return cargo_free_self_build::cmd_cargo_free_self_build(cargo_free_self_build::CargoFreeSelfBuildOptions {
-            root: &current_dir_or_error()?,
+        let root = current_dir_or_error()?;
+        let options = cargo_free_self_build::CargoFreeSelfBuildOptions {
+            root: &root,
             out_dir,
             rustc,
             json: ctx.json,
-        });
+        };
+        if fixed_point {
+            return cargo_free_self_build::cmd_cargo_free_fixed_point_self_build(options);
+        }
+        return cargo_free_self_build::cmd_cargo_free_self_build(options);
     }
 
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
@@ -3041,9 +3053,58 @@ mod tests {
         let args = Args::parse_from(["mantle", "self-build", "--cargo-free", "--out", "/tmp/mantle-out"]);
         assert!(matches!(args.command, Command::SelfBuild {
             cargo_free: true,
+            fixed_point: false,
             out: Some(_),
             ..
         }));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_cargo_free_fixed_point_out_dir() {
+        let args = Args::parse_from([
+            "mantle",
+            "self-build",
+            "--cargo-free",
+            "--fixed-point",
+            "--out",
+            "/tmp/mantle-fixed-point",
+        ]);
+        assert!(matches!(args.command, Command::SelfBuild {
+            cargo_free: true,
+            fixed_point: true,
+            out: Some(_),
+            ..
+        }));
+    }
+
+    #[test]
+    fn self_build_cli_rejects_fixed_point_without_cargo_free() {
+        let err =
+            Args::try_parse_from(["mantle", "self-build", "--fixed-point", "--out", "/tmp/mantle-out"]).unwrap_err();
+        let rendered = err.to_string();
+        assert!(rendered.contains("--cargo-free"));
+        assert!(rendered.contains("required"));
+    }
+
+    #[test]
+    fn cargo_free_fixed_point_rejects_legacy_options() {
+        let args = Args::parse_from([
+            "mantle",
+            "self-build",
+            "--cargo-free",
+            "--fixed-point",
+            "--out",
+            "/tmp/mantle-fixed-point",
+            "--jobs",
+            "1",
+        ]);
+
+        let err = run(args).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "error: build failed\n--cargo-free self-build cannot be combined with legacy stage0/store self-build options"
+        );
     }
 
     #[test]

@@ -4,15 +4,97 @@ use tempfile::TempDir;
 
 #[cfg(unix)]
 const EXECUTABLE_PERMISSIONS: u32 = 0o755;
+const FIXED_POINT_SUCCESS_SOURCE: &str = r##"
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+
+fn main() {
+    let args = env::args().collect::<Vec<_>>();
+    if args.iter().any(|arg| arg == "rust-plan") {
+        emit_receipt(true, &args);
+        return;
+    }
+    println!("tiny mantle");
+}
+
+fn emit_receipt(copy_self: bool, args: &[String]) {
+    let output_root = output_root(args);
+    let unit_dir = output_root.join("fake-unit");
+    fs::create_dir_all(&unit_dir).unwrap();
+    let binary = unit_dir.join("mantle");
+    if copy_self {
+        fs::copy(env::current_exe().unwrap(), &binary).unwrap();
+    } else {
+        fs::write(&binary, "#!/bin/sh\nexit 0\n").unwrap();
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    println!(r#"{{"topology_execution":{{"execution_status":"success","unit_executions":[{{"unit_id":"fake-unit","target_name":"mantle","target_kind":"bin","execution_status":"success","source_digest":{{"algorithm":"blake3","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}}]}}}}"#);
+}
+
+fn output_root(args: &[String]) -> PathBuf {
+    args.windows(2)
+        .find(|pair| pair[0] == "--execution-output-root")
+        .map(|pair| PathBuf::from(&pair[1]))
+        .unwrap()
+}
+"##;
+const FIXED_POINT_MISMATCH_SOURCE: &str = r##"
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+
+fn main() {
+    let args = env::args().collect::<Vec<_>>();
+    if args.iter().any(|arg| arg == "rust-plan") {
+        emit_receipt(&args);
+        return;
+    }
+    println!("tiny mantle");
+}
+
+fn emit_receipt(args: &[String]) {
+    let output_root = output_root(args);
+    let unit_dir = output_root.join("fake-unit");
+    fs::create_dir_all(&unit_dir).unwrap();
+    let binary = unit_dir.join("mantle");
+    fs::write(&binary, "#!/bin/sh\nexit 0\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    println!(r#"{{"topology_execution":{{"execution_status":"success","unit_executions":[{{"unit_id":"fake-unit","target_name":"mantle","target_kind":"bin","execution_status":"success","source_digest":{{"algorithm":"blake3","value":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}}]}}}}"#);
+}
+
+fn output_root(args: &[String]) -> PathBuf {
+    args.windows(2)
+        .find(|pair| pair[0] == "--execution-output-root")
+        .map(|pair| PathBuf::from(&pair[1]))
+        .unwrap()
+}
+"##;
 
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")
 }
 
 fn write_tiny_mantle_fixture(dir: &TempDir) -> std::path::PathBuf {
+    write_mantle_fixture(dir, "fn main() { println!(\"tiny mantle\"); }\n")
+}
+
+fn write_fixed_point_fixture(dir: &TempDir, source: &str) -> std::path::PathBuf {
+    write_mantle_fixture(dir, source)
+}
+
+fn write_mantle_fixture(dir: &TempDir, source: &str) -> std::path::PathBuf {
     let root = dir.path().join("tiny-mantle");
     std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(root.join("src/main.rs"), "fn main() { println!(\"tiny mantle\"); }\n").unwrap();
+    std::fs::write(root.join("src/main.rs"), source).unwrap();
     std::fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"mantle\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[[bin]]\nname = \"mantle\"\npath = \"src/main.rs\"\n",
@@ -102,4 +184,153 @@ fn cargo_free_self_build_fails_if_ambient_cargo_is_invoked() {
     assert!(out_dir.join("smoke-stderr.txt").is_file());
     let smoke_stderr = std::fs::read_to_string(out_dir.join("smoke-stderr.txt")).unwrap();
     assert!(smoke_stderr.contains("not run: blocked before binary"));
+}
+
+#[test]
+fn cargo_free_fixed_point_builds_tiny_mantle_fixture() {
+    let dir = TempDir::new().unwrap();
+    let root = write_fixed_point_fixture(&dir, FIXED_POINT_SUCCESS_SOURCE);
+    let out_dir = dir.path().join("cargo-free-fixed-point-out");
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--fixed-point")
+        .arg("--out")
+        .arg(&out_dir)
+        .output()
+        .expect("cargo-free fixed-point CLI should run");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary: Value = serde_json::from_slice(&output.stdout).expect("summary JSON should parse");
+    assert_eq!(summary["schema"], "mantle-cargo-free-fixed-point-proof-v1");
+    assert_eq!(summary["status"], "success");
+    assert_eq!(summary["fixed_point"], true);
+    assert_eq!(summary["stage1"]["success"], true);
+    assert_eq!(summary["stage2"]["success"], true);
+    assert_eq!(summary["stage1"]["cargo_marker_absent"], true);
+    assert_eq!(summary["stage2"]["cargo_marker_absent"], true);
+    assert_eq!(summary["stage1"]["binary_blake3"], summary["stage2"]["binary_blake3"]);
+    assert!(out_dir.join("stage1/mantle").is_file());
+    assert!(out_dir.join("stage2/mantle").is_file());
+    assert!(out_dir.join("preflight.json").is_file());
+    assert!(out_dir.join("toolchain/compatibility.json").is_file());
+    assert!(!out_dir.join("stage1/cargo-was-invoked").exists());
+    assert!(!out_dir.join("stage2/cargo-was-invoked").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn cargo_free_fixed_point_fails_if_stage_invokes_cargo() {
+    let dir = TempDir::new().unwrap();
+    let root = write_fixed_point_fixture(&dir, FIXED_POINT_SUCCESS_SOURCE);
+    let out_dir = dir.path().join("cargo-free-fixed-point-out");
+    let fake_rustc = dir.path().join("rustc-invokes-cargo");
+    write_executable(
+        &fake_rustc,
+        "#!/bin/sh\ncase \" $* \" in *\" --version \"*) exit 0;; esac\ncargo --version >/dev/null 2>&1\nexit 1\n",
+    );
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--fixed-point")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--rustc")
+        .arg(&fake_rustc)
+        .output()
+        .expect("cargo-free fixed-point CLI should run");
+
+    assert!(!output.status.success(), "stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    assert!(out_dir.join("stage1/cargo-was-invoked").is_file());
+    let summary: Value = serde_json::from_slice(&output.stdout).expect("blocked summary JSON should parse");
+    assert_eq!(summary["status"], "blocked");
+    assert_eq!(summary["stage1"]["cargo_marker_absent"], false);
+    assert_eq!(summary["stage1"]["blocker"], "cargo guard was invoked");
+    assert!(out_dir.join("stage1/smoke-stdout.txt").is_file());
+    assert!(out_dir.join("stage1/smoke-stderr.txt").is_file());
+}
+
+#[test]
+fn cargo_free_fixed_point_rejects_inside_source_output_dir() {
+    let dir = TempDir::new().unwrap();
+    let root = write_fixed_point_fixture(&dir, FIXED_POINT_SUCCESS_SOURCE);
+    let out_dir = root.join("target/proof");
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--fixed-point")
+        .arg("--out")
+        .arg(&out_dir)
+        .output()
+        .expect("cargo-free fixed-point CLI should run");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("inside source root"), "{stderr}");
+    assert!(stderr.contains("choose /tmp"), "{stderr}");
+}
+
+#[test]
+fn cargo_free_fixed_point_reports_missing_rustc_toolchain() {
+    let dir = TempDir::new().unwrap();
+    let root = write_fixed_point_fixture(&dir, FIXED_POINT_SUCCESS_SOURCE);
+    let out_dir = dir.path().join("cargo-free-fixed-point-out");
+    let missing_rustc = dir.path().join("missing-rustc");
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--fixed-point")
+        .arg("--out")
+        .arg(&out_dir)
+        .arg("--rustc")
+        .arg(&missing_rustc)
+        .output()
+        .expect("cargo-free fixed-point CLI should run");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("canonicalize rustc"), "{stderr}");
+    assert!(stderr.contains("missing-rustc"), "{stderr}");
+}
+
+#[test]
+fn cargo_free_fixed_point_reports_stage_digest_mismatch() {
+    let dir = TempDir::new().unwrap();
+    let root = write_fixed_point_fixture(&dir, FIXED_POINT_MISMATCH_SOURCE);
+    let out_dir = dir.path().join("cargo-free-fixed-point-out");
+
+    let output = mantle_cmd()
+        .current_dir(&root)
+        .arg("--json")
+        .arg("self-build")
+        .arg("--cargo-free")
+        .arg("--fixed-point")
+        .arg("--out")
+        .arg(&out_dir)
+        .output()
+        .expect("cargo-free fixed-point CLI should run");
+
+    assert!(!output.status.success());
+    let summary: Value = serde_json::from_slice(&output.stdout).expect("mismatch summary JSON should parse");
+    assert_eq!(summary["status"], "mismatch");
+    assert_eq!(summary["fixed_point"], false);
+    assert_ne!(summary["stage1"]["binary_blake3"], summary["stage2"]["binary_blake3"]);
+    assert_eq!(summary["blocker"], "stage1/stage2 Mantle binary digests differ");
 }
