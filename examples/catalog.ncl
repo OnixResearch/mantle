@@ -86,8 +86,8 @@ let Example = {
       kind = "nickel-fetcher",
       support_tier = "real-network",
       requirements = { network = true, generated_seed = false, linux_bwrap = false, heavyweight = false, benchmark = false },
-      validation_rails = ["eval", "manual-network-build"],
-      skip_reason = "uses a live external URL; pair with offline fixture tests before CI claims",
+      validation_rails = ["eval", "manual-network-build", "offline-fetchurl-fixture", "fixed-output-negative"],
+      skip_reason = "uses a live external URL; fast validation uses the offline fetchurl fixture and fixed-output mismatch tests",
     },
     {
       id = "fetch-tarball",
@@ -98,8 +98,8 @@ let Example = {
       kind = "nickel-fetcher",
       support_tier = "real-network",
       requirements = { network = true, generated_seed = false, linux_bwrap = false, heavyweight = false, benchmark = false },
-      validation_rails = ["eval", "manual-network-build"],
-      skip_reason = "uses a live external URL; pair with offline fixture tests before CI claims",
+      validation_rails = ["eval", "manual-network-build", "offline-fetch-tarball-fixture", "fixed-output-negative"],
+      skip_reason = "uses a live external URL; fast validation uses the offline fetchTarball fixture and fixed-output mismatch tests",
     },
     {
       id = "fetch-git",
@@ -110,8 +110,8 @@ let Example = {
       kind = "nickel-fetcher",
       support_tier = "real-network",
       requirements = { network = true, generated_seed = false, linux_bwrap = false, heavyweight = false, benchmark = false },
-      validation_rails = ["eval", "manual-network-build"],
-      skip_reason = "uses a live external repository; pair with offline fixture tests before CI claims",
+      validation_rails = ["eval", "manual-network-build", "offline-fetchgit-fixture", "fixed-output-negative"],
+      skip_reason = "uses a live external repository; fast validation uses the offline fetchGit fixture and fixed-output mismatch tests",
     },
     {
       id = "fetch-crate-crc64",
@@ -122,8 +122,8 @@ let Example = {
       kind = "nickel-fetcher",
       support_tier = "real-network",
       requirements = { network = true, generated_seed = false, linux_bwrap = false, heavyweight = false, benchmark = false },
-      validation_rails = ["eval", "manual-network-build"],
-      skip_reason = "uses crates.io; keep explicit network evidence for successful builds",
+      validation_rails = ["eval", "manual-network-build", "offline-fetch-tarball-fixture", "fixed-output-negative"],
+      skip_reason = "uses crates.io; fast validation uses the offline fetchTarball fixture and fixed-output mismatch tests",
     },
     {
       id = "build-crate-crc64",

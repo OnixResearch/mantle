@@ -14,7 +14,16 @@ const NICKEL_EXTENSION: &str = "ncl";
 const RUST_EXTENSION: &str = "rs";
 const SUPPORT_TIER_FAST: &str = "fast";
 const SUPPORT_TIER_NEGATIVE: &str = "negative";
+const SUPPORT_TIER_REAL_NETWORK: &str = "real-network";
 const EMPTY_SKIP_REASON: &str = "";
+const FETCH_FILE_ID: &str = "fetch-file";
+const FETCH_TARBALL_ID: &str = "fetch-tarball";
+const FETCH_GIT_ID: &str = "fetch-git";
+const FETCH_CRATE_CRC64_ID: &str = "fetch-crate-crc64";
+const OFFLINE_FETCHURL_RAIL: &str = "offline-fetchurl-fixture";
+const OFFLINE_FETCH_TARBALL_RAIL: &str = "offline-fetch-tarball-fixture";
+const OFFLINE_FETCHGIT_RAIL: &str = "offline-fetchgit-fixture";
+const FIXED_OUTPUT_NEGATIVE_RAIL: &str = "fixed-output-negative";
 const EXAMPLES_SECTION_HEADER: &str = "## Examples";
 const NEXT_SECTION_PREFIX: &str = "## ";
 const CRUNCH_IDENTIFIER_ALLOWLIST: &[&str] = &["crunch.ncl"];
@@ -70,6 +79,10 @@ const ALLOWED_RAILS: &[&str] = &[
     "manual-seed-eval",
     "negative-build",
     "non-claim-doc",
+    OFFLINE_FETCHURL_RAIL,
+    OFFLINE_FETCH_TARBALL_RAIL,
+    OFFLINE_FETCHGIT_RAIL,
+    FIXED_OUTPUT_NEGATIVE_RAIL,
 ];
 
 #[derive(Debug, Clone, Deserialize)]
@@ -262,6 +275,31 @@ fn validate_requirement_consistency(example: &ExampleEntry, errors: &mut Vec<Str
     if example.requirements.linux_bwrap && example.support_tier == "benchmark" {
         errors.push(format!("benchmark example `{}` must not require bwrap", example.id));
     }
+    validate_fetcher_fixture_rails(example, errors);
+}
+
+fn validate_fetcher_fixture_rails(example: &ExampleEntry, errors: &mut Vec<String>) {
+    let Some(expected_offline_rail) = expected_offline_fetcher_rail(&example.id) else {
+        return;
+    };
+    if example.support_tier != SUPPORT_TIER_REAL_NETWORK && example.support_tier != "heavy-real-network" {
+        errors.push(format!("fetcher example `{}` must stay classified as real-network", example.id));
+    }
+    if !example.validation_rails.iter().any(|rail| rail == expected_offline_rail) {
+        errors.push(format!("fetcher example `{}` missing offline fixture rail `{expected_offline_rail}`", example.id));
+    }
+    if !example.validation_rails.iter().any(|rail| rail == FIXED_OUTPUT_NEGATIVE_RAIL) {
+        errors.push(format!("fetcher example `{}` missing fixed-output negative rail", example.id));
+    }
+}
+
+fn expected_offline_fetcher_rail(id: &str) -> Option<&'static str> {
+    match id {
+        FETCH_FILE_ID => Some(OFFLINE_FETCHURL_RAIL),
+        FETCH_TARBALL_ID | FETCH_CRATE_CRC64_ID => Some(OFFLINE_FETCH_TARBALL_RAIL),
+        FETCH_GIT_ID => Some(OFFLINE_FETCHGIT_RAIL),
+        _ => None,
+    }
 }
 
 fn validate_catalog_path_coverage(catalog: &Catalog, user_facing_paths: &BTreeSet<String>, errors: &mut Vec<String>) {
@@ -444,6 +482,29 @@ fn examples_catalog_rejects_invalid_tier_and_silent_skip() {
     assert!(errors.iter().any(|error| error.contains("unsupported support_tier")), "errors: {errors:?}");
     assert!(errors.iter().any(|error| error.contains("needs explicit skip_reason")), "errors: {errors:?}");
     assert!(errors.iter().any(|error| error.contains("must use a network support tier")), "errors: {errors:?}");
+}
+
+#[test]
+fn examples_catalog_rejects_fetchers_without_offline_and_negative_rails() {
+    let mut fetcher = example(FETCH_FILE_ID, "examples/fetch-file.ncl");
+    fetcher.lane = "fetchers".to_string();
+    fetcher.kind = "nickel-fetcher".to_string();
+    fetcher.support_tier = SUPPORT_TIER_REAL_NETWORK.to_string();
+    fetcher.requirements.network = true;
+    fetcher.requirements.linux_bwrap = false;
+    fetcher.skip_reason = "uses a live external URL".to_string();
+    fetcher.validation_rails = vec!["eval".to_string(), "manual-network-build".to_string()];
+    let catalog = catalog_with_entries(vec![fetcher]);
+    let paths = BTreeSet::from(["examples/fetch-file.ncl".to_string()]);
+    let docs = readme_for(&["examples/fetch-file.ncl"]);
+
+    let errors = validate_catalog(&catalog, &paths, &docs, &docs);
+
+    assert!(errors.iter().any(|error| error.contains("missing offline fixture rail")), "errors: {errors:?}");
+    assert!(
+        errors.iter().any(|error| error.contains("missing fixed-output negative rail")),
+        "errors: {errors:?}"
+    );
 }
 
 #[test]

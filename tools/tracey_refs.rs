@@ -90,6 +90,28 @@
 // Verified by `tests/examples_build.rs` assertions for hello/multi-step output
 // content, local multi-output fixture files, project check result output, and
 // fail-closed handling of diagnostic examples.
+//
+// r[impl examples.offline_fetcher_fixtures]
+// Implemented by generated local file, tarball, and git fixtures in
+// `tests/examples_build.rs`, and by catalog/docs rails that map real-network
+// cookbook examples to their offline validation fixture families.
+//
+// r[verify examples.offline_fetcher_fixtures]
+// Verified by `tests/examples_build.rs` offline fetchurl, fetchTarball, and
+// fetchGit tests using temp store/state roots plus test-owned local sources, and
+// by `tests/examples_inventory.rs` rejecting fetcher catalog entries without
+// offline fixture rails.
+//
+// r[impl examples.fixed_output_negative_cases]
+// Implemented by wrong-hash file, tarball, and git fixture tests plus a temp
+// `--fix` repair workflow in `tests/examples_build.rs`, so checked-in examples
+// are not mutated during hash repair validation.
+//
+// r[verify examples.fixed_output_negative_cases]
+// Verified by `tests/examples_build.rs::offline_fetcher_wrong_hashes_fail_closed`
+// and `fix_flag_updates_temp_fetchurl_fixture_hash`, which assert fixed-output
+// mismatch diagnostics, no successful output reporting, empty failed temp stores,
+// and a corrected temp fixture hash.
 
 // Compiled-eval legacy OpenSpec bridge.
 //

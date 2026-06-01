@@ -18,14 +18,14 @@ This directory is a supported examples gallery. `examples/catalog.ncl` is the so
 
 ## Fetcher cookbook
 
-Real-network examples stay useful for operators, but CI-grade coverage should use offline fixtures from the fetcher-hardening change before claiming deterministic support.
+Real-network examples stay useful for operators, but deterministic validation uses generated offline fixtures in `tests/examples_build.rs` for each fetcher helper family.
 
-| File | What it shows | Capability |
-|---|---|---|
-| `examples/fetch-file.ncl` | Fixed-output single file fetch from a real URL. | real network |
-| `examples/fetch-tarball.ncl` | Fixed-output tarball fetch/unpack from a real URL. | real network |
-| `examples/fetch-git.ncl` | Fixed-output git checkout from a real repository. | real network |
-| `examples/fetch-crate-crc64.ncl` | Fetch the published `crc64` crate source. | real network |
+| File | What it shows | Capability | Offline validation rail |
+|---|---|---|---|
+| `examples/fetch-file.ncl` | Fixed-output single file fetch from a real URL. | real network | `offline-fetchurl-fixture` + `fixed-output-negative` |
+| `examples/fetch-tarball.ncl` | Fixed-output tarball fetch/unpack from a real URL. | real network | `offline-fetch-tarball-fixture` + `fixed-output-negative` |
+| `examples/fetch-git.ncl` | Fixed-output git checkout from a real repository. | real network | `offline-fetchgit-fixture` + `fixed-output-negative` |
+| `examples/fetch-crate-crc64.ncl` | Fetch the published `crc64` crate source. | real network | `offline-fetch-tarball-fixture` + `fixed-output-negative` |
 
 ## Package composition
 
