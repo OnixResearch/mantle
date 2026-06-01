@@ -30,6 +30,7 @@ const CARGO_SHIM_DIR: &str = "cargo-guard-bin";
 const CARGO_SHIM_NAME: &str = "cargo";
 const CARGO_MARKER_FILE: &str = "cargo-was-invoked";
 const C_COMPILER_ALIAS: &str = "cc";
+const LINKER_ALIAS: &str = "ld";
 const PKG_CONFIG_ALIAS: &str = "pkg-config";
 const PRODUCED_MANTLE_FILE: &str = "mantle";
 const MANTLE_TARGET_NAME: &str = "mantle";
@@ -1454,7 +1455,7 @@ fn write_toolchain_path_aliases(
             return Err(RunError::Build("source-built toolchain closure blocked: Cargo must stay guarded".to_string()));
         }
         remove_owned_path(&link)?;
-        symlink_toolchain_alias(&target, &link)?;
+        write_toolchain_alias(&target, &link)?;
     }
     Ok(())
 }
@@ -1500,6 +1501,7 @@ fn add_role_aliases(
 ) -> Result<(), RunError> {
     use crate::source_toolchain_closure::ToolchainRole;
     match role {
+        ToolchainRole::Linker => add_toolchain_alias(aliases, LINKER_ALIAS.to_string(), target),
         ToolchainRole::CCompiler => add_toolchain_alias(aliases, C_COMPILER_ALIAS.to_string(), target),
         ToolchainRole::PkgConfig => add_toolchain_alias(aliases, PKG_CONFIG_ALIAS.to_string(), target),
         _ => Ok(()),
@@ -1545,13 +1547,13 @@ fn path_to_string(path: &Path) -> Result<String, RunError> {
 }
 
 #[cfg(unix)]
-fn symlink_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
-    std::os::unix::fs::symlink(target, link)
-        .map_err(|err| internal(format!("symlink {} -> {}: {err}", link.display(), target.display())))
+fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
+    write_text(link, &format!("#!/bin/sh\nexec {} \"$@\"\n", shell_quote(target)))?;
+    set_executable(link)
 }
 
 #[cfg(not(unix))]
-fn symlink_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
+fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
     fs::copy(target, link)
         .map_err(|err| internal(format!("copy {} -> {}: {err}", target.display(), link.display())))?;
     set_executable(link)
@@ -2062,6 +2064,19 @@ mod tests {
         assert!(err.message().contains("host-tool-leakage"));
         assert!(err.message().contains("PkgConfig"));
         assert!(err.message().contains("digest mismatch"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_path_aliases_expose_declared_linker_for_collect2() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let aliases = toolchain_path_aliases(&manifest).unwrap();
+
+        assert_eq!(aliases.get("ld"), Some(&tools.linker));
+        assert_eq!(aliases.get("cc"), Some(&tools.c_compiler));
+        assert!(!aliases.contains_key("cargo"));
     }
 
     #[cfg(unix)]

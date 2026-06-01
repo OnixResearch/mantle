@@ -792,6 +792,8 @@ cd nixtamal && nix-shell  # then dune build
 
 - 2026-05-28: Cargo unit graph custom-build targets can be named `build-script-main` while Mantle metadata package targets use `build-script-build`. Selected-host filtering must normalize custom-build names before matching or linked packages like `aws-lc-sys` lose their metadata producer.
 
+- 2026-06-01: Source-root musl target closure proof gets past simple Rust linking with a wrapper that targets `x86_64-unknown-linux-musl` and source-root musl GCC, but current native topology builds build-script dependency libraries (for example `cc`, `cmake`, `dunce`, `fs_extra`) for the target triple. Host custom-build units such as `aws-lc-sys` then fail with `error E0461: couldn't find crate \`cc\` with expected target triple x86_64-unknown-linux-gnu`. Do not mark the source-built closure fixed-point proof complete until host custom-build/proc-macro units and their dependency libraries compile for the host toolchain while target lib/bin units compile for the receipt-bound source-root target toolchain.
+
 - 2026-05-28: `ring` build.rs unwraps `CARGO_MANIFEST_LINKS`; native build-script env must set it from `[package].links` (empty if absent), and `append_cargo_package_env` must allow this non-`CARGO_PKG_` Cargo key.
 
 - 2026-05-28: Native registry dependency source resolution must be package-version-aware when vendored registry sources contain same-name versions (for example `thiserror` / `thiserror-impl` 1.x and 2.x). Name-only selection linked `thiserror@2.0.18` to `thiserror-impl@1.0.69` and produced `could not find __private` / `as_dyn_error` errors.
