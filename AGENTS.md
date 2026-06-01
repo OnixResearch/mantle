@@ -461,6 +461,7 @@ When claiming test results, status, completion, or feature support in commit mes
 - **No proof, no claim.** Produce or inspect current evidence before making the claim. If evidence is absent, say "not proven" or describe only the narrower thing that was proven.
 - **Clean/dirty tree claims need exact evidence.** If a final/status response says the worktree is clean, dirty only in ignored paths, or has no tracked changes, include exact same-turn `git status --short --branch` / `jj status` output in the response or cite a committed transcript that records the post-change status. Do not generalize from a pre-commit status after adding evidence files.
 - **Post-archive validation claims require archived evidence.** If a final response or commit says post-archive Cairn validation passed, append that exact post-archive command output to the archived change evidence transcript before committing or finalizing.
+- Cairn validation/gate evidence captured through `nix run path:/home/brittonr/git/cairn#cairn -- ...` can include Nix build or remote-builder warning lines before JSON. Capture each command to a temp file and append it into evidence with `text` fences; avoid piping repeated `nix run` gates through grouped `tee`, which can leave incomplete transcripts if stdout gets a broken pipe.
 - **Run the command in the same tool call** that produces the summary.
   Use `Bash` with a timeout for fast tests, `pueue_run` + `pueue_log`
   for slow ones. The tool output IS the evidence.
