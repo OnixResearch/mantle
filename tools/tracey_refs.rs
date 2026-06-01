@@ -47,6 +47,29 @@
 // Verified by `tests/removed_system_cli.rs::system_eval_is_not_a_supported_subcommand`
 // and the public/implementation surface scans in that test module.
 
+// Examples support contract bridge.
+//
+// r[impl examples.support_catalog]
+// Implemented by `examples/catalog.ncl`, which is evaluated as typed Nickel and
+// consumed by `tests/examples_inventory.rs` to classify every checked-in
+// user-facing example by support tier, capability, and validation rail.
+//
+// r[verify examples.support_catalog]
+// Verified by `tests/examples_inventory.rs`: positive coverage parses the live
+// catalog and checks every checked-in user-facing example path; negative tests
+// reject duplicate ids/paths, unsupported support tiers, silent skips, and
+// missing catalog coverage.
+//
+// r[impl examples.documentation_drift]
+// Implemented by the catalog-backed documentation index in `examples/README.md`
+// plus the root README examples section. The drift rail keeps generated and
+// real-network examples explicitly classified instead of relying on prose only.
+//
+// r[verify examples.documentation_drift]
+// Verified by `tests/examples_inventory.rs`: README drift tests reject omitted
+// catalog paths, stale example links, and stale Crunch branding outside exact
+// compatibility identifiers such as `crunch.ncl`.
+
 // Compiled-eval legacy OpenSpec bridge.
 //
 // These references close Tracey linkage to the archived, legacy OpenSpec
