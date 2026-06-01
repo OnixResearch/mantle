@@ -141,6 +141,20 @@
 // r[verify compiled-eval.private-backend-seam.no-leak]
 // `EvalBackend`, `EvalRequest`, and Cranelift request handling stay private to
 // `crunch-eval`; existing public helper signatures remain interpreter-shaped.
+
+// Tracey coverage readiness bridge.
+//
+// r[impl verification_evidence.tracey_coverage_readiness]
+// Implemented by the bounded backfill workflow recorded in
+// `cairn/archive/2026-06-01-tracey-coverage-readiness-backfill/`, plus this
+// bridge file that keeps accepted requirements linked while root-package source
+// scanning remains limited.
+//
+// r[verify verification_evidence.tracey_coverage_readiness]
+// Verified by archived evidence in
+// `cairn/archive/2026-06-01-tracey-coverage-readiness-backfill/evidence/`, which
+// records baseline counts, grouped missing IDs, first-batch refs, validation,
+// tasks gates, and explicit non-claim status for remaining coverage debt.
 //
 // r[impl compiled-eval.cranelift-prototype-subset]
 // r[verify compiled-eval.cranelift-prototype-subset]

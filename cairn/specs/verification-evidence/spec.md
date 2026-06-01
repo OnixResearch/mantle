@@ -37,3 +37,21 @@ r[verification_evidence.proof_before_claim] Mantle work MUST NOT claim status, c
 - WHEN a commit message, evidence summary, status reply, or final response claims post-archive Cairn validation passed
 - THEN the archived change evidence transcript MUST include the exact post-archive validation command and output.
 - AND the claim MUST NOT rely only on pre-archive gates or unstored chat transcript output.
+
+### Requirement: Tracey coverage readiness
+
+r[verification_evidence.tracey_coverage_readiness] Mantle MUST maintain deterministic coverage traceability for accepted Cairn requirements before presenting release-readiness or archive-readiness claims that depend on Tracey coverage.
+
+#### Scenario: accepted requirements have traceability disposition
+
+GIVEN an accepted requirement exists under `cairn/specs/`
+WHEN Tracey coverage readiness is evaluated
+THEN the requirement MUST have either implementation/verification references, an evidence-backed bridge reference, or an explicit tracked debt disposition.
+AND comment-only bridge references MUST cite inspected implementation paths or durable evidence before being counted as satisfying traceability.
+
+#### Scenario: coverage failures stay bounded
+
+GIVEN `cairn tracey coverage --root . --json` reports missing requirements
+WHEN an agent or operator reports readiness status
+THEN the report MUST include the exact coverage validity, referenced count, missing count, dangling count, and next missing group.
+AND it MUST NOT claim global Tracey coverage is green unless the command reports `valid: true`.
