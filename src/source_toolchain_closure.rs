@@ -699,6 +699,30 @@ mod tests {
     }
 
     #[test]
+    fn enforcement_rejects_undeclared_host_linker_path() {
+        let manifest = valid_manifest();
+        let observed = vec![observed(ToolchainRole::Linker, "/usr/bin/ld", DIGEST_B)];
+
+        let err = enforce_observed_toolchain_inputs(&manifest, &observed).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::HostToolLeakage);
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("Linker"));
+    }
+
+    #[test]
+    fn enforcement_rejects_undeclared_host_pkg_config_path() {
+        let manifest = valid_manifest();
+        let observed = vec![observed(ToolchainRole::PkgConfig, "/usr/bin/pkg-config", DIGEST_E)];
+
+        let err = enforce_observed_toolchain_inputs(&manifest, &observed).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::HostToolLeakage);
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("PkgConfig"));
+    }
+
+    #[test]
     fn enforcement_rejects_declared_path_with_digest_mismatch() {
         let manifest = valid_manifest();
         let observed = vec![observed(ToolchainRole::Rustc, "/toolchain/rustc", DIGEST_B)];

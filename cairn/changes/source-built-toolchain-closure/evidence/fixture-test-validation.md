@@ -12,8 +12,10 @@ This evidence covers positive and negative fixture tests for source-built toolch
 - Positive manifest fixture parsing now covers JSON manifest parsing, seed exception accounting, source-built member counts, policy digest length, and order-independent policy digesting across members and seed exceptions.
 - Policy digest coverage now proves seed exception justification text affects the digest.
 - Negative fixture coverage now rejects placeholder/TODO and unverified seed exception metadata fail-closed before proof promotion.
+- Host leakage coverage now names concrete tests for host rustc, linker, and pkg-config leakage instead of relying on vague existing coverage.
 - Fixed-point policy coverage now rejects stage policy digest presence mismatches and keeps `claim=false` / `not-source-built-toolchain-closure` even when stage binary and policy digests match.
 - CLI fixture coverage now accepts matching seed-exception manifests without claiming source-built closure proof and rejects placeholder seed-exception manifests before writing receipts/binaries.
+- Oracle checkpoint `negative-fixture-coverage-oracle-checkpoint.md` records the inspected evidence, decision, owner, and next action for using existing plus new negative coverage to satisfy the exact task wording.
 
 ## Test evidence
 
@@ -37,6 +39,16 @@ test source_toolchain_closure::tests::policy_digest_changes_when_seed_exception_
 test source_toolchain_closure::tests::validator_rejects_unverified_seed_exception_name ... ok
 
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 626 filtered out; finished in 0.00s
+```
+
+The later pueue task 29 reran this focused suite after adding exact host linker/pkg-config leakage tests:
+
+```text
+running 23 tests
+test source_toolchain_closure::tests::enforcement_rejects_undeclared_host_linker_path ... ok
+test source_toolchain_closure::tests::enforcement_rejects_undeclared_host_pkg_config_path ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 626 filtered out; finished in 0.00s
 ```
 
 ### pueue task 49 — cargo_free_self_build focused unit tests
@@ -95,9 +107,22 @@ test cargo_free_self_build_reports_seed_exception_accounting_without_claiming_pr
 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.10s
 ```
 
+## Negative task coverage map
+
+| Required negative case | Concrete test evidence |
+| --- | --- |
+| Missing toolchain members | `source_toolchain_closure::tests::validator_rejects_missing_required_role`; `cargo_free_self_build_rejects_invalid_toolchain_closure_manifest`; `cargo_free_fixed_point_rejects_invalid_toolchain_closure_manifest` |
+| Digest mismatches | `source_toolchain_closure::tests::enforcement_rejects_declared_path_with_digest_mismatch`; `cargo_free_self_build::tests::receipt_bound_enforcement_rejects_linker_digest_mismatch`; `cargo_free_self_build::tests::receipt_bound_enforcement_rejects_pkg_config_digest_mismatch`; `cargo_free_self_build::tests::receipt_bound_enforcement_rejects_c_compiler_digest_mismatch` |
+| Placeholder seeds | `source_toolchain_closure::tests::validator_rejects_placeholder_seed_exception_reason`; `source_toolchain_closure::tests::validator_rejects_unverified_seed_exception_name`; `cargo_free_self_build_rejects_placeholder_seed_exception_manifest` |
+| Host rustc leakage | `source_toolchain_closure::tests::enforcement_rejects_undeclared_host_rustc_path`; `cargo_free_self_build_rejects_undeclared_host_rustc_before_unit_execution` |
+| Host linker leakage | `source_toolchain_closure::tests::enforcement_rejects_undeclared_host_linker_path`; `cargo_free_self_build::tests::receipt_bound_enforcement_rejects_linker_digest_mismatch` |
+| Host pkg-config leakage | `source_toolchain_closure::tests::enforcement_rejects_undeclared_host_pkg_config_path`; `cargo_free_self_build::tests::receipt_bound_enforcement_rejects_pkg_config_digest_mismatch` |
+| Policy digest mismatch between stages | `cargo_free_self_build::tests::fixed_point_status_rejects_policy_digest_mismatch_before_success`; `cargo_free_self_build::tests::fixed_point_status_rejects_policy_digest_presence_mismatch_before_success` |
+| Attempted promotion of current fixed-point evidence | `cargo_free_self_build::tests::fixed_point_summary_keeps_closure_non_claim_even_when_policy_matches`; CLI matching-manifest tests assert `claim=false` and `not-source-built-toolchain-closure` |
+
 ## Final validation
 
-### pueue task 22 — formatting, diff check, Cairn validation, tasks gate
+### pueue task 30 — formatting, diff check, Cairn validation, tasks gate
 
 Command:
 
@@ -108,7 +133,7 @@ git diff --check
 /home/brittonr/.cargo-target/debug/cairn gate tasks source-built-toolchain-closure --root .
 ```
 
-Result excerpt from `pueue_log 22`:
+Result excerpt from `pueue_log 30`:
 
 ```text
 rustfmt --edition 2024 --check /home/brittonr/git/mantle/examples/benchmark_compare.rs ... /home/brittonr/git/mantle/tests/transcript_cli.rs
@@ -132,3 +157,5 @@ rustfmt --edition 2024 --check /home/brittonr/git/mantle/examples/benchmark_comp
   "verdict": "PASS"
 }
 ```
+
+A final pueue task 31 after evidence edits reran `git diff --check`, `cairn validate --root .`, and `cairn gate tasks source-built-toolchain-closure --root .`; it reported `valid: true` and `verdict: PASS`.
