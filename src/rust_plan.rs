@@ -7254,8 +7254,8 @@ fn remap_dependency_artifacts_to_host_variants(
         if let Some(producer_unit_id) = &dependency.producer_unit_id {
             if let Some(host_unit_id) = host_id_by_target_id.get(producer_unit_id) {
                 dependency.producer_unit_id = Some(host_unit_id.clone());
-                continue;
             }
+            continue;
         }
         if let Some(host_unit_id) = host_id_by_package.get(&dependency.package_id) {
             dependency.producer_unit_id = Some(host_unit_id.clone());
@@ -15475,6 +15475,35 @@ rust-version = "1.80"
             untouched_target_consumer.dependency_artifacts[0].producer_unit_id.as_deref(),
             Some(target_dependency_unit_id.as_str())
         );
+    }
+
+    #[test]
+    fn host_dependency_remap_preserves_explicit_non_target_producers() {
+        let dependency_id = "registry+https://github.com/rust-lang/crates.io-index#helper@1.0.0";
+        let target_unit_id = "target-helper-lib";
+        let host_unit_id = host_dependency_unit_id(target_unit_id);
+        let explicit_proc_macro_id = "host-helper-proc-macro";
+        let mut dependencies = vec![
+            RustDependencyArtifact {
+                package_id: dependency_id.to_string(),
+                name: "helper_macro".to_string(),
+                producer_unit_id: Some(explicit_proc_macro_id.to_string()),
+                artifact: format!("artifact:{dependency_id}:helper_macro"),
+            },
+            RustDependencyArtifact {
+                package_id: dependency_id.to_string(),
+                name: "helper".to_string(),
+                producer_unit_id: None,
+                artifact: format!("artifact:{dependency_id}:helper"),
+            },
+        ];
+        let host_id_by_target_id = BTreeMap::from([(target_unit_id.to_string(), host_unit_id.clone())]);
+        let host_id_by_package = BTreeMap::from([(dependency_id.to_string(), host_unit_id.clone())]);
+
+        remap_dependency_artifacts_to_host_variants(&mut dependencies, &host_id_by_target_id, &host_id_by_package);
+
+        assert_eq!(dependencies[0].producer_unit_id.as_deref(), Some(explicit_proc_macro_id));
+        assert_eq!(dependencies[1].producer_unit_id.as_deref(), Some(host_unit_id.as_str()));
     }
 
     #[test]
