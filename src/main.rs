@@ -393,6 +393,10 @@ enum Command {
         /// Source-built toolchain closure manifest for --cargo-free proof input validation.
         #[arg(long, requires = "cargo_free")]
         toolchain_closure: Option<PathBuf>,
+
+        /// Target triple for --cargo-free rust-plan execution; repeatable.
+        #[arg(long = "target", requires = "cargo_free")]
+        targets: Vec<String>,
     },
 
     /// Capture Cargo oracle metadata and unit graph as a normalized Rust package plan receipt
@@ -2339,6 +2343,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             out,
             rustc,
             toolchain_closure,
+            targets,
         } => run_self_build_command(
             ctx,
             *jobs,
@@ -2360,6 +2365,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             out.as_deref(),
             rustc,
             toolchain_closure.as_deref(),
+            targets,
         ),
         _ => unreachable!("self-build helper called with non-self-build command"),
     }
@@ -2387,6 +2393,7 @@ fn run_self_build_command(
     out: Option<&std::path::Path>,
     rustc: &std::path::Path,
     toolchain_closure: Option<&std::path::Path>,
+    targets: &[String],
 ) -> Result<(), RunError> {
     if cargo_free {
         validate_cargo_free_legacy_self_build_args(
@@ -2411,6 +2418,7 @@ fn run_self_build_command(
             root: &root,
             out_dir,
             rustc,
+            targets,
             toolchain_closure,
             json: ctx.json,
         };
@@ -3186,6 +3194,24 @@ mod tests {
             toolchain_closure: Some(_),
             ..
         }));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_cargo_free_target_triple() {
+        let args = Args::parse_from([
+            "mantle",
+            "self-build",
+            "--cargo-free",
+            "--out",
+            "/tmp/mantle-out",
+            "--target",
+            "x86_64-unknown-linux-musl",
+        ]);
+        assert!(matches!(args.command, Command::SelfBuild {
+            cargo_free: true,
+            targets,
+            ..
+        } if targets == vec!["x86_64-unknown-linux-musl".to_string()]));
     }
 
     #[test]

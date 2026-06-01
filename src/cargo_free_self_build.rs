@@ -31,6 +31,8 @@ const CARGO_SHIM_NAME: &str = "cargo";
 const CARGO_MARKER_FILE: &str = "cargo-was-invoked";
 const C_COMPILER_ALIAS: &str = "cc";
 const LINKER_ALIAS: &str = "ld";
+const ARCHIVER_ALIAS: &str = "ar";
+const RANLIB_ALIAS: &str = "ranlib";
 const PKG_CONFIG_ALIAS: &str = "pkg-config";
 const PRODUCED_MANTLE_FILE: &str = "mantle";
 const MANTLE_TARGET_NAME: &str = "mantle";
@@ -84,6 +86,7 @@ pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) root: &'a Path,
     pub(crate) out_dir: &'a Path,
     pub(crate) rustc: &'a Path,
+    pub(crate) targets: &'a [String],
     pub(crate) toolchain_closure: Option<&'a Path>,
     pub(crate) json: bool,
 }
@@ -292,7 +295,8 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     let execution_toolchain =
         prepare_execution_toolchain(&paths.guard_path_dir, options.rustc, &loaded_toolchain_closure)?;
 
-    let mut child = run_rust_plan_child(&paths, &execution_toolchain.rustc, &execution_toolchain.path_env)?;
+    let mut child =
+        run_rust_plan_child(&paths, &execution_toolchain.rustc, options.targets, &execution_toolchain.path_env)?;
     let produced = if child.blocker.is_none() {
         materialize_or_block(&paths, &mut child)?
     } else {
@@ -319,7 +323,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
     let compatibility_rustc = prepare_rustc_for_compatibility(options.rustc, &loaded_toolchain_closure)?;
     let compatibility = prepare_rustc_compatibility(&bundle_dir, &compatibility_rustc)?;
-    let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc)?;
+    let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc, options.targets)?;
     let toolchain_status =
         enforce_fixed_point_toolchain(&compatibility.summary.stage_rustc, &loaded_toolchain_closure)?;
     write_fixed_point_non_claims(&plan.bundle_dir)?;
@@ -402,7 +406,12 @@ fn canonicalize_root(root: &Path) -> Result<PathBuf, RunError> {
     fs::canonicalize(root).map_err(|err| internal(format!("canonicalize root {}: {err}", root.display())))
 }
 
-pub(crate) fn plan_fixed_point_paths(root: &Path, out_dir: &Path, rustc: &Path) -> Result<FixedPointPlan, RunError> {
+pub(crate) fn plan_fixed_point_paths(
+    root: &Path,
+    out_dir: &Path,
+    rustc: &Path,
+    targets: &[String],
+) -> Result<FixedPointPlan, RunError> {
     if !root.is_absolute() {
         return Err(RunError::Build(format!(
             "fixed-point planner requires an absolute source root, got {}",
@@ -423,6 +432,7 @@ pub(crate) fn plan_fixed_point_paths(root: &Path, out_dir: &Path, rustc: &Path) 
             &bundle_dir,
             &shared_execution_dir,
             rustc,
+            targets,
             FixedPointMantleBinary::Host,
         ),
         fixed_point_stage_plan(
@@ -431,6 +441,7 @@ pub(crate) fn plan_fixed_point_paths(root: &Path, out_dir: &Path, rustc: &Path) 
             &bundle_dir,
             &shared_execution_dir,
             rustc,
+            targets,
             FixedPointMantleBinary::StageOutput {
                 stage_name: STAGE1_DIR,
                 path: stage1_binary_path,
@@ -458,6 +469,7 @@ fn fixed_point_stage_plan(
     bundle_dir: &Path,
     execution_dir: &Path,
     rustc: &Path,
+    targets: &[String],
     mantle_binary: FixedPointMantleBinary,
 ) -> FixedPointStagePlan {
     debug_assert!(!name.is_empty());
@@ -469,7 +481,7 @@ fn fixed_point_stage_plan(
     let path_cargo_shim = guard_path_dir.join(CARGO_SHIM_NAME);
     let command = FixedPointStageCommandPlan {
         mantle_binary,
-        args: rust_plan_args(root, &explicit_cargo_shim, rustc, execution_dir),
+        args: rust_plan_args(root, &explicit_cargo_shim, rustc, targets, execution_dir),
         current_dir: root.to_path_buf(),
         cargo_env_value: path_cargo_shim.clone(),
         path_guard_dir: guard_path_dir.clone(),
@@ -492,8 +504,14 @@ fn fixed_point_stage_plan(
     }
 }
 
-fn rust_plan_args(root: &Path, cargo_shim: &Path, rustc: &Path, execution_dir: &Path) -> Vec<OsString> {
-    let args = [
+fn rust_plan_args(
+    root: &Path,
+    cargo_shim: &Path,
+    rustc: &Path,
+    targets: &[String],
+    execution_dir: &Path,
+) -> Vec<OsString> {
+    let mut args = vec![
         OsString::from(JSON_FLAG),
         OsString::from(RUST_PLAN_COMMAND),
         OsString::from(ROOT_FLAG),
@@ -502,14 +520,20 @@ fn rust_plan_args(root: &Path, cargo_shim: &Path, rustc: &Path, execution_dir: &
         cargo_shim.as_os_str().to_os_string(),
         OsString::from(RUSTC_FLAG),
         rustc.as_os_str().to_os_string(),
+    ];
+    for target in targets {
+        args.push(OsString::from("--target"));
+        args.push(OsString::from(target));
+    }
+    args.extend([
         OsString::from(NO_CARGO_ORACLE_FLAG),
         OsString::from(EXECUTE_TOPOLOGY_FLAG),
         OsString::from(EXECUTION_OUTPUT_ROOT_FLAG),
         execution_dir.as_os_str().to_os_string(),
-    ];
+    ]);
     debug_assert_eq!(args.first(), Some(&OsString::from(JSON_FLAG)));
     debug_assert_eq!(args.last(), Some(&execution_dir.as_os_str().to_os_string()));
-    args.into_iter().collect()
+    args
 }
 
 fn prepare_fixed_point_output_dir(bundle_dir: &Path) -> Result<(), RunError> {
@@ -686,9 +710,15 @@ fn ensure_outside_root(out_dir: &Path, root: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
-fn run_rust_plan_child(paths: &BuildPaths, rustc: &Path, path_env: &OsStr) -> Result<ChildRun, RunError> {
+fn run_rust_plan_child(
+    paths: &BuildPaths,
+    rustc: &Path,
+    targets: &[String],
+    path_env: &OsStr,
+) -> Result<ChildRun, RunError> {
     let current_exe = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
-    let output = Command::new(&current_exe)
+    let mut command = Command::new(&current_exe);
+    command
         .arg("--json")
         .arg("rust-plan")
         .arg("--root")
@@ -696,7 +726,11 @@ fn run_rust_plan_child(paths: &BuildPaths, rustc: &Path, path_env: &OsStr) -> Re
         .arg("--cargo")
         .arg(&paths.explicit_cargo_shim)
         .arg("--rustc")
-        .arg(rustc)
+        .arg(rustc);
+    for target in targets {
+        command.arg("--target").arg(target);
+    }
+    let output = command
         .arg("--no-cargo-oracle")
         .arg("--execute-topology")
         .arg("--execution-output-root")
@@ -1468,7 +1502,7 @@ fn toolchain_path_aliases(
         let target = canonicalize_toolchain_path(Path::new(&member.execution_path), member.role)?;
         require_executable(&target)?;
         add_toolchain_alias(&mut aliases, path_file_name(&target)?, &target)?;
-        add_role_aliases(&mut aliases, member.role, &target)?;
+        add_role_aliases(&mut aliases, member, &target)?;
     }
     Ok(aliases)
 }
@@ -1496,14 +1530,20 @@ fn executable_path_members(
 
 fn add_role_aliases(
     aliases: &mut BTreeMap<String, PathBuf>,
-    role: crate::source_toolchain_closure::ToolchainRole,
+    member: &crate::source_toolchain_closure::ToolchainClosureMember,
     target: &Path,
 ) -> Result<(), RunError> {
     use crate::source_toolchain_closure::ToolchainRole;
-    match role {
+    match member.role {
         ToolchainRole::Linker => add_toolchain_alias(aliases, LINKER_ALIAS.to_string(), target),
         ToolchainRole::CCompiler => add_toolchain_alias(aliases, C_COMPILER_ALIAS.to_string(), target),
         ToolchainRole::PkgConfig => add_toolchain_alias(aliases, PKG_CONFIG_ALIAS.to_string(), target),
+        ToolchainRole::NativeHelper if member.name == ARCHIVER_ALIAS => {
+            add_toolchain_alias(aliases, ARCHIVER_ALIAS.to_string(), target)
+        }
+        ToolchainRole::NativeHelper if member.name == RANLIB_ALIAS => {
+            add_toolchain_alias(aliases, RANLIB_ALIAS.to_string(), target)
+        }
         _ => Ok(()),
     }
 }
@@ -1817,7 +1857,7 @@ mod tests {
         let out_dir = Path::new("/tmp/mantle-fixed-point");
         let rustc = Path::new("/toolchain/bin/rustc");
 
-        let plan = plan_fixed_point_paths(root, out_dir, rustc).unwrap();
+        let plan = plan_fixed_point_paths(root, out_dir, rustc, &[]).unwrap();
         let stage1 = &plan.stages[FIXED_POINT_STAGE1_INDEX];
         let stage2 = &plan.stages[FIXED_POINT_STAGE2_INDEX];
 
@@ -1846,8 +1886,24 @@ mod tests {
         assert_eq!(stage1.command.path_guard_dir, stage1.guard_path_dir);
         assert_eq!(
             stage1.command.args,
-            rust_plan_args(root, &stage1.explicit_cargo_shim, rustc, &plan.shared_execution_dir)
+            rust_plan_args(root, &stage1.explicit_cargo_shim, rustc, &[], &plan.shared_execution_dir)
         );
+    }
+
+    #[test]
+    fn fixed_point_plan_threads_targets_into_stage_commands() {
+        let root = Path::new("/repo/mantle");
+        let out_dir = Path::new("/tmp/mantle-fixed-point");
+        let rustc = Path::new("/toolchain/bin/rustc");
+        let targets = vec!["x86_64-unknown-linux-musl".to_string()];
+
+        let plan = plan_fixed_point_paths(root, out_dir, rustc, &targets).unwrap();
+        let stage1_args = &plan.stages[FIXED_POINT_STAGE1_INDEX].command.args;
+        let stage2_args = &plan.stages[FIXED_POINT_STAGE2_INDEX].command.args;
+
+        assert!(has_ordered_os_arg_pair(stage1_args, "--target", "x86_64-unknown-linux-musl"));
+        assert!(has_ordered_os_arg_pair(stage2_args, "--target", "x86_64-unknown-linux-musl"));
+        assert!(!has_ordered_os_arg_pair(stage1_args, "--target", "x86_64-unknown-linux-gnu"));
     }
 
     #[test]
@@ -1856,7 +1912,7 @@ mod tests {
         let out_dir = Path::new("/repo/mantle/target/proof");
         let rustc = Path::new("/toolchain/bin/rustc");
 
-        let err = plan_fixed_point_paths(root, out_dir, rustc).unwrap_err();
+        let err = plan_fixed_point_paths(root, out_dir, rustc, &[]).unwrap_err();
         assert!(err.message().contains("inside source root"));
         assert!(err.message().contains("choose /tmp"));
     }
@@ -1874,7 +1930,8 @@ mod tests {
 
     #[test]
     fn fixed_point_plan_rejects_relative_source_root() {
-        let err = plan_fixed_point_paths(Path::new("repo"), Path::new("/tmp/proof"), Path::new("rustc")).unwrap_err();
+        let err =
+            plan_fixed_point_paths(Path::new("repo"), Path::new("/tmp/proof"), Path::new("rustc"), &[]).unwrap_err();
         assert!(err.message().contains("absolute source root"));
         assert!(err.message().contains("repo"));
     }
@@ -1920,7 +1977,7 @@ mod tests {
         let root = Path::new("/repo/mantle");
         let out_dir = Path::new("/tmp/mantle-fixed-point");
         let rustc = Path::new("/toolchain/bin/rustc");
-        let plan = plan_fixed_point_paths(root, out_dir, rustc).unwrap();
+        let plan = plan_fixed_point_paths(root, out_dir, rustc, &[]).unwrap();
         let compatibility = RustcCompatibilitySummary {
             requested_rustc: rustc.to_path_buf(),
             stage_rustc: rustc.to_path_buf(),
@@ -2076,6 +2133,8 @@ mod tests {
 
         assert_eq!(aliases.get("ld"), Some(&tools.linker));
         assert_eq!(aliases.get("cc"), Some(&tools.c_compiler));
+        assert_eq!(aliases.get(ARCHIVER_ALIAS), Some(&tools.archiver));
+        assert_eq!(aliases.get(RANLIB_ALIAS), Some(&tools.ranlib));
         assert!(!aliases.contains_key("cargo"));
     }
 
@@ -2123,6 +2182,8 @@ mod tests {
         rustc: PathBuf,
         linker: PathBuf,
         c_compiler: PathBuf,
+        archiver: PathBuf,
+        ranlib: PathBuf,
         sysroot: PathBuf,
         pkg_config: Option<PathBuf>,
     }
@@ -2136,9 +2197,13 @@ mod tests {
         let rustc = tool_dir.join("rustc");
         let linker = tool_dir.join("ld");
         let c_compiler = tool_dir.join("cc");
+        let archiver = tool_dir.join(ARCHIVER_ALIAS);
+        let ranlib = tool_dir.join(RANLIB_ALIAS);
         write_fake_executable(&rustc, &rustc_sysroot_script(&sysroot));
         write_fake_executable(&linker, "#!/bin/sh\nexit 0\n");
         write_fake_executable(&c_compiler, "#!/bin/sh\nexit 0\n");
+        write_fake_executable(&archiver, "#!/bin/sh\nexit 0\n");
+        write_fake_executable(&ranlib, "#!/bin/sh\nexit 0\n");
         let pkg_config = include_pkg_config.then(|| {
             let path = tool_dir.join(PKG_CONFIG_ALIAS);
             write_fake_executable(&path, "#!/bin/sh\nexit 0\n");
@@ -2148,12 +2213,18 @@ mod tests {
             rustc,
             linker,
             c_compiler,
+            archiver,
+            ranlib,
             sysroot,
             pkg_config,
         }
     }
 
     #[cfg(unix)]
+    fn has_ordered_os_arg_pair(args: &[OsString], flag: &str, value: &str) -> bool {
+        args.windows(2).any(|window| window[0] == OsStr::new(flag) && window[1] == OsStr::new(value))
+    }
+
     fn fake_toolchain_manifest(
         tools: &FakeToolchain,
         override_digest: Option<(&str, String)>,
@@ -2163,6 +2234,8 @@ mod tests {
             fake_member(ToolchainRole::Rustc, "rustc", &tools.rustc, override_digest.as_ref()),
             fake_member(ToolchainRole::Linker, "ld", &tools.linker, override_digest.as_ref()),
             fake_member(ToolchainRole::CCompiler, "c-compiler", &tools.c_compiler, override_digest.as_ref()),
+            fake_member(ToolchainRole::NativeHelper, ARCHIVER_ALIAS, &tools.archiver, override_digest.as_ref()),
+            fake_member(ToolchainRole::NativeHelper, RANLIB_ALIAS, &tools.ranlib, override_digest.as_ref()),
             fake_member(ToolchainRole::Sysroot, "sysroot", &tools.sysroot, override_digest.as_ref()),
         ];
         if let Some(pkg_config) = &tools.pkg_config {
