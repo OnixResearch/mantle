@@ -69,6 +69,27 @@
 // Verified by `tests/examples_inventory.rs`: README drift tests reject omitted
 // catalog paths, stale example links, and stale Crunch branding outside exact
 // compatibility identifiers such as `crunch.ncl`.
+//
+// r[impl examples.validation_matrix]
+// Implemented by `tests/examples_eval.rs` and `tests/examples_build.rs`, which
+// consume the catalog's eval rails, run fast build smoke tests in temp
+// store/state roots, and keep heavyweight examples behind explicit ignored
+// tests or capability skips.
+//
+// r[verify examples.validation_matrix]
+// Verified by `tests/examples_eval.rs` catalog-driven eval coverage plus
+// negative malformed/missing-seed assertions, and by `tests/examples_build.rs`
+// fast/offline build smoke, missing-selector, and intentional-failure coverage.
+//
+// r[impl examples.output_execution]
+// Implemented by `tests/examples_build.rs`, which inspects flat outputs,
+// multi-output layouts, project check result files, and the preserved ignored
+// crc64 binary execution test for heavyweight validation.
+//
+// r[verify examples.output_execution]
+// Verified by `tests/examples_build.rs` assertions for hello/multi-step output
+// content, local multi-output fixture files, project check result output, and
+// fail-closed handling of diagnostic examples.
 
 // Compiled-eval legacy OpenSpec bridge.
 //
