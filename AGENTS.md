@@ -497,6 +497,10 @@ When claiming test results, status, completion, or feature support in commit mes
   explicit `Url::parse`. On this host `PathBuf::from("http://cache.example.com")`
   stringifies as `http:/cache.example.com`, which silently breaks HTTP cache
   dispatch.
+- Cairn's built-in `cairn tracey coverage --root .` rail currently scans only
+  implementation refs under `crates/` and `tools/`, not Mantle's root-package
+  `src/` or `tests/`. For root-package requirements, keep bridge refs in
+  `tools/tracey_refs.rs` until the rail learns the package-root source globs.
 - Current HTTP pull semantics: `import_paths_from_http_cache()` strips query /
   fragment from the cache base URL, rejects URL userinfo credentials, always
   runs `nix-cache-info` preflight before any already-present short-circuit,
