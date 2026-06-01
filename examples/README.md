@@ -4,11 +4,13 @@ This directory is a supported examples gallery. `examples/catalog.ncl` is the so
 
 ## Beginner
 
-| File | What it shows | Fast rail |
-|---|---|---|
-| `examples/hello.ncl` | Smallest derivation; writes a flat hello output with `/bin/sh`. | eval + fast build + output inspection |
-| `examples/multi-step.ncl` | Multi-line output using shell builtins only. | eval + fast build + output inspection |
-| `examples/mk-hello.ncl` | `mkDerivation` wrapper with generated seed paths. | manual seed eval/build |
+Start here. These examples are local, fast, and do not need generated seed material unless the capability column says so.
+
+| File | Command | Expected output shape | Capability |
+|---|---|---|---|
+| `examples/hello.ncl` | `mantle build examples/hello.ncl --no-substitute` | flat file containing `Hello, mantle!` | local + fast |
+| `examples/multi-step.ncl` | `mantle build examples/multi-step.ncl --no-substitute` | flat file containing `name: multi-step` | local + fast |
+| `examples/mk-hello.ncl` | `mantle build examples/mk-hello.ncl -I examples -I builders --no-substitute` | store path containing `bin/hello` | generated seed |
 
 ## Diagnostics
 
@@ -20,48 +22,54 @@ This directory is a supported examples gallery. `examples/catalog.ncl` is the so
 
 Real-network examples stay useful for operators, but deterministic validation uses generated offline fixtures in `tests/examples_build.rs` for each fetcher helper family.
 
-| File | What it shows | Capability | Offline validation rail |
-|---|---|---|---|
-| `examples/fetch-file.ncl` | Fixed-output single file fetch from a real URL. | real network | `offline-fetchurl-fixture` + `fixed-output-negative` |
-| `examples/fetch-tarball.ncl` | Fixed-output tarball fetch/unpack from a real URL. | real network | `offline-fetch-tarball-fixture` + `fixed-output-negative` |
-| `examples/fetch-git.ncl` | Fixed-output git checkout from a real repository. | real network | `offline-fetchgit-fixture` + `fixed-output-negative` |
-| `examples/fetch-crate-crc64.ncl` | Fetch the published `crc64` crate source. | real network | `offline-fetch-tarball-fixture` + `fixed-output-negative` |
+| File | Command | Expected output shape | Capability | Offline validation rail |
+|---|---|---|---|---|
+| `examples/fetch-file.ncl` | `mantle build examples/fetch-file.ncl` | fixed-output file | real network | `offline-fetchurl-fixture` + `fixed-output-negative` |
+| `examples/fetch-tarball.ncl` | `mantle build examples/fetch-tarball.ncl` | unpacked source tree | real network | `offline-fetch-tarball-fixture` + `fixed-output-negative` |
+| `examples/fetch-git.ncl` | `mantle build examples/fetch-git.ncl` | checkout tree without `.git/` | real network | `offline-fetchgit-fixture` + `fixed-output-negative` |
+| `examples/fetch-crate-crc64.ncl` | `mantle build examples/fetch-crate-crc64.ncl` | crate source tree containing `Cargo.toml` | real network | `offline-fetch-tarball-fixture` + `fixed-output-negative` |
 
 ## Package composition
 
-| File | What it shows | Capability |
-|---|---|---|
-| `examples/build-from-source.ncl` | Multi-file C project with `make`, library, binary, and install phase. | generated seed |
-| `examples/multi-output.ncl` | Named outputs: `out`, `dev`, and `man`. | generated seed |
-| `examples/override.ncl` | `overrideAttrs` without rewriting the original package. | generated seed |
-| `examples/package-set.ncl` | Related packages in one Nickel package set. | generated seed |
+After basic derivations and fetchers, move to output layouts and package relationships.
+
+| File | Command | Expected output shape | Capability |
+|---|---|---|---|
+| `examples/local-output-layout.ncl` | `mantle build examples/local-output-layout.ncl --no-substitute` | named outputs with `bin/show-layout`, `include/local_output_layout.h`, and `share/doc/local-output-layout/README` | local + fast |
+| `examples/build-from-source.ncl` | `mantle build examples/build-from-source.ncl -I examples --no-substitute` | installed library and binary | generated seed |
+| `examples/multi-output.ncl` | `mantle build examples/multi-output.ncl -I examples --no-substitute` | named outputs: `out`, `dev`, and `man` | generated seed |
+| `examples/override.ncl` | `mantle eval examples/override.ncl -I examples -I builders` | overridden derivation metadata | generated seed |
+| `examples/package-set.ncl` | `mantle eval examples/package-set.ncl -I examples -I builders` | related package records | generated seed |
 
 ## Project workflow
 
-| File | What it shows | Capability |
-|---|---|---|
-| `examples/project/crunch.ncl` | Project outputs: default package, named packages, and checks. | generated seed |
+Project examples show selector syntax after package composition. See `examples/project/README.md` for the full command table.
 
-Useful commands after generating `examples/project/seed.ncl`:
+| File | Command | Expected output shape | Capability |
+|---|---|---|---|
+| `examples/project/crunch.ncl` | `cd examples/project && mantle build` | default package store path with `bin/hello` | generated seed |
+| `examples/project/crunch.ncl` | `cd examples/project && mantle build .#hello` | named package store path with `bin/hello` | generated seed |
+| `examples/project/crunch.ncl` | `cd examples/project && mantle build .#goodbye` | named package store path with `bin/goodbye` | generated seed |
+| `examples/project/crunch.ncl` | `cd examples/project && mantle build .#checks.test-hello` | check output with `result` text `ok` | generated seed |
 
-```bash
-cd examples/project
-mantle build
-mantle build .#hello
-mantle run .#hello
-mantle build .#checks.test-hello
-```
+## Trust/provenance
+
+These commands inspect local build evidence. They are not release or witness proofs, and placeholder output must not be treated as proof evidence.
+
+| Example or recipe | Command | Expected evidence shape | Non-claim |
+|---|---|---|---|
+| JSON build report for `examples/hello.ncl` | `mantle --json build examples/hello.ncl --store /tmp/mantle-examples-store --state-dir /tmp/mantle-examples-state --no-substitute` | build-report JSON with `outputs[].artifact_attestation.path` | proves only local build/report shape |
+| `examples/crunch.ncl` | `mantle eval examples/crunch.ncl -I examples` | self-build derivation skeleton shape | does not prove release, witness, or fixed-point self-hosting success |
 
 ## Advanced bootstrap
 
-| File | What it shows | Capability |
-|---|---|---|
-| `examples/bootstrap-no-nix.ncl` | Compile C with the shared reduced bootstrap seed provider. | heavy + bwrap |
-| `examples/build-crate-crc64.ncl` | Build a real crates.io Rust crate with Mantle's bootstrap Rust toolchain. | heavy + real network + bwrap |
-| `examples/hello-static.ncl` | Static C hello with generated seed paths. | generated seed |
-| `examples/hello-world.ncl` | C hello with generated seed paths. | generated seed |
-| `examples/crunch.ncl` | Self-build derivation structure skeleton. Real proof uses `mantle self-build`. | skeleton / non-claim |
-| `examples/seed.ncl` | Generated host seed paths used by seed-dependent examples. | generated support file |
+| File | Command | Expected output shape | Capability |
+|---|---|---|---|
+| `examples/bootstrap-no-nix.ncl` | `mantle build examples/bootstrap-no-nix.ncl --no-substitute` | store path containing `bin/hello` | heavy + bwrap |
+| `examples/build-crate-crc64.ncl` | `mantle build examples/build-crate-crc64.ncl --no-substitute` | store path containing `bin/crc64` | heavy + real network + bwrap |
+| `examples/hello-static.ncl` | `mantle build examples/hello-static.ncl -I examples --no-substitute` | static `hello` binary | generated seed |
+| `examples/hello-world.ncl` | `mantle build examples/hello-world.ncl -I examples --no-substitute` | C hello binary | generated seed |
+| `examples/seed.ncl` | generated by `mantle bootstrap -o examples/seed.ncl` | host-specific seed paths | generated support file |
 
 ## Benchmarks
 

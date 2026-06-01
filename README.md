@@ -292,6 +292,7 @@ Fast local examples:
 
 - [`examples/hello.ncl`](examples/hello.ncl) — smallest derivation
 - [`examples/multi-step.ncl`](examples/multi-step.ncl) — multi-line output using shell builtins only
+- [`examples/local-output-layout.ncl`](examples/local-output-layout.ncl) — named output layout without generated seed material
 - [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
 
 Cookbook and advanced examples:
@@ -301,6 +302,7 @@ Cookbook and advanced examples:
 - [`examples/build-from-source.ncl`](examples/build-from-source.ncl) — build a multi-file C project with `make`
 - [`examples/bootstrap-no-nix.ncl`](examples/bootstrap-no-nix.ncl) — compile C with the shared reduced bootstrap seed provider
 - [`examples/project/crunch.ncl`](examples/project/crunch.ncl) — project-aware `mantle build .#name` layout
+- `mantle --json build examples/hello.ncl` — local build report with artifact attestation sidecar references; not a release or witness proof
 
 ## Benchmark suite
 

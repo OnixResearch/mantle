@@ -31,8 +31,19 @@ const SUPPORT_FILES: &[&str] = &[
     "examples/README.md",
     "examples/benchmark_support.rs",
     "examples/catalog.ncl",
+    PROJECT_README_PATH,
 ];
 const GENERATED_DOC_ONLY_PATHS: &[&str] = &["examples/project/seed.ncl"];
+const PROJECT_README_PATH: &str = "examples/project/README.md";
+const TRUST_SECTION_HEADER: &str = "## Trust/provenance";
+const PROGRESSIVE_LANE_HEADERS: &[&str] = &[
+    "## Beginner",
+    "## Fetcher cookbook",
+    "## Package composition",
+    "## Project workflow",
+    TRUST_SECTION_HEADER,
+    "## Advanced bootstrap",
+];
 const ALLOWED_SUPPORT_TIERS: &[&str] = &[
     "benchmark",
     "fast",
@@ -62,6 +73,7 @@ const ALLOWED_LANES: &[&str] = &[
     "fetchers",
     "generated-support",
     "project-workflow",
+    "trust-provenance",
 ];
 const ALLOWED_RAILS: &[&str] = &[
     "benchmark-harness-test",
@@ -329,6 +341,53 @@ fn validate_examples_readme(
     }
     validate_documented_paths_exist("examples README", examples_readme, user_facing_paths, errors);
     validate_no_stale_crunch_branding("examples README", examples_readme, errors);
+    validate_progressive_lane_order(examples_readme, errors);
+    validate_project_workflow_docs(examples_readme, errors);
+    validate_trust_provenance_non_claims(examples_readme, errors);
+}
+
+fn validate_progressive_lane_order(examples_readme: &str, errors: &mut Vec<String>) {
+    let mut last_index = None;
+    for header in PROGRESSIVE_LANE_HEADERS {
+        let Some(index) = examples_readme.find(header) else {
+            errors.push(format!("examples README missing progressive lane `{header}`"));
+            continue;
+        };
+        if let Some(previous_index) = last_index {
+            if index <= previous_index {
+                errors.push(format!("examples README lane `{header}` is out of progressive order"));
+            }
+        }
+        last_index = Some(index);
+    }
+}
+
+fn validate_project_workflow_docs(examples_readme: &str, errors: &mut Vec<String>) {
+    let section = markdown_section(examples_readme, "## Project workflow");
+    for needle in [
+        "mantle build",
+        ".#hello",
+        ".#goodbye",
+        ".#checks.test-hello",
+        "result` text `ok",
+    ] {
+        if !section.contains(needle) {
+            errors.push(format!("project workflow docs missing `{needle}`"));
+        }
+    }
+}
+
+fn validate_trust_provenance_non_claims(examples_readme: &str, errors: &mut Vec<String>) {
+    let section = markdown_section(examples_readme, TRUST_SECTION_HEADER);
+    for needle in [
+        "artifact_attestation",
+        "not release or witness proofs",
+        "does not prove release",
+    ] {
+        if !section.contains(needle) {
+            errors.push(format!("trust/provenance docs missing non-claim or evidence shape `{needle}`"));
+        }
+    }
 }
 
 fn validate_root_readme(root_readme: &str, user_facing_paths: &BTreeSet<String>, errors: &mut Vec<String>) {
@@ -508,6 +567,65 @@ fn examples_catalog_rejects_fetchers_without_offline_and_negative_rails() {
 }
 
 #[test]
+fn examples_catalog_rejects_readme_lane_order_and_missing_project_outputs() {
+    let catalog = catalog_with_entries(vec![example("hello", "examples/hello.ncl")]);
+    let paths = BTreeSet::from(["examples/hello.ncl".to_string()]);
+    let examples_readme = [
+        EXAMPLES_SECTION_HEADER,
+        "- `examples/hello.ncl`",
+        "## Advanced bootstrap",
+        "## Beginner",
+        "## Fetcher cookbook",
+        "## Package composition",
+        "## Project workflow",
+        "mantle build .#hello",
+        TRUST_SECTION_HEADER,
+        "artifact_attestation; these are not release or witness proofs and do not prove release success",
+    ]
+    .join("\n");
+    let root_readme = readme_for(&["examples/hello.ncl"]);
+
+    let errors = validate_catalog(&catalog, &paths, &examples_readme, &root_readme);
+
+    assert!(errors.iter().any(|error| error.contains("out of progressive order")), "errors: {errors:?}");
+    assert!(
+        errors.iter().any(|error| error.contains("project workflow docs missing `.#goodbye`")),
+        "errors: {errors:?}"
+    );
+    assert!(
+        errors.iter().any(|error| error.contains("project workflow docs missing `result` text `ok`")),
+        "errors: {errors:?}"
+    );
+}
+
+#[test]
+fn examples_catalog_rejects_trust_docs_without_non_claims() {
+    let catalog = catalog_with_entries(vec![example("hello", "examples/hello.ncl")]);
+    let paths = BTreeSet::from(["examples/hello.ncl".to_string()]);
+    let examples_readme = [
+        EXAMPLES_SECTION_HEADER,
+        "- `examples/hello.ncl`",
+        "## Beginner",
+        "## Fetcher cookbook",
+        "## Package composition",
+        "## Project workflow",
+        "mantle build .#hello .#goodbye .#checks.test-hello result` text `ok",
+        TRUST_SECTION_HEADER,
+        "placeholder proof succeeded",
+        "## Advanced bootstrap",
+    ]
+    .join("\n");
+    let root_readme = readme_for(&["examples/hello.ncl"]);
+
+    let errors = validate_catalog(&catalog, &paths, &examples_readme, &root_readme);
+
+    assert!(
+        errors.iter().any(|error| error.contains("trust/provenance docs missing non-claim")),
+        "errors: {errors:?}"
+    );
+}
+
+#[test]
 fn examples_catalog_rejects_readme_omissions_and_stale_paths() {
     let catalog = catalog_with_entries(vec![example("hello", "examples/hello.ncl")]);
     let paths = BTreeSet::from(["examples/hello.ncl".to_string()]);
@@ -542,11 +660,29 @@ fn examples_catalog_rejects_stale_crunch_branding_in_user_docs() {
 fn documented_crunch_ncl_identifier_is_allowed() {
     let catalog = catalog_with_entries(vec![example("project", "examples/project/crunch.ncl")]);
     let paths = BTreeSet::from(["examples/project/crunch.ncl".to_string()]);
-    let docs = readme_for(&["examples/project/crunch.ncl"]);
+    let docs = progressive_readme_for(&["examples/project/crunch.ncl"]);
 
     let errors = validate_catalog(&catalog, &paths, &docs, &docs);
 
     assert!(errors.is_empty(), "crunch.ncl compatibility identifier should be allowed: {errors:?}");
+}
+
+fn progressive_readme_for(paths: &[&str]) -> String {
+    let mut lines = vec![EXAMPLES_SECTION_HEADER.to_string()];
+    for path in paths {
+        lines.push(format!("- `{path}`"));
+    }
+    lines.extend([
+        "## Beginner".to_string(),
+        "## Fetcher cookbook".to_string(),
+        "## Package composition".to_string(),
+        "## Project workflow".to_string(),
+        "mantle build .#hello .#goodbye .#checks.test-hello result` text `ok".to_string(),
+        TRUST_SECTION_HEADER.to_string(),
+        "artifact_attestation entries are not release or witness proofs and does not prove release success".to_string(),
+        "## Advanced bootstrap".to_string(),
+    ]);
+    lines.join("\n")
 }
 
 #[test]
@@ -562,5 +698,6 @@ fn examples_catalog_supports_lane_inventory_for_docs() {
     assert!(lanes.contains_key("fetchers"), "fetcher lane missing: {lanes:?}");
     assert!(lanes.contains_key("composition"), "composition lane missing: {lanes:?}");
     assert!(lanes.contains_key("project-workflow"), "project lane missing: {lanes:?}");
+    assert!(lanes.contains_key("trust-provenance"), "trust/provenance lane missing: {lanes:?}");
     assert!(lanes.contains_key("advanced-bootstrap"), "advanced lane missing: {lanes:?}");
 }

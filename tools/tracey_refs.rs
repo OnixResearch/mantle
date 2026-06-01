@@ -112,6 +112,29 @@
 // and `fix_flag_updates_temp_fetchurl_fixture_hash`, which assert fixed-output
 // mismatch diagnostics, no successful output reporting, empty failed temp stores,
 // and a corrected temp fixture hash.
+//
+// r[impl examples.progressive_gallery]
+// Implemented by the progressive lane order and command/output tables in
+// `examples/README.md`, the local named-output example
+// `examples/local-output-layout.ncl`, and project workflow documentation under
+// `examples/project/README.md`.
+//
+// r[verify examples.progressive_gallery]
+// Verified by `tests/examples_inventory.rs` progressive lane/project-doc checks,
+// `tests/examples_eval.rs` catalog-driven evaluation, `tests/examples_build.rs`
+// local output-layout assertions, and the module-boundary guard in
+// `tests/removed_system_cli.rs`.
+//
+// r[impl examples.trust_provenance_gallery]
+// Implemented by the trust/provenance lane in `examples/README.md`, which gives a
+// runnable JSON build-report recipe and keeps the self-build skeleton documented
+// as a non-claim rather than fake proof evidence.
+//
+// r[verify examples.trust_provenance_gallery]
+// Verified by `tests/examples_build.rs::hello_json_build_report_exposes_artifact_attestation_shape`
+// for deterministic local evidence shape, and by `tests/examples_inventory.rs`
+// negative checks requiring artifact-attestation wording plus release/witness
+// non-claim text.
 
 // Compiled-eval legacy OpenSpec bridge.
 //

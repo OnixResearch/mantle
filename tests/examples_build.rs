@@ -8,6 +8,9 @@ const HELLO_OUTPUT: &str = "Hello, mantle!";
 const MULTI_STEP_MARKER: &str = "name: multi-step";
 const FAIL_MARKER: &str = "this will fail";
 const PROJECT_CHECK_RESULT: &str = "ok";
+const LOCAL_LAYOUT_HEADER: &str = "#define LOCAL_OUTPUT_LAYOUT 1";
+const LOCAL_LAYOUT_DOC: &str = "local output layout docs";
+const BUILD_REPORT_SCHEMA: &str = "crunch-build-report-v1";
 const SHA256_DIGEST_BYTES: usize = 32;
 const WRONG_SHA256_SRI: &str = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 const OFFLINE_FETCH_FILE_CONTENT: &[u8] = b"offline fetchurl fixture\n";
@@ -140,10 +143,21 @@ fn build_example(example: &str) -> BuildRun {
 }
 
 fn build_path(path: &Path) -> BuildRun {
+    build_path_with_json_mode(path, false)
+}
+
+fn build_path_json(path: &Path) -> BuildRun {
+    build_path_with_json_mode(path, true)
+}
+
+fn build_path_with_json_mode(path: &Path, json_mode: bool) -> BuildRun {
     let store = tempfile::tempdir().unwrap();
     let state = tempfile::tempdir().unwrap();
     let mut cmd = mantle_cmd();
     cmd.current_dir(repo_root());
+    if json_mode {
+        cmd.arg("--json");
+    }
     cmd.args([
         "build",
         path.to_str().unwrap(),
@@ -433,6 +447,64 @@ fn multi_step_example_builds_structured_output() {
     assert!(out_path.starts_with(run.store.path()), "output should land in temp store: {}", out_path.display());
     let output = std::fs::read_to_string(&out_path).unwrap();
     assert!(output.contains(MULTI_STEP_MARKER), "unexpected multi-step output: {output}");
+}
+
+#[test]
+fn local_output_layout_example_builds_named_outputs() {
+    if !can_build() {
+        eprintln!("SKIP: example build requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_example("examples/local-output-layout.ncl");
+    assert_success(&run, "local output layout example");
+
+    let outputs = build_stdout_paths(&run);
+    assert_eq!(outputs.len(), 3, "local output layout should print three named outputs: {outputs:?}");
+    assert!(
+        outputs.iter().all(|path| path.starts_with(run.store.path())),
+        "outputs should use temp store: {outputs:?}"
+    );
+    assert!(outputs.iter().any(|path| path.join("bin/show-layout").is_file()), "missing out output: {outputs:?}");
+    assert!(
+        outputs.iter().any(|path| std::fs::read_to_string(path.join("include/local_output_layout.h"))
+            .is_ok_and(|text| text.contains(LOCAL_LAYOUT_HEADER))),
+        "missing dev header output: {outputs:?}"
+    );
+    assert!(
+        outputs.iter().any(|path| {
+            std::fs::read_to_string(path.join("share/doc/local-output-layout/README"))
+                .is_ok_and(|text| text.trim() == LOCAL_LAYOUT_DOC)
+        }),
+        "missing doc output: {outputs:?}"
+    );
+}
+
+#[test]
+fn hello_json_build_report_exposes_artifact_attestation_shape() {
+    if !can_build() {
+        eprintln!("SKIP: JSON build report requires Linux + bwrap + /nix/store");
+        return;
+    }
+
+    let run = build_path_json(&repo_root().join("examples/hello.ncl"));
+    assert_success(&run, "hello JSON build report");
+
+    let stdout = String::from_utf8(run.output.stdout.clone()).unwrap();
+    let report: serde_json::Value = serde_json::from_str(&stdout).expect("hello build report should be JSON");
+    assert_eq!(report["schema"], BUILD_REPORT_SCHEMA);
+    assert_eq!(report["counts"]["succeeded_total"], 1);
+    assert_eq!(report["counts"]["failed_total"], 0);
+    assert_eq!(report["outcomes"][0]["label"], "hello");
+    let attestation = &report["outcomes"][0]["outputs"][0]["artifact_attestation"];
+    let logical_path = attestation["logical_path"].as_str().unwrap();
+    let sidecar_path = attestation["path"].as_str().unwrap();
+    assert!(logical_path.contains("hello"), "logical path should name hello: {logical_path}");
+    assert!(
+        sidecar_path.contains("attestations/artifacts"),
+        "sidecar path should be artifact attestation: {sidecar_path}"
+    );
+    assert!(Path::new(sidecar_path).is_file(), "artifact attestation sidecar should exist: {sidecar_path}");
 }
 
 #[test]
