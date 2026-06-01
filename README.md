@@ -286,14 +286,21 @@ failures.
 
 ## Examples
 
-The repo ships runnable examples under [`examples/`](examples/):
+The repo ships a supported examples gallery under [`examples/`](examples/). The source of truth is [`examples/catalog.ncl`](examples/catalog.ncl), which classifies support tier, prerequisites, network use, and validation rails. Start with [`examples/README.md`](examples/README.md) for the progressive guide.
+
+Fast local examples:
+
+- [`examples/hello.ncl`](examples/hello.ncl) — smallest derivation
+- [`examples/multi-step.ncl`](examples/multi-step.ncl) — multi-line output using shell builtins only
+- [`examples/fail.ncl`](examples/fail.ncl) — intentional failure for diagnostics
+
+Cookbook and advanced examples:
 
 - [`examples/fetch-crate-crc64.ncl`](examples/fetch-crate-crc64.ncl) — fetch a real crates.io source tarball (`crc64` 2.0.0)
-- [`examples/build-crate-crc64.ncl`](examples/build-crate-crc64.ncl) — build that real crate with mantle's bootstrap Rust toolchain and shared reduced seed provider
+- [`examples/build-crate-crc64.ncl`](examples/build-crate-crc64.ncl) — build that real crate with Mantle's bootstrap Rust toolchain and shared reduced seed provider
 - [`examples/build-from-source.ncl`](examples/build-from-source.ncl) — build a multi-file C project with `make`
 - [`examples/bootstrap-no-nix.ncl`](examples/bootstrap-no-nix.ncl) — compile C with the shared reduced bootstrap seed provider
-- [`examples/project/`](examples/project/) — project-aware `mantle build .#name` layout
-- [`examples/README.md`](examples/README.md) — short index of the full example set
+- [`examples/project/crunch.ncl`](examples/project/crunch.ncl) — project-aware `mantle build .#name` layout
 
 ## Benchmark suite
 
