@@ -3,7 +3,7 @@
 ## Baseline and inventory
 
 - [x] [serial] Record a fresh Tracey coverage baseline with total requirements, referenced count, missing count, dangling count, and missing IDs grouped by accepted spec. r[verification_evidence.tracey_coverage_readiness] Evidence: `evidence/baseline-and-first-batch-2026-06-01.md` records baseline command output summary (`202` total, `1` referenced, `201` missing, `0` dangling) and points to `evidence/tracey-coverage-baseline-grouped-2026-06-01.json` for full grouped missing IDs.
-- [x] [serial] Classify each missing requirement group as direct-marker, bridge-marker, scanner-gap, or real implementation debt, with owner and next action. r[verification_evidence.tracey_coverage_readiness] Evidence: `evidence/baseline-and-first-batch-2026-06-01.md` classifies `build_tool_boundary`, `compiled-eval`, `rust_package_planning`, and `verification_evidence.tracey_coverage_readiness` groups with owner and next action.
+- [x] [serial] Classify each missing requirement group as direct-marker, bridge-marker, scanner-gap, or real implementation debt, with owner and next action. r[verification_evidence.tracey_coverage_readiness] Evidence: `evidence/baseline-and-first-batch-2026-06-01.md` classifies `build_tool_boundary`, `compiled-eval`, `rust_package_planning`, and `verification_evidence.tracey_coverage_readiness` groups with owner and next action. `evidence/compiled-eval-origin-oracle-checkpoint-2026-06-01.md` records the oracle decision proving the `compiled-eval` missing IDs originate from `openspec/specs/compiled-eval-backends/spec.md`.
 
 ## Implementation
 
