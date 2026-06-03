@@ -2,30 +2,46 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::errors::RunError;
+use crate::frontend_artifact_export::FRONTEND_ARTIFACT_EXPORT_DIAG_DIGEST_MISMATCH;
+use crate::frontend_artifact_export::FRONTEND_ARTIFACT_EXPORT_DIAG_UNSUPPORTED_REF_SCHEME;
 use crate::frontend_artifact_export::FRONTEND_ARTIFACT_EXPORT_MODE_ARCHIVE;
 use crate::frontend_artifact_export::FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY;
 use crate::frontend_artifact_export::FRONTEND_ARTIFACT_EXPORT_MODE_STREAM;
 use crate::frontend_artifact_export::FrontendArtifactExportContent;
 use crate::frontend_artifact_export::FrontendArtifactExportDiagnostic;
 use crate::frontend_artifact_export::FrontendArtifactExportExpectation;
+use crate::frontend_artifact_export::FrontendArtifactExportPreflightRequest;
+use crate::frontend_artifact_export::FrontendArtifactExportReceipt;
 use crate::frontend_artifact_export::FrontendArtifactExportReport;
 use crate::frontend_artifact_export::FrontendArtifactExportRequest;
 use crate::frontend_artifact_export::export_frontend_artifact;
 use crate::frontend_artifact_export::render_frontend_artifact_export_receipt;
+use crate::frontend_artifact_export::validate_frontend_artifact_export_preflight;
 use crate::frontend_artifact_spec::FrontendArtifactAdmissionAttestation;
+use crate::frontend_artifact_store::FrontendArtifactStoreImportReport;
+use crate::frontend_artifact_store::artifact_digest_from_ref;
+use crate::frontend_artifact_store::import_frontend_artifact;
+use crate::frontend_artifact_store::materialize_frontend_artifact;
 
 const PROVENANCE_PAIR_SEPARATOR: char = '=';
 const EXPORT_FAILURE_EXIT_CODE: u8 = 1;
 
-pub fn cmd_artifact(action: crate::ArtifactAction, current_dir: &Path, json: bool) -> Result<(), RunError> {
+pub fn cmd_artifact(
+    action: crate::ArtifactAction,
+    current_dir: &Path,
+    state_dir: &Path,
+    json: bool,
+) -> Result<(), RunError> {
     match action {
         crate::ArtifactAction::Export {
             artifact_ref,
             attestation,
             materialized_path,
+            out,
             artifact_digest,
             spec_id,
             spec_version,
@@ -35,10 +51,12 @@ pub fn cmd_artifact(action: crate::ArtifactAction, current_dir: &Path, json: boo
             receipt_out,
         } => cmd_artifact_export(ArtifactExportShellRequest {
             current_dir,
+            state_dir,
             json,
             artifact_ref: &artifact_ref,
             attestation_path: &attestation,
-            materialized_path: &materialized_path,
+            materialized_path: materialized_path.as_deref(),
+            out_path: out.as_deref(),
             artifact_digest: &artifact_digest,
             spec_id: spec_id.as_deref(),
             spec_version: spec_version.as_deref(),
@@ -47,15 +65,24 @@ pub fn cmd_artifact(action: crate::ArtifactAction, current_dir: &Path, json: boo
             content_provenance: &content_provenance,
             receipt_out: receipt_out.as_deref(),
         }),
+        crate::ArtifactAction::Import { path, report_out } => cmd_artifact_import(ArtifactImportShellRequest {
+            current_dir,
+            state_dir,
+            json,
+            source_path: &path,
+            report_out: report_out.as_deref(),
+        }),
     }
 }
 
 struct ArtifactExportShellRequest<'a> {
     current_dir: &'a Path,
+    state_dir: &'a Path,
     json: bool,
     artifact_ref: &'a str,
     attestation_path: &'a Path,
-    materialized_path: &'a Path,
+    materialized_path: Option<&'a Path>,
+    out_path: Option<&'a Path>,
     artifact_digest: &'a str,
     spec_id: Option<&'a str>,
     spec_version: Option<&'a str>,
@@ -65,14 +92,19 @@ struct ArtifactExportShellRequest<'a> {
     receipt_out: Option<&'a Path>,
 }
 
+struct ArtifactImportShellRequest<'a> {
+    current_dir: &'a Path,
+    state_dir: &'a Path,
+    json: bool,
+    source_path: &'a Path,
+    report_out: Option<&'a Path>,
+}
+
 fn cmd_artifact_export(request: ArtifactExportShellRequest<'_>) -> Result<(), RunError> {
     let attestation_path = resolve_cli_path(request.current_dir, request.attestation_path);
-    let materialized_path = resolve_cli_path(request.current_dir, request.materialized_path);
     let receipt_out = request.receipt_out.map(|path| resolve_cli_path(request.current_dir, path));
     let attestation = load_frontend_artifact_attestation(&attestation_path)?;
     let provenance = parse_content_provenance(request.content_provenance)?;
-    let content =
-        export_content_if_available(request.artifact_ref, request.artifact_digest, &materialized_path, provenance);
     let expectation = FrontendArtifactExportExpectation {
         artifact_ref: request.artifact_ref,
         artifact_digest: Some(request.artifact_digest),
@@ -80,17 +112,90 @@ fn cmd_artifact_export(request: ArtifactExportShellRequest<'_>) -> Result<(), Ru
         spec_version: request.spec_version,
         spec_hash: request.spec_hash,
     };
-    let content_ref = content.as_ref();
-    let export_request = FrontendArtifactExportRequest {
+    let preflight = FrontendArtifactExportPreflightRequest {
         expectation,
         attestation: Some(&attestation),
-        content: content_ref,
         destination_mode: request.destination_mode,
         supported_destination_modes: supported_destination_modes(),
         no_hidden_fallback: true,
     };
+    let preflight_diagnostics = validate_frontend_artifact_export_preflight(&preflight);
+    if !preflight_diagnostics.is_empty() {
+        return emit_export_report(&failed_report(preflight_diagnostics), receipt_out.as_deref(), request.json);
+    }
+    if let Some(diagnostics) = storage_ref_diagnostics(&request) {
+        return emit_export_report(&failed_report(diagnostics), receipt_out.as_deref(), request.json);
+    }
+    let content = resolve_export_content(&request, provenance)?;
+    let content_ref = content.as_ref();
+    let export_request = FrontendArtifactExportRequest {
+        preflight,
+        content: content_ref,
+    };
     let report = export_frontend_artifact(&export_request);
     emit_export_report(&report, receipt_out.as_deref(), request.json)
+}
+
+fn cmd_artifact_import(request: ArtifactImportShellRequest<'_>) -> Result<(), RunError> {
+    let source_path = resolve_cli_path(request.current_dir, request.source_path);
+    let report_out = request.report_out.map(|path| resolve_cli_path(request.current_dir, path));
+    let report = import_frontend_artifact(&source_path, request.state_dir)
+        .map_err(|err| RunError::Internal(format!("importing frontend artifact: {err}")))?;
+    if let Some(path) = report_out.as_deref() {
+        write_json_output(path, &report)?;
+    }
+    emit_import_report(&report, report_out.as_deref(), request.json)
+}
+
+fn resolve_export_content(
+    request: &ArtifactExportShellRequest<'_>,
+    provenance: BTreeMap<String, String>,
+) -> Result<Option<FrontendArtifactExportContent>, RunError> {
+    if let Some(materialized_path) = request.materialized_path {
+        let materialized_path = resolve_cli_path(request.current_dir, materialized_path);
+        return Ok(export_content_if_available(
+            request.artifact_ref,
+            request.artifact_digest,
+            &materialized_path,
+            provenance,
+        ));
+    }
+    let Some(out_path) = request.out_path else {
+        return Err(RunError::Internal(
+            "artifact export requires --materialized-path or storage-backed --out".to_string(),
+        ));
+    };
+    let out_path = resolve_cli_path(request.current_dir, out_path);
+    let stored = materialize_frontend_artifact(request.state_dir, request.artifact_ref, &out_path)
+        .map_err(|err| RunError::Internal(format!("materializing frontend artifact: {err}")))?;
+    Ok(stored.map(|stored| FrontendArtifactExportContent {
+        artifact_ref: stored.artifact_ref,
+        artifact_digest: stored.artifact_digest,
+        materialized_path: stored.content_path.display().to_string(),
+        provenance,
+    }))
+}
+
+fn storage_ref_diagnostics(request: &ArtifactExportShellRequest<'_>) -> Option<Vec<FrontendArtifactExportDiagnostic>> {
+    if request.materialized_path.is_some() {
+        return None;
+    }
+    let Some(actual_digest) = artifact_digest_from_ref(request.artifact_ref) else {
+        return Some(vec![FrontendArtifactExportDiagnostic {
+            code: FRONTEND_ARTIFACT_EXPORT_DIAG_UNSUPPORTED_REF_SCHEME.to_string(),
+            path: "expectation.artifact_ref".to_string(),
+            message: "storage-backed frontend artifact export requires a mantle://blake3/<lowercase-hex> artifact ref"
+                .to_string(),
+        }]);
+    };
+    if actual_digest == request.artifact_digest {
+        return None;
+    }
+    Some(vec![FrontendArtifactExportDiagnostic {
+        code: FRONTEND_ARTIFACT_EXPORT_DIAG_DIGEST_MISMATCH.to_string(),
+        path: "expectation.artifact_digest".to_string(),
+        message: "requested artifact digest does not match the storage-backed artifact ref".to_string(),
+    }])
 }
 
 fn supported_destination_modes() -> &'static [&'static str] {
@@ -156,16 +261,50 @@ fn emit_failed_export_report(report: &FrontendArtifactExportReport, json: bool) 
     Err(RunError::Build(format_export_diagnostics(&report.diagnostics)))
 }
 
-fn write_receipt(
-    path: &Path,
-    receipt: &crate::frontend_artifact_export::FrontendArtifactExportReceipt,
+fn emit_import_report(
+    report: &FrontendArtifactStoreImportReport,
+    report_out: Option<&Path>,
+    json: bool,
 ) -> Result<(), RunError> {
+    if json {
+        let rendered = serde_json::to_string_pretty(report)
+            .map_err(|err| RunError::Internal(format!("serializing artifact import report: {err}")))?;
+        println!("{rendered}");
+        return Ok(());
+    }
+    println!("imported {}", report.artifact_ref);
+    println!("artifact_digest: {}", report.artifact_digest);
+    if let Some(path) = report_out {
+        println!("report: {}", path.display());
+    }
+    Ok(())
+}
+
+fn failed_report(diagnostics: Vec<FrontendArtifactExportDiagnostic>) -> FrontendArtifactExportReport {
+    FrontendArtifactExportReport {
+        exported: false,
+        receipt: None,
+        diagnostics,
+    }
+}
+
+fn write_receipt(path: &Path, receipt: &FrontendArtifactExportReceipt) -> Result<(), RunError> {
+    let rendered = render_frontend_artifact_export_receipt(receipt)
+        .map_err(|err| RunError::Internal(format!("serializing {}: {err}", path.display())))?;
+    write_text_output(path, &rendered)
+}
+
+fn write_json_output(path: &Path, value: &impl Serialize) -> Result<(), RunError> {
+    let rendered = serde_json::to_string_pretty(value)
+        .map_err(|err| RunError::Internal(format!("serializing {}: {err}", path.display())))?;
+    write_text_output(path, &rendered)
+}
+
+fn write_text_output(path: &Path, rendered: &str) -> Result<(), RunError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
     }
-    let rendered = render_frontend_artifact_export_receipt(receipt)
-        .map_err(|err| RunError::Internal(format!("serializing {}: {err}", path.display())))?;
     std::fs::write(path, rendered).map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
 }
 
@@ -230,7 +369,9 @@ mod tests {
     const SAMPLE_ARTIFACT_KIND: &str = "mantle-onix-activation-closure";
     const SAMPLE_ARTIFACT_REF: &str = "mantle://blake3/artifact";
     const SAMPLE_BUILD_ROOT: &str = "drv:demo";
+    const SAMPLE_REJECTED_VALIDATION_RESULT: &str = "rejected";
     const SAMPLE_PROVENANCE_ENTRY: &str = "build_report=report-b3";
+    const STORED_ARTIFACT_CONTENT: &[u8] = b"stored frontend artifact";
 
     fn sample_digest(seed: &[u8]) -> String {
         format!("{}{}", FRONTEND_ARTIFACT_EXPORT_DIGEST_PREFIX_BLAKE3, blake3::hash(seed).to_hex())
@@ -240,7 +381,7 @@ mod tests {
         blake3::hash(b"sample spec").to_hex().to_string()
     }
 
-    fn sample_attestation(artifact_digest: &str) -> FrontendArtifactAdmissionAttestation {
+    fn sample_attestation(artifact_ref: &str, artifact_digest: &str) -> FrontendArtifactAdmissionAttestation {
         FrontendArtifactAdmissionAttestation {
             spec_id: SAMPLE_SPEC_ID.to_string(),
             spec_version: SAMPLE_SPEC_VERSION.to_string(),
@@ -249,13 +390,29 @@ mod tests {
             validator_kind: FRONTEND_ARTIFACT_VALIDATOR_KIND_ALLOWLIST_V1.to_string(),
             validator_ref: SAMPLE_VALIDATOR_REF.to_string(),
             artifact_kind: SAMPLE_ARTIFACT_KIND.to_string(),
-            artifact_ref: SAMPLE_ARTIFACT_REF.to_string(),
+            artifact_ref: artifact_ref.to_string(),
             artifact_digest: Some(artifact_digest.to_string()),
             target_identity: None,
             build_root: SAMPLE_BUILD_ROOT.to_string(),
             validation_result: FRONTEND_ARTIFACT_VALIDATION_RESULT_ADMITTED.to_string(),
             no_hidden_fallback: true,
         }
+    }
+
+    fn sample_legacy_attestation(artifact_digest: &str) -> FrontendArtifactAdmissionAttestation {
+        sample_attestation(SAMPLE_ARTIFACT_REF, artifact_digest)
+    }
+
+    fn hidden_fallback_attestation(artifact_ref: &str, artifact_digest: &str) -> FrontendArtifactAdmissionAttestation {
+        let mut attestation = sample_attestation(artifact_ref, artifact_digest);
+        attestation.no_hidden_fallback = false;
+        attestation
+    }
+
+    fn rejected_attestation(artifact_ref: &str, artifact_digest: &str) -> FrontendArtifactAdmissionAttestation {
+        let mut attestation = sample_attestation(artifact_ref, artifact_digest);
+        attestation.validation_result = SAMPLE_REJECTED_VALIDATION_RESULT.to_string();
+        attestation
     }
 
     fn write_json(path: &Path, value: &impl serde::Serialize) {
@@ -266,23 +423,70 @@ mod tests {
         std::fs::write(path, text).expect("write JSON");
     }
 
+    fn legacy_export_action(
+        attestation_path: PathBuf,
+        materialized_path: PathBuf,
+        receipt_path: Option<PathBuf>,
+        artifact_digest: String,
+    ) -> crate::ArtifactAction {
+        crate::ArtifactAction::Export {
+            artifact_ref: SAMPLE_ARTIFACT_REF.to_string(),
+            attestation: attestation_path,
+            materialized_path: Some(materialized_path),
+            out: None,
+            artifact_digest,
+            spec_id: Some(SAMPLE_SPEC_ID.to_string()),
+            spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
+            spec_hash: Some(sample_spec_hash()),
+            destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY.to_string(),
+            content_provenance: vec![SAMPLE_PROVENANCE_ENTRY.to_string()],
+            receipt_out: receipt_path,
+        }
+    }
+
     #[test]
-    fn artifact_export_cli_writes_receipt_for_admitted_artifact() {
+    fn artifact_import_cli_writes_store_report() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let artifact_digest = sample_digest(b"artifact");
-        let attestation = sample_attestation(&artifact_digest);
+        let source = temp.path().join("artifact.txt");
+        let report_path = temp.path().join("report.json");
+        std::fs::write(&source, STORED_ARTIFACT_CONTENT).expect("write source");
+
+        cmd_artifact(
+            crate::ArtifactAction::Import {
+                path: source,
+                report_out: Some(report_path.clone()),
+            },
+            temp.path(),
+            temp.path(),
+            false,
+        )
+        .expect("artifact import succeeds");
+
+        let report: FrontendArtifactStoreImportReport =
+            serde_json::from_slice(&std::fs::read(&report_path).expect("read report")).expect("parse report");
+        assert!(report.artifact_ref.starts_with("mantle://blake3/"));
+        assert!(report.artifact_digest.starts_with(FRONTEND_ARTIFACT_EXPORT_DIGEST_PREFIX_BLAKE3));
+    }
+
+    #[test]
+    fn artifact_export_cli_materializes_from_artifact_store() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("artifact.txt");
         let attestation_path = temp.path().join("attestation.json");
-        let materialized_path = temp.path().join("artifact-dir");
+        let exported_path = temp.path().join("exported.txt");
         let receipt_path = temp.path().join("receipt.json");
-        std::fs::create_dir_all(&materialized_path).expect("materialized artifact dir");
+        std::fs::write(&source, STORED_ARTIFACT_CONTENT).expect("write source");
+        let import_report = import_frontend_artifact(&source, temp.path()).expect("import artifact");
+        let attestation = sample_attestation(&import_report.artifact_ref, &import_report.artifact_digest);
         write_json(&attestation_path, &attestation);
 
         cmd_artifact(
             crate::ArtifactAction::Export {
-                artifact_ref: SAMPLE_ARTIFACT_REF.to_string(),
+                artifact_ref: import_report.artifact_ref.clone(),
                 attestation: attestation_path,
-                materialized_path,
-                artifact_digest: artifact_digest.clone(),
+                materialized_path: None,
+                out: Some(exported_path.clone()),
+                artifact_digest: import_report.artifact_digest.clone(),
                 spec_id: Some(SAMPLE_SPEC_ID.to_string()),
                 spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
                 spec_hash: Some(sample_spec_hash()),
@@ -291,11 +495,189 @@ mod tests {
                 receipt_out: Some(receipt_path.clone()),
             },
             temp.path(),
+            temp.path(),
             false,
         )
         .expect("artifact export succeeds");
 
-        let receipt: crate::frontend_artifact_export::FrontendArtifactExportReceipt =
+        assert_eq!(std::fs::read(&exported_path).expect("read exported"), STORED_ARTIFACT_CONTENT);
+        let receipt: FrontendArtifactExportReceipt =
+            serde_json::from_slice(&std::fs::read(&receipt_path).expect("read receipt")).expect("parse receipt");
+        assert_eq!(receipt.schema, FRONTEND_ARTIFACT_EXPORT_RECEIPT_SCHEMA);
+        assert_eq!(receipt.artifact_ref, import_report.artifact_ref);
+        assert_eq!(receipt.artifact_digest, import_report.artifact_digest);
+        assert_eq!(receipt.materialized_path, exported_path.display().to_string());
+        assert_eq!(receipt.content_provenance["build_report"], "report-b3");
+    }
+
+    #[test]
+    fn artifact_export_cli_rejects_hidden_fallback_before_materialization() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("artifact.txt");
+        let attestation_path = temp.path().join("attestation.json");
+        let exported_path = temp.path().join("exported.txt");
+        std::fs::write(&source, STORED_ARTIFACT_CONTENT).expect("write source");
+        let import_report = import_frontend_artifact(&source, temp.path()).expect("import artifact");
+        let attestation = hidden_fallback_attestation(&import_report.artifact_ref, &import_report.artifact_digest);
+        write_json(&attestation_path, &attestation);
+
+        let err = cmd_artifact(
+            crate::ArtifactAction::Export {
+                artifact_ref: import_report.artifact_ref,
+                attestation: attestation_path,
+                materialized_path: None,
+                out: Some(exported_path.clone()),
+                artifact_digest: import_report.artifact_digest,
+                spec_id: Some(SAMPLE_SPEC_ID.to_string()),
+                spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
+                spec_hash: Some(sample_spec_hash()),
+                destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY.to_string(),
+                content_provenance: Vec::new(),
+                receipt_out: None,
+            },
+            temp.path(),
+            temp.path(),
+            false,
+        )
+        .expect_err("hidden fallback rejected");
+
+        assert!(err.to_string().contains("frontend-artifact-export-hidden-fallback"));
+        assert!(!exported_path.exists());
+    }
+
+    #[test]
+    fn artifact_export_cli_rejects_missing_admission_before_materialization() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("artifact.txt");
+        let attestation_path = temp.path().join("attestation.json");
+        let exported_path = temp.path().join("exported.txt");
+        std::fs::write(&source, STORED_ARTIFACT_CONTENT).expect("write source");
+        let import_report = import_frontend_artifact(&source, temp.path()).expect("import artifact");
+        let attestation = rejected_attestation(&import_report.artifact_ref, &import_report.artifact_digest);
+        write_json(&attestation_path, &attestation);
+
+        let err = cmd_artifact(
+            crate::ArtifactAction::Export {
+                artifact_ref: import_report.artifact_ref,
+                attestation: attestation_path,
+                materialized_path: None,
+                out: Some(exported_path.clone()),
+                artifact_digest: import_report.artifact_digest,
+                spec_id: Some(SAMPLE_SPEC_ID.to_string()),
+                spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
+                spec_hash: Some(sample_spec_hash()),
+                destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY.to_string(),
+                content_provenance: Vec::new(),
+                receipt_out: None,
+            },
+            temp.path(),
+            temp.path(),
+            false,
+        )
+        .expect_err("missing admission rejected");
+
+        assert!(err.to_string().contains("frontend-artifact-export-missing-admission-proof"));
+        assert!(!exported_path.exists());
+    }
+
+    #[test]
+    fn artifact_export_cli_rejects_wrong_ref_before_materialization() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("artifact.txt");
+        let attestation_path = temp.path().join("attestation.json");
+        let exported_path = temp.path().join("exported.txt");
+        std::fs::write(&source, STORED_ARTIFACT_CONTENT).expect("write source");
+        let import_report = import_frontend_artifact(&source, temp.path()).expect("import artifact");
+        let other_digest_hex = blake3::hash(b"other ref").to_hex().to_string();
+        let other_ref = format!("mantle://blake3/{other_digest_hex}");
+        let attestation = sample_attestation(&other_ref, &import_report.artifact_digest);
+        write_json(&attestation_path, &attestation);
+
+        let err = cmd_artifact(
+            crate::ArtifactAction::Export {
+                artifact_ref: import_report.artifact_ref,
+                attestation: attestation_path,
+                materialized_path: None,
+                out: Some(exported_path.clone()),
+                artifact_digest: import_report.artifact_digest,
+                spec_id: Some(SAMPLE_SPEC_ID.to_string()),
+                spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
+                spec_hash: Some(sample_spec_hash()),
+                destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY.to_string(),
+                content_provenance: Vec::new(),
+                receipt_out: None,
+            },
+            temp.path(),
+            temp.path(),
+            false,
+        )
+        .expect_err("wrong ref rejected");
+
+        assert!(err.to_string().contains("frontend-artifact-export-proof-mismatch"));
+        assert!(!exported_path.exists());
+    }
+
+    #[test]
+    fn artifact_export_cli_rejects_digest_mismatch_before_materialization() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("artifact.txt");
+        let attestation_path = temp.path().join("attestation.json");
+        let exported_path = temp.path().join("exported.txt");
+        std::fs::write(&source, STORED_ARTIFACT_CONTENT).expect("write source");
+        let import_report = import_frontend_artifact(&source, temp.path()).expect("import artifact");
+        let wrong_digest = sample_digest(b"wrong digest");
+        let attestation = sample_attestation(&import_report.artifact_ref, &wrong_digest);
+        write_json(&attestation_path, &attestation);
+
+        let err = cmd_artifact(
+            crate::ArtifactAction::Export {
+                artifact_ref: import_report.artifact_ref,
+                attestation: attestation_path,
+                materialized_path: None,
+                out: Some(exported_path.clone()),
+                artifact_digest: wrong_digest,
+                spec_id: Some(SAMPLE_SPEC_ID.to_string()),
+                spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
+                spec_hash: Some(sample_spec_hash()),
+                destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY.to_string(),
+                content_provenance: Vec::new(),
+                receipt_out: None,
+            },
+            temp.path(),
+            temp.path(),
+            false,
+        )
+        .expect_err("digest mismatch rejected");
+
+        assert!(err.to_string().contains("frontend-artifact-export-digest-mismatch"));
+        assert!(!exported_path.exists());
+    }
+
+    #[test]
+    fn artifact_export_cli_writes_receipt_for_admitted_artifact() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let artifact_digest = sample_digest(b"artifact");
+        let attestation = sample_legacy_attestation(&artifact_digest);
+        let attestation_path = temp.path().join("attestation.json");
+        let materialized_path = temp.path().join("artifact-dir");
+        let receipt_path = temp.path().join("receipt.json");
+        std::fs::create_dir_all(&materialized_path).expect("materialized artifact dir");
+        write_json(&attestation_path, &attestation);
+
+        cmd_artifact(
+            legacy_export_action(
+                attestation_path,
+                materialized_path,
+                Some(receipt_path.clone()),
+                artifact_digest.clone(),
+            ),
+            temp.path(),
+            temp.path(),
+            false,
+        )
+        .expect("artifact export succeeds");
+
+        let receipt: FrontendArtifactExportReceipt =
             serde_json::from_slice(&std::fs::read(&receipt_path).expect("read receipt")).expect("parse receipt");
         assert_eq!(receipt.schema, FRONTEND_ARTIFACT_EXPORT_RECEIPT_SCHEMA);
         assert_eq!(receipt.artifact_ref, SAMPLE_ARTIFACT_REF);
@@ -308,7 +690,7 @@ mod tests {
     fn artifact_export_cli_accepts_admission_sidecar() {
         let temp = tempfile::tempdir().expect("tempdir");
         let artifact_digest = sample_digest(b"artifact");
-        let attestation = sample_attestation(&artifact_digest);
+        let attestation = sample_legacy_attestation(&artifact_digest);
         let sidecar = serde_json::json!({
             "schema": "mantle-frontend-artifact-admission-v1",
             "attestation": attestation,
@@ -320,18 +702,8 @@ mod tests {
         write_json(&attestation_path, &sidecar);
 
         cmd_artifact(
-            crate::ArtifactAction::Export {
-                artifact_ref: SAMPLE_ARTIFACT_REF.to_string(),
-                attestation: attestation_path,
-                materialized_path,
-                artifact_digest,
-                spec_id: Some(SAMPLE_SPEC_ID.to_string()),
-                spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
-                spec_hash: Some(sample_spec_hash()),
-                destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY.to_string(),
-                content_provenance: Vec::new(),
-                receipt_out: Some(receipt_path.clone()),
-            },
+            legacy_export_action(attestation_path, materialized_path, Some(receipt_path.clone()), artifact_digest),
+            temp.path(),
             temp.path(),
             false,
         )
@@ -344,29 +716,18 @@ mod tests {
     fn artifact_export_cli_rejects_non_mantle_refs() {
         let temp = tempfile::tempdir().expect("tempdir");
         let artifact_digest = sample_digest(b"artifact");
-        let attestation = sample_attestation(&artifact_digest);
+        let attestation = sample_legacy_attestation(&artifact_digest);
         let attestation_path = temp.path().join("attestation.json");
         let materialized_path = temp.path().join("artifact-dir");
         std::fs::create_dir_all(&materialized_path).expect("materialized artifact dir");
         write_json(&attestation_path, &attestation);
 
-        let err = cmd_artifact(
-            crate::ArtifactAction::Export {
-                artifact_ref: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo".to_string(),
-                attestation: attestation_path,
-                materialized_path,
-                artifact_digest,
-                spec_id: Some(SAMPLE_SPEC_ID.to_string()),
-                spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
-                spec_hash: Some(sample_spec_hash()),
-                destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY.to_string(),
-                content_provenance: Vec::new(),
-                receipt_out: None,
-            },
-            temp.path(),
-            false,
-        )
-        .expect_err("non-mantle ref rejected");
+        let mut action = legacy_export_action(attestation_path, materialized_path, None, artifact_digest);
+        let crate::ArtifactAction::Export { artifact_ref, .. } = &mut action else {
+            unreachable!("legacy action is export")
+        };
+        *artifact_ref = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo".to_string();
+        let err = cmd_artifact(action, temp.path(), temp.path(), false).expect_err("non-mantle ref rejected");
 
         assert!(err.to_string().contains("frontend-artifact-export-unsupported-ref-scheme"));
     }
@@ -375,16 +736,39 @@ mod tests {
     fn artifact_export_cli_rejects_missing_materialized_content() {
         let temp = tempfile::tempdir().expect("tempdir");
         let artifact_digest = sample_digest(b"artifact");
-        let attestation = sample_attestation(&artifact_digest);
+        let attestation = sample_legacy_attestation(&artifact_digest);
         let attestation_path = temp.path().join("attestation.json");
         let missing_path = temp.path().join("missing-artifact-dir");
         write_json(&attestation_path, &attestation);
 
         let err = cmd_artifact(
+            legacy_export_action(attestation_path, missing_path, None, artifact_digest),
+            temp.path(),
+            temp.path(),
+            false,
+        )
+        .expect_err("missing content rejected");
+
+        assert!(err.to_string().contains("frontend-artifact-export-content-unavailable"));
+    }
+
+    #[test]
+    fn artifact_export_cli_rejects_missing_stored_content() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let missing_digest_hex = blake3::hash(b"missing stored content").to_hex().to_string();
+        let artifact_ref = format!("mantle://blake3/{missing_digest_hex}");
+        let artifact_digest = format!("{FRONTEND_ARTIFACT_EXPORT_DIGEST_PREFIX_BLAKE3}{missing_digest_hex}");
+        let attestation = sample_attestation(&artifact_ref, &artifact_digest);
+        let attestation_path = temp.path().join("attestation.json");
+        let exported_path = temp.path().join("exported");
+        write_json(&attestation_path, &attestation);
+
+        let err = cmd_artifact(
             crate::ArtifactAction::Export {
-                artifact_ref: SAMPLE_ARTIFACT_REF.to_string(),
+                artifact_ref,
                 attestation: attestation_path,
-                materialized_path: missing_path,
+                materialized_path: None,
+                out: Some(exported_path),
                 artifact_digest,
                 spec_id: Some(SAMPLE_SPEC_ID.to_string()),
                 spec_version: Some(SAMPLE_SPEC_VERSION.to_string()),
@@ -394,9 +778,10 @@ mod tests {
                 receipt_out: None,
             },
             temp.path(),
+            temp.path(),
             false,
         )
-        .expect_err("missing content rejected");
+        .expect_err("missing stored content rejected");
 
         assert!(err.to_string().contains("frontend-artifact-export-content-unavailable"));
     }

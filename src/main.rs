@@ -16,6 +16,7 @@ mod errors;
 mod fix;
 mod frontend_artifact_export;
 mod frontend_artifact_spec;
+mod frontend_artifact_store;
 mod log_cmd;
 mod operator_diagnostics;
 mod project_build;
@@ -921,9 +922,13 @@ pub enum ArtifactAction {
         #[arg(long)]
         attestation: PathBuf,
 
-        /// Already-materialized artifact path exported by a Mantle storage adapter
+        /// Already-materialized artifact path; skips storage lookup when provided
         #[arg(long = "materialized-path")]
-        materialized_path: PathBuf,
+        materialized_path: Option<PathBuf>,
+
+        /// Storage-backed export destination path when --materialized-path is not provided
+        #[arg(long = "out")]
+        out: Option<PathBuf>,
 
         /// Expected artifact digest, formatted as blake3:<lowercase-hex>
         #[arg(long = "artifact-digest")]
@@ -952,6 +957,16 @@ pub enum ArtifactAction {
         /// Write the export receipt JSON to this path
         #[arg(long = "receipt-out")]
         receipt_out: Option<PathBuf>,
+    },
+
+    /// Import local content into Mantle's frontend artifact store
+    Import {
+        /// File, symlink, or directory to import
+        path: PathBuf,
+
+        /// Write the import report JSON to this path
+        #[arg(long = "report-out")]
+        report_out: Option<PathBuf>,
     },
 }
 
@@ -1297,7 +1312,9 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Store { action } => {
             store_cmd::cmd_store(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix)
         }
-        Command::Artifact { action } => artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, ctx.json),
+        Command::Artifact { action } => {
+            artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)
+        }
         Command::Attest { action } => run_attest_command(ctx, action.clone()),
         Command::Init
         | Command::Check

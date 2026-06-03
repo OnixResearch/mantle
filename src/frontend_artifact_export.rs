@@ -50,13 +50,18 @@ pub struct FrontendArtifactExportContent {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FrontendArtifactExportRequest<'a> {
+pub struct FrontendArtifactExportPreflightRequest<'a> {
     pub expectation: FrontendArtifactExportExpectation<'a>,
     pub attestation: Option<&'a FrontendArtifactAdmissionAttestation>,
-    pub content: Option<&'a FrontendArtifactExportContent>,
     pub destination_mode: &'a str,
     pub supported_destination_modes: &'a [&'a str],
     pub no_hidden_fallback: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FrontendArtifactExportRequest<'a> {
+    pub preflight: FrontendArtifactExportPreflightRequest<'a>,
+    pub content: Option<&'a FrontendArtifactExportContent>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,7 +118,9 @@ pub struct FrontendArtifactExportReport {
     pub diagnostics: Vec<FrontendArtifactExportDiagnostic>,
 }
 
-pub fn export_frontend_artifact(request: &FrontendArtifactExportRequest<'_>) -> FrontendArtifactExportReport {
+pub fn validate_frontend_artifact_export_preflight(
+    request: &FrontendArtifactExportPreflightRequest<'_>,
+) -> Vec<FrontendArtifactExportDiagnostic> {
     let mut diagnostics = Vec::new();
     validate_request_shape(request, &mut diagnostics);
     validate_expected_spec_digest(request.expectation.spec_hash, "expectation.spec_hash", &mut diagnostics);
@@ -123,10 +130,15 @@ pub fn export_frontend_artifact(request: &FrontendArtifactExportRequest<'_>) -> 
         &mut diagnostics,
     );
     validate_attestation(request, &mut diagnostics);
+    diagnostics
+}
+
+pub fn export_frontend_artifact(request: &FrontendArtifactExportRequest<'_>) -> FrontendArtifactExportReport {
+    let mut diagnostics = validate_frontend_artifact_export_preflight(&request.preflight);
     validate_content(request, &mut diagnostics);
 
     if diagnostics.is_empty() {
-        if let (Some(attestation), Some(content)) = (request.attestation, request.content) {
+        if let (Some(attestation), Some(content)) = (request.preflight.attestation, request.content) {
             return report(Some(receipt_from_validated(request, attestation, content)), diagnostics);
         }
     }
@@ -141,7 +153,7 @@ pub fn render_frontend_artifact_export_receipt(
 }
 
 fn validate_request_shape(
-    request: &FrontendArtifactExportRequest<'_>,
+    request: &FrontendArtifactExportPreflightRequest<'_>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
     require_non_empty(request.expectation.artifact_ref, "expectation.artifact_ref", diagnostics);
@@ -170,7 +182,7 @@ fn validate_request_shape(
 }
 
 fn validate_attestation(
-    request: &FrontendArtifactExportRequest<'_>,
+    request: &FrontendArtifactExportPreflightRequest<'_>,
     diagnostics: &mut Vec<FrontendArtifactExportDiagnostic>,
 ) {
     let Some(attestation) = request.attestation else {
@@ -261,19 +273,19 @@ fn validate_content(
     validate_required_artifact_digest(&content.artifact_digest, "content.artifact_digest", diagnostics);
     require_equal(
         &content.artifact_ref,
-        request.expectation.artifact_ref,
+        request.preflight.expectation.artifact_ref,
         "content.artifact_ref",
         "exported content artifact ref does not match requested artifact ref",
         diagnostics,
     );
     require_optional_digest_equal(
-        request.expectation.artifact_digest,
+        request.preflight.expectation.artifact_digest,
         &content.artifact_digest,
         "content.artifact_digest",
         "exported content digest does not match requested artifact digest",
         diagnostics,
     );
-    if let Some(attestation) = request.attestation {
+    if let Some(attestation) = request.preflight.attestation {
         require_optional_digest_equal(
             attestation.artifact_digest.as_deref(),
             &content.artifact_digest,
@@ -291,10 +303,10 @@ fn receipt_from_validated(
 ) -> FrontendArtifactExportReceipt {
     let material = FrontendArtifactExportReceiptMaterial {
         schema: FRONTEND_ARTIFACT_EXPORT_RECEIPT_SCHEMA.to_string(),
-        artifact_ref: request.expectation.artifact_ref.to_string(),
+        artifact_ref: request.preflight.expectation.artifact_ref.to_string(),
         artifact_digest: content.artifact_digest.clone(),
         materialized_path: content.materialized_path.clone(),
-        destination_mode: request.destination_mode.to_string(),
+        destination_mode: request.preflight.destination_mode.to_string(),
         spec_id: attestation.spec_id.clone(),
         spec_version: attestation.spec_version.clone(),
         spec_hash: attestation.spec_hash.clone(),
@@ -574,16 +586,18 @@ mod tests {
         content: Option<&'a FrontendArtifactExportContent>,
     ) -> FrontendArtifactExportRequest<'a> {
         FrontendArtifactExportRequest {
-            expectation,
-            attestation,
+            preflight: FrontendArtifactExportPreflightRequest {
+                expectation,
+                attestation,
+                destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY,
+                supported_destination_modes: &[
+                    FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY,
+                    FRONTEND_ARTIFACT_EXPORT_MODE_ARCHIVE,
+                    FRONTEND_ARTIFACT_EXPORT_MODE_STREAM,
+                ],
+                no_hidden_fallback: true,
+            },
             content,
-            destination_mode: FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY,
-            supported_destination_modes: &[
-                FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY,
-                FRONTEND_ARTIFACT_EXPORT_MODE_ARCHIVE,
-                FRONTEND_ARTIFACT_EXPORT_MODE_STREAM,
-            ],
-            no_hidden_fallback: true,
         }
     }
 
@@ -715,7 +729,7 @@ mod tests {
         let content = sample_content();
         let expectation = sample_expectation(&artifact_digest, &spec_hash);
         let mut request = sample_request(expectation, Some(&attestation), Some(&content));
-        request.no_hidden_fallback = false;
+        request.preflight.no_hidden_fallback = false;
 
         let report = export_frontend_artifact(&request);
 
