@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
@@ -9,6 +10,9 @@ use tokio::process::Command;
 
 use crate::sandbox::InputsProvider;
 use crate::sandbox::SandboxSpec;
+
+const BWRAP_PROGRAM: &str = "bwrap";
+const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
 
 const COMMON_BWRAP_ARGS: &[&str] = &[
     "--unshare-uts",
@@ -231,20 +235,49 @@ fn set_sandbox_umask(command: &mut Command) {
 #[cfg(not(unix))]
 fn set_sandbox_umask(_command: &mut Command) {}
 
+fn choose_bwrap_program(env_value: Option<OsString>) -> OsString {
+    match env_value {
+        Some(value) if !value.is_empty() => value,
+        _ => OsString::from(BWRAP_PROGRAM),
+    }
+}
+
+fn bwrap_program() -> OsString {
+    choose_bwrap_program(std::env::var_os(BWRAP_PATH_ENV))
+}
+
+fn annotate_bwrap_spawn_error(program: &OsString, error: std::io::Error) -> std::io::Error {
+    if error.kind() != ErrorKind::NotFound {
+        return error;
+    }
+
+    std::io::Error::new(
+        ErrorKind::NotFound,
+        format!(
+            "bubblewrap executable '{}' not found; put '{}' on PATH or set {} to an executable bwrap path: {error}",
+            program.to_string_lossy(),
+            BWRAP_PROGRAM,
+            BWRAP_PATH_ENV
+        ),
+    )
+}
+
 impl Bwrap {
     // TODO(#132): support streaming std{err,out}
     /// Run the sandbox and return the result.
     pub async fn run(mut self) -> std::io::Result<SandboxOutcome> {
         let _guard = self.inputs_provider.provide_inputs(self.host_workdir.join("host_inputs_dir"))?;
 
-        let mut command = Command::new("bwrap");
+        let program = bwrap_program();
+        let mut command = Command::new(&program);
         command.args(self.args);
         // Make sure we've closed stdin otherwise builds can hang forever blocked on std io.
         command.stdin(Stdio::null());
         set_sandbox_umask(&mut command);
+        let output = command.output().await.map_err(|error| annotate_bwrap_spawn_error(&program, error))?;
 
         Ok(SandboxOutcome {
-            output: command.output().await?,
+            output,
             scratch_dir: self.host_workdir.join("scratches"),
         })
     }
@@ -401,6 +434,40 @@ mod tests {
         args.windows(3)
             .find(|window| window[0] == "--ro-bind" && window[2] == dest)
             .map(|window| window[1].clone())
+    }
+
+    #[test]
+    fn choose_bwrap_program_prefers_explicit_env_path() {
+        let explicit = OsString::from("/tools/bwrap");
+        let selected = choose_bwrap_program(Some(explicit.clone()));
+
+        assert_eq!(selected, explicit);
+    }
+
+    #[test]
+    fn choose_bwrap_program_falls_back_for_empty_or_missing_env() {
+        assert_eq!(choose_bwrap_program(None), OsString::from(BWRAP_PROGRAM));
+        assert_eq!(choose_bwrap_program(Some(OsString::new())), OsString::from(BWRAP_PROGRAM));
+    }
+
+    #[test]
+    fn annotate_bwrap_spawn_error_mentions_env_for_missing_program() {
+        let error = std::io::Error::new(ErrorKind::NotFound, "missing");
+        let annotated = annotate_bwrap_spawn_error(&OsString::from("/missing/bwrap"), error);
+        let rendered = annotated.to_string();
+
+        assert_eq!(annotated.kind(), ErrorKind::NotFound);
+        assert!(rendered.contains("/missing/bwrap"));
+        assert!(rendered.contains(BWRAP_PATH_ENV));
+    }
+
+    #[test]
+    fn annotate_bwrap_spawn_error_preserves_non_not_found_errors() {
+        let error = std::io::Error::new(ErrorKind::PermissionDenied, "denied");
+        let annotated = annotate_bwrap_spawn_error(&OsString::from("/locked/bwrap"), error);
+
+        assert_eq!(annotated.kind(), ErrorKind::PermissionDenied);
+        assert_eq!(annotated.to_string(), "denied");
     }
 
     #[test]

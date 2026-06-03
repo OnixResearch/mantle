@@ -10,6 +10,7 @@ use clap::ValueEnum;
 use serde::Serialize;
 
 const SANDBOX_SHELL_DEFAULT: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
+const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
 const MAX_NIX_STORE_SCAN_ENTRIES: u32 = 200_000;
 const MAX_PARENT_ASCENT: u32 = 64;
 
@@ -175,6 +176,9 @@ fn command_supports_nightly(program: &str) -> bool {
 }
 
 fn check_bwrap_visibility() -> PreflightCheck {
+    if let Some(path) = explicit_bwrap_path_from_env() {
+        return check_explicit_bwrap(&path);
+    }
     if let Some(path) = find_bwrap() {
         return ok_check("bwrap", format!("found {}", path.display()), None);
     }
@@ -182,7 +186,33 @@ fn check_bwrap_visibility() -> PreflightCheck {
     failed_check(
         "bwrap",
         "bubblewrap executable not found".to_string(),
-        Some("install bwrap or put it on PATH before running build-capable workflows".to_string()),
+        Some(format!(
+            "install bwrap, put it on PATH, or set {BWRAP_PATH_ENV} before running build-capable workflows"
+        )),
+    )
+}
+
+fn explicit_bwrap_path_from_env() -> Option<PathBuf> {
+    explicit_bwrap_path(std::env::var_os(BWRAP_PATH_ENV))
+}
+
+fn explicit_bwrap_path(value: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let path = value?;
+    if path.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(path))
+}
+
+fn check_explicit_bwrap(path: &Path) -> PreflightCheck {
+    if is_executable_file(path) {
+        return ok_check("bwrap", format!("using {BWRAP_PATH_ENV}={}", path.display()), None);
+    }
+
+    failed_check(
+        "bwrap",
+        format!("{BWRAP_PATH_ENV} points to a missing or non-executable bwrap"),
+        Some(path.display().to_string()),
     )
 }
 
@@ -421,5 +451,26 @@ mod tests {
         let check = check_explicit_shell("sandbox-shell", Path::new("/missing/shell"), "SNIX_BUILD_SANDBOX_SHELL");
         assert_eq!(check.status, PreflightStatus::Failed);
         assert!(check.summary.contains("SNIX_BUILD_SANDBOX_SHELL"));
+    }
+
+    #[test]
+    fn explicit_bwrap_path_uses_non_empty_env_value() {
+        let path = explicit_bwrap_path(Some(std::ffi::OsString::from("/tools/bwrap"))).expect("explicit path");
+
+        assert_eq!(path, PathBuf::from("/tools/bwrap"));
+    }
+
+    #[test]
+    fn explicit_bwrap_path_ignores_empty_or_missing_env_value() {
+        assert!(explicit_bwrap_path(None).is_none());
+        assert!(explicit_bwrap_path(Some(std::ffi::OsString::new())).is_none());
+    }
+
+    #[test]
+    fn explicit_bwrap_failure_mentions_source() {
+        let check = check_explicit_bwrap(Path::new("/missing/bwrap"));
+
+        assert_eq!(check.status, PreflightStatus::Failed);
+        assert!(check.summary.contains(BWRAP_PATH_ENV));
     }
 }
