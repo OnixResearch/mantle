@@ -1,5 +1,6 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
+mod artifact_cmd;
 mod attest_cmd;
 mod bootstrap;
 mod bootstrap_parity;
@@ -283,6 +284,12 @@ enum Command {
     Store {
         #[command(subcommand)]
         action: StoreAction,
+    },
+
+    /// Frontend-neutral admitted artifact commands
+    Artifact {
+        #[command(subcommand)]
+        action: ArtifactAction,
     },
 
     /// Attestation inspection and verification commands
@@ -903,6 +910,52 @@ pub enum ReleaseAction {
 }
 
 #[derive(Subcommand, Debug, Clone)]
+pub enum ArtifactAction {
+    /// Validate and receipt a spec-admitted frontend artifact export
+    Export {
+        /// Artifact ref to export, e.g. mantle://blake3/...
+        #[arg(long = "artifact-ref")]
+        artifact_ref: String,
+
+        /// JSON frontend artifact admission attestation or sidecar
+        #[arg(long)]
+        attestation: PathBuf,
+
+        /// Already-materialized artifact path exported by a Mantle storage adapter
+        #[arg(long = "materialized-path")]
+        materialized_path: PathBuf,
+
+        /// Expected artifact digest, formatted as blake3:<lowercase-hex>
+        #[arg(long = "artifact-digest")]
+        artifact_digest: String,
+
+        /// Expected frontend spec id
+        #[arg(long = "spec-id")]
+        spec_id: Option<String>,
+
+        /// Expected frontend spec version
+        #[arg(long = "spec-version")]
+        spec_version: Option<String>,
+
+        /// Expected frontend spec BLAKE3 hash
+        #[arg(long = "spec-hash")]
+        spec_hash: Option<String>,
+
+        /// Export destination mode recorded in the receipt
+        #[arg(long = "destination-mode", default_value = frontend_artifact_export::FRONTEND_ARTIFACT_EXPORT_MODE_DIRECTORY)]
+        destination_mode: String,
+
+        /// Content provenance entries in KEY=VALUE form; may be repeated
+        #[arg(long = "content-provenance")]
+        content_provenance: Vec<String>,
+
+        /// Write the export receipt JSON to this path
+        #[arg(long = "receipt-out")]
+        receipt_out: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
 pub enum AttestAction {
     /// Show an artifact attestation for a store path
     Show {
@@ -1244,6 +1297,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Store { action } => {
             store_cmd::cmd_store(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix)
         }
+        Command::Artifact { action } => artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, ctx.json),
         Command::Attest { action } => run_attest_command(ctx, action.clone()),
         Command::Init
         | Command::Check

@@ -121,6 +121,37 @@ Excerpt:
 }
 ```
 
+## CLI seam update
+
+Additional command after adding `mantle artifact export` and keeping storage-backed materialization tasks open:
+
+```text
+/home/brittonr/git/mantle $ git diff --check && cairn validate --root . && cairn gate tasks frontend-artifact-fetch-export --root .
+```
+
+Result: command exited successfully.
+
+Excerpt:
+
+```json
+{
+  "specs_validated": 7,
+  "valid": true
+}
+{
+  "change": "frontend-artifact-fetch-export",
+  "input_hash": "e235a3f01c43a32022ac0da8fdd8b90c2c9c030c9a4b127b2b1adbcfcf326d54",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "ad7d4993e79d6dee1088d597462d24e87d63631970b156ed3f21d1d0e26223ba",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
 ## Non-claims
 
-This evidence supports only the pure validator/receipt slice. It does not claim a storage-backed export implementation, CLI/API seam, Octet receipt integration, or Onix deploy integration.
+This evidence now supports the pure validator/receipt slice and the frontend-neutral CLI seam that validates an already materialized artifact path. It does not claim a storage-backed export/materialization backend, Octet receipt integration, Onix deploy integration, or any ability to transfer/deploy `mantle-onix-activation-closure` artifacts yet.
