@@ -13,6 +13,7 @@ mod build_report;
 mod cargo_free_self_build;
 mod errors;
 mod fix;
+mod frontend_artifact_spec;
 mod log_cmd;
 mod operator_diagnostics;
 mod project_build;

@@ -10,6 +10,7 @@ use crate::build_failure::BuildFailureEnvelope;
 use crate::build_failure::build_failure_envelopes;
 use crate::build_log::DiagnosticPersistenceFailure;
 use crate::build_log::existing_log_file_path;
+use crate::frontend_artifact_spec::FrontendArtifactAdmissionAttestation;
 
 #[derive(Debug, Serialize)]
 pub struct BuildJsonReport {
@@ -21,6 +22,7 @@ pub struct BuildJsonReport {
     pub hermeticity_mode: String,
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
+    pub frontend_artifact_attestations: Vec<FrontendArtifactAdmissionAttestation>,
     pub diagnostic_persistence_failures: Vec<DiagnosticPersistenceFailure>,
     pub counts: BuildJsonCounts,
     pub outcomes: Vec<BuildJsonOutcome>,
@@ -101,7 +103,24 @@ pub fn render_build_json_report(
     logs_dir: &Path,
     diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
 ) -> Result<String, serde_json::Error> {
-    let report = build_json_report(config, result, logs_dir, diagnostic_persistence_failures);
+    render_build_json_report_with_frontend_artifact_attestations(
+        config,
+        result,
+        logs_dir,
+        diagnostic_persistence_failures,
+        &[],
+    )
+}
+
+pub fn render_build_json_report_with_frontend_artifact_attestations(
+    config: &BuildConfig,
+    result: &PipelineResult,
+    logs_dir: &Path,
+    diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
+    frontend_artifact_attestations: &[FrontendArtifactAdmissionAttestation],
+) -> Result<String, serde_json::Error> {
+    let report =
+        build_json_report(config, result, logs_dir, diagnostic_persistence_failures, frontend_artifact_attestations);
     serde_json::to_string_pretty(&report)
 }
 
@@ -110,6 +129,7 @@ fn build_json_report(
     result: &PipelineResult,
     logs_dir: &Path,
     diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
+    frontend_artifact_attestations: &[FrontendArtifactAdmissionAttestation],
 ) -> BuildJsonReport {
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
     let outcome_reports = build_outcome_reports(config, result, logs_dir);
@@ -143,6 +163,7 @@ fn build_json_report(
         hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
         hermeticity_audit_events,
         native_dynamic_plans,
+        frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
         diagnostic_persistence_failures: diagnostic_persistence_failures.to_vec(),
         counts,
         outcomes: outcome_reports,
@@ -487,7 +508,7 @@ mod tests {
             }],
         };
 
-        let report = build_json_report(&config, &result, logs_dir.path(), &[]);
+        let report = build_json_report(&config, &result, logs_dir.path(), &[], &[]);
         let logical_path = output_path.to_absolute_path_with_prefix(&config.store_dir);
 
         assert_eq!(report.hermeticity_mode, "practical");
@@ -511,6 +532,110 @@ mod tests {
         assert_eq!(substitution.transferred_bytes, 12);
         assert_eq!(substitution.reused_bytes, 34);
         assert!(substitution.fallback_reason.is_none());
+    }
+
+    #[test]
+    fn render_build_json_report_serializes_frontend_artifact_attestation() {
+        use std::collections::BTreeMap;
+        use std::collections::HashMap;
+
+        const MIN_MAX_JOBS: u32 = 1;
+        const SPEC_ID: &str = "example.activation";
+        const SPEC_VERSION: &str = "1";
+        const VALIDATOR_REF: &str = "mantle://blake3/spec-validator";
+        const ARTIFACT_KIND: &str = "example-activation-closure";
+        const ARTIFACT_REF: &str = "mantle://blake3/artifact";
+        const TARGET_IDENTITY: &str = "machine:demo";
+        const BUILD_ROOT: &str = "drv:demo";
+        const SPEC_MATERIAL: &[u8] = br#"{"schema":"mantle-frontend-artifact-kind-allowlist-v1","allowed_kinds":["example-activation-closure"]}"#;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let logs_dir = tempfile::tempdir().unwrap();
+        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let config = BuildConfig {
+            file: output_dir.path().join("demo.ncl"),
+            import_paths: Vec::new(),
+            output_dir: output_dir.path().to_path_buf(),
+            state_dir: state_dir.path().to_path_buf(),
+            store_dir: "/crunch/store".to_string(),
+            verbose: false,
+            max_jobs: MIN_MAX_JOBS,
+            substituter_url: None,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            keypair: signing_key,
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+            root_retention_source: None,
+        };
+        let result = PipelineResult {
+            outcomes: Vec::new(),
+            failed: Vec::new(),
+            fod_mismatches: Vec::new(),
+            root_labels: HashMap::new(),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
+            native_dynamic_plans: Vec::new(),
+        };
+        let spec_hash = blake3::hash(SPEC_MATERIAL).to_hex().to_string();
+        let spec = crate::frontend_artifact_spec::FrontendArtifactSpecRef {
+            id: SPEC_ID.to_string(),
+            version: SPEC_VERSION.to_string(),
+            validator_kind: crate::frontend_artifact_spec::FRONTEND_ARTIFACT_VALIDATOR_KIND_ALLOWLIST_V1.to_string(),
+            validator_ref: VALIDATOR_REF.to_string(),
+            hash_algorithm: crate::frontend_artifact_spec::FRONTEND_ARTIFACT_HASH_ALGORITHM_BLAKE3.to_string(),
+            hash: spec_hash.clone(),
+            metadata: BTreeMap::new(),
+        };
+        let manifest = crate::frontend_artifact_spec::FrontendArtifactManifest {
+            kind: ARTIFACT_KIND.to_string(),
+            artifact_ref: ARTIFACT_REF.to_string(),
+            artifact_digest: Some("blake3:artifact-digest".to_string()),
+            target_identity: Some(TARGET_IDENTITY.to_string()),
+            spec_id: SPEC_ID.to_string(),
+            spec_version: SPEC_VERSION.to_string(),
+            spec_hash,
+            no_hidden_fallback: true,
+            provenance: BTreeMap::from([("builder".to_string(), "mantle".to_string())]),
+        };
+        let admission = crate::frontend_artifact_spec::admit_frontend_artifact(
+            &crate::frontend_artifact_spec::FrontendArtifactAdmissionRequest {
+                spec: Some(&spec),
+                manifest: &manifest,
+                spec_material: SPEC_MATERIAL,
+                supported_validator_kinds: &[
+                    crate::frontend_artifact_spec::FRONTEND_ARTIFACT_VALIDATOR_KIND_ALLOWLIST_V1,
+                ],
+                build_root: BUILD_ROOT,
+            },
+        );
+        assert!(admission.admitted, "{:#?}", admission.diagnostics);
+        let attestation = admission.attestation.expect("admission attestation");
+
+        let json_report =
+            render_build_json_report_with_frontend_artifact_attestations(&config, &result, logs_dir.path(), &[], &[
+                attestation,
+            ])
+            .unwrap();
+        let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
+        let attestation = &json_value["frontend_artifact_attestations"][0];
+
+        assert_eq!(attestation["spec_id"], SPEC_ID);
+        assert_eq!(attestation["spec_version"], SPEC_VERSION);
+        assert_eq!(
+            attestation["validator_kind"],
+            crate::frontend_artifact_spec::FRONTEND_ARTIFACT_VALIDATOR_KIND_ALLOWLIST_V1
+        );
+        assert_eq!(attestation["validator_ref"], VALIDATOR_REF);
+        assert_eq!(attestation["artifact_kind"], ARTIFACT_KIND);
+        assert_eq!(attestation["artifact_ref"], ARTIFACT_REF);
+        assert_eq!(attestation["target_identity"], TARGET_IDENTITY);
+        assert_eq!(attestation["build_root"], BUILD_ROOT);
+        assert_eq!(
+            attestation["validation_result"],
+            crate::frontend_artifact_spec::FRONTEND_ARTIFACT_VALIDATION_RESULT_ADMITTED
+        );
+        assert_eq!(attestation["no_hidden_fallback"], true);
     }
 
     #[test]
@@ -606,6 +731,7 @@ mod tests {
                     "detail": "explicit --impure mode permits ambient host dependencies",
                 }],
                 "native_dynamic_plans": [],
+                "frontend_artifact_attestations": [],
                 "diagnostic_persistence_failures": [{
                     "operation": "write-build-log",
                     "artifact": "build-log",
