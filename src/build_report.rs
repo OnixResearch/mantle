@@ -4,7 +4,9 @@ use crunch_pipeline::BuildConfig;
 use crunch_pipeline::PipelineResult;
 use crunch_pipeline::drv_key_for;
 use crunch_pipeline::label_for_key;
+use nix_compat::store_path::StorePath;
 use serde::Serialize;
+use snix_store::path_info::PathInfo;
 
 use crate::build_failure::BuildFailureEnvelope;
 use crate::build_failure::build_failure_envelopes;
@@ -183,7 +185,7 @@ fn build_native_dynamic_plan_reports(result: &PipelineResult, store_dir: &str) -
             plan_artifact_path: row
                 .plan_artifact_path
                 .as_ref()
-                .map(|path| path.to_absolute_path_with_prefix(store_dir)),
+                .map(|path: &StorePath<String>| path.to_absolute_path_with_prefix(store_dir)),
             raw_artifact_digest: row.raw_artifact_digest.clone(),
             canonical_plan_digest: row.canonical_plan_digest.clone(),
             accepted_unit_ids: row.accepted_unit_ids.clone(),
@@ -217,7 +219,7 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
             let mut outputs: Vec<BuildJsonOutput> = outcome
                 .outputs
                 .iter()
-                .map(|(name, path_info)| {
+                .map(|(name, path_info): (&String, &PathInfo)| {
                     let logical_path = path_info.store_path.to_absolute_path_with_prefix(&config.store_dir);
                     let attestation_path = crunch_store::artifact_attestation_file_path(
                         &config.state_dir,
@@ -612,11 +614,14 @@ mod tests {
         assert!(admission.admitted, "{:#?}", admission.diagnostics);
         let attestation = admission.attestation.expect("admission attestation");
 
-        let json_report =
-            render_build_json_report_with_frontend_artifact_attestations(&config, &result, logs_dir.path(), &[], &[
-                attestation,
-            ])
-            .unwrap();
+        let json_report = render_build_json_report_with_frontend_artifact_attestations(
+            &config,
+            &result,
+            logs_dir.path(),
+            &[],
+            &[attestation],
+        )
+        .unwrap();
         let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
         let attestation = &json_value["frontend_artifact_attestations"][0];
 

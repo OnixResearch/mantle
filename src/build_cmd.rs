@@ -290,8 +290,10 @@ fn write_failure_logs(
         let Some(drv_path) = parse_drv_key(&config.store_dir, &failed.drv_key) else {
             continue;
         };
-        let label = label_for_key(result, &failed.drv_key).unwrap_or(drv_path.name());
-        if let Err(failure) = write_log(logs_dir, &drv_path, label, false, &failed.error) {
+        let label = label_for_key(result, &failed.drv_key)
+            .map(str::to_owned)
+            .unwrap_or_else(|| drv_path.name().to_string());
+        if let Err(failure) = write_log(logs_dir, &drv_path, &label, false, &failed.error) {
             failures.push(failure);
         }
     }
@@ -388,7 +390,7 @@ pub fn load_or_generate_signing_keypair(
     // 3. Auto-generate.
     let config_dir = config_dir_or(state_dir);
     let default_path = default_signing_key_path(state_dir);
-    let (keypair, line) = signing::generate_keypair();
+    let (keypair, line): (signing::KeyPair, String) = signing::generate_keypair();
     std::fs::create_dir_all(&config_dir)
         .map_err(|e| RunError::Internal(format!("creating config dir {}: {e}", config_dir.display())))?;
 
