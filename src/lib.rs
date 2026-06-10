@@ -3,6 +3,8 @@
 // crunch library crate -- re-exports for integration tests.
 
 pub mod bootstrap;
+#[allow(dead_code)]
+pub mod build_correctness;
 pub mod errors;
 pub mod protected_exec;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]

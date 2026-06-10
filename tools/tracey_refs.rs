@@ -217,3 +217,49 @@
 // Future semantic-equivalence requirements remain non-claims: the current guard
 // is that unsupported broader semantics stay outside the prototype and the
 // interpreter remains the reference path.
+
+// Nix-like build correctness primitive bridge.
+//
+// r[impl build_correctness.action_spec]
+// r[verify build_correctness.action_spec]
+// Implemented by `src/build_correctness.rs` canonical `mantle-action-spec-v1`
+// records and verified by `build_correctness_action_spec_*` unit tests.
+//
+// r[impl build_correctness.nickel_eval_source_closure]
+// r[verify build_correctness.nickel_eval_source_closure]
+// Implemented by `src/build_correctness.rs` Nickel evaluation receipt DTOs and
+// undeclared-import validation; verified by the Nickel eval receipt unit test.
+//
+// r[impl build_correctness.cas_object_store]
+// r[verify build_correctness.cas_object_store]
+// Implemented by `src/build_correctness.rs` CAS object manifests for files,
+// directories, symlinks, generated payloads, redacted secret descriptors, and
+// path-view-only rejection; verified by CAS positive/negative unit tests.
+//
+// r[impl build_correctness.hermetic_execution_policy]
+// r[verify build_correctness.hermetic_execution_policy]
+// Implemented by `src/build_correctness.rs` sandbox/network policy validation
+// and enforced/unsupported sandbox reports; verified by hermetic policy tests.
+//
+// r[impl build_correctness.output_reference_scanning]
+// r[verify build_correctness.output_reference_scanning]
+// Implemented by `src/build_correctness.rs` reference scan reports and
+// fail-closed diagnostics for undeclared, forbidden, traversal, duplicate-view,
+// and plaintext-secret findings; verified by reference scan tests.
+//
+// r[impl build_correctness.reuse_and_substitution]
+// r[verify build_correctness.reuse_and_substitution]
+// Implemented by `src/build_correctness.rs` receipt-equivalence reuse admission
+// over action refs, object refs, policies, producers, and signatures; verified
+// by reuse admission tests.
+//
+// r[impl build_tool_boundary.correctness_primitives_frontend_neutral]
+// r[verify build_tool_boundary.correctness_primitives_frontend_neutral]
+// Implemented by treating frontend spec refs as opaque data in
+// `src/build_correctness.rs`; verified by the frontend-boundary unit test.
+//
+// r[impl verification_evidence.build_correctness_receipts]
+// r[verify verification_evidence.build_correctness_receipts]
+// Implemented by `src/build_correctness.rs` deterministic
+// `mantle-action-receipt-v1` receipts plus bounded JSON rendering; verified by
+// receipt determinism/non-claim tests and archived change evidence.

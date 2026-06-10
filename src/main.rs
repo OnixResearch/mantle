@@ -7,6 +7,8 @@ mod bootstrap_parity;
 mod bootstrap_source_root;
 mod bootstrap_validate;
 mod build_cmd;
+#[allow(dead_code)]
+mod build_correctness;
 mod build_failure;
 mod build_log;
 mod build_plan;

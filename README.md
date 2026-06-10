@@ -176,6 +176,9 @@ mantle attest release-verify target/release-verification/<release-id> --trusted-
 For the full command path, examples, and sidecar rules, see
 [`docs/operator-workflows.md`](docs/operator-workflows.md).
 
+For frontend-neutral action/object/reference-scan evidence contracts, see
+[`docs/build-correctness-primitives.md`](docs/build-correctness-primitives.md).
+
 ## Validation tiers
 
 Use the checked-in toolchain from [`rust-toolchain.toml`](rust-toolchain.toml)
