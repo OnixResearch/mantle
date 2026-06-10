@@ -1,0 +1,93 @@
+# Build correctness delta
+
+## ADDED Requirements
+
+### Requirement: Mantle action specs are declared build actions [r[build_correctness.action_spec]]
+
+Mantle MUST model strong build-correctness claims with a versioned `mantle-action-spec-v1` record. The action spec MUST declare action kind, platform, toolchain object refs, input object refs, argument digest, environment digest, output declarations, sandbox policy, network policy, expected reference policy, and frontend spec refs when present. The canonical action ref MUST use BLAKE3 with domain separation and the shape `mantle-action://blake3/<digest>`.
+
+#### Scenario: Canonical action ref is deterministic [r[build_correctness.action_spec.scenario.deterministic]]
+
+- GIVEN two action specs contain equivalent declared fields in different input or map traversal orders
+- WHEN Mantle canonicalizes them
+- THEN both specs MUST produce the same action ref
+- AND host temp paths, serialization order, and undeclared environment MUST NOT affect the action ref
+
+#### Scenario: Changed declared input changes action ref [r[build_correctness.action_spec.scenario.semantic-drift]]
+
+- GIVEN an action changes toolchain ref, input object ref, args digest, environment digest, output declaration, sandbox policy, network policy, expected refs, or frontend spec ref
+- WHEN Mantle canonicalizes the changed spec
+- THEN it MUST produce a different action ref
+- AND prior receipts for the old action ref MUST NOT satisfy the changed action
+
+### Requirement: Mantle CAS object store [r[build_correctness.cas_object_store]]
+
+Mantle MUST represent admitted build inputs and produced outputs as content-addressed objects using explicit BLAKE3 object refs such as `mantle-object://blake3/<digest>`. Object manifests MUST model object kind, byte count when applicable, content digest, executable or mode metadata when modeled, symlink target when applicable, sorted directory children when applicable, and redacted secret descriptor metadata. Path roots MAY be recorded as views, but path roots MUST NOT be accepted as canonical object identity.
+
+#### Scenario: Produced object is admitted by content [r[build_correctness.cas_object_store.scenario.admit]]
+
+- GIVEN a produced output has modeled metadata and bytes
+- WHEN CAS admission runs
+- THEN Mantle MUST compute a canonical object ref from content and modeled metadata
+- AND any export or execution path MUST be recorded only as a view over that object ref
+
+#### Scenario: Path-only identity is rejected [r[build_correctness.cas_object_store.scenario.reject-path-only]]
+
+- GIVEN a build input or output is identified only by a host path, export path, or execution path
+- WHEN strong correctness admission runs
+- THEN Mantle MUST reject the object or mark the claim as unsupported
+- AND diagnostics MUST identify path-only identity as the blocker
+
+### Requirement: Hermetic execution policy [r[build_correctness.hermetic_execution_policy]]
+
+Mantle MUST require an explicit sandbox and network policy before reporting strong action-correct execution. The execution report MUST state whether the requested policy was enforced. If Mantle cannot enforce the requested policy on the current host, it MUST fail closed or downgrade the evidence to a narrower non-strong claim.
+
+#### Scenario: Enforced policy enables strong receipt [r[build_correctness.hermetic_execution_policy.scenario.enforced]]
+
+- GIVEN an action spec declares sandbox and network policy supported by the current executor
+- WHEN Mantle executes the action
+- THEN the action receipt MUST include a sandbox report proving the requested policy was enforced
+- AND the result MAY participate in strong action-correctness claims
+
+#### Scenario: Unsupported policy blocks strong claim [r[build_correctness.hermetic_execution_policy.scenario.unsupported]]
+
+- GIVEN an action spec requires sandbox or network restrictions the current executor cannot enforce
+- WHEN Mantle prepares execution or receipt admission
+- THEN Mantle MUST fail closed or mark the result fixture-only/narrower evidence
+- AND it MUST NOT emit a strong action-correct receipt
+
+### Requirement: Output reference scanning [r[build_correctness.output_reference_scanning]]
+
+Mantle MUST provide output reference scan evidence for strong build-correctness claims. The scan MUST compare discovered or supplied output references against the action spec's expected reference policy. Undeclared refs, forbidden refs, duplicate conflicting views, path traversal, stale scan roots, unsupported scanner kinds, and plaintext secret bytes MUST fail closed.
+
+#### Scenario: Declared references pass [r[build_correctness.output_reference_scanning.scenario.pass]]
+
+- GIVEN a produced output references only declared input objects, generated payloads, entrypoints, and redacted secret descriptors
+- WHEN reference scanning validates the output
+- THEN the scan report MUST be accepted
+- AND the action receipt MUST bind the accepted scan report
+
+#### Scenario: Forbidden references fail [r[build_correctness.output_reference_scanning.scenario.fail]]
+
+- GIVEN a produced output references an undeclared host path, temp/build root, frontend-forbidden runtime path, path traversal, or plaintext secret bytes
+- WHEN reference scanning validates the output
+- THEN the scan report MUST fail with deterministic diagnostics
+- AND the action result MUST NOT satisfy strong correctness admission
+
+### Requirement: Reuse and substitution admission [r[build_correctness.reuse_and_substitution]]
+
+Mantle MUST accept reused or substituted outputs for strong correctness claims only when the candidate receipt matches the requested action ref, input refs, toolchain refs, sandbox policy, network policy, output object refs, reference scan policy, producer policy, and required signatures. Stale refs, missing signatures when required, policy mismatch, unsupported producer identity, path-only identity, or receipt tampering MUST fail closed.
+
+#### Scenario: Matching receipt admits reuse [r[build_correctness.reuse_and_substitution.scenario.accept]]
+
+- GIVEN a prior local or external receipt matches the requested action ref and required trust policy
+- WHEN Mantle evaluates output reuse
+- THEN it MAY accept the produced object refs without rerunning the action
+- AND the new report MUST explain reuse with the matched receipt identity
+
+#### Scenario: Stale substitute is rejected [r[build_correctness.reuse_and_substitution.scenario.reject-stale]]
+
+- GIVEN a candidate substitute has a stale action ref, stale object ref, mismatched sandbox policy, missing required signature, unsupported producer identity, or path-only output identity
+- WHEN Mantle evaluates output reuse
+- THEN it MUST reject the substitute with deterministic diagnostics
+- AND it MUST NOT report strong action-correct success for that output
