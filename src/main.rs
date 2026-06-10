@@ -35,6 +35,8 @@ mod release_nix_witness;
 mod release_reproducibility;
 mod release_source;
 mod rust_plan;
+#[allow(dead_code)]
+mod rust_source_provider;
 mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
@@ -675,6 +677,17 @@ enum BootstrapAction {
         /// Fail closed unless the requested parity axes are complete
         #[arg(long = "require")]
         require: Vec<bootstrap_parity::ParityAxis>,
+    },
+
+    /// Fail closed until a real source-built Rust provider materializer exists
+    RustSourceProvider {
+        /// Source-built Rust provider recipe anchor
+        #[arg(long, default_value = "bootstrap/rust-source.ncl")]
+        recipe: PathBuf,
+
+        /// Planned output directory for the Rust provider
+        #[arg(long)]
+        output_dir: PathBuf,
     },
 
     /// Run build-profile preflight, build a bootstrap derivation, and save evidence
@@ -1971,6 +1984,9 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
         BootstrapAction::ParityReport { require } => {
             bootstrap_parity::cmd_bootstrap_parity_report(&current_dir_or_error()?, require, ctx.json)
         }
+        BootstrapAction::RustSourceProvider { recipe, output_dir } => {
+            cmd_bootstrap_rust_source_provider(recipe, output_dir, &ctx.store, ctx.verbose)
+        }
         BootstrapAction::Validate {
             target,
             import_paths,
@@ -1990,6 +2006,28 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             strict_hermetic: *strict_hermetic,
             impure: *impure,
         }),
+    }
+}
+
+fn cmd_bootstrap_rust_source_provider(
+    recipe: &Path,
+    output_dir: &Path,
+    _store_dir: &Path,
+    verbose: bool,
+) -> Result<(), RunError> {
+    let scratch = tempfile::Builder::new()
+        .prefix("mantle-rust-source-provider-")
+        .tempdir()
+        .map_err(|err| RunError::Internal(format!("creating Rust provider scratch: {err}")))?;
+    match rust_source_provider::materialize_rust_source_provider(recipe, output_dir, scratch.path(), verbose) {
+        Ok(materialized) => {
+            eprintln!("Materialized Rust source provider {}", materialized.output_path.display());
+            eprintln!("  recipe_digest_blake3: {}", materialized.recipe_digest_blake3);
+            eprintln!("  metadata_path: {}", materialized.metadata_path.display());
+            eprintln!("  metadata_digest_blake3: {}", materialized.metadata_digest_blake3);
+            Ok(())
+        }
+        Err(err) => Err(RunError::Build(format!("Rust source provider materialization failed closed: {err}"))),
     }
 }
 
@@ -3176,6 +3214,46 @@ mod tests {
         assert!(err.contains("not implemented") || err.contains("placeholder"));
         assert!(!err.contains(bootstrap_source_root::SOURCE_ROOT_BLOCKED_REASON));
         assert!(!output.exists());
+    }
+
+    #[test]
+    fn bootstrap_rust_source_provider_action_parses() {
+        let args = Args::parse_from([
+            "mantle",
+            "bootstrap",
+            "rust-source-provider",
+            "--recipe",
+            "bootstrap/rust-source.ncl",
+            "--output-dir",
+            "/tmp/mantle-rust-provider",
+        ]);
+
+        let Command::Bootstrap {
+            action: Some(BootstrapAction::RustSourceProvider { recipe, output_dir }),
+            ..
+        } = args.command
+        else {
+            panic!("expected rust-source-provider bootstrap action");
+        };
+        assert_eq!(recipe, PathBuf::from("bootstrap/rust-source.ncl"));
+        assert_eq!(output_dir, PathBuf::from("/tmp/mantle-rust-provider"));
+    }
+
+    #[test]
+    fn bootstrap_rust_source_provider_fails_closed_without_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output_dir = dir.path().join("rust-provider");
+        let store = dir.path().join("store");
+        fs::create_dir(&store).unwrap();
+        fs::write(&recipe, "blocked recipe\n").unwrap();
+
+        let err = cmd_bootstrap_rust_source_provider(&recipe, &output_dir, &store, false).unwrap_err().to_string();
+
+        assert!(err.contains("Rust source provider materialization failed closed"));
+        assert!(err.contains(rust_source_provider::RUST_SOURCE_PROVIDER_BLOCKED_REASON));
+        assert!(err.contains("recipe_digest_blake3="));
+        assert!(!output_dir.exists());
     }
 
     fn source_root_manifest_with_patch_json() -> serde_json::Value {
