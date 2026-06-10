@@ -115,3 +115,48 @@ error: tracey coverage failed
 The generated report `/tmp/mantle-nix-correctness-tracey.json` contained large
 pre-existing accepted-spec coverage debt and dangling refs from the active change
 before sync. This transcript does not claim Tracey coverage passed.
+
+## Sync, archive, and post-archive validation
+
+Dry-run command:
+
+```text
+set -e
+nix run path:/home/brittonr/git/cairn#cairn -- sync nix-correctness-primitives --root . >/tmp/mantle-nix-correctness-sync-dry-run.json
+echo cairn-sync-dry-run:PASS
+nix run path:/home/brittonr/git/cairn#cairn -- archive nix-correctness-primitives --root . >/tmp/mantle-nix-correctness-archive-dry-run.json
+echo cairn-archive-dry-run:PASS
+```
+
+Observed output (pueue task 73):
+
+```text
+cairn-sync-dry-run:PASS
+cairn-archive-dry-run:PASS
+```
+
+The dry-run receipts reported `"blocked": false` for both sync and archive.
+
+Execute command:
+
+```text
+set -e
+nix run path:/home/brittonr/git/cairn#cairn -- sync nix-correctness-primitives --root . --execute
+CAIRN_ARCHIVE_DATE=2026-06-10 nix run path:/home/brittonr/git/cairn#cairn -- archive nix-correctness-primitives --root . --execute
+nix run path:/home/brittonr/git/cairn#cairn -- validate --root . >/tmp/mantle-nix-correctness-post-archive-validate.json
+echo cairn-post-archive-validate:PASS
+```
+
+Observed output (pueue task 75):
+
+```text
+cairn-post-archive-validate:PASS
+```
+
+After adding this archived evidence note, validation was run again.
+
+Observed output (pueue task 76):
+
+```text
+cairn-final-validate:PASS
+```
