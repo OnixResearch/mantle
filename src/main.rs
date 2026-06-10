@@ -423,6 +423,18 @@ enum Command {
         #[arg(long, default_value = "rustc")]
         rustc: PathBuf,
 
+        /// Compiler-policy mode for Rust unit execution: plain, audit, deny, or required
+        #[arg(long, default_value = "plain")]
+        compiler_policy_mode: String,
+
+        /// Compiler-policy provider manifest JSON consumed at the rustc invocation boundary
+        #[arg(long)]
+        compiler_policy_provider_manifest: Option<PathBuf>,
+
+        /// Expected BLAKE3 digest for the compiler-policy provider manifest
+        #[arg(long)]
+        compiler_policy_provider_manifest_digest: Option<String>,
+
         /// Target triple to pass to Cargo; repeatable
         #[arg(long = "target")]
         targets: Vec<String>,
@@ -2058,6 +2070,9 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         root,
         cargo,
         rustc,
+        compiler_policy_mode,
+        compiler_policy_provider_manifest,
+        compiler_policy_provider_manifest_digest,
         targets,
         profile,
         features,
@@ -2078,6 +2093,11 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         return Err(RunError::Internal("run_rust_plan_command called with non-RustPlan command".to_string()));
     };
     let root = root.clone().unwrap_or(current_dir_or_error()?);
+    let compiler_policy = rust_plan::rust_compiler_policy_selection(
+        compiler_policy_mode,
+        compiler_policy_provider_manifest.clone(),
+        compiler_policy_provider_manifest_digest.clone(),
+    )?;
     let options = rust_plan::RustPlanOptions {
         root,
         cargo: cargo.clone(),
@@ -2090,16 +2110,18 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         no_cargo_oracle: *no_cargo_oracle,
     };
     let receipt = rust_plan::capture_rust_plan(&options)?;
+    let execution_options = |output_root: PathBuf| rust_plan::RustUnitExecutionOptions {
+        rustc: rustc.clone(),
+        output_root,
+        compiler_policy: compiler_policy.clone(),
+    };
     if *execute_first_supported_unit {
         let output_root = execution_output_root.clone().ok_or_else(|| {
             RunError::Internal("--execute-first-supported-unit requires --execution-output-root".to_string())
         })?;
         let unit_execution = rust_plan::execute_first_supported_rust_unit(
             &receipt.unit_derivation_graph,
-            &rust_plan::RustUnitExecutionOptions {
-                rustc: rustc.clone(),
-                output_root,
-            },
+            &execution_options(output_root),
         )?;
         return rust_plan::print_rust_plan_execution_receipt(
             &rust_plan::RustPlanExecutionReceipt {
@@ -2115,10 +2137,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         })?;
         let dependency_chain_execution = rust_plan::execute_first_rust_unit_dependency_chain(
             &receipt.unit_derivation_graph,
-            &rust_plan::RustUnitExecutionOptions {
-                rustc: rustc.clone(),
-                output_root,
-            },
+            &execution_options(output_root),
         )?;
         return rust_plan::print_rust_plan_dependency_chain_execution_receipt(
             &rust_plan::RustPlanDependencyChainExecutionReceipt {
@@ -2134,10 +2153,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         })?;
         let target_topology_execution = rust_plan::execute_rust_target_unit_topology(
             &receipt.unit_derivation_graph,
-            &rust_plan::RustUnitExecutionOptions {
-                rustc: rustc.clone(),
-                output_root,
-            },
+            &execution_options(output_root),
         )?;
         return rust_plan::print_rust_plan_target_topology_execution_receipt(
             &rust_plan::RustPlanTargetTopologyExecutionReceipt {
@@ -2155,10 +2171,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             &receipt.native_registry_source_planning,
             &receipt.native_host_unit_graph_planning,
             &receipt.unit_derivation_graph,
-            &rust_plan::RustUnitExecutionOptions {
-                rustc: rustc.clone(),
-                output_root,
-            },
+            &execution_options(output_root),
         )?;
         return rust_plan::print_rust_plan_host_artifact_topology_execution_receipt(
             &rust_plan::RustPlanHostArtifactTopologyExecutionReceipt {
@@ -2176,10 +2189,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             &receipt.native_registry_source_planning,
             &receipt.native_host_unit_graph_planning,
             &receipt.unit_derivation_graph,
-            &rust_plan::RustUnitExecutionOptions {
-                rustc: rustc.clone(),
-                output_root,
-            },
+            &execution_options(output_root),
         )?;
         return rust_plan::print_rust_plan_topology_execution_receipt(
             &rust_plan::RustPlanTopologyExecutionReceipt {
@@ -2197,10 +2207,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             rust_plan::execute_native_rust_dev_dependency_test_topology(
                 &receipt.native_package_target_planning,
                 &receipt.unit_derivation_graph,
-                &rust_plan::RustUnitExecutionOptions {
-                    rustc: rustc.clone(),
-                    output_root,
-                },
+                &execution_options(output_root),
             )?;
         return rust_plan::print_rust_plan_dev_dependency_test_topology_execution_receipt(
             &rust_plan::RustPlanDevDependencyTestTopologyExecutionReceipt {
@@ -2218,10 +2225,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             rust_plan::execute_native_registry_workspace_dependency_topology(
                 &receipt.native_package_target_planning,
                 &receipt.unit_derivation_graph,
-                &rust_plan::RustUnitExecutionOptions {
-                    rustc: rustc.clone(),
-                    output_root,
-                },
+                &execution_options(output_root),
             )?;
         return rust_plan::print_rust_plan_workspace_dependency_topology_execution_receipt(
             &rust_plan::RustPlanWorkspaceDependencyTopologyExecutionReceipt {
@@ -2239,10 +2243,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
             &receipt.native_registry_source_planning,
             &receipt.native_package_target_planning,
             &receipt.unit_derivation_graph,
-            &rust_plan::RustUnitExecutionOptions {
-                rustc: rustc.clone(),
-                output_root,
-            },
+            &execution_options(output_root),
         )?;
         return rust_plan::print_rust_plan_patch_source_topology_execution_receipt(
             &rust_plan::RustPlanPatchSourceTopologyExecutionReceipt {

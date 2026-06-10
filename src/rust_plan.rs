@@ -107,6 +107,29 @@ const CARGO_REGISTRY_SOURCE_PREFIX: &str = "registry+";
 const CARGO_GIT_SOURCE_PREFIX: &str = "git+";
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
 const GIT_SOURCE_DIGEST_ALGORITHM: &str = "git-revision";
+const COMPILER_POLICY_MODE_PLAIN: &str = "plain";
+const COMPILER_POLICY_MODE_AUDIT: &str = "audit";
+const COMPILER_POLICY_MODE_DENY: &str = "deny";
+const COMPILER_POLICY_MODE_REQUIRED: &str = "required";
+const COMPILER_POLICY_DIGEST_PREFIX: &str = "b3:";
+const COMPILER_POLICY_ADAPTER_REPORT_ENV: &str = "MANTLE_COMPILER_POLICY_REPORT";
+const COMPILER_POLICY_REPORT_DIR: &str = ".mantle-policy-reports";
+const COMPILER_POLICY_STATUS_PASSED: &str = "passed";
+const COMPILER_POLICY_STATUS_FAILED: &str = "failed";
+const COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN: &str = "audit-failed-open";
+const COMPILER_POLICY_STATUS_NOT_RUN: &str = "not-run";
+const COMPILER_POLICY_STANDARDS_SCOPE_UNIT_SOURCE: &str = "rust-unit-source";
+const COMPILER_POLICY_STANDARDS_STATUS_ARTIFACT_VERIFIED: &str = "policy-artifact-verified";
+const COMPILER_POLICY_CLAIM_CONFIGURED_PROFILE: &str = "configured compiler-policy profile compliance only";
+const COMPILER_POLICY_CLAIM_NO_COMPLIANCE: &str =
+    "no compiler-policy compliance claim because policy execution did not pass";
+const COMPILER_POLICY_NON_CLAIMS: &[&str] = &[
+    "program-correctness",
+    "complete-fcis-proof",
+    "general-safety",
+    "absence-of-all-defects",
+    "full-cargo-compatibility",
+];
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustPlanOptions {
@@ -559,10 +582,163 @@ pub(crate) struct UnitDerivationBlocker {
     pub(crate) message: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RustCompilerPolicySelection {
+    pub(crate) mode: RustCompilerPolicyMode,
+    pub(crate) provider_manifest: Option<PathBuf>,
+    pub(crate) expected_provider_manifest_digest: Option<String>,
+}
+
+impl Default for RustCompilerPolicySelection {
+    fn default() -> Self {
+        Self {
+            mode: RustCompilerPolicyMode::Plain,
+            provider_manifest: None,
+            expected_provider_manifest_digest: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RustCompilerPolicyMode {
+    Plain,
+    Audit,
+    Deny,
+    Required,
+}
+
+impl RustCompilerPolicyMode {
+    pub(crate) fn parse(value: &str) -> Result<Self, RunError> {
+        match value {
+            COMPILER_POLICY_MODE_PLAIN => Ok(Self::Plain),
+            COMPILER_POLICY_MODE_AUDIT => Ok(Self::Audit),
+            COMPILER_POLICY_MODE_DENY => Ok(Self::Deny),
+            COMPILER_POLICY_MODE_REQUIRED => Ok(Self::Required),
+            _ => Err(RunError::Internal(format!(
+                "unsupported compiler-policy mode `{value}`; expected plain, audit, deny, or required"
+            ))),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Plain => COMPILER_POLICY_MODE_PLAIN,
+            Self::Audit => COMPILER_POLICY_MODE_AUDIT,
+            Self::Deny => COMPILER_POLICY_MODE_DENY,
+            Self::Required => COMPILER_POLICY_MODE_REQUIRED,
+        }
+    }
+
+    fn is_plain(self) -> bool {
+        self == Self::Plain
+    }
+
+    fn is_fail_closed(self) -> bool {
+        matches!(self, Self::Deny | Self::Required)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct RustUnitExecutionOptions {
     pub(crate) rustc: PathBuf,
     pub(crate) output_root: PathBuf,
+    pub(crate) compiler_policy: RustCompilerPolicySelection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustCompilerPolicyExecutionReceipt {
+    pub(crate) identity: RustCompilerPolicyIdentity,
+    pub(crate) invocation_status: String,
+    pub(crate) compliance_claim: String,
+    pub(crate) non_claims: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) standards_gate: Option<RustCompilerPolicyStandardsGateReceipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustCompilerPolicyIdentity {
+    pub(crate) mode: String,
+    pub(crate) provider: String,
+    pub(crate) profile: String,
+    pub(crate) adapter_kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_manifest_digest_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) driver_digest_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) lint_library_digest_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) config_digest_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) standards_policy_digest_blake3: Option<String>,
+    pub(crate) adapter_executable: String,
+    pub(crate) adapter_environment_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustCompilerPolicyStandardsGateReceipt {
+    pub(crate) scope: String,
+    pub(crate) policy_digest_blake3: String,
+    pub(crate) status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustCompilerPolicyWaiverSummary {
+    pub(crate) count: u32,
+    pub(crate) policies: Vec<String>,
+    pub(crate) entries_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RustCompilerPolicyProviderManifest {
+    provider: String,
+    profile: String,
+    adapter_kind: String,
+    compatible_rustc: RustCompilerPolicyManifestRustcIdentity,
+    driver: RustCompilerPolicyManifestArtifact,
+    lint_library: RustCompilerPolicyManifestArtifact,
+    config: RustCompilerPolicyManifestArtifact,
+    #[serde(default)]
+    standards_policy: Option<RustCompilerPolicyManifestArtifact>,
+    #[serde(default)]
+    required_environment: BTreeMap<String, String>,
+    #[serde(default)]
+    claims: Vec<String>,
+    #[serde(default)]
+    non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RustCompilerPolicyManifestRustcIdentity {
+    #[serde(default)]
+    executable_blake3: Option<String>,
+    version_verbose: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RustCompilerPolicyManifestArtifact {
+    path: String,
+    blake3: String,
+}
+
+#[derive(Debug, Clone)]
+struct RustCompilerPolicyInvocation {
+    executable: PathBuf,
+    environment: BTreeMap<String, String>,
+    report_path: PathBuf,
+    receipt: RustCompilerPolicyExecutionReceipt,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RustCompilerPolicyAdapterReport {
+    #[serde(default)]
+    waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
+    #[serde(default)]
+    standards_gate: Option<RustCompilerPolicyStandardsGateReceipt>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -582,6 +758,8 @@ pub(crate) struct RustUnitExecutionReceipt {
     pub(crate) dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) output_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
     pub(crate) receipt_hash: String,
 }
@@ -11442,6 +11620,508 @@ fn rustc_dependency_search_args(args: &[String]) -> BTreeSet<String> {
         .collect()
 }
 
+pub(crate) fn rust_compiler_policy_selection(
+    mode: &str,
+    provider_manifest: Option<PathBuf>,
+    expected_provider_manifest_digest: Option<String>,
+) -> Result<RustCompilerPolicySelection, RunError> {
+    let mode = RustCompilerPolicyMode::parse(mode)?;
+    if mode.is_plain() {
+        return Ok(RustCompilerPolicySelection {
+            mode,
+            provider_manifest: None,
+            expected_provider_manifest_digest: None,
+        });
+    }
+    Ok(RustCompilerPolicySelection {
+        mode,
+        provider_manifest,
+        expected_provider_manifest_digest,
+    })
+}
+
+fn resolve_compiler_policy_invocation(
+    selection: &RustCompilerPolicySelection,
+    rustc: &Path,
+    output_root: &Path,
+    unit: &RustUnitDerivationSummary,
+    toolchain: &RustToolchainIdentity,
+) -> Result<Result<Option<RustCompilerPolicyInvocation>, RustCompilerPolicyResolutionBlocker>, RunError> {
+    if selection.mode.is_plain() {
+        return Ok(Ok(None));
+    }
+    let Some(manifest_path) = selection.provider_manifest.as_ref() else {
+        return Ok(Err(compiler_policy_resolution_blocker(
+            selection,
+            "compiler-policy-missing-provider-manifest",
+            "compiler-policy mode requires a provider manifest",
+        )?));
+    };
+    let manifest_bytes = match fs::read(manifest_path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            return Ok(Err(compiler_policy_resolution_blocker(
+                selection,
+                "compiler-policy-missing-provider-manifest",
+                &format!("reading compiler-policy provider manifest {}: {err}", manifest_path.display()),
+            )?));
+        }
+    };
+    let manifest_digest = compiler_policy_digest_bytes(&manifest_bytes);
+    if let Some(expected_digest) = &selection.expected_provider_manifest_digest {
+        let Some(expected_digest) = normalize_compiler_policy_digest(expected_digest) else {
+            return Ok(Err(compiler_policy_resolution_blocker(
+                selection,
+                "compiler-policy-invalid-provider-manifest-digest",
+                "expected compiler-policy provider manifest digest must be b3:<64 lowercase hex> or raw 64 lowercase hex",
+            )?));
+        };
+        if expected_digest != manifest_digest {
+            return Ok(Err(compiler_policy_resolution_blocker(
+                selection,
+                "compiler-policy-provider-manifest-digest-mismatch",
+                "compiler-policy provider manifest digest does not match the operator-selected digest",
+            )?));
+        }
+    }
+    let manifest = match serde_json::from_slice::<RustCompilerPolicyProviderManifest>(&manifest_bytes) {
+        Ok(manifest) => manifest,
+        Err(err) => {
+            return Ok(Err(compiler_policy_resolution_blocker(
+                selection,
+                "compiler-policy-invalid-provider-manifest",
+                &format!("parsing compiler-policy provider manifest {}: {err}", manifest_path.display()),
+            )?));
+        }
+    };
+    match validate_compiler_policy_manifest(selection.mode, rustc, toolchain, &manifest, &manifest_digest)? {
+        Ok(identity) => {
+            let report_path = compiler_policy_report_path(output_root, unit);
+            Ok(Ok(Some(RustCompilerPolicyInvocation {
+                executable: PathBuf::from(&manifest.driver.path),
+                environment: manifest.required_environment,
+                report_path,
+                receipt: compiler_policy_receipt(identity, COMPILER_POLICY_STATUS_NOT_RUN, None),
+            })))
+        }
+        Err(blocker) => Ok(Err(blocker)),
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RustCompilerPolicyResolutionBlocker {
+    receipt: RustCompilerPolicyExecutionReceipt,
+    blocker: RustUnitExecutionBlocker,
+}
+
+fn validate_compiler_policy_manifest(
+    mode: RustCompilerPolicyMode,
+    rustc: &Path,
+    toolchain: &RustToolchainIdentity,
+    manifest: &RustCompilerPolicyProviderManifest,
+    manifest_digest: &str,
+) -> Result<Result<RustCompilerPolicyIdentity, RustCompilerPolicyResolutionBlocker>, RunError> {
+    if manifest.provider.is_empty() || manifest.profile.is_empty() || manifest.adapter_kind.is_empty() {
+        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+            mode,
+            manifest,
+            Some(manifest_digest.to_string()),
+            "compiler-policy-invalid-provider-manifest",
+            "compiler-policy provider, profile, and adapter kind must be non-empty",
+        )?));
+    }
+    if manifest.compatible_rustc.version_verbose != toolchain.version_verbose {
+        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+            mode,
+            manifest,
+            Some(manifest_digest.to_string()),
+            "compiler-policy-toolchain-mismatch",
+            "compiler-policy provider manifest was produced for a different rustc -vV identity",
+        )?));
+    }
+    if let Some(expected_rustc_digest) = &manifest.compatible_rustc.executable_blake3 {
+        if let Some(actual_rustc_digest) = readable_path_digest(rustc)? {
+            if normalize_compiler_policy_digest(expected_rustc_digest).as_deref() != Some(actual_rustc_digest.as_str())
+            {
+                return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+                    mode,
+                    manifest,
+                    Some(manifest_digest.to_string()),
+                    "compiler-policy-toolchain-mismatch",
+                    "compiler-policy provider manifest rustc executable digest does not match selected rustc",
+                )?));
+            }
+        }
+    }
+    let driver_digest = match verify_compiler_policy_artifact("driver", &manifest.driver) {
+        Ok(digest) => digest,
+        Err(blocker) => {
+            return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+                mode,
+                manifest,
+                Some(manifest_digest.to_string()),
+                &blocker.class,
+                &blocker.message,
+            )?));
+        }
+    };
+    let lint_library_digest = match verify_compiler_policy_artifact("lint_library", &manifest.lint_library) {
+        Ok(digest) => digest,
+        Err(blocker) => {
+            return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+                mode,
+                manifest,
+                Some(manifest_digest.to_string()),
+                &blocker.class,
+                &blocker.message,
+            )?));
+        }
+    };
+    let config_digest = match verify_compiler_policy_artifact("config", &manifest.config) {
+        Ok(digest) => digest,
+        Err(blocker) => {
+            return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+                mode,
+                manifest,
+                Some(manifest_digest.to_string()),
+                &blocker.class,
+                &blocker.message,
+            )?));
+        }
+    };
+    let standards_policy_digest = match &manifest.standards_policy {
+        Some(artifact) => match verify_compiler_policy_artifact("standards_policy", artifact) {
+            Ok(digest) => Some(digest),
+            Err(blocker) => {
+                return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+                    mode,
+                    manifest,
+                    Some(manifest_digest.to_string()),
+                    &blocker.class,
+                    &blocker.message,
+                )?));
+            }
+        },
+        None if mode == RustCompilerPolicyMode::Required => {
+            return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+                mode,
+                manifest,
+                Some(manifest_digest.to_string()),
+                "compiler-policy-missing-standards-policy",
+                "required compiler-policy mode requires a declared standards policy artifact",
+            )?));
+        }
+        None => None,
+    };
+    if manifest.claims.is_empty() {
+        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+            mode,
+            manifest,
+            Some(manifest_digest.to_string()),
+            "compiler-policy-invalid-provider-manifest",
+            "compiler-policy provider manifest must declare bounded claims",
+        )?));
+    }
+    if !manifest.non_claims.iter().any(|claim| claim == "program-correctness") {
+        return Ok(Err(compiler_policy_resolution_blocker_for_manifest(
+            mode,
+            manifest,
+            Some(manifest_digest.to_string()),
+            "compiler-policy-invalid-provider-manifest",
+            "compiler-policy provider manifest must explicitly avoid program-correctness claims",
+        )?));
+    }
+    let adapter_environment_digest_blake3 = rust_derivation_env_digest(&manifest.required_environment)?;
+    Ok(Ok(RustCompilerPolicyIdentity {
+        mode: mode.as_str().to_string(),
+        provider: manifest.provider.clone(),
+        profile: manifest.profile.clone(),
+        adapter_kind: manifest.adapter_kind.clone(),
+        provider_manifest_digest_blake3: Some(manifest_digest.to_string()),
+        driver_digest_blake3: Some(driver_digest),
+        lint_library_digest_blake3: Some(lint_library_digest),
+        config_digest_blake3: Some(config_digest),
+        standards_policy_digest_blake3: standards_policy_digest,
+        adapter_executable: normalize_path_string(Path::new(&manifest.driver.path)),
+        adapter_environment_digest_blake3,
+    }))
+}
+
+fn verify_compiler_policy_artifact(
+    field: &str,
+    artifact: &RustCompilerPolicyManifestArtifact,
+) -> Result<String, RustUnitExecutionBlocker> {
+    let Some(declared_digest) = normalize_compiler_policy_digest(&artifact.blake3) else {
+        return Err(RustUnitExecutionBlocker {
+            class: "compiler-policy-invalid-digest".to_string(),
+            message: format!("compiler-policy {field} digest must be b3:<64 lowercase hex> or raw 64 lowercase hex"),
+        });
+    };
+    let path = Path::new(&artifact.path);
+    let bytes = fs::read(path).map_err(|err| RustUnitExecutionBlocker {
+        class: "compiler-policy-missing-material".to_string(),
+        message: format!("reading compiler-policy {field} artifact {}: {err}", path.display()),
+    })?;
+    let actual_digest = compiler_policy_digest_bytes(&bytes);
+    if actual_digest != declared_digest {
+        return Err(RustUnitExecutionBlocker {
+            class: "compiler-policy-digest-mismatch".to_string(),
+            message: format!("compiler-policy {field} artifact digest does not match provider manifest"),
+        });
+    }
+    Ok(actual_digest)
+}
+
+fn readable_path_digest(path: &Path) -> Result<Option<String>, RunError> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(Some(compiler_policy_digest_bytes(&bytes))),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(RunError::Internal(format!("reading {} for compiler-policy digest: {err}", path.display()))),
+    }
+}
+
+fn compiler_policy_resolution_blocker(
+    selection: &RustCompilerPolicySelection,
+    class: &str,
+    message: &str,
+) -> Result<RustCompilerPolicyResolutionBlocker, RunError> {
+    let adapter_executable = selection
+        .provider_manifest
+        .as_deref()
+        .map(normalize_path_string)
+        .unwrap_or_else(|| "unresolved".to_string());
+    let identity = RustCompilerPolicyIdentity {
+        mode: selection.mode.as_str().to_string(),
+        provider: "unresolved".to_string(),
+        profile: "unresolved".to_string(),
+        adapter_kind: "unresolved".to_string(),
+        provider_manifest_digest_blake3: None,
+        driver_digest_blake3: None,
+        lint_library_digest_blake3: None,
+        config_digest_blake3: None,
+        standards_policy_digest_blake3: None,
+        adapter_executable,
+        adapter_environment_digest_blake3: rust_derivation_env_digest(&BTreeMap::new())?,
+    };
+    Ok(RustCompilerPolicyResolutionBlocker {
+        receipt: compiler_policy_receipt(identity, COMPILER_POLICY_STATUS_NOT_RUN, None),
+        blocker: RustUnitExecutionBlocker {
+            class: class.to_string(),
+            message: message.to_string(),
+        },
+    })
+}
+
+fn compiler_policy_resolution_blocker_for_manifest(
+    mode: RustCompilerPolicyMode,
+    manifest: &RustCompilerPolicyProviderManifest,
+    provider_manifest_digest_blake3: Option<String>,
+    class: &str,
+    message: &str,
+) -> Result<RustCompilerPolicyResolutionBlocker, RunError> {
+    let identity = RustCompilerPolicyIdentity {
+        mode: mode.as_str().to_string(),
+        provider: empty_to_unresolved(&manifest.provider),
+        profile: empty_to_unresolved(&manifest.profile),
+        adapter_kind: empty_to_unresolved(&manifest.adapter_kind),
+        provider_manifest_digest_blake3,
+        driver_digest_blake3: normalize_compiler_policy_digest(&manifest.driver.blake3),
+        lint_library_digest_blake3: normalize_compiler_policy_digest(&manifest.lint_library.blake3),
+        config_digest_blake3: normalize_compiler_policy_digest(&manifest.config.blake3),
+        standards_policy_digest_blake3: manifest
+            .standards_policy
+            .as_ref()
+            .and_then(|artifact| normalize_compiler_policy_digest(&artifact.blake3)),
+        adapter_executable: normalize_path_string(Path::new(&manifest.driver.path)),
+        adapter_environment_digest_blake3: rust_derivation_env_digest(&manifest.required_environment)?,
+    };
+    Ok(RustCompilerPolicyResolutionBlocker {
+        receipt: compiler_policy_receipt(identity, COMPILER_POLICY_STATUS_NOT_RUN, None),
+        blocker: RustUnitExecutionBlocker {
+            class: class.to_string(),
+            message: message.to_string(),
+        },
+    })
+}
+
+fn empty_to_unresolved(value: &str) -> String {
+    if value.is_empty() {
+        return "unresolved".to_string();
+    }
+    value.to_string()
+}
+
+fn compiler_policy_receipt(
+    identity: RustCompilerPolicyIdentity,
+    invocation_status: &str,
+    waiver_summary: Option<RustCompilerPolicyWaiverSummary>,
+) -> RustCompilerPolicyExecutionReceipt {
+    let compliance_claim = if invocation_status == COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN
+        || invocation_status == COMPILER_POLICY_STATUS_NOT_RUN
+    {
+        COMPILER_POLICY_CLAIM_NO_COMPLIANCE.to_string()
+    } else {
+        COMPILER_POLICY_CLAIM_CONFIGURED_PROFILE.to_string()
+    };
+    let standards_gate = identity.standards_policy_digest_blake3.as_ref().map(|policy_digest_blake3| {
+        RustCompilerPolicyStandardsGateReceipt {
+            scope: COMPILER_POLICY_STANDARDS_SCOPE_UNIT_SOURCE.to_string(),
+            policy_digest_blake3: policy_digest_blake3.clone(),
+            status: COMPILER_POLICY_STANDARDS_STATUS_ARTIFACT_VERIFIED.to_string(),
+            waiver_summary: None,
+        }
+    });
+    RustCompilerPolicyExecutionReceipt {
+        identity,
+        invocation_status: invocation_status.to_string(),
+        compliance_claim,
+        non_claims: COMPILER_POLICY_NON_CLAIMS.iter().map(|claim| (*claim).to_string()).collect(),
+        standards_gate,
+        waiver_summary,
+    }
+}
+
+fn compiler_policy_receipt_with_status(
+    mut receipt: RustCompilerPolicyExecutionReceipt,
+    invocation_status: &str,
+) -> RustCompilerPolicyExecutionReceipt {
+    receipt.invocation_status = invocation_status.to_string();
+    receipt.compliance_claim = if invocation_status == COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN
+        || invocation_status == COMPILER_POLICY_STATUS_NOT_RUN
+    {
+        COMPILER_POLICY_CLAIM_NO_COMPLIANCE.to_string()
+    } else {
+        COMPILER_POLICY_CLAIM_CONFIGURED_PROFILE.to_string()
+    };
+    receipt
+}
+
+fn compiler_policy_receipt_from_report(
+    invocation: &RustCompilerPolicyInvocation,
+    invocation_status: &str,
+    fail_closed: bool,
+) -> Result<Result<RustCompilerPolicyExecutionReceipt, RustUnitExecutionBlocker>, RunError> {
+    let mut receipt = compiler_policy_receipt_with_status(invocation.receipt.clone(), invocation_status);
+    if !invocation.report_path.exists() {
+        return Ok(Ok(receipt));
+    }
+    let bytes = fs::read(&invocation.report_path).map_err(|err| {
+        RunError::Internal(format!(
+            "reading compiler-policy adapter report {}: {err}",
+            invocation.report_path.display()
+        ))
+    })?;
+    let report = match serde_json::from_slice::<RustCompilerPolicyAdapterReport>(&bytes) {
+        Ok(report) => report,
+        Err(err) if fail_closed => {
+            return Ok(Err(RustUnitExecutionBlocker {
+                class: "compiler-policy-invalid-adapter-report".to_string(),
+                message: format!("compiler-policy adapter report is not valid JSON: {err}"),
+            }));
+        }
+        Err(_err) => return Ok(Ok(receipt)),
+    };
+    if let Some(waiver_summary) = report.waiver_summary {
+        receipt.waiver_summary = Some(waiver_summary);
+    }
+    if let Some(standards_gate) = report.standards_gate {
+        receipt.standards_gate = Some(standards_gate);
+    }
+    Ok(Ok(receipt))
+}
+
+fn compiler_policy_report_path(output_root: &Path, unit: &RustUnitDerivationSummary) -> PathBuf {
+    output_root
+        .join(COMPILER_POLICY_REPORT_DIR)
+        .join(format!("{}.json", safe_path_component(&unit.unit_id)))
+}
+
+fn normalize_compiler_policy_digest(value: &str) -> Option<String> {
+    let hex = value.strip_prefix(COMPILER_POLICY_DIGEST_PREFIX).unwrap_or(value);
+    if hex.len() != BLAKE3_HEX_CHARS {
+        return None;
+    }
+    if !hex.chars().all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase()) {
+        return None;
+    }
+    Some(format!("{COMPILER_POLICY_DIGEST_PREFIX}{hex}"))
+}
+
+fn compiler_policy_digest_bytes(bytes: &[u8]) -> String {
+    format!("{COMPILER_POLICY_DIGEST_PREFIX}{}", blake3::hash(bytes).to_hex())
+}
+
+fn prepare_unit_output_dir(unit_output_dir: &Path) -> Result<(), RunError> {
+    if unit_output_dir.exists() {
+        fs::remove_dir_all(unit_output_dir).map_err(|err| {
+            RunError::Internal(format!("removing prior Rust unit output {}: {err}", unit_output_dir.display()))
+        })?;
+    }
+    fs::create_dir_all(unit_output_dir)
+        .map_err(|err| RunError::Internal(format!("creating Rust unit output {}: {err}", unit_output_dir.display())))
+}
+
+fn execute_rust_compiler_command(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    unit_output_dir: &Path,
+    compiler_policy: Option<&RustCompilerPolicyInvocation>,
+) -> Result<std::process::Output, RunError> {
+    let mut command = match compiler_policy {
+        Some(policy) => {
+            if let Some(report_dir) = policy.report_path.parent() {
+                fs::create_dir_all(report_dir).map_err(|err| {
+                    RunError::Internal(format!(
+                        "creating compiler-policy report directory {}: {err}",
+                        report_dir.display()
+                    ))
+                })?;
+            }
+            let mut command = Command::new(&policy.executable);
+            command.arg(&options.rustc);
+            command
+        }
+        None => Command::new(&options.rustc),
+    };
+    command.args(rust_topology_runtime_args(&unit.derivation.args));
+    command.arg("--out-dir").arg(unit_output_dir);
+    apply_rust_topology_child_env(&mut command, &unit.derivation.env);
+    if let Some(policy) = compiler_policy {
+        for (key, value) in &policy.environment {
+            command.env(key, value);
+        }
+        command.env(COMPILER_POLICY_ADAPTER_REPORT_ENV, &policy.report_path);
+    }
+    command.output().map_err(|err| {
+        let executable = compiler_policy
+            .map_or_else(|| options.rustc.display().to_string(), |policy| policy.executable.display().to_string());
+        RunError::Internal(format!("executing Rust compiler command {executable} for unit {}: {err}", unit.unit_id))
+    })
+}
+
+fn compiler_policy_blocked_execution_receipt(
+    unit: &RustUnitDerivationSummary,
+    toolchain: RustToolchainIdentity,
+    environment_digest_blake3: String,
+    dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    compiler_policy: RustCompilerPolicyExecutionReceipt,
+    blocker: RustUnitExecutionBlocker,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    finalized_execution_receipt(
+        unit,
+        "blocked",
+        "not-run-compiler-policy-blocker",
+        toolchain,
+        environment_digest_blake3,
+        dependency_artifact_digests,
+        host_artifact_digests,
+        Vec::new(),
+        Some(compiler_policy),
+        Some(blocker),
+    )
+}
+
 fn execute_rust_unit(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
@@ -11500,6 +12180,38 @@ fn execute_rust_unit(
     let dependency_artifact_digests = dependency_artifact_digests.unwrap();
     let host_artifact_digests = host_artifact_digests.unwrap();
     let environment_digest_blake3 = rust_derivation_env_digest(&unit.derivation.env)?;
+    let compiler_policy_resolution = resolve_compiler_policy_invocation(
+        &options.compiler_policy,
+        &options.rustc,
+        &options.output_root,
+        unit,
+        &toolchain,
+    )?;
+    let (compiler_policy_invocation, unresolved_audit_policy) = match compiler_policy_resolution {
+        Ok(invocation) => (invocation, None),
+        Err(policy_blocker) if options.compiler_policy.mode == RustCompilerPolicyMode::Audit => (
+            None,
+            Some(compiler_policy_receipt_with_status(
+                policy_blocker.receipt,
+                COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN,
+            )),
+        ),
+        Err(policy_blocker) => {
+            return compiler_policy_blocked_execution_receipt(
+                unit,
+                toolchain,
+                environment_digest_blake3,
+                dependency_artifact_digests,
+                host_artifact_digests,
+                policy_blocker.receipt,
+                policy_blocker.blocker,
+            );
+        }
+    };
+    let expected_compiler_policy_receipt = compiler_policy_invocation
+        .as_ref()
+        .map(|invocation| invocation.receipt.clone())
+        .or(unresolved_audit_policy.clone());
     if let Some(receipt) = try_reuse_rust_unit_outputs(
         unit,
         &unit_output_dir,
@@ -11507,36 +12219,95 @@ fn execute_rust_unit(
         environment_digest_blake3.clone(),
         dependency_artifact_digests.clone(),
         host_artifact_digests.clone(),
+        expected_compiler_policy_receipt.clone(),
     )? {
         return Ok(receipt);
     }
-    if unit_output_dir.exists() {
-        fs::remove_dir_all(&unit_output_dir).map_err(|err| {
-            RunError::Internal(format!("removing prior Rust unit output {}: {err}", unit_output_dir.display()))
-        })?;
-    }
-    fs::create_dir_all(&unit_output_dir)
-        .map_err(|err| RunError::Internal(format!("creating Rust unit output {}: {err}", unit_output_dir.display())))?;
+    prepare_unit_output_dir(&unit_output_dir)?;
 
-    let mut command = Command::new(&options.rustc);
-    command.args(rust_topology_runtime_args(&unit.derivation.args));
-    command.arg("--out-dir").arg(&unit_output_dir);
-    apply_rust_topology_child_env(&mut command, &unit.derivation.env);
-    let output = command
-        .output()
-        .map_err(|err| RunError::Internal(format!("executing rustc for unit {}: {err}", unit.unit_id)))?;
+    let output = execute_rust_compiler_command(unit, options, &unit_output_dir, compiler_policy_invocation.as_ref())?;
+    let mut compiler_policy_receipt = expected_compiler_policy_receipt;
     if !output.status.success() {
-        let diagnostic = redacted_diagnostic(&output.stderr);
-        return failed_execution_receipt(
-            unit,
-            toolchain,
-            dependency_artifact_digests,
-            host_artifact_digests,
-            &diagnostic,
-        );
+        if let Some(invocation) = compiler_policy_invocation.as_ref() {
+            if options.compiler_policy.mode == RustCompilerPolicyMode::Audit {
+                prepare_unit_output_dir(&unit_output_dir)?;
+                let fallback_output = execute_rust_compiler_command(unit, options, &unit_output_dir, None)?;
+                if !fallback_output.status.success() {
+                    let diagnostic = redacted_diagnostic(&fallback_output.stderr);
+                    return failed_execution_receipt(
+                        unit,
+                        toolchain,
+                        dependency_artifact_digests,
+                        host_artifact_digests,
+                        compiler_policy_receipt.map(|receipt| {
+                            compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN)
+                        }),
+                        &diagnostic,
+                    );
+                }
+                compiler_policy_receipt = Some(compiler_policy_receipt_with_status(
+                    invocation.receipt.clone(),
+                    COMPILER_POLICY_STATUS_AUDIT_FAILED_OPEN,
+                ));
+            } else {
+                let diagnostic = redacted_diagnostic(&output.stderr);
+                return failed_execution_receipt(
+                    unit,
+                    toolchain,
+                    dependency_artifact_digests,
+                    host_artifact_digests,
+                    compiler_policy_receipt
+                        .map(|receipt| compiler_policy_receipt_with_status(receipt, COMPILER_POLICY_STATUS_FAILED)),
+                    &diagnostic,
+                );
+            }
+        } else {
+            let diagnostic = redacted_diagnostic(&output.stderr);
+            return failed_execution_receipt(
+                unit,
+                toolchain,
+                dependency_artifact_digests,
+                host_artifact_digests,
+                compiler_policy_receipt,
+                &diagnostic,
+            );
+        }
+    } else if let Some(invocation) = compiler_policy_invocation.as_ref() {
+        match compiler_policy_receipt_from_report(
+            invocation,
+            COMPILER_POLICY_STATUS_PASSED,
+            options.compiler_policy.mode.is_fail_closed(),
+        )? {
+            Ok(receipt) => compiler_policy_receipt = Some(receipt),
+            Err(blocker) => {
+                return compiler_policy_blocked_execution_receipt(
+                    unit,
+                    toolchain,
+                    environment_digest_blake3,
+                    dependency_artifact_digests,
+                    host_artifact_digests,
+                    compiler_policy_receipt_with_status(invocation.receipt.clone(), COMPILER_POLICY_STATUS_FAILED),
+                    blocker,
+                );
+            }
+        }
     }
     let output_artifact_digests = digest_output_artifacts(&unit_output_dir)?;
     if output_artifact_digests.is_empty() {
+        if let Some(compiler_policy) = compiler_policy_receipt.clone() {
+            return compiler_policy_blocked_execution_receipt(
+                unit,
+                toolchain,
+                environment_digest_blake3,
+                dependency_artifact_digests,
+                host_artifact_digests,
+                compiler_policy,
+                RustUnitExecutionBlocker {
+                    class: "missing-declared-output".to_string(),
+                    message: "rustc completed but produced no declared output artifacts".to_string(),
+                },
+            );
+        }
         return blocked_execution_receipt(
             Some(unit),
             "missing-declared-output",
@@ -11552,6 +12323,7 @@ fn execute_rust_unit(
         dependency_artifact_digests,
         host_artifact_digests,
         output_artifact_digests,
+        compiler_policy_receipt,
         None,
     )?;
     write_rust_unit_execution_receipt(&unit_output_dir, &receipt)?;
@@ -11565,6 +12337,7 @@ fn try_reuse_rust_unit_outputs(
     environment_digest_blake3: String,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
 ) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
     let receipt_path = unit_output_dir.join(RUST_UNIT_EXECUTION_RECEIPT_FILE);
     if !receipt_path.exists() {
@@ -11583,6 +12356,7 @@ fn try_reuse_rust_unit_outputs(
                 dependency_artifact_digests,
                 host_artifact_digests,
                 Vec::new(),
+                compiler_policy,
                 "prior execution receipt is missing or malformed",
             )
             .map(Some);
@@ -11597,11 +12371,14 @@ fn try_reuse_rust_unit_outputs(
             dependency_artifact_digests,
             host_artifact_digests,
             current_output_artifact_digests,
+            compiler_policy,
             "prior execution receipt exists but no declared output artifacts are readable",
         )
         .map(Some);
     }
     let expected_outputs = sorted_strings(unit.derivation.outputs.clone());
+    let expected_policy_identity = compiler_policy.as_ref().map(|receipt| &receipt.identity);
+    let prior_policy_identity = prior_receipt.compiler_policy.as_ref().map(|receipt| &receipt.identity);
     let matches_current_inputs = prior_receipt.execution_status == "success"
         && prior_receipt.unit_id == unit.unit_id
         && prior_receipt.package_id == unit.package_id
@@ -11615,6 +12392,7 @@ fn try_reuse_rust_unit_outputs(
         && prior_receipt.dependency_artifact_digests == dependency_artifact_digests
         && prior_receipt.host_artifact_digests == host_artifact_digests
         && prior_receipt.output_artifact_digests == current_output_artifact_digests
+        && prior_policy_identity == expected_policy_identity
         && prior_receipt.blocker.is_none();
     if !matches_current_inputs {
         return stale_cached_output_receipt(
@@ -11624,7 +12402,8 @@ fn try_reuse_rust_unit_outputs(
             dependency_artifact_digests,
             host_artifact_digests,
             current_output_artifact_digests,
-            "prior execution receipt does not match current explicit inputs or output artifact digests",
+            compiler_policy,
+            "prior execution receipt does not match current explicit inputs, compiler-policy identity, or output artifact digests",
         )
         .map(Some);
     }
@@ -11637,6 +12416,7 @@ fn try_reuse_rust_unit_outputs(
         dependency_artifact_digests,
         host_artifact_digests,
         current_output_artifact_digests,
+        prior_receipt.compiler_policy,
         None,
     )?;
     write_rust_unit_execution_receipt(unit_output_dir, &receipt)?;
@@ -11650,6 +12430,7 @@ fn stale_cached_output_receipt(
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     output_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     message: &str,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
     finalized_execution_receipt(
@@ -11661,6 +12442,7 @@ fn stale_cached_output_receipt(
         dependency_artifact_digests,
         host_artifact_digests,
         output_artifact_digests,
+        compiler_policy,
         Some(RustUnitExecutionBlocker {
             class: "stale-cached-output".to_string(),
             message: message.to_string(),
@@ -12139,6 +12921,7 @@ fn blocked_execution_receipt(
         Vec::new(),
         Vec::new(),
         Vec::new(),
+        None,
         Some(RustUnitExecutionBlocker {
             class: class.to_string(),
             message: message.to_string(),
@@ -12151,6 +12934,7 @@ fn failed_execution_receipt(
     toolchain: RustToolchainIdentity,
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     diagnostic: &str,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
     finalized_execution_receipt(
@@ -12162,6 +12946,7 @@ fn failed_execution_receipt(
         dependency_artifact_digests,
         host_artifact_digests,
         Vec::new(),
+        compiler_policy,
         Some(RustUnitExecutionBlocker {
             class: "rustc-failed".to_string(),
             message: diagnostic.to_string(),
@@ -12178,6 +12963,7 @@ fn finalized_execution_receipt(
     dependency_artifact_digests: Vec<RustExecutionArtifactDigest>,
     host_artifact_digests: Vec<RustExecutionArtifactDigest>,
     output_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     blocker: Option<RustUnitExecutionBlocker>,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
     let mut receipt = RustUnitExecutionReceipt {
@@ -12196,6 +12982,7 @@ fn finalized_execution_receipt(
         dependency_artifact_digests,
         host_artifact_digests,
         output_artifact_digests,
+        compiler_policy,
         blocker,
         receipt_hash: String::new(),
     };
@@ -12452,6 +13239,8 @@ fn normalize_path_string(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use std::ffi::OsStr;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     use std::process::Command;
 
     use tempfile::TempDir;
@@ -12805,6 +13594,169 @@ mod tests {
             derivations,
             blockers: Vec::new(),
         }
+    }
+
+    const TEST_RUSTC_VERSION_VERBOSE: &str =
+        "rustc 1.99.0-test\nrelease: 1.99.0-test\ncommit-hash: test-commit\nhost: x86_64-unknown-linux-gnu";
+    const TEST_POLICY_PROVIDER: &str = "octet";
+    const TEST_POLICY_PROFILE: &str = "artifact-required";
+    const TEST_POLICY_ADAPTER_KIND: &str = "dylint-rustc-driver";
+    const TEST_POLICY_REQUIRED_ENV_KEY: &str = "DYLINT_NO_DEPS";
+    const TEST_POLICY_REQUIRED_ENV_VALUE: &str = "1";
+    const TEST_POLICY_WAIVER_DIGEST: &str = "b3:1111111111111111111111111111111111111111111111111111111111111111";
+    const TEST_POLICY_BAD_DIGEST: &str = "b3:0000000000000000000000000000000000000000000000000000000000000000";
+    const TEST_FAKE_RUSTC_ARTIFACT: &str = "libpolicy_fixture.rlib";
+    const TEST_FAKE_POLICY_FAIL_STATUS: i32 = 17;
+    const TEST_FAKE_RUSTC_MISSING_OUT_STATUS: i32 = 2;
+    const TEST_FAKE_POLICY_ENV_STATUS: i32 = 9;
+    #[cfg(unix)]
+    const TEST_EXECUTABLE_MODE: u32 = 0o755;
+
+    fn write_executable(path: &Path, text: &str) {
+        std::fs::write(path, text).unwrap();
+        #[cfg(unix)]
+        {
+            let mut permissions = std::fs::metadata(path).unwrap().permissions();
+            permissions.set_mode(TEST_EXECUTABLE_MODE);
+            std::fs::set_permissions(path, permissions).unwrap();
+        }
+    }
+
+    fn write_fake_rustc(dir: &Path) -> PathBuf {
+        let rustc = dir.join("rustc");
+        write_executable(
+            &rustc,
+            &format!(
+                "#!/bin/sh\nif [ \"$1\" = \"-vV\" ]; then\n  printf '%s\\n' \"{TEST_RUSTC_VERSION_VERBOSE}\"\n  exit 0\nfi\nout=''\nprev=''\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--out-dir\" ]; then out=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nif [ -z \"$out\" ]; then echo missing-out-dir >&2; exit {TEST_FAKE_RUSTC_MISSING_OUT_STATUS}; fi\nmkdir -p \"$out\"\nprintf fake-rlib > \"$out/{TEST_FAKE_RUSTC_ARTIFACT}\"\n"
+            ),
+        );
+        rustc
+    }
+
+    fn write_fake_policy_adapter(dir: &Path, passes: bool, report_json: Option<&str>) -> PathBuf {
+        let adapter = dir.join(if passes { "policy-driver" } else { "policy-driver-fails" });
+        let report_writer = report_json.map_or_else(String::new, |json| {
+            format!(
+                "if [ -n \"$MANTLE_COMPILER_POLICY_REPORT\" ]; then\n  cat > \"$MANTLE_COMPILER_POLICY_REPORT\" <<'JSON'\n{json}\nJSON\nfi\n"
+            )
+        });
+        let status = if passes { 0 } else { TEST_FAKE_POLICY_FAIL_STATUS };
+        write_executable(
+            &adapter,
+            &format!(
+                "#!/bin/sh\nif [ \"${{{TEST_POLICY_REQUIRED_ENV_KEY}:-}}\" != \"{TEST_POLICY_REQUIRED_ENV_VALUE}\" ]; then echo missing-policy-env >&2; exit {TEST_FAKE_POLICY_ENV_STATUS}; fi\n{report_writer}if [ {status} -ne 0 ]; then echo policy-denied >&2; exit {status}; fi\nrustc=\"$1\"\nshift\nexec \"$rustc\" \"$@\"\n"
+            ),
+        );
+        adapter
+    }
+
+    fn write_policy_manifest(
+        dir: &Path,
+        rustc: &Path,
+        driver: &Path,
+        include_standards: bool,
+    ) -> (PathBuf, PathBuf, PathBuf, Option<PathBuf>) {
+        let lint_library = dir.join("liboctet_lints.so");
+        let config = dir.join("dylint.toml");
+        let standards = dir.join("octet-standards.json");
+        std::fs::write(&lint_library, "lint-library").unwrap();
+        std::fs::write(&config, "[octet]\ndisabled_lints=[]\n").unwrap();
+        if include_standards {
+            std::fs::write(&standards, "{\"standards\":true}\n").unwrap();
+        }
+        let standards_json = if include_standards {
+            serde_json::json!({
+                "path": normalize_path_string(&standards),
+                "blake3": compiler_policy_digest_bytes(&std::fs::read(&standards).unwrap()),
+            })
+        } else {
+            Value::Null
+        };
+        let manifest = serde_json::json!({
+            "schema": "octet-compiler-policy-provider/v1",
+            "provider": TEST_POLICY_PROVIDER,
+            "profile": TEST_POLICY_PROFILE,
+            "adapter_kind": TEST_POLICY_ADAPTER_KIND,
+            "compatible_rustc": {
+                "executable": normalize_path_string(rustc),
+                "executable_blake3": Value::Null,
+                "version_verbose": TEST_RUSTC_VERSION_VERBOSE,
+                "release": "1.99.0-test",
+                "commit_hash": "test-commit"
+            },
+            "driver": {
+                "path": normalize_path_string(driver),
+                "blake3": compiler_policy_digest_bytes(&std::fs::read(driver).unwrap())
+            },
+            "lint_library": {
+                "path": normalize_path_string(&lint_library),
+                "blake3": compiler_policy_digest_bytes(&std::fs::read(&lint_library).unwrap())
+            },
+            "config": {
+                "path": normalize_path_string(&config),
+                "blake3": compiler_policy_digest_bytes(&std::fs::read(&config).unwrap())
+            },
+            "standards_policy": standards_json,
+            "required_environment": { TEST_POLICY_REQUIRED_ENV_KEY: TEST_POLICY_REQUIRED_ENV_VALUE },
+            "required_lints": ["no_unwrap"],
+            "disabled_lints": [],
+            "waiver_contract": {"syntax": ["octet-allow:"], "required_fields": ["owner"], "summary_shape": ["count"]},
+            "claims": ["configured-profile-compliance"],
+            "non_claims": ["program-correctness", "complete-fcis-proof", "general-safety", "absence-of-all-defects"]
+        });
+        let manifest_path = dir.join("provider-manifest.json");
+        std::fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        (manifest_path, lint_library, config, if include_standards { Some(standards) } else { None })
+    }
+
+    fn write_policy_manifest_with_rustc_version(
+        dir: &Path,
+        rustc: &Path,
+        driver: &Path,
+        version_verbose: &str,
+    ) -> PathBuf {
+        let (manifest_path, _lint, _config, _standards) = write_policy_manifest(dir, rustc, driver, true);
+        let mut manifest = serde_json::from_slice::<Value>(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        manifest["compatible_rustc"]["version_verbose"] = Value::String(version_verbose.to_string());
+        std::fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        manifest_path
+    }
+
+    fn policy_selection(mode: RustCompilerPolicyMode, manifest: &Path) -> RustCompilerPolicySelection {
+        RustCompilerPolicySelection {
+            mode,
+            provider_manifest: Some(manifest.to_path_buf()),
+            expected_provider_manifest_digest: None,
+        }
+    }
+
+    fn policy_test_graph(dir: &Path) -> UnitDerivationGraphSummary {
+        let crate_dir = dir.join("policy-crate");
+        let manifest_path = crate_dir.join("Cargo.toml");
+        let src_dir = crate_dir.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(&manifest_path, "[package]\nname='policy-crate'\nversion='0.1.0'\n").unwrap();
+        let lib_path = src_dir.join("lib.rs");
+        std::fs::write(&lib_path, "pub fn answer() -> u32 { 42 }\n").unwrap();
+        let packages = vec![CargoPackage {
+            id: "path+file://policy-crate#policy-crate@0.1.0".to_string(),
+            name: "policy-crate".to_string(),
+            version: "0.1.0".to_string(),
+            source: None,
+            manifest_path: manifest_path.display().to_string(),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
+        }];
+        let closure = summarize_source_closure(&packages, &[]).unwrap();
+        let unit_graph = serde_json::json!({
+            "units": [{
+                "pkg_id": "path+file://policy-crate#policy-crate@0.1.0",
+                "target": {"name": "policy-crate", "kind": ["lib"], "crate_types": ["lib"], "src_path": lib_path.display().to_string(), "edition": "2021"},
+                "mode": "build",
+                "deps": []
+            }]
+        });
+        summarize_unit_derivation_graph(&unit_graph, &closure, &options(dir)).unwrap()
     }
 
     fn rustc_edition_arg(args: &[String]) -> &str {
@@ -14169,6 +15121,7 @@ rust-version = "1.80"
             &RustUnitExecutionOptions {
                 rustc: dir.path().join("rustc"),
                 output_root: dir.path().join("unit-out"),
+                compiler_policy: RustCompilerPolicySelection::default(),
             },
             &dir.path().join("out"),
             None,
@@ -14260,6 +15213,7 @@ rust-version = "1.80"
         let options = RustUnitExecutionOptions {
             rustc: dir.path().join("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, None);
@@ -14296,6 +15250,7 @@ rust-version = "1.80"
         let options = RustUnitExecutionOptions {
             rustc: rustc_path.clone(),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         };
 
         let root = build_script_package_root(&unit).expect("source path has package root");
@@ -14329,6 +15284,7 @@ rust-version = "1.80"
         let options = RustUnitExecutionOptions {
             rustc: dir.path().join("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         };
 
         let env = build_script_child_env(&unit, &options, &out_dir, build_script_package_root(&unit).as_deref());
@@ -18483,6 +19439,7 @@ checksum = "0123456789abcdef"
         let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
 
@@ -18508,6 +19465,7 @@ checksum = "0123456789abcdef"
         let repeated = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
         assert_eq!(repeated.execution_status, "success");
@@ -18526,12 +19484,319 @@ checksum = "0123456789abcdef"
         let stale = execute_first_supported_rust_unit(&changed_env_graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
         assert_eq!(stale.execution_status, "blocked");
         assert_eq!(stale.rebuild_reason, "not-run-stale-cached-output");
         assert_eq!(stale.blocker.as_ref().unwrap().class, "stale-cached-output");
         assert_ne!(stale.environment_digest_blake3, receipt.environment_digest_blake3);
+        assert!(receipt.compiler_policy.is_none());
+    }
+
+    #[test]
+    fn compiler_policy_audit_mode_records_adapter_identity_and_waivers() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let report = serde_json::json!({
+            "waiver_summary": {
+                "count": 1,
+                "policies": ["octet::no_unwrap"],
+                "entries_digest_blake3": TEST_POLICY_WAIVER_DIGEST
+            }
+        });
+        let adapter = write_fake_policy_adapter(dir.path(), true, Some(&report.to_string()));
+        let (manifest, _lint, _config, standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("audit-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Audit, &manifest),
+        })
+        .unwrap();
+
+        let policy = receipt.compiler_policy.as_ref().expect("policy receipt is present");
+        assert_eq!(receipt.execution_status, "success");
+        assert_eq!(policy.identity.mode, COMPILER_POLICY_MODE_AUDIT);
+        assert_eq!(policy.identity.provider, TEST_POLICY_PROVIDER);
+        assert_eq!(policy.identity.profile, TEST_POLICY_PROFILE);
+        assert_eq!(policy.identity.adapter_kind, TEST_POLICY_ADAPTER_KIND);
+        assert_eq!(policy.invocation_status, COMPILER_POLICY_STATUS_PASSED);
+        assert!(
+            policy
+                .identity
+                .provider_manifest_digest_blake3
+                .as_ref()
+                .unwrap()
+                .starts_with(COMPILER_POLICY_DIGEST_PREFIX)
+        );
+        assert_eq!(policy.waiver_summary.as_ref().unwrap().count, 1);
+        assert_eq!(policy.waiver_summary.as_ref().unwrap().entries_digest_blake3, TEST_POLICY_WAIVER_DIGEST);
+        assert_eq!(policy.standards_gate.as_ref().unwrap().scope, COMPILER_POLICY_STANDARDS_SCOPE_UNIT_SOURCE);
+        assert_eq!(
+            policy.standards_gate.as_ref().unwrap().policy_digest_blake3,
+            compiler_policy_digest_bytes(&std::fs::read(standards.unwrap()).unwrap())
+        );
+        assert!(policy.non_claims.iter().any(|claim| claim == "program-correctness"));
+    }
+
+    #[test]
+    fn compiler_policy_json_receipt_contains_identity_and_waiver_summary() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let report = serde_json::json!({
+            "waiver_summary": {
+                "count": 1,
+                "policies": ["octet::no_unwrap"],
+                "entries_digest_blake3": TEST_POLICY_WAIVER_DIGEST
+            }
+        });
+        let adapter = write_fake_policy_adapter(dir.path(), true, Some(&report.to_string()));
+        let (manifest, _lint, _config, _standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("json-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Audit, &manifest),
+        })
+        .unwrap();
+        let json = serde_json::to_value(&receipt).unwrap();
+
+        assert_eq!(json["compiler_policy"]["identity"]["provider"], TEST_POLICY_PROVIDER);
+        assert_eq!(json["compiler_policy"]["identity"]["mode"], COMPILER_POLICY_MODE_AUDIT);
+        assert_eq!(json["compiler_policy"]["waiver_summary"]["count"], 1);
+        assert_eq!(json["compiler_policy"]["waiver_summary"]["entries_digest_blake3"], TEST_POLICY_WAIVER_DIGEST);
+        assert!(
+            json["compiler_policy"]["identity"]["provider_manifest_digest_blake3"]
+                .as_str()
+                .unwrap()
+                .starts_with(COMPILER_POLICY_DIGEST_PREFIX)
+        );
+    }
+
+    #[test]
+    fn compiler_policy_deny_mode_rejects_adapter_failure() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), false, None);
+        let (manifest, _lint, _config, _standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("deny-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Deny, &manifest),
+        })
+        .unwrap();
+
+        let policy = receipt.compiler_policy.as_ref().expect("policy receipt is present");
+        assert_eq!(receipt.execution_status, "failed");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "rustc-failed");
+        assert_eq!(policy.identity.mode, COMPILER_POLICY_MODE_DENY);
+        assert_eq!(policy.invocation_status, COMPILER_POLICY_STATUS_FAILED);
+        assert!(receipt.output_artifact_digests.is_empty());
+    }
+
+    #[test]
+    fn compiler_policy_required_mode_records_complete_static_identity() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), true, None);
+        let (manifest, _lint, _config, _standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("required-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+        })
+        .unwrap();
+
+        let policy = receipt.compiler_policy.as_ref().expect("policy receipt is present");
+        assert_eq!(receipt.execution_status, "success");
+        assert_eq!(policy.identity.mode, COMPILER_POLICY_MODE_REQUIRED);
+        assert_eq!(policy.invocation_status, COMPILER_POLICY_STATUS_PASSED);
+        assert!(policy.identity.driver_digest_blake3.as_ref().unwrap().starts_with(COMPILER_POLICY_DIGEST_PREFIX));
+        assert!(
+            policy
+                .identity
+                .lint_library_digest_blake3
+                .as_ref()
+                .unwrap()
+                .starts_with(COMPILER_POLICY_DIGEST_PREFIX)
+        );
+        assert!(policy.identity.config_digest_blake3.as_ref().unwrap().starts_with(COMPILER_POLICY_DIGEST_PREFIX));
+        assert!(
+            policy
+                .identity
+                .standards_policy_digest_blake3
+                .as_ref()
+                .unwrap()
+                .starts_with(COMPILER_POLICY_DIGEST_PREFIX)
+        );
+        assert_eq!(policy.identity.adapter_environment_digest_blake3.len(), BLAKE3_HEX_CHARS);
+        assert!(policy.compliance_claim.contains("compiler-policy profile"));
+    }
+
+    #[test]
+    fn compiler_policy_required_mode_blocks_missing_driver() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), true, None);
+        let (manifest, _lint, _config, _standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        std::fs::remove_file(adapter).unwrap();
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("missing-driver-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.rebuild_reason, "not-run-compiler-policy-blocker");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "compiler-policy-missing-material");
+        assert!(receipt.compiler_policy.is_some());
+        assert!(receipt.output_artifact_digests.is_empty());
+    }
+
+    #[test]
+    fn compiler_policy_required_mode_blocks_missing_lint_library() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), true, None);
+        let (manifest, lint, _config, _standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        std::fs::remove_file(lint).unwrap();
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("missing-lint-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "compiler-policy-missing-material");
+        assert!(receipt.compiler_policy.as_ref().unwrap().identity.lint_library_digest_blake3.is_some());
+    }
+
+    #[test]
+    fn compiler_policy_required_mode_blocks_toolchain_mismatch() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), true, None);
+        let manifest =
+            write_policy_manifest_with_rustc_version(dir.path(), &rustc, &adapter, "rustc 0.0.0\nrelease: 0.0.0");
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("toolchain-mismatch-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "compiler-policy-toolchain-mismatch");
+        assert!(receipt.output_artifact_digests.is_empty());
+    }
+
+    #[test]
+    fn compiler_policy_required_mode_blocks_policy_digest_mismatch() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), true, None);
+        let (manifest, _lint, config, _standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        std::fs::write(config, "[octet]\ndisabled_lints=['no_unwrap']\n").unwrap();
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("digest-mismatch-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "compiler-policy-digest-mismatch");
+        assert!(receipt.compiler_policy.as_ref().unwrap().identity.config_digest_blake3.is_some());
+    }
+
+    #[test]
+    fn compiler_policy_required_mode_blocks_missing_standards_artifact() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), true, None);
+        let (manifest, _lint, _config, standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        std::fs::remove_file(standards.unwrap()).unwrap();
+        let graph = policy_test_graph(dir.path());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("missing-standards-out"),
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "compiler-policy-missing-material");
+        assert!(receipt.compiler_policy.as_ref().unwrap().identity.standards_policy_digest_blake3.is_some());
+    }
+
+    #[test]
+    fn compiler_policy_required_mode_rejects_raw_rustc_cached_output() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), true, None);
+        let (manifest, _lint, _config, _standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        let graph = policy_test_graph(dir.path());
+        let output_root = dir.path().join("reuse-out");
+
+        let plain = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc: rustc.clone(),
+            output_root: output_root.clone(),
+            compiler_policy: RustCompilerPolicySelection::default(),
+        })
+        .unwrap();
+        let required = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root,
+            compiler_policy: policy_selection(RustCompilerPolicyMode::Required, &manifest),
+        })
+        .unwrap();
+
+        assert_eq!(plain.execution_status, "success");
+        assert!(plain.compiler_policy.is_none());
+        assert_eq!(required.execution_status, "blocked");
+        assert_eq!(required.blocker.as_ref().unwrap().class, "stale-cached-output");
+        assert!(required.compiler_policy.is_some());
+        assert!(required.blocker.as_ref().unwrap().message.contains("compiler-policy identity"));
+    }
+
+    #[test]
+    fn compiler_policy_expected_manifest_digest_mismatch_blocks_required_mode() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let adapter = write_fake_policy_adapter(dir.path(), true, None);
+        let (manifest, _lint, _config, _standards) = write_policy_manifest(dir.path(), &rustc, &adapter, true);
+        let graph = policy_test_graph(dir.path());
+        let mut selection = policy_selection(RustCompilerPolicyMode::Required, &manifest);
+        selection.expected_provider_manifest_digest = Some(TEST_POLICY_BAD_DIGEST.to_string());
+
+        let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("manifest-digest-out"),
+            compiler_policy: selection,
+        })
+        .unwrap();
+
+        assert_eq!(receipt.execution_status, "blocked");
+        assert_eq!(receipt.blocker.as_ref().unwrap().class, "compiler-policy-provider-manifest-digest-mismatch");
+        assert!(receipt.compiler_policy.is_some());
     }
 
     #[test]
@@ -18601,6 +19866,7 @@ checksum = "0123456789abcdef"
         let receipt = execute_first_rust_unit_dependency_chain(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("chain-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
 
@@ -18649,6 +19915,7 @@ checksum = "0123456789abcdef"
         let receipt = execute_first_rust_unit_dependency_chain(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("chain-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
 
@@ -18694,6 +19961,7 @@ checksum = "0123456789abcdef"
         let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
 
@@ -18746,6 +20014,7 @@ checksum = "0123456789abcdef"
         let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
 
@@ -18796,6 +20065,7 @@ checksum = "0123456789abcdef"
         let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
 
@@ -18849,6 +20119,7 @@ checksum = "0123456789abcdef"
         let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
 
@@ -18892,6 +20163,7 @@ checksum = "0123456789abcdef"
         let receipt = execute_first_supported_rust_unit(&graph, &RustUnitExecutionOptions {
             rustc: PathBuf::from("rustc"),
             output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
         })
         .unwrap();
 
