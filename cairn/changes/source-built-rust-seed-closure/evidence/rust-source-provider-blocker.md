@@ -113,3 +113,69 @@ Output summaries:
   "valid": true,
   "verdict": "PASS"
 ```
+
+## Provider import orchestration slice
+
+After the fail-closed materializer landed, Mantle added a validated import path for an existing provider directory. This does not complete source-built Rust materialization; it only gives future externally produced providers a strict acceptance boundary.
+
+### Baseline before import changes
+
+Commands:
+
+```sh
+cargo test -p mantle --bin mantle rust_source_provider
+cargo test -p mantle --bin mantle bootstrap_rust_source_provider
+```
+
+Output summaries:
+
+```text
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 718 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 726 filtered out; finished in 0.00s
+```
+
+### Implementation
+
+- `src/rust_source_provider.rs` now provides `import_rust_source_provider(import_dir, output_dir)`.
+- Import validates the source directory before copying, refuses existing output directories, copies into the requested output path only after validation, and revalidates the copied provider metadata/artifact digests.
+- `mantle bootstrap rust-source-provider --import-dir <dir> --output-dir <dir>` exposes the import path.
+- Negative tests prove prebuilt provider metadata and existing output directories fail without creating/replacing provider output.
+
+### Post-change checks
+
+Commands:
+
+```sh
+cargo test -p mantle --bin mantle rust_source_provider
+cargo test -p mantle --bin mantle bootstrap_rust_source_provider
+```
+
+Output summaries:
+
+```text
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 718 filtered out; finished in 0.02s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 729 filtered out; finished in 0.00s
+```
+
+Decision: the real provider task remains blocked because no actual Rust-from-C/source-built Rust provider directory exists. Import support must not be counted as materializing or importing a real provider until a non-fake provider is supplied and smoke-tested.
+
+## Cairn validation after import orchestration update
+
+Commands:
+
+```sh
+nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+nix run path:/home/brittonr/git/cairn#cairn -- gate tasks source-built-rust-seed-closure --root .
+```
+
+Output summaries:
+
+```json
+  "changes": 1,
+  "specs_validated": 6,
+  "valid": true
+  "issues": [],
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+```

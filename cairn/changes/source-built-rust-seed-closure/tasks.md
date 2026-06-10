@@ -10,7 +10,7 @@
 ## Implementation
 
 - [ ] [serial] Materialize or import a real receipt-bound Rust compiler/sysroot provider; do not mark complete with a wrapper around prebuilt Nix Rust. r[rust_package_planning.source_built_rust_seed_closure]
-  - Blocked: `evidence/rust-source-provider-blocker.md` records the deterministic fail-closed blocker from `mantle bootstrap rust-source-provider`; no provider output was created.
+  - Blocked: `evidence/rust-source-provider-blocker.md` records the deterministic fail-closed blocker from `mantle bootstrap rust-source-provider`; no real provider output was created. The CLI can now validate/import an existing provider directory, but no non-fake Rust-from-source provider exists yet.
 - [x] [serial] Extend toolchain closure validation so Rust compiler/sysroot members can be promoted from seed exceptions to source-built members only when provider metadata and receipts are complete. r[rust_package_planning.source_built_rust_seed_closure]
   - Evidence: `src/source_toolchain_closure.rs` rejects prebuilt/rustup/Nix/wrapper provenance markers, missing provider roles, and observed artifact digest mismatches.
 - [ ] [serial] Thread the source-built Rust provider into Cargo-free one-shot and fixed-point proof commands while preserving host/target topology split behavior. r[rust_package_planning.source_built_rust_seed_closure]

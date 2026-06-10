@@ -679,11 +679,15 @@ enum BootstrapAction {
         require: Vec<bootstrap_parity::ParityAxis>,
     },
 
-    /// Fail closed until a real source-built Rust provider materializer exists
+    /// Materialize or import a source-built Rust provider after validation
     RustSourceProvider {
         /// Source-built Rust provider recipe anchor
         #[arg(long, default_value = "bootstrap/rust-source.ncl")]
         recipe: PathBuf,
+
+        /// Existing provider directory to validate and import instead of materializing
+        #[arg(long)]
+        import_dir: Option<PathBuf>,
 
         /// Planned output directory for the Rust provider
         #[arg(long)]
@@ -1984,9 +1988,11 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
         BootstrapAction::ParityReport { require } => {
             bootstrap_parity::cmd_bootstrap_parity_report(&current_dir_or_error()?, require, ctx.json)
         }
-        BootstrapAction::RustSourceProvider { recipe, output_dir } => {
-            cmd_bootstrap_rust_source_provider(recipe, output_dir, &ctx.store, ctx.verbose)
-        }
+        BootstrapAction::RustSourceProvider {
+            recipe,
+            import_dir,
+            output_dir,
+        } => cmd_bootstrap_rust_source_provider(recipe, import_dir.as_deref(), output_dir, &ctx.store, ctx.verbose),
         BootstrapAction::Validate {
             target,
             import_paths,
@@ -2011,10 +2017,14 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
 
 fn cmd_bootstrap_rust_source_provider(
     recipe: &Path,
+    import_dir: Option<&Path>,
     output_dir: &Path,
     _store_dir: &Path,
     verbose: bool,
 ) -> Result<(), RunError> {
+    if let Some(import_dir) = import_dir {
+        return cmd_import_rust_source_provider(import_dir, output_dir);
+    }
     let scratch = tempfile::Builder::new()
         .prefix("mantle-rust-source-provider-")
         .tempdir()
@@ -2029,6 +2039,17 @@ fn cmd_bootstrap_rust_source_provider(
         }
         Err(err) => Err(RunError::Build(format!("Rust source provider materialization failed closed: {err}"))),
     }
+}
+
+fn cmd_import_rust_source_provider(import_dir: &Path, output_dir: &Path) -> Result<(), RunError> {
+    let imported = rust_source_provider::import_rust_source_provider(import_dir, output_dir)
+        .map_err(|err| RunError::Build(format!("Rust source provider import failed closed: {err}")))?;
+    eprintln!("Imported Rust source provider {}", imported.output_path.display());
+    eprintln!("  input: {}", imported.input_path.display());
+    eprintln!("  metadata_path: {}", imported.validation.metadata_path.display());
+    eprintln!("  metadata_digest_blake3: {}", imported.validation.metadata_digest_blake3);
+    eprintln!("  policy_digest_blake3: {}", imported.validation.validation.policy_digest_blake3);
+    Ok(())
 }
 
 fn run_bootstrap_command(
@@ -3229,13 +3250,44 @@ mod tests {
         ]);
 
         let Command::Bootstrap {
-            action: Some(BootstrapAction::RustSourceProvider { recipe, output_dir }),
+            action:
+                Some(BootstrapAction::RustSourceProvider {
+                    recipe,
+                    import_dir,
+                    output_dir,
+                }),
             ..
         } = args.command
         else {
             panic!("expected rust-source-provider bootstrap action");
         };
         assert_eq!(recipe, PathBuf::from("bootstrap/rust-source.ncl"));
+        assert!(import_dir.is_none());
+        assert_eq!(output_dir, PathBuf::from("/tmp/mantle-rust-provider"));
+    }
+
+    #[test]
+    fn bootstrap_rust_source_provider_action_parses_import_dir() {
+        let args = Args::parse_from([
+            "mantle",
+            "bootstrap",
+            "rust-source-provider",
+            "--import-dir",
+            "/tmp/source-built-rust-provider",
+            "--output-dir",
+            "/tmp/mantle-rust-provider",
+        ]);
+
+        let Command::Bootstrap {
+            action: Some(BootstrapAction::RustSourceProvider {
+                import_dir, output_dir, ..
+            }),
+            ..
+        } = args.command
+        else {
+            panic!("expected rust-source-provider bootstrap action");
+        };
+        assert_eq!(import_dir, Some(PathBuf::from("/tmp/source-built-rust-provider")));
         assert_eq!(output_dir, PathBuf::from("/tmp/mantle-rust-provider"));
     }
 
@@ -3248,7 +3300,9 @@ mod tests {
         fs::create_dir(&store).unwrap();
         fs::write(&recipe, "blocked recipe\n").unwrap();
 
-        let err = cmd_bootstrap_rust_source_provider(&recipe, &output_dir, &store, false).unwrap_err().to_string();
+        let err = cmd_bootstrap_rust_source_provider(&recipe, None, &output_dir, &store, false)
+            .unwrap_err()
+            .to_string();
 
         assert!(err.contains("Rust source provider materialization failed closed"));
         assert!(err.contains(rust_source_provider::RUST_SOURCE_PROVIDER_BLOCKED_REASON));

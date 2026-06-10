@@ -34,6 +34,13 @@ pub(crate) struct RustSourceProviderDirectoryValidation {
     pub(crate) validation: RustSourceProviderValidation,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct RustSourceProviderImport {
+    pub(crate) input_path: PathBuf,
+    pub(crate) output_path: PathBuf,
+    pub(crate) validation: RustSourceProviderDirectoryValidation,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RustSourceProviderMaterializationPlan {
     recipe_path: PathBuf,
@@ -49,6 +56,7 @@ pub(crate) enum RustSourceProviderError {
     Validate(String),
     MissingArtifact(String),
     Digest(String),
+    Copy(String),
     Blocked {
         recipe_path: PathBuf,
         recipe_digest_blake3: String,
@@ -64,6 +72,7 @@ impl std::fmt::Display for RustSourceProviderError {
             Self::Validate(message) => write!(formatter, "validate: {message}"),
             Self::MissingArtifact(message) => write!(formatter, "missing artifact: {message}"),
             Self::Digest(message) => write!(formatter, "digest: {message}"),
+            Self::Copy(message) => write!(formatter, "copy: {message}"),
             Self::Blocked {
                 recipe_path,
                 recipe_digest_blake3,
@@ -105,6 +114,27 @@ pub(crate) fn materialize_rust_source_provider(
     })
 }
 
+pub(crate) fn import_rust_source_provider(
+    import_dir: &Path,
+    output_dir: &Path,
+) -> Result<RustSourceProviderImport, RustSourceProviderError> {
+    validate_import_request(import_dir, output_dir)?;
+    validate_materialized_rust_source_provider(import_dir)?;
+    copy_provider_tree(import_dir, output_dir)?;
+    let validation = match validate_materialized_rust_source_provider(output_dir) {
+        Ok(validation) => validation,
+        Err(err) => {
+            let _ = remove_import_output(output_dir);
+            return Err(err);
+        }
+    };
+    Ok(RustSourceProviderImport {
+        input_path: import_dir.to_path_buf(),
+        output_path: output_dir.to_path_buf(),
+        validation,
+    })
+}
+
 pub(crate) fn validate_materialized_rust_source_provider(
     provider_dir: &Path,
 ) -> Result<RustSourceProviderDirectoryValidation, RustSourceProviderError> {
@@ -128,6 +158,22 @@ pub(crate) fn validate_materialized_rust_source_provider(
         metadata_digest_blake3,
         validation,
     })
+}
+
+fn validate_import_request(import_dir: &Path, output_dir: &Path) -> Result<(), RustSourceProviderError> {
+    if import_dir.as_os_str().is_empty() {
+        return Err(RustSourceProviderError::Read("import dir is empty".to_string()));
+    }
+    if output_dir.as_os_str().is_empty() {
+        return Err(RustSourceProviderError::Read("output dir is empty".to_string()));
+    }
+    if !import_dir.is_dir() {
+        return Err(RustSourceProviderError::Read(format!("import dir {} is not a directory", import_dir.display())));
+    }
+    if output_dir.exists() {
+        return Err(RustSourceProviderError::Copy(format!("output dir {} already exists", output_dir.display())));
+    }
+    Ok(())
 }
 
 fn plan_materialization(
@@ -154,6 +200,86 @@ fn plan_materialization(
         scratch_dir: scratch_dir.to_path_buf(),
         recipe_digest_blake3: recipe_digest_blake3.to_string(),
     })
+}
+
+fn copy_provider_tree(import_dir: &Path, output_dir: &Path) -> Result<(), RustSourceProviderError> {
+    let parent = output_dir
+        .parent()
+        .ok_or_else(|| RustSourceProviderError::Copy(format!("{} has no parent", output_dir.display())))?;
+    fs::create_dir_all(parent)
+        .map_err(|err| RustSourceProviderError::Copy(format!("create {}: {err}", parent.display())))?;
+    fs::create_dir(output_dir)
+        .map_err(|err| RustSourceProviderError::Copy(format!("create {}: {err}", output_dir.display())))?;
+    let mut copied_entries = 0usize;
+    if let Err(err) = copy_directory_contents(import_dir, output_dir, &mut copied_entries) {
+        let _ = remove_import_output(output_dir);
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn copy_directory_contents(src: &Path, dst: &Path, copied_entries: &mut usize) -> Result<(), RustSourceProviderError> {
+    for entry in
+        fs::read_dir(src).map_err(|err| RustSourceProviderError::Copy(format!("read dir {}: {err}", src.display())))?
+    {
+        *copied_entries = copied_entries
+            .checked_add(1)
+            .ok_or_else(|| RustSourceProviderError::Copy("provider import entry count overflowed".to_string()))?;
+        if *copied_entries > DIRECTORY_DIGEST_MAX_ENTRIES {
+            return Err(RustSourceProviderError::Copy(format!(
+                "provider import has more than {DIRECTORY_DIGEST_MAX_ENTRIES} entries"
+            )));
+        }
+        let entry = entry.map_err(|err| RustSourceProviderError::Copy(format!("read dir entry: {err}")))?;
+        let source_path = entry.path();
+        let dest_path = dst.join(entry.file_name());
+        let file_type = entry
+            .file_type()
+            .map_err(|err| RustSourceProviderError::Copy(format!("file type {}: {err}", source_path.display())))?;
+        if file_type.is_dir() {
+            fs::create_dir(&dest_path)
+                .map_err(|err| RustSourceProviderError::Copy(format!("create {}: {err}", dest_path.display())))?;
+            copy_directory_contents(&source_path, &dest_path, copied_entries)?;
+        } else if file_type.is_file() {
+            fs::copy(&source_path, &dest_path).map_err(|err| {
+                RustSourceProviderError::Copy(format!(
+                    "copy {} -> {}: {err}",
+                    source_path.display(),
+                    dest_path.display()
+                ))
+            })?;
+        } else if file_type.is_symlink() {
+            copy_symlink(&source_path, &dest_path)?;
+        } else {
+            return Err(RustSourceProviderError::Copy(format!("unsupported file type at {}", source_path.display())));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn copy_symlink(source_path: &Path, dest_path: &Path) -> Result<(), RustSourceProviderError> {
+    let target = fs::read_link(source_path)
+        .map_err(|err| RustSourceProviderError::Copy(format!("readlink {}: {err}", source_path.display())))?;
+    std::os::unix::fs::symlink(&target, dest_path).map_err(|err| {
+        RustSourceProviderError::Copy(format!("symlink {} -> {}: {err}", dest_path.display(), target.display()))
+    })
+}
+
+#[cfg(not(unix))]
+fn copy_symlink(source_path: &Path, _dest_path: &Path) -> Result<(), RustSourceProviderError> {
+    Err(RustSourceProviderError::Copy(format!(
+        "symlink import is unsupported on this platform at {}",
+        source_path.display()
+    )))
+}
+
+fn remove_import_output(output_dir: &Path) -> Result<(), RustSourceProviderError> {
+    if !output_dir.exists() {
+        return Ok(());
+    }
+    fs::remove_dir_all(output_dir)
+        .map_err(|err| RustSourceProviderError::Copy(format!("remove {}: {err}", output_dir.display())))
 }
 
 fn observed_provider_artifacts(
@@ -313,6 +439,54 @@ mod tests {
         let err = validate_materialized_rust_source_provider(dir.path()).unwrap_err();
 
         assert!(err.to_string().contains("digest mismatch"));
+    }
+
+    #[test]
+    fn import_provider_copies_validated_provider() {
+        let dir = tempfile::tempdir().unwrap();
+        let import_dir = dir.path().join("import");
+        let output_dir = dir.path().join("output");
+        fs::create_dir(&import_dir).unwrap();
+        let metadata = write_fake_provider(&import_dir);
+
+        let imported = import_rust_source_provider(&import_dir, &output_dir).unwrap();
+
+        assert_eq!(imported.input_path, import_dir);
+        assert_eq!(imported.output_path, output_dir);
+        assert_eq!(imported.validation.validation.artifact_count, metadata.artifacts.len());
+        assert!(imported.output_path.join("bin/rustc").is_file());
+        assert!(imported.output_path.join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file());
+    }
+
+    #[test]
+    fn import_provider_rejects_prebuilt_metadata_without_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let import_dir = dir.path().join("import");
+        let output_dir = dir.path().join("output");
+        fs::create_dir(&import_dir).unwrap();
+        let mut metadata = write_fake_provider(&import_dir);
+        metadata.provenance.uses_prebuilt_rust = true;
+        write_json(&import_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH), &metadata).unwrap();
+
+        let err = import_rust_source_provider(&import_dir, &output_dir).unwrap_err();
+
+        assert!(err.to_string().contains("uses prebuilt Rust"));
+        assert!(!output_dir.exists());
+    }
+
+    #[test]
+    fn import_provider_rejects_existing_output_without_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let import_dir = dir.path().join("import");
+        let output_dir = dir.path().join("output");
+        fs::create_dir(&import_dir).unwrap();
+        fs::create_dir(&output_dir).unwrap();
+        write_fake_provider(&import_dir);
+
+        let err = import_rust_source_provider(&import_dir, &output_dir).unwrap_err();
+
+        assert!(err.to_string().contains("already exists"));
+        assert!(output_dir.exists());
     }
 
     fn write_fake_provider(root: &Path) -> RustSourceProviderMetadata {
