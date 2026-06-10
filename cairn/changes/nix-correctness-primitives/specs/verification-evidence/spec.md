@@ -2,13 +2,13 @@
 
 ### Requirement: Build correctness receipts [r[verification_evidence.build_correctness_receipts]]
 
-Mantle MUST emit deterministic receipts for action-correct build claims. A receipt MUST bind action ref, input object refs, toolchain refs, produced object refs, reference scan ref, sandbox report ref, network policy result, producer identity, signature refs when present, execution status, and build-or-reuse reason. Human and JSON output MUST keep claims bounded to the exact action/object evidence present.
+Mantle MUST emit deterministic receipts for action-correct build claims. A receipt MUST bind action ref, Nickel evaluation receipt ref when the action was produced from Mantle `.ncl`, input object refs, toolchain refs, produced object refs, reference scan ref, sandbox report ref, network policy result, producer identity, signature refs when present, execution status, and build-or-reuse reason. Human and JSON output MUST keep claims bounded to the exact action/object evidence present.
 
 #### Scenario: Successful action receipt is complete [r[verification_evidence.build_correctness_receipts.scenario.success]]
 
 - GIVEN Mantle executes an action under enforced policy and admits produced CAS objects
 - WHEN it emits a build correctness receipt
-- THEN the receipt MUST include action ref, input refs, toolchain refs, produced object refs, reference scan ref, sandbox report ref, producer identity, and execution status
+- THEN the receipt MUST include action ref, Nickel evaluation receipt ref when applicable, input refs, toolchain refs, produced object refs, reference scan ref, sandbox report ref, producer identity, and execution status
 - AND the receipt MUST be deterministic for equivalent declared inputs and outputs
 
 #### Scenario: Reuse receipt names trust basis [r[verification_evidence.build_correctness_receipts.scenario.reuse]]

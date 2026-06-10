@@ -20,6 +20,24 @@ Mantle MUST model strong build-correctness claims with a versioned `mantle-actio
 - THEN it MUST produce a different action ref
 - AND prior receipts for the old action ref MUST NOT satisfy the changed action
 
+### Requirement: Mantle Nickel evaluation source closure [r[build_correctness.nickel_eval_source_closure]]
+
+Mantle MUST model Nickel evaluation as a declared source-closure action whenever the evaluated result participates in a strong build-correctness claim. The evaluation receipt MUST bind root source ref, transitive dependency refs or import closure, import path policy, evaluator identity, selected export format or build-IR shape, and output digest. Undeclared imports, ambient filesystem reads, evaluator mismatch, stale dependency refs, or output digest mismatch MUST fail closed for strong correctness claims.
+
+#### Scenario: Declared Nickel eval is receipt-bound [r[build_correctness.nickel_eval_source_closure.scenario.bound]]
+
+- GIVEN a Mantle `.ncl` build expression has a declared root source, dependency closure, evaluator identity, import path policy, and output format
+- WHEN Nickel evaluation produces build input data
+- THEN Mantle MUST emit an evaluation receipt binding those fields and the output digest
+- AND downstream action specs MAY reference that evaluation receipt as provenance
+
+#### Scenario: Undeclared Nickel import blocks strong claim [r[build_correctness.nickel_eval_source_closure.scenario.undeclared-import]]
+
+- GIVEN a Mantle `.ncl` expression imports a file outside the declared source closure or allowed import path policy
+- WHEN Nickel evaluation provenance is required for a strong correctness claim
+- THEN Mantle MUST fail closed with a deterministic undeclared-import diagnostic
+- AND it MUST NOT treat the lowered build data as strong correctness evidence
+
 ### Requirement: Mantle CAS object store [r[build_correctness.cas_object_store]]
 
 Mantle MUST represent admitted build inputs and produced outputs as content-addressed objects using explicit BLAKE3 object refs such as `mantle-object://blake3/<digest>`. Object manifests MUST model object kind, byte count when applicable, content digest, executable or mode metadata when modeled, symlink target when applicable, sorted directory children when applicable, and redacted secret descriptor metadata. Path roots MAY be recorded as views, but path roots MUST NOT be accepted as canonical object identity.

@@ -7,6 +7,7 @@ Onix can then lower evaluated Nickel/Onix semantics into Mantle action specs and
 ## What Changes
 
 - Define a generic derivation-like action spec with declared inputs, toolchains, args, environment, outputs, platform, sandbox policy, network policy, and expected reference policy.
+- Treat Mantle Nickel evaluation itself as a declared source-closure action when its result participates in strong correctness claims.
 - Define BLAKE3 action refs and content-addressed object refs that do not rely on path names for identity.
 - Add CAS object-store admission semantics for produced outputs and frontend-supplied input objects.
 - Add hermetic execution policy and fail-closed blockers when the requested sandbox/network policy cannot be enforced.
@@ -24,10 +25,11 @@ Onix can then lower evaluated Nickel/Onix semantics into Mantle action specs and
 ## Non-goals
 
 - Do not implement the Nix language, Nix derivation format, Nix store protocol, NixOS module system, or Onix module semantics in Mantle.
+- Do not outsource Mantle correctness to Bazel; `rules_nickel` is prior art for declared Nickel `src`/`deps`/`out` evaluation, not a runtime dependency or replacement for Mantle receipts.
 - Do not claim compiler correctness, source-to-binary reproducibility, full bootstrap correctness, or physical-target determinism.
 - Do not make path roots identity. Paths may be views over content-addressed objects.
 - Do not serialize decrypted secret bytes in action specs, object manifests, reference scans, receipts, logs, or diagnostics.
 
 ## Verification Expectations
 
-Implementation is not archive-ready until focused tests prove canonical action refs, CAS object admission, hermetic policy blockers, output reference scanning, receipt binding, reuse/substitution rejection on stale evidence, and frontend-neutral boundary preservation. Evidence must include current command output for focused tests, `cargo fmt`, relevant workspace tests, `cairn validate --root .`, and proposal/design/tasks gates.
+Implementation is not archive-ready until focused tests prove canonical action refs, Nickel evaluation source-closure identity, CAS object admission, hermetic policy blockers, output reference scanning, receipt binding, reuse/substitution rejection on stale evidence, and frontend-neutral boundary preservation. Evidence must include current command output for focused tests, `cargo fmt`, relevant workspace tests, `cairn validate --root .`, and proposal/design/tasks gates.
