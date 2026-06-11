@@ -2065,8 +2065,18 @@ fn cmd_bootstrap_rust_source_provider(
             }
             Ok(())
         }
-        Err(err) => Err(RunError::Build(format!("Rust source provider materialization failed closed: {err}"))),
+        Err(err) => {
+            let preserved_scratch = preserve_rust_source_provider_scratch(scratch);
+            Err(RunError::Build(format!(
+                "Rust source provider materialization failed closed: {err} preserved_scratch={}",
+                preserved_scratch.display()
+            )))
+        }
     }
+}
+
+fn preserve_rust_source_provider_scratch(scratch: tempfile::TempDir) -> PathBuf {
+    scratch.keep()
 }
 
 fn cmd_import_rust_source_provider(
@@ -3448,8 +3458,18 @@ mod tests {
         assert!(err.contains("Rust source provider materialization failed closed"));
         assert!(err.contains("mrustc-0.12.0"));
         assert!(err.contains("missing-mrustc.tar.gz"));
+        assert!(err.contains("preserved_scratch="));
         assert!(!err.contains("Materialized Rust source provider"));
         assert!(!output_dir.exists());
+        let preserved_scratch = preserved_scratch_from_error(&err);
+        assert!(preserved_scratch.exists());
+        fs::remove_dir_all(&preserved_scratch).unwrap();
+    }
+
+    fn preserved_scratch_from_error(message: &str) -> PathBuf {
+        const PRESERVED_SCRATCH_FIELD: &str = "preserved_scratch=";
+        let (_, value) = message.split_once(PRESERVED_SCRATCH_FIELD).unwrap();
+        PathBuf::from(value.trim())
     }
 
     fn write_fast_failing_rust_source_route(root: &Path, missing_source: &Path) {
