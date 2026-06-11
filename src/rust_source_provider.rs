@@ -8,6 +8,9 @@
 
 use std::ffi::OsString;
 use std::fs;
+use std::fs::File;
+use std::io::Read;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -32,11 +35,25 @@ const DIRECTORY_DIGEST_MAX_ENTRIES: usize = 200_000;
 const RUST_SOURCE_PROVIDER_PLAN_FILE: &str = "rust-source-plan.ncl";
 const FIRST_STAGE_PLAN_SCHEMA: &str = "mantle-rust-source-provider-first-stage-plan-v1";
 const FIRST_STAGE_PLAN_FILE: &str = "mrustc-first-stage-plan.json";
+const FIRST_STAGE_SOURCES_MANIFEST_SCHEMA: &str = "mantle-rust-source-provider-first-stage-sources-v1";
+const FIRST_STAGE_SOURCES_MANIFEST_FILE: &str = "mrustc-first-stage-sources.json";
 const FIRST_STAGE_SCRIPT_FILE: &str = "run-mrustc-first-stage.sh";
+const FIRST_STAGE_ARCHIVE_DIR: &str = "archives";
 const FIRST_STAGE_SOURCE_DIR: &str = "sources";
 const FIRST_STAGE_BUILD_DIR: &str = "build";
+const FIRST_STAGE_SOURCE_ARCHIVE_EXTENSION: &str = "tar.gz";
+const FIRST_STAGE_TAR_GZ_EXTENSION: &str = ".tar.gz";
+const FIRST_STAGE_TGZ_EXTENSION: &str = ".tgz";
 const FIRST_STAGE_MISSING_SOURCE_EXIT_CODE: i32 = 2;
 const FIRST_STAGE_NOT_IMPLEMENTED_EXIT_CODE: i32 = 1;
+const FIRST_STAGE_FETCH_TIMEOUT_SECS: u64 = 600;
+const FIRST_STAGE_FETCH_MAX_RETRIES: u32 = 3;
+const FIRST_STAGE_FETCH_RETRY_BASE_DELAY_MS: u64 = 2_000;
+const FIRST_STAGE_FETCH_MAX_MIB: u64 = 768;
+const BYTES_PER_KIB: u64 = 1_024;
+const BYTES_PER_MIB: u64 = BYTES_PER_KIB * BYTES_PER_KIB;
+const FIRST_STAGE_FETCH_MAX_BYTES: u64 = FIRST_STAGE_FETCH_MAX_MIB * BYTES_PER_MIB;
+const FIRST_STAGE_ARCHIVE_MAX_ENTRIES: u32 = 500_000;
 const REQUIRED_FIRST_STAGE_OUTPUT_ROLES: [RustProviderRole; 4] = [
     RustProviderRole::Rustc,
     RustProviderRole::Cargo,
@@ -136,11 +153,24 @@ struct RustSourceProviderFirstStageBoundary {
     source_ids: Vec<String>,
     sources: Vec<RustSourceProviderBootstrapSource>,
     expected_outputs: Vec<RustSourceProviderBootstrapOutput>,
+    archive_dir: PathBuf,
     source_dir: PathBuf,
     build_dir: PathBuf,
     output_dir: PathBuf,
     plan_path: PathBuf,
+    sources_manifest_path: PathBuf,
     script_path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct RustSourceProviderFirstStageSourceAcquisition {
+    id: String,
+    url: String,
+    archive_path: PathBuf,
+    archive_sha256_hex: String,
+    extracted_path: PathBuf,
+    extracted_digest_blake3: String,
+    archive_entry_count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +190,8 @@ pub(crate) enum RustSourceProviderError {
     Validate(String),
     MissingArtifact(String),
     Digest(String),
+    Fetch(String),
+    Extract(String),
     Copy(String),
     Smoke(String),
     Blocked {
@@ -181,6 +213,8 @@ impl std::fmt::Display for RustSourceProviderError {
             Self::Validate(message) => write!(formatter, "validate: {message}"),
             Self::MissingArtifact(message) => write!(formatter, "missing artifact: {message}"),
             Self::Digest(message) => write!(formatter, "digest: {message}"),
+            Self::Fetch(message) => write!(formatter, "fetch: {message}"),
+            Self::Extract(message) => write!(formatter, "extract: {message}"),
             Self::Copy(message) => write!(formatter, "copy: {message}"),
             Self::Smoke(message) => write!(formatter, "smoke: {message}"),
             Self::Blocked {
@@ -233,6 +267,8 @@ pub(crate) fn materialize_rust_source_provider(
     let route = load_rust_source_provider_route(&plan.route_plan_path)?;
     let boundary = prepare_first_stage_boundary(&plan, &route)?;
     write_first_stage_boundary(&boundary)?;
+    let first_stage_sources = acquire_first_stage_sources(&boundary, verbose)?;
+    write_first_stage_sources_manifest(&boundary, &first_stage_sources)?;
     if verbose {
         eprintln!("Rust source provider recipe: {}", plan.recipe_path.display());
         eprintln!("  recipe_digest_blake3: {}", plan.recipe_digest_blake3);
@@ -242,6 +278,7 @@ pub(crate) fn materialize_rust_source_provider(
         eprintln!("  first_stage_id: {}", boundary.stage_id);
         eprintln!("  first_stage_script: {}", boundary.script_path.display());
         eprintln!("  first_stage_plan: {}", boundary.plan_path.display());
+        eprintln!("  first_stage_sources: {}", boundary.sources_manifest_path.display());
         eprintln!("  planned_output: {}", plan.output_dir.display());
         eprintln!("  planned_scratch: {}", plan.scratch_dir.display());
     }
@@ -553,10 +590,12 @@ fn prepare_first_stage_boundary(
         source_ids: stage.source_ids.clone(),
         sources,
         expected_outputs,
+        archive_dir: materialization.scratch_dir.join(FIRST_STAGE_ARCHIVE_DIR),
         source_dir: materialization.scratch_dir.join(FIRST_STAGE_SOURCE_DIR),
         build_dir: materialization.scratch_dir.join(FIRST_STAGE_BUILD_DIR),
         output_dir: materialization.output_dir.clone(),
         plan_path: materialization.scratch_dir.join(FIRST_STAGE_PLAN_FILE),
+        sources_manifest_path: materialization.scratch_dir.join(FIRST_STAGE_SOURCES_MANIFEST_FILE),
         script_path: materialization.scratch_dir.join(FIRST_STAGE_SCRIPT_FILE),
     })
 }
@@ -623,6 +662,8 @@ fn expected_outputs_for_stage(
 }
 
 fn write_first_stage_boundary(boundary: &RustSourceProviderFirstStageBoundary) -> Result<(), RustSourceProviderError> {
+    fs::create_dir_all(&boundary.archive_dir)
+        .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", boundary.archive_dir.display())))?;
     fs::create_dir_all(&boundary.source_dir)
         .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", boundary.source_dir.display())))?;
     fs::create_dir_all(&boundary.build_dir)
@@ -657,15 +698,300 @@ fn first_stage_boundary_manifest(
         },
         "sources": &boundary.sources,
         "paths": {
+            "archive_dir": boundary.archive_dir.display().to_string(),
             "source_dir": boundary.source_dir.display().to_string(),
             "build_dir": boundary.build_dir.display().to_string(),
             "output_dir": boundary.output_dir.display().to_string(),
             "script": boundary.script_path.display().to_string(),
+            "source_manifest": boundary.sources_manifest_path.display().to_string(),
         },
         "blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
     });
     serde_json::to_vec_pretty(&manifest)
         .map_err(|err| RustSourceProviderError::Parse(format!("serialize first stage plan: {err}")))
+}
+
+fn acquire_first_stage_sources(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    verbose: bool,
+) -> Result<Vec<RustSourceProviderFirstStageSourceAcquisition>, RustSourceProviderError> {
+    assert!(!boundary.sources.is_empty(), "first stage sources must not be empty");
+    assert!(!boundary.archive_dir.as_os_str().is_empty(), "archive dir must not be empty");
+    fs::create_dir_all(&boundary.archive_dir)
+        .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", boundary.archive_dir.display())))?;
+    fs::create_dir_all(&boundary.source_dir)
+        .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", boundary.source_dir.display())))?;
+    let mut acquired = Vec::with_capacity(boundary.sources.len());
+    for source in &boundary.sources {
+        acquired.push(acquire_first_stage_source(boundary, source, verbose)?);
+    }
+    if acquired.len() != boundary.sources.len() {
+        return Err(RustSourceProviderError::Fetch("first stage source acquisition count mismatch".to_string()));
+    }
+    Ok(acquired)
+}
+
+fn acquire_first_stage_source(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    source: &RustSourceProviderBootstrapSource,
+    verbose: bool,
+) -> Result<RustSourceProviderFirstStageSourceAcquisition, RustSourceProviderError> {
+    let source_component = safe_source_component(&source.id)?;
+    ensure_supported_first_stage_archive(&source.url)?;
+    let archive_path = boundary.archive_dir.join(format!("{source_component}.{FIRST_STAGE_SOURCE_ARCHIVE_EXTENSION}"));
+    let extracted_path = boundary.source_dir.join(&source_component);
+    let bytes = fetch_first_stage_source_bytes(source)?;
+    let archive_sha256_hex = sha256_hex(&bytes);
+    if archive_sha256_hex != source.sha256_hex {
+        return Err(RustSourceProviderError::Digest(format!(
+            "source '{}' digest mismatch: expected {}, got {archive_sha256_hex}",
+            source.id, source.sha256_hex
+        )));
+    }
+    fs::write(&archive_path, &bytes)
+        .map_err(|err| RustSourceProviderError::Fetch(format!("write {}: {err}", archive_path.display())))?;
+    prepare_empty_directory(&extracted_path)?;
+    let archive_entry_count = extract_first_stage_tar_gz(&archive_path, &extracted_path)?;
+    let extracted_digest_blake3 = content_digest_blake3(&extracted_path)?;
+    if verbose {
+        eprintln!(
+            "  acquired source {} sha256={} extracted={} entries={}",
+            source.id,
+            archive_sha256_hex,
+            extracted_path.display(),
+            archive_entry_count
+        );
+    }
+    Ok(RustSourceProviderFirstStageSourceAcquisition {
+        id: source.id.clone(),
+        url: source.url.clone(),
+        archive_path,
+        archive_sha256_hex,
+        extracted_path,
+        extracted_digest_blake3,
+        archive_entry_count,
+    })
+}
+
+fn write_first_stage_sources_manifest(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    sources: &[RustSourceProviderFirstStageSourceAcquisition],
+) -> Result<(), RustSourceProviderError> {
+    if sources.len() != boundary.sources.len() {
+        return Err(RustSourceProviderError::Fetch("first stage sources manifest count mismatch".to_string()));
+    }
+    let manifest = serde_json::json!({
+        "schema": FIRST_STAGE_SOURCES_MANIFEST_SCHEMA,
+        "stage_id": boundary.stage_id,
+        "route_plan_digest_blake3": boundary.route_plan_digest_blake3,
+        "route_policy_digest_blake3": boundary.route_policy_digest_blake3,
+        "source_count": sources.len(),
+        "sources": sources,
+        "blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
+    });
+    let bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|err| RustSourceProviderError::Parse(format!("serialize first stage sources manifest: {err}")))?;
+    fs::write(&boundary.sources_manifest_path, bytes).map_err(|err| {
+        RustSourceProviderError::Read(format!(
+            "write first stage sources manifest {}: {err}",
+            boundary.sources_manifest_path.display()
+        ))
+    })
+}
+
+fn fetch_first_stage_source_bytes(
+    source: &RustSourceProviderBootstrapSource,
+) -> Result<Vec<u8>, RustSourceProviderError> {
+    let parsed = url::Url::parse(&source.url)
+        .map_err(|err| RustSourceProviderError::Fetch(format!("source '{}' url parse: {err}", source.id)))?;
+    match parsed.scheme() {
+        "file" => read_file_url_limited(&source.id, &parsed),
+        "http" | "https" => fetch_http_source_bytes(&source.id, &source.url),
+        scheme => Err(RustSourceProviderError::Fetch(format!(
+            "source '{}' uses unsupported url scheme '{scheme}'",
+            source.id
+        ))),
+    }
+}
+
+fn read_file_url_limited(source_id: &str, url: &url::Url) -> Result<Vec<u8>, RustSourceProviderError> {
+    let path = url
+        .to_file_path()
+        .map_err(|_| RustSourceProviderError::Fetch(format!("source '{source_id}' file url is not a local path")))?;
+    let mut file = File::open(&path).map_err(|err| {
+        RustSourceProviderError::Fetch(format!("source '{source_id}' open {}: {err}", path.display()))
+    })?;
+    read_limited_bytes(&mut file, &format!("source '{source_id}' {}", path.display()))
+}
+
+fn fetch_http_source_bytes(source_id: &str, url: &str) -> Result<Vec<u8>, RustSourceProviderError> {
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(FIRST_STAGE_FETCH_TIMEOUT_SECS)))
+        .build()
+        .into();
+    let mut last_error = String::new();
+    for attempt in 0..=FIRST_STAGE_FETCH_MAX_RETRIES {
+        if attempt != 0 {
+            sleep_before_first_stage_fetch_retry(url, attempt);
+        }
+        match fetch_http_source_once(&agent, source_id, url) {
+            Ok(bytes) => return Ok(bytes),
+            Err(err) => {
+                last_error = err.to_string();
+                if !is_transient_first_stage_fetch_error(&last_error) {
+                    return Err(err);
+                }
+            }
+        }
+    }
+    Err(RustSourceProviderError::Fetch(last_error))
+}
+
+fn fetch_http_source_once(agent: &ureq::Agent, source_id: &str, url: &str) -> Result<Vec<u8>, RustSourceProviderError> {
+    let response = agent
+        .get(url)
+        .call()
+        .map_err(|err| RustSourceProviderError::Fetch(format!("source '{source_id}' {url}: {err}")))?;
+    let mut body = response.into_body();
+    let mut reader = body.with_config().limit(FIRST_STAGE_FETCH_MAX_BYTES).reader();
+    read_limited_bytes(&mut reader, &format!("source '{source_id}' {url}"))
+}
+
+fn sleep_before_first_stage_fetch_retry(url: &str, attempt: u32) {
+    let exponent = attempt.saturating_sub(1).min(FIRST_STAGE_FETCH_MAX_RETRIES);
+    let delay_ms = FIRST_STAGE_FETCH_RETRY_BASE_DELAY_MS.saturating_mul(1_u64 << exponent);
+    eprintln!("  [rust-source-provider] retry {attempt}/{FIRST_STAGE_FETCH_MAX_RETRIES} for {url} after {delay_ms}ms");
+    std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+}
+
+fn read_limited_bytes(reader: &mut dyn Read, label: &str) -> Result<Vec<u8>, RustSourceProviderError> {
+    let mut bytes = Vec::new();
+    reader
+        .take(FIRST_STAGE_FETCH_MAX_BYTES)
+        .read_to_end(&mut bytes)
+        .map_err(|err| RustSourceProviderError::Fetch(format!("{label}: reading body: {err}")))?;
+    if bytes.is_empty() {
+        return Err(RustSourceProviderError::Fetch(format!("{label}: empty source body")));
+    }
+    Ok(bytes)
+}
+
+fn is_transient_first_stage_fetch_error(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("network is unreachable")
+        || lower.contains("connection reset")
+        || lower.contains("timed out")
+        || lower.contains("try again")
+        || lower.contains("502")
+        || lower.contains("503")
+        || lower.contains("504")
+}
+
+fn ensure_supported_first_stage_archive(url: &str) -> Result<(), RustSourceProviderError> {
+    let lower = url.to_ascii_lowercase();
+    if lower.ends_with(FIRST_STAGE_TAR_GZ_EXTENSION) || lower.ends_with(FIRST_STAGE_TGZ_EXTENSION) {
+        return Ok(());
+    }
+    Err(RustSourceProviderError::Extract(format!("first stage source archive must be tar.gz/tgz: {url}")))
+}
+
+fn prepare_empty_directory(path: &Path) -> Result<(), RustSourceProviderError> {
+    if path.exists() && path.is_dir() {
+        fs::remove_dir_all(path)
+            .map_err(|err| RustSourceProviderError::Extract(format!("remove {}: {err}", path.display())))?;
+    } else if path.exists() {
+        fs::remove_file(path)
+            .map_err(|err| RustSourceProviderError::Extract(format!("remove {}: {err}", path.display())))?;
+    }
+    fs::create_dir_all(path)
+        .map_err(|err| RustSourceProviderError::Extract(format!("create {}: {err}", path.display())))
+}
+
+fn extract_first_stage_tar_gz(archive_path: &Path, dest: &Path) -> Result<u32, RustSourceProviderError> {
+    let file = File::open(archive_path)
+        .map_err(|err| RustSourceProviderError::Extract(format!("open {}: {err}", archive_path.display())))?;
+    let decoder = flate2::read::GzDecoder::new(file);
+    let mut archive = tar::Archive::new(decoder);
+    let mut entry_count = 0_u32;
+    for entry in archive
+        .entries()
+        .map_err(|err| RustSourceProviderError::Extract(format!("read {}: {err}", archive_path.display())))?
+    {
+        entry_count = entry_count.checked_add(1).ok_or_else(|| {
+            RustSourceProviderError::Extract("first stage archive entry count overflowed".to_string())
+        })?;
+        if entry_count > FIRST_STAGE_ARCHIVE_MAX_ENTRIES {
+            return Err(RustSourceProviderError::Extract(format!(
+                "first stage archive exceeds {FIRST_STAGE_ARCHIVE_MAX_ENTRIES} entries"
+            )));
+        }
+        let entry = entry.map_err(|err| RustSourceProviderError::Extract(format!("read archive entry: {err}")))?;
+        unpack_first_stage_entry(entry, dest)?;
+    }
+    if entry_count == 0 {
+        return Err(RustSourceProviderError::Extract(format!("{} is empty", archive_path.display())));
+    }
+    Ok(entry_count)
+}
+
+fn unpack_first_stage_entry<R: Read>(mut entry: tar::Entry<'_, R>, dest: &Path) -> Result<(), RustSourceProviderError> {
+    let raw_path = entry
+        .path()
+        .map_err(|err| RustSourceProviderError::Extract(format!("read archive path: {err}")))?
+        .into_owned();
+    let Some(relative_path) = strip_first_archive_component(&raw_path)? else {
+        return Ok(());
+    };
+    let output_path = dest.join(relative_path);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| RustSourceProviderError::Extract(format!("create {}: {err}", parent.display())))?;
+    }
+    entry
+        .unpack(&output_path)
+        .map_err(|err| RustSourceProviderError::Extract(format!("unpack {}: {err}", output_path.display())))?;
+    Ok(())
+}
+
+fn strip_first_archive_component(path: &Path) -> Result<Option<PathBuf>, RustSourceProviderError> {
+    let mut components = path.components();
+    let Some(first) = components.next() else {
+        return Ok(None);
+    };
+    if !matches!(first, Component::Normal(_)) {
+        return Err(RustSourceProviderError::Extract(format!("unsafe archive path {}", path.display())));
+    }
+    let mut stripped = PathBuf::new();
+    for component in components {
+        match component {
+            Component::Normal(part) => stripped.push(part),
+            Component::CurDir => {}
+            _ => return Err(RustSourceProviderError::Extract(format!("unsafe archive path {}", path.display()))),
+        }
+    }
+    if stripped.as_os_str().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(stripped))
+}
+
+fn safe_source_component(source_id: &str) -> Result<String, RustSourceProviderError> {
+    let mut components = Path::new(source_id).components();
+    let Some(Component::Normal(first)) = components.next() else {
+        return Err(RustSourceProviderError::Validate(format!("source id '{source_id}' is not a path component")));
+    };
+    if components.next().is_some() {
+        return Err(RustSourceProviderError::Validate(format!(
+            "source id '{source_id}' is not a single path component"
+        )));
+    }
+    Ok(first.to_string_lossy().to_string())
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
+    <sha2::Sha256 as sha2::Digest>::update(&mut hasher, bytes);
+    data_encoding::HEXLOWER.encode(&<sha2::Sha256 as sha2::Digest>::finalize(hasher))
 }
 
 fn first_stage_boundary_script(boundary: &RustSourceProviderFirstStageBoundary) -> String {
@@ -676,20 +1002,27 @@ fn first_stage_boundary_script(boundary: &RustSourceProviderFirstStageBoundary) 
     script.push_str(&format!("SOURCE_DIR={}\n", shell_quote(&boundary.source_dir.display().to_string())));
     script.push_str(&format!("BUILD_DIR={}\n", shell_quote(&boundary.build_dir.display().to_string())));
     script.push_str(&format!("OUTPUT_DIR={}\n", shell_quote(&boundary.output_dir.display().to_string())));
+    script
+        .push_str(&format!("SOURCE_MANIFEST={}\n", shell_quote(&boundary.sources_manifest_path.display().to_string())));
     script.push_str("printf '%s\\n' \"mantle rust source first stage: $STAGE_ID\"\n");
+    script.push_str(&format!(
+        "if [ ! -f \"$SOURCE_MANIFEST\" ]; then printf '%s\\n' {} >&2; exit {}; fi\n",
+        shell_quote("missing verified source manifest"),
+        FIRST_STAGE_MISSING_SOURCE_EXIT_CODE
+    ));
     for source in &boundary.sources {
         script.push_str(&format!(
-            "if [ ! -e \"$SOURCE_DIR\"/{id} ]; then printf '%s\\n' {message} >&2; exit {missing}; fi\n",
+            "if [ ! -d \"$SOURCE_DIR\"/{id} ]; then printf '%s\\n' {message} >&2; exit {missing}; fi\n",
             id = shell_quote(&source.id),
             message = shell_quote(&format!(
-                "missing source '{}' from {} with sha256 {}",
+                "missing verified source '{}' from {} with sha256 {}",
                 source.id, source.url, source.sha256_hex
             )),
             missing = FIRST_STAGE_MISSING_SOURCE_EXIT_CODE,
         ));
     }
     script.push_str(
-        "printf '%s\\n' \"planned build dir: $BUILD_DIR\"\nprintf '%s\\n' \"planned output dir: $OUTPUT_DIR\"\n",
+        "printf '%s\\n' \"verified sources manifest: $SOURCE_MANIFEST\"\nprintf '%s\\n' \"planned build dir: $BUILD_DIR\"\nprintf '%s\\n' \"planned output dir: $OUTPUT_DIR\"\n",
     );
     script.push_str(&format!(
         "printf '%s\\n' {} >&2\nexit {}\n",
@@ -1036,6 +1369,9 @@ mod tests {
     const HOST_TRIPLE: &str = "x86_64-unknown-linux-gnu";
     const TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
     const SYNTHETIC_RLIB_BYTES: &[u8] = b"synthetic rlib\n";
+    const FIRST_STAGE_TEST_SOURCE_COUNT: usize = 2;
+    const SOURCE_ARCHIVE_FILE_MODE: u32 = 0o644;
+    const SHA256_HEX_CHAR_COUNT: usize = 64;
     #[cfg(unix)]
     const EXECUTABLE_MODE: u32 = 0o755;
 
@@ -1059,8 +1395,12 @@ mod tests {
         assert!(!output.exists());
         assert!(scratch.join(FIRST_STAGE_SCRIPT_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_PLAN_FILE).is_file());
+        assert!(scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE).is_file());
+        assert!(scratch.join(FIRST_STAGE_ARCHIVE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_BUILD_DIR).is_dir());
+        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/README.txt").is_file());
+        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("rust-1.90.0/README.txt").is_file());
         #[cfg(unix)]
         assert_eq!(script_mode(&scratch.join(FIRST_STAGE_SCRIPT_FILE)), EXECUTABLE_MODE);
         let manifest: serde_json::Value =
@@ -1071,8 +1411,13 @@ mod tests {
             manifest["stage"]["expected_outputs"].as_array().unwrap().len(),
             REQUIRED_FIRST_STAGE_OUTPUT_ROLES.len()
         );
+        let sources_manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE)).unwrap()).unwrap();
+        assert_eq!(sources_manifest["schema"], FIRST_STAGE_SOURCES_MANIFEST_SCHEMA);
+        assert_eq!(sources_manifest["source_count"], FIRST_STAGE_TEST_SOURCE_COUNT);
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
-        assert!(script.contains("missing source"));
+        assert!(script.contains("missing verified source"));
+        assert!(script.contains("verified sources manifest"));
         assert!(script.contains("mrustc-0.12.0"));
         assert!(script.contains(RUST_SOURCE_PROVIDER_BLOCKED_REASON));
     }
@@ -1092,6 +1437,24 @@ mod tests {
         assert!(!scratch.join(FIRST_STAGE_SCRIPT_FILE).exists());
     }
 
+    #[test]
+    fn materializer_rejects_first_stage_source_digest_mismatch_without_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "blocked recipe\n").unwrap();
+        write_test_route_plan_with_mrustc_sha(dir.path(), &sample_sha256_hex('d'));
+
+        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+
+        let message = err.to_string();
+        assert!(message.contains("digest mismatch"));
+        assert!(message.contains("mrustc-0.12.0"));
+        assert!(!output.exists());
+        assert!(!scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE).exists());
+    }
+
     #[cfg(unix)]
     #[test]
     fn first_stage_script_fails_before_provider_output_when_sources_missing() {
@@ -1102,6 +1465,7 @@ mod tests {
         fs::write(&recipe, "blocked recipe\n").unwrap();
         write_test_route_plan(dir.path());
         let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        fs::remove_dir_all(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0")).unwrap();
 
         let status = Command::new(scratch.join(FIRST_STAGE_SCRIPT_FILE)).status().unwrap();
 
@@ -1299,6 +1663,16 @@ mod tests {
     }
 
     fn write_test_route_plan(root: &Path) {
+        let sources = write_test_source_archives(root);
+        write_test_route_plan_with_sources(root, &sources, &sources.mrustc_sha256_hex);
+    }
+
+    fn write_test_route_plan_with_mrustc_sha(root: &Path, mrustc_sha256_hex: &str) {
+        let sources = write_test_source_archives(root);
+        write_test_route_plan_with_sources(root, &sources, mrustc_sha256_hex);
+    }
+
+    fn write_test_route_plan_with_sources(root: &Path, sources: &TestSourceArchives, mrustc_sha256_hex: &str) {
         let text = r#"
 let Source = {
   id | String,
@@ -1358,24 +1732,24 @@ let Plan = {
       kind = "tarball",
       name = "mrustc-source",
       version = "0.12.0",
-      url = "https://example.invalid/mrustc-0.12.0.tar.gz",
-      sha256_hex = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      url = "__MRUSTC_URL__",
+      sha256_hex = "__MRUSTC_SHA256__",
     },
     {
       id = "rust-1.90.0",
       kind = "tarball",
       name = "rust-compiler-source",
       version = "1.90.0",
-      url = "https://example.invalid/rustc-1.90.0-src.tar.gz",
-      sha256_hex = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      url = "__RUST190_URL__",
+      sha256_hex = "__RUST190_SHA256__",
     },
     {
       id = "rust-1.94.0",
       kind = "tarball",
       name = "rust-compiler-source",
       version = "1.94.0",
-      url = "https://example.invalid/rustc-1.94.0-src.tar.gz",
-      sha256_hex = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      url = "__RUST194_URL__",
+      sha256_hex = "__RUST194_SHA256__",
     },
   ],
   stages = [
@@ -1408,7 +1782,67 @@ let Plan = {
   ],
 } | Plan
 "#;
+        let text = text
+            .replace("__MRUSTC_URL__", &sources.mrustc_url)
+            .replace("__MRUSTC_SHA256__", mrustc_sha256_hex)
+            .replace("__RUST190_URL__", &sources.rust190_url)
+            .replace("__RUST190_SHA256__", &sources.rust190_sha256_hex)
+            .replace("__RUST194_URL__", &sources.rust194_url)
+            .replace("__RUST194_SHA256__", &sources.rust194_sha256_hex);
         fs::write(root.join(RUST_SOURCE_PROVIDER_PLAN_FILE), text).unwrap();
+    }
+
+    struct TestSourceArchives {
+        mrustc_url: String,
+        mrustc_sha256_hex: String,
+        rust190_url: String,
+        rust190_sha256_hex: String,
+        rust194_url: String,
+        rust194_sha256_hex: String,
+    }
+
+    fn write_test_source_archives(root: &Path) -> TestSourceArchives {
+        let archive_dir = root.join("test-source-archives");
+        fs::create_dir_all(&archive_dir).unwrap();
+        let mrustc_path = archive_dir.join("mrustc-0.12.0.tar.gz");
+        let rust190_path = archive_dir.join("rust-1.90.0.tar.gz");
+        let rust194_path = archive_dir.join("rust-1.94.0.tar.gz");
+        write_test_source_archive(&mrustc_path, "mrustc-0.12.0", b"mrustc seed source\n");
+        write_test_source_archive(&rust190_path, "rust-1.90.0", b"rust 1.90 source\n");
+        write_test_source_archive(&rust194_path, "rust-1.94.0", b"rust 1.94 source\n");
+        TestSourceArchives {
+            mrustc_url: url::Url::from_file_path(&mrustc_path).unwrap().to_string(),
+            mrustc_sha256_hex: sha256_file_hex(&mrustc_path),
+            rust190_url: url::Url::from_file_path(&rust190_path).unwrap().to_string(),
+            rust190_sha256_hex: sha256_file_hex(&rust190_path),
+            rust194_url: url::Url::from_file_path(&rust194_path).unwrap().to_string(),
+            rust194_sha256_hex: sha256_file_hex(&rust194_path),
+        }
+    }
+
+    fn write_test_source_archive(path: &Path, top_dir: &str, readme: &[u8]) {
+        let file = File::create(path).unwrap();
+        let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        let mut builder = tar::Builder::new(encoder);
+        let mut header = tar::Header::new_gnu();
+        header.set_size(u64::try_from(readme.len()).unwrap());
+        header.set_mode(SOURCE_ARCHIVE_FILE_MODE);
+        header.set_cksum();
+        let readme_path = format!("{top_dir}/README.txt");
+        builder.append_data(&mut header, readme_path, readme).unwrap();
+        builder.finish().unwrap();
+        let encoder = builder.into_inner().unwrap();
+        encoder.finish().unwrap();
+    }
+
+    fn sha256_file_hex(path: &Path) -> String {
+        sha256_hex(&fs::read(path).unwrap())
+    }
+
+    fn sample_sha256_hex(ch: char) -> String {
+        assert!(ch.is_ascii_hexdigit(), "sample digest char must be hex");
+        assert!(!ch.is_ascii_uppercase(), "sample digest char must be lowercase");
+        std::iter::repeat_n(ch, SHA256_HEX_CHAR_COUNT).collect()
     }
 
     #[cfg(unix)]

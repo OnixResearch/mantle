@@ -3433,9 +3433,12 @@ mod tests {
     #[test]
     fn bootstrap_rust_source_provider_fails_closed_without_output() {
         let dir = tempfile::tempdir().unwrap();
-        let recipe = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap/rust-source.ncl");
+        let recipe = dir.path().join("rust-source.ncl");
         let output_dir = dir.path().join("rust-provider");
         let store = dir.path().join("store");
+        let missing_source = dir.path().join("missing-mrustc.tar.gz");
+        fs::write(&recipe, "blocked recipe\n").unwrap();
+        write_fast_failing_rust_source_route(dir.path(), &missing_source);
         fs::create_dir(&store).unwrap();
 
         let err = cmd_bootstrap_rust_source_provider(&recipe, None, &output_dir, &store, false, false, None)
@@ -3443,9 +3446,127 @@ mod tests {
             .to_string();
 
         assert!(err.contains("Rust source provider materialization failed closed"));
-        assert!(err.contains(rust_source_provider::RUST_SOURCE_PROVIDER_BLOCKED_REASON));
-        assert!(err.contains("recipe_digest_blake3="));
+        assert!(err.contains("mrustc-0.12.0"));
+        assert!(err.contains("missing-mrustc.tar.gz"));
+        assert!(!err.contains("Materialized Rust source provider"));
         assert!(!output_dir.exists());
+    }
+
+    fn write_fast_failing_rust_source_route(root: &Path, missing_source: &Path) {
+        const SAMPLE_SHA256_HEX: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let missing_url = url::Url::from_file_path(missing_source).unwrap().to_string();
+        let text = r#"
+let Source = {
+  id | String,
+  kind | String,
+  name | String,
+  version | String,
+  url | String,
+  sha256_hex | String,
+} in
+let Stage = {
+  id | String,
+  kind | String,
+  source_ids | Array String,
+  bootstrap_stage_id | String,
+  rust_version | String,
+  outputs | Array String,
+  notes | Array String,
+} in
+let Output = {
+  role | String,
+  path | String,
+} in
+let Policy = {
+  source_built | Bool,
+  uses_prebuilt_rust | Bool,
+  forbids_prebuilt_rust | Bool,
+  reference | String,
+} in
+let Plan = {
+  schema | String,
+  provider_id | String,
+  route | String,
+  host_triple | String,
+  target_triple | String,
+  final_version | String,
+  policy | Policy,
+  sources | Array Source,
+  stages | Array Stage,
+  final_outputs | Array Output,
+} in
+{
+  schema = "mantle-rust-source-provider-bootstrap-plan-v1",
+  provider_id = "mantle-rust-source-provider",
+  route = "mrustc-source-route",
+  host_triple = "x86_64-unknown-linux-musl",
+  target_triple = "x86_64-unknown-linux-musl",
+  final_version = "1.94.0",
+  policy = {
+    source_built = true,
+    uses_prebuilt_rust = false,
+    forbids_prebuilt_rust = true,
+    reference = "fast failing unit route",
+  },
+  sources = [
+    {
+      id = "mrustc-0.12.0",
+      kind = "tarball",
+      name = "mrustc-source",
+      version = "0.12.0",
+      url = "__MISSING_URL__",
+      sha256_hex = "__SAMPLE_SHA256__",
+    },
+    {
+      id = "rust-1.90.0",
+      kind = "tarball",
+      name = "rust-compiler-source",
+      version = "1.90.0",
+      url = "__MISSING_URL__",
+      sha256_hex = "__SAMPLE_SHA256__",
+    },
+    {
+      id = "rust-1.94.0",
+      kind = "tarball",
+      name = "rust-compiler-source",
+      version = "1.94.0",
+      url = "__MISSING_URL__",
+      sha256_hex = "__SAMPLE_SHA256__",
+    },
+  ],
+  stages = [
+    {
+      id = "mrustc-to-rust-1.90.0",
+      kind = "mrustc-seed",
+      source_ids = ["mrustc-0.12.0", "rust-1.90.0"],
+      bootstrap_stage_id = "",
+      rust_version = "1.90.0",
+      outputs = ["rustc", "cargo", "host-rustlib", "target-rustlib"],
+      notes = ["fast failing source fetch boundary"],
+    },
+    {
+      id = "rust-1.94.0-final",
+      kind = "rustc-final",
+      source_ids = ["rust-1.94.0"],
+      bootstrap_stage_id = "mrustc-to-rust-1.90.0",
+      rust_version = "1.94.0",
+      outputs = ["rustc", "cargo", "rustdoc", "host-rustlib", "target-rustlib", "provider-receipt"],
+      notes = ["install provider metadata and receipts"],
+    },
+  ],
+  final_outputs = [
+    { role = "rustc", path = "bin/rustc" },
+    { role = "cargo", path = "bin/cargo" },
+    { role = "rustdoc", path = "bin/rustdoc" },
+    { role = "host-rustlib", path = "lib/rustlib/x86_64-unknown-linux-musl/lib" },
+    { role = "target-rustlib", path = "lib/rustlib/x86_64-unknown-linux-musl/lib" },
+    { role = "provider-receipt", path = "share/mantle-rust-provider/receipts/build.json" },
+  ],
+} | Plan
+"#
+        .replace("__MISSING_URL__", &missing_url)
+        .replace("__SAMPLE_SHA256__", SAMPLE_SHA256_HEX);
+        fs::write(root.join("rust-source-plan.ncl"), text).unwrap();
     }
 
     fn source_root_manifest_with_patch_json() -> serde_json::Value {
