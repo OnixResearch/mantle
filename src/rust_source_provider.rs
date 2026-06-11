@@ -521,6 +521,11 @@ pub(crate) enum RustSourceProviderError {
         route_plan_digest_blake3: Option<String>,
         first_stage_id: Option<String>,
         first_stage_script_path: Option<PathBuf>,
+        final_candidate_stage_id: Option<String>,
+        final_candidate_dir: Option<PathBuf>,
+        final_candidate_manifest_path: Option<PathBuf>,
+        final_candidate_metadata_digest_blake3: Option<String>,
+        final_candidate_smoke_summary_path: Option<PathBuf>,
         reason: &'static str,
     },
 }
@@ -545,6 +550,11 @@ impl std::fmt::Display for RustSourceProviderError {
                 route_plan_digest_blake3,
                 first_stage_id,
                 first_stage_script_path,
+                final_candidate_stage_id,
+                final_candidate_dir,
+                final_candidate_manifest_path,
+                final_candidate_metadata_digest_blake3,
+                final_candidate_smoke_summary_path,
                 reason,
             } => {
                 write!(
@@ -563,6 +573,28 @@ impl std::fmt::Display for RustSourceProviderError {
                 }
                 if let Some(first_stage_script_path) = first_stage_script_path {
                     write!(formatter, " first_stage_script={}", first_stage_script_path.display())?;
+                }
+                if let Some(final_candidate_stage_id) = final_candidate_stage_id {
+                    write!(formatter, " final_candidate_stage_id={final_candidate_stage_id}")?;
+                }
+                if let Some(final_candidate_dir) = final_candidate_dir {
+                    write!(formatter, " final_candidate_dir={}", final_candidate_dir.display())?;
+                }
+                if let Some(final_candidate_manifest_path) = final_candidate_manifest_path {
+                    write!(formatter, " final_candidate_manifest={}", final_candidate_manifest_path.display())?;
+                }
+                if let Some(final_candidate_metadata_digest_blake3) = final_candidate_metadata_digest_blake3 {
+                    write!(
+                        formatter,
+                        " final_candidate_metadata_digest_blake3={final_candidate_metadata_digest_blake3}"
+                    )?;
+                }
+                if let Some(final_candidate_smoke_summary_path) = final_candidate_smoke_summary_path {
+                    write!(
+                        formatter,
+                        " final_candidate_smoke_summary={}",
+                        final_candidate_smoke_summary_path.display()
+                    )?;
                 }
                 Ok(())
             }
@@ -623,6 +655,11 @@ pub(crate) fn materialize_rust_source_provider(
         route_plan_digest_blake3: Some(boundary.route_plan_digest_blake3),
         first_stage_id: Some(boundary.stage_id),
         first_stage_script_path: Some(boundary.script_path),
+        final_candidate_stage_id: Some(rustc_final_run.candidate.stage_id),
+        final_candidate_dir: Some(rustc_final_run.candidate.candidate_dir),
+        final_candidate_manifest_path: Some(rustc_final_run.boundary.provider_candidate_manifest_path),
+        final_candidate_metadata_digest_blake3: Some(rustc_final_run.candidate.metadata_digest_blake3),
+        final_candidate_smoke_summary_path: Some(rustc_final_run.smoke.summary_path),
         reason: RUST_SOURCE_PROVIDER_BLOCKED_REASON,
     })
 }
@@ -3931,6 +3968,14 @@ mod tests {
         assert!(text.contains("recipe_digest_blake3="));
         assert!(text.contains("route_plan_digest_blake3="));
         assert!(text.contains("first_stage_id=mrustc-to-rust-1.90.0"));
+        assert!(text.contains("final_candidate_stage_id=rust-1.94.0-final"));
+        assert!(text.contains("final_candidate_dir="));
+        assert!(text.contains(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR));
+        assert!(text.contains("final_candidate_manifest="));
+        assert!(text.contains(RUSTC_FINAL_PROVIDER_CANDIDATE_MANIFEST_FILE));
+        assert!(text.contains("final_candidate_metadata_digest_blake3="));
+        assert!(text.contains("final_candidate_smoke_summary="));
+        assert!(text.contains(SMOKE_EVIDENCE_SUMMARY_FILE));
         assert!(!text.contains("source-built claim"));
         assert!(!output.exists());
         assert!(scratch.join(FIRST_STAGE_SCRIPT_FILE).is_file());
