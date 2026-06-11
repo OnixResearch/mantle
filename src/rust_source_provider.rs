@@ -26,6 +26,13 @@ const SMOKE_SOURCE_FILE: &str = "mantle-rust-provider-smoke.rs";
 const SMOKE_OUTPUT_FILE: &str = "libmantle_rust_provider_smoke.rlib";
 const SMOKE_CRATE_NAME: &str = "mantle_rust_provider_smoke";
 const SMOKE_RETURN_CODE: u32 = 42;
+const SMOKE_EVIDENCE_SCHEMA: &str = "mantle-rust-source-provider-smoke-evidence-v1";
+const SMOKE_EVIDENCE_SUMMARY_FILE: &str = "smoke.json";
+const SMOKE_EVIDENCE_STDOUT_FILE: &str = "smoke-stdout.txt";
+const SMOKE_EVIDENCE_STDERR_FILE: &str = "smoke-stderr.txt";
+const SMOKE_EVIDENCE_SOURCE_FILE: &str = "smoke-source.rs";
+const SMOKE_EVIDENCE_OUTPUT_FILE: &str = "smoke-output.rlib";
+const SMOKE_EVIDENCE_METADATA_FILE: &str = "provider-metadata.json";
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustSourceProviderMaterialization {
@@ -61,6 +68,20 @@ pub(crate) struct RustSourceProviderSmoke {
     pub(crate) target_triple: String,
     pub(crate) stdout: String,
     pub(crate) stderr: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RustSourceProviderSmokeEvidence {
+    pub(crate) evidence_dir: PathBuf,
+    pub(crate) summary_path: PathBuf,
+    pub(crate) stdout_path: PathBuf,
+    pub(crate) stderr_path: PathBuf,
+    pub(crate) source_path: PathBuf,
+    pub(crate) output_path: PathBuf,
+    pub(crate) metadata_path: PathBuf,
+    pub(crate) output_digest_blake3: String,
+    pub(crate) metadata_digest_blake3: String,
+    pub(crate) policy_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,6 +248,35 @@ pub(crate) fn smoke_rust_source_provider(
     })
 }
 
+pub(crate) fn persist_rust_source_provider_smoke_evidence(
+    evidence_dir: &Path,
+    smoke: &RustSourceProviderSmoke,
+    validation: &RustSourceProviderDirectoryValidation,
+) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
+    if evidence_dir.as_os_str().is_empty() {
+        return Err(RustSourceProviderError::Smoke("smoke evidence dir is empty".to_string()));
+    }
+    fs::create_dir_all(evidence_dir).map_err(|err| {
+        RustSourceProviderError::Smoke(format!("create smoke evidence dir {}: {err}", evidence_dir.display()))
+    })?;
+    let evidence = smoke_evidence_paths(evidence_dir, smoke, validation);
+    copy_evidence_file(&smoke.source_path, &evidence.source_path)?;
+    copy_evidence_file(&smoke.output_path, &evidence.output_path)?;
+    copy_evidence_file(&validation.metadata_path, &evidence.metadata_path)?;
+    write_evidence_text(&evidence.stdout_path, &smoke.stdout)?;
+    write_evidence_text(&evidence.stderr_path, &smoke.stderr)?;
+    let copied_output_digest = file_digest_blake3(&evidence.output_path)?;
+    if copied_output_digest != smoke.output_digest_blake3 {
+        return Err(RustSourceProviderError::Smoke("copied smoke output digest mismatch".to_string()));
+    }
+    let copied_metadata_digest = file_digest_blake3(&evidence.metadata_path)?;
+    if copied_metadata_digest != validation.metadata_digest_blake3 {
+        return Err(RustSourceProviderError::Smoke("copied provider metadata digest mismatch".to_string()));
+    }
+    write_smoke_evidence_summary(&evidence, smoke, validation)?;
+    Ok(evidence)
+}
+
 pub(crate) fn validate_materialized_rust_source_provider(
     provider_dir: &Path,
 ) -> Result<RustSourceProviderDirectoryValidation, RustSourceProviderError> {
@@ -254,6 +304,77 @@ pub(crate) fn validate_materialized_rust_source_provider(
         metadata,
         validation,
     })
+}
+
+fn smoke_evidence_paths(
+    evidence_dir: &Path,
+    smoke: &RustSourceProviderSmoke,
+    validation: &RustSourceProviderDirectoryValidation,
+) -> RustSourceProviderSmokeEvidence {
+    RustSourceProviderSmokeEvidence {
+        evidence_dir: evidence_dir.to_path_buf(),
+        summary_path: evidence_dir.join(SMOKE_EVIDENCE_SUMMARY_FILE),
+        stdout_path: evidence_dir.join(SMOKE_EVIDENCE_STDOUT_FILE),
+        stderr_path: evidence_dir.join(SMOKE_EVIDENCE_STDERR_FILE),
+        source_path: evidence_dir.join(SMOKE_EVIDENCE_SOURCE_FILE),
+        output_path: evidence_dir.join(SMOKE_EVIDENCE_OUTPUT_FILE),
+        metadata_path: evidence_dir.join(SMOKE_EVIDENCE_METADATA_FILE),
+        output_digest_blake3: smoke.output_digest_blake3.clone(),
+        metadata_digest_blake3: validation.metadata_digest_blake3.clone(),
+        policy_digest_blake3: validation.validation.policy_digest_blake3.clone(),
+    }
+}
+
+fn write_smoke_evidence_summary(
+    evidence: &RustSourceProviderSmokeEvidence,
+    smoke: &RustSourceProviderSmoke,
+    validation: &RustSourceProviderDirectoryValidation,
+) -> Result<(), RustSourceProviderError> {
+    let summary = serde_json::json!({
+        "schema": SMOKE_EVIDENCE_SCHEMA,
+        "provider_path": smoke.provider_path,
+        "rustc_path": smoke.rustc_path,
+        "target_triple": smoke.target_triple,
+        "stdout_path": evidence.stdout_path,
+        "stderr_path": evidence.stderr_path,
+        "source_path": evidence.source_path,
+        "output_path": evidence.output_path,
+        "output_digest_blake3": evidence.output_digest_blake3,
+        "metadata": {
+            "original_path": validation.metadata_path,
+            "evidence_path": evidence.metadata_path,
+            "metadata_digest_blake3": evidence.metadata_digest_blake3,
+            "policy_digest_blake3": evidence.policy_digest_blake3,
+            "host_triple": validation.metadata.host_triple,
+            "target_triple": validation.metadata.target_triple,
+            "artifact_count": validation.validation.artifact_count,
+            "source_count": validation.validation.source_count,
+            "receipt_count": validation.validation.receipt_count,
+        }
+    });
+    let bytes = serde_json::to_vec_pretty(&summary)
+        .map_err(|err| RustSourceProviderError::Smoke(format!("serialize smoke evidence summary: {err}")))?;
+    fs::write(&evidence.summary_path, bytes).map_err(|err| {
+        RustSourceProviderError::Smoke(format!(
+            "write smoke evidence summary {}: {err}",
+            evidence.summary_path.display()
+        ))
+    })
+}
+
+fn copy_evidence_file(source_path: &Path, dest_path: &Path) -> Result<(), RustSourceProviderError> {
+    fs::copy(source_path, dest_path).map_err(|err| {
+        RustSourceProviderError::Smoke(format!(
+            "copy evidence {} -> {}: {err}",
+            source_path.display(),
+            dest_path.display()
+        ))
+    })?;
+    Ok(())
+}
+
+fn write_evidence_text(path: &Path, text: &str) -> Result<(), RustSourceProviderError> {
+    fs::write(path, text).map_err(|err| RustSourceProviderError::Smoke(format!("write {}: {err}", path.display())))
 }
 
 fn validate_import_request(import_dir: &Path, output_dir: &Path) -> Result<(), RustSourceProviderError> {
@@ -690,6 +811,51 @@ mod tests {
         assert_eq!(smoke.output_digest_blake3, blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string());
         assert!(smoke.stdout.contains("synthetic rustc smoke"));
         assert!(smoke.stderr.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn smoke_evidence_persists_summary_output_and_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        let scratch_dir = dir.path().join("scratch");
+        let evidence_dir = dir.path().join("evidence");
+        fs::create_dir(&provider_dir).unwrap();
+        write_synthetic_smoke_provider(&provider_dir, None);
+        let validation = validate_materialized_rust_source_provider(&provider_dir).unwrap();
+        let smoke = smoke_rust_source_provider(&provider_dir, &scratch_dir).unwrap();
+
+        let evidence = persist_rust_source_provider_smoke_evidence(&evidence_dir, &smoke, &validation).unwrap();
+        let summary: serde_json::Value = serde_json::from_slice(&fs::read(&evidence.summary_path).unwrap()).unwrap();
+
+        assert_eq!(evidence.evidence_dir, evidence_dir);
+        assert_eq!(evidence.output_digest_blake3, smoke.output_digest_blake3);
+        assert_eq!(evidence.metadata_digest_blake3, validation.metadata_digest_blake3);
+        assert_eq!(summary["schema"], SMOKE_EVIDENCE_SCHEMA);
+        assert_eq!(summary["output_digest_blake3"], smoke.output_digest_blake3);
+        assert_eq!(fs::read_to_string(&evidence.stdout_path).unwrap(), smoke.stdout);
+        assert_eq!(fs::read_to_string(&evidence.stderr_path).unwrap(), smoke.stderr);
+        assert_eq!(fs::read(&evidence.output_path).unwrap(), SYNTHETIC_RLIB_BYTES);
+        assert_eq!(content_digest_blake3(&evidence.metadata_path).unwrap(), validation.metadata_digest_blake3);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn smoke_evidence_rejects_tampered_smoke_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        let scratch_dir = dir.path().join("scratch");
+        let evidence_dir = dir.path().join("evidence");
+        fs::create_dir(&provider_dir).unwrap();
+        write_synthetic_smoke_provider(&provider_dir, None);
+        let validation = validate_materialized_rust_source_provider(&provider_dir).unwrap();
+        let smoke = smoke_rust_source_provider(&provider_dir, &scratch_dir).unwrap();
+        fs::write(&smoke.output_path, b"tampered").unwrap();
+
+        let err = persist_rust_source_provider_smoke_evidence(&evidence_dir, &smoke, &validation).unwrap_err();
+
+        assert!(err.to_string().contains("copied smoke output digest mismatch"));
+        assert!(!evidence_dir.join(SMOKE_EVIDENCE_SUMMARY_FILE).exists());
     }
 
     #[cfg(unix)]
