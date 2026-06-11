@@ -52,6 +52,8 @@ const FIRST_STAGE_BUILD_LOG_FILE: &str = "mrustc-first-stage-build.log";
 const FIRST_STAGE_PROVIDER_CANDIDATE_SCHEMA: &str = "mantle-rust-source-provider-first-stage-candidate-v1";
 const FIRST_STAGE_PROVIDER_CANDIDATE_DIR: &str = "mrustc-first-stage-provider-candidate";
 const FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE: &str = "mrustc-first-stage-provider-candidate.json";
+const FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR: &str = "mrustc-first-stage-provider-candidate-smoke";
+const FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_WORK_DIR: &str = "work";
 const FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH: &str = "share/mantle-rust-provider/receipts/build.json";
 const FIRST_STAGE_PROVIDER_RECEIPT_ID: &str = "mrustc-first-stage-build";
 const FIRST_STAGE_PROVIDER_RECEIPT_NAME: &str = "mrustc-first-stage-build-receipt";
@@ -204,6 +206,8 @@ struct RustSourceProviderFirstStageBoundary {
     build_log_path: PathBuf,
     provider_candidate_dir: PathBuf,
     provider_candidate_manifest_path: PathBuf,
+    provider_candidate_smoke_dir: PathBuf,
+    provider_candidate_smoke_work_dir: PathBuf,
     script_path: PathBuf,
 }
 
@@ -361,6 +365,7 @@ pub(crate) fn materialize_rust_source_provider(
     write_first_stage_build_manifest(&boundary, &first_stage_build)?;
     let first_stage_candidate =
         assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
+    let first_stage_candidate_smoke = smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate)?;
     write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
     if verbose {
         eprintln!("Rust source provider recipe: {}", plan.recipe_path.display());
@@ -376,6 +381,7 @@ pub(crate) fn materialize_rust_source_provider(
         eprintln!("  first_stage_build_log: {}", boundary.build_log_path.display());
         eprintln!("  first_stage_provider_candidate: {}", first_stage_candidate.candidate_dir.display());
         eprintln!("  first_stage_provider_candidate_manifest: {}", boundary.provider_candidate_manifest_path.display());
+        eprintln!("  first_stage_provider_candidate_smoke: {}", first_stage_candidate_smoke.summary_path.display());
         eprintln!("  planned_output: {}", plan.output_dir.display());
         eprintln!("  planned_scratch: {}", plan.scratch_dir.display());
     }
@@ -713,6 +719,11 @@ fn prepare_first_stage_boundary(
         provider_candidate_manifest_path: materialization
             .scratch_dir
             .join(FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE),
+        provider_candidate_smoke_dir: materialization.scratch_dir.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR),
+        provider_candidate_smoke_work_dir: materialization
+            .scratch_dir
+            .join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR)
+            .join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_WORK_DIR),
         script_path: materialization.scratch_dir.join(FIRST_STAGE_SCRIPT_FILE),
     })
 }
@@ -831,6 +842,8 @@ fn first_stage_boundary_manifest(
             "build_log": boundary.build_log_path.display().to_string(),
             "provider_candidate_dir": boundary.provider_candidate_dir.display().to_string(),
             "provider_candidate_manifest": boundary.provider_candidate_manifest_path.display().to_string(),
+            "provider_candidate_smoke_dir": boundary.provider_candidate_smoke_dir.display().to_string(),
+            "provider_candidate_smoke_work_dir": boundary.provider_candidate_smoke_work_dir.display().to_string(),
         },
         "blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
     });
@@ -1045,6 +1058,15 @@ fn assemble_first_stage_provider_candidate(
         source_count: validation.validation.source_count,
         receipt_count: validation.validation.receipt_count,
     })
+}
+
+fn smoke_first_stage_provider_candidate(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    candidate: &RustSourceProviderFirstStageProviderCandidate,
+) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
+    let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
+    let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
+    persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
 }
 
 fn validate_first_stage_candidate_request(
@@ -2094,6 +2116,8 @@ mod tests {
                 .join(FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH)
                 .is_file()
         );
+        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE).is_file());
+        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_OUTPUT_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_ARCHIVE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_BUILD_DIR).is_dir());
@@ -2149,6 +2173,13 @@ mod tests {
         assert_eq!(candidate_validation.validation.artifact_count, expected_candidate_artifacts);
         assert_eq!(candidate_validation.validation.receipt_count, 1);
         assert_eq!(candidate_validation.validation.source_count, FIRST_STAGE_TEST_SOURCE_COUNT);
+        let smoke_summary: serde_json::Value = serde_json::from_slice(
+            &fs::read(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(smoke_summary["schema"], SMOKE_EVIDENCE_SCHEMA);
+        assert_eq!(smoke_summary["output_digest_blake3"], blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string());
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains("missing verified source"));
         assert!(script.contains("verified sources manifest"));
@@ -2612,7 +2643,7 @@ let Plan = {
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
-        b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf 'synthetic prefix rustc\\n' > output/prefix/bin/rustc\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/cargo\n"
+        b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/cargo\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {
