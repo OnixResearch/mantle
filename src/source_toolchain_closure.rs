@@ -1169,16 +1169,21 @@ fn validate_seed_exception_text(label: &str, value: &str) -> Result<(), Toolchai
 }
 
 fn validate_no_disallowed_rust_provider_text(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
-    let normalized = value.to_ascii_lowercase();
-    for marker in DISALLOWED_RUST_PROVIDER_MARKERS {
-        if contains_disallowed_rust_provider_marker(&normalized, marker) {
-            return Err(error(
-                ToolchainClosureErrorKind::PrebuiltRustProvider,
-                format!("{label} contains disallowed Rust provider marker '{marker}'"),
-            ));
-        }
+    if let Some(marker) = disallowed_rust_provider_marker(value) {
+        return Err(error(
+            ToolchainClosureErrorKind::PrebuiltRustProvider,
+            format!("{label} contains disallowed Rust provider marker '{marker}'"),
+        ));
     }
     Ok(())
+}
+
+pub(crate) fn disallowed_rust_provider_marker(value: &str) -> Option<&'static str> {
+    let normalized = value.to_ascii_lowercase();
+    DISALLOWED_RUST_PROVIDER_MARKERS
+        .iter()
+        .copied()
+        .find(|marker| contains_disallowed_rust_provider_marker(&normalized, marker))
 }
 
 fn contains_disallowed_rust_provider_marker(value: &str, marker: &str) -> bool {

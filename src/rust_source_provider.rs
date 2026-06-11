@@ -14,6 +14,7 @@ use std::process::Command;
 use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_METADATA_PATH;
 use crate::source_toolchain_closure::RustProviderObservedArtifact;
 use crate::source_toolchain_closure::RustProviderObservedBuildReceipt;
+use crate::source_toolchain_closure::RustProviderRole;
 use crate::source_toolchain_closure::RustSourceProviderBuildReceipt;
 use crate::source_toolchain_closure::RustSourceProviderMetadata;
 use crate::source_toolchain_closure::RustSourceProviderValidation;
@@ -33,6 +34,8 @@ const SMOKE_EVIDENCE_STDERR_FILE: &str = "smoke-stderr.txt";
 const SMOKE_EVIDENCE_SOURCE_FILE: &str = "smoke-source.rs";
 const SMOKE_EVIDENCE_OUTPUT_FILE: &str = "smoke-output.rlib";
 const SMOKE_EVIDENCE_METADATA_FILE: &str = "provider-metadata.json";
+const RUST_PROVIDER_ARTIFACT_TEXT_PROBE_BYTES: usize = 4_096;
+const RUST_PROVIDER_ARTIFACT_MARKER_SCAN_BYTES: usize = 65_536;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustSourceProviderMaterialization {
@@ -552,7 +555,7 @@ fn observed_provider_artifacts(
         observed.push(RustProviderObservedArtifact {
             role: artifact.role,
             path: artifact.path.clone(),
-            content_digest_blake3: content_digest_blake3(&path)?,
+            content_digest_blake3: observed_provider_artifact_digest(artifact.role, &path)?,
         });
     }
     Ok(observed)
@@ -579,6 +582,53 @@ fn observed_provider_receipts(
         });
     }
     Ok(observed)
+}
+
+fn observed_provider_artifact_digest(role: RustProviderRole, path: &Path) -> Result<String, RustSourceProviderError> {
+    if path.is_file() {
+        let bytes =
+            fs::read(path).map_err(|err| RustSourceProviderError::Digest(format!("read {}: {err}", path.display())))?;
+        validate_observed_provider_artifact_bytes(role, path, &bytes)?;
+        return Ok(blake3::hash(&bytes).to_hex().to_string());
+    }
+    if path.is_dir() {
+        return directory_digest_blake3(path);
+    }
+    Err(RustSourceProviderError::MissingArtifact(format!(
+        "{} is neither file nor directory",
+        path.display()
+    )))
+}
+
+fn validate_observed_provider_artifact_bytes(
+    role: RustProviderRole,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<(), RustSourceProviderError> {
+    if !matches!(role, RustProviderRole::Rustc | RustProviderRole::Cargo) {
+        return Ok(());
+    }
+    if !looks_like_text_artifact(bytes) {
+        return Ok(());
+    }
+    let scan_len = bytes.len().min(RUST_PROVIDER_ARTIFACT_MARKER_SCAN_BYTES);
+    let text = String::from_utf8_lossy(&bytes[..scan_len]);
+    if let Some(marker) = crate::source_toolchain_closure::disallowed_rust_provider_marker(&text) {
+        return Err(RustSourceProviderError::Validate(format!(
+            "provider artifact {} contains disallowed Rust provider marker '{marker}'",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn looks_like_text_artifact(bytes: &[u8]) -> bool {
+    if bytes.starts_with(b"#!") {
+        return true;
+    }
+    let probe_len = bytes.len().min(RUST_PROVIDER_ARTIFACT_TEXT_PROBE_BYTES);
+    let probe = &bytes[..probe_len];
+    !probe.contains(&0) && std::str::from_utf8(probe).is_ok()
 }
 
 fn content_digest_blake3(path: &Path) -> Result<String, RustSourceProviderError> {
@@ -726,6 +776,21 @@ mod tests {
         let err = validate_materialized_rust_source_provider(dir.path()).unwrap_err();
 
         assert!(err.to_string().contains("digest mismatch"));
+    }
+
+    #[test]
+    fn directory_validator_rejects_nix_rustc_wrapper_even_with_matching_digest() {
+        let dir = tempfile::tempdir().unwrap();
+        let wrapper = b"#!/bin/sh\nexec /nix/store/example-rust-default/bin/rustc \"$@\"\n";
+        write_fake_provider(dir.path());
+        write_bytes(dir.path(), "bin/rustc", wrapper);
+        refresh_fake_receipt_and_metadata(dir.path());
+
+        let err = validate_materialized_rust_source_provider(dir.path()).unwrap_err();
+        let message = err.to_string();
+
+        assert!(message.contains("disallowed Rust provider marker"));
+        assert!(message.contains("'nix'"));
     }
 
     #[test]
