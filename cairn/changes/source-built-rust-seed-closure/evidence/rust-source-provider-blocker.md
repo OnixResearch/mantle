@@ -244,3 +244,71 @@ Output summaries:
   "valid": true,
   "verdict": "PASS"
 ```
+
+## Provider smoke orchestration slice
+
+This slice adds the smoke-check boundary for already validated provider directories. It still does not claim a real source-built Rust provider exists.
+
+### Baseline before smoke changes
+
+Commands:
+
+```sh
+cargo test -p mantle --bin mantle rust_source_provider
+cargo test -p mantle --bin mantle bootstrap_rust_source_provider
+```
+
+Output summaries:
+
+```text
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 718 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 737 filtered out; finished in 0.00s
+```
+
+### Implementation
+
+- Added `rust_source_provider::smoke_rust_source_provider(provider_dir, scratch_dir)`.
+- Smoke validation first revalidates metadata, artifacts, and receipt JSON; only then does it launch provider-local `bin/rustc`.
+- The rustc invocation clears the environment, passes `--sysroot <provider-dir>`, targets the provider metadata host triple, and compiles a no-std smoke library to an rlib under the scratch directory.
+- The result records provider path, rustc path, target triple, smoke source/output paths, stdout/stderr summaries, and BLAKE3 digest of the smoke output.
+- CLI import/materialization path now accepts `--smoke` and prints the smoke digest if validation and compile succeed.
+- Positive test uses a synthetic rustc fixture only to exercise orchestration. Negative test mutates metadata to prebuilt and proves the sentinel rustc script is not launched.
+
+### Post-change checks
+
+Commands:
+
+```sh
+cargo test -p mantle --bin mantle rust_source_provider
+cargo test -p mantle --bin mantle bootstrap_rust_source_provider
+```
+
+Output summaries:
+
+```text
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 718 filtered out; finished in 0.12s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 739 filtered out; finished in 0.00s
+```
+
+Decision: the real smoke-build task remains blocked because no real source-built provider directory exists. The smoke rail is ready to run once materialization or an external import supplies a genuine provider.
+
+## Cairn validation after smoke-rail update
+
+Commands:
+
+```sh
+nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+nix run path:/home/brittonr/git/cairn#cairn -- gate tasks source-built-rust-seed-closure --root .
+```
+
+Output summaries:
+
+```json
+  "changes": 1,
+  "specs_validated": 6,
+  "valid": true
+  "issues": [],
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+```

@@ -689,6 +689,10 @@ enum BootstrapAction {
         #[arg(long)]
         import_dir: Option<PathBuf>,
 
+        /// Compile a provider-local no_std smoke crate after validation/import
+        #[arg(long)]
+        smoke: bool,
+
         /// Planned output directory for the Rust provider
         #[arg(long)]
         output_dir: PathBuf,
@@ -1991,8 +1995,16 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
         BootstrapAction::RustSourceProvider {
             recipe,
             import_dir,
+            smoke,
             output_dir,
-        } => cmd_bootstrap_rust_source_provider(recipe, import_dir.as_deref(), output_dir, &ctx.store, ctx.verbose),
+        } => cmd_bootstrap_rust_source_provider(
+            recipe,
+            import_dir.as_deref(),
+            output_dir,
+            &ctx.store,
+            ctx.verbose,
+            *smoke,
+        ),
         BootstrapAction::Validate {
             target,
             import_paths,
@@ -2021,9 +2033,10 @@ fn cmd_bootstrap_rust_source_provider(
     output_dir: &Path,
     _store_dir: &Path,
     verbose: bool,
+    smoke: bool,
 ) -> Result<(), RunError> {
     if let Some(import_dir) = import_dir {
-        return cmd_import_rust_source_provider(import_dir, output_dir);
+        return cmd_import_rust_source_provider(import_dir, output_dir, smoke);
     }
     let scratch = tempfile::Builder::new()
         .prefix("mantle-rust-source-provider-")
@@ -2035,13 +2048,16 @@ fn cmd_bootstrap_rust_source_provider(
             eprintln!("  recipe_digest_blake3: {}", materialized.recipe_digest_blake3);
             eprintln!("  metadata_path: {}", materialized.metadata_path.display());
             eprintln!("  metadata_digest_blake3: {}", materialized.metadata_digest_blake3);
+            if smoke {
+                cmd_smoke_rust_source_provider(&materialized.output_path)?;
+            }
             Ok(())
         }
         Err(err) => Err(RunError::Build(format!("Rust source provider materialization failed closed: {err}"))),
     }
 }
 
-fn cmd_import_rust_source_provider(import_dir: &Path, output_dir: &Path) -> Result<(), RunError> {
+fn cmd_import_rust_source_provider(import_dir: &Path, output_dir: &Path, smoke: bool) -> Result<(), RunError> {
     let imported = rust_source_provider::import_rust_source_provider(import_dir, output_dir)
         .map_err(|err| RunError::Build(format!("Rust source provider import failed closed: {err}")))?;
     eprintln!("Imported Rust source provider {}", imported.output_path.display());
@@ -2049,6 +2065,31 @@ fn cmd_import_rust_source_provider(import_dir: &Path, output_dir: &Path) -> Resu
     eprintln!("  metadata_path: {}", imported.validation.metadata_path.display());
     eprintln!("  metadata_digest_blake3: {}", imported.validation.metadata_digest_blake3);
     eprintln!("  policy_digest_blake3: {}", imported.validation.validation.policy_digest_blake3);
+    if smoke {
+        cmd_smoke_rust_source_provider(&imported.output_path)?;
+    }
+    Ok(())
+}
+
+fn cmd_smoke_rust_source_provider(provider_dir: &Path) -> Result<(), RunError> {
+    let scratch = tempfile::Builder::new()
+        .prefix("mantle-rust-provider-smoke-")
+        .tempdir()
+        .map_err(|err| RunError::Internal(format!("creating Rust provider smoke scratch: {err}")))?;
+    let smoke = rust_source_provider::smoke_rust_source_provider(provider_dir, scratch.path())
+        .map_err(|err| RunError::Build(format!("Rust source provider smoke failed closed: {err}")))?;
+    eprintln!("Smoked Rust source provider {}", smoke.provider_path.display());
+    eprintln!("  rustc_path: {}", smoke.rustc_path.display());
+    eprintln!("  target_triple: {}", smoke.target_triple);
+    eprintln!("  smoke_source: {}", smoke.source_path.display());
+    eprintln!("  smoke_output: {}", smoke.output_path.display());
+    eprintln!("  smoke_output_digest_blake3: {}", smoke.output_digest_blake3);
+    if !smoke.stdout.is_empty() {
+        eprintln!("  smoke_stdout: {}", smoke.stdout.trim_end());
+    }
+    if !smoke.stderr.is_empty() {
+        eprintln!("  smoke_stderr: {}", smoke.stderr.trim_end());
+    }
     Ok(())
 }
 
@@ -3254,6 +3295,7 @@ mod tests {
                 Some(BootstrapAction::RustSourceProvider {
                     recipe,
                     import_dir,
+                    smoke,
                     output_dir,
                 }),
             ..
@@ -3263,6 +3305,7 @@ mod tests {
         };
         assert_eq!(recipe, PathBuf::from("bootstrap/rust-source.ncl"));
         assert!(import_dir.is_none());
+        assert!(!smoke);
         assert_eq!(output_dir, PathBuf::from("/tmp/mantle-rust-provider"));
     }
 
@@ -3274,20 +3317,26 @@ mod tests {
             "rust-source-provider",
             "--import-dir",
             "/tmp/source-built-rust-provider",
+            "--smoke",
             "--output-dir",
             "/tmp/mantle-rust-provider",
         ]);
 
         let Command::Bootstrap {
-            action: Some(BootstrapAction::RustSourceProvider {
-                import_dir, output_dir, ..
-            }),
+            action:
+                Some(BootstrapAction::RustSourceProvider {
+                    import_dir,
+                    smoke,
+                    output_dir,
+                    ..
+                }),
             ..
         } = args.command
         else {
             panic!("expected rust-source-provider bootstrap action");
         };
         assert_eq!(import_dir, Some(PathBuf::from("/tmp/source-built-rust-provider")));
+        assert!(smoke);
         assert_eq!(output_dir, PathBuf::from("/tmp/mantle-rust-provider"));
     }
 
@@ -3300,7 +3349,7 @@ mod tests {
         fs::create_dir(&store).unwrap();
         fs::write(&recipe, "blocked recipe\n").unwrap();
 
-        let err = cmd_bootstrap_rust_source_provider(&recipe, None, &output_dir, &store, false)
+        let err = cmd_bootstrap_rust_source_provider(&recipe, None, &output_dir, &store, false, false)
             .unwrap_err()
             .to_string();
 

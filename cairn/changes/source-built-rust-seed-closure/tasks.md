@@ -21,7 +21,7 @@
 - [x] [serial] Add positive and negative validator tests for Rust compiler/sysroot provider metadata, placeholder rejection, digest mismatch, and seed-exception demotion. r[rust_package_planning.source_built_rust_seed_closure]
   - Evidence: `evidence/rust-source-provider-blocker.md` records `cargo test -p mantle --bin mantle source_toolchain_closure`, `rust_source_provider`, and `bootstrap_rust_source_provider` passing.
 - [ ] [serial] Run a Rust compiler/sysroot smoke build using only declared provider paths and record stdout/stderr, binary digest, and provider metadata. r[rust_package_planning.source_built_rust_seed_closure]
-  - Blocked: no real source-built Rust provider exists to smoke-test.
+  - Blocked: no real source-built Rust provider exists to smoke-test. The `--smoke` rail now validates/imports first and records a smoke output digest when a genuine provider is supplied.
 - [x] [serial] Run one-shot Cargo-free self-build with the Rust provider or record the deterministic blocker. r[rust_package_planning.source_built_rust_seed_closure]
   - Evidence: `evidence/rust-source-provider-blocker.md` records the provider blocker that prevents launching provider-backed one-shot self-build honestly.
 - [ ] [serial] Run fixed-point Cargo-free proof and record whether `not-source-built-toolchain-closure` can be removed; if not, record exact remaining non-claims. r[rust_package_planning.source_built_rust_seed_closure]
