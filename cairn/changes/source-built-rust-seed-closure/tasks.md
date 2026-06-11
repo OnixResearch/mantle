@@ -5,7 +5,7 @@
 - [x] [serial] Record a fresh baseline of Rust compiler/sysroot seed exceptions from the latest source-built closure proof manifest. r[rust_package_planning.source_built_rust_seed_closure]
   - Evidence: `evidence/rust-source-provider-blocker.md` records that no local latest source-built Rust proof manifest was present under `target/` or filtered `/tmp`, so the current non-claim remains `not-source-built-toolchain-closure`.
 - [x] [serial] Define the normalized Rust compiler/sysroot provider contract, including required roles, metadata fields, BLAKE3 digests, source identities, and build receipt identities. r[rust_package_planning.source_built_rust_seed_closure]
-  - Evidence: `src/source_toolchain_closure.rs` defines `mantle-rust-source-provider-v1` metadata and validates required `rustc`, `cargo`, host rustlib, target rustlib, and receipt artifacts.
+  - Evidence: `src/source_toolchain_closure.rs` defines `mantle-rust-source-provider-v1` metadata plus `mantle-rust-source-provider-receipt-v1` receipts and validates required `rustc`, `cargo`, host rustlib, target rustlib, provider receipt artifacts, exact rustlib layout, and receipt output artifact linkage.
 
 ## Implementation
 

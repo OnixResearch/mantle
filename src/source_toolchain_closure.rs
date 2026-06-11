@@ -32,6 +32,7 @@ const REQUIRED_TOOLCHAIN_ROLES: [ToolchainRole; 4] = [
     ToolchainRole::Sysroot,
 ];
 pub(crate) const RUST_SOURCE_PROVIDER_SCHEMA: &str = "mantle-rust-source-provider-v1";
+pub(crate) const RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA: &str = "mantle-rust-source-provider-receipt-v1";
 pub(crate) const RUST_SOURCE_PROVIDER_ID: &str = "mantle-rust-source-provider";
 pub(crate) const RUST_SOURCE_PROVIDER_METADATA_PATH: &str = "share/mantle-rust-provider/provider.json";
 pub(crate) const RUST_SOURCE_PROVIDER_RECEIPTS_DIR: &str = "share/mantle-rust-provider/receipts";
@@ -39,6 +40,8 @@ const RUST_PROVIDER_POLICY_DIGEST_CONTEXT: &str = "mantle-rust-source-provider-p
 const MAX_RUST_PROVIDER_ARTIFACTS: usize = 256;
 const MAX_RUST_PROVIDER_SOURCES: usize = 64;
 const MAX_RUST_PROVIDER_RECEIPTS: usize = 64;
+const MAX_RUST_PROVIDER_RECEIPT_STEPS: usize = 128;
+const MAX_RUST_PROVIDER_RECEIPT_ARGUMENTS: usize = 64;
 const REQUIRED_RUST_PROVIDER_ROLES: [RustProviderRole; 5] = [
     RustProviderRole::Rustc,
     RustProviderRole::Cargo,
@@ -166,6 +169,33 @@ pub(crate) struct RustSourceProviderMetadata {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustSourceProviderBuildReceipt {
+    pub(crate) schema: String,
+    pub(crate) receipt_id: String,
+    pub(crate) provider_id: String,
+    pub(crate) host_triple: String,
+    pub(crate) target_triple: String,
+    pub(crate) source_ids: Vec<String>,
+    pub(crate) output_artifacts: Vec<RustProviderReceiptArtifact>,
+    pub(crate) build_steps: Vec<RustProviderReceiptStep>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustProviderReceiptArtifact {
+    pub(crate) role: RustProviderRole,
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) content_digest_blake3: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustProviderReceiptStep {
+    pub(crate) name: String,
+    pub(crate) program: String,
+    pub(crate) arguments: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RustSourceProviderProvenance {
     pub(crate) source_built: bool,
     pub(crate) uses_prebuilt_rust: bool,
@@ -215,6 +245,13 @@ pub(crate) struct RustProviderObservedArtifact {
     pub(crate) role: RustProviderRole,
     pub(crate) path: String,
     pub(crate) content_digest_blake3: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RustProviderObservedBuildReceipt {
+    pub(crate) path: String,
+    pub(crate) content_digest_blake3: String,
+    pub(crate) receipt: RustSourceProviderBuildReceipt,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -352,6 +389,15 @@ pub(crate) fn enforce_observed_rust_source_provider_artifacts(
     for artifact in observed {
         require_observed_rust_provider_artifact_declared(&normalized, artifact)?;
     }
+    validation_from_normalized_rust_provider(&normalized)
+}
+
+pub(crate) fn enforce_observed_rust_source_provider_receipts(
+    metadata: &RustSourceProviderMetadata,
+    observed: &[RustProviderObservedBuildReceipt],
+) -> Result<RustSourceProviderValidation, ToolchainClosureError> {
+    let normalized = normalize_rust_source_provider_metadata(metadata)?;
+    validate_observed_rust_provider_receipts(&normalized, observed)?;
     validation_from_normalized_rust_provider(&normalized)
 }
 
@@ -588,6 +634,7 @@ fn normalize_rust_source_provider_metadata(
     let source_ids = validate_rust_provider_sources(&metadata.sources)?;
     let receipt_ids = validate_rust_provider_receipts(&metadata.build_receipts)?;
     validate_rust_provider_artifacts(metadata, &source_ids, &receipt_ids)?;
+    validate_rust_provider_receipt_artifact_links(metadata)?;
     let mut normalized = metadata.clone();
     normalized.sources.sort_by_key(rust_provider_source_sort_key);
     normalized.build_receipts.sort_by_key(rust_provider_receipt_sort_key);
@@ -657,6 +704,10 @@ fn validate_collection_count(label: &str, len: usize, max: usize) -> Result<(), 
     if len == 0 {
         return Err(error(ToolchainClosureErrorKind::InvalidRustProvider, format!("{label} is empty")));
     }
+    validate_max_collection_count(label, len, max)
+}
+
+fn validate_max_collection_count(label: &str, len: usize, max: usize) -> Result<(), ToolchainClosureError> {
     if len > max {
         return Err(error(
             ToolchainClosureErrorKind::InvalidRustProvider,
@@ -757,6 +808,39 @@ fn validate_rust_provider_artifact(
     Ok(())
 }
 
+fn validate_rust_provider_receipt_artifact_links(
+    metadata: &RustSourceProviderMetadata,
+) -> Result<(), ToolchainClosureError> {
+    for receipt in &metadata.build_receipts {
+        let Some(artifact) = metadata
+            .artifacts
+            .iter()
+            .find(|artifact| artifact.role == RustProviderRole::ProviderReceipt && artifact.path == receipt.path)
+        else {
+            return Err(error(
+                ToolchainClosureErrorKind::MissingRustProviderRole,
+                format!("rust provider receipt '{}' has no provider-receipt artifact", receipt.id),
+            ));
+        };
+        if artifact.build_receipt_id != receipt.id {
+            return Err(error(
+                ToolchainClosureErrorKind::InvalidRustProvider,
+                format!(
+                    "rust provider receipt '{}' artifact references build_receipt_id '{}'",
+                    receipt.id, artifact.build_receipt_id
+                ),
+            ));
+        }
+        if artifact.content_digest_blake3 != receipt.digest_blake3 {
+            return Err(error(
+                ToolchainClosureErrorKind::DigestMismatch,
+                format!("rust provider receipt '{}' digest does not match provider-receipt artifact", receipt.id),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn require_rust_provider_roles(roles: &BTreeSet<RustProviderRole>) -> Result<(), ToolchainClosureError> {
     for role in REQUIRED_RUST_PROVIDER_ROLES {
         if !roles.contains(&role) {
@@ -778,10 +862,10 @@ fn validate_rust_provider_role_path(
         RustProviderRole::Cargo => require_provider_path(&artifact.path, CARGO_PROVIDER_PATH, artifact.role),
         RustProviderRole::Rustdoc => require_provider_path(&artifact.path, RUSTDOC_PROVIDER_PATH, artifact.role),
         RustProviderRole::HostRustlib => {
-            require_provider_path_prefix(&artifact.path, &rustlib_prefix(&metadata.host_triple), artifact.role)
+            require_provider_path_prefix(&artifact.path, &rustlib_lib_prefix(&metadata.host_triple), artifact.role)
         }
         RustProviderRole::TargetRustlib => {
-            require_provider_path_prefix(&artifact.path, &rustlib_prefix(&metadata.target_triple), artifact.role)
+            require_provider_path_prefix(&artifact.path, &rustlib_lib_prefix(&metadata.target_triple), artifact.role)
         }
         RustProviderRole::ProviderReceipt => validate_provider_receipt_path(&artifact.path),
     }
@@ -807,8 +891,8 @@ fn require_provider_path_prefix(path: &str, prefix: &str, role: RustProviderRole
     ))
 }
 
-fn rustlib_prefix(triple: &str) -> String {
-    format!("{RUSTLIB_PROVIDER_PREFIX}/{triple}")
+fn rustlib_lib_prefix(triple: &str) -> String {
+    format!("{RUSTLIB_PROVIDER_PREFIX}/{triple}/lib")
 }
 
 fn validate_receipt_path_prefix(path: &str) -> Result<(), ToolchainClosureError> {
@@ -875,6 +959,192 @@ fn require_observed_rust_provider_artifact_declared(
     Err(error(
         ToolchainClosureErrorKind::DigestMismatch,
         format!("rust provider artifact {:?} digest mismatch at {}", observed.role, observed.path),
+    ))
+}
+
+fn validate_observed_rust_provider_receipts(
+    metadata: &RustSourceProviderMetadata,
+    observed: &[RustProviderObservedBuildReceipt],
+) -> Result<(), ToolchainClosureError> {
+    validate_collection_count("observed rust provider receipts", observed.len(), MAX_RUST_PROVIDER_RECEIPTS)?;
+    let mut observed_paths = BTreeSet::new();
+    for receipt in observed {
+        validate_provider_relative_path("observed rust provider receipt path", &receipt.path)?;
+        validate_receipt_path_prefix(&receipt.path)?;
+        validate_blake3_hex("observed rust provider receipt content_digest_blake3", &receipt.content_digest_blake3)?;
+        if !observed_paths.insert(receipt.path.clone()) {
+            return Err(error(
+                ToolchainClosureErrorKind::DuplicateRustProviderItem,
+                format!("duplicate observed rust provider receipt '{}'", receipt.path),
+            ));
+        }
+        validate_observed_rust_provider_receipt(metadata, receipt)?;
+    }
+    require_declared_rust_provider_receipts_observed(metadata, &observed_paths)
+}
+
+fn validate_observed_rust_provider_receipt(
+    metadata: &RustSourceProviderMetadata,
+    observed: &RustProviderObservedBuildReceipt,
+) -> Result<(), ToolchainClosureError> {
+    let Some(declared) = metadata.build_receipts.iter().find(|receipt| receipt.path == observed.path) else {
+        return Err(error(
+            ToolchainClosureErrorKind::MissingRustProviderRole,
+            format!("observed rust provider receipt {} is undeclared", observed.path),
+        ));
+    };
+    if declared.digest_blake3 != observed.content_digest_blake3 {
+        return Err(error(
+            ToolchainClosureErrorKind::DigestMismatch,
+            format!("rust provider receipt '{}' digest mismatch", declared.id),
+        ));
+    }
+    validate_rust_provider_receipt_payload(metadata, declared, &observed.receipt)
+}
+
+fn require_declared_rust_provider_receipts_observed(
+    metadata: &RustSourceProviderMetadata,
+    observed_paths: &BTreeSet<String>,
+) -> Result<(), ToolchainClosureError> {
+    for receipt in &metadata.build_receipts {
+        if !observed_paths.contains(&receipt.path) {
+            return Err(error(
+                ToolchainClosureErrorKind::MissingRustProviderRole,
+                format!("declared rust provider receipt '{}' was not observed", receipt.path),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_rust_provider_receipt_payload(
+    metadata: &RustSourceProviderMetadata,
+    declared: &RustProviderBuildReceiptIdentity,
+    receipt: &RustSourceProviderBuildReceipt,
+) -> Result<(), ToolchainClosureError> {
+    if receipt.schema != RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA {
+        return Err(error(
+            ToolchainClosureErrorKind::InvalidRustProvider,
+            format!("expected receipt schema {RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA}, got {}", receipt.schema),
+        ));
+    }
+    require_equal("rust provider receipt_id", &receipt.receipt_id, &declared.id)?;
+    require_equal("rust provider receipt provider_id", &receipt.provider_id, &metadata.provider_id)?;
+    require_equal("rust provider receipt host_triple", &receipt.host_triple, &metadata.host_triple)?;
+    require_equal("rust provider receipt target_triple", &receipt.target_triple, &metadata.target_triple)?;
+    validate_rust_provider_receipt_sources(metadata, receipt)?;
+    validate_rust_provider_receipt_artifacts(metadata, receipt)?;
+    validate_rust_provider_receipt_steps(receipt)
+}
+
+fn validate_rust_provider_receipt_sources(
+    metadata: &RustSourceProviderMetadata,
+    receipt: &RustSourceProviderBuildReceipt,
+) -> Result<(), ToolchainClosureError> {
+    validate_collection_count("rust provider receipt source_ids", receipt.source_ids.len(), MAX_RUST_PROVIDER_SOURCES)?;
+    let declared_sources: BTreeSet<String> = metadata.sources.iter().map(|source| source.id.clone()).collect();
+    let mut receipt_sources = BTreeSet::new();
+    for source_id in &receipt.source_ids {
+        validate_non_empty("rust provider receipt source_id", source_id)?;
+        validate_no_disallowed_rust_provider_text("rust provider receipt source_id", source_id)?;
+        if !declared_sources.contains(source_id) {
+            return Err(error(
+                ToolchainClosureErrorKind::InvalidRustProvider,
+                format!("rust provider receipt references unknown source_id '{source_id}'"),
+            ));
+        }
+        if !receipt_sources.insert(source_id.clone()) {
+            return Err(error(
+                ToolchainClosureErrorKind::DuplicateRustProviderItem,
+                format!("duplicate rust provider receipt source_id '{source_id}'"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_rust_provider_receipt_artifacts(
+    metadata: &RustSourceProviderMetadata,
+    receipt: &RustSourceProviderBuildReceipt,
+) -> Result<(), ToolchainClosureError> {
+    validate_collection_count(
+        "rust provider receipt output_artifacts",
+        receipt.output_artifacts.len(),
+        MAX_RUST_PROVIDER_ARTIFACTS,
+    )?;
+    let expected = metadata_artifacts_for_receipt(metadata, &receipt.receipt_id);
+    let mut actual = BTreeSet::new();
+    for artifact in &receipt.output_artifacts {
+        validate_non_empty("rust provider receipt artifact name", &artifact.name)?;
+        validate_no_disallowed_rust_provider_text("rust provider receipt artifact name", &artifact.name)?;
+        validate_provider_relative_path("rust provider receipt artifact path", &artifact.path)?;
+        validate_blake3_hex("rust provider receipt artifact content_digest_blake3", &artifact.content_digest_blake3)?;
+        if !actual.insert(receipt_artifact_key(artifact)) {
+            return Err(error(
+                ToolchainClosureErrorKind::DuplicateRustProviderItem,
+                format!("duplicate rust provider receipt artifact '{}'", artifact.name),
+            ));
+        }
+    }
+    if actual == expected {
+        return Ok(());
+    }
+    Err(error(
+        ToolchainClosureErrorKind::InvalidRustProvider,
+        format!("rust provider receipt '{}' output artifacts do not match metadata", receipt.receipt_id),
+    ))
+}
+
+fn validate_rust_provider_receipt_steps(receipt: &RustSourceProviderBuildReceipt) -> Result<(), ToolchainClosureError> {
+    validate_collection_count(
+        "rust provider receipt build_steps",
+        receipt.build_steps.len(),
+        MAX_RUST_PROVIDER_RECEIPT_STEPS,
+    )?;
+    for step in &receipt.build_steps {
+        validate_non_empty("rust provider receipt step name", &step.name)?;
+        validate_non_empty("rust provider receipt step program", &step.program)?;
+        validate_no_disallowed_rust_provider_text("rust provider receipt step name", &step.name)?;
+        validate_no_disallowed_rust_provider_text("rust provider receipt step program", &step.program)?;
+        validate_max_collection_count(
+            "rust provider receipt step arguments",
+            step.arguments.len(),
+            MAX_RUST_PROVIDER_RECEIPT_ARGUMENTS,
+        )?;
+        for argument in &step.arguments {
+            validate_no_disallowed_rust_provider_text("rust provider receipt step argument", argument)?;
+        }
+    }
+    Ok(())
+}
+
+fn metadata_artifacts_for_receipt(
+    metadata: &RustSourceProviderMetadata,
+    receipt_id: &str,
+) -> BTreeSet<(RustProviderRole, String, String, String)> {
+    metadata
+        .artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact.build_receipt_id == receipt_id && artifact.role != RustProviderRole::ProviderReceipt
+        })
+        .map(|artifact| {
+            (artifact.role, artifact.name.clone(), artifact.path.clone(), artifact.content_digest_blake3.clone())
+        })
+        .collect()
+}
+
+fn receipt_artifact_key(artifact: &RustProviderReceiptArtifact) -> (RustProviderRole, String, String, String) {
+    (artifact.role, artifact.name.clone(), artifact.path.clone(), artifact.content_digest_blake3.clone())
+}
+
+fn require_equal(label: &str, actual: &str, expected: &str) -> Result<(), ToolchainClosureError> {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(error(
+        ToolchainClosureErrorKind::InvalidRustProvider,
+        format!("{label} expected {expected}, got {actual}"),
     ))
 }
 
@@ -1419,6 +1689,99 @@ mod tests {
     }
 
     #[test]
+    fn rust_source_provider_accepts_matching_receipt_payload() {
+        let metadata = valid_rust_provider_metadata();
+        let observed = observed_rust_provider_receipts(&metadata);
+
+        let validation = enforce_observed_rust_source_provider_receipts(&metadata, &observed).unwrap();
+
+        assert_eq!(validation.receipt_count, 1);
+        assert_eq!(validation.artifact_count, REQUIRED_RUST_PROVIDER_ROLES.len());
+    }
+
+    #[test]
+    fn rust_source_provider_rejects_bad_receipt_schema() {
+        let metadata = valid_rust_provider_metadata();
+        let mut observed = observed_rust_provider_receipts(&metadata);
+        observed[0].receipt.schema = "mantle-rust-provider-receipt-v0".to_string();
+
+        let err = enforce_observed_rust_source_provider_receipts(&metadata, &observed).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(err.message().contains(RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA));
+    }
+
+    #[test]
+    fn rust_source_provider_rejects_receipt_with_prebuilt_step() {
+        let metadata = valid_rust_provider_metadata();
+        let mut observed = observed_rust_provider_receipts(&metadata);
+        observed[0].receipt.build_steps[0].program = "nix-build".to_string();
+
+        let err = enforce_observed_rust_source_provider_receipts(&metadata, &observed).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::PrebuiltRustProvider);
+        assert!(err.message().contains("rust provider receipt step program"));
+        assert!(err.message().contains("nix"));
+    }
+
+    #[test]
+    fn rust_source_provider_rejects_receipt_artifact_mismatch() {
+        let metadata = valid_rust_provider_metadata();
+        let mut observed = observed_rust_provider_receipts(&metadata);
+        observed[0].receipt.output_artifacts.pop();
+
+        let err = enforce_observed_rust_source_provider_receipts(&metadata, &observed).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(err.message().contains("output artifacts do not match metadata"));
+    }
+
+    #[test]
+    fn rust_source_provider_rejects_receipt_digest_mismatch() {
+        let metadata = valid_rust_provider_metadata();
+        let mut observed = observed_rust_provider_receipts(&metadata);
+        observed[0].content_digest_blake3 = DIGEST_F.to_string();
+
+        let err = enforce_observed_rust_source_provider_receipts(&metadata, &observed).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::DigestMismatch);
+        assert!(err.message().contains("receipt 'build-receipt' digest mismatch"));
+    }
+
+    #[test]
+    fn rust_source_provider_rejects_rustlib_outside_lib_dir() {
+        let mut metadata = valid_rust_provider_metadata();
+        let host_rustlib = metadata
+            .artifacts
+            .iter_mut()
+            .find(|artifact| artifact.role == RustProviderRole::HostRustlib)
+            .unwrap();
+        host_rustlib.path = "lib/rustlib/x86_64-unknown-linux-gnu".to_string();
+
+        let err = validate_rust_source_provider_metadata(&metadata).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(err.message().contains("HostRustlib"));
+        assert!(err.message().contains("/lib"));
+    }
+
+    #[test]
+    fn rust_source_provider_rejects_provider_receipt_digest_link_mismatch() {
+        let mut metadata = valid_rust_provider_metadata();
+        let provider_receipt = metadata
+            .artifacts
+            .iter_mut()
+            .find(|artifact| artifact.role == RustProviderRole::ProviderReceipt)
+            .unwrap();
+        provider_receipt.content_digest_blake3 = DIGEST_A.to_string();
+
+        let err = validate_rust_source_provider_metadata(&metadata).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::DigestMismatch);
+        assert!(err.message().contains("provider-receipt artifact"));
+    }
+
+    #[test]
     fn rust_source_provider_rejects_prebuilt_source_name() {
         let mut metadata = valid_rust_provider_metadata();
         metadata.sources[0].name = "rustup wrapped compiler".to_string();
@@ -1574,7 +1937,7 @@ mod tests {
                     RustProviderRole::ProviderReceipt,
                     "build-receipt",
                     "share/mantle-rust-provider/receipts/build.json",
-                    DIGEST_A,
+                    DIGEST_B,
                 ),
             ],
         }
@@ -1606,5 +1969,49 @@ mod tests {
                 content_digest_blake3: artifact.content_digest_blake3.clone(),
             })
             .collect()
+    }
+
+    fn observed_rust_provider_receipts(metadata: &RustSourceProviderMetadata) -> Vec<RustProviderObservedBuildReceipt> {
+        metadata
+            .build_receipts
+            .iter()
+            .map(|receipt| RustProviderObservedBuildReceipt {
+                path: receipt.path.clone(),
+                content_digest_blake3: receipt.digest_blake3.clone(),
+                receipt: valid_rust_provider_receipt(metadata, &receipt.id),
+            })
+            .collect()
+    }
+
+    fn valid_rust_provider_receipt(
+        metadata: &RustSourceProviderMetadata,
+        receipt_id: &str,
+    ) -> RustSourceProviderBuildReceipt {
+        RustSourceProviderBuildReceipt {
+            schema: RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA.to_string(),
+            receipt_id: receipt_id.to_string(),
+            provider_id: metadata.provider_id.clone(),
+            host_triple: metadata.host_triple.clone(),
+            target_triple: metadata.target_triple.clone(),
+            source_ids: metadata.sources.iter().map(|source| source.id.clone()).collect(),
+            output_artifacts: metadata
+                .artifacts
+                .iter()
+                .filter(|artifact| {
+                    artifact.build_receipt_id == receipt_id && artifact.role != RustProviderRole::ProviderReceipt
+                })
+                .map(|artifact| RustProviderReceiptArtifact {
+                    role: artifact.role,
+                    name: artifact.name.clone(),
+                    path: artifact.path.clone(),
+                    content_digest_blake3: artifact.content_digest_blake3.clone(),
+                })
+                .collect(),
+            build_steps: vec![RustProviderReceiptStep {
+                name: "compile-rust-from-source".to_string(),
+                program: "mantle-rust-source-stage".to_string(),
+                arguments: vec!["bootstrap/rust-source.ncl".to_string()],
+            }],
+        }
     }
 }

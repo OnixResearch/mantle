@@ -12,6 +12,8 @@ use std::path::PathBuf;
 
 use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_METADATA_PATH;
 use crate::source_toolchain_closure::RustProviderObservedArtifact;
+use crate::source_toolchain_closure::RustProviderObservedBuildReceipt;
+use crate::source_toolchain_closure::RustSourceProviderBuildReceipt;
 use crate::source_toolchain_closure::RustSourceProviderMetadata;
 use crate::source_toolchain_closure::RustSourceProviderValidation;
 
@@ -150,8 +152,11 @@ pub(crate) fn validate_materialized_rust_source_provider(
         RustSourceProviderError::Parse(format!("provider metadata {}: {err}", metadata_path.display()))
     })?;
     let observed = observed_provider_artifacts(provider_dir, &metadata)?;
+    let observed_receipts = observed_provider_receipts(provider_dir, &metadata)?;
+    crate::source_toolchain_closure::enforce_observed_rust_source_provider_artifacts(&metadata, &observed)
+        .map_err(|err| RustSourceProviderError::Validate(err.message().to_string()))?;
     let validation =
-        crate::source_toolchain_closure::enforce_observed_rust_source_provider_artifacts(&metadata, &observed)
+        crate::source_toolchain_closure::enforce_observed_rust_source_provider_receipts(&metadata, &observed_receipts)
             .map_err(|err| RustSourceProviderError::Validate(err.message().to_string()))?;
     Ok(RustSourceProviderDirectoryValidation {
         metadata_path,
@@ -301,6 +306,29 @@ fn observed_provider_artifacts(
     Ok(observed)
 }
 
+fn observed_provider_receipts(
+    provider_dir: &Path,
+    metadata: &RustSourceProviderMetadata,
+) -> Result<Vec<RustProviderObservedBuildReceipt>, RustSourceProviderError> {
+    let mut observed = Vec::with_capacity(metadata.build_receipts.len());
+    for receipt in &metadata.build_receipts {
+        let path = provider_dir.join(&receipt.path);
+        let bytes = fs::read(&path)
+            .map_err(|err| RustSourceProviderError::Read(format!("provider receipt {}: {err}", path.display())))?;
+        if bytes.is_empty() {
+            return Err(RustSourceProviderError::Read(format!("provider receipt {} is empty", path.display())));
+        }
+        let parsed = serde_json::from_slice::<RustSourceProviderBuildReceipt>(&bytes)
+            .map_err(|err| RustSourceProviderError::Parse(format!("provider receipt {}: {err}", path.display())))?;
+        observed.push(RustProviderObservedBuildReceipt {
+            path: receipt.path.clone(),
+            content_digest_blake3: blake3::hash(&bytes).to_hex().to_string(),
+            receipt: parsed,
+        });
+    }
+    Ok(observed)
+}
+
 fn content_digest_blake3(path: &Path) -> Result<String, RustSourceProviderError> {
     if path.is_file() {
         return file_digest_blake3(path);
@@ -372,8 +400,8 @@ fn collect_relative_paths(root: &Path, current: &Path, out: &mut Vec<String>) ->
 }
 
 #[cfg(test)]
-fn write_json(path: &Path, metadata: &RustSourceProviderMetadata) -> Result<(), RustSourceProviderError> {
-    let bytes = serde_json::to_vec_pretty(metadata)
+fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), RustSourceProviderError> {
+    let bytes = serde_json::to_vec_pretty(value)
         .map_err(|err| RustSourceProviderError::Parse(format!("serialize test metadata: {err}")))?;
     let parent = path
         .parent()
@@ -387,11 +415,15 @@ fn write_json(path: &Path, metadata: &RustSourceProviderMetadata) -> Result<(), 
 mod tests {
     use super::*;
     use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_ID;
+    use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA;
     use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_SCHEMA;
     use crate::source_toolchain_closure::RustProviderArtifact;
     use crate::source_toolchain_closure::RustProviderBuildReceiptIdentity;
+    use crate::source_toolchain_closure::RustProviderReceiptArtifact;
+    use crate::source_toolchain_closure::RustProviderReceiptStep;
     use crate::source_toolchain_closure::RustProviderRole;
     use crate::source_toolchain_closure::RustProviderSourceIdentity;
+    use crate::source_toolchain_closure::RustSourceProviderBuildReceipt;
     use crate::source_toolchain_closure::RustSourceProviderProvenance;
     use crate::source_toolchain_closure::ToolchainBuildReceiptKind;
     use crate::source_toolchain_closure::ToolchainSourceKind;
@@ -489,15 +521,63 @@ mod tests {
         assert!(output_dir.exists());
     }
 
+    #[test]
+    fn import_provider_rejects_malformed_receipt_without_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let import_dir = dir.path().join("import");
+        let output_dir = dir.path().join("output");
+        fs::create_dir(&import_dir).unwrap();
+        write_fake_provider(&import_dir);
+        fs::write(import_dir.join("share/mantle-rust-provider/receipts/build.json"), b"not-json").unwrap();
+
+        let err = import_rust_source_provider(&import_dir, &output_dir).unwrap_err();
+
+        assert!(err.to_string().contains("provider receipt"));
+        assert!(!output_dir.exists());
+    }
+
     fn write_fake_provider(root: &Path) -> RustSourceProviderMetadata {
         write_bytes(root, "bin/rustc", b"rustc");
         write_bytes(root, "bin/cargo", b"cargo");
         write_bytes(root, "lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib", b"host-std");
         write_bytes(root, "lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib", b"target-std");
-        write_bytes(root, "share/mantle-rust-provider/receipts/build.json", b"receipt");
+        let receipt = fake_receipt(root);
+        write_json(&root.join("share/mantle-rust-provider/receipts/build.json"), &receipt).unwrap();
         let metadata = fake_metadata(root);
         write_json(&root.join(RUST_SOURCE_PROVIDER_METADATA_PATH), &metadata).unwrap();
         metadata
+    }
+
+    fn fake_receipt(root: &Path) -> RustSourceProviderBuildReceipt {
+        RustSourceProviderBuildReceipt {
+            schema: RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA.to_string(),
+            receipt_id: "build-receipt".to_string(),
+            provider_id: RUST_SOURCE_PROVIDER_ID.to_string(),
+            host_triple: HOST_TRIPLE.to_string(),
+            target_triple: TARGET_TRIPLE.to_string(),
+            source_ids: vec!["rust-src".to_string()],
+            output_artifacts: vec![
+                receipt_artifact(root, RustProviderRole::Rustc, "rustc", "bin/rustc"),
+                receipt_artifact(root, RustProviderRole::Cargo, "cargo", "bin/cargo"),
+                receipt_artifact(
+                    root,
+                    RustProviderRole::HostRustlib,
+                    "host-rustlib",
+                    "lib/rustlib/x86_64-unknown-linux-gnu/lib",
+                ),
+                receipt_artifact(
+                    root,
+                    RustProviderRole::TargetRustlib,
+                    "target-rustlib",
+                    "lib/rustlib/x86_64-unknown-linux-musl/lib",
+                ),
+            ],
+            build_steps: vec![RustProviderReceiptStep {
+                name: "compile-rust-from-source".to_string(),
+                program: "mantle-rust-source-stage".to_string(),
+                arguments: vec!["bootstrap/rust-source.ncl".to_string()],
+            }],
+        }
     }
 
     fn fake_metadata(root: &Path) -> RustSourceProviderMetadata {
@@ -557,6 +637,15 @@ mod tests {
             content_digest_blake3: digest_path(root, path),
             source_id: "rust-src".to_string(),
             build_receipt_id: "build-receipt".to_string(),
+        }
+    }
+
+    fn receipt_artifact(root: &Path, role: RustProviderRole, name: &str, path: &str) -> RustProviderReceiptArtifact {
+        RustProviderReceiptArtifact {
+            role,
+            name: name.to_string(),
+            path: path.to_string(),
+            content_digest_blake3: digest_path(root, path),
         }
     }
 

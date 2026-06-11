@@ -179,3 +179,68 @@ Output summaries:
   "valid": true,
   "verdict": "PASS"
 ```
+
+## Provider receipt schema and exact layout slice
+
+This slice tightened the provider acceptance boundary without claiming a real Rust-from-source provider exists.
+
+### Baseline before receipt-schema changes
+
+Command:
+
+```sh
+cargo test -p mantle --bin mantle source_toolchain_closure
+```
+
+Output summary:
+
+```text
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 703 filtered out; finished in 0.01s
+```
+
+### Implementation
+
+- Added pure `mantle-rust-source-provider-receipt-v1` receipt payload structs in `src/source_toolchain_closure.rs`.
+- Receipt validation now checks receipt schema, receipt/provider IDs, host/target triples, declared source IDs, output artifact digests, bounded build steps, and prebuilt/rustup/Nix/wrapper marker rejection in receipt steps.
+- Metadata validation now requires each `build_receipts[]` entry to have a matching `provider-receipt` artifact with the same relative path, digest, and `build_receipt_id`.
+- Rustlib layout is now exact enough to require host/target rustlib artifacts under `lib/rustlib/<triple>/lib`.
+- Shell validation in `src/rust_source_provider.rs` reads receipt JSON files, computes their BLAKE3 digests, parses them, and delegates semantic checks to the pure core.
+
+### Post-change checks
+
+Commands:
+
+```sh
+cargo test -p mantle --bin mantle source_toolchain_closure
+cargo test -p mantle --bin mantle rust_source_provider
+```
+
+Output summaries:
+
+```text
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 704 filtered out; finished in 0.00s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 718 filtered out; finished in 11.02s
+```
+
+Decision: this defines and tests the receipt/layout contract, but it still uses synthetic test fixtures. No real Rust-from-source provider directory has been materialized, imported, or smoke-tested, so the implementation/proof tasks remain blocked.
+
+## Cairn validation after receipt-schema update
+
+Commands:
+
+```sh
+nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+nix run path:/home/brittonr/git/cairn#cairn -- gate tasks source-built-rust-seed-closure --root .
+```
+
+Output summaries:
+
+```json
+  "changes": 1,
+  "specs_validated": 6,
+  "valid": true
+  "issues": [],
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+```
