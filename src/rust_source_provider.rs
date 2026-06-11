@@ -65,6 +65,13 @@ const RUSTC_STAGE1_SOURCES_MANIFEST_FILE: &str = "rustc-stage1-sources.json";
 const RUSTC_STAGE1_ARCHIVE_DIR: &str = "rustc-stage1-archives";
 const RUSTC_STAGE1_SOURCE_DIR: &str = "rustc-stage1-sources";
 const RUSTC_STAGE1_BUILD_DIR: &str = "rustc-stage1-build";
+const RUSTC_STAGE1_OUTPUT_DIR: &str = "rustc-stage1-output";
+const RUSTC_STAGE1_BUILD_MANIFEST_SCHEMA: &str = "mantle-rust-source-provider-rustc-stage1-build-v1";
+const RUSTC_STAGE1_BUILD_MANIFEST_FILE: &str = "rustc-stage1-build.json";
+const RUSTC_STAGE1_BUILD_LOG_FILE: &str = "rustc-stage1-build.log";
+const RUSTC_STAGE1_SCRIPT_FILE: &str = "run-rustc-stage1.sh";
+const RUSTC_STAGE1_SOURCE_BUILD_SCRIPT: &str = "mantle-rustc-stage1-build.sh";
+const RUSTC_STAGE1_SHELL_PROGRAM: &str = "sh";
 const FIRST_STAGE_SCRIPT_FILE: &str = "run-mrustc-first-stage.sh";
 const FIRST_STAGE_ARCHIVE_DIR: &str = "archives";
 const FIRST_STAGE_SOURCE_DIR: &str = "sources";
@@ -74,6 +81,7 @@ const FIRST_STAGE_TAR_GZ_EXTENSION: &str = ".tar.gz";
 const FIRST_STAGE_TGZ_EXTENSION: &str = ".tgz";
 const FIRST_STAGE_MISSING_SOURCE_EXIT_CODE: i32 = 2;
 const FIRST_STAGE_BUILD_FAILED_EXIT_CODE: i32 = 3;
+const RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE: i32 = 4;
 const FIRST_STAGE_FETCH_TIMEOUT_SECS: u64 = 600;
 const FIRST_STAGE_FETCH_MAX_RETRIES: u32 = 3;
 const FIRST_STAGE_FETCH_RETRY_BASE_DELAY_MS: u64 = 2_000;
@@ -244,9 +252,13 @@ struct RustSourceProviderRustcStage1Boundary {
     archive_dir: PathBuf,
     source_dir: PathBuf,
     build_dir: PathBuf,
+    stage_output_dir: PathBuf,
     output_dir: PathBuf,
     plan_path: PathBuf,
     sources_manifest_path: PathBuf,
+    build_manifest_path: PathBuf,
+    build_log_path: PathBuf,
+    script_path: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -289,6 +301,23 @@ struct RustSourceProviderFirstStageProviderCandidate {
     artifact_count: usize,
     source_count: usize,
     receipt_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct RustSourceProviderRustcStage1Build {
+    stage_id: String,
+    script_path: PathBuf,
+    log_path: PathBuf,
+    stage_output_dir: PathBuf,
+    stage_output_digest_blake3: String,
+    rustc_path: PathBuf,
+    rustc_digest_blake3: String,
+    cargo_path: PathBuf,
+    cargo_digest_blake3: String,
+    host_rustlib_path: PathBuf,
+    host_rustlib_digest_blake3: String,
+    target_rustlib_path: PathBuf,
+    target_rustlib_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -409,6 +438,8 @@ pub(crate) fn materialize_rust_source_provider(
     write_rustc_stage1_boundary(&rustc_stage1_boundary)?;
     let rustc_stage1_sources = acquire_rustc_stage1_sources(&rustc_stage1_boundary, verbose)?;
     write_rustc_stage1_sources_manifest(&rustc_stage1_boundary, &rustc_stage1_sources)?;
+    let rustc_stage1_build = run_rustc_stage1_build(&rustc_stage1_boundary, verbose)?;
+    write_rustc_stage1_build_manifest(&rustc_stage1_boundary, &rustc_stage1_build)?;
     if verbose {
         eprintln!("Rust source provider recipe: {}", plan.recipe_path.display());
         eprintln!("  recipe_digest_blake3: {}", plan.recipe_digest_blake3);
@@ -427,6 +458,8 @@ pub(crate) fn materialize_rust_source_provider(
         eprintln!("  rustc_stage1_id: {}", rustc_stage1_boundary.stage_id);
         eprintln!("  rustc_stage1_plan: {}", rustc_stage1_boundary.plan_path.display());
         eprintln!("  rustc_stage1_sources: {}", rustc_stage1_boundary.sources_manifest_path.display());
+        eprintln!("  rustc_stage1_build: {}", rustc_stage1_boundary.build_manifest_path.display());
+        eprintln!("  rustc_stage1_build_log: {}", rustc_stage1_boundary.build_log_path.display());
         eprintln!("  planned_output: {}", plan.output_dir.display());
         eprintln!("  planned_scratch: {}", plan.scratch_dir.display());
     }
@@ -831,9 +864,13 @@ fn prepare_rustc_stage1_boundary(
         archive_dir: materialization.scratch_dir.join(RUSTC_STAGE1_ARCHIVE_DIR),
         source_dir: materialization.scratch_dir.join(RUSTC_STAGE1_SOURCE_DIR),
         build_dir: materialization.scratch_dir.join(RUSTC_STAGE1_BUILD_DIR),
+        stage_output_dir: materialization.scratch_dir.join(RUSTC_STAGE1_OUTPUT_DIR),
         output_dir: materialization.output_dir.clone(),
         plan_path: materialization.scratch_dir.join(RUSTC_STAGE1_PLAN_FILE),
         sources_manifest_path: materialization.scratch_dir.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE),
+        build_manifest_path: materialization.scratch_dir.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE),
+        build_log_path: materialization.scratch_dir.join(RUSTC_STAGE1_BUILD_LOG_FILE),
+        script_path: materialization.scratch_dir.join(RUSTC_STAGE1_SCRIPT_FILE),
     })
 }
 
@@ -936,7 +973,12 @@ fn write_rustc_stage1_boundary(
     fs::create_dir_all(&boundary.build_dir)
         .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", boundary.build_dir.display())))?;
     let manifest = rustc_stage1_boundary_manifest(boundary);
-    write_json_pretty(&boundary.plan_path, &manifest, "rustc stage1 plan")
+    write_json_pretty(&boundary.plan_path, &manifest, "rustc stage1 plan")?;
+    let script = rustc_stage1_boundary_script(boundary)?;
+    fs::write(&boundary.script_path, script).map_err(|err| {
+        RustSourceProviderError::Read(format!("write rustc stage1 script {}: {err}", boundary.script_path.display()))
+    })?;
+    make_executable(&boundary.script_path)
 }
 
 fn rustc_stage1_boundary_manifest(boundary: &RustSourceProviderRustcStage1Boundary) -> serde_json::Value {
@@ -967,11 +1009,160 @@ fn rustc_stage1_boundary_manifest(boundary: &RustSourceProviderRustcStage1Bounda
             "archive_dir": boundary.archive_dir.display().to_string(),
             "source_dir": boundary.source_dir.display().to_string(),
             "build_dir": boundary.build_dir.display().to_string(),
+            "stage_output_dir": boundary.stage_output_dir.display().to_string(),
             "output_dir": boundary.output_dir.display().to_string(),
+            "script": boundary.script_path.display().to_string(),
             "source_manifest": boundary.sources_manifest_path.display().to_string(),
+            "build_manifest": boundary.build_manifest_path.display().to_string(),
+            "build_log": boundary.build_log_path.display().to_string(),
         },
         "next_blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
     })
+}
+
+fn rustc_stage1_boundary_script(
+    boundary: &RustSourceProviderRustcStage1Boundary,
+) -> Result<String, RustSourceProviderError> {
+    let inputs = rustc_stage1_script_inputs(boundary)?;
+    let mut script = String::new();
+    push_rustc_stage1_script_header(&mut script, boundary, &inputs);
+    push_rustc_stage1_script_input_checks(&mut script);
+    push_rustc_stage1_script_build_commands(&mut script);
+    Ok(script)
+}
+
+struct RustSourceProviderRustcStage1ScriptInputs {
+    source_id: String,
+    source_path: PathBuf,
+    build_script_path: PathBuf,
+}
+
+fn rustc_stage1_script_inputs(
+    boundary: &RustSourceProviderRustcStage1Boundary,
+) -> Result<RustSourceProviderRustcStage1ScriptInputs, RustSourceProviderError> {
+    let source = rustc_stage1_build_source(boundary)?;
+    let source_component = safe_source_component(&source.id)?;
+    let source_path = boundary.source_dir.join(&source_component);
+    let build_script_path = source_path.join(RUSTC_STAGE1_SOURCE_BUILD_SCRIPT);
+    Ok(RustSourceProviderRustcStage1ScriptInputs {
+        source_id: source.id.clone(),
+        source_path,
+        build_script_path,
+    })
+}
+
+fn push_rustc_stage1_script_header(
+    script: &mut String,
+    boundary: &RustSourceProviderRustcStage1Boundary,
+    inputs: &RustSourceProviderRustcStage1ScriptInputs,
+) {
+    script.push_str("#!/bin/sh\n");
+    script.push_str("set -eu\n");
+    script.push_str(&format!("STAGE_ID={}\n", shell_quote(&boundary.stage_id)));
+    script.push_str(&format!("RUSTC_VERSION={}\n", shell_quote(&boundary.rust_version)));
+    script.push_str(&format!("HOST_TRIPLE={}\n", shell_quote(&boundary.host_triple)));
+    script.push_str(&format!("TARGET_TRIPLE={}\n", shell_quote(&boundary.target_triple)));
+    script
+        .push_str(&format!("SOURCE_MANIFEST={}\n", shell_quote(&boundary.sources_manifest_path.display().to_string())));
+    script.push_str(&format!("RUST_SOURCE_ID={}\n", shell_quote(&inputs.source_id)));
+    script.push_str(&format!("RUST_SOURCE={}\n", shell_quote(&inputs.source_path.display().to_string())));
+    script.push_str(&format!("BUILD_SCRIPT={}\n", shell_quote(&inputs.build_script_path.display().to_string())));
+    script.push_str(&format!(
+        "BOOTSTRAP_PROVIDER={}\n",
+        shell_quote(&boundary.bootstrap_provider_candidate_dir.display().to_string())
+    ));
+    script.push_str(&format!("BUILD_DIR={}\n", shell_quote(&boundary.build_dir.display().to_string())));
+    script.push_str(&format!("STAGE_OUTPUT={}\n", shell_quote(&boundary.stage_output_dir.display().to_string())));
+    script.push_str(&format!("SHELL_PROGRAM={}\n", shell_quote(RUSTC_STAGE1_SHELL_PROGRAM)));
+}
+
+fn push_rustc_stage1_script_input_checks(script: &mut String) {
+    script.push_str("printf '%s\\n' \"mantle rustc stage1: $STAGE_ID\"\n");
+    push_required_shell_var_file_check(
+        script,
+        "SOURCE_MANIFEST",
+        "missing rustc stage1 source manifest",
+        FIRST_STAGE_MISSING_SOURCE_EXIT_CODE,
+    );
+    push_required_shell_var_dir_check(
+        script,
+        "RUST_SOURCE",
+        "missing verified rustc stage1 source",
+        FIRST_STAGE_MISSING_SOURCE_EXIT_CODE,
+    );
+    push_required_shell_var_file_check(
+        script,
+        "BUILD_SCRIPT",
+        "rustc stage1 source has no build script",
+        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+    );
+    push_required_shell_path_file_check(
+        script,
+        "\"$BOOTSTRAP_PROVIDER/bin/rustc\"",
+        "bootstrap provider candidate has no rustc",
+        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+    );
+    push_required_shell_path_file_check(
+        script,
+        "\"$BOOTSTRAP_PROVIDER/bin/cargo\"",
+        "bootstrap provider candidate has no cargo",
+        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+    );
+    push_required_shell_path_dir_check(
+        script,
+        "\"$BOOTSTRAP_PROVIDER/lib/rustlib/$TARGET_TRIPLE/lib\"",
+        "bootstrap provider candidate has no target rustlib",
+        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+    );
+    push_required_shell_command_check(script, "SHELL_PROGRAM", "sh is required for rustc stage1");
+}
+
+fn push_rustc_stage1_script_build_commands(script: &mut String) {
+    script.push_str("mkdir -p \"$BUILD_DIR\" \"$STAGE_OUTPUT\"\n");
+    script.push_str(
+        "MANTLE_BOOTSTRAP_PROVIDER=\"$BOOTSTRAP_PROVIDER\" MANTLE_STAGE_OUTPUT=\"$STAGE_OUTPUT\" MANTLE_RUST_VERSION=\"$RUSTC_VERSION\" MANTLE_HOST_TRIPLE=\"$HOST_TRIPLE\" MANTLE_TARGET_TRIPLE=\"$TARGET_TRIPLE\" \"$SHELL_PROGRAM\" \"$BUILD_SCRIPT\"\n",
+    );
+    push_required_shell_path_file_check(
+        script,
+        "\"$STAGE_OUTPUT/bin/rustc\"",
+        "rustc stage1 build did not produce bin/rustc",
+        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+    );
+    push_required_shell_path_file_check(
+        script,
+        "\"$STAGE_OUTPUT/bin/cargo\"",
+        "rustc stage1 build did not produce bin/cargo",
+        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+    );
+    push_required_shell_path_dir_check(
+        script,
+        "\"$STAGE_OUTPUT/lib/rustlib/$HOST_TRIPLE/lib\"",
+        "rustc stage1 build did not produce host rustlib",
+        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+    );
+    push_required_shell_path_dir_check(
+        script,
+        "\"$STAGE_OUTPUT/lib/rustlib/$TARGET_TRIPLE/lib\"",
+        "rustc stage1 build did not produce target rustlib",
+        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+    );
+    script.push_str("printf '%s\\n' \"rustc stage1 products ready\"\n");
+}
+
+fn rustc_stage1_build_source(
+    boundary: &RustSourceProviderRustcStage1Boundary,
+) -> Result<&RustSourceProviderBootstrapSource, RustSourceProviderError> {
+    let mut matches = boundary.sources.iter().filter(|source| source.id.starts_with(FIRST_STAGE_RUST_SOURCE_PREFIX));
+    let Some(source) = matches.next() else {
+        return Err(RustSourceProviderError::Build(format!("rustc stage1 '{}' has no Rust source", boundary.stage_id)));
+    };
+    if matches.next().is_none() {
+        return Ok(source);
+    }
+    Err(RustSourceProviderError::Build(format!(
+        "rustc stage1 '{}' has multiple Rust sources",
+        boundary.stage_id
+    )))
 }
 
 fn first_stage_boundary_manifest(
@@ -1137,6 +1328,111 @@ fn write_rustc_stage1_sources_manifest(
         "next_blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
     });
     write_json_pretty(&boundary.sources_manifest_path, &manifest, "rustc stage1 sources manifest")
+}
+
+fn run_rustc_stage1_build(
+    boundary: &RustSourceProviderRustcStage1Boundary,
+    verbose: bool,
+) -> Result<RustSourceProviderRustcStage1Build, RustSourceProviderError> {
+    validate_rustc_stage1_build_inputs(boundary)?;
+    prepare_empty_provider_candidate_dir(&boundary.stage_output_dir)?;
+    if verbose {
+        eprintln!("  rustc_stage1_build_script: {}", boundary.script_path.display());
+        eprintln!("  rustc_stage1_build_log: {}", boundary.build_log_path.display());
+    }
+    let log = File::create(&boundary.build_log_path).map_err(|err| {
+        RustSourceProviderError::Build(format!("create {}: {err}", boundary.build_log_path.display()))
+    })?;
+    let status = Command::new(&boundary.script_path)
+        .stdout(log.try_clone().map_err(|err| {
+            RustSourceProviderError::Build(format!("clone {}: {err}", boundary.build_log_path.display()))
+        })?)
+        .stderr(log)
+        .status()
+        .map_err(|err| RustSourceProviderError::Build(format!("launch {}: {err}", boundary.script_path.display())))?;
+    if !status.success() {
+        let log_tail = fs::read(&boundary.build_log_path)
+            .map(|bytes| bounded_output_text(&bytes))
+            .unwrap_or_else(|err| format!("<failed to read build log: {err}>"));
+        return Err(RustSourceProviderError::Build(format!(
+            "rustc stage1 build failed with status {status}; log={}; tail={log_tail:?}",
+            boundary.build_log_path.display()
+        )));
+    }
+    rustc_stage1_build_from_outputs(boundary)
+}
+
+fn validate_rustc_stage1_build_inputs(
+    boundary: &RustSourceProviderRustcStage1Boundary,
+) -> Result<(), RustSourceProviderError> {
+    if !boundary.script_path.is_file() {
+        return Err(RustSourceProviderError::Build(format!(
+            "rustc stage1 script {} is missing",
+            boundary.script_path.display()
+        )));
+    }
+    if !boundary.sources_manifest_path.is_file() {
+        return Err(RustSourceProviderError::Build(format!(
+            "rustc stage1 source manifest {} is missing",
+            boundary.sources_manifest_path.display()
+        )));
+    }
+    if !boundary.bootstrap_provider_candidate_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file() {
+        return Err(RustSourceProviderError::Build(format!(
+            "bootstrap provider candidate metadata is missing under {}",
+            boundary.bootstrap_provider_candidate_dir.display()
+        )));
+    }
+    Ok(())
+}
+
+fn rustc_stage1_build_from_outputs(
+    boundary: &RustSourceProviderRustcStage1Boundary,
+) -> Result<RustSourceProviderRustcStage1Build, RustSourceProviderError> {
+    let rustc_path = boundary.stage_output_dir.join(PROVIDER_RUSTC_RELATIVE_PATH);
+    let cargo_path = boundary.stage_output_dir.join(PROVIDER_CARGO_RELATIVE_PATH);
+    let host_rustlib_path = boundary.stage_output_dir.join(provider_rustlib_relative_path(&boundary.host_triple));
+    let target_rustlib_path = boundary.stage_output_dir.join(provider_rustlib_relative_path(&boundary.target_triple));
+    validate_first_stage_build_product(&rustc_path, PROVIDER_RUSTC_RELATIVE_PATH)?;
+    validate_first_stage_build_product(&cargo_path, PROVIDER_CARGO_RELATIVE_PATH)?;
+    validate_first_stage_build_product(&host_rustlib_path, "rustc stage1 host rustlib")?;
+    validate_first_stage_build_product(&target_rustlib_path, "rustc stage1 target rustlib")?;
+    Ok(RustSourceProviderRustcStage1Build {
+        stage_id: boundary.stage_id.clone(),
+        script_path: boundary.script_path.clone(),
+        log_path: boundary.build_log_path.clone(),
+        stage_output_digest_blake3: content_digest_blake3(&boundary.stage_output_dir)?,
+        stage_output_dir: boundary.stage_output_dir.clone(),
+        rustc_digest_blake3: file_digest_blake3(&rustc_path)?,
+        cargo_digest_blake3: file_digest_blake3(&cargo_path)?,
+        host_rustlib_digest_blake3: content_digest_blake3(&host_rustlib_path)?,
+        target_rustlib_digest_blake3: content_digest_blake3(&target_rustlib_path)?,
+        rustc_path,
+        cargo_path,
+        host_rustlib_path,
+        target_rustlib_path,
+    })
+}
+
+fn write_rustc_stage1_build_manifest(
+    boundary: &RustSourceProviderRustcStage1Boundary,
+    build: &RustSourceProviderRustcStage1Build,
+) -> Result<(), RustSourceProviderError> {
+    let manifest = serde_json::json!({
+        "schema": RUSTC_STAGE1_BUILD_MANIFEST_SCHEMA,
+        "stage_id": boundary.stage_id,
+        "bootstrap_stage_id": boundary.bootstrap_stage_id,
+        "route_plan_digest_blake3": boundary.route_plan_digest_blake3,
+        "route_policy_digest_blake3": boundary.route_policy_digest_blake3,
+        "bootstrap_provider_candidate": {
+            "path": boundary.bootstrap_provider_candidate_dir.display().to_string(),
+            "metadata_digest_blake3": boundary.bootstrap_provider_metadata_digest_blake3,
+            "policy_digest_blake3": boundary.bootstrap_provider_policy_digest_blake3,
+        },
+        "build": build,
+        "next_blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
+    });
+    write_json_pretty(&boundary.build_manifest_path, &manifest, "rustc stage1 build manifest")
 }
 
 fn run_first_stage_build(
@@ -1925,6 +2221,27 @@ fn push_required_shell_var_file_check(script: &mut String, shell_var: &str, mess
     ));
 }
 
+fn push_required_shell_var_dir_check(script: &mut String, shell_var: &str, message: &str, exit_code: i32) {
+    script.push_str(&format!(
+        "if [ ! -d \"${shell_var}\" ]; then printf '%s\\n' {} >&2; exit {exit_code}; fi\n",
+        shell_quote(message)
+    ));
+}
+
+fn push_required_shell_path_file_check(script: &mut String, shell_expr: &str, message: &str, exit_code: i32) {
+    script.push_str(&format!(
+        "if [ ! -f {shell_expr} ]; then printf '%s\\n' {} >&2; exit {exit_code}; fi\n",
+        shell_quote(message)
+    ));
+}
+
+fn push_required_shell_path_dir_check(script: &mut String, shell_expr: &str, message: &str, exit_code: i32) {
+    script.push_str(&format!(
+        "if [ ! -d {shell_expr} ]; then printf '%s\\n' {} >&2; exit {exit_code}; fi\n",
+        shell_quote(message)
+    ));
+}
+
 fn push_required_relative_file_check(script: &mut String, relative_path: &str, message: &str) {
     script.push_str(&format!(
         "if [ ! -f {relative_path} ]; then printf '%s\\n' {} >&2; exit {}; fi\n",
@@ -2321,9 +2638,14 @@ mod tests {
         assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_OUTPUT_FILE).is_file());
         assert!(scratch.join(RUSTC_STAGE1_PLAN_FILE).is_file());
         assert!(scratch.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).is_file());
+        assert!(scratch.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE).is_file());
+        assert!(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE).is_file());
+        assert!(scratch.join(RUSTC_STAGE1_SCRIPT_FILE).is_file());
         assert!(scratch.join(RUSTC_STAGE1_ARCHIVE_DIR).is_dir());
         assert!(scratch.join(RUSTC_STAGE1_SOURCE_DIR).is_dir());
         assert!(scratch.join(RUSTC_STAGE1_BUILD_DIR).is_dir());
+        assert!(scratch.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
+        assert!(scratch.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
         assert!(scratch.join(RUSTC_STAGE1_SOURCE_DIR).join("rust-1.91.1/README.txt").is_file());
         assert!(scratch.join(FIRST_STAGE_ARCHIVE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).is_dir());
@@ -2401,6 +2723,18 @@ mod tests {
         assert_eq!(rustc_stage1_sources["schema"], RUSTC_STAGE1_SOURCES_MANIFEST_SCHEMA);
         assert_eq!(rustc_stage1_sources["source_count"], RUSTC_STAGE1_TEST_SOURCE_COUNT);
         assert_eq!(rustc_stage1_sources["sources"][0]["id"], "rust-1.91.1");
+        let rustc_stage1_build: serde_json::Value =
+            serde_json::from_slice(&fs::read(scratch.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE)).unwrap()).unwrap();
+        assert_eq!(rustc_stage1_build["schema"], RUSTC_STAGE1_BUILD_MANIFEST_SCHEMA);
+        assert_eq!(rustc_stage1_build["build"]["stage_id"], "rust-1.91.1-stage1");
+        assert_eq!(rustc_stage1_build["build"]["rustc_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
+        assert_eq!(
+            rustc_stage1_build["build"]["target_rustlib_digest_blake3"].as_str().unwrap().len(),
+            SHA256_HEX_CHAR_COUNT
+        );
+        let rustc_stage1_log = fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
+        assert!(rustc_stage1_log.contains("mantle rustc stage1"));
+        assert!(rustc_stage1_log.contains("rustc stage1 products ready"));
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains("missing verified source"));
         assert!(script.contains("verified sources manifest"));
@@ -2901,6 +3235,13 @@ let Plan = {
                 test_mrustc_run_rustc_makefile(),
             );
         }
+        if top_dir == "rust-1.91.1" {
+            append_test_tar_file(
+                &mut builder,
+                &format!("{top_dir}/{RUSTC_STAGE1_SOURCE_BUILD_SCRIPT}"),
+                test_rustc_stage1_build_script(),
+            );
+        }
         builder.finish().unwrap();
         let encoder = builder.into_inner().unwrap();
         encoder.finish().unwrap();
@@ -2924,6 +3265,10 @@ let Plan = {
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
         b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/cargo\n"
+    }
+
+    fn test_rustc_stage1_build_script() -> &'static [u8] {
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nprintf 'synthetic stage1 rustc from %s\\n' \"$MANTLE_BOOTSTRAP_PROVIDER\" > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic stage1 cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {
