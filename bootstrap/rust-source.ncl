@@ -2,10 +2,11 @@
 #
 # This file intentionally does not import bootstrap/rust.ncl and does not wrap
 # Nix, rustup, or the official prebuilt Rust standalone installer. It is the
-# recipe anchor for the future real Rust-from-source provider. Until the full
-# rustc/cargo/rustlib bootstrap chain exists, building this derivation aborts
-# with the same deterministic blocker used by `mantle bootstrap
-# rust-source-provider`.
+# recipe anchor for the future real Rust-from-source provider. The selected
+# mrustc-to-current-Rust source route is tracked separately in
+# bootstrap/rust-source-plan.ncl. Until the full rustc/cargo/rustlib bootstrap
+# chain exists, building this derivation aborts with the same deterministic
+# blocker used by `mantle bootstrap rust-source-provider`.
 
 let mantle = import "lib.ncl" in
 

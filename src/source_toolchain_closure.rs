@@ -37,11 +37,18 @@ pub(crate) const RUST_SOURCE_PROVIDER_ID: &str = "mantle-rust-source-provider";
 pub(crate) const RUST_SOURCE_PROVIDER_METADATA_PATH: &str = "share/mantle-rust-provider/provider.json";
 pub(crate) const RUST_SOURCE_PROVIDER_RECEIPTS_DIR: &str = "share/mantle-rust-provider/receipts";
 const RUST_PROVIDER_POLICY_DIGEST_CONTEXT: &str = "mantle-rust-source-provider-policy-digest-v1";
+const RUST_PROVIDER_BOOTSTRAP_PLAN_SCHEMA: &str = "mantle-rust-source-provider-bootstrap-plan-v1";
+const RUST_PROVIDER_BOOTSTRAP_PLAN_DIGEST_CONTEXT: &str = "mantle-rust-source-provider-bootstrap-plan-digest-v1";
 const MAX_RUST_PROVIDER_ARTIFACTS: usize = 256;
 const MAX_RUST_PROVIDER_SOURCES: usize = 64;
 const MAX_RUST_PROVIDER_RECEIPTS: usize = 64;
 const MAX_RUST_PROVIDER_RECEIPT_STEPS: usize = 128;
 const MAX_RUST_PROVIDER_RECEIPT_ARGUMENTS: usize = 64;
+const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_SOURCES: usize = 16;
+const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_STAGES: usize = 16;
+const MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_OUTPUTS: usize = 16;
+const MAX_RUST_PROVIDER_BOOTSTRAP_STAGE_NOTES: usize = 16;
+const SHA256_HEX_CHAR_COUNT: usize = 64;
 const REQUIRED_RUST_PROVIDER_ROLES: [RustProviderRole; 5] = [
     RustProviderRole::Rustc,
     RustProviderRole::Cargo,
@@ -262,6 +269,71 @@ pub(crate) struct RustSourceProviderValidation {
     pub(crate) receipt_count: usize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustSourceProviderBootstrapPlan {
+    pub(crate) schema: String,
+    pub(crate) provider_id: String,
+    pub(crate) route: String,
+    pub(crate) host_triple: String,
+    pub(crate) target_triple: String,
+    pub(crate) final_version: String,
+    pub(crate) policy: RustSourceProviderBootstrapPolicy,
+    pub(crate) sources: Vec<RustSourceProviderBootstrapSource>,
+    pub(crate) stages: Vec<RustSourceProviderBootstrapStage>,
+    pub(crate) final_outputs: Vec<RustSourceProviderBootstrapOutput>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustSourceProviderBootstrapPolicy {
+    pub(crate) source_built: bool,
+    pub(crate) uses_prebuilt_rust: bool,
+    pub(crate) forbids_prebuilt_rust: bool,
+    pub(crate) reference: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustSourceProviderBootstrapSource {
+    pub(crate) id: String,
+    pub(crate) kind: ToolchainSourceKind,
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) url: String,
+    pub(crate) sha256_hex: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustSourceProviderBootstrapStage {
+    pub(crate) id: String,
+    pub(crate) kind: RustSourceProviderBootstrapStageKind,
+    pub(crate) source_ids: Vec<String>,
+    pub(crate) bootstrap_stage_id: String,
+    pub(crate) rust_version: String,
+    pub(crate) outputs: Vec<RustProviderRole>,
+    pub(crate) notes: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum RustSourceProviderBootstrapStageKind {
+    MrustcSeed,
+    RustcStage1,
+    RustcFinal,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustSourceProviderBootstrapOutput {
+    pub(crate) role: RustProviderRole,
+    pub(crate) path: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct RustSourceProviderBootstrapPlanValidation {
+    pub(crate) policy_digest_blake3: String,
+    pub(crate) source_count: usize,
+    pub(crate) stage_count: usize,
+    pub(crate) final_output_count: usize,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct ToolchainClosureValidation {
     pub(crate) policy_digest_blake3: String,
@@ -378,6 +450,13 @@ pub(crate) fn validate_rust_source_provider_metadata(
 ) -> Result<RustSourceProviderValidation, ToolchainClosureError> {
     let normalized = normalize_rust_source_provider_metadata(metadata)?;
     validation_from_normalized_rust_provider(&normalized)
+}
+
+pub(crate) fn validate_rust_source_provider_bootstrap_plan(
+    plan: &RustSourceProviderBootstrapPlan,
+) -> Result<RustSourceProviderBootstrapPlanValidation, ToolchainClosureError> {
+    let normalized = normalize_rust_source_provider_bootstrap_plan(plan)?;
+    validation_from_normalized_rust_provider_bootstrap_plan(&normalized)
 }
 
 pub(crate) fn enforce_observed_rust_source_provider_artifacts(
@@ -651,6 +730,309 @@ fn validation_from_normalized_rust_provider(
         source_count: metadata.sources.len(),
         receipt_count: metadata.build_receipts.len(),
     })
+}
+
+fn normalize_rust_source_provider_bootstrap_plan(
+    plan: &RustSourceProviderBootstrapPlan,
+) -> Result<RustSourceProviderBootstrapPlan, ToolchainClosureError> {
+    validate_rust_provider_bootstrap_plan_schema(&plan.schema)?;
+    validate_rust_provider_bootstrap_plan_identity(plan)?;
+    validate_rust_provider_bootstrap_plan_policy(&plan.policy)?;
+    let source_ids = validate_rust_provider_bootstrap_sources(&plan.sources)?;
+    validate_rust_provider_bootstrap_stages(plan, &source_ids)?;
+    validate_rust_provider_bootstrap_outputs(plan)?;
+    let mut normalized = plan.clone();
+    normalized.sources.sort_by_key(rust_provider_bootstrap_source_sort_key);
+    normalized.final_outputs.sort_by_key(rust_provider_bootstrap_output_sort_key);
+    Ok(normalized)
+}
+
+fn validation_from_normalized_rust_provider_bootstrap_plan(
+    plan: &RustSourceProviderBootstrapPlan,
+) -> Result<RustSourceProviderBootstrapPlanValidation, ToolchainClosureError> {
+    Ok(RustSourceProviderBootstrapPlanValidation {
+        policy_digest_blake3: digest_normalized_rust_provider_bootstrap_plan(plan)?,
+        source_count: plan.sources.len(),
+        stage_count: plan.stages.len(),
+        final_output_count: plan.final_outputs.len(),
+    })
+}
+
+fn validate_rust_provider_bootstrap_plan_schema(schema: &str) -> Result<(), ToolchainClosureError> {
+    if schema == RUST_PROVIDER_BOOTSTRAP_PLAN_SCHEMA {
+        return Ok(());
+    }
+    Err(error(
+        ToolchainClosureErrorKind::InvalidRustProvider,
+        format!("expected schema {RUST_PROVIDER_BOOTSTRAP_PLAN_SCHEMA}, got {schema}"),
+    ))
+}
+
+fn validate_rust_provider_bootstrap_plan_identity(
+    plan: &RustSourceProviderBootstrapPlan,
+) -> Result<(), ToolchainClosureError> {
+    require_equal("rust provider bootstrap provider_id", &plan.provider_id, RUST_SOURCE_PROVIDER_ID)?;
+    validate_non_empty("rust provider bootstrap route", &plan.route)?;
+    validate_no_disallowed_rust_provider_text("rust provider bootstrap route", &plan.route)?;
+    validate_non_empty("rust provider bootstrap host_triple", &plan.host_triple)?;
+    validate_non_empty("rust provider bootstrap target_triple", &plan.target_triple)?;
+    validate_non_empty("rust provider bootstrap final_version", &plan.final_version)
+}
+
+fn validate_rust_provider_bootstrap_plan_policy(
+    policy: &RustSourceProviderBootstrapPolicy,
+) -> Result<(), ToolchainClosureError> {
+    validate_non_empty("rust provider bootstrap reference", &policy.reference)?;
+    if !policy.source_built {
+        return Err(error(
+            ToolchainClosureErrorKind::PrebuiltRustProvider,
+            "rust provider bootstrap plan is not source-built",
+        ));
+    }
+    if policy.uses_prebuilt_rust {
+        return Err(error(
+            ToolchainClosureErrorKind::PrebuiltRustProvider,
+            "rust provider bootstrap plan uses prebuilt Rust",
+        ));
+    }
+    if policy.forbids_prebuilt_rust {
+        return Ok(());
+    }
+    Err(error(
+        ToolchainClosureErrorKind::PrebuiltRustProvider,
+        "rust provider bootstrap plan does not forbid prebuilt Rust",
+    ))
+}
+
+fn validate_rust_provider_bootstrap_sources(
+    sources: &[RustSourceProviderBootstrapSource],
+) -> Result<BTreeSet<String>, ToolchainClosureError> {
+    validate_collection_count(
+        "rust provider bootstrap sources",
+        sources.len(),
+        MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_SOURCES,
+    )?;
+    let mut ids = BTreeSet::new();
+    for source in sources {
+        validate_rust_provider_bootstrap_source(source)?;
+        if !ids.insert(source.id.clone()) {
+            return Err(error(
+                ToolchainClosureErrorKind::DuplicateRustProviderItem,
+                format!("duplicate rust provider bootstrap source id '{}'", source.id),
+            ));
+        }
+    }
+    Ok(ids)
+}
+
+fn validate_rust_provider_bootstrap_source(
+    source: &RustSourceProviderBootstrapSource,
+) -> Result<(), ToolchainClosureError> {
+    validate_non_empty("rust provider bootstrap source id", &source.id)?;
+    validate_non_empty("rust provider bootstrap source name", &source.name)?;
+    validate_non_empty("rust provider bootstrap source version", &source.version)?;
+    validate_non_empty("rust provider bootstrap source url", &source.url)?;
+    validate_no_disallowed_rust_provider_text("rust provider bootstrap source id", &source.id)?;
+    validate_no_disallowed_rust_provider_text("rust provider bootstrap source name", &source.name)?;
+    if !matches!(source.kind, ToolchainSourceKind::Tarball) {
+        return Err(error(
+            ToolchainClosureErrorKind::InvalidRustProvider,
+            format!("rust provider bootstrap source '{}' must be a tarball", source.id),
+        ));
+    }
+    validate_sha256_hex("rust provider bootstrap source sha256_hex", &source.sha256_hex)
+}
+
+fn validate_rust_provider_bootstrap_stages(
+    plan: &RustSourceProviderBootstrapPlan,
+    source_ids: &BTreeSet<String>,
+) -> Result<(), ToolchainClosureError> {
+    validate_collection_count(
+        "rust provider bootstrap stages",
+        plan.stages.len(),
+        MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_STAGES,
+    )?;
+    let mut seen_stage_ids = BTreeSet::new();
+    let mut final_stage_count = 0usize;
+    for stage in &plan.stages {
+        validate_rust_provider_bootstrap_stage(plan, source_ids, &seen_stage_ids, stage)?;
+        if matches!(stage.kind, RustSourceProviderBootstrapStageKind::RustcFinal) {
+            final_stage_count = final_stage_count.checked_add(1).ok_or_else(|| {
+                error(ToolchainClosureErrorKind::InvalidRustProvider, "rust provider final stage count overflowed")
+            })?;
+        }
+        if !seen_stage_ids.insert(stage.id.clone()) {
+            return Err(error(
+                ToolchainClosureErrorKind::DuplicateRustProviderItem,
+                format!("duplicate rust provider bootstrap stage id '{}'", stage.id),
+            ));
+        }
+    }
+    if final_stage_count == 1 {
+        return Ok(());
+    }
+    Err(error(
+        ToolchainClosureErrorKind::InvalidRustProvider,
+        format!("rust provider bootstrap plan has {final_stage_count} final stages"),
+    ))
+}
+
+fn validate_rust_provider_bootstrap_stage(
+    plan: &RustSourceProviderBootstrapPlan,
+    source_ids: &BTreeSet<String>,
+    seen_stage_ids: &BTreeSet<String>,
+    stage: &RustSourceProviderBootstrapStage,
+) -> Result<(), ToolchainClosureError> {
+    validate_non_empty("rust provider bootstrap stage id", &stage.id)?;
+    validate_non_empty("rust provider bootstrap stage rust_version", &stage.rust_version)?;
+    validate_no_disallowed_rust_provider_text("rust provider bootstrap stage id", &stage.id)?;
+    validate_rust_provider_bootstrap_stage_sources(source_ids, stage)?;
+    validate_rust_provider_bootstrap_stage_link(plan, seen_stage_ids, stage)?;
+    validate_rust_provider_bootstrap_stage_outputs(stage)?;
+    validate_rust_provider_bootstrap_stage_notes(stage)
+}
+
+fn validate_rust_provider_bootstrap_stage_sources(
+    source_ids: &BTreeSet<String>,
+    stage: &RustSourceProviderBootstrapStage,
+) -> Result<(), ToolchainClosureError> {
+    validate_collection_count(
+        "rust provider bootstrap stage source_ids",
+        stage.source_ids.len(),
+        MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_SOURCES,
+    )?;
+    let mut stage_source_ids = BTreeSet::new();
+    for source_id in &stage.source_ids {
+        validate_non_empty("rust provider bootstrap stage source_id", source_id)?;
+        validate_no_disallowed_rust_provider_text("rust provider bootstrap stage source_id", source_id)?;
+        if !source_ids.contains(source_id) {
+            return Err(error(
+                ToolchainClosureErrorKind::InvalidRustProvider,
+                format!("rust provider bootstrap stage '{}' references unknown source_id '{source_id}'", stage.id),
+            ));
+        }
+        if !stage_source_ids.insert(source_id.clone()) {
+            return Err(error(
+                ToolchainClosureErrorKind::DuplicateRustProviderItem,
+                format!("duplicate rust provider bootstrap stage source_id '{source_id}'"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_rust_provider_bootstrap_stage_link(
+    plan: &RustSourceProviderBootstrapPlan,
+    seen_stage_ids: &BTreeSet<String>,
+    stage: &RustSourceProviderBootstrapStage,
+) -> Result<(), ToolchainClosureError> {
+    match stage.kind {
+        RustSourceProviderBootstrapStageKind::MrustcSeed => {
+            if stage.bootstrap_stage_id.is_empty() {
+                return Ok(());
+            }
+            Err(error(
+                ToolchainClosureErrorKind::InvalidRustProvider,
+                format!("mrustc bootstrap stage '{}' must not name a predecessor", stage.id),
+            ))
+        }
+        RustSourceProviderBootstrapStageKind::RustcStage1 => require_prior_bootstrap_stage(seen_stage_ids, stage),
+        RustSourceProviderBootstrapStageKind::RustcFinal => {
+            require_equal("rust provider final stage version", &stage.rust_version, &plan.final_version)?;
+            require_prior_bootstrap_stage(seen_stage_ids, stage)
+        }
+    }
+}
+
+fn require_prior_bootstrap_stage(
+    seen_stage_ids: &BTreeSet<String>,
+    stage: &RustSourceProviderBootstrapStage,
+) -> Result<(), ToolchainClosureError> {
+    validate_non_empty("rust provider bootstrap_stage_id", &stage.bootstrap_stage_id)?;
+    if seen_stage_ids.contains(&stage.bootstrap_stage_id) {
+        return Ok(());
+    }
+    Err(error(
+        ToolchainClosureErrorKind::InvalidRustProvider,
+        format!(
+            "rust provider bootstrap stage '{}' references unknown predecessor '{}'",
+            stage.id, stage.bootstrap_stage_id
+        ),
+    ))
+}
+
+fn validate_rust_provider_bootstrap_stage_outputs(
+    stage: &RustSourceProviderBootstrapStage,
+) -> Result<(), ToolchainClosureError> {
+    validate_collection_count(
+        "rust provider bootstrap stage outputs",
+        stage.outputs.len(),
+        MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_OUTPUTS,
+    )?;
+    let mut roles = BTreeSet::new();
+    for role in &stage.outputs {
+        if !roles.insert(*role) {
+            return Err(error(
+                ToolchainClosureErrorKind::DuplicateRustProviderItem,
+                format!("duplicate rust provider bootstrap stage output role {role:?}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_rust_provider_bootstrap_stage_notes(
+    stage: &RustSourceProviderBootstrapStage,
+) -> Result<(), ToolchainClosureError> {
+    validate_max_collection_count(
+        "rust provider bootstrap stage notes",
+        stage.notes.len(),
+        MAX_RUST_PROVIDER_BOOTSTRAP_STAGE_NOTES,
+    )?;
+    for note in &stage.notes {
+        validate_no_disallowed_rust_provider_text("rust provider bootstrap stage note", note)?;
+    }
+    Ok(())
+}
+
+fn validate_rust_provider_bootstrap_outputs(
+    plan: &RustSourceProviderBootstrapPlan,
+) -> Result<(), ToolchainClosureError> {
+    validate_collection_count(
+        "rust provider bootstrap final outputs",
+        plan.final_outputs.len(),
+        MAX_RUST_PROVIDER_BOOTSTRAP_PLAN_OUTPUTS,
+    )?;
+    let mut roles = BTreeSet::new();
+    for output in &plan.final_outputs {
+        validate_provider_relative_path("rust provider bootstrap output path", &output.path)?;
+        validate_rust_provider_bootstrap_role_path(plan, output)?;
+        if !roles.insert(output.role) {
+            return Err(error(
+                ToolchainClosureErrorKind::DuplicateRustProviderItem,
+                format!("duplicate rust provider bootstrap output role {:?}", output.role),
+            ));
+        }
+    }
+    require_rust_provider_roles(&roles)
+}
+
+fn validate_rust_provider_bootstrap_role_path(
+    plan: &RustSourceProviderBootstrapPlan,
+    output: &RustSourceProviderBootstrapOutput,
+) -> Result<(), ToolchainClosureError> {
+    match output.role {
+        RustProviderRole::Rustc => require_provider_path(&output.path, RUSTC_PROVIDER_PATH, output.role),
+        RustProviderRole::Cargo => require_provider_path(&output.path, CARGO_PROVIDER_PATH, output.role),
+        RustProviderRole::Rustdoc => require_provider_path(&output.path, RUSTDOC_PROVIDER_PATH, output.role),
+        RustProviderRole::HostRustlib => {
+            require_provider_path_prefix(&output.path, &rustlib_lib_prefix(&plan.host_triple), output.role)
+        }
+        RustProviderRole::TargetRustlib => {
+            require_provider_path_prefix(&output.path, &rustlib_lib_prefix(&plan.target_triple), output.role)
+        }
+        RustProviderRole::ProviderReceipt => validate_provider_receipt_path(&output.path),
+    }
 }
 
 fn validate_rust_provider_schema(schema: &str) -> Result<(), ToolchainClosureError> {
@@ -1232,6 +1614,17 @@ fn validate_blake3_hex(label: &str, value: &str) -> Result<(), ToolchainClosureE
     if value.len() != BLAKE3_HEX_CHAR_COUNT {
         return Err(error(ToolchainClosureErrorKind::InvalidDigest, format!("{label} has invalid length")));
     }
+    validate_lowercase_hex(label, value)
+}
+
+fn validate_sha256_hex(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
+    if value.len() != SHA256_HEX_CHAR_COUNT {
+        return Err(error(ToolchainClosureErrorKind::InvalidDigest, format!("{label} has invalid length")));
+    }
+    validate_lowercase_hex(label, value)
+}
+
+fn validate_lowercase_hex(label: &str, value: &str) -> Result<(), ToolchainClosureError> {
     if value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
         return Ok(());
     }
@@ -1260,6 +1653,19 @@ fn digest_normalized_rust_provider(metadata: &RustSourceProviderMetadata) -> Res
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
+fn digest_normalized_rust_provider_bootstrap_plan(
+    plan: &RustSourceProviderBootstrapPlan,
+) -> Result<String, ToolchainClosureError> {
+    let payload = serde_json::json!({
+        "context": RUST_PROVIDER_BOOTSTRAP_PLAN_DIGEST_CONTEXT,
+        "plan": plan,
+    });
+    let bytes = serde_json::to_vec(&payload).map_err(|err| {
+        error(ToolchainClosureErrorKind::Serialization, format!("serialize rust provider bootstrap plan: {err}"))
+    })?;
+    Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
 fn member_key(member: &ToolchainClosureMember) -> (ToolchainRole, String) {
     (member.role, member.name.clone())
 }
@@ -1284,6 +1690,14 @@ fn rust_provider_artifact_sort_key(artifact: &RustProviderArtifact) -> (RustProv
     (artifact.role, artifact.name.clone(), artifact.path.clone())
 }
 
+fn rust_provider_bootstrap_source_sort_key(source: &RustSourceProviderBootstrapSource) -> (String, String) {
+    (source.id.clone(), source.sha256_hex.clone())
+}
+
+fn rust_provider_bootstrap_output_sort_key(output: &RustSourceProviderBootstrapOutput) -> (RustProviderRole, String) {
+    (output.role, output.path.clone())
+}
+
 fn error(kind: ToolchainClosureErrorKind, message: impl Into<String>) -> ToolchainClosureError {
     ToolchainClosureError {
         kind,
@@ -1302,6 +1716,11 @@ mod tests {
     const DIGEST_E: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
     const DIGEST_F: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     const TWO_SEED_EXCEPTION_COUNT: usize = 2;
+    const EXPECTED_BOOTSTRAP_PLAN_SOURCE_COUNT: usize = 6;
+    const EXPECTED_BOOTSTRAP_PLAN_STAGE_COUNT: usize = 5;
+    const EXPECTED_BOOTSTRAP_PLAN_FINAL_OUTPUT_COUNT: usize = 6;
+    const MRUSTC_SOURCE_SHA256_HEX: &str = "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56";
+    const FINAL_RUST_VERSION: &str = "1.94.0";
 
     #[test]
     fn absent_closure_status_preserves_current_non_claim() {
@@ -1798,6 +2217,93 @@ mod tests {
         assert!(err.message().contains("rustup"));
     }
 
+    #[test]
+    fn valid_rust_source_provider_bootstrap_plan_yields_stable_digest() {
+        let plan = valid_rust_provider_bootstrap_plan();
+        let mut reordered = plan.clone();
+        reordered.sources.reverse();
+        reordered.final_outputs.reverse();
+
+        let validation = validate_rust_source_provider_bootstrap_plan(&plan).unwrap();
+        let validation_reordered = validate_rust_source_provider_bootstrap_plan(&reordered).unwrap();
+
+        assert_eq!(validation.source_count, EXPECTED_BOOTSTRAP_PLAN_SOURCE_COUNT);
+        assert_eq!(validation.stage_count, EXPECTED_BOOTSTRAP_PLAN_STAGE_COUNT);
+        assert_eq!(validation.final_output_count, EXPECTED_BOOTSTRAP_PLAN_FINAL_OUTPUT_COUNT);
+        assert_eq!(validation.policy_digest_blake3, validation_reordered.policy_digest_blake3);
+    }
+
+    #[test]
+    fn checked_in_rust_source_plan_loads_stagex_mrustc_route() {
+        let plan_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap/rust-source-plan.ncl");
+        let import_paths: Vec<std::ffi::OsString> = Vec::new();
+        let plan: RustSourceProviderBootstrapPlan = crunch_eval::evaluate_and_deserialize(&plan_path, &import_paths)
+            .unwrap_or_else(|err| panic!("loading {}: {err}", plan_path.display()));
+
+        let validation = validate_rust_source_provider_bootstrap_plan(&plan).unwrap();
+
+        assert_eq!(plan.final_version, FINAL_RUST_VERSION);
+        assert_eq!(validation.source_count, EXPECTED_BOOTSTRAP_PLAN_SOURCE_COUNT);
+        assert_eq!(validation.stage_count, EXPECTED_BOOTSTRAP_PLAN_STAGE_COUNT);
+        assert!(
+            plan.sources
+                .iter()
+                .any(|source| { source.id == "mrustc-0.12.0" && source.sha256_hex == MRUSTC_SOURCE_SHA256_HEX })
+        );
+        assert!(plan.stages.iter().any(|stage| {
+            stage.kind == RustSourceProviderBootstrapStageKind::MrustcSeed
+                && stage.source_ids.iter().any(|source_id| source_id == "mrustc-0.12.0")
+        }));
+        assert!(plan.stages.iter().any(|stage| {
+            stage.kind == RustSourceProviderBootstrapStageKind::RustcFinal
+                && stage.bootstrap_stage_id == "rust-1.93.1-stage1"
+        }));
+    }
+
+    #[test]
+    fn rust_source_provider_bootstrap_plan_rejects_prebuilt_policy() {
+        let mut plan = valid_rust_provider_bootstrap_plan();
+        plan.policy.uses_prebuilt_rust = true;
+
+        let err = validate_rust_source_provider_bootstrap_plan(&plan).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::PrebuiltRustProvider);
+        assert!(err.message().contains("uses prebuilt Rust"));
+    }
+
+    #[test]
+    fn rust_source_provider_bootstrap_plan_requires_final_roles() {
+        let mut plan = valid_rust_provider_bootstrap_plan();
+        plan.final_outputs.retain(|output| output.role != RustProviderRole::TargetRustlib);
+
+        let err = validate_rust_source_provider_bootstrap_plan(&plan).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::MissingRustProviderRole);
+        assert!(err.message().contains("TargetRustlib"));
+    }
+
+    #[test]
+    fn rust_source_provider_bootstrap_plan_requires_ordered_stage_predecessors() {
+        let mut plan = valid_rust_provider_bootstrap_plan();
+        plan.stages[1].bootstrap_stage_id = "future-stage".to_string();
+
+        let err = validate_rust_source_provider_bootstrap_plan(&plan).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(err.message().contains("unknown predecessor"));
+    }
+
+    #[test]
+    fn rust_source_provider_bootstrap_plan_rejects_unknown_stage_source() {
+        let mut plan = valid_rust_provider_bootstrap_plan();
+        plan.stages[0].source_ids[0] = "missing-source".to_string();
+
+        let err = validate_rust_source_provider_bootstrap_plan(&plan).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(err.message().contains("unknown source_id"));
+    }
+
     fn valid_manifest() -> ToolchainClosureManifest {
         ToolchainClosureManifest {
             schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA.to_string(),
@@ -1945,6 +2451,164 @@ mod tests {
                     DIGEST_B,
                 ),
             ],
+        }
+    }
+
+    fn valid_rust_provider_bootstrap_plan() -> RustSourceProviderBootstrapPlan {
+        RustSourceProviderBootstrapPlan {
+            schema: RUST_PROVIDER_BOOTSTRAP_PLAN_SCHEMA.to_string(),
+            provider_id: RUST_SOURCE_PROVIDER_ID.to_string(),
+            route: "mrustc-to-rust-current-source-route".to_string(),
+            host_triple: "x86_64-unknown-linux-musl".to_string(),
+            target_triple: "x86_64-unknown-linux-musl".to_string(),
+            final_version: FINAL_RUST_VERSION.to_string(),
+            policy: RustSourceProviderBootstrapPolicy {
+                source_built: true,
+                uses_prebuilt_rust: false,
+                forbids_prebuilt_rust: true,
+                reference: "stagex core rust package route".to_string(),
+            },
+            sources: vec![
+                rust_provider_bootstrap_source("mrustc-0.12.0", "0.12.0", MRUSTC_SOURCE_SHA256_HEX),
+                rust_provider_bootstrap_source(
+                    "rust-1.90.0",
+                    "1.90.0",
+                    "799a9f9cba4ed5351e071048bcf6b5560755d9009648def33a407dd4961f9b7e",
+                ),
+                rust_provider_bootstrap_source(
+                    "rust-1.91.1",
+                    "1.91.1",
+                    "38dce205d39f61571261f0444237a1ce9efecb970e760d8ec4d957af5b445723",
+                ),
+                rust_provider_bootstrap_source(
+                    "rust-1.92.0",
+                    "1.92.0",
+                    "9e0d2ca75c7e275fdc758255bf4b03afb3d65d1543602746907c933b6901c3b8",
+                ),
+                rust_provider_bootstrap_source(
+                    "rust-1.93.1",
+                    "1.93.1",
+                    "4c230a44b3d9c9f3cef950943719f8380058d27c91fda5e36a9a947ef013e01f",
+                ),
+                rust_provider_bootstrap_source(
+                    "rust-1.94.0",
+                    FINAL_RUST_VERSION,
+                    "b83f921cd3f321ff614f9c06a8b870d89299fc02888b48a5549683a36823474c",
+                ),
+            ],
+            stages: vec![
+                rust_provider_bootstrap_stage(
+                    "mrustc-to-rust-1.90.0",
+                    RustSourceProviderBootstrapStageKind::MrustcSeed,
+                    &["mrustc-0.12.0", "rust-1.90.0"],
+                    "",
+                    "1.90.0",
+                ),
+                rust_provider_bootstrap_stage(
+                    "rust-1.91.1-stage1",
+                    RustSourceProviderBootstrapStageKind::RustcStage1,
+                    &["rust-1.91.1"],
+                    "mrustc-to-rust-1.90.0",
+                    "1.91.1",
+                ),
+                rust_provider_bootstrap_stage(
+                    "rust-1.92.0-stage1",
+                    RustSourceProviderBootstrapStageKind::RustcStage1,
+                    &["rust-1.92.0"],
+                    "rust-1.91.1-stage1",
+                    "1.92.0",
+                ),
+                rust_provider_bootstrap_stage(
+                    "rust-1.93.1-stage1",
+                    RustSourceProviderBootstrapStageKind::RustcStage1,
+                    &["rust-1.93.1"],
+                    "rust-1.92.0-stage1",
+                    "1.93.1",
+                ),
+                rust_provider_bootstrap_stage(
+                    "rust-1.94.0-final",
+                    RustSourceProviderBootstrapStageKind::RustcFinal,
+                    &["rust-1.94.0"],
+                    "rust-1.93.1-stage1",
+                    FINAL_RUST_VERSION,
+                ),
+            ],
+            final_outputs: vec![
+                rust_provider_bootstrap_output(RustProviderRole::Rustc, RUSTC_PROVIDER_PATH),
+                rust_provider_bootstrap_output(RustProviderRole::Cargo, CARGO_PROVIDER_PATH),
+                rust_provider_bootstrap_output(RustProviderRole::Rustdoc, RUSTDOC_PROVIDER_PATH),
+                rust_provider_bootstrap_output(
+                    RustProviderRole::HostRustlib,
+                    "lib/rustlib/x86_64-unknown-linux-musl/lib",
+                ),
+                rust_provider_bootstrap_output(
+                    RustProviderRole::TargetRustlib,
+                    "lib/rustlib/x86_64-unknown-linux-musl/lib",
+                ),
+                rust_provider_bootstrap_output(
+                    RustProviderRole::ProviderReceipt,
+                    "share/mantle-rust-provider/receipts/build.json",
+                ),
+            ],
+        }
+    }
+
+    fn rust_provider_bootstrap_source(id: &str, version: &str, sha256_hex: &str) -> RustSourceProviderBootstrapSource {
+        let url = if id == "mrustc-0.12.0" {
+            "https://github.com/thepowersgang/mrustc/archive/refs/tags/v0.12.0.tar.gz".to_string()
+        } else {
+            format!("https://static.rust-lang.org/dist/rustc-{version}-src.tar.gz")
+        };
+        RustSourceProviderBootstrapSource {
+            id: id.to_string(),
+            kind: ToolchainSourceKind::Tarball,
+            name: "rust-compiler-source".to_string(),
+            version: version.to_string(),
+            url,
+            sha256_hex: sha256_hex.to_string(),
+        }
+    }
+
+    fn rust_provider_bootstrap_stage(
+        id: &str,
+        kind: RustSourceProviderBootstrapStageKind,
+        source_ids: &[&str],
+        bootstrap_stage_id: &str,
+        rust_version: &str,
+    ) -> RustSourceProviderBootstrapStage {
+        let outputs = match kind {
+            RustSourceProviderBootstrapStageKind::RustcFinal => vec![
+                RustProviderRole::Rustc,
+                RustProviderRole::Cargo,
+                RustProviderRole::Rustdoc,
+                RustProviderRole::HostRustlib,
+                RustProviderRole::TargetRustlib,
+                RustProviderRole::ProviderReceipt,
+            ],
+            RustSourceProviderBootstrapStageKind::MrustcSeed | RustSourceProviderBootstrapStageKind::RustcStage1 => {
+                vec![
+                    RustProviderRole::Rustc,
+                    RustProviderRole::Cargo,
+                    RustProviderRole::HostRustlib,
+                    RustProviderRole::TargetRustlib,
+                ]
+            }
+        };
+        RustSourceProviderBootstrapStage {
+            id: id.to_string(),
+            kind,
+            source_ids: source_ids.iter().map(|source_id| (*source_id).to_string()).collect(),
+            bootstrap_stage_id: bootstrap_stage_id.to_string(),
+            rust_version: rust_version.to_string(),
+            outputs,
+            notes: vec!["compile source stage".to_string()],
+        }
+    }
+
+    fn rust_provider_bootstrap_output(role: RustProviderRole, path: &str) -> RustSourceProviderBootstrapOutput {
+        RustSourceProviderBootstrapOutput {
+            role,
+            path: path.to_string(),
         }
     }
 

@@ -1427,3 +1427,4 @@ mantle run [target] [-- args...] Build and execute a package binary (`.#name`, b
 ## References
 
 - [fosslinux/live-bootstrap](https://github.com/fosslinux/live-bootstrap) — reference stage order and source provenance for the hex0 → mes → tinycc → GCC bootstrap ladder.
+- [stagex/stagex](https://codeberg.org/stagex/stagex) — mrustc-to-current-Rust source bootstrap route used as the reference shape for `bootstrap/rust-source-plan.ncl`.
