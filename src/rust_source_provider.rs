@@ -15,10 +15,17 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_ID;
 use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_METADATA_PATH;
+use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA;
+use crate::source_toolchain_closure::RustProviderArtifact;
+use crate::source_toolchain_closure::RustProviderBuildReceiptIdentity;
 use crate::source_toolchain_closure::RustProviderObservedArtifact;
 use crate::source_toolchain_closure::RustProviderObservedBuildReceipt;
+use crate::source_toolchain_closure::RustProviderReceiptArtifact;
+use crate::source_toolchain_closure::RustProviderReceiptStep;
 use crate::source_toolchain_closure::RustProviderRole;
+use crate::source_toolchain_closure::RustProviderSourceIdentity;
 use crate::source_toolchain_closure::RustSourceProviderBootstrapOutput;
 use crate::source_toolchain_closure::RustSourceProviderBootstrapPlan;
 use crate::source_toolchain_closure::RustSourceProviderBootstrapPlanValidation;
@@ -27,7 +34,9 @@ use crate::source_toolchain_closure::RustSourceProviderBootstrapStage;
 use crate::source_toolchain_closure::RustSourceProviderBootstrapStageKind;
 use crate::source_toolchain_closure::RustSourceProviderBuildReceipt;
 use crate::source_toolchain_closure::RustSourceProviderMetadata;
+use crate::source_toolchain_closure::RustSourceProviderProvenance;
 use crate::source_toolchain_closure::RustSourceProviderValidation;
+use crate::source_toolchain_closure::ToolchainBuildReceiptKind;
 
 pub(crate) const RUST_SOURCE_PROVIDER_BLOCKED_REASON: &str = "source-built Rust provider materialization is not implemented: Mantle has no receipt-bound Rust-from-source bootstrap that can build rustc/cargo/rustlib without prebuilt Rust";
 
@@ -40,6 +49,13 @@ const FIRST_STAGE_SOURCES_MANIFEST_FILE: &str = "mrustc-first-stage-sources.json
 const FIRST_STAGE_BUILD_MANIFEST_SCHEMA: &str = "mantle-rust-source-provider-first-stage-build-v1";
 const FIRST_STAGE_BUILD_MANIFEST_FILE: &str = "mrustc-first-stage-build.json";
 const FIRST_STAGE_BUILD_LOG_FILE: &str = "mrustc-first-stage-build.log";
+const FIRST_STAGE_PROVIDER_CANDIDATE_SCHEMA: &str = "mantle-rust-source-provider-first-stage-candidate-v1";
+const FIRST_STAGE_PROVIDER_CANDIDATE_DIR: &str = "mrustc-first-stage-provider-candidate";
+const FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE: &str = "mrustc-first-stage-provider-candidate.json";
+const FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH: &str = "share/mantle-rust-provider/receipts/build.json";
+const FIRST_STAGE_PROVIDER_RECEIPT_ID: &str = "mrustc-first-stage-build";
+const FIRST_STAGE_PROVIDER_RECEIPT_NAME: &str = "mrustc-first-stage-build-receipt";
+const FIRST_STAGE_PROVIDER_BUILD_RECIPE: &str = "mrustc-first-stage-source-route";
 const FIRST_STAGE_SCRIPT_FILE: &str = "run-mrustc-first-stage.sh";
 const FIRST_STAGE_ARCHIVE_DIR: &str = "archives";
 const FIRST_STAGE_SOURCE_DIR: &str = "sources";
@@ -73,12 +89,16 @@ const FIRST_STAGE_MAKE_PROGRAM: &str = "make";
 const FIRST_STAGE_COPY_PROGRAM: &str = "cp";
 const FIRST_STAGE_CXXFLAGS: &str = "-g0 -O2 -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_NONE";
 const FIRST_STAGE_MAKE_FALLBACK_GLOB: &str = "/nix/store/*-gnumake-*/bin/make /nix/store/*-gnumake-static-*/bin/make";
+const PROVIDER_RUSTC_RELATIVE_PATH: &str = "bin/rustc";
+const PROVIDER_CARGO_RELATIVE_PATH: &str = "bin/cargo";
+const PROVIDER_RUSTLIB_PREFIX: &str = "lib/rustlib";
 const REQUIRED_FIRST_STAGE_OUTPUT_ROLES: [RustProviderRole; 4] = [
     RustProviderRole::Rustc,
     RustProviderRole::Cargo,
     RustProviderRole::HostRustlib,
     RustProviderRole::TargetRustlib,
 ];
+const FIRST_STAGE_PROVIDER_RECEIPT_ARTIFACT_COUNT: usize = 1;
 const SMOKE_OUTPUT_CAPTURE_BYTES: usize = 16_384;
 const SMOKE_SOURCE_FILE: &str = "mantle-rust-provider-smoke.rs";
 const SMOKE_OUTPUT_FILE: &str = "libmantle_rust_provider_smoke.rlib";
@@ -182,6 +202,8 @@ struct RustSourceProviderFirstStageBoundary {
     sources_manifest_path: PathBuf,
     build_manifest_path: PathBuf,
     build_log_path: PathBuf,
+    provider_candidate_dir: PathBuf,
+    provider_candidate_manifest_path: PathBuf,
     script_path: PathBuf,
 }
 
@@ -213,6 +235,18 @@ struct RustSourceProviderFirstStageBuild {
     prefix_digest_blake3: String,
     prefix_rustlib_path: PathBuf,
     prefix_rustlib_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct RustSourceProviderFirstStageProviderCandidate {
+    stage_id: String,
+    candidate_dir: PathBuf,
+    metadata_path: PathBuf,
+    metadata_digest_blake3: String,
+    policy_digest_blake3: String,
+    artifact_count: usize,
+    source_count: usize,
+    receipt_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -325,6 +359,9 @@ pub(crate) fn materialize_rust_source_provider(
     write_first_stage_sources_manifest(&boundary, &first_stage_sources)?;
     let first_stage_build = run_first_stage_build(&boundary, verbose)?;
     write_first_stage_build_manifest(&boundary, &first_stage_build)?;
+    let first_stage_candidate =
+        assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
+    write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
     if verbose {
         eprintln!("Rust source provider recipe: {}", plan.recipe_path.display());
         eprintln!("  recipe_digest_blake3: {}", plan.recipe_digest_blake3);
@@ -337,6 +374,8 @@ pub(crate) fn materialize_rust_source_provider(
         eprintln!("  first_stage_sources: {}", boundary.sources_manifest_path.display());
         eprintln!("  first_stage_build: {}", boundary.build_manifest_path.display());
         eprintln!("  first_stage_build_log: {}", boundary.build_log_path.display());
+        eprintln!("  first_stage_provider_candidate: {}", first_stage_candidate.candidate_dir.display());
+        eprintln!("  first_stage_provider_candidate_manifest: {}", boundary.provider_candidate_manifest_path.display());
         eprintln!("  planned_output: {}", plan.output_dir.display());
         eprintln!("  planned_scratch: {}", plan.scratch_dir.display());
     }
@@ -559,6 +598,18 @@ fn write_evidence_text(path: &Path, text: &str) -> Result<(), RustSourceProvider
     fs::write(path, text).map_err(|err| RustSourceProviderError::Smoke(format!("write {}: {err}", path.display())))
 }
 
+fn write_json_pretty<T: serde::Serialize>(path: &Path, value: &T, label: &str) -> Result<(), RustSourceProviderError> {
+    let bytes = serde_json::to_vec_pretty(value)
+        .map_err(|err| RustSourceProviderError::Parse(format!("serialize {label}: {err}")))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| RustSourceProviderError::Read(format!("{} has no parent", path.display())))?;
+    fs::create_dir_all(parent)
+        .map_err(|err| RustSourceProviderError::Read(format!("create {}: {err}", parent.display())))?;
+    fs::write(path, bytes)
+        .map_err(|err| RustSourceProviderError::Read(format!("write {label} {}: {err}", path.display())))
+}
+
 fn validate_import_request(import_dir: &Path, output_dir: &Path) -> Result<(), RustSourceProviderError> {
     if import_dir.as_os_str().is_empty() {
         return Err(RustSourceProviderError::Read("import dir is empty".to_string()));
@@ -658,6 +709,10 @@ fn prepare_first_stage_boundary(
         sources_manifest_path: materialization.scratch_dir.join(FIRST_STAGE_SOURCES_MANIFEST_FILE),
         build_manifest_path: materialization.scratch_dir.join(FIRST_STAGE_BUILD_MANIFEST_FILE),
         build_log_path: materialization.scratch_dir.join(FIRST_STAGE_BUILD_LOG_FILE),
+        provider_candidate_dir: materialization.scratch_dir.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR),
+        provider_candidate_manifest_path: materialization
+            .scratch_dir
+            .join(FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE),
         script_path: materialization.scratch_dir.join(FIRST_STAGE_SCRIPT_FILE),
     })
 }
@@ -774,6 +829,8 @@ fn first_stage_boundary_manifest(
             "source_manifest": boundary.sources_manifest_path.display().to_string(),
             "build_manifest": boundary.build_manifest_path.display().to_string(),
             "build_log": boundary.build_log_path.display().to_string(),
+            "provider_candidate_dir": boundary.provider_candidate_dir.display().to_string(),
+            "provider_candidate_manifest": boundary.provider_candidate_manifest_path.display().to_string(),
         },
         "blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
     });
@@ -949,6 +1006,287 @@ fn write_first_stage_build_manifest(
             boundary.build_manifest_path.display()
         ))
     })
+}
+
+fn assemble_first_stage_provider_candidate(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    route: &LoadedRustSourceProviderRoute,
+    sources: &[RustSourceProviderFirstStageSourceAcquisition],
+    build: &RustSourceProviderFirstStageBuild,
+) -> Result<RustSourceProviderFirstStageProviderCandidate, RustSourceProviderError> {
+    validate_first_stage_candidate_request(boundary, sources, build)?;
+    prepare_empty_provider_candidate_dir(&boundary.provider_candidate_dir)?;
+    copy_provider_prefix(&build.prefix_path, &boundary.provider_candidate_dir)?;
+    let source_identities = first_stage_provider_source_identities(boundary, sources)?;
+    let build_sources = first_stage_build_sources(boundary)?;
+    let artifact_source_id = build_sources.rust_id;
+    let receipt_artifacts = first_stage_provider_receipt_artifacts(&boundary.provider_candidate_dir, route)?;
+    let receipt = first_stage_provider_receipt(boundary, route, &source_identities, &receipt_artifacts);
+    let receipt_path = boundary.provider_candidate_dir.join(FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH);
+    write_json_pretty(&receipt_path, &receipt, "first-stage provider receipt")?;
+    let receipt_digest_blake3 = file_digest_blake3(&receipt_path)?;
+    let metadata = first_stage_provider_metadata(
+        route,
+        &source_identities,
+        &receipt_artifacts,
+        &receipt_digest_blake3,
+        &artifact_source_id,
+    );
+    let metadata_path = boundary.provider_candidate_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH);
+    write_json_pretty(&metadata_path, &metadata, "first-stage provider metadata")?;
+    let validation = validate_materialized_rust_source_provider(&boundary.provider_candidate_dir)?;
+    Ok(RustSourceProviderFirstStageProviderCandidate {
+        stage_id: boundary.stage_id.clone(),
+        candidate_dir: boundary.provider_candidate_dir.clone(),
+        metadata_path,
+        metadata_digest_blake3: validation.metadata_digest_blake3,
+        policy_digest_blake3: validation.validation.policy_digest_blake3,
+        artifact_count: validation.validation.artifact_count,
+        source_count: validation.validation.source_count,
+        receipt_count: validation.validation.receipt_count,
+    })
+}
+
+fn validate_first_stage_candidate_request(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    sources: &[RustSourceProviderFirstStageSourceAcquisition],
+    build: &RustSourceProviderFirstStageBuild,
+) -> Result<(), RustSourceProviderError> {
+    if sources.len() != boundary.sources.len() {
+        return Err(RustSourceProviderError::Validate("first-stage candidate source count mismatch".to_string()));
+    }
+    if build.stage_id != boundary.stage_id {
+        return Err(RustSourceProviderError::Validate(format!(
+            "first-stage candidate build stage expected {}, got {}",
+            boundary.stage_id, build.stage_id
+        )));
+    }
+    if boundary.provider_candidate_dir == boundary.output_dir {
+        return Err(RustSourceProviderError::Validate(
+            "provider candidate must not be the final output dir".to_string(),
+        ));
+    }
+    validate_first_stage_build_product(&build.prefix_path, FIRST_STAGE_PREFIX_DIR)
+}
+
+fn prepare_empty_provider_candidate_dir(path: &Path) -> Result<(), RustSourceProviderError> {
+    if path.exists() && path.is_dir() {
+        fs::remove_dir_all(path)
+            .map_err(|err| RustSourceProviderError::Copy(format!("remove {}: {err}", path.display())))?;
+    } else if path.exists() {
+        fs::remove_file(path)
+            .map_err(|err| RustSourceProviderError::Copy(format!("remove {}: {err}", path.display())))?;
+    }
+    fs::create_dir_all(path).map_err(|err| RustSourceProviderError::Copy(format!("create {}: {err}", path.display())))
+}
+
+fn copy_provider_prefix(src: &Path, dst: &Path) -> Result<(), RustSourceProviderError> {
+    let mut copied_entries = 0usize;
+    copy_directory_contents(src, dst, &mut copied_entries)?;
+    if copied_entries == 0 {
+        return Err(RustSourceProviderError::Copy(format!("provider prefix {} was empty", src.display())));
+    }
+    Ok(())
+}
+
+fn first_stage_provider_source_identities(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    sources: &[RustSourceProviderFirstStageSourceAcquisition],
+) -> Result<Vec<RustProviderSourceIdentity>, RustSourceProviderError> {
+    let mut identities = Vec::with_capacity(boundary.sources.len());
+    for source in &boundary.sources {
+        let acquired = sources.iter().find(|acquired| acquired.id == source.id).ok_or_else(|| {
+            RustSourceProviderError::Validate(format!("first-stage candidate lacks source acquisition '{}'", source.id))
+        })?;
+        identities.push(RustProviderSourceIdentity {
+            id: source.id.clone(),
+            kind: source.kind,
+            name: source.name.clone(),
+            digest_blake3: acquired.extracted_digest_blake3.clone(),
+        });
+    }
+    Ok(identities)
+}
+
+fn first_stage_provider_receipt_artifacts(
+    candidate_dir: &Path,
+    route: &LoadedRustSourceProviderRoute,
+) -> Result<Vec<RustProviderReceiptArtifact>, RustSourceProviderError> {
+    Ok(vec![
+        provider_receipt_artifact(candidate_dir, RustProviderRole::Rustc, "rustc", PROVIDER_RUSTC_RELATIVE_PATH)?,
+        provider_receipt_artifact(candidate_dir, RustProviderRole::Cargo, "cargo", PROVIDER_CARGO_RELATIVE_PATH)?,
+        provider_receipt_artifact(
+            candidate_dir,
+            RustProviderRole::HostRustlib,
+            "host-rustlib",
+            &provider_rustlib_relative_path(&route.plan.host_triple),
+        )?,
+        provider_receipt_artifact(
+            candidate_dir,
+            RustProviderRole::TargetRustlib,
+            "target-rustlib",
+            &provider_rustlib_relative_path(&route.plan.target_triple),
+        )?,
+    ])
+}
+
+fn provider_receipt_artifact(
+    provider_dir: &Path,
+    role: RustProviderRole,
+    name: &str,
+    relative_path: &str,
+) -> Result<RustProviderReceiptArtifact, RustSourceProviderError> {
+    Ok(RustProviderReceiptArtifact {
+        role,
+        name: name.to_string(),
+        path: relative_path.to_string(),
+        content_digest_blake3: content_digest_blake3(&provider_dir.join(relative_path))?,
+    })
+}
+
+fn first_stage_provider_receipt(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    route: &LoadedRustSourceProviderRoute,
+    sources: &[RustProviderSourceIdentity],
+    artifacts: &[RustProviderReceiptArtifact],
+) -> RustSourceProviderBuildReceipt {
+    RustSourceProviderBuildReceipt {
+        schema: RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA.to_string(),
+        receipt_id: FIRST_STAGE_PROVIDER_RECEIPT_ID.to_string(),
+        provider_id: RUST_SOURCE_PROVIDER_ID.to_string(),
+        host_triple: route.plan.host_triple.clone(),
+        target_triple: route.plan.target_triple.clone(),
+        source_ids: sources.iter().map(|source| source.id.clone()).collect(),
+        output_artifacts: artifacts.to_vec(),
+        build_steps: first_stage_provider_receipt_steps(boundary),
+    }
+}
+
+fn first_stage_provider_receipt_steps(boundary: &RustSourceProviderFirstStageBoundary) -> Vec<RustProviderReceiptStep> {
+    vec![
+        RustProviderReceiptStep {
+            name: "acquire-first-stage-sources".to_string(),
+            program: "mantle-rust-source-fetch".to_string(),
+            arguments: boundary.source_ids.clone(),
+        },
+        RustProviderReceiptStep {
+            name: "build-mrustc".to_string(),
+            program: FIRST_STAGE_MAKE_PROGRAM.to_string(),
+            arguments: vec![format!("CXXFLAGS={FIRST_STAGE_CXXFLAGS}")],
+        },
+        RustProviderReceiptStep {
+            name: "build-minicargo".to_string(),
+            program: FIRST_STAGE_MAKE_PROGRAM.to_string(),
+            arguments: vec![
+                "-f".to_string(),
+                FIRST_STAGE_MINICARGO_MAKEFILE.to_string(),
+                FIRST_STAGE_MINICARGO_BINARY.to_string(),
+            ],
+        },
+        RustProviderReceiptStep {
+            name: "translate-rustc".to_string(),
+            program: FIRST_STAGE_MAKE_PROGRAM.to_string(),
+            arguments: vec![
+                "-f".to_string(),
+                FIRST_STAGE_MINICARGO_MAKEFILE.to_string(),
+                FIRST_STAGE_TRANSLATED_RUSTC_BINARY.to_string(),
+            ],
+        },
+        RustProviderReceiptStep {
+            name: "translate-cargo".to_string(),
+            program: FIRST_STAGE_MAKE_PROGRAM.to_string(),
+            arguments: vec![
+                "-f".to_string(),
+                FIRST_STAGE_MINICARGO_MAKEFILE.to_string(),
+                FIRST_STAGE_TRANSLATED_CARGO_BINARY.to_string(),
+            ],
+        },
+        RustProviderReceiptStep {
+            name: "build-rust-prefix".to_string(),
+            program: FIRST_STAGE_MAKE_PROGRAM.to_string(),
+            arguments: vec!["-C".to_string(), FIRST_STAGE_RUN_RUSTC_DIR.to_string()],
+        },
+    ]
+}
+
+fn first_stage_provider_metadata(
+    route: &LoadedRustSourceProviderRoute,
+    sources: &[RustProviderSourceIdentity],
+    receipt_artifacts: &[RustProviderReceiptArtifact],
+    receipt_digest_blake3: &str,
+    artifact_source_id: &str,
+) -> RustSourceProviderMetadata {
+    RustSourceProviderMetadata {
+        schema: crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_SCHEMA.to_string(),
+        provider_id: RUST_SOURCE_PROVIDER_ID.to_string(),
+        host_triple: route.plan.host_triple.clone(),
+        target_triple: route.plan.target_triple.clone(),
+        provenance: RustSourceProviderProvenance {
+            source_built: true,
+            uses_prebuilt_rust: false,
+            build_recipe: FIRST_STAGE_PROVIDER_BUILD_RECIPE.to_string(),
+        },
+        sources: sources.to_vec(),
+        build_receipts: vec![first_stage_provider_receipt_identity(receipt_digest_blake3)],
+        artifacts: first_stage_provider_artifacts(receipt_artifacts, receipt_digest_blake3, artifact_source_id),
+    }
+}
+
+fn first_stage_provider_receipt_identity(receipt_digest_blake3: &str) -> RustProviderBuildReceiptIdentity {
+    RustProviderBuildReceiptIdentity {
+        id: FIRST_STAGE_PROVIDER_RECEIPT_ID.to_string(),
+        kind: ToolchainBuildReceiptKind::ExternalAttestedBuild,
+        name: FIRST_STAGE_PROVIDER_RECEIPT_NAME.to_string(),
+        path: FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH.to_string(),
+        digest_blake3: receipt_digest_blake3.to_string(),
+    }
+}
+
+fn first_stage_provider_artifacts(
+    receipt_artifacts: &[RustProviderReceiptArtifact],
+    receipt_digest_blake3: &str,
+    artifact_source_id: &str,
+) -> Vec<RustProviderArtifact> {
+    let mut artifacts: Vec<RustProviderArtifact> = receipt_artifacts
+        .iter()
+        .map(|artifact| RustProviderArtifact {
+            role: artifact.role,
+            name: artifact.name.clone(),
+            path: artifact.path.clone(),
+            content_digest_blake3: artifact.content_digest_blake3.clone(),
+            source_id: artifact_source_id.to_string(),
+            build_receipt_id: FIRST_STAGE_PROVIDER_RECEIPT_ID.to_string(),
+        })
+        .collect();
+    artifacts.push(RustProviderArtifact {
+        role: RustProviderRole::ProviderReceipt,
+        name: FIRST_STAGE_PROVIDER_RECEIPT_NAME.to_string(),
+        path: FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH.to_string(),
+        content_digest_blake3: receipt_digest_blake3.to_string(),
+        source_id: artifact_source_id.to_string(),
+        build_receipt_id: FIRST_STAGE_PROVIDER_RECEIPT_ID.to_string(),
+    });
+    artifacts
+}
+
+fn provider_rustlib_relative_path(triple: &str) -> String {
+    format!("{PROVIDER_RUSTLIB_PREFIX}/{triple}/lib")
+}
+
+fn write_first_stage_provider_candidate_manifest(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    candidate: &RustSourceProviderFirstStageProviderCandidate,
+) -> Result<(), RustSourceProviderError> {
+    let manifest = serde_json::json!({
+        "schema": FIRST_STAGE_PROVIDER_CANDIDATE_SCHEMA,
+        "stage_id": boundary.stage_id,
+        "route_plan_digest_blake3": boundary.route_plan_digest_blake3,
+        "route_policy_digest_blake3": boundary.route_policy_digest_blake3,
+        "candidate": candidate,
+        "candidate_only": true,
+        "next_blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
+    });
+    write_json_pretty(&boundary.provider_candidate_manifest_path, &manifest, "first-stage provider candidate manifest")
 }
 
 fn first_stage_build_sources(
@@ -1747,6 +2085,15 @@ mod tests {
         assert!(scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_BUILD_MANIFEST_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_BUILD_LOG_FILE).is_file());
+        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
+        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR).is_dir());
+        assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR).join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file());
+        assert!(
+            scratch
+                .join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR)
+                .join(FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH)
+                .is_file()
+        );
         assert!(scratch.join(FIRST_STAGE_ARCHIVE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_BUILD_DIR).is_dir());
@@ -1788,11 +2135,43 @@ mod tests {
             build_manifest["build"]["prefix_rustlib_digest_blake3"].as_str().unwrap().len(),
             SHA256_HEX_CHAR_COUNT
         );
+        let candidate_manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE)).unwrap())
+                .unwrap();
+        assert_eq!(candidate_manifest["schema"], FIRST_STAGE_PROVIDER_CANDIDATE_SCHEMA);
+        assert_eq!(candidate_manifest["candidate_only"], true);
+        let expected_candidate_artifacts =
+            REQUIRED_FIRST_STAGE_OUTPUT_ROLES.len() + FIRST_STAGE_PROVIDER_RECEIPT_ARTIFACT_COUNT;
+        assert_eq!(candidate_manifest["candidate"]["artifact_count"], expected_candidate_artifacts);
+        assert_eq!(candidate_manifest["candidate"]["source_count"], FIRST_STAGE_TEST_SOURCE_COUNT);
+        let candidate_validation =
+            validate_materialized_rust_source_provider(&scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR)).unwrap();
+        assert_eq!(candidate_validation.validation.artifact_count, expected_candidate_artifacts);
+        assert_eq!(candidate_validation.validation.receipt_count, 1);
+        assert_eq!(candidate_validation.validation.source_count, FIRST_STAGE_TEST_SOURCE_COUNT);
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains("missing verified source"));
         assert!(script.contains("verified sources manifest"));
         assert!(script.contains("mrustc-0.12.0"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_BINARY));
+    }
+
+    #[test]
+    fn first_stage_provider_candidate_rejects_tampered_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "blocked recipe\n").unwrap();
+        write_test_route_plan(dir.path());
+        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let candidate = scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR);
+
+        fs::write(candidate.join(PROVIDER_RUSTC_RELATIVE_PATH), b"changed-rustc").unwrap();
+        let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
+
+        assert!(err.to_string().contains("digest mismatch"));
+        assert!(!output.exists());
     }
 
     #[test]
