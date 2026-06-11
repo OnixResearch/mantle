@@ -3433,11 +3433,10 @@ mod tests {
     #[test]
     fn bootstrap_rust_source_provider_fails_closed_without_output() {
         let dir = tempfile::tempdir().unwrap();
-        let recipe = dir.path().join("rust-source.ncl");
+        let recipe = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap/rust-source.ncl");
         let output_dir = dir.path().join("rust-provider");
         let store = dir.path().join("store");
         fs::create_dir(&store).unwrap();
-        fs::write(&recipe, "blocked recipe\n").unwrap();
 
         let err = cmd_bootstrap_rust_source_provider(&recipe, None, &output_dir, &store, false, false, None)
             .unwrap_err()
