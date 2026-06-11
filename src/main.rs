@@ -408,6 +408,10 @@ enum Command {
         #[arg(long, requires = "cargo_free")]
         toolchain_closure: Option<PathBuf>,
 
+        /// Validated source-built Rust provider directory for --cargo-free rustc binding.
+        #[arg(long, requires = "cargo_free")]
+        rust_source_provider: Option<PathBuf>,
+
         /// Target triple for --cargo-free rust-plan execution; repeatable.
         #[arg(long = "target", requires = "cargo_free")]
         targets: Vec<String>,
@@ -2519,6 +2523,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             out,
             rustc,
             toolchain_closure,
+            rust_source_provider,
             targets,
         } => run_self_build_command(
             ctx,
@@ -2541,6 +2546,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             out.as_deref(),
             rustc,
             toolchain_closure.as_deref(),
+            rust_source_provider.as_deref(),
             targets,
         ),
         _ => unreachable!("self-build helper called with non-self-build command"),
@@ -2569,6 +2575,7 @@ fn run_self_build_command(
     out: Option<&std::path::Path>,
     rustc: &std::path::Path,
     toolchain_closure: Option<&std::path::Path>,
+    rust_source_provider: Option<&std::path::Path>,
     targets: &[String],
 ) -> Result<(), RunError> {
     if cargo_free {
@@ -2596,6 +2603,7 @@ fn run_self_build_command(
             rustc,
             targets,
             toolchain_closure,
+            rust_source_provider,
             json: ctx.json,
         };
         if fixed_point {
@@ -3454,6 +3462,24 @@ mod tests {
     }
 
     #[test]
+    fn self_build_cli_accepts_cargo_free_rust_source_provider() {
+        let args = Args::parse_from([
+            "mantle",
+            "self-build",
+            "--cargo-free",
+            "--out",
+            "/tmp/mantle-out",
+            "--rust-source-provider",
+            "/tmp/rust-source-provider",
+        ]);
+        assert!(matches!(args.command, Command::SelfBuild {
+            cargo_free: true,
+            rust_source_provider: Some(_),
+            ..
+        }));
+    }
+
+    #[test]
     fn self_build_cli_accepts_cargo_free_target_triple() {
         let args = Args::parse_from([
             "mantle",
@@ -3475,6 +3501,20 @@ mod tests {
     fn self_build_cli_rejects_toolchain_closure_without_cargo_free() {
         let err =
             Args::try_parse_from(["mantle", "self-build", "--toolchain-closure", "/tmp/toolchain.json"]).unwrap_err();
+        let rendered = err.to_string();
+        assert!(rendered.contains("--cargo-free"));
+        assert!(rendered.contains("required"));
+    }
+
+    #[test]
+    fn self_build_cli_rejects_rust_source_provider_without_cargo_free() {
+        let err = Args::try_parse_from([
+            "mantle",
+            "self-build",
+            "--rust-source-provider",
+            "/tmp/rust-source-provider",
+        ])
+        .unwrap_err();
         let rendered = err.to_string();
         assert!(rendered.contains("--cargo-free"));
         assert!(rendered.contains("required"));

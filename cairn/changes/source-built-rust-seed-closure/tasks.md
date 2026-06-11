@@ -13,8 +13,8 @@
   - Blocked: `evidence/rust-source-provider-blocker.md` records the deterministic fail-closed blocker from `mantle bootstrap rust-source-provider`; no real provider output was created. The CLI can now validate/import an existing provider directory, but no non-fake Rust-from-source provider exists yet.
 - [x] [serial] Extend toolchain closure validation so Rust compiler/sysroot members can be promoted from seed exceptions to source-built members only when provider metadata and receipts are complete. r[rust_package_planning.source_built_rust_seed_closure]
   - Evidence: `src/source_toolchain_closure.rs` rejects prebuilt/rustup/Nix/wrapper provenance markers, missing provider roles, and observed artifact digest mismatches.
-- [ ] [serial] Thread the source-built Rust provider into Cargo-free one-shot and fixed-point proof commands while preserving host/target topology split behavior. r[rust_package_planning.source_built_rust_seed_closure]
-  - Blocked until a real provider exists; only the fail-closed bootstrap materializer surface is wired.
+- [x] [serial] Thread the source-built Rust provider into Cargo-free one-shot and fixed-point proof commands while preserving host/target topology split behavior. r[rust_package_planning.source_built_rust_seed_closure]
+  - Evidence: `evidence/rust-provider-cargo-free-threading-2026-06-10.md` records positive and negative provider binding tests, CLI parsing coverage, fixed-point summary coverage, and provider validation/smoke tests. The future provider still must be real source-built metadata, not a prebuilt wrapper.
 
 ## Verification
 
@@ -27,4 +27,4 @@
 - [ ] [serial] Run fixed-point Cargo-free proof and record whether `not-source-built-toolchain-closure` can be removed; if not, record exact remaining non-claims. r[rust_package_planning.source_built_rust_seed_closure]
   - Blocked: provider materialization fails closed; `not-source-built-toolchain-closure` remains.
 - [x] [serial] Run `cairn validate --root .` and tasks gate, then archive only after completed tasks cite durable evidence. r[rust_package_planning.source_built_rust_seed_closure]
-  - Evidence: `evidence/validation-refresh-2026-06-10.md` records fresh validation/task-gate output and confirms the change remains active because provider-backed materialization, smoke, and fixed-point proof tasks are still blocked.
+  - Evidence: `evidence/validation-refresh-2026-06-10.md` and `evidence/rust-provider-cargo-free-threading-2026-06-10.md` record validation/task-gate output and confirm the change remains active because provider-backed materialization, smoke, and fixed-point proof tasks are still blocked.

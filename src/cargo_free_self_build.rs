@@ -70,6 +70,10 @@ const SOURCE_DIGEST_FIELD: &str = "source_digest";
 const SOURCE_DIGEST_ALGORITHM_FIELD: &str = "algorithm";
 const RUSTC_SYSROOT_PRINT_ARG: &str = "sysroot";
 const TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD: &str = "source_built_toolchain_closure_policy_digest_blake3";
+const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source-provider-binding-v1";
+const RUST_SOURCE_PROVIDER_STATUS_ABSENT: &str = "absent";
+const RUST_SOURCE_PROVIDER_STATUS_VALIDATED: &str = "validated";
+const RUST_SOURCE_PROVIDER_REQUIRED_ROLE_COUNT: usize = 1;
 const SOURCE_DIGEST_VALUE_FIELD: &str = "value";
 const SUCCESS_EXIT_CODE: i32 = 0;
 const FALLBACK_ERROR_EXIT_CODE: i32 = 1;
@@ -88,6 +92,7 @@ pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) rustc: &'a Path,
     pub(crate) targets: &'a [String],
     pub(crate) toolchain_closure: Option<&'a Path>,
+    pub(crate) rust_source_provider: Option<&'a Path>,
     pub(crate) json: bool,
 }
 
@@ -96,6 +101,28 @@ struct LoadedToolchainClosure {
     status: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     manifest_path: Option<PathBuf>,
     manifest: Option<crate::source_toolchain_closure::ToolchainClosureManifest>,
+}
+
+#[derive(Clone, Debug)]
+struct LoadedRustSourceProvider {
+    status: RustSourceProviderBindingStatus,
+    rustc: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RustSourceProviderBindingStatus {
+    schema: &'static str,
+    status: String,
+    provider_dir: Option<PathBuf>,
+    metadata_path: Option<PathBuf>,
+    metadata_digest_blake3: Option<String>,
+    policy_digest_blake3: Option<String>,
+    host_triple: Option<String>,
+    target_triple: Option<String>,
+    artifact_count: Option<usize>,
+    source_count: Option<usize>,
+    receipt_count: Option<usize>,
+    rustc_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -237,6 +264,7 @@ struct FixedPointSummary {
     stage2: Option<FixedPointStageSummary>,
     rustc_compatibility: RustcCompatibilitySummary,
     source_built_toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: RustSourceProviderBindingStatus,
     blocker: Option<String>,
     non_claims: Vec<&'static str>,
 }
@@ -282,6 +310,7 @@ struct SelfBuildSummary {
     smoke_status_code: Option<i32>,
     blocker: Option<String>,
     source_built_toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: RustSourceProviderBindingStatus,
     non_claims: Vec<&'static str>,
 }
 
@@ -291,9 +320,11 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     write_non_claims(&paths.out_dir)?;
     write_cargo_shim(&paths.explicit_cargo_shim, &paths.marker_path)?;
     write_cargo_shim(&paths.path_cargo_shim, &paths.marker_path)?;
+    let loaded_rust_provider = load_rust_source_provider(options.rust_source_provider)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
+    let requested_rustc = selected_cargo_free_rustc(&loaded_rust_provider, options.rustc);
     let execution_toolchain =
-        prepare_execution_toolchain(&paths.guard_path_dir, options.rustc, &loaded_toolchain_closure)?;
+        prepare_execution_toolchain(&paths.guard_path_dir, requested_rustc, &loaded_toolchain_closure)?;
 
     let mut child =
         run_rust_plan_child(&paths, &execution_toolchain.rustc, options.targets, &execution_toolchain.path_env)?;
@@ -305,7 +336,7 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     if child.blocker.is_some() && produced.is_none() {
         write_blocked_smoke_outputs(&paths, child.blocker.as_deref())?;
     }
-    let summary = summarize(&paths, &child, produced.as_ref(), execution_toolchain.status);
+    let summary = summarize(&paths, &child, produced.as_ref(), execution_toolchain.status, loaded_rust_provider.status);
     write_summary(&paths.meta_path, &summary)?;
     print_summary(&summary, options.json)?;
 
@@ -320,14 +351,16 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let bundle_dir = absolutize(&root, options.out_dir);
     ensure_outside_root(&bundle_dir, &root)?;
     prepare_fixed_point_output_dir(&bundle_dir)?;
+    let loaded_rust_provider = load_rust_source_provider(options.rust_source_provider)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
-    let compatibility_rustc = prepare_rustc_for_compatibility(options.rustc, &loaded_toolchain_closure)?;
+    let requested_rustc = selected_cargo_free_rustc(&loaded_rust_provider, options.rustc);
+    let compatibility_rustc = prepare_rustc_for_compatibility(requested_rustc, &loaded_toolchain_closure)?;
     let compatibility = prepare_rustc_compatibility(&bundle_dir, &compatibility_rustc)?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc, options.targets)?;
     let toolchain_status =
         enforce_fixed_point_toolchain(&compatibility.summary.stage_rustc, &loaded_toolchain_closure)?;
     write_fixed_point_non_claims(&plan.bundle_dir)?;
-    write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_status)?;
+    write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_status, &loaded_rust_provider.status)?;
 
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let stage_policy_digest = toolchain_status.policy_digest_blake3.as_deref();
@@ -343,6 +376,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
             &plan,
             &compatibility.summary,
             &toolchain_status,
+            &loaded_rust_provider.status,
             stage1,
             None,
             BLOCKED_STATUS,
@@ -355,6 +389,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
             &plan,
             &compatibility.summary,
             &toolchain_status,
+            &loaded_rust_provider.status,
             stage1,
             None,
             BLOCKED_STATUS,
@@ -372,13 +407,23 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
             &plan,
             &compatibility.summary,
             &toolchain_status,
+            &loaded_rust_provider.status,
             stage1,
             Some(stage2),
             BLOCKED_STATUS,
         );
     }
     let status = fixed_point_status(&stage1, &stage2)?;
-    finish_fixed_point(options.json, &plan, &compatibility.summary, &toolchain_status, stage1, Some(stage2), status)
+    finish_fixed_point(
+        options.json,
+        &plan,
+        &compatibility.summary,
+        &toolchain_status,
+        &loaded_rust_provider.status,
+        stage1,
+        Some(stage2),
+        status,
+    )
 }
 
 fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
@@ -994,11 +1039,20 @@ fn finish_fixed_point(
     plan: &FixedPointPlan,
     compatibility: &RustcCompatibilitySummary,
     toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: &RustSourceProviderBindingStatus,
     stage1: FixedPointStageRun,
     stage2: Option<FixedPointStageRun>,
     status: &str,
 ) -> Result<(), RunError> {
-    let summary = fixed_point_summary(plan, compatibility, toolchain_closure, &stage1, stage2.as_ref(), status);
+    let summary = fixed_point_summary(
+        plan,
+        compatibility,
+        toolchain_closure,
+        rust_source_provider,
+        &stage1,
+        stage2.as_ref(),
+        status,
+    );
     write_summary(&plan.meta_path, &summary)?;
     print_fixed_point_summary(&summary, json_mode)?;
     if status == SUCCESS_STATUS {
@@ -1011,6 +1065,7 @@ fn fixed_point_summary(
     plan: &FixedPointPlan,
     compatibility: &RustcCompatibilitySummary,
     toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: &RustSourceProviderBindingStatus,
     stage1: &FixedPointStageRun,
     stage2: Option<&FixedPointStageRun>,
     status: &str,
@@ -1031,6 +1086,7 @@ fn fixed_point_summary(
             wrapper_blake3: compatibility.wrapper_blake3.clone(),
         },
         source_built_toolchain_closure: toolchain_closure.clone(),
+        rust_source_provider: rust_source_provider.clone(),
         blocker: fixed_point_blocker(stage1, stage2, status),
         non_claims: fixed_point_non_claims(),
     }
@@ -1199,6 +1255,7 @@ fn summarize(
     child: &ChildRun,
     produced: Option<&ProducedBinary>,
     toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: RustSourceProviderBindingStatus,
 ) -> SelfBuildSummary {
     let receipt = child.receipt.as_ref();
     SelfBuildSummary {
@@ -1225,6 +1282,7 @@ fn summarize(
         smoke_status_code: produced.and_then(|value| value.smoke_status_code),
         blocker: child.blocker.clone(),
         source_built_toolchain_closure: toolchain_closure,
+        rust_source_provider,
         non_claims: vec![
             "not-crunch-bootstrap",
             "not-release-reproducibility",
@@ -1706,6 +1764,91 @@ fn fixed_point_non_claims() -> Vec<&'static str> {
     ]
 }
 
+fn selected_cargo_free_rustc<'a>(loaded_provider: &'a LoadedRustSourceProvider, fallback_rustc: &'a Path) -> &'a Path {
+    loaded_provider.rustc.as_deref().unwrap_or(fallback_rustc)
+}
+
+fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSourceProvider, RunError> {
+    let Some(provider_dir) = provider_dir else {
+        return Ok(LoadedRustSourceProvider {
+            status: absent_rust_source_provider_binding(),
+            rustc: None,
+        });
+    };
+    let provider_dir = fs::canonicalize(provider_dir)
+        .map_err(|err| RunError::Build(format!("read --rust-source-provider {}: {err}", provider_dir.display())))?;
+    let validation =
+        crate::rust_source_provider::validate_materialized_rust_source_provider(&provider_dir).map_err(|err| {
+            RunError::Build(format!(
+                "source-built Rust provider blocked: --rust-source-provider {} failed validation: {err}",
+                provider_dir.display()
+            ))
+        })?;
+    let rustc_path = rust_provider_role_path(
+        &provider_dir,
+        &validation.metadata,
+        crate::source_toolchain_closure::RustProviderRole::Rustc,
+    )?;
+    require_executable(&rustc_path)?;
+    Ok(LoadedRustSourceProvider {
+        status: validated_rust_source_provider_binding(&provider_dir, &validation, &rustc_path),
+        rustc: Some(rustc_path),
+    })
+}
+
+fn absent_rust_source_provider_binding() -> RustSourceProviderBindingStatus {
+    RustSourceProviderBindingStatus {
+        schema: RUST_SOURCE_PROVIDER_BINDING_SCHEMA,
+        status: RUST_SOURCE_PROVIDER_STATUS_ABSENT.to_string(),
+        provider_dir: None,
+        metadata_path: None,
+        metadata_digest_blake3: None,
+        policy_digest_blake3: None,
+        host_triple: None,
+        target_triple: None,
+        artifact_count: None,
+        source_count: None,
+        receipt_count: None,
+        rustc_path: None,
+    }
+}
+
+fn validated_rust_source_provider_binding(
+    provider_dir: &Path,
+    validation: &crate::rust_source_provider::RustSourceProviderDirectoryValidation,
+    rustc_path: &Path,
+) -> RustSourceProviderBindingStatus {
+    RustSourceProviderBindingStatus {
+        schema: RUST_SOURCE_PROVIDER_BINDING_SCHEMA,
+        status: RUST_SOURCE_PROVIDER_STATUS_VALIDATED.to_string(),
+        provider_dir: Some(provider_dir.to_path_buf()),
+        metadata_path: Some(validation.metadata_path.clone()),
+        metadata_digest_blake3: Some(validation.metadata_digest_blake3.clone()),
+        policy_digest_blake3: Some(validation.validation.policy_digest_blake3.clone()),
+        host_triple: Some(validation.metadata.host_triple.clone()),
+        target_triple: Some(validation.metadata.target_triple.clone()),
+        artifact_count: Some(validation.validation.artifact_count),
+        source_count: Some(validation.validation.source_count),
+        receipt_count: Some(validation.validation.receipt_count),
+        rustc_path: Some(rustc_path.to_path_buf()),
+    }
+}
+
+fn rust_provider_role_path(
+    provider_dir: &Path,
+    metadata: &crate::source_toolchain_closure::RustSourceProviderMetadata,
+    role: crate::source_toolchain_closure::RustProviderRole,
+) -> Result<PathBuf, RunError> {
+    let artifacts = metadata.artifacts.iter().filter(|artifact| artifact.role == role).collect::<Vec<_>>();
+    if artifacts.len() != RUST_SOURCE_PROVIDER_REQUIRED_ROLE_COUNT {
+        return Err(RunError::Build(format!(
+            "source-built Rust provider blocked: expected one {role:?} artifact, found {}",
+            artifacts.len()
+        )));
+    }
+    Ok(provider_dir.join(&artifacts[0].path))
+}
+
 fn load_source_built_toolchain_closure(manifest_path: Option<&Path>) -> Result<LoadedToolchainClosure, RunError> {
     let Some(manifest_path) = manifest_path else {
         return Ok(LoadedToolchainClosure {
@@ -1736,6 +1879,7 @@ fn write_fixed_point_preflight(
     plan: &FixedPointPlan,
     compatibility: &RustcCompatibilitySummary,
     toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: &RustSourceProviderBindingStatus,
 ) -> Result<(), RunError> {
     let value = json!({
         "schema": plan.schema,
@@ -1744,6 +1888,7 @@ fn write_fixed_point_preflight(
         "shared_execution_dir": plan.shared_execution_dir,
         "rustc_compatibility": compatibility,
         "source_built_toolchain_closure": toolchain_closure,
+        "rust_source_provider": rust_source_provider,
     });
     let bytes = serde_json::to_vec_pretty(&value).map_err(|err| internal(format!("serialize preflight: {err}")))?;
     write_bytes(&plan.preflight_path, &bytes)
@@ -1798,6 +1943,18 @@ mod tests {
     const FIXED_POINT_TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const FIXED_POINT_TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT: usize = 4;
+    const RUST_PROVIDER_HOST_TRIPLE: &str = "x86_64-unknown-linux-gnu";
+    const RUST_PROVIDER_TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
+    const RUST_PROVIDER_SOURCE_ID: &str = "rust-src";
+    const RUST_PROVIDER_RECEIPT_ID: &str = "build-receipt";
+    const RUST_PROVIDER_BUILD_RECIPE: &str = "bootstrap/rust-source.ncl";
+    const RUST_PROVIDER_STAGE_PROGRAM: &str = "mantle-rust-source-stage";
+    const RUST_PROVIDER_RUSTC_PATH: &str = "bin/rustc";
+    const RUST_PROVIDER_CARGO_PATH: &str = "bin/cargo";
+    const RUST_PROVIDER_HOST_RUSTLIB_PATH: &str = "lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib";
+    const RUST_PROVIDER_TARGET_RUSTLIB_PATH: &str = "lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib";
+    const RUST_PROVIDER_RECEIPT_PATH: &str = "share/mantle-rust-provider/receipts/build.json";
+    const RUST_PROVIDER_METADATA_PATH: &str = crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_METADATA_PATH;
 
     #[test]
     fn safe_path_component_replaces_unsafe_path_bytes() {
@@ -1988,14 +2145,79 @@ mod tests {
         let toolchain_closure = enforced_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
         let stage1 = fixed_point_stage_run(STAGE1_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
         let stage2 = fixed_point_stage_run(STAGE2_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
+        let rust_source_provider = absent_rust_source_provider_binding();
 
-        let summary =
-            fixed_point_summary(&plan, &compatibility, &toolchain_closure, &stage1, Some(&stage2), SUCCESS_STATUS);
+        let summary = fixed_point_summary(
+            &plan,
+            &compatibility,
+            &toolchain_closure,
+            &rust_source_provider,
+            &stage1,
+            Some(&stage2),
+            SUCCESS_STATUS,
+        );
 
         assert!(summary.fixed_point);
         assert!(!summary.source_built_toolchain_closure.claim);
         assert_eq!(summary.source_built_toolchain_closure.non_claim, "not-source-built-toolchain-closure");
+        assert_eq!(summary.rust_source_provider.status, RUST_SOURCE_PROVIDER_STATUS_ABSENT);
         assert!(summary.non_claims.contains(&"not-source-built-toolchain-closure"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rust_source_provider_binding_uses_validated_provider_rustc() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        fs::create_dir(&provider_dir).unwrap();
+        write_fake_rust_source_provider(&provider_dir, false);
+
+        let loaded = load_rust_source_provider(Some(&provider_dir)).unwrap();
+        let expected_provider_dir = fs::canonicalize(&provider_dir).unwrap();
+        let expected_rustc = expected_provider_dir.join("bin/rustc");
+
+        assert_eq!(loaded.status.schema, RUST_SOURCE_PROVIDER_BINDING_SCHEMA);
+        assert_eq!(loaded.status.status, RUST_SOURCE_PROVIDER_STATUS_VALIDATED);
+        assert_eq!(loaded.status.provider_dir.as_deref(), Some(expected_provider_dir.as_path()));
+        assert_eq!(loaded.status.rustc_path.as_deref(), Some(expected_rustc.as_path()));
+        assert_eq!(loaded.status.host_triple.as_deref(), Some(RUST_PROVIDER_HOST_TRIPLE));
+        assert_eq!(loaded.status.target_triple.as_deref(), Some(RUST_PROVIDER_TARGET_TRIPLE));
+        assert_eq!(loaded.rustc.as_deref(), Some(expected_rustc.as_path()));
+    }
+
+    #[test]
+    fn rust_source_provider_selection_prefers_validated_provider_and_keeps_fallback() {
+        let fallback = PathBuf::from("/fallback/rustc");
+        let provider_rustc = PathBuf::from("/provider/bin/rustc");
+        let absent = LoadedRustSourceProvider {
+            status: absent_rust_source_provider_binding(),
+            rustc: None,
+        };
+        let validated = LoadedRustSourceProvider {
+            status: absent_rust_source_provider_binding(),
+            rustc: Some(provider_rustc.clone()),
+        };
+
+        assert_eq!(selected_cargo_free_rustc(&absent, &fallback), fallback.as_path());
+        assert_ne!(selected_cargo_free_rustc(&absent, &fallback), provider_rustc.as_path());
+        assert_eq!(selected_cargo_free_rustc(&validated, &fallback), provider_rustc.as_path());
+        assert_ne!(selected_cargo_free_rustc(&validated, &fallback), fallback.as_path());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rust_source_provider_binding_rejects_prebuilt_provider_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        fs::create_dir(&provider_dir).unwrap();
+        write_fake_rust_source_provider(&provider_dir, true);
+
+        let err = load_rust_source_provider(Some(&provider_dir)).unwrap_err();
+        let message = err.message();
+
+        assert!(message.contains("source-built Rust provider blocked"));
+        assert!(message.contains("failed validation"));
+        assert!(message.contains("not source-built"));
     }
 
     fn fixed_point_stage_run(
@@ -2186,6 +2408,172 @@ mod tests {
         ranlib: PathBuf,
         sysroot: PathBuf,
         pkg_config: Option<PathBuf>,
+    }
+
+    #[cfg(unix)]
+    fn write_fake_rust_source_provider(root: &Path, prebuilt: bool) {
+        write_provider_bytes(root, RUST_PROVIDER_RUSTC_PATH, b"rustc");
+        set_executable(&root.join(RUST_PROVIDER_RUSTC_PATH)).unwrap();
+        write_provider_bytes(root, RUST_PROVIDER_CARGO_PATH, b"cargo");
+        write_provider_bytes(root, RUST_PROVIDER_HOST_RUSTLIB_PATH, b"host-std");
+        write_provider_bytes(root, RUST_PROVIDER_TARGET_RUSTLIB_PATH, b"target-std");
+
+        let receipt = fake_rust_provider_receipt(root);
+        write_provider_json(&root.join(RUST_PROVIDER_RECEIPT_PATH), &receipt);
+        let metadata = fake_rust_provider_metadata(root, prebuilt);
+        write_provider_json(&root.join(RUST_PROVIDER_METADATA_PATH), &metadata);
+    }
+
+    #[cfg(unix)]
+    fn fake_rust_provider_receipt(root: &Path) -> crate::source_toolchain_closure::RustSourceProviderBuildReceipt {
+        use crate::source_toolchain_closure::*;
+
+        RustSourceProviderBuildReceipt {
+            schema: RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA.to_string(),
+            receipt_id: RUST_PROVIDER_RECEIPT_ID.to_string(),
+            provider_id: RUST_SOURCE_PROVIDER_ID.to_string(),
+            host_triple: RUST_PROVIDER_HOST_TRIPLE.to_string(),
+            target_triple: RUST_PROVIDER_TARGET_TRIPLE.to_string(),
+            source_ids: vec![RUST_PROVIDER_SOURCE_ID.to_string()],
+            output_artifacts: fake_rust_provider_receipt_artifacts(root),
+            build_steps: vec![RustProviderReceiptStep {
+                name: "compile-rust-from-source".to_string(),
+                program: RUST_PROVIDER_STAGE_PROGRAM.to_string(),
+                arguments: vec![RUST_PROVIDER_BUILD_RECIPE.to_string()],
+            }],
+        }
+    }
+
+    #[cfg(unix)]
+    fn fake_rust_provider_metadata(
+        root: &Path,
+        prebuilt: bool,
+    ) -> crate::source_toolchain_closure::RustSourceProviderMetadata {
+        use crate::source_toolchain_closure::*;
+
+        RustSourceProviderMetadata {
+            schema: RUST_SOURCE_PROVIDER_SCHEMA.to_string(),
+            provider_id: RUST_SOURCE_PROVIDER_ID.to_string(),
+            host_triple: RUST_PROVIDER_HOST_TRIPLE.to_string(),
+            target_triple: RUST_PROVIDER_TARGET_TRIPLE.to_string(),
+            provenance: RustSourceProviderProvenance {
+                source_built: !prebuilt,
+                uses_prebuilt_rust: prebuilt,
+                build_recipe: RUST_PROVIDER_BUILD_RECIPE.to_string(),
+            },
+            sources: vec![RustProviderSourceIdentity {
+                id: RUST_PROVIDER_SOURCE_ID.to_string(),
+                kind: ToolchainSourceKind::Tarball,
+                name: "rust-compiler-source".to_string(),
+                digest_blake3: blake3::hash(b"source").to_hex().to_string(),
+            }],
+            build_receipts: vec![RustProviderBuildReceiptIdentity {
+                id: RUST_PROVIDER_RECEIPT_ID.to_string(),
+                kind: ToolchainBuildReceiptKind::MantleDerivation,
+                name: "rust-source-build-receipt".to_string(),
+                path: RUST_PROVIDER_RECEIPT_PATH.to_string(),
+                digest_blake3: blake3_file(&root.join(RUST_PROVIDER_RECEIPT_PATH)).unwrap(),
+            }],
+            artifacts: fake_rust_provider_artifacts(root),
+        }
+    }
+
+    #[cfg(unix)]
+    fn fake_rust_provider_artifacts(root: &Path) -> Vec<crate::source_toolchain_closure::RustProviderArtifact> {
+        use crate::source_toolchain_closure::RustProviderRole;
+
+        vec![
+            rust_provider_artifact(root, RustProviderRole::Rustc, "rustc", RUST_PROVIDER_RUSTC_PATH),
+            rust_provider_artifact(root, RustProviderRole::Cargo, "cargo", RUST_PROVIDER_CARGO_PATH),
+            rust_provider_artifact(
+                root,
+                RustProviderRole::HostRustlib,
+                "host-rustlib",
+                RUST_PROVIDER_HOST_RUSTLIB_PATH,
+            ),
+            rust_provider_artifact(
+                root,
+                RustProviderRole::TargetRustlib,
+                "target-rustlib",
+                RUST_PROVIDER_TARGET_RUSTLIB_PATH,
+            ),
+            rust_provider_artifact(
+                root,
+                RustProviderRole::ProviderReceipt,
+                RUST_PROVIDER_RECEIPT_ID,
+                RUST_PROVIDER_RECEIPT_PATH,
+            ),
+        ]
+    }
+
+    #[cfg(unix)]
+    fn fake_rust_provider_receipt_artifacts(
+        root: &Path,
+    ) -> Vec<crate::source_toolchain_closure::RustProviderReceiptArtifact> {
+        use crate::source_toolchain_closure::RustProviderRole;
+
+        vec![
+            rust_provider_receipt_artifact(root, RustProviderRole::Rustc, "rustc", RUST_PROVIDER_RUSTC_PATH),
+            rust_provider_receipt_artifact(root, RustProviderRole::Cargo, "cargo", RUST_PROVIDER_CARGO_PATH),
+            rust_provider_receipt_artifact(
+                root,
+                RustProviderRole::HostRustlib,
+                "host-rustlib",
+                RUST_PROVIDER_HOST_RUSTLIB_PATH,
+            ),
+            rust_provider_receipt_artifact(
+                root,
+                RustProviderRole::TargetRustlib,
+                "target-rustlib",
+                RUST_PROVIDER_TARGET_RUSTLIB_PATH,
+            ),
+        ]
+    }
+
+    #[cfg(unix)]
+    fn rust_provider_artifact(
+        root: &Path,
+        role: crate::source_toolchain_closure::RustProviderRole,
+        name: &str,
+        path: &str,
+    ) -> crate::source_toolchain_closure::RustProviderArtifact {
+        crate::source_toolchain_closure::RustProviderArtifact {
+            role,
+            name: name.to_string(),
+            path: path.to_string(),
+            content_digest_blake3: blake3_file(&root.join(path)).unwrap(),
+            source_id: "rust-src".to_string(),
+            build_receipt_id: "build-receipt".to_string(),
+        }
+    }
+
+    #[cfg(unix)]
+    fn rust_provider_receipt_artifact(
+        root: &Path,
+        role: crate::source_toolchain_closure::RustProviderRole,
+        name: &str,
+        path: &str,
+    ) -> crate::source_toolchain_closure::RustProviderReceiptArtifact {
+        crate::source_toolchain_closure::RustProviderReceiptArtifact {
+            role,
+            name: name.to_string(),
+            path: path.to_string(),
+            content_digest_blake3: blake3_file(&root.join(path)).unwrap(),
+        }
+    }
+
+    #[cfg(unix)]
+    fn write_provider_bytes(root: &Path, relative: &str, bytes: &[u8]) {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn write_provider_json<T: serde::Serialize>(path: &Path, value: &T) {
+        let bytes = serde_json::to_vec_pretty(value).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
     }
 
     #[cfg(unix)]
