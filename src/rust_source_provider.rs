@@ -37,6 +37,9 @@ const FIRST_STAGE_PLAN_SCHEMA: &str = "mantle-rust-source-provider-first-stage-p
 const FIRST_STAGE_PLAN_FILE: &str = "mrustc-first-stage-plan.json";
 const FIRST_STAGE_SOURCES_MANIFEST_SCHEMA: &str = "mantle-rust-source-provider-first-stage-sources-v1";
 const FIRST_STAGE_SOURCES_MANIFEST_FILE: &str = "mrustc-first-stage-sources.json";
+const FIRST_STAGE_BUILD_MANIFEST_SCHEMA: &str = "mantle-rust-source-provider-first-stage-build-v1";
+const FIRST_STAGE_BUILD_MANIFEST_FILE: &str = "mrustc-first-stage-build.json";
+const FIRST_STAGE_BUILD_LOG_FILE: &str = "mrustc-first-stage-build.log";
 const FIRST_STAGE_SCRIPT_FILE: &str = "run-mrustc-first-stage.sh";
 const FIRST_STAGE_ARCHIVE_DIR: &str = "archives";
 const FIRST_STAGE_SOURCE_DIR: &str = "sources";
@@ -45,7 +48,7 @@ const FIRST_STAGE_SOURCE_ARCHIVE_EXTENSION: &str = "tar.gz";
 const FIRST_STAGE_TAR_GZ_EXTENSION: &str = ".tar.gz";
 const FIRST_STAGE_TGZ_EXTENSION: &str = ".tgz";
 const FIRST_STAGE_MISSING_SOURCE_EXIT_CODE: i32 = 2;
-const FIRST_STAGE_NOT_IMPLEMENTED_EXIT_CODE: i32 = 1;
+const FIRST_STAGE_BUILD_FAILED_EXIT_CODE: i32 = 3;
 const FIRST_STAGE_FETCH_TIMEOUT_SECS: u64 = 600;
 const FIRST_STAGE_FETCH_MAX_RETRIES: u32 = 3;
 const FIRST_STAGE_FETCH_RETRY_BASE_DELAY_MS: u64 = 2_000;
@@ -54,6 +57,16 @@ const BYTES_PER_KIB: u64 = 1_024;
 const BYTES_PER_MIB: u64 = BYTES_PER_KIB * BYTES_PER_KIB;
 const FIRST_STAGE_FETCH_MAX_BYTES: u64 = FIRST_STAGE_FETCH_MAX_MIB * BYTES_PER_MIB;
 const FIRST_STAGE_ARCHIVE_MAX_ENTRIES: u32 = 500_000;
+const FIRST_STAGE_MRUSTC_SOURCE_PREFIX: &str = "mrustc-";
+const FIRST_STAGE_RUST_SOURCE_PREFIX: &str = "rust-";
+const FIRST_STAGE_MRUSTC_BINARY: &str = "bin/mrustc";
+const FIRST_STAGE_MINICARGO_BINARY: &str = "bin/minicargo";
+const FIRST_STAGE_MINICARGO_MAKEFILE: &str = "minicargo.mk";
+const FIRST_STAGE_MAKEFILE: &str = "Makefile";
+const FIRST_STAGE_MAKE_PROGRAM: &str = "make";
+const FIRST_STAGE_COPY_PROGRAM: &str = "cp";
+const FIRST_STAGE_CXXFLAGS: &str = "-g0 -O2 -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_NONE";
+const FIRST_STAGE_MAKE_FALLBACK_GLOB: &str = "/nix/store/*-gnumake-*/bin/make /nix/store/*-gnumake-static-*/bin/make";
 const REQUIRED_FIRST_STAGE_OUTPUT_ROLES: [RustProviderRole; 4] = [
     RustProviderRole::Rustc,
     RustProviderRole::Cargo,
@@ -159,6 +172,8 @@ struct RustSourceProviderFirstStageBoundary {
     output_dir: PathBuf,
     plan_path: PathBuf,
     sources_manifest_path: PathBuf,
+    build_manifest_path: PathBuf,
+    build_log_path: PathBuf,
     script_path: PathBuf,
 }
 
@@ -171,6 +186,27 @@ struct RustSourceProviderFirstStageSourceAcquisition {
     extracted_path: PathBuf,
     extracted_digest_blake3: String,
     archive_entry_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct RustSourceProviderFirstStageBuild {
+    stage_id: String,
+    script_path: PathBuf,
+    log_path: PathBuf,
+    mrustc_path: PathBuf,
+    mrustc_digest_blake3: String,
+    minicargo_path: PathBuf,
+    minicargo_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RustSourceProviderFirstStageBuildSources {
+    mrustc_id: String,
+    rust_id: String,
+    mrustc_path: PathBuf,
+    rust_path: PathBuf,
+    mrustc_archive_path: PathBuf,
+    rust_archive_path: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,6 +228,7 @@ pub(crate) enum RustSourceProviderError {
     Digest(String),
     Fetch(String),
     Extract(String),
+    Build(String),
     Copy(String),
     Smoke(String),
     Blocked {
@@ -215,6 +252,7 @@ impl std::fmt::Display for RustSourceProviderError {
             Self::Digest(message) => write!(formatter, "digest: {message}"),
             Self::Fetch(message) => write!(formatter, "fetch: {message}"),
             Self::Extract(message) => write!(formatter, "extract: {message}"),
+            Self::Build(message) => write!(formatter, "build: {message}"),
             Self::Copy(message) => write!(formatter, "copy: {message}"),
             Self::Smoke(message) => write!(formatter, "smoke: {message}"),
             Self::Blocked {
@@ -269,6 +307,8 @@ pub(crate) fn materialize_rust_source_provider(
     write_first_stage_boundary(&boundary)?;
     let first_stage_sources = acquire_first_stage_sources(&boundary, verbose)?;
     write_first_stage_sources_manifest(&boundary, &first_stage_sources)?;
+    let first_stage_build = run_first_stage_build(&boundary, verbose)?;
+    write_first_stage_build_manifest(&boundary, &first_stage_build)?;
     if verbose {
         eprintln!("Rust source provider recipe: {}", plan.recipe_path.display());
         eprintln!("  recipe_digest_blake3: {}", plan.recipe_digest_blake3);
@@ -279,6 +319,8 @@ pub(crate) fn materialize_rust_source_provider(
         eprintln!("  first_stage_script: {}", boundary.script_path.display());
         eprintln!("  first_stage_plan: {}", boundary.plan_path.display());
         eprintln!("  first_stage_sources: {}", boundary.sources_manifest_path.display());
+        eprintln!("  first_stage_build: {}", boundary.build_manifest_path.display());
+        eprintln!("  first_stage_build_log: {}", boundary.build_log_path.display());
         eprintln!("  planned_output: {}", plan.output_dir.display());
         eprintln!("  planned_scratch: {}", plan.scratch_dir.display());
     }
@@ -596,6 +638,8 @@ fn prepare_first_stage_boundary(
         output_dir: materialization.output_dir.clone(),
         plan_path: materialization.scratch_dir.join(FIRST_STAGE_PLAN_FILE),
         sources_manifest_path: materialization.scratch_dir.join(FIRST_STAGE_SOURCES_MANIFEST_FILE),
+        build_manifest_path: materialization.scratch_dir.join(FIRST_STAGE_BUILD_MANIFEST_FILE),
+        build_log_path: materialization.scratch_dir.join(FIRST_STAGE_BUILD_LOG_FILE),
         script_path: materialization.scratch_dir.join(FIRST_STAGE_SCRIPT_FILE),
     })
 }
@@ -672,7 +716,7 @@ fn write_first_stage_boundary(boundary: &RustSourceProviderFirstStageBoundary) -
     fs::write(&boundary.plan_path, plan_bytes).map_err(|err| {
         RustSourceProviderError::Read(format!("write first stage plan {}: {err}", boundary.plan_path.display()))
     })?;
-    let script = first_stage_boundary_script(boundary);
+    let script = first_stage_boundary_script(boundary)?;
     fs::write(&boundary.script_path, script).map_err(|err| {
         RustSourceProviderError::Read(format!("write first stage script {}: {err}", boundary.script_path.display()))
     })?;
@@ -704,6 +748,8 @@ fn first_stage_boundary_manifest(
             "output_dir": boundary.output_dir.display().to_string(),
             "script": boundary.script_path.display().to_string(),
             "source_manifest": boundary.sources_manifest_path.display().to_string(),
+            "build_manifest": boundary.build_manifest_path.display().to_string(),
+            "build_log": boundary.build_log_path.display().to_string(),
         },
         "blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
     });
@@ -797,6 +843,141 @@ fn write_first_stage_sources_manifest(
             boundary.sources_manifest_path.display()
         ))
     })
+}
+
+fn run_first_stage_build(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    verbose: bool,
+) -> Result<RustSourceProviderFirstStageBuild, RustSourceProviderError> {
+    let build_sources = first_stage_build_sources(boundary)?;
+    validate_first_stage_build_inputs(&build_sources)?;
+    if verbose {
+        eprintln!("  first_stage_build_script: {}", boundary.script_path.display());
+        eprintln!("  first_stage_build_log: {}", boundary.build_log_path.display());
+    }
+    let log = File::create(&boundary.build_log_path).map_err(|err| {
+        RustSourceProviderError::Build(format!("create {}: {err}", boundary.build_log_path.display()))
+    })?;
+    let status = Command::new(&boundary.script_path)
+        .stdout(log.try_clone().map_err(|err| {
+            RustSourceProviderError::Build(format!("clone {}: {err}", boundary.build_log_path.display()))
+        })?)
+        .stderr(log)
+        .status()
+        .map_err(|err| RustSourceProviderError::Build(format!("launch {}: {err}", boundary.script_path.display())))?;
+    if !status.success() {
+        let log_tail = fs::read(&boundary.build_log_path)
+            .map(|bytes| bounded_output_text(&bytes))
+            .unwrap_or_else(|err| format!("<failed to read build log: {err}>"));
+        return Err(RustSourceProviderError::Build(format!(
+            "first-stage mrustc/minicargo build failed with status {status}; log={}; tail={log_tail:?}",
+            boundary.build_log_path.display()
+        )));
+    }
+    let mrustc_path = build_sources.mrustc_path.join(FIRST_STAGE_MRUSTC_BINARY);
+    let minicargo_path = build_sources.mrustc_path.join(FIRST_STAGE_MINICARGO_BINARY);
+    validate_first_stage_build_product(&mrustc_path, FIRST_STAGE_MRUSTC_BINARY)?;
+    validate_first_stage_build_product(&minicargo_path, FIRST_STAGE_MINICARGO_BINARY)?;
+    Ok(RustSourceProviderFirstStageBuild {
+        stage_id: boundary.stage_id.clone(),
+        script_path: boundary.script_path.clone(),
+        log_path: boundary.build_log_path.clone(),
+        mrustc_digest_blake3: file_digest_blake3(&mrustc_path)?,
+        minicargo_digest_blake3: file_digest_blake3(&minicargo_path)?,
+        mrustc_path,
+        minicargo_path,
+    })
+}
+
+fn write_first_stage_build_manifest(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    build: &RustSourceProviderFirstStageBuild,
+) -> Result<(), RustSourceProviderError> {
+    let manifest = serde_json::json!({
+        "schema": FIRST_STAGE_BUILD_MANIFEST_SCHEMA,
+        "stage_id": boundary.stage_id,
+        "route_plan_digest_blake3": boundary.route_plan_digest_blake3,
+        "route_policy_digest_blake3": boundary.route_policy_digest_blake3,
+        "build": build,
+        "next_blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
+    });
+    let bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|err| RustSourceProviderError::Parse(format!("serialize first stage build manifest: {err}")))?;
+    fs::write(&boundary.build_manifest_path, bytes).map_err(|err| {
+        RustSourceProviderError::Read(format!(
+            "write first stage build manifest {}: {err}",
+            boundary.build_manifest_path.display()
+        ))
+    })
+}
+
+fn first_stage_build_sources(
+    boundary: &RustSourceProviderFirstStageBoundary,
+) -> Result<RustSourceProviderFirstStageBuildSources, RustSourceProviderError> {
+    let mrustc = select_first_stage_source(boundary, FIRST_STAGE_MRUSTC_SOURCE_PREFIX)?;
+    let rust = select_first_stage_source(boundary, FIRST_STAGE_RUST_SOURCE_PREFIX)?;
+    let mrustc_id = safe_source_component(&mrustc.id)?;
+    let rust_id = safe_source_component(&rust.id)?;
+    Ok(RustSourceProviderFirstStageBuildSources {
+        mrustc_path: boundary.source_dir.join(&mrustc_id),
+        rust_path: boundary.source_dir.join(&rust_id),
+        mrustc_archive_path: boundary.archive_dir.join(format!("{mrustc_id}.{FIRST_STAGE_SOURCE_ARCHIVE_EXTENSION}")),
+        rust_archive_path: boundary.archive_dir.join(format!("{rust_id}.{FIRST_STAGE_SOURCE_ARCHIVE_EXTENSION}")),
+        mrustc_id,
+        rust_id,
+    })
+}
+
+fn select_first_stage_source<'a>(
+    boundary: &'a RustSourceProviderFirstStageBoundary,
+    id_prefix: &str,
+) -> Result<&'a RustSourceProviderBootstrapSource, RustSourceProviderError> {
+    let mut matches = boundary.sources.iter().filter(|source| source.id.starts_with(id_prefix));
+    let Some(source) = matches.next() else {
+        return Err(RustSourceProviderError::Build(format!(
+            "first stage '{}' has no source with id prefix '{id_prefix}'",
+            boundary.stage_id
+        )));
+    };
+    if matches.next().is_none() {
+        return Ok(source);
+    }
+    Err(RustSourceProviderError::Build(format!(
+        "first stage '{}' has multiple sources with id prefix '{id_prefix}'",
+        boundary.stage_id
+    )))
+}
+
+fn validate_first_stage_build_inputs(
+    sources: &RustSourceProviderFirstStageBuildSources,
+) -> Result<(), RustSourceProviderError> {
+    require_first_stage_path(&sources.mrustc_path, "mrustc source dir", true)?;
+    require_first_stage_path(&sources.rust_path, "Rust source dir", true)?;
+    require_first_stage_path(&sources.mrustc_archive_path, "mrustc source archive", false)?;
+    require_first_stage_path(&sources.rust_archive_path, "Rust source archive", false)?;
+    require_first_stage_path(&sources.mrustc_path.join(FIRST_STAGE_MAKEFILE), "mrustc Makefile", false)?;
+    require_first_stage_path(
+        &sources.mrustc_path.join(FIRST_STAGE_MINICARGO_MAKEFILE),
+        "mrustc minicargo makefile",
+        false,
+    )
+}
+
+fn require_first_stage_path(path: &Path, label: &str, directory: bool) -> Result<(), RustSourceProviderError> {
+    if directory && path.is_dir() {
+        return Ok(());
+    }
+    if !directory && path.is_file() {
+        return Ok(());
+    }
+    Err(RustSourceProviderError::Build(format!("missing {label}: {}", path.display())))
+}
+
+fn validate_first_stage_build_product(path: &Path, label: &str) -> Result<(), RustSourceProviderError> {
+    if path.is_file() {
+        return Ok(());
+    }
+    Err(RustSourceProviderError::Build(format!("missing first-stage product {label}: {}", path.display())))
 }
 
 fn fetch_first_stage_source_bytes(
@@ -994,16 +1175,49 @@ fn sha256_hex(bytes: &[u8]) -> String {
     data_encoding::HEXLOWER.encode(&<sha2::Sha256 as sha2::Digest>::finalize(hasher))
 }
 
-fn first_stage_boundary_script(boundary: &RustSourceProviderFirstStageBoundary) -> String {
+fn first_stage_boundary_script(
+    boundary: &RustSourceProviderFirstStageBoundary,
+) -> Result<String, RustSourceProviderError> {
+    let build_sources = first_stage_build_sources(boundary)?;
     let mut script = String::new();
+    push_first_stage_script_header(&mut script, boundary, &build_sources);
+    push_first_stage_source_checks(&mut script, boundary);
+    push_first_stage_tool_checks(&mut script);
+    push_first_stage_build_commands(&mut script);
+    Ok(script)
+}
+
+fn push_first_stage_script_header(
+    script: &mut String,
+    boundary: &RustSourceProviderFirstStageBoundary,
+    build_sources: &RustSourceProviderFirstStageBuildSources,
+) {
     script.push_str("#!/bin/sh\n");
     script.push_str("set -eu\n");
     script.push_str(&format!("STAGE_ID={}\n", shell_quote(&boundary.stage_id)));
+    script.push_str(&format!("RUSTC_VERSION={}\n", shell_quote(&boundary.rust_version)));
     script.push_str(&format!("SOURCE_DIR={}\n", shell_quote(&boundary.source_dir.display().to_string())));
     script.push_str(&format!("BUILD_DIR={}\n", shell_quote(&boundary.build_dir.display().to_string())));
     script.push_str(&format!("OUTPUT_DIR={}\n", shell_quote(&boundary.output_dir.display().to_string())));
+    script.push_str(&format!("ARCHIVE_DIR={}\n", shell_quote(&boundary.archive_dir.display().to_string())));
+    script.push_str(&format!("MRUSTC_SOURCE_ID={}\n", shell_quote(&build_sources.mrustc_id)));
+    script.push_str(&format!("RUST_SOURCE_ID={}\n", shell_quote(&build_sources.rust_id)));
+    script.push_str(&format!("MRUSTC_SOURCE={}\n", shell_quote(&build_sources.mrustc_path.display().to_string())));
+    script.push_str(&format!("RUST_SOURCE={}\n", shell_quote(&build_sources.rust_path.display().to_string())));
+    script.push_str(&format!(
+        "MRUSTC_ARCHIVE={}\n",
+        shell_quote(&build_sources.mrustc_archive_path.display().to_string())
+    ));
+    script.push_str(&format!("RUST_ARCHIVE={}\n", shell_quote(&build_sources.rust_archive_path.display().to_string())));
     script
         .push_str(&format!("SOURCE_MANIFEST={}\n", shell_quote(&boundary.sources_manifest_path.display().to_string())));
+    script.push_str(&format!("MAKE_PROGRAM={}\n", shell_quote(FIRST_STAGE_MAKE_PROGRAM)));
+    script.push_str(&format!("MAKE_FALLBACK_GLOB={}\n", shell_quote(FIRST_STAGE_MAKE_FALLBACK_GLOB)));
+    script.push_str(&format!("COPY_PROGRAM={}\n", shell_quote(FIRST_STAGE_COPY_PROGRAM)));
+    script.push_str(&format!("MRUSTC_CXXFLAGS={}\n", shell_quote(FIRST_STAGE_CXXFLAGS)));
+}
+
+fn push_first_stage_source_checks(script: &mut String, boundary: &RustSourceProviderFirstStageBoundary) {
     script.push_str("printf '%s\\n' \"mantle rust source first stage: $STAGE_ID\"\n");
     script.push_str(&format!(
         "if [ ! -f \"$SOURCE_MANIFEST\" ]; then printf '%s\\n' {} >&2; exit {}; fi\n",
@@ -1021,15 +1235,77 @@ fn first_stage_boundary_script(boundary: &RustSourceProviderFirstStageBoundary) 
             missing = FIRST_STAGE_MISSING_SOURCE_EXIT_CODE,
         ));
     }
-    script.push_str(
-        "printf '%s\\n' \"verified sources manifest: $SOURCE_MANIFEST\"\nprintf '%s\\n' \"planned build dir: $BUILD_DIR\"\nprintf '%s\\n' \"planned output dir: $OUTPUT_DIR\"\n",
+    push_required_shell_var_file_check(
+        script,
+        "MRUSTC_ARCHIVE",
+        "missing verified mrustc archive",
+        FIRST_STAGE_MISSING_SOURCE_EXIT_CODE,
     );
+    push_required_shell_var_file_check(
+        script,
+        "RUST_ARCHIVE",
+        "missing verified Rust archive",
+        FIRST_STAGE_MISSING_SOURCE_EXIT_CODE,
+    );
+    push_mrustc_source_file_check(script, FIRST_STAGE_MAKEFILE, "mrustc source has no Makefile");
+    push_mrustc_source_file_check(script, FIRST_STAGE_MINICARGO_MAKEFILE, "mrustc source has no minicargo.mk");
+}
+
+fn push_first_stage_tool_checks(script: &mut String) {
+    script.push_str(
+        "if ! command -v \"$MAKE_PROGRAM\" >/dev/null 2>&1; then for candidate in $MAKE_FALLBACK_GLOB; do if [ -x \"$candidate\" ]; then MAKE_PROGRAM=\"$candidate\"; break; fi; done; fi\n",
+    );
+    push_required_shell_command_check(script, "MAKE_PROGRAM", "make is required for mrustc first stage");
+    push_required_shell_command_check(script, "COPY_PROGRAM", "cp is required for mrustc first stage");
+}
+
+fn push_first_stage_build_commands(script: &mut String) {
+    script.push_str(
+        "printf '%s\\n' \"verified sources manifest: $SOURCE_MANIFEST\"\nprintf '%s\\n' \"build dir: $BUILD_DIR\"\nprintf '%s\\n' \"output dir: $OUTPUT_DIR\"\n",
+    );
+    script.push_str("mkdir -p \"$BUILD_DIR\"\n");
+    script.push_str("$COPY_PROGRAM \"$RUST_ARCHIVE\" \"$MRUSTC_SOURCE/rustc-${RUSTC_VERSION}-src.tar.gz\"\n");
+    script.push_str("cd \"$MRUSTC_SOURCE\"\n");
+    script.push_str("$MAKE_PROGRAM CXXFLAGS=\"$MRUSTC_CXXFLAGS\"\n");
+    script.push_str(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"));
+    push_required_relative_file_check(script, FIRST_STAGE_MRUSTC_BINARY, "mrustc build did not produce bin/mrustc");
+    push_required_relative_file_check(
+        script,
+        FIRST_STAGE_MINICARGO_BINARY,
+        "mrustc build did not produce bin/minicargo",
+    );
+    script.push_str("printf '%s\\n' \"mrustc first-stage products ready\"\n");
+}
+
+fn push_mrustc_source_file_check(script: &mut String, file_name: &str, message: &str) {
     script.push_str(&format!(
-        "printf '%s\\n' {} >&2\nexit {}\n",
-        shell_quote(RUST_SOURCE_PROVIDER_BLOCKED_REASON),
-        FIRST_STAGE_NOT_IMPLEMENTED_EXIT_CODE
+        "if [ ! -f \"$MRUSTC_SOURCE/{file_name}\" ]; then printf '%s\\n' {} >&2; exit {}; fi\n",
+        shell_quote(message),
+        FIRST_STAGE_BUILD_FAILED_EXIT_CODE
     ));
-    script
+}
+
+fn push_required_shell_var_file_check(script: &mut String, shell_var: &str, message: &str, exit_code: i32) {
+    script.push_str(&format!(
+        "if [ ! -f \"${shell_var}\" ]; then printf '%s\\n' {} >&2; exit {exit_code}; fi\n",
+        shell_quote(message)
+    ));
+}
+
+fn push_required_relative_file_check(script: &mut String, relative_path: &str, message: &str) {
+    script.push_str(&format!(
+        "if [ ! -f {relative_path} ]; then printf '%s\\n' {} >&2; exit {}; fi\n",
+        shell_quote(message),
+        FIRST_STAGE_BUILD_FAILED_EXIT_CODE
+    ));
+}
+
+fn push_required_shell_command_check(script: &mut String, shell_var: &str, message: &str) {
+    script.push_str(&format!(
+        "if ! command -v \"${shell_var}\" >/dev/null 2>&1; then printf '%s\\n' {} >&2; exit {}; fi\n",
+        shell_quote(message),
+        FIRST_STAGE_BUILD_FAILED_EXIT_CODE
+    ));
 }
 
 fn shell_quote(value: &str) -> String {
@@ -1387,7 +1663,7 @@ mod tests {
         let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
 
         let text = err.to_string();
-        assert!(text.contains(RUST_SOURCE_PROVIDER_BLOCKED_REASON));
+        assert!(text.contains(RUST_SOURCE_PROVIDER_BLOCKED_REASON), "unexpected materializer error: {text}");
         assert!(text.contains("recipe_digest_blake3="));
         assert!(text.contains("route_plan_digest_blake3="));
         assert!(text.contains("first_stage_id=mrustc-to-rust-1.90.0"));
@@ -1396,10 +1672,14 @@ mod tests {
         assert!(scratch.join(FIRST_STAGE_SCRIPT_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_PLAN_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE).is_file());
+        assert!(scratch.join(FIRST_STAGE_BUILD_MANIFEST_FILE).is_file());
+        assert!(scratch.join(FIRST_STAGE_BUILD_LOG_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_ARCHIVE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_BUILD_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/README.txt").is_file());
+        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/bin/mrustc").is_file());
+        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/bin/minicargo").is_file());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("rust-1.90.0/README.txt").is_file());
         #[cfg(unix)]
         assert_eq!(script_mode(&scratch.join(FIRST_STAGE_SCRIPT_FILE)), EXECUTABLE_MODE);
@@ -1415,11 +1695,15 @@ mod tests {
             serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE)).unwrap()).unwrap();
         assert_eq!(sources_manifest["schema"], FIRST_STAGE_SOURCES_MANIFEST_SCHEMA);
         assert_eq!(sources_manifest["source_count"], FIRST_STAGE_TEST_SOURCE_COUNT);
+        let build_manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_BUILD_MANIFEST_FILE)).unwrap()).unwrap();
+        assert_eq!(build_manifest["schema"], FIRST_STAGE_BUILD_MANIFEST_SCHEMA);
+        assert_eq!(build_manifest["build"]["mrustc_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains("missing verified source"));
         assert!(script.contains("verified sources manifest"));
         assert!(script.contains("mrustc-0.12.0"));
-        assert!(script.contains(RUST_SOURCE_PROVIDER_BLOCKED_REASON));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_BINARY));
     }
 
     #[test]
@@ -1824,15 +2108,34 @@ let Plan = {
         let file = File::create(path).unwrap();
         let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
         let mut builder = tar::Builder::new(encoder);
-        let mut header = tar::Header::new_gnu();
-        header.set_size(u64::try_from(readme.len()).unwrap());
-        header.set_mode(SOURCE_ARCHIVE_FILE_MODE);
-        header.set_cksum();
-        let readme_path = format!("{top_dir}/README.txt");
-        builder.append_data(&mut header, readme_path, readme).unwrap();
+        append_test_tar_file(&mut builder, &format!("{top_dir}/README.txt"), readme);
+        if top_dir.starts_with(FIRST_STAGE_MRUSTC_SOURCE_PREFIX) {
+            append_test_tar_file(&mut builder, &format!("{top_dir}/{FIRST_STAGE_MAKEFILE}"), test_mrustc_makefile());
+            append_test_tar_file(
+                &mut builder,
+                &format!("{top_dir}/{FIRST_STAGE_MINICARGO_MAKEFILE}"),
+                test_mrustc_minicargo_makefile(),
+            );
+        }
         builder.finish().unwrap();
         let encoder = builder.into_inner().unwrap();
         encoder.finish().unwrap();
+    }
+
+    fn append_test_tar_file(builder: &mut tar::Builder<flate2::write::GzEncoder<File>>, path: &str, bytes: &[u8]) {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(u64::try_from(bytes.len()).unwrap());
+        header.set_mode(SOURCE_ARCHIVE_FILE_MODE);
+        header.set_cksum();
+        builder.append_data(&mut header, path, bytes).unwrap();
+    }
+
+    fn test_mrustc_makefile() -> &'static [u8] {
+        b"all:\n\tmkdir -p bin\n\tprintf 'synthetic mrustc\\n' > bin/mrustc\n\tchmod +x bin/mrustc\n"
+    }
+
+    fn test_mrustc_minicargo_makefile() -> &'static [u8] {
+        b"bin/minicargo:\n\tmkdir -p bin\n\tprintf 'synthetic minicargo\\n' > bin/minicargo\n\tchmod +x bin/minicargo\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {
