@@ -26,4 +26,5 @@
   - Evidence: `evidence/rust-source-provider-blocker.md` records the provider blocker that prevents launching provider-backed one-shot self-build honestly.
 - [ ] [serial] Run fixed-point Cargo-free proof and record whether `not-source-built-toolchain-closure` can be removed; if not, record exact remaining non-claims. r[rust_package_planning.source_built_rust_seed_closure]
   - Blocked: provider materialization fails closed; `not-source-built-toolchain-closure` remains.
-- [ ] [serial] Run `cairn validate --root .` and tasks gate, then archive only after completed tasks cite durable evidence. r[rust_package_planning.source_built_rust_seed_closure]
+- [x] [serial] Run `cairn validate --root .` and tasks gate, then archive only after completed tasks cite durable evidence. r[rust_package_planning.source_built_rust_seed_closure]
+  - Evidence: `evidence/validation-refresh-2026-06-10.md` records fresh validation/task-gate output and confirms the change remains active because provider-backed materialization, smoke, and fixed-point proof tasks are still blocked.
