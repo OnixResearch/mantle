@@ -71,6 +71,7 @@ const RUSTC_STAGE1_BUILD_MANIFEST_SCHEMA: &str = "mantle-rust-source-provider-ru
 const RUSTC_STAGE1_BUILD_MANIFEST_FILE: &str = "rustc-stage1-build.json";
 const RUSTC_STAGE1_BUILD_LOG_FILE: &str = "rustc-stage1-build.log";
 const RUSTC_STAGE1_SCRIPT_FILE: &str = "run-rustc-stage1.sh";
+const RUSTC_STAGE1_CHAIN_DIR: &str = "rustc-stage1-chain";
 const RUSTC_STAGE1_PROVIDER_CANDIDATE_SCHEMA: &str = "mantle-rust-source-provider-rustc-stage1-candidate-v1";
 const RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR: &str = "rustc-stage1-provider-candidate";
 const RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE: &str = "rustc-stage1-provider-candidate.json";
@@ -318,6 +319,20 @@ struct RustSourceProviderFirstStageProviderCandidate {
     receipt_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RustSourceProviderBootstrapProviderCandidate {
+    stage_id: String,
+    candidate_dir: PathBuf,
+    metadata_digest_blake3: String,
+    policy_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RustcStage1ScratchLayout {
+    TopLevel,
+    Scoped,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 struct RustSourceProviderRustcStage1Build {
     stage_id: String,
@@ -345,6 +360,13 @@ struct RustSourceProviderRustcStage1ProviderCandidate {
     artifact_count: usize,
     source_count: usize,
     receipt_count: usize,
+}
+
+#[derive(Debug, Clone)]
+struct RustSourceProviderRustcStage1ProviderCandidateRun {
+    boundary: RustSourceProviderRustcStage1Boundary,
+    candidate: RustSourceProviderRustcStage1ProviderCandidate,
+    smoke: RustSourceProviderSmokeEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -461,21 +483,22 @@ pub(crate) fn materialize_rust_source_provider(
         assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
     let first_stage_candidate_smoke = smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate)?;
     write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
-    let rustc_stage1_boundary = prepare_rustc_stage1_boundary(&plan, &route, &first_stage_candidate)?;
-    write_rustc_stage1_boundary(&rustc_stage1_boundary)?;
-    let rustc_stage1_sources = acquire_rustc_stage1_sources(&rustc_stage1_boundary, verbose)?;
-    write_rustc_stage1_sources_manifest(&rustc_stage1_boundary, &rustc_stage1_sources)?;
-    let rustc_stage1_build = run_rustc_stage1_build(&rustc_stage1_boundary, verbose)?;
-    write_rustc_stage1_build_manifest(&rustc_stage1_boundary, &rustc_stage1_build)?;
-    let rustc_stage1_candidate = assemble_rustc_stage1_provider_candidate(
-        &rustc_stage1_boundary,
+    let first_stage_bootstrap_candidate = bootstrap_candidate_from_first_stage(&first_stage_candidate);
+    let rustc_stage1_run = run_rustc_stage1_provider_candidate(
+        &plan,
         &route,
-        &rustc_stage1_sources,
-        &rustc_stage1_build,
+        &first_stage_bootstrap_candidate,
+        RustcStage1ScratchLayout::TopLevel,
+        verbose,
     )?;
-    let rustc_stage1_candidate_smoke =
-        smoke_rustc_stage1_provider_candidate(&rustc_stage1_boundary, &rustc_stage1_candidate)?;
-    write_rustc_stage1_provider_candidate_manifest(&rustc_stage1_boundary, &rustc_stage1_candidate)?;
+    let rustc_stage1_bootstrap_candidate = bootstrap_candidate_from_rustc_stage1(&rustc_stage1_run.candidate);
+    let rustc_stage1_next_run = run_rustc_stage1_provider_candidate(
+        &plan,
+        &route,
+        &rustc_stage1_bootstrap_candidate,
+        RustcStage1ScratchLayout::Scoped,
+        verbose,
+    )?;
     if verbose {
         eprintln!("Rust source provider recipe: {}", plan.recipe_path.display());
         eprintln!("  recipe_digest_blake3: {}", plan.recipe_digest_blake3);
@@ -491,17 +514,34 @@ pub(crate) fn materialize_rust_source_provider(
         eprintln!("  first_stage_provider_candidate: {}", first_stage_candidate.candidate_dir.display());
         eprintln!("  first_stage_provider_candidate_manifest: {}", boundary.provider_candidate_manifest_path.display());
         eprintln!("  first_stage_provider_candidate_smoke: {}", first_stage_candidate_smoke.summary_path.display());
-        eprintln!("  rustc_stage1_id: {}", rustc_stage1_boundary.stage_id);
-        eprintln!("  rustc_stage1_plan: {}", rustc_stage1_boundary.plan_path.display());
-        eprintln!("  rustc_stage1_sources: {}", rustc_stage1_boundary.sources_manifest_path.display());
-        eprintln!("  rustc_stage1_build: {}", rustc_stage1_boundary.build_manifest_path.display());
-        eprintln!("  rustc_stage1_build_log: {}", rustc_stage1_boundary.build_log_path.display());
-        eprintln!("  rustc_stage1_provider_candidate: {}", rustc_stage1_candidate.candidate_dir.display());
+        eprintln!("  rustc_stage1_id: {}", rustc_stage1_run.boundary.stage_id);
+        eprintln!("  rustc_stage1_plan: {}", rustc_stage1_run.boundary.plan_path.display());
+        eprintln!("  rustc_stage1_sources: {}", rustc_stage1_run.boundary.sources_manifest_path.display());
+        eprintln!("  rustc_stage1_build: {}", rustc_stage1_run.boundary.build_manifest_path.display());
+        eprintln!("  rustc_stage1_build_log: {}", rustc_stage1_run.boundary.build_log_path.display());
+        eprintln!("  rustc_stage1_provider_candidate: {}", rustc_stage1_run.candidate.candidate_dir.display());
         eprintln!(
             "  rustc_stage1_provider_candidate_manifest: {}",
-            rustc_stage1_boundary.provider_candidate_manifest_path.display()
+            rustc_stage1_run.boundary.provider_candidate_manifest_path.display()
         );
-        eprintln!("  rustc_stage1_provider_candidate_smoke: {}", rustc_stage1_candidate_smoke.summary_path.display());
+        eprintln!("  rustc_stage1_provider_candidate_smoke: {}", rustc_stage1_run.smoke.summary_path.display());
+        eprintln!("  rustc_stage1_next_id: {}", rustc_stage1_next_run.boundary.stage_id);
+        eprintln!("  rustc_stage1_next_plan: {}", rustc_stage1_next_run.boundary.plan_path.display());
+        eprintln!("  rustc_stage1_next_sources: {}", rustc_stage1_next_run.boundary.sources_manifest_path.display());
+        eprintln!("  rustc_stage1_next_build: {}", rustc_stage1_next_run.boundary.build_manifest_path.display());
+        eprintln!("  rustc_stage1_next_build_log: {}", rustc_stage1_next_run.boundary.build_log_path.display());
+        eprintln!(
+            "  rustc_stage1_next_provider_candidate: {}",
+            rustc_stage1_next_run.candidate.candidate_dir.display()
+        );
+        eprintln!(
+            "  rustc_stage1_next_provider_candidate_manifest: {}",
+            rustc_stage1_next_run.boundary.provider_candidate_manifest_path.display()
+        );
+        eprintln!(
+            "  rustc_stage1_next_provider_candidate_smoke: {}",
+            rustc_stage1_next_run.smoke.summary_path.display()
+        );
         eprintln!("  planned_output: {}", plan.output_dir.display());
         eprintln!("  planned_scratch: {}", plan.scratch_dir.display());
     }
@@ -881,12 +921,14 @@ fn mrustc_target_version(rust_version: &str) -> String {
 fn prepare_rustc_stage1_boundary(
     materialization: &RustSourceProviderMaterializationPlan,
     route: &LoadedRustSourceProviderRoute,
-    bootstrap_candidate: &RustSourceProviderFirstStageProviderCandidate,
+    bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
+    scratch_layout: RustcStage1ScratchLayout,
 ) -> Result<RustSourceProviderRustcStage1Boundary, RustSourceProviderError> {
-    let stage = select_first_rustc_stage1_stage(&route.plan, bootstrap_candidate)?;
+    let stage = select_next_rustc_stage1_stage(&route.plan, bootstrap_candidate)?;
     validate_rustc_stage1_outputs(stage)?;
     let sources = sources_for_stage(&route.plan, stage)?;
     let expected_outputs = expected_outputs_for_stage(&route.plan, stage)?;
+    let stage_root = rustc_stage1_stage_root(materialization, &stage.id, scratch_layout)?;
     Ok(RustSourceProviderRustcStage1Boundary {
         route_plan_path: route.plan_path.clone(),
         route_plan_digest_blake3: route.plan_digest_blake3.clone(),
@@ -903,31 +945,63 @@ fn prepare_rustc_stage1_boundary(
         bootstrap_provider_candidate_dir: bootstrap_candidate.candidate_dir.clone(),
         bootstrap_provider_metadata_digest_blake3: bootstrap_candidate.metadata_digest_blake3.clone(),
         bootstrap_provider_policy_digest_blake3: bootstrap_candidate.policy_digest_blake3.clone(),
-        archive_dir: materialization.scratch_dir.join(RUSTC_STAGE1_ARCHIVE_DIR),
-        source_dir: materialization.scratch_dir.join(RUSTC_STAGE1_SOURCE_DIR),
-        build_dir: materialization.scratch_dir.join(RUSTC_STAGE1_BUILD_DIR),
-        stage_output_dir: materialization.scratch_dir.join(RUSTC_STAGE1_OUTPUT_DIR),
+        archive_dir: stage_root.join(RUSTC_STAGE1_ARCHIVE_DIR),
+        source_dir: stage_root.join(RUSTC_STAGE1_SOURCE_DIR),
+        build_dir: stage_root.join(RUSTC_STAGE1_BUILD_DIR),
+        stage_output_dir: stage_root.join(RUSTC_STAGE1_OUTPUT_DIR),
         output_dir: materialization.output_dir.clone(),
-        plan_path: materialization.scratch_dir.join(RUSTC_STAGE1_PLAN_FILE),
-        sources_manifest_path: materialization.scratch_dir.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE),
-        build_manifest_path: materialization.scratch_dir.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE),
-        build_log_path: materialization.scratch_dir.join(RUSTC_STAGE1_BUILD_LOG_FILE),
-        script_path: materialization.scratch_dir.join(RUSTC_STAGE1_SCRIPT_FILE),
-        provider_candidate_dir: materialization.scratch_dir.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR),
-        provider_candidate_manifest_path: materialization
-            .scratch_dir
-            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE),
-        provider_candidate_smoke_dir: materialization.scratch_dir.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR),
-        provider_candidate_smoke_work_dir: materialization
-            .scratch_dir
+        plan_path: stage_root.join(RUSTC_STAGE1_PLAN_FILE),
+        sources_manifest_path: stage_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE),
+        build_manifest_path: stage_root.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE),
+        build_log_path: stage_root.join(RUSTC_STAGE1_BUILD_LOG_FILE),
+        script_path: stage_root.join(RUSTC_STAGE1_SCRIPT_FILE),
+        provider_candidate_dir: stage_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR),
+        provider_candidate_manifest_path: stage_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE),
+        provider_candidate_smoke_dir: stage_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR),
+        provider_candidate_smoke_work_dir: stage_root
             .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR)
             .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_WORK_DIR),
     })
 }
 
-fn select_first_rustc_stage1_stage<'a>(
+fn bootstrap_candidate_from_first_stage(
+    candidate: &RustSourceProviderFirstStageProviderCandidate,
+) -> RustSourceProviderBootstrapProviderCandidate {
+    RustSourceProviderBootstrapProviderCandidate {
+        stage_id: candidate.stage_id.clone(),
+        candidate_dir: candidate.candidate_dir.clone(),
+        metadata_digest_blake3: candidate.metadata_digest_blake3.clone(),
+        policy_digest_blake3: candidate.policy_digest_blake3.clone(),
+    }
+}
+
+fn bootstrap_candidate_from_rustc_stage1(
+    candidate: &RustSourceProviderRustcStage1ProviderCandidate,
+) -> RustSourceProviderBootstrapProviderCandidate {
+    RustSourceProviderBootstrapProviderCandidate {
+        stage_id: candidate.stage_id.clone(),
+        candidate_dir: candidate.candidate_dir.clone(),
+        metadata_digest_blake3: candidate.metadata_digest_blake3.clone(),
+        policy_digest_blake3: candidate.policy_digest_blake3.clone(),
+    }
+}
+
+fn rustc_stage1_stage_root(
+    materialization: &RustSourceProviderMaterializationPlan,
+    stage_id: &str,
+    scratch_layout: RustcStage1ScratchLayout,
+) -> Result<PathBuf, RustSourceProviderError> {
+    match scratch_layout {
+        RustcStage1ScratchLayout::TopLevel => Ok(materialization.scratch_dir.clone()),
+        RustcStage1ScratchLayout::Scoped => {
+            Ok(materialization.scratch_dir.join(RUSTC_STAGE1_CHAIN_DIR).join(safe_source_component(stage_id)?))
+        }
+    }
+}
+
+fn select_next_rustc_stage1_stage<'a>(
     plan: &'a RustSourceProviderBootstrapPlan,
-    bootstrap_candidate: &RustSourceProviderFirstStageProviderCandidate,
+    bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
 ) -> Result<&'a RustSourceProviderBootstrapStage, RustSourceProviderError> {
     let mut matches = plan.stages.iter().filter(|stage| {
         stage.kind == RustSourceProviderBootstrapStageKind::RustcStage1
@@ -946,6 +1020,29 @@ fn select_first_rustc_stage1_stage<'a>(
         "rust source route has multiple rustc stage1 stages after '{}'",
         bootstrap_candidate.stage_id
     )))
+}
+
+fn run_rustc_stage1_provider_candidate(
+    materialization: &RustSourceProviderMaterializationPlan,
+    route: &LoadedRustSourceProviderRoute,
+    bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
+    scratch_layout: RustcStage1ScratchLayout,
+    verbose: bool,
+) -> Result<RustSourceProviderRustcStage1ProviderCandidateRun, RustSourceProviderError> {
+    let boundary = prepare_rustc_stage1_boundary(materialization, route, bootstrap_candidate, scratch_layout)?;
+    write_rustc_stage1_boundary(&boundary)?;
+    let sources = acquire_rustc_stage1_sources(&boundary, verbose)?;
+    write_rustc_stage1_sources_manifest(&boundary, &sources)?;
+    let build = run_rustc_stage1_build(&boundary, verbose)?;
+    write_rustc_stage1_build_manifest(&boundary, &build)?;
+    let candidate = assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)?;
+    let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate)?;
+    write_rustc_stage1_provider_candidate_manifest(&boundary, &candidate)?;
+    Ok(RustSourceProviderRustcStage1ProviderCandidateRun {
+        boundary,
+        candidate,
+        smoke,
+    })
 }
 
 fn validate_rustc_stage1_outputs(stage: &RustSourceProviderBootstrapStage) -> Result<(), RustSourceProviderError> {
@@ -2914,6 +3011,7 @@ mod tests {
     const FIRST_STAGE_TEST_SOURCE_COUNT: usize = 2;
     const RUSTC_STAGE1_TEST_SOURCE_COUNT: usize = 1;
     const RUSTC_STAGE1_BOOTSTRAP_PROVIDER_SOURCE_COUNT: usize = 1;
+    const RUSTC_STAGE1_NEXT_ID: &str = "rust-1.92.0-stage1";
     const SOURCE_ARCHIVE_FILE_MODE: u32 = 0o644;
     const SHA256_HEX_CHAR_COUNT: usize = 64;
     #[cfg(unix)]
@@ -3104,6 +3202,111 @@ mod tests {
             rustc_stage1_smoke_summary["output_digest_blake3"],
             blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string()
         );
+        let rustc_stage1_next_root = scratch.join(RUSTC_STAGE1_CHAIN_DIR).join(RUSTC_STAGE1_NEXT_ID);
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_PLAN_FILE).is_file());
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).is_file());
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE).is_file());
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_BUILD_LOG_FILE).is_file());
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_SCRIPT_FILE).is_file());
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_SOURCE_DIR).join("rust-1.92.0/README.txt").is_file());
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
+        assert!(
+            rustc_stage1_next_root
+                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
+                .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
+                .is_file()
+        );
+        assert!(
+            rustc_stage1_next_root
+                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
+                .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
+                .is_file()
+        );
+        assert!(
+            rustc_stage1_next_root
+                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR)
+                .join(SMOKE_EVIDENCE_SUMMARY_FILE)
+                .is_file()
+        );
+        let rustc_stage1_next_plan: serde_json::Value =
+            serde_json::from_slice(&fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_PLAN_FILE)).unwrap()).unwrap();
+        assert_eq!(rustc_stage1_next_plan["schema"], RUSTC_STAGE1_PLAN_SCHEMA);
+        assert_eq!(rustc_stage1_next_plan["stage"]["id"], RUSTC_STAGE1_NEXT_ID);
+        assert_eq!(rustc_stage1_next_plan["stage"]["bootstrap_stage_id"], "rust-1.91.1-stage1");
+        assert_eq!(
+            rustc_stage1_next_plan["bootstrap_provider_candidate"]["metadata_digest_blake3"],
+            rustc_stage1_candidate_validation.metadata_digest_blake3
+        );
+        let rustc_stage1_next_sources: serde_json::Value =
+            serde_json::from_slice(&fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE)).unwrap())
+                .unwrap();
+        assert_eq!(rustc_stage1_next_sources["schema"], RUSTC_STAGE1_SOURCES_MANIFEST_SCHEMA);
+        assert_eq!(rustc_stage1_next_sources["source_count"], RUSTC_STAGE1_TEST_SOURCE_COUNT);
+        assert_eq!(rustc_stage1_next_sources["sources"][0]["id"], "rust-1.92.0");
+        let rustc_stage1_next_build: serde_json::Value =
+            serde_json::from_slice(&fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_BUILD_MANIFEST_FILE)).unwrap())
+                .unwrap();
+        assert_eq!(rustc_stage1_next_build["schema"], RUSTC_STAGE1_BUILD_MANIFEST_SCHEMA);
+        assert_eq!(rustc_stage1_next_build["build"]["stage_id"], RUSTC_STAGE1_NEXT_ID);
+        assert_eq!(
+            rustc_stage1_next_build["build"]["rustc_digest_blake3"].as_str().unwrap().len(),
+            SHA256_HEX_CHAR_COUNT
+        );
+        let rustc_stage1_next_candidate_manifest: serde_json::Value = serde_json::from_slice(
+            &fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(rustc_stage1_next_candidate_manifest["schema"], RUSTC_STAGE1_PROVIDER_CANDIDATE_SCHEMA);
+        assert_eq!(rustc_stage1_next_candidate_manifest["candidate_only"], true);
+        assert_eq!(rustc_stage1_next_candidate_manifest["final_output_written"], false);
+        assert_eq!(
+            rustc_stage1_next_candidate_manifest["candidate"]["artifact_count"],
+            expected_rustc_stage1_candidate_artifacts
+        );
+        assert_eq!(
+            rustc_stage1_next_candidate_manifest["candidate"]["source_count"],
+            expected_rustc_stage1_candidate_sources
+        );
+        let rustc_stage1_next_candidate_validation = validate_materialized_rust_source_provider(
+            &rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR),
+        )
+        .unwrap();
+        assert_eq!(
+            rustc_stage1_next_candidate_validation.validation.artifact_count,
+            expected_rustc_stage1_candidate_artifacts
+        );
+        assert_eq!(rustc_stage1_next_candidate_validation.validation.receipt_count, 1);
+        assert_eq!(
+            rustc_stage1_next_candidate_validation.validation.source_count,
+            expected_rustc_stage1_candidate_sources
+        );
+        assert!(
+            rustc_stage1_next_candidate_validation
+                .metadata
+                .sources
+                .iter()
+                .any(|source| source.id == "rust-1.92.0-stage1-bootstrap-provider")
+        );
+        let rustc_stage1_next_smoke_summary: serde_json::Value = serde_json::from_slice(
+            &fs::read(
+                rustc_stage1_next_root
+                    .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR)
+                    .join(SMOKE_EVIDENCE_SUMMARY_FILE),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(rustc_stage1_next_smoke_summary["schema"], SMOKE_EVIDENCE_SCHEMA);
+        assert_eq!(
+            rustc_stage1_next_smoke_summary["output_digest_blake3"],
+            blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string()
+        );
+        let rustc_stage1_next_log =
+            fs::read_to_string(rustc_stage1_next_root.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
+        assert!(rustc_stage1_next_log.contains(RUSTC_STAGE1_NEXT_ID));
+        assert!(rustc_stage1_next_log.contains("rustc stage1 products ready"));
         let rustc_stage1_log = fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
         assert!(rustc_stage1_log.contains("mantle rustc stage1"));
         assert!(rustc_stage1_log.contains("rustc stage1 products ready"));
@@ -3144,6 +3347,27 @@ mod tests {
         let candidate = scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR);
 
         fs::write(candidate.join(PROVIDER_CARGO_RELATIVE_PATH), b"changed-cargo").unwrap();
+        let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
+
+        assert!(err.to_string().contains("digest mismatch"));
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn chained_rustc_stage1_provider_candidate_rejects_tampered_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "blocked recipe\n").unwrap();
+        write_test_route_plan(dir.path());
+        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let candidate = scratch
+            .join(RUSTC_STAGE1_CHAIN_DIR)
+            .join(RUSTC_STAGE1_NEXT_ID)
+            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR);
+
+        fs::write(candidate.join(PROVIDER_RUSTC_RELATIVE_PATH), b"changed-chained-rustc").unwrap();
         let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
 
         assert!(err.to_string().contains("digest mismatch"));
@@ -3202,6 +3426,28 @@ mod tests {
         assert!(scratch.join(RUSTC_STAGE1_PLAN_FILE).is_file());
         assert!(!scratch.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).exists());
         assert!(!scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).exists());
+    }
+
+    #[test]
+    fn materializer_rejects_chained_rustc_stage1_source_digest_mismatch_without_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "blocked recipe\n").unwrap();
+        write_test_route_plan_with_rust192_sha(dir.path(), &sample_sha256_hex('f'));
+
+        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+
+        let message = err.to_string();
+        assert!(message.contains("digest mismatch"));
+        assert!(message.contains("rust-1.92.0"));
+        assert!(!output.exists());
+        assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
+        let rustc_stage1_next_root = scratch.join(RUSTC_STAGE1_CHAIN_DIR).join(RUSTC_STAGE1_NEXT_ID);
+        assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_PLAN_FILE).is_file());
+        assert!(!rustc_stage1_next_root.join(RUSTC_STAGE1_SOURCES_MANIFEST_FILE).exists());
+        assert!(!rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).exists());
     }
 
     #[cfg(unix)]
@@ -3418,16 +3664,45 @@ mod tests {
 
     fn write_test_route_plan_with_mrustc_sha(root: &Path, mrustc_sha256_hex: &str) {
         let sources = write_test_source_archives(root);
-        write_test_route_plan_with_source_shas(root, &sources, mrustc_sha256_hex, &sources.rust191_sha256_hex);
+        write_test_route_plan_with_source_shas(
+            root,
+            &sources,
+            mrustc_sha256_hex,
+            &sources.rust191_sha256_hex,
+            &sources.rust192_sha256_hex,
+        );
     }
 
     fn write_test_route_plan_with_rust191_sha(root: &Path, rust191_sha256_hex: &str) {
         let sources = write_test_source_archives(root);
-        write_test_route_plan_with_source_shas(root, &sources, &sources.mrustc_sha256_hex, rust191_sha256_hex);
+        write_test_route_plan_with_source_shas(
+            root,
+            &sources,
+            &sources.mrustc_sha256_hex,
+            rust191_sha256_hex,
+            &sources.rust192_sha256_hex,
+        );
+    }
+
+    fn write_test_route_plan_with_rust192_sha(root: &Path, rust192_sha256_hex: &str) {
+        let sources = write_test_source_archives(root);
+        write_test_route_plan_with_source_shas(
+            root,
+            &sources,
+            &sources.mrustc_sha256_hex,
+            &sources.rust191_sha256_hex,
+            rust192_sha256_hex,
+        );
     }
 
     fn write_test_route_plan_with_sources(root: &Path, sources: &TestSourceArchives, mrustc_sha256_hex: &str) {
-        write_test_route_plan_with_source_shas(root, sources, mrustc_sha256_hex, &sources.rust191_sha256_hex)
+        write_test_route_plan_with_source_shas(
+            root,
+            sources,
+            mrustc_sha256_hex,
+            &sources.rust191_sha256_hex,
+            &sources.rust192_sha256_hex,
+        )
     }
 
     fn write_test_route_plan_with_source_shas(
@@ -3435,6 +3710,7 @@ mod tests {
         sources: &TestSourceArchives,
         mrustc_sha256_hex: &str,
         rust191_sha256_hex: &str,
+        rust192_sha256_hex: &str,
     ) {
         let text = r#"
 let Source = {
@@ -3515,6 +3791,14 @@ let Plan = {
       sha256_hex = "__RUST191_SHA256__",
     },
     {
+      id = "rust-1.92.0",
+      kind = "tarball",
+      name = "rust-compiler-source",
+      version = "1.92.0",
+      url = "__RUST192_URL__",
+      sha256_hex = "__RUST192_SHA256__",
+    },
+    {
       id = "rust-1.94.0",
       kind = "tarball",
       name = "rust-compiler-source",
@@ -3543,10 +3827,19 @@ let Plan = {
       notes = ["advance one Rust source release after mrustc"],
     },
     {
+      id = "rust-1.92.0-stage1",
+      kind = "rustc-stage1",
+      source_ids = ["rust-1.92.0"],
+      bootstrap_stage_id = "rust-1.91.1-stage1",
+      rust_version = "1.92.0",
+      outputs = ["rustc", "cargo", "host-rustlib", "target-rustlib"],
+      notes = ["advance one chained Rust source release"],
+    },
+    {
       id = "rust-1.94.0-final",
       kind = "rustc-final",
       source_ids = ["rust-1.94.0"],
-      bootstrap_stage_id = "rust-1.91.1-stage1",
+      bootstrap_stage_id = "rust-1.92.0-stage1",
       rust_version = "1.94.0",
       outputs = ["rustc", "cargo", "rustdoc", "host-rustlib", "target-rustlib", "provider-receipt"],
       notes = ["install provider metadata and receipts"],
@@ -3569,6 +3862,8 @@ let Plan = {
             .replace("__RUST190_SHA256__", &sources.rust190_sha256_hex)
             .replace("__RUST191_URL__", &sources.rust191_url)
             .replace("__RUST191_SHA256__", rust191_sha256_hex)
+            .replace("__RUST192_URL__", &sources.rust192_url)
+            .replace("__RUST192_SHA256__", rust192_sha256_hex)
             .replace("__RUST194_URL__", &sources.rust194_url)
             .replace("__RUST194_SHA256__", &sources.rust194_sha256_hex);
         fs::write(root.join(RUST_SOURCE_PROVIDER_PLAN_FILE), text).unwrap();
@@ -3581,6 +3876,8 @@ let Plan = {
         rust190_sha256_hex: String,
         rust191_url: String,
         rust191_sha256_hex: String,
+        rust192_url: String,
+        rust192_sha256_hex: String,
         rust194_url: String,
         rust194_sha256_hex: String,
     }
@@ -3591,10 +3888,12 @@ let Plan = {
         let mrustc_path = archive_dir.join("mrustc-0.12.0.tar.gz");
         let rust190_path = archive_dir.join("rust-1.90.0.tar.gz");
         let rust191_path = archive_dir.join("rust-1.91.1.tar.gz");
+        let rust192_path = archive_dir.join("rust-1.92.0.tar.gz");
         let rust194_path = archive_dir.join("rust-1.94.0.tar.gz");
         write_test_source_archive(&mrustc_path, "mrustc-0.12.0", b"mrustc seed source\n");
         write_test_source_archive(&rust190_path, "rust-1.90.0", b"rust 1.90 source\n");
         write_test_source_archive(&rust191_path, "rust-1.91.1", b"rust 1.91.1 source\n");
+        write_test_source_archive(&rust192_path, "rust-1.92.0", b"rust 1.92.0 source\n");
         write_test_source_archive(&rust194_path, "rust-1.94.0", b"rust 1.94 source\n");
         TestSourceArchives {
             mrustc_url: url::Url::from_file_path(&mrustc_path).unwrap().to_string(),
@@ -3603,6 +3902,8 @@ let Plan = {
             rust190_sha256_hex: sha256_file_hex(&rust190_path),
             rust191_url: url::Url::from_file_path(&rust191_path).unwrap().to_string(),
             rust191_sha256_hex: sha256_file_hex(&rust191_path),
+            rust192_url: url::Url::from_file_path(&rust192_path).unwrap().to_string(),
+            rust192_sha256_hex: sha256_file_hex(&rust192_path),
             rust194_url: url::Url::from_file_path(&rust194_path).unwrap().to_string(),
             rust194_sha256_hex: sha256_file_hex(&rust194_path),
         }
@@ -3626,7 +3927,7 @@ let Plan = {
                 test_mrustc_run_rustc_makefile(),
             );
         }
-        if top_dir == "rust-1.91.1" {
+        if matches!(top_dir, "rust-1.91.1" | "rust-1.92.0") {
             append_test_tar_file(
                 &mut builder,
                 &format!("{top_dir}/{RUSTC_STAGE1_SOURCE_BUILD_SCRIPT}"),
