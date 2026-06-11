@@ -1,19 +1,20 @@
-# Rust source first-stage mrustc/minicargo build boundary
+# Rust source first-stage mrustc/Rust 1.90 build boundary
 
 Task-ID: rust-source-first-stage-mrustc-build-2026-06-11
 Covers: rust_package_planning.source_built_rust_seed_closure
 
 ## Implementation
 
-Mantle now runs the verified first-stage source boundary far enough to attempt the mrustc/minicargo build:
+Mantle now runs the verified first-stage source boundary far enough to attempt the mrustc/minicargo plus Rust 1.90 first-stage build:
 
 - `run-mrustc-first-stage.sh` checks the verified source manifest, extracted `mrustc-*` and `rust-*` source trees, and the verified archives.
-- The script copies the verified Rust source archive into the extracted mrustc tree as `rustc-<version>-src.tar.gz`, then invokes `make CXXFLAGS=...` and `make -f minicargo.mk bin/minicargo`.
+- The script copies the verified Rust source archive into the extracted mrustc tree as `rustc-<version>-src.tar.gz`.
+- It invokes `make CXXFLAGS=...`, `make -f minicargo.mk bin/minicargo`, `make -f minicargo.mk output/rustc`, `make -f minicargo.mk output/cargo`, and `make -C run_rustc`.
 - The materializer captures stdout/stderr in `mrustc-first-stage-build.log` and fails closed with a log tail when the build script fails.
-- On build-script success, the materializer validates `bin/mrustc` and `bin/minicargo`, records BLAKE3 digests in `mrustc-first-stage-build.json`, and then still returns the existing provider blocker because Rust compiler/sysroot output metadata and receipts are not implemented yet.
+- On build-script success, the materializer validates `bin/mrustc`, `bin/minicargo`, translated `output/rustc`, translated `output/cargo`, `run_rustc/output/prefix`, and its target rustlib, then records BLAKE3 digests in `mrustc-first-stage-build.json`.
 - A Nix-store gnumake fallback is used only as a host convenience for this non-claiming build attempt when `make` is absent from `PATH`; it is not provider evidence and does not remove the source-built Rust non-claim.
 
-This still does not build `rustc`, `cargo`, host rustlib, target rustlib, final provider metadata, or provider receipts. The real provider task remains unchecked.
+This still does not emit the final provider directory, provider metadata, provider receipts, or a provider-backed smoke proof. The real provider task remains unchecked.
 
 ## Baseline before changes
 
@@ -60,7 +61,7 @@ Output summary:
 test rust_source_provider::tests::materializer_prepares_first_stage_boundary_then_fails_closed ... ok
 test rust_source_provider::tests::materializer_rejects_first_stage_source_digest_mismatch_without_output ... ok
 test rust_source_provider::tests::first_stage_script_fails_before_provider_output_when_sources_missing ... ok
-test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 719 filtered out; finished in 0.50s
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 719 filtered out; finished in 1.78s
 ```
 
 ### route/core regression tests
@@ -79,7 +80,7 @@ Output summary:
 
 ```text
 test source_toolchain_closure::tests::checked_in_rust_source_plan_loads_stagex_mrustc_route ... ok
-test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 719 filtered out; finished in 0.10s
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 719 filtered out; finished in 0.04s
 ```
 
 ### formatting check
@@ -147,4 +148,4 @@ Output summary:
 
 ## Remaining blocker
 
-The first-stage script can now run mrustc/minicargo make targets and record product digests, but the materializer still stops before the Rust 1.90 compiler/sysroot build and before final provider metadata/receipt emission. `not-source-built-toolchain-closure` remains.
+The first-stage script can now run mrustc/minicargo and Rust 1.90 first-stage make targets and record product digests, but the materializer still stops before final provider directory assembly, provider metadata/receipt emission, real provider smoke, and fixed-point proof. `not-source-built-toolchain-closure` remains.

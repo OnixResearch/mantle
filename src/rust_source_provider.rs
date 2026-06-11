@@ -61,6 +61,12 @@ const FIRST_STAGE_MRUSTC_SOURCE_PREFIX: &str = "mrustc-";
 const FIRST_STAGE_RUST_SOURCE_PREFIX: &str = "rust-";
 const FIRST_STAGE_MRUSTC_BINARY: &str = "bin/mrustc";
 const FIRST_STAGE_MINICARGO_BINARY: &str = "bin/minicargo";
+const FIRST_STAGE_TRANSLATED_RUSTC_BINARY: &str = "output/rustc";
+const FIRST_STAGE_TRANSLATED_CARGO_BINARY: &str = "output/cargo";
+const FIRST_STAGE_RUN_RUSTC_DIR: &str = "run_rustc";
+const FIRST_STAGE_PREFIX_DIR: &str = "run_rustc/output/prefix";
+const FIRST_STAGE_PREFIX_RUSTC_BINARY: &str = "run_rustc/output/prefix/bin/rustc";
+const FIRST_STAGE_PREFIX_CARGO_BINARY: &str = "run_rustc/output/prefix/bin/cargo";
 const FIRST_STAGE_MINICARGO_MAKEFILE: &str = "minicargo.mk";
 const FIRST_STAGE_MAKEFILE: &str = "Makefile";
 const FIRST_STAGE_MAKE_PROGRAM: &str = "make";
@@ -163,6 +169,8 @@ struct RustSourceProviderFirstStageBoundary {
     stage_id: String,
     stage_kind: RustSourceProviderBootstrapStageKind,
     rust_version: String,
+    target_triple: String,
+    mrustc_target_version: String,
     source_ids: Vec<String>,
     sources: Vec<RustSourceProviderBootstrapSource>,
     expected_outputs: Vec<RustSourceProviderBootstrapOutput>,
@@ -197,6 +205,14 @@ struct RustSourceProviderFirstStageBuild {
     mrustc_digest_blake3: String,
     minicargo_path: PathBuf,
     minicargo_digest_blake3: String,
+    translated_rustc_path: PathBuf,
+    translated_rustc_digest_blake3: String,
+    translated_cargo_path: PathBuf,
+    translated_cargo_digest_blake3: String,
+    prefix_path: PathBuf,
+    prefix_digest_blake3: String,
+    prefix_rustlib_path: PathBuf,
+    prefix_rustlib_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -629,6 +645,8 @@ fn prepare_first_stage_boundary(
         stage_id: stage.id.clone(),
         stage_kind: stage.kind,
         rust_version: stage.rust_version.clone(),
+        target_triple: route.plan.target_triple.clone(),
+        mrustc_target_version: mrustc_target_version(&stage.rust_version),
         source_ids: stage.source_ids.clone(),
         sources,
         expected_outputs,
@@ -668,6 +686,10 @@ fn validate_first_stage_outputs(stage: &RustSourceProviderBootstrapStage) -> Res
         )));
     }
     Ok(())
+}
+
+fn mrustc_target_version(rust_version: &str) -> String {
+    rust_version.strip_suffix(".0").unwrap_or(rust_version).to_string()
 }
 
 fn sources_for_stage(
@@ -737,6 +759,8 @@ fn first_stage_boundary_manifest(
             "id": &boundary.stage_id,
             "kind": boundary.stage_kind,
             "rust_version": &boundary.rust_version,
+            "target_triple": &boundary.target_triple,
+            "mrustc_target_version": &boundary.mrustc_target_version,
             "source_ids": &boundary.source_ids,
             "expected_outputs": &boundary.expected_outputs,
         },
@@ -876,16 +900,32 @@ fn run_first_stage_build(
     }
     let mrustc_path = build_sources.mrustc_path.join(FIRST_STAGE_MRUSTC_BINARY);
     let minicargo_path = build_sources.mrustc_path.join(FIRST_STAGE_MINICARGO_BINARY);
+    let translated_rustc_path = build_sources.mrustc_path.join(FIRST_STAGE_TRANSLATED_RUSTC_BINARY);
+    let translated_cargo_path = build_sources.mrustc_path.join(FIRST_STAGE_TRANSLATED_CARGO_BINARY);
+    let prefix_path = build_sources.mrustc_path.join(FIRST_STAGE_PREFIX_DIR);
+    let prefix_rustlib_path = prefix_path.join("lib/rustlib").join(&boundary.target_triple).join("lib");
     validate_first_stage_build_product(&mrustc_path, FIRST_STAGE_MRUSTC_BINARY)?;
     validate_first_stage_build_product(&minicargo_path, FIRST_STAGE_MINICARGO_BINARY)?;
+    validate_first_stage_build_product(&translated_rustc_path, FIRST_STAGE_TRANSLATED_RUSTC_BINARY)?;
+    validate_first_stage_build_product(&translated_cargo_path, FIRST_STAGE_TRANSLATED_CARGO_BINARY)?;
+    validate_first_stage_build_product(&prefix_path, FIRST_STAGE_PREFIX_DIR)?;
+    validate_first_stage_build_product(&prefix_rustlib_path, "prefix rustlib")?;
     Ok(RustSourceProviderFirstStageBuild {
         stage_id: boundary.stage_id.clone(),
         script_path: boundary.script_path.clone(),
         log_path: boundary.build_log_path.clone(),
         mrustc_digest_blake3: file_digest_blake3(&mrustc_path)?,
         minicargo_digest_blake3: file_digest_blake3(&minicargo_path)?,
+        translated_rustc_digest_blake3: file_digest_blake3(&translated_rustc_path)?,
+        translated_cargo_digest_blake3: file_digest_blake3(&translated_cargo_path)?,
+        prefix_digest_blake3: content_digest_blake3(&prefix_path)?,
+        prefix_rustlib_digest_blake3: content_digest_blake3(&prefix_rustlib_path)?,
         mrustc_path,
         minicargo_path,
+        translated_rustc_path,
+        translated_cargo_path,
+        prefix_path,
+        prefix_rustlib_path,
     })
 }
 
@@ -974,7 +1014,7 @@ fn require_first_stage_path(path: &Path, label: &str, directory: bool) -> Result
 }
 
 fn validate_first_stage_build_product(path: &Path, label: &str) -> Result<(), RustSourceProviderError> {
-    if path.is_file() {
+    if path.is_file() || path.is_dir() {
         return Ok(());
     }
     Err(RustSourceProviderError::Build(format!("missing first-stage product {label}: {}", path.display())))
@@ -1196,6 +1236,8 @@ fn push_first_stage_script_header(
     script.push_str("set -eu\n");
     script.push_str(&format!("STAGE_ID={}\n", shell_quote(&boundary.stage_id)));
     script.push_str(&format!("RUSTC_VERSION={}\n", shell_quote(&boundary.rust_version)));
+    script.push_str(&format!("RUSTC_TARGET={}\n", shell_quote(&boundary.target_triple)));
+    script.push_str(&format!("MRUSTC_TARGET_VER={}\n", shell_quote(&boundary.mrustc_target_version)));
     script.push_str(&format!("SOURCE_DIR={}\n", shell_quote(&boundary.source_dir.display().to_string())));
     script.push_str(&format!("BUILD_DIR={}\n", shell_quote(&boundary.build_dir.display().to_string())));
     script.push_str(&format!("OUTPUT_DIR={}\n", shell_quote(&boundary.output_dir.display().to_string())));
@@ -1266,15 +1308,46 @@ fn push_first_stage_build_commands(script: &mut String) {
     script.push_str("mkdir -p \"$BUILD_DIR\"\n");
     script.push_str("$COPY_PROGRAM \"$RUST_ARCHIVE\" \"$MRUSTC_SOURCE/rustc-${RUSTC_VERSION}-src.tar.gz\"\n");
     script.push_str("cd \"$MRUSTC_SOURCE\"\n");
+    script.push_str("export RUSTC_TARGET MRUSTC_TARGET_VER RUSTC_VERSION\n");
+    script.push_str("export RUSTC_INSTALL_BINDIR=bin\n");
+    script.push_str("export OUTDIR_SUF=\n");
+    script.push_str("export CARGO_CFG_RUSTIX_NO_LINUX_RAW=1\n");
     script.push_str("$MAKE_PROGRAM CXXFLAGS=\"$MRUSTC_CXXFLAGS\"\n");
     script.push_str(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"));
+    script.push_str(&format!(
+        "$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}\n"
+    ));
+    script.push_str(&format!(
+        "$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}\n"
+    ));
+    script.push_str(&format!("$MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR}\n"));
     push_required_relative_file_check(script, FIRST_STAGE_MRUSTC_BINARY, "mrustc build did not produce bin/mrustc");
     push_required_relative_file_check(
         script,
         FIRST_STAGE_MINICARGO_BINARY,
         "mrustc build did not produce bin/minicargo",
     );
-    script.push_str("printf '%s\\n' \"mrustc first-stage products ready\"\n");
+    push_required_relative_file_check(
+        script,
+        FIRST_STAGE_TRANSLATED_RUSTC_BINARY,
+        "mrustc build did not produce output/rustc",
+    );
+    push_required_relative_file_check(
+        script,
+        FIRST_STAGE_TRANSLATED_CARGO_BINARY,
+        "mrustc build did not produce output/cargo",
+    );
+    push_required_relative_file_check(
+        script,
+        FIRST_STAGE_PREFIX_RUSTC_BINARY,
+        "mrustc run_rustc did not produce prefix rustc",
+    );
+    push_required_relative_file_check(
+        script,
+        FIRST_STAGE_PREFIX_CARGO_BINARY,
+        "mrustc run_rustc did not produce prefix cargo",
+    );
+    script.push_str("printf '%s\\n' \"Rust 1.90 first-stage products ready\"\n");
 }
 
 fn push_mrustc_source_file_check(script: &mut String, file_name: &str, message: &str) {
@@ -1680,6 +1753,14 @@ mod tests {
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/README.txt").is_file());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/bin/mrustc").is_file());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/bin/minicargo").is_file());
+        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/output/rustc").is_file());
+        assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/output/cargo").is_file());
+        assert!(
+            scratch
+                .join(FIRST_STAGE_SOURCE_DIR)
+                .join("mrustc-0.12.0/run_rustc/output/prefix/bin/rustc")
+                .is_file()
+        );
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("rust-1.90.0/README.txt").is_file());
         #[cfg(unix)]
         assert_eq!(script_mode(&scratch.join(FIRST_STAGE_SCRIPT_FILE)), EXECUTABLE_MODE);
@@ -1699,6 +1780,14 @@ mod tests {
             serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_BUILD_MANIFEST_FILE)).unwrap()).unwrap();
         assert_eq!(build_manifest["schema"], FIRST_STAGE_BUILD_MANIFEST_SCHEMA);
         assert_eq!(build_manifest["build"]["mrustc_digest_blake3"].as_str().unwrap().len(), SHA256_HEX_CHAR_COUNT);
+        assert_eq!(
+            build_manifest["build"]["translated_rustc_digest_blake3"].as_str().unwrap().len(),
+            SHA256_HEX_CHAR_COUNT
+        );
+        assert_eq!(
+            build_manifest["build"]["prefix_rustlib_digest_blake3"].as_str().unwrap().len(),
+            SHA256_HEX_CHAR_COUNT
+        );
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains("missing verified source"));
         assert!(script.contains("verified sources manifest"));
@@ -2116,6 +2205,11 @@ let Plan = {
                 &format!("{top_dir}/{FIRST_STAGE_MINICARGO_MAKEFILE}"),
                 test_mrustc_minicargo_makefile(),
             );
+            append_test_tar_file(
+                &mut builder,
+                &format!("{top_dir}/{FIRST_STAGE_RUN_RUSTC_DIR}/{FIRST_STAGE_MAKEFILE}"),
+                test_mrustc_run_rustc_makefile(),
+            );
         }
         builder.finish().unwrap();
         let encoder = builder.into_inner().unwrap();
@@ -2135,7 +2229,11 @@ let Plan = {
     }
 
     fn test_mrustc_minicargo_makefile() -> &'static [u8] {
-        b"bin/minicargo:\n\tmkdir -p bin\n\tprintf 'synthetic minicargo\\n' > bin/minicargo\n\tchmod +x bin/minicargo\n"
+        b"bin/minicargo:\n\tmkdir -p bin\n\tprintf 'synthetic minicargo\\n' > bin/minicargo\n\tchmod +x bin/minicargo\noutput/rustc:\n\tmkdir -p output\n\tprintf 'synthetic translated rustc\\n' > output/rustc\n\tchmod +x output/rustc\noutput/cargo:\n\tmkdir -p output\n\tprintf 'synthetic translated cargo\\n' > output/cargo\n\tchmod +x output/cargo\n"
+    }
+
+    fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
+        b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf 'synthetic prefix rustc\\n' > output/prefix/bin/rustc\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/cargo\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {
