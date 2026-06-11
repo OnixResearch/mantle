@@ -1,10 +1,9 @@
 //! Shell/orchestration for the source-built Rust compiler/sysroot provider.
 //!
 //! This module performs filesystem work around the pure provider metadata
-//! validator in `source_toolchain_closure`. It deliberately fails closed for
-//! materialization until Mantle has a real Rust-from-source bootstrap path; the
-//! validation entry points are ready for a future materializer output and refuse
-//! prebuilt/wrapper metadata in the pure core.
+//! validator in `source_toolchain_closure`. It fails closed unless every
+//! source-built stage reaches a validated final provider candidate; only then
+//! does it copy that candidate into the requested provider output directory.
 
 use std::ffi::OsString;
 use std::fs;
@@ -638,6 +637,13 @@ pub(crate) fn materialize_rust_source_provider(
             .candidate,
     );
     let rustc_final_run = run_rustc_final_provider_candidate(&plan, &route, &rustc_final_bootstrap_candidate, verbose)?;
+    let materialized = promote_rustc_final_provider_candidate(&plan, &rustc_final_run)?;
+    if let Err(err) =
+        write_rustc_final_provider_candidate_manifest(&rustc_final_run.boundary, &rustc_final_run.candidate, true)
+    {
+        let _ = remove_import_output(&materialized.output_path);
+        return Err(err);
+    }
     if verbose {
         emit_rust_source_materialization_progress(
             &plan,
@@ -648,19 +654,60 @@ pub(crate) fn materialize_rust_source_provider(
             &rustc_final_run,
         );
     }
-    Err(RustSourceProviderError::Blocked {
-        recipe_path: plan.recipe_path,
-        recipe_digest_blake3: plan.recipe_digest_blake3,
-        route_plan_path: Some(boundary.route_plan_path),
-        route_plan_digest_blake3: Some(boundary.route_plan_digest_blake3),
-        first_stage_id: Some(boundary.stage_id),
-        first_stage_script_path: Some(boundary.script_path),
-        final_candidate_stage_id: Some(rustc_final_run.candidate.stage_id),
-        final_candidate_dir: Some(rustc_final_run.candidate.candidate_dir),
-        final_candidate_manifest_path: Some(rustc_final_run.boundary.provider_candidate_manifest_path),
-        final_candidate_metadata_digest_blake3: Some(rustc_final_run.candidate.metadata_digest_blake3),
-        final_candidate_smoke_summary_path: Some(rustc_final_run.smoke.summary_path),
-        reason: RUST_SOURCE_PROVIDER_BLOCKED_REASON,
+    Ok(materialized)
+}
+
+fn promote_rustc_final_provider_candidate(
+    materialization: &RustSourceProviderMaterializationPlan,
+    run: &RustSourceProviderRustcFinalProviderCandidateRun,
+) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
+    if run.candidate.stage_id != run.boundary.stage_id {
+        return Err(RustSourceProviderError::Validate(format!(
+            "rustc final candidate stage expected {}, got {}",
+            run.boundary.stage_id, run.candidate.stage_id
+        )));
+    }
+    if run.candidate.candidate_dir != run.boundary.provider_candidate_dir {
+        return Err(RustSourceProviderError::Validate(format!(
+            "rustc final candidate dir expected {}, got {}",
+            run.boundary.provider_candidate_dir.display(),
+            run.candidate.candidate_dir.display()
+        )));
+    }
+    if materialization.output_dir != run.boundary.output_dir {
+        return Err(RustSourceProviderError::Validate(format!(
+            "rust source provider output expected {}, got {}",
+            materialization.output_dir.display(),
+            run.boundary.output_dir.display()
+        )));
+    }
+    let candidate_validation = validate_materialized_rust_source_provider(&run.candidate.candidate_dir)?;
+    if candidate_validation.metadata_digest_blake3 != run.candidate.metadata_digest_blake3 {
+        return Err(RustSourceProviderError::Validate(format!(
+            "rustc final candidate metadata digest expected {}, got {}",
+            run.candidate.metadata_digest_blake3, candidate_validation.metadata_digest_blake3
+        )));
+    }
+    copy_provider_tree(&run.candidate.candidate_dir, &materialization.output_dir)?;
+    let output_validation = match validate_materialized_rust_source_provider(&materialization.output_dir) {
+        Ok(validation) => validation,
+        Err(err) => {
+            let _ = remove_import_output(&materialization.output_dir);
+            return Err(err);
+        }
+    };
+    if output_validation.metadata_digest_blake3 != run.candidate.metadata_digest_blake3 {
+        let _ = remove_import_output(&materialization.output_dir);
+        return Err(RustSourceProviderError::Validate(format!(
+            "materialized provider metadata digest expected {}, got {}",
+            run.candidate.metadata_digest_blake3, output_validation.metadata_digest_blake3
+        )));
+    }
+    Ok(RustSourceProviderMaterialization {
+        output_path: materialization.output_dir.clone(),
+        recipe_digest_blake3: materialization.recipe_digest_blake3.clone(),
+        metadata_path: output_validation.metadata_path,
+        metadata_digest_blake3: output_validation.metadata_digest_blake3,
     })
 }
 
@@ -977,6 +1024,9 @@ fn plan_materialization(
     }
     if output_dir.as_os_str().is_empty() {
         return Err(RustSourceProviderError::Read("output dir is empty".to_string()));
+    }
+    if output_dir.exists() {
+        return Err(RustSourceProviderError::Copy(format!("output dir {} already exists", output_dir.display())));
     }
     if scratch_dir.as_os_str().is_empty() {
         return Err(RustSourceProviderError::Read("scratch dir is empty".to_string()));
@@ -1344,7 +1394,7 @@ fn run_rustc_final_provider_candidate(
     write_rustc_final_build_manifest(&boundary, &build)?;
     let candidate = assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)?;
     let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate)?;
-    write_rustc_final_provider_candidate_manifest(&boundary, &candidate)?;
+    write_rustc_final_provider_candidate_manifest(&boundary, &candidate, false)?;
     Ok(RustSourceProviderRustcFinalProviderCandidateRun {
         boundary,
         candidate,
@@ -2760,8 +2810,9 @@ fn rustc_final_provider_artifacts(
 fn write_rustc_final_provider_candidate_manifest(
     boundary: &RustSourceProviderRustcFinalBoundary,
     candidate: &RustSourceProviderRustcFinalProviderCandidate,
+    final_output_written: bool,
 ) -> Result<(), RustSourceProviderError> {
-    let manifest = serde_json::json!({
+    let mut manifest = serde_json::json!({
         "schema": RUSTC_FINAL_PROVIDER_CANDIDATE_SCHEMA,
         "stage_id": boundary.stage_id,
         "route_plan_digest_blake3": boundary.route_plan_digest_blake3,
@@ -2773,10 +2824,13 @@ fn write_rustc_final_provider_candidate_manifest(
             "policy_digest_blake3": boundary.bootstrap_provider_policy_digest_blake3,
         },
         "candidate": candidate,
-        "candidate_only": true,
-        "final_output_written": false,
-        "next_blocked_reason": RUST_SOURCE_PROVIDER_BLOCKED_REASON,
+        "candidate_only": !final_output_written,
+        "final_output_path": boundary.output_dir.display().to_string(),
+        "final_output_written": final_output_written,
     });
+    if !final_output_written {
+        manifest["next_blocked_reason"] = serde_json::Value::String(RUST_SOURCE_PROVIDER_BLOCKED_REASON.to_string());
+    }
     write_json_pretty(&boundary.provider_candidate_manifest_path, &manifest, "rustc final provider candidate manifest")
 }
 
@@ -3953,31 +4007,25 @@ mod tests {
     const EXECUTABLE_MODE: u32 = 0o755;
 
     #[test]
-    fn materializer_prepares_first_stage_boundary_then_fails_closed() {
+    fn materializer_writes_final_provider_output_from_validated_candidate() {
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
         let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
+        fs::write(&recipe, "source-built recipe\n").unwrap();
         write_test_route_plan(dir.path());
 
-        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let materialized = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
 
-        let text = err.to_string();
-        assert!(text.contains(RUST_SOURCE_PROVIDER_BLOCKED_REASON), "unexpected materializer error: {text}");
-        assert!(text.contains("recipe_digest_blake3="));
-        assert!(text.contains("route_plan_digest_blake3="));
-        assert!(text.contains("first_stage_id=mrustc-to-rust-1.90.0"));
-        assert!(text.contains("final_candidate_stage_id=rust-1.94.0-final"));
-        assert!(text.contains("final_candidate_dir="));
-        assert!(text.contains(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR));
-        assert!(text.contains("final_candidate_manifest="));
-        assert!(text.contains(RUSTC_FINAL_PROVIDER_CANDIDATE_MANIFEST_FILE));
-        assert!(text.contains("final_candidate_metadata_digest_blake3="));
-        assert!(text.contains("final_candidate_smoke_summary="));
-        assert!(text.contains(SMOKE_EVIDENCE_SUMMARY_FILE));
-        assert!(!text.contains("source-built claim"));
-        assert!(!output.exists());
+        assert_eq!(materialized.output_path, output);
+        assert_eq!(materialized.recipe_digest_blake3.len(), SHA256_HEX_CHAR_COUNT);
+        assert_eq!(materialized.metadata_digest_blake3.len(), SHA256_HEX_CHAR_COUNT);
+        assert_eq!(materialized.metadata_path, output.join(RUST_SOURCE_PROVIDER_METADATA_PATH));
+        assert!(output.join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
+        assert!(output.join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
+        assert!(output.join(PROVIDER_RUSTDOC_RELATIVE_PATH).is_file());
+        assert!(output.join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file());
+        assert!(output.join(RUSTC_FINAL_PROVIDER_RECEIPT_RELATIVE_PATH).is_file());
         assert!(scratch.join(FIRST_STAGE_SCRIPT_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_PLAN_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_SOURCES_MANIFEST_FILE).is_file());
@@ -4400,8 +4448,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(rustc_final_candidate_manifest["schema"], RUSTC_FINAL_PROVIDER_CANDIDATE_SCHEMA);
-        assert_eq!(rustc_final_candidate_manifest["candidate_only"], true);
-        assert_eq!(rustc_final_candidate_manifest["final_output_written"], false);
+        assert_eq!(rustc_final_candidate_manifest["candidate_only"], false);
+        assert_eq!(rustc_final_candidate_manifest["final_output_written"], true);
+        assert_eq!(rustc_final_candidate_manifest["final_output_path"], output.display().to_string());
+        assert!(rustc_final_candidate_manifest.get("next_blocked_reason").is_none());
         assert_eq!(rustc_final_candidate_manifest["candidate"]["stage_id"], RUSTC_FINAL_STAGE_ID);
         let expected_rustc_final_candidate_artifacts =
             REQUIRED_RUSTC_FINAL_BUILD_OUTPUT_ROLES.len() + RUSTC_FINAL_PROVIDER_RECEIPT_ARTIFACT_COUNT;
@@ -4415,6 +4465,12 @@ mod tests {
         let rustc_final_candidate_validation =
             validate_materialized_rust_source_provider(&rustc_final_root.join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR))
                 .unwrap();
+        let materialized_validation = validate_materialized_rust_source_provider(&output).unwrap();
+        assert_eq!(materialized_validation.metadata_digest_blake3, materialized.metadata_digest_blake3);
+        assert_eq!(
+            materialized_validation.validation.policy_digest_blake3,
+            rustc_final_candidate_validation.validation.policy_digest_blake3
+        );
         assert_eq!(
             rustc_final_candidate_validation.validation.artifact_count,
             expected_rustc_final_candidate_artifacts
@@ -4469,6 +4525,23 @@ mod tests {
     }
 
     #[test]
+    fn materializer_rejects_existing_output_before_scratch_work() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "source-built recipe\n").unwrap();
+        fs::create_dir(&output).unwrap();
+        write_test_route_plan(dir.path());
+
+        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+
+        assert!(err.to_string().contains("already exists"));
+        assert!(!scratch.join(FIRST_STAGE_SCRIPT_FILE).exists());
+        assert!(output.is_dir());
+    }
+
+    #[test]
     fn first_stage_provider_candidate_rejects_tampered_artifact() {
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
@@ -4476,14 +4549,14 @@ mod tests {
         let scratch = dir.path().join("scratch");
         fs::write(&recipe, "blocked recipe\n").unwrap();
         write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
         let candidate = scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR);
 
         fs::write(candidate.join(PROVIDER_RUSTC_RELATIVE_PATH), b"changed-rustc").unwrap();
         let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
 
         assert!(err.to_string().contains("digest mismatch"));
-        assert!(!output.exists());
+        assert!(validate_materialized_rust_source_provider(&output).is_ok());
     }
 
     #[test]
@@ -4494,14 +4567,14 @@ mod tests {
         let scratch = dir.path().join("scratch");
         fs::write(&recipe, "blocked recipe\n").unwrap();
         write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
         let candidate = scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR);
 
         fs::write(candidate.join(PROVIDER_CARGO_RELATIVE_PATH), b"changed-cargo").unwrap();
         let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
 
         assert!(err.to_string().contains("digest mismatch"));
-        assert!(!output.exists());
+        assert!(validate_materialized_rust_source_provider(&output).is_ok());
     }
 
     #[test]
@@ -4512,7 +4585,7 @@ mod tests {
         let scratch = dir.path().join("scratch");
         fs::write(&recipe, "blocked recipe\n").unwrap();
         write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
         let candidate = scratch
             .join(RUSTC_STAGE1_CHAIN_DIR)
             .join(RUSTC_STAGE1_NEXT_ID)
@@ -4522,7 +4595,7 @@ mod tests {
         let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
 
         assert!(err.to_string().contains("digest mismatch"));
-        assert!(!output.exists());
+        assert!(validate_materialized_rust_source_provider(&output).is_ok());
     }
 
     #[test]
@@ -4533,7 +4606,7 @@ mod tests {
         let scratch = dir.path().join("scratch");
         fs::write(&recipe, "blocked recipe\n").unwrap();
         write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
         let candidate = scratch
             .join(RUSTC_STAGE1_CHAIN_DIR)
             .join(RUSTC_STAGE1_FINAL_CHAIN_ID)
@@ -4543,7 +4616,7 @@ mod tests {
         let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
 
         assert!(err.to_string().contains("digest mismatch"));
-        assert!(!output.exists());
+        assert!(validate_materialized_rust_source_provider(&output).is_ok());
     }
 
     #[test]
@@ -4554,14 +4627,14 @@ mod tests {
         let scratch = dir.path().join("scratch");
         fs::write(&recipe, "blocked recipe\n").unwrap();
         write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
         let candidate = scratch.join(RUSTC_FINAL_DIR).join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR);
 
         fs::write(candidate.join(PROVIDER_RUSTDOC_RELATIVE_PATH), b"changed-final-rustdoc").unwrap();
         let err = validate_materialized_rust_source_provider(&candidate).unwrap_err();
 
         assert!(err.to_string().contains("digest mismatch"));
-        assert!(!output.exists());
+        assert!(validate_materialized_rust_source_provider(&output).is_ok());
     }
 
     #[test]
@@ -4689,20 +4762,20 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn first_stage_script_fails_before_provider_output_when_sources_missing() {
+    fn first_stage_script_fails_when_sources_removed_after_materialization() {
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
         let scratch = dir.path().join("scratch");
-        fs::write(&recipe, "blocked recipe\n").unwrap();
+        fs::write(&recipe, "source-built recipe\n").unwrap();
         write_test_route_plan(dir.path());
-        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+        let _ = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
         fs::remove_dir_all(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0")).unwrap();
 
         let status = Command::new(scratch.join(FIRST_STAGE_SCRIPT_FILE)).status().unwrap();
 
         assert_eq!(status.code(), Some(FIRST_STAGE_MISSING_SOURCE_EXIT_CODE));
-        assert!(!output.exists());
+        assert!(validate_materialized_rust_source_provider(&output).is_ok());
     }
 
     #[test]
