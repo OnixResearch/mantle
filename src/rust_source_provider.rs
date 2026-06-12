@@ -157,6 +157,54 @@ const FIRST_STAGE_GCC_FALLBACK_GLOB: &str =
     "/nix/store/*-bootstrap-stage*-gcc-wrapper-*/bin/g++ /nix/store/*-gcc-wrapper-*/bin/g++";
 const FIRST_STAGE_ZLIB_PKG_CONFIG_FALLBACK_GLOB: &str =
     "/nix/store/*-zlib-*-dev/lib/pkgconfig /nix/store/*-libz-*-dev/lib/pkgconfig";
+const FIRST_STAGE_ENV_SCRUB_VARS: &[&str] = &[
+    "CARGO",
+    "CARGO_BIN_NAME",
+    "CARGO_CFG_LINUX",
+    "CARGO_CFG_TARGET_ABI",
+    "CARGO_CFG_TARGET_ARCH",
+    "CARGO_CFG_TARGET_ENDIAN",
+    "CARGO_CFG_TARGET_ENV",
+    "CARGO_CFG_TARGET_FAMILY",
+    "CARGO_CFG_TARGET_HAS_ATOMIC",
+    "CARGO_CFG_TARGET_HAS_ATOMIC_EQUAL_ALIGNMENT",
+    "CARGO_CFG_TARGET_HAS_ATOMIC_LOAD_STORE",
+    "CARGO_CFG_TARGET_OS",
+    "CARGO_CFG_TARGET_POINTER_WIDTH",
+    "CARGO_CFG_TARGET_VENDOR",
+    "CARGO_CFG_UNIX",
+    "CARGO_CFG_WINDOWS",
+    "CARGO_CRATE_NAME",
+    "CARGO_ENCODED_RUSTFLAGS",
+    "CARGO_MANIFEST_DIR",
+    "CARGO_MANIFEST_PATH",
+    "CARGO_PKG_AUTHORS",
+    "CARGO_PKG_DESCRIPTION",
+    "CARGO_PKG_HOMEPAGE",
+    "CARGO_PKG_LICENSE",
+    "CARGO_PKG_LICENSE_FILE",
+    "CARGO_PKG_NAME",
+    "CARGO_PKG_README",
+    "CARGO_PKG_REPOSITORY",
+    "CARGO_PKG_RUST_VERSION",
+    "CARGO_PKG_VERSION",
+    "CARGO_PKG_VERSION_MAJOR",
+    "CARGO_PKG_VERSION_MINOR",
+    "CARGO_PKG_VERSION_PATCH",
+    "CARGO_PKG_VERSION_PRE",
+    "CARGO_PRIMARY_PACKAGE",
+    "DEBUG",
+    "HOST",
+    "MRUSTC_LIBDIR",
+    "NUM_JOBS",
+    "OPT_LEVEL",
+    "OUT_DIR",
+    "PROFILE",
+    "RUSTC",
+    "RUSTDOC",
+    "RUSTFLAGS",
+    "TARGET",
+];
 const PROVIDER_RUSTC_RELATIVE_PATH: &str = "bin/rustc";
 const PROVIDER_CARGO_RELATIVE_PATH: &str = "bin/cargo";
 const PROVIDER_RUSTDOC_RELATIVE_PATH: &str = "bin/rustdoc";
@@ -3568,6 +3616,7 @@ fn first_stage_boundary_script(
     let mut script = String::new();
     push_first_stage_script_header(&mut script, boundary, &build_sources);
     push_first_stage_source_checks(&mut script, boundary);
+    push_first_stage_env_scrub(&mut script);
     push_first_stage_tool_checks(&mut script);
     push_first_stage_build_commands(&mut script);
     Ok(script)
@@ -3648,6 +3697,13 @@ fn push_first_stage_source_checks(script: &mut String, boundary: &RustSourceProv
     );
     push_mrustc_source_file_check(script, FIRST_STAGE_MAKEFILE, "mrustc source has no Makefile");
     push_mrustc_source_file_check(script, FIRST_STAGE_MINICARGO_MAKEFILE, "mrustc source has no minicargo.mk");
+}
+
+fn push_first_stage_env_scrub(script: &mut String) {
+    script.push_str("printf '%s\\n' 'scrubbing inherited Cargo/build-script environment'\n");
+    for var_name in FIRST_STAGE_ENV_SCRUB_VARS {
+        script.push_str(&format!("unset {var_name}\n"));
+    }
 }
 
 fn push_first_stage_tool_checks(script: &mut String) {
@@ -4694,6 +4750,16 @@ mod tests {
         assert!(script.contains("using GCC toolchain"));
         assert!(script.contains("ZLIB_PKG_CONFIG_FALLBACK_GLOB"));
         assert!(script.contains("using zlib pkg-config flags"));
+        assert!(script.contains("scrubbing inherited Cargo/build-script environment"));
+        assert!(script.contains("unset CARGO_PKG_VERSION"));
+        assert!(script.contains("unset CARGO_MANIFEST_DIR"));
+        assert!(script.contains("unset OUT_DIR"));
+        assert!(script.contains("unset TARGET"));
+        assert!(script.contains("unset HOST"));
+        assert!(!script.contains("unset RUSTC_TARGET"));
+        let scrub_index = script.find("unset CARGO_PKG_VERSION").unwrap();
+        let build_index = script.find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE}")).unwrap();
+        assert!(scrub_index < build_index);
     }
 
     #[test]
