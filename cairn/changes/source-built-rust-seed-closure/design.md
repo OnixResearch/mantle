@@ -16,11 +16,11 @@ The current fixed-point proof uses `rustc-source-root-target-wrapper` around a p
 - Host/target split must remain intact: host proc-macro/custom-build units still need host-compatible Rust artifacts.
 - Accidentally relabeling prebuilt Rust as source-built would violate proof-before-claim policy.
 
-## Current frontier: first-stage env isolation
+## Current frontier: musl-host Rust compiler dylib
 
-The real mrustc-to-Rust first-stage route now reaches the rustc crate graph and stops at `rustc_apfloat` build-script package-version validation. The build-script requires `CARGO_PKG_VERSION` to end with the LLVM metadata suffix, while the preserved probe observed `0.1.0`, which points at inherited Mantle package env leaking into build-script execution.
+The real mrustc-to-Rust first-stage route now moves past the earlier env leak, local `libproc_macro` workspace discovery, musl CRT search, unwind-symbol, and static-musl `*.so` copy blockers. The preserved probe reaches the Rust 1.90 compiler build and fails closed because `rustc_driver` still requests a dylib, while the current route is building host compiler artifacts for `x86_64-unknown-linux-musl`, whose target does not support that crate type.
 
-The first-stage shell should scrub inherited Cargo/build-script variables before invoking mrustc/minicargo/make, then allow minicargo to set crate-specific `CARGO_PKG_*`, `CARGO_MANIFEST_DIR`, `OUT_DIR`, `TARGET`, `HOST`, and related values. This is a boundary-hardening step only: it may move the route past `rustc_apfloat`, but it still cannot justify a source-built provider claim until final provider materialization, smoke, provider-backed self-build, and fixed-point proof succeed.
+The next design decision is the host/target split for the source-built provider route: keep the target sysroot on musl for static outputs, but avoid pretending the Rust compiler host itself can be produced as a musl dylib-based compiler without a real upstream-compatible strategy. This still cannot justify a source-built provider claim until final provider materialization, smoke, provider-backed self-build, and fixed-point proof succeed.
 
 ## Validation
 
