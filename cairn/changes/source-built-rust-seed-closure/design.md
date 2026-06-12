@@ -22,6 +22,15 @@ The real mrustc-to-Rust first-stage route now moves past the earlier env leak, l
 
 The next design decision is the host/target split for the source-built provider route: keep the target sysroot on musl for static outputs, but avoid pretending the Rust compiler host itself can be produced as a musl dylib-based compiler without a real upstream-compatible strategy. This still cannot justify a source-built provider claim until final provider materialization, smoke, provider-backed self-build, and fixed-point proof succeed.
 
+## Planned route split
+
+The next implementation slice should make the route plan and first-stage build boundary explicit about two roles:
+
+- `compiler_host_triple`: the triple used for `rustc`, `cargo`, `rustdoc`, proc-macro loading, and compiler-host libraries. The current probe indicates this must not be `x86_64-unknown-linux-musl` unless there is a proven dylib-capable strategy for `rustc_driver`.
+- `target_triple`: the musl target sysroot used for statically linked Mantle outputs and target package units.
+
+Provider metadata and receipts must continue to carry both `host-rustlib` and `target-rustlib` roles. If the route temporarily uses a GNU compiler host to get past `rustc_driver`, the evidence must still prove that the musl target sysroot is source-built and receipt-bound. It is not acceptable to collapse the roles or relabel a GNU-host compiler plus a prebuilt musl std as a full source-built Rust closure.
+
 ## Validation
 
 - Closure validator rejects placeholder or prebuilt Rust provider metadata.

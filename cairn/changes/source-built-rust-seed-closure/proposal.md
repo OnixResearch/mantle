@@ -6,6 +6,7 @@ The archived source-built toolchain closure proof successfully bound the target 
 
 - Define the source-built Rust compiler/sysroot closure contract that can replace the current Rust seed exceptions.
 - Materialize or import a real Rust compiler and standard library closure with source identity, build receipt identity, executable paths, and BLAKE3 content digests.
+- Split the source-built route's compiler-host artifacts from the musl target sysroot when the real route requires different triples.
 - Thread that closure into Cargo-free self-build and fixed-point proofs without using ambient Rust toolchain discovery.
 - Keep non-claims visible until the Rust compiler/sysroot closure is actually source-built and receipt-bound.
 

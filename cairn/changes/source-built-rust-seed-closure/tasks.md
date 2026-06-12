@@ -33,6 +33,10 @@
 - [x] [serial] Scrub inherited Cargo/build-script environment before first-stage mrustc/minicargo/make execution. r[rust_package_planning.source_built_rust_seed_closure]
   - Evidence: `evidence/rust-source-first-stage-env-scrub-2026-06-12.md` records the bounded unset list, generated-script regression coverage, and focused `rust_source_provider` test output.
   - Evidence: `evidence/rust-source-first-stage-env-scrub-probe-2026-06-12.md` records that the preserved real-route rerun moved past `rustc_apfloat`; the next fail-closed blocker is musl-host `rustc_driver` dylib support, not env leakage.
+- [ ] [serial] Split the Rust source route into compiler-host and musl target sysroot roles before rerunning the real first-stage compiler build. r[rust_package_planning.source_built_rust_seed_closure]
+  - Target implementation: update the route plan/build boundary so `rustc`/`cargo`/compiler-host libraries can use a dylib-capable compiler host triple while the target rustlib remains `x86_64-unknown-linux-musl`.
+  - Target tests: add positive coverage that provider metadata/receipts distinguish `host-rustlib` from `target-rustlib`, and negative coverage that either role cannot be satisfied by the other's artifact path.
+  - Target evidence: record the route-plan diff, focused `rust_source_provider` tests, and a preserved real-route probe showing whether the `rustc_driver` dylib blocker moves.
 - [x] [serial] Extend toolchain closure validation so Rust compiler/sysroot members can be promoted from seed exceptions to source-built members only when provider metadata and receipts are complete. r[rust_package_planning.source_built_rust_seed_closure]
   - Evidence: `src/source_toolchain_closure.rs` rejects prebuilt/rustup/Nix/wrapper provenance markers, missing provider roles, and observed artifact digest mismatches.
 - [x] [serial] Thread the source-built Rust provider into Cargo-free one-shot and fixed-point proof commands while preserving host/target topology split behavior. r[rust_package_planning.source_built_rust_seed_closure]
@@ -57,4 +61,4 @@
 - [ ] [serial] Run fixed-point Cargo-free proof and record whether `not-source-built-toolchain-closure` can be removed; if not, record exact remaining non-claims. r[rust_package_planning.source_built_rust_seed_closure]
   - Blocked: provider materialization fails closed; `not-source-built-toolchain-closure` remains.
 - [x] [serial] Run `cairn validate --root .` and tasks gate, then archive only after completed tasks cite durable evidence. r[rust_package_planning.source_built_rust_seed_closure]
-  - Evidence: `evidence/validation-refresh-2026-06-10.md`, `evidence/rust-provider-cargo-free-threading-2026-06-10.md`, and `evidence/validation-env-scrub-probe-2026-06-12.md` record validation/task-gate output and confirm the change remains active because provider-backed materialization, smoke, and fixed-point proof tasks are still blocked.
+  - Evidence: `evidence/validation-refresh-2026-06-10.md`, `evidence/rust-provider-cargo-free-threading-2026-06-10.md`, `evidence/validation-env-scrub-probe-2026-06-12.md`, and `evidence/host-target-split-cairn-2026-06-12.md` record validation/task-gate output and confirm the change remains active because provider-backed materialization, smoke, and fixed-point proof tasks are still blocked.
