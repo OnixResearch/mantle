@@ -40,7 +40,7 @@ use crate::source_toolchain_closure::ToolchainSourceKind;
 
 pub(crate) const RUST_SOURCE_PROVIDER_BLOCKED_REASON: &str = "source-built Rust provider materialization is not implemented: Mantle has no receipt-bound Rust-from-source bootstrap that can build rustc/cargo/rustlib without prebuilt Rust";
 
-const DIRECTORY_DIGEST_MAX_ENTRIES: usize = 200_000;
+const DIRECTORY_DIGEST_MAX_ENTRIES: usize = 1_000_000;
 const RUST_SOURCE_PROVIDER_PLAN_FILE: &str = "rust-source-plan.ncl";
 const FIRST_STAGE_PLAN_SCHEMA: &str = "mantle-rust-source-provider-first-stage-plan-v1";
 const FIRST_STAGE_PLAN_FILE: &str = "mrustc-first-stage-plan.json";
@@ -145,8 +145,18 @@ const FIRST_STAGE_MINICARGO_MAKEFILE: &str = "minicargo.mk";
 const FIRST_STAGE_MAKEFILE: &str = "Makefile";
 const FIRST_STAGE_MAKE_PROGRAM: &str = "make";
 const FIRST_STAGE_COPY_PROGRAM: &str = "cp";
+const FIRST_STAGE_PKG_CONFIG_PROGRAM: &str = "pkg-config";
+const FIRST_STAGE_CMAKE_PROGRAM: &str = "cmake";
+const FIRST_STAGE_CC_PROGRAM: &str = "cc";
+const FIRST_STAGE_CXX_PROGRAM: &str = "c++";
+const FIRST_STAGE_HOST_GNU_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 const FIRST_STAGE_CXXFLAGS: &str = "-g0 -O2 -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_NONE";
 const FIRST_STAGE_MAKE_FALLBACK_GLOB: &str = "/nix/store/*-gnumake-*/bin/make /nix/store/*-gnumake-static-*/bin/make";
+const FIRST_STAGE_CMAKE_FALLBACK_GLOB: &str = "/nix/store/*-cmake-*/bin/cmake /nix/store/*-cmake-minimal-*/bin/cmake";
+const FIRST_STAGE_GCC_FALLBACK_GLOB: &str =
+    "/nix/store/*-bootstrap-stage*-gcc-wrapper-*/bin/g++ /nix/store/*-gcc-wrapper-*/bin/g++";
+const FIRST_STAGE_ZLIB_PKG_CONFIG_FALLBACK_GLOB: &str =
+    "/nix/store/*-zlib-*-dev/lib/pkgconfig /nix/store/*-libz-*-dev/lib/pkgconfig";
 const PROVIDER_RUSTC_RELATIVE_PATH: &str = "bin/rustc";
 const PROVIDER_CARGO_RELATIVE_PATH: &str = "bin/cargo";
 const PROVIDER_RUSTDOC_RELATIVE_PATH: &str = "bin/rustdoc";
@@ -3592,6 +3602,17 @@ fn push_first_stage_script_header(
     script.push_str(&format!("MAKE_PROGRAM={}\n", shell_quote(FIRST_STAGE_MAKE_PROGRAM)));
     script.push_str(&format!("MAKE_FALLBACK_GLOB={}\n", shell_quote(FIRST_STAGE_MAKE_FALLBACK_GLOB)));
     script.push_str(&format!("COPY_PROGRAM={}\n", shell_quote(FIRST_STAGE_COPY_PROGRAM)));
+    script.push_str(&format!("PKG_CONFIG_PROGRAM={}\n", shell_quote(FIRST_STAGE_PKG_CONFIG_PROGRAM)));
+    script.push_str(&format!("CMAKE_PROGRAM={}\n", shell_quote(FIRST_STAGE_CMAKE_PROGRAM)));
+    script.push_str(&format!("CC_PROGRAM={}\n", shell_quote(FIRST_STAGE_CC_PROGRAM)));
+    script.push_str(&format!("CXX_PROGRAM={}\n", shell_quote(FIRST_STAGE_CXX_PROGRAM)));
+    script.push_str(&format!("HOST_GNU_TRIPLE={}\n", shell_quote(FIRST_STAGE_HOST_GNU_TRIPLE)));
+    script.push_str(&format!("CMAKE_FALLBACK_GLOB={}\n", shell_quote(FIRST_STAGE_CMAKE_FALLBACK_GLOB)));
+    script.push_str(&format!("GCC_FALLBACK_GLOB={}\n", shell_quote(FIRST_STAGE_GCC_FALLBACK_GLOB)));
+    script.push_str(&format!(
+        "ZLIB_PKG_CONFIG_FALLBACK_GLOB={}\n",
+        shell_quote(FIRST_STAGE_ZLIB_PKG_CONFIG_FALLBACK_GLOB)
+    ));
     script.push_str(&format!("MRUSTC_CXXFLAGS={}\n", shell_quote(FIRST_STAGE_CXXFLAGS)));
 }
 
@@ -3633,8 +3654,58 @@ fn push_first_stage_tool_checks(script: &mut String) {
     script.push_str(
         "if ! command -v \"$MAKE_PROGRAM\" >/dev/null 2>&1; then for candidate in $MAKE_FALLBACK_GLOB; do if [ -x \"$candidate\" ]; then MAKE_PROGRAM=\"$candidate\"; break; fi; done; fi\n",
     );
+    script.push_str(
+        "if command -v \"$MAKE_PROGRAM\" >/dev/null 2>&1; then make_dir=$(dirname \"$(command -v \"$MAKE_PROGRAM\")\"); case \":$PATH:\" in *\":$make_dir:\"*) ;; *) PATH=\"$make_dir:$PATH\"; export PATH;; esac; fi\n",
+    );
+    script.push_str(
+        "if ! command -v \"$CMAKE_PROGRAM\" >/dev/null 2>&1; then for candidate in $CMAKE_FALLBACK_GLOB; do if [ -x \"$candidate\" ]; then CMAKE_PROGRAM=\"$candidate\"; break; fi; done; fi\n",
+    );
+    script.push_str(
+        "if command -v \"$CMAKE_PROGRAM\" >/dev/null 2>&1; then cmake_dir=$(dirname \"$(command -v \"$CMAKE_PROGRAM\")\"); case \":$PATH:\" in *\":$cmake_dir:\"*) ;; *) PATH=\"$cmake_dir:$PATH\"; export PATH;; esac; fi\n",
+    );
+    push_first_stage_gcc_toolchain(script);
     push_required_shell_command_check(script, "MAKE_PROGRAM", "make is required for mrustc first stage");
     push_required_shell_command_check(script, "COPY_PROGRAM", "cp is required for mrustc first stage");
+    push_required_shell_command_check(script, "CMAKE_PROGRAM", "cmake is required for mrustc first stage");
+    push_required_shell_command_check(script, "CC_PROGRAM", "cc is required for mrustc first stage");
+    push_required_shell_command_check(script, "CXX_PROGRAM", "c++ is required for mrustc first stage");
+    push_first_stage_zlib_flags(script);
+}
+
+fn push_first_stage_gcc_toolchain(script: &mut String) {
+    script.push_str("for candidate in $GCC_FALLBACK_GLOB; do\n");
+    script.push_str("  candidate_dir=$(dirname \"$candidate\")\n");
+    script.push_str("  candidate_gcc=\"$candidate_dir/gcc\"\n");
+    script.push_str("  if [ ! -x \"$candidate\" ] || [ ! -x \"$candidate_gcc\" ]; then continue; fi\n");
+    script.push_str("  candidate_machine=$(\"$candidate_gcc\" -dumpmachine 2>/dev/null || true)\n");
+    script.push_str("  if [ \"$candidate_machine\" != \"$HOST_GNU_TRIPLE\" ]; then continue; fi\n");
+    script.push_str(
+        "  case \":$PATH:\" in *\":$candidate_dir:\"*) ;; *) PATH=\"$candidate_dir:$PATH\"; export PATH;; esac\n",
+    );
+    script.push_str("  printf '%s\\n' \"using GCC toolchain: $candidate_dir ($candidate_machine)\"\n");
+    script.push_str("  break\n");
+    script.push_str("done\n");
+}
+
+fn push_first_stage_zlib_flags(script: &mut String) {
+    script.push_str("ZLIB_CFLAGS=\n");
+    script.push_str("ZLIB_LIBS=\n");
+    script.push_str("if command -v \"$PKG_CONFIG_PROGRAM\" >/dev/null 2>&1; then\n");
+    script.push_str("  if ! \"$PKG_CONFIG_PROGRAM\" --exists zlib >/dev/null 2>&1; then\n");
+    script.push_str(
+        "    for pc_dir in $ZLIB_PKG_CONFIG_FALLBACK_GLOB; do if [ -f \"$pc_dir/zlib.pc\" ]; then PKG_CONFIG_PATH=\"${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$pc_dir\"; export PKG_CONFIG_PATH; break; fi; done\n",
+    );
+    script.push_str("  fi\n");
+    script.push_str("  if \"$PKG_CONFIG_PROGRAM\" --exists zlib >/dev/null 2>&1; then\n");
+    script.push_str("    ZLIB_CFLAGS=$(\"$PKG_CONFIG_PROGRAM\" --cflags zlib)\n");
+    script.push_str("    ZLIB_LIBS=$(\"$PKG_CONFIG_PROGRAM\" --libs zlib)\n");
+    script.push_str("    printf '%s\\n' \"using zlib pkg-config flags: $ZLIB_CFLAGS $ZLIB_LIBS\"\n");
+    script.push_str("  else\n");
+    script.push_str("    printf '%s\\n' 'zlib pkg-config metadata not found; continuing without zlib flags'\n");
+    script.push_str("  fi\n");
+    script.push_str("else\n");
+    script.push_str("  printf '%s\\n' 'pkg-config not found; continuing without zlib flags'\n");
+    script.push_str("fi\n");
 }
 
 fn push_first_stage_build_commands(script: &mut String) {
@@ -3648,7 +3719,13 @@ fn push_first_stage_build_commands(script: &mut String) {
     script.push_str("export RUSTC_INSTALL_BINDIR=bin\n");
     script.push_str("export OUTDIR_SUF=\n");
     script.push_str("export CARGO_CFG_RUSTIX_NO_LINUX_RAW=1\n");
-    script.push_str("$MAKE_PROGRAM CXXFLAGS=\"$MRUSTC_CXXFLAGS\"\n");
+    script.push_str("export CC=\"$CC_PROGRAM\"\n");
+    script.push_str("export CXX=\"$CXX_PROGRAM\"\n");
+    script.push_str("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
+    script.push_str("export LDFLAGS=\"$ZLIB_LIBS\"\n");
+    script.push_str("export LIBS=\"$ZLIB_LIBS\"\n");
+    script
+        .push_str("$MAKE_PROGRAM CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n");
     script.push_str(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"));
     script.push_str(&format!(
         "$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}\n"
@@ -4084,9 +4161,16 @@ mod tests {
     const RUSTC_FINAL_STAGE_ID: &str = "rust-1.94.0-final";
     const SOURCE_ARCHIVE_FILE_MODE: u32 = 0o644;
     const SOURCE_ARCHIVE_EXECUTABLE_FILE_MODE: u32 = 0o755;
+    const OBSERVED_RUST_190_SOURCE_TREE_ENTRIES: usize = 279_266;
     const SHA256_HEX_CHAR_COUNT: usize = 64;
     #[cfg(unix)]
     const EXECUTABLE_MODE: u32 = 0o755;
+
+    #[test]
+    fn directory_digest_entry_limit_covers_observed_rust_source_tree() {
+        assert!(DIRECTORY_DIGEST_MAX_ENTRIES > OBSERVED_RUST_190_SOURCE_TREE_ENTRIES);
+        assert!(OBSERVED_RUST_190_SOURCE_TREE_ENTRIES > 0);
+    }
 
     #[test]
     fn materializer_writes_final_provider_output_from_validated_candidate() {
@@ -4604,6 +4688,12 @@ mod tests {
         assert!(script.contains("verified sources manifest"));
         assert!(script.contains("mrustc-0.12.0"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_BINARY));
+        assert!(script.contains(FIRST_STAGE_PKG_CONFIG_PROGRAM));
+        assert!(script.contains(FIRST_STAGE_CMAKE_PROGRAM));
+        assert!(script.contains("GCC_FALLBACK_GLOB"));
+        assert!(script.contains("using GCC toolchain"));
+        assert!(script.contains("ZLIB_PKG_CONFIG_FALLBACK_GLOB"));
+        assert!(script.contains("using zlib pkg-config flags"));
     }
 
     #[test]
