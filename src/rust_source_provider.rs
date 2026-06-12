@@ -152,6 +152,7 @@ const FIRST_STAGE_PKG_CONFIG_PROGRAM: &str = "pkg-config";
 const FIRST_STAGE_CMAKE_PROGRAM: &str = "cmake";
 const FIRST_STAGE_CC_PROGRAM: &str = "cc";
 const FIRST_STAGE_CXX_PROGRAM: &str = "c++";
+const FIRST_STAGE_MUSL_TRIPLE: &str = "x86_64-unknown-linux-musl";
 const FIRST_STAGE_TARGET_CC_PROGRAM: &str = "x86_64-unknown-linux-musl-gcc";
 const FIRST_STAGE_TARGET_CXX_PROGRAM: &str = "x86_64-unknown-linux-musl-g++";
 const FIRST_STAGE_TARGET_AR_PROGRAM: &str = "x86_64-unknown-linux-musl-ar";
@@ -159,6 +160,8 @@ const FIRST_STAGE_TARGET_RANLIB_PROGRAM: &str = "x86_64-unknown-linux-musl-ranli
 const FIRST_STAGE_TARGET_LINKER_ALIAS_DIR: &str = "target-linker-bin";
 const FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR: &str = "target-linker-runtime";
 const FIRST_STAGE_STATIC_MUSL_DYLIB_EXT: &str = "rlib";
+const FIRST_STAGE_TARGET_OUTDIR_SUFFIX: &str = "-target";
+const FIRST_STAGE_TARGET_PREFIX_S_DIR: &str = "run_rustc/output-target/prefix-s";
 const FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR: &str = "NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_musl";
 const FIRST_STAGE_TARGET_NIX_SUPPORT_DIR: &str = "nix-support";
 const FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE: &str = "orig-libc";
@@ -345,6 +348,7 @@ struct RustSourceProviderFirstStageBoundary {
     stage_id: String,
     stage_kind: RustSourceProviderBootstrapStageKind,
     rust_version: String,
+    host_triple: String,
     target_triple: String,
     mrustc_target_version: String,
     source_ids: Vec<String>,
@@ -426,6 +430,8 @@ struct RustSourceProviderFirstStageBuild {
     prefix_digest_blake3: String,
     prefix_rustlib_path: PathBuf,
     prefix_rustlib_digest_blake3: String,
+    target_prefix_rustlib_path: PathBuf,
+    target_prefix_rustlib_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -1166,6 +1172,7 @@ fn prepare_first_stage_boundary(
         stage_id: stage.id.clone(),
         stage_kind: stage.kind,
         rust_version: stage.rust_version.clone(),
+        host_triple: route.plan.host_triple.clone(),
         target_triple: route.plan.target_triple.clone(),
         mrustc_target_version: mrustc_target_version(&stage.rust_version),
         source_ids: stage.source_ids.clone(),
@@ -2059,6 +2066,7 @@ fn first_stage_boundary_manifest(
             "id": &boundary.stage_id,
             "kind": boundary.stage_kind,
             "rust_version": &boundary.rust_version,
+            "host_triple": &boundary.host_triple,
             "target_triple": &boundary.target_triple,
             "mrustc_target_version": &boundary.mrustc_target_version,
             "source_ids": &boundary.source_ids,
@@ -3023,13 +3031,15 @@ fn run_first_stage_build(
     let translated_rustc_path = build_sources.mrustc_path.join(FIRST_STAGE_TRANSLATED_RUSTC_BINARY);
     let translated_cargo_path = build_sources.mrustc_path.join(FIRST_STAGE_TRANSLATED_CARGO_BINARY);
     let prefix_path = build_sources.mrustc_path.join(FIRST_STAGE_PREFIX_DIR);
-    let prefix_rustlib_path = prefix_path.join("lib/rustlib").join(&boundary.target_triple).join("lib");
+    let prefix_rustlib_path = prefix_path.join("lib/rustlib").join(&boundary.host_triple).join("lib");
+    let target_prefix_rustlib_path = prefix_path.join("lib/rustlib").join(&boundary.target_triple).join("lib");
     validate_first_stage_build_product(&mrustc_path, FIRST_STAGE_MRUSTC_BINARY)?;
     validate_first_stage_build_product(&minicargo_path, FIRST_STAGE_MINICARGO_BINARY)?;
     validate_first_stage_build_product(&translated_rustc_path, FIRST_STAGE_TRANSLATED_RUSTC_BINARY)?;
     validate_first_stage_build_product(&translated_cargo_path, FIRST_STAGE_TRANSLATED_CARGO_BINARY)?;
     validate_first_stage_build_product(&prefix_path, FIRST_STAGE_PREFIX_DIR)?;
-    validate_first_stage_build_product(&prefix_rustlib_path, "prefix rustlib")?;
+    validate_first_stage_build_product(&prefix_rustlib_path, "prefix host rustlib")?;
+    validate_first_stage_build_product(&target_prefix_rustlib_path, "prefix target rustlib")?;
     Ok(RustSourceProviderFirstStageBuild {
         stage_id: boundary.stage_id.clone(),
         script_path: boundary.script_path.clone(),
@@ -3040,12 +3050,14 @@ fn run_first_stage_build(
         translated_cargo_digest_blake3: file_digest_blake3(&translated_cargo_path)?,
         prefix_digest_blake3: content_digest_blake3(&prefix_path)?,
         prefix_rustlib_digest_blake3: content_digest_blake3(&prefix_rustlib_path)?,
+        target_prefix_rustlib_digest_blake3: content_digest_blake3(&target_prefix_rustlib_path)?,
         mrustc_path,
         minicargo_path,
         translated_rustc_path,
         translated_cargo_path,
         prefix_path,
         prefix_rustlib_path,
+        target_prefix_rustlib_path,
     })
 }
 
@@ -3274,9 +3286,22 @@ fn first_stage_provider_receipt_steps(boundary: &RustSourceProviderFirstStageBou
             ],
         },
         RustProviderReceiptStep {
-            name: "build-rust-prefix".to_string(),
+            name: "build-rust-host-prefix".to_string(),
             program: FIRST_STAGE_MAKE_PROGRAM.to_string(),
-            arguments: vec!["-C".to_string(), FIRST_STAGE_RUN_RUSTC_DIR.to_string()],
+            arguments: vec![
+                "-C".to_string(),
+                FIRST_STAGE_RUN_RUSTC_DIR.to_string(),
+                format!("host={}", boundary.host_triple),
+            ],
+        },
+        RustProviderReceiptStep {
+            name: "build-rust-target-rustlib".to_string(),
+            program: FIRST_STAGE_MAKE_PROGRAM.to_string(),
+            arguments: vec![
+                "-C".to_string(),
+                FIRST_STAGE_RUN_RUSTC_DIR.to_string(),
+                format!("target={}", boundary.target_triple),
+            ],
         },
     ]
 }
@@ -3647,7 +3672,9 @@ fn push_first_stage_script_header(
     script.push_str("set -eu\n");
     script.push_str(&format!("STAGE_ID={}\n", shell_quote(&boundary.stage_id)));
     script.push_str(&format!("RUSTC_VERSION={}\n", shell_quote(&boundary.rust_version)));
-    script.push_str(&format!("RUSTC_TARGET={}\n", shell_quote(&boundary.target_triple)));
+    script.push_str(&format!("RUSTC_HOST_TRIPLE={}\n", shell_quote(&boundary.host_triple)));
+    script.push_str(&format!("RUSTC_TARGET={}\n", shell_quote(&boundary.host_triple)));
+    script.push_str(&format!("RUSTC_PROVIDER_TARGET_TRIPLE={}\n", shell_quote(&boundary.target_triple)));
     script.push_str(&format!("MRUSTC_TARGET_VER={}\n", shell_quote(&boundary.mrustc_target_version)));
     script.push_str(&format!("SOURCE_DIR={}\n", shell_quote(&boundary.source_dir.display().to_string())));
     script.push_str(&format!("BUILD_DIR={}\n", shell_quote(&boundary.build_dir.display().to_string())));
@@ -3804,6 +3831,9 @@ fn push_first_stage_minicargo_workspace_boundary(script: &mut String) {
 }
 
 fn push_first_stage_target_linker_wrapper(script: &mut String) {
+    script.push_str(&format!(
+        "if [ \"$RUSTC_TARGET\" = \"$RUSTC_PROVIDER_TARGET_TRIPLE\" ] && [ \"$RUSTC_TARGET\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"
+    ));
     script.push_str("if ! command -v \"$TARGET_CC_PROGRAM\" >/dev/null 2>&1; then for candidate in $TARGET_MUSL_GCC_FALLBACK_GLOB; do if [ -x \"$candidate\" ]; then TARGET_CC_PROGRAM=\"$candidate\"; break; fi; done; fi\n");
     script.push_str(&format!(
         "if ! command -v \"$TARGET_CC_PROGRAM\" >/dev/null 2>&1; then printf '%s\\n' 'x86_64 musl target gcc is required for run_rustc target linking' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
@@ -3864,6 +3894,9 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("export RANLIB=ranlib\n");
     script.push_str("export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=cc\n");
     script.push_str("printf '%s\\n' \"using target linker wrapper: $target_alias_dir/cc -> $target_cc_path ($target_cc_machine); runtime CRT/unwind dir: $target_runtime_dir\"\n");
+    script.push_str("else\n");
+    script.push_str("  printf '%s\\n' \"using compiler-host linker for $RUSTC_TARGET; target sysroot remains $RUSTC_PROVIDER_TARGET_TRIPLE\"\n");
+    script.push_str("fi\n");
 }
 
 fn push_first_stage_build_commands(script: &mut String) {
@@ -3880,6 +3913,8 @@ fn push_first_stage_build_commands(script: &mut String) {
     script.push_str("export CARGO_CFG_RUSTIX_NO_LINUX_RAW=1\n");
     script.push_str("export CC=\"$CC_PROGRAM\"\n");
     script.push_str("export CXX=\"$CXX_PROGRAM\"\n");
+    script.push_str("export CFLAGS=\"$ZLIB_CFLAGS\"\n");
+    script.push_str("export CPPFLAGS=\"$ZLIB_CFLAGS\"\n");
     script.push_str("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
     script.push_str("export LDFLAGS=\"$ZLIB_LIBS\"\n");
     script.push_str("export LIBS=\"$ZLIB_LIBS\"\n");
@@ -3892,10 +3927,8 @@ fn push_first_stage_build_commands(script: &mut String) {
     script.push_str(&format!(
         "$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}\n"
     ));
-    push_first_stage_target_linker_wrapper(script);
-    script.push_str(&format!(
-        "$MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT={FIRST_STAGE_STATIC_MUSL_DYLIB_EXT}\n"
-    ));
+    push_first_stage_run_rustc_host(script);
+    push_first_stage_run_rustc_target(script);
     push_required_relative_file_check(script, FIRST_STAGE_MRUSTC_BINARY, "mrustc build did not produce bin/mrustc");
     push_required_relative_file_check(
         script,
@@ -3923,6 +3956,44 @@ fn push_first_stage_build_commands(script: &mut String) {
         "mrustc run_rustc did not produce prefix cargo",
     );
     script.push_str("printf '%s\\n' \"Rust 1.90 first-stage products ready\"\n");
+}
+
+fn push_first_stage_run_rustc_host(script: &mut String) {
+    script.push_str("RUSTC_TARGET=\"$RUSTC_HOST_TRIPLE\"\n");
+    push_first_stage_target_linker_wrapper(script);
+    push_first_stage_run_rustc_dylib_ext(script);
+    script.push_str(&format!(
+        "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\"; else $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR}; fi\n"
+    ));
+}
+
+fn push_first_stage_run_rustc_target(script: &mut String) {
+    script.push_str("if [ \"$RUSTC_PROVIDER_TARGET_TRIPLE\" != \"$RUSTC_HOST_TRIPLE\" ]; then\n");
+    script.push_str("RUSTC_TARGET=\"$RUSTC_PROVIDER_TARGET_TRIPLE\"\n");
+    push_first_stage_target_linker_wrapper(script);
+    push_first_stage_run_rustc_dylib_ext(script);
+    script.push_str(&format!("target_prefix_s={FIRST_STAGE_TARGET_PREFIX_S_DIR}\n"));
+    script.push_str("target_libdir=\"$target_prefix_s/lib/rustlib/$RUSTC_TARGET/lib\"\n");
+    script.push_str("target_libstd=\"$target_libdir/libstd.rlib\"\n");
+    script.push_str(&format!(
+        "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR} OUTDIR_SUF={FIRST_STAGE_TARGET_OUTDIR_SUFFIX} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\" \"output{FIRST_STAGE_TARGET_OUTDIR_SUFFIX}/prefix-s/lib/rustlib/$RUSTC_TARGET/lib/libstd.rlib\"; else $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR} OUTDIR_SUF={FIRST_STAGE_TARGET_OUTDIR_SUFFIX} \"output{FIRST_STAGE_TARGET_OUTDIR_SUFFIX}/prefix-s/lib/rustlib/$RUSTC_TARGET/lib/libstd.rlib\"; fi\n"
+    ));
+    script.push_str(&format!(
+        "if [ ! -f \"$target_libstd\" ]; then printf '%s\\n' 'target rustlib build did not produce libstd.rlib' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!("prefix_target_libdir={FIRST_STAGE_PREFIX_DIR}/lib/rustlib/\"$RUSTC_TARGET\"/lib\n"));
+    script.push_str("mkdir -p \"$prefix_target_libdir\"\n");
+    script.push_str("$COPY_PROGRAM \"$target_libdir\"/* \"$prefix_target_libdir/\"\n");
+    script.push_str("RUSTC_TARGET=\"$RUSTC_HOST_TRIPLE\"\n");
+    script.push_str("else\n");
+    script.push_str("  printf '%s\\n' 'compiler host and provider target triples are identical; using host rustlib for target role'\n");
+    script.push_str("fi\n");
+}
+
+fn push_first_stage_run_rustc_dylib_ext(script: &mut String) {
+    script.push_str(&format!(
+        "if [ \"$RUSTC_TARGET\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then RUN_RUSTC_DYLIB_EXT={FIRST_STAGE_STATIC_MUSL_DYLIB_EXT}; else RUN_RUSTC_DYLIB_EXT=; fi\n"
+    ));
 }
 
 fn push_mrustc_source_file_check(script: &mut String, file_name: &str, message: &str) {
@@ -4433,6 +4504,10 @@ mod tests {
             build_manifest["build"]["prefix_rustlib_digest_blake3"].as_str().unwrap().len(),
             SHA256_HEX_CHAR_COUNT
         );
+        assert_eq!(
+            build_manifest["build"]["target_prefix_rustlib_digest_blake3"].as_str().unwrap().len(),
+            SHA256_HEX_CHAR_COUNT
+        );
         let candidate_manifest: serde_json::Value =
             serde_json::from_slice(&fs::read(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE)).unwrap())
                 .unwrap();
@@ -4856,11 +4931,17 @@ mod tests {
         assert!(script.contains("using GCC toolchain"));
         assert!(script.contains("ZLIB_PKG_CONFIG_FALLBACK_GLOB"));
         assert!(script.contains("using zlib pkg-config flags"));
+        assert!(script.contains("export CFLAGS=\"$ZLIB_CFLAGS\""));
+        assert!(script.contains("export CPPFLAGS=\"$ZLIB_CFLAGS\""));
         assert!(script.contains("scrubbing inherited Cargo/build-script environment"));
         assert!(script.contains("writing minicargo workspace boundary"));
         assert!(script.contains(&format!("members = [\"{FIRST_STAGE_PROC_MACRO_WORKSPACE_MEMBER}\"]")));
         assert!(script.contains(&format!("resolver = \"{FIRST_STAGE_MINICARGO_WORKSPACE_RESOLVER}\"")));
+        assert!(script.contains(&format!("RUSTC_HOST_TRIPLE={}", shell_quote(HOST_TRIPLE))));
+        assert!(script.contains(&format!("RUSTC_TARGET={}", shell_quote(HOST_TRIPLE))));
+        assert!(script.contains(&format!("RUSTC_PROVIDER_TARGET_TRIPLE={}", shell_quote(TARGET_TRIPLE))));
         assert!(script.contains("using target linker wrapper"));
+        assert!(script.contains("using compiler-host linker"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_ALIAS_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR));
@@ -4871,7 +4952,10 @@ mod tests {
         assert!(script.contains("crtbeginS.o"));
         assert!(script.contains("libgcc.a"));
         assert!(script.contains("libunwind.a"));
-        assert!(script.contains(&format!("DYLIB_EXT={FIRST_STAGE_STATIC_MUSL_DYLIB_EXT}")));
+        assert!(script.contains(&format!("RUN_RUSTC_DYLIB_EXT={FIRST_STAGE_STATIC_MUSL_DYLIB_EXT}")));
+        assert!(script.contains(&format!("OUTDIR_SUF={FIRST_STAGE_TARGET_OUTDIR_SUFFIX}")));
+        assert!(script.contains(FIRST_STAGE_TARGET_PREFIX_S_DIR));
+        assert!(script.contains("target rustlib build did not produce libstd.rlib"));
         assert!(script.contains("export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=cc"));
         assert!(script.contains("unset CARGO_PKG_VERSION"));
         assert!(script.contains("unset CARGO_MANIFEST_DIR"));
@@ -4881,17 +4965,21 @@ mod tests {
         assert!(!script.contains("unset RUSTC_TARGET"));
         let scrub_index = script.find("unset CARGO_PKG_VERSION").unwrap();
         let workspace_index = script.find("writing minicargo workspace boundary").unwrap();
-        let target_linker_index = script.find("using target linker wrapper").unwrap();
+        let compiler_host_linker_index = script.find("using compiler-host linker").unwrap();
         let build_index = script.find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE}")).unwrap();
-        let run_rustc_index = script
-            .find(&format!(
-                "$MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT={FIRST_STAGE_STATIC_MUSL_DYLIB_EXT}"
-            ))
+        let host_run_rustc_index = script
+            .find(&format!("if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR}"))
             .unwrap();
+        let target_assignment_index = script.rfind("RUSTC_TARGET=\"$RUSTC_PROVIDER_TARGET_TRIPLE\"").unwrap();
+        let target_linker_index = script.rfind("using target linker wrapper").unwrap();
+        let target_run_rustc_index = script.find(&format!("OUTDIR_SUF={FIRST_STAGE_TARGET_OUTDIR_SUFFIX}")).unwrap();
         assert!(scrub_index < build_index);
         assert!(workspace_index < build_index);
-        assert!(build_index < target_linker_index);
-        assert!(target_linker_index < run_rustc_index);
+        assert!(build_index < compiler_host_linker_index);
+        assert!(compiler_host_linker_index < host_run_rustc_index);
+        assert!(host_run_rustc_index < target_assignment_index);
+        assert!(target_assignment_index < target_linker_index);
+        assert!(target_linker_index < target_run_rustc_index);
     }
 
     #[test]
@@ -5544,7 +5632,7 @@ let Plan = {
   schema = "mantle-rust-source-provider-bootstrap-plan-v1",
   provider_id = "mantle-rust-source-provider",
   route = "mrustc-source-route",
-  host_triple = "x86_64-unknown-linux-musl",
+  host_triple = "x86_64-unknown-linux-gnu",
   target_triple = "x86_64-unknown-linux-musl",
   final_version = "1.94.0",
   policy = {
@@ -5654,7 +5742,7 @@ let Plan = {
     { role = "rustc", path = "bin/rustc" },
     { role = "cargo", path = "bin/cargo" },
     { role = "rustdoc", path = "bin/rustdoc" },
-    { role = "host-rustlib", path = "lib/rustlib/x86_64-unknown-linux-musl/lib" },
+    { role = "host-rustlib", path = "lib/rustlib/x86_64-unknown-linux-gnu/lib" },
     { role = "target-rustlib", path = "lib/rustlib/x86_64-unknown-linux-musl/lib" },
     { role = "provider-receipt", path = "share/mantle-rust-provider/receipts/build.json" },
   ],
@@ -5821,7 +5909,7 @@ let Plan = {
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
-        b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/cargo\n"
+        b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/cargo\n\noutput-target/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p output-target/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf 'synthetic target std\\n' > output-target/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n"
     }
 
     fn test_rustc_stage1_build_script() -> &'static [u8] {

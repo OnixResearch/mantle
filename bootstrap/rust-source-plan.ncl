@@ -50,7 +50,7 @@ let Plan = {
   schema = "mantle-rust-source-provider-bootstrap-plan-v1",
   provider_id = "mantle-rust-source-provider",
   route = "mrustc-to-rust-current-source-route",
-  host_triple = "x86_64-unknown-linux-musl",
+  host_triple = "x86_64-unknown-linux-gnu",
   target_triple = "x86_64-unknown-linux-musl",
   final_version = "1.94.0",
   policy = {
@@ -163,7 +163,7 @@ let Plan = {
     { role = "rustc", path = "bin/rustc" },
     { role = "cargo", path = "bin/cargo" },
     { role = "rustdoc", path = "bin/rustdoc" },
-    { role = "host-rustlib", path = "lib/rustlib/x86_64-unknown-linux-musl/lib" },
+    { role = "host-rustlib", path = "lib/rustlib/x86_64-unknown-linux-gnu/lib" },
     { role = "target-rustlib", path = "lib/rustlib/x86_64-unknown-linux-musl/lib" },
     { role = "provider-receipt", path = "share/mantle-rust-provider/receipts/build.json" },
   ],

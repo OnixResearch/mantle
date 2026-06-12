@@ -2075,7 +2075,51 @@ mod tests {
         assert_eq!(validation.artifact_count, REQUIRED_RUST_PROVIDER_ROLES.len());
         assert_eq!(validation.source_count, 1);
         assert_eq!(validation.receipt_count, 1);
+        assert_eq!(metadata.host_triple, "x86_64-unknown-linux-gnu");
+        assert_eq!(metadata.target_triple, "x86_64-unknown-linux-musl");
+        assert!(metadata.artifacts.iter().any(|artifact| {
+            artifact.role == RustProviderRole::HostRustlib
+                && artifact.path == "lib/rustlib/x86_64-unknown-linux-gnu/lib"
+        }));
+        assert!(metadata.artifacts.iter().any(|artifact| {
+            artifact.role == RustProviderRole::TargetRustlib
+                && artifact.path == "lib/rustlib/x86_64-unknown-linux-musl/lib"
+        }));
         assert_eq!(validation.policy_digest_blake3, validation_reordered.policy_digest_blake3);
+    }
+
+    #[test]
+    fn rust_source_provider_rejects_host_rustlib_satisfied_by_target_path() {
+        let mut metadata = valid_rust_provider_metadata();
+        let host_rustlib = metadata
+            .artifacts
+            .iter_mut()
+            .find(|artifact| artifact.role == RustProviderRole::HostRustlib)
+            .unwrap();
+        host_rustlib.path = "lib/rustlib/x86_64-unknown-linux-musl/lib".to_string();
+
+        let err = validate_rust_source_provider_metadata(&metadata).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(err.message().contains("HostRustlib"));
+        assert!(err.message().contains("x86_64-unknown-linux-gnu"));
+    }
+
+    #[test]
+    fn rust_source_provider_rejects_target_rustlib_satisfied_by_host_path() {
+        let mut metadata = valid_rust_provider_metadata();
+        let target_rustlib = metadata
+            .artifacts
+            .iter_mut()
+            .find(|artifact| artifact.role == RustProviderRole::TargetRustlib)
+            .unwrap();
+        target_rustlib.path = "lib/rustlib/x86_64-unknown-linux-gnu/lib".to_string();
+
+        let err = validate_rust_source_provider_metadata(&metadata).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(err.message().contains("TargetRustlib"));
+        assert!(err.message().contains("x86_64-unknown-linux-musl"));
     }
 
     #[test]
@@ -2230,7 +2274,46 @@ mod tests {
         assert_eq!(validation.source_count, EXPECTED_BOOTSTRAP_PLAN_SOURCE_COUNT);
         assert_eq!(validation.stage_count, EXPECTED_BOOTSTRAP_PLAN_STAGE_COUNT);
         assert_eq!(validation.final_output_count, EXPECTED_BOOTSTRAP_PLAN_FINAL_OUTPUT_COUNT);
+        assert_eq!(plan.host_triple, "x86_64-unknown-linux-gnu");
+        assert_eq!(plan.target_triple, "x86_64-unknown-linux-musl");
+        assert!(plan.final_outputs.iter().any(|output| {
+            output.role == RustProviderRole::HostRustlib && output.path == "lib/rustlib/x86_64-unknown-linux-gnu/lib"
+        }));
+        assert!(plan.final_outputs.iter().any(|output| {
+            output.role == RustProviderRole::TargetRustlib && output.path == "lib/rustlib/x86_64-unknown-linux-musl/lib"
+        }));
         assert_eq!(validation.policy_digest_blake3, validation_reordered.policy_digest_blake3);
+    }
+
+    #[test]
+    fn rust_source_provider_bootstrap_plan_rejects_host_target_rustlib_aliasing() {
+        let mut host_alias_plan = valid_rust_provider_bootstrap_plan();
+        let host_output = host_alias_plan
+            .final_outputs
+            .iter_mut()
+            .find(|output| output.role == RustProviderRole::HostRustlib)
+            .unwrap();
+        host_output.path = "lib/rustlib/x86_64-unknown-linux-musl/lib".to_string();
+
+        let host_err = validate_rust_source_provider_bootstrap_plan(&host_alias_plan).unwrap_err();
+
+        assert_eq!(host_err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(host_err.message().contains("HostRustlib"));
+        assert!(host_err.message().contains("x86_64-unknown-linux-gnu"));
+
+        let mut target_alias_plan = valid_rust_provider_bootstrap_plan();
+        let target_output = target_alias_plan
+            .final_outputs
+            .iter_mut()
+            .find(|output| output.role == RustProviderRole::TargetRustlib)
+            .unwrap();
+        target_output.path = "lib/rustlib/x86_64-unknown-linux-gnu/lib".to_string();
+
+        let target_err = validate_rust_source_provider_bootstrap_plan(&target_alias_plan).unwrap_err();
+
+        assert_eq!(target_err.kind(), ToolchainClosureErrorKind::InvalidRustProvider);
+        assert!(target_err.message().contains("TargetRustlib"));
+        assert!(target_err.message().contains("x86_64-unknown-linux-musl"));
     }
 
     #[test]
@@ -2243,6 +2326,14 @@ mod tests {
         let validation = validate_rust_source_provider_bootstrap_plan(&plan).unwrap();
 
         assert_eq!(plan.final_version, FINAL_RUST_VERSION);
+        assert_eq!(plan.host_triple, "x86_64-unknown-linux-gnu");
+        assert_eq!(plan.target_triple, "x86_64-unknown-linux-musl");
+        assert!(plan.final_outputs.iter().any(|output| {
+            output.role == RustProviderRole::HostRustlib && output.path == "lib/rustlib/x86_64-unknown-linux-gnu/lib"
+        }));
+        assert!(plan.final_outputs.iter().any(|output| {
+            output.role == RustProviderRole::TargetRustlib && output.path == "lib/rustlib/x86_64-unknown-linux-musl/lib"
+        }));
         assert_eq!(validation.source_count, EXPECTED_BOOTSTRAP_PLAN_SOURCE_COUNT);
         assert_eq!(validation.stage_count, EXPECTED_BOOTSTRAP_PLAN_STAGE_COUNT);
         assert!(
@@ -2459,7 +2550,7 @@ mod tests {
             schema: RUST_PROVIDER_BOOTSTRAP_PLAN_SCHEMA.to_string(),
             provider_id: RUST_SOURCE_PROVIDER_ID.to_string(),
             route: "mrustc-to-rust-current-source-route".to_string(),
-            host_triple: "x86_64-unknown-linux-musl".to_string(),
+            host_triple: "x86_64-unknown-linux-gnu".to_string(),
             target_triple: "x86_64-unknown-linux-musl".to_string(),
             final_version: FINAL_RUST_VERSION.to_string(),
             policy: RustSourceProviderBootstrapPolicy {
@@ -2539,7 +2630,7 @@ mod tests {
                 rust_provider_bootstrap_output(RustProviderRole::Rustdoc, RUSTDOC_PROVIDER_PATH),
                 rust_provider_bootstrap_output(
                     RustProviderRole::HostRustlib,
-                    "lib/rustlib/x86_64-unknown-linux-musl/lib",
+                    "lib/rustlib/x86_64-unknown-linux-gnu/lib",
                 ),
                 rust_provider_bootstrap_output(
                     RustProviderRole::TargetRustlib,

@@ -16,20 +16,16 @@ The current fixed-point proof uses `rustc-source-root-target-wrapper` around a p
 - Host/target split must remain intact: host proc-macro/custom-build units still need host-compatible Rust artifacts.
 - Accidentally relabeling prebuilt Rust as source-built would violate proof-before-claim policy.
 
-## Current frontier: musl-host Rust compiler dylib
+## Current frontier: GNU compiler host with musl target rustlib
 
-The real mrustc-to-Rust first-stage route now moves past the earlier env leak, local `libproc_macro` workspace discovery, musl CRT search, unwind-symbol, and static-musl `*.so` copy blockers. The preserved probe reaches the Rust 1.90 compiler build and fails closed because `rustc_driver` still requests a dylib, while the current route is building host compiler artifacts for `x86_64-unknown-linux-musl`, whose target does not support that crate type.
+The real mrustc-to-Rust first-stage route now moves past the earlier env leak, local `libproc_macro` workspace discovery, musl CRT search, unwind-symbol, static-musl `*.so` copy, and musl-host `rustc_driver` dylib blockers. The route plan and first-stage build boundary now model two roles:
 
-The next design decision is the host/target split for the source-built provider route: keep the target sysroot on musl for static outputs, but avoid pretending the Rust compiler host itself can be produced as a musl dylib-based compiler without a real upstream-compatible strategy. This still cannot justify a source-built provider claim until final provider materialization, smoke, provider-backed self-build, and fixed-point proof succeed.
+- `compiler_host_triple`: the triple used for `rustc`, `cargo`, `rustdoc`, proc-macro loading, and compiler-host libraries. The active route uses `x86_64-unknown-linux-gnu` so `rustc_driver` can be built as a dylib-capable compiler-host artifact.
+- `target_triple`: the musl target sysroot used for statically linked Mantle outputs and target package units. The first-stage generator builds this as a std-only target rustlib pass and records it separately as `target-rustlib`.
 
-## Planned route split
+Provider metadata and receipts continue to carry both `host-rustlib` and `target-rustlib` roles, and tests reject satisfying the target role with the host rustlib path. The preserved clean rebuild recorded in `evidence/host-target-split-implementation-2026-06-12.md` shows the translated Rust 1.90 compiler reporting `host: x86_64-unknown-linux-gnu`, so the old musl-host `rustc_driver` blocker moved.
 
-The next implementation slice should make the route plan and first-stage build boundary explicit about two roles:
-
-- `compiler_host_triple`: the triple used for `rustc`, `cargo`, `rustdoc`, proc-macro loading, and compiler-host libraries. The current probe indicates this must not be `x86_64-unknown-linux-musl` unless there is a proven dylib-capable strategy for `rustc_driver`.
-- `target_triple`: the musl target sysroot used for statically linked Mantle outputs and target package units.
-
-Provider metadata and receipts must continue to carry both `host-rustlib` and `target-rustlib` roles. If the route temporarily uses a GNU compiler host to get past `rustc_driver`, the evidence must still prove that the musl target sysroot is source-built and receipt-bound. It is not acceptable to collapse the roles or relabel a GNU-host compiler plus a prebuilt musl std as a full source-built Rust closure.
+The next observed manual-probe frontier is translated Cargo dependency build environment: `libz-sys` could not find `zlib.h`, and vendored OpenSSL could not find `make`. The generated first-stage script now carries the make directory in `PATH` and exports zlib `CFLAGS`/`CPPFLAGS`, but this still cannot justify a source-built provider claim until final provider materialization, smoke, provider-backed self-build, and fixed-point proof succeed.
 
 ## Validation
 
