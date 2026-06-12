@@ -82,6 +82,8 @@ const RUSTC_STAGE1_PROVIDER_RECEIPT_ID: &str = "rustc-stage1-build";
 const RUSTC_STAGE1_PROVIDER_RECEIPT_NAME: &str = "rustc-stage1-build-receipt";
 const RUSTC_STAGE1_PROVIDER_BUILD_RECIPE: &str = "rustc-stage1-source-route";
 const RUSTC_STAGE1_SOURCE_BUILD_SCRIPT: &str = "mantle-rustc-stage1-build.sh";
+const RUSTC_STAGE1_GENERATED_BUILD_SCRIPT: &str = "mantle-generated-rustc-stage1-build.sh";
+const RUSTC_STAGE1_XPY_GOALS: &str = "install rustc cargo library/std";
 const RUSTC_STAGE1_SHELL_PROGRAM: &str = "sh";
 const RUSTC_FINAL_DIR: &str = "rustc-final";
 const RUSTC_FINAL_PLAN_SCHEMA: &str = "mantle-rust-source-provider-rustc-final-plan-v1";
@@ -106,7 +108,11 @@ const RUSTC_FINAL_PROVIDER_RECEIPT_ID: &str = "rust-final-build";
 const RUSTC_FINAL_PROVIDER_RECEIPT_NAME: &str = "rust-final-build-receipt";
 const RUSTC_FINAL_PROVIDER_BUILD_RECIPE: &str = "rust-final-source-route";
 const RUSTC_FINAL_SOURCE_BUILD_SCRIPT: &str = "mantle-rustc-final-build.sh";
+const RUSTC_FINAL_GENERATED_BUILD_SCRIPT: &str = "mantle-generated-rustc-final-build.sh";
+const RUSTC_FINAL_XPY_GOALS: &str = "install rustc cargo rustdoc library/std";
 const RUSTC_FINAL_SHELL_PROGRAM: &str = "sh";
+const RUSTC_SOURCE_XPY_SCRIPT: &str = "x.py";
+const RUSTC_SOURCE_GENERATED_CONFIG_FILE: &str = "mantle-rust-build-config.toml";
 const FIRST_STAGE_SCRIPT_FILE: &str = "run-mrustc-first-stage.sh";
 const FIRST_STAGE_ARCHIVE_DIR: &str = "archives";
 const FIRST_STAGE_SOURCE_DIR: &str = "sources";
@@ -1695,11 +1701,10 @@ fn push_rustc_stage1_script_input_checks(script: &mut String) {
         "missing verified rustc stage1 source",
         FIRST_STAGE_MISSING_SOURCE_EXIT_CODE,
     );
-    push_required_shell_var_file_check(
+    push_rustc_source_build_script_resolution(
         script,
-        "BUILD_SCRIPT",
-        "rustc stage1 source has no build script",
-        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+        "rustc stage1 source has no build script or x.py",
+        RUSTC_STAGE1_GENERATED_BUILD_SCRIPT,
     );
     push_required_shell_path_file_check(
         script,
@@ -1722,11 +1727,90 @@ fn push_rustc_stage1_script_input_checks(script: &mut String) {
     push_required_shell_command_check(script, "SHELL_PROGRAM", "sh is required for rustc stage1");
 }
 
+fn push_rustc_source_build_script_resolution(script: &mut String, missing_message: &str, generated_script_file: &str) {
+    script.push_str("if [ -f \"$BUILD_SCRIPT\" ]; then\n");
+    script.push_str("  RESOLVED_BUILD_SCRIPT=\"$BUILD_SCRIPT\"\n");
+    script.push_str("else\n");
+    script.push_str("  XPY_SCRIPT=\"$RUST_SOURCE/");
+    script.push_str(RUSTC_SOURCE_XPY_SCRIPT);
+    script.push_str("\"\n");
+    script.push_str("  if [ ! -f \"$XPY_SCRIPT\" ]; then printf '%s\\n' ");
+    script.push_str(&shell_quote(missing_message));
+    script.push_str(" >&2; exit ");
+    script.push_str(&RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; fi\n");
+    script.push_str("  RESOLVED_BUILD_SCRIPT=\"$BUILD_DIR/");
+    script.push_str(generated_script_file);
+    script.push_str("\"\n");
+    push_generated_rustc_source_build_script(script);
+    script.push_str("  chmod +x \"$RESOLVED_BUILD_SCRIPT\"\n");
+    script.push_str("fi\n");
+}
+
+fn push_generated_rustc_source_build_script(script: &mut String) {
+    script.push_str("  cat > \"$RESOLVED_BUILD_SCRIPT\" <<'MANTLE_RUST_SOURCE_GENERATED_SCRIPT'\n");
+    script.push_str("#!/bin/sh\n");
+    script.push_str("set -eu\n");
+    script.push_str("CONFIG=\"$MANTLE_BUILD_DIR/");
+    script.push_str(RUSTC_SOURCE_GENERATED_CONFIG_FILE);
+    script.push_str("\"\n");
+    script.push_str("mkdir -p \"$MANTLE_BUILD_DIR\" \"$MANTLE_STAGE_OUTPUT\"\n");
+    script.push_str("cat > \"$CONFIG\" <<MANTLE_RUST_BUILD_CONFIG\n");
+    script.push_str("profile = \"compiler\"\n");
+    script.push_str("changelog-seen = 2\n\n");
+    script.push_str("[build]\n");
+    script.push_str("build = \"$MANTLE_HOST_TRIPLE\"\n");
+    script.push_str("host = [\"$MANTLE_HOST_TRIPLE\"]\n");
+    script.push_str("target = [\"$MANTLE_TARGET_TRIPLE\"]\n");
+    script.push_str("cargo = \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\n");
+    script.push_str("rustc = \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\n");
+    script.push_str("extended = true\n");
+    script.push_str("tools = [\"cargo\", \"rustdoc\"]\n");
+    script.push_str("vendor = true\n");
+    script.push_str("build-dir = \"$MANTLE_BUILD_DIR/rust-build\"\n\n");
+    script.push_str("[install]\n");
+    script.push_str("prefix = \"$MANTLE_STAGE_OUTPUT\"\n\n");
+    script.push_str("[rust]\n");
+    script.push_str("download-rustc = false\n");
+    script.push_str("channel = \"stable\"\n");
+    script.push_str("codegen-tests = false\n");
+    script.push_str("deny-warnings = false\n\n");
+    script.push_str("[llvm]\n");
+    script.push_str("download-ci-llvm = false\n");
+    script.push_str("MANTLE_RUST_BUILD_CONFIG\n");
+    script.push_str("printf '%s\\n' \"using generated x.py Rust build adapter: $MANTLE_RUST_SOURCE\"\n");
+    script.push_str("if [ -x \"$MANTLE_RUST_SOURCE/");
+    script.push_str(RUSTC_SOURCE_XPY_SCRIPT);
+    script.push_str("\" ]; then\n");
+    script.push_str("  \"$MANTLE_RUST_SOURCE/");
+    script.push_str(RUSTC_SOURCE_XPY_SCRIPT);
+    script.push_str("\" --config \"$CONFIG\" $MANTLE_RUST_BUILD_GOALS\n");
+    script.push_str("elif command -v python3 >/dev/null 2>&1; then\n");
+    script.push_str("  python3 \"$MANTLE_RUST_SOURCE/");
+    script.push_str(RUSTC_SOURCE_XPY_SCRIPT);
+    script.push_str("\" --config \"$CONFIG\" $MANTLE_RUST_BUILD_GOALS\n");
+    script.push_str("else\n");
+    script.push_str("  printf '%s\\n' 'x.py is not executable and python3 is unavailable' >&2\n");
+    script.push_str("  exit ");
+    script.push_str(&RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("\n");
+    script.push_str("fi\n");
+    script.push_str("MANTLE_RUST_SOURCE_GENERATED_SCRIPT\n");
+}
+
+fn push_rustc_source_build_script_launch(script: &mut String, goals: &str) {
+    script.push_str(
+        "MANTLE_BOOTSTRAP_PROVIDER=\"$BOOTSTRAP_PROVIDER\" MANTLE_STAGE_OUTPUT=\"$STAGE_OUTPUT\" MANTLE_BUILD_DIR=\"$BUILD_DIR\" MANTLE_RUST_SOURCE=\"$RUST_SOURCE\" MANTLE_RUST_BUILD_GOALS=",
+    );
+    script.push_str(&shell_quote(goals));
+    script.push_str(
+        " MANTLE_RUST_VERSION=\"$RUSTC_VERSION\" MANTLE_HOST_TRIPLE=\"$HOST_TRIPLE\" MANTLE_TARGET_TRIPLE=\"$TARGET_TRIPLE\" \"$SHELL_PROGRAM\" \"$RESOLVED_BUILD_SCRIPT\"\n",
+    );
+}
+
 fn push_rustc_stage1_script_build_commands(script: &mut String) {
     script.push_str("mkdir -p \"$BUILD_DIR\" \"$STAGE_OUTPUT\"\n");
-    script.push_str(
-        "MANTLE_BOOTSTRAP_PROVIDER=\"$BOOTSTRAP_PROVIDER\" MANTLE_STAGE_OUTPUT=\"$STAGE_OUTPUT\" MANTLE_RUST_VERSION=\"$RUSTC_VERSION\" MANTLE_HOST_TRIPLE=\"$HOST_TRIPLE\" MANTLE_TARGET_TRIPLE=\"$TARGET_TRIPLE\" \"$SHELL_PROGRAM\" \"$BUILD_SCRIPT\"\n",
-    );
+    push_rustc_source_build_script_launch(script, RUSTC_STAGE1_XPY_GOALS);
     push_required_shell_path_file_check(
         script,
         "\"$STAGE_OUTPUT/bin/rustc\"",
@@ -1793,11 +1877,10 @@ fn push_rustc_final_script_input_checks(script: &mut String) {
         "missing verified rustc final source",
         FIRST_STAGE_MISSING_SOURCE_EXIT_CODE,
     );
-    push_required_shell_var_file_check(
+    push_rustc_source_build_script_resolution(
         script,
-        "BUILD_SCRIPT",
-        "rustc final source has no build script",
-        RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE,
+        "rustc final source has no build script or x.py",
+        RUSTC_FINAL_GENERATED_BUILD_SCRIPT,
     );
     push_required_shell_path_file_check(
         script,
@@ -1822,9 +1905,7 @@ fn push_rustc_final_script_input_checks(script: &mut String) {
 
 fn push_rustc_final_script_build_commands(script: &mut String) {
     script.push_str("mkdir -p \"$BUILD_DIR\" \"$STAGE_OUTPUT\"\n");
-    script.push_str(
-        "MANTLE_BOOTSTRAP_PROVIDER=\"$BOOTSTRAP_PROVIDER\" MANTLE_STAGE_OUTPUT=\"$STAGE_OUTPUT\" MANTLE_RUST_VERSION=\"$RUSTC_VERSION\" MANTLE_HOST_TRIPLE=\"$HOST_TRIPLE\" MANTLE_TARGET_TRIPLE=\"$TARGET_TRIPLE\" \"$SHELL_PROGRAM\" \"$BUILD_SCRIPT\"\n",
-    );
+    push_rustc_source_build_script_launch(script, RUSTC_FINAL_XPY_GOALS);
     push_required_shell_path_file_check(
         script,
         "\"$STAGE_OUTPUT/bin/rustc\"",
@@ -4002,6 +4083,7 @@ mod tests {
     const RUSTC_STAGE1_FINAL_CHAIN_ID: &str = "rust-1.93.1-stage1";
     const RUSTC_FINAL_STAGE_ID: &str = "rust-1.94.0-final";
     const SOURCE_ARCHIVE_FILE_MODE: u32 = 0o644;
+    const SOURCE_ARCHIVE_EXECUTABLE_FILE_MODE: u32 = 0o755;
     const SHA256_HEX_CHAR_COUNT: usize = 64;
     #[cfg(unix)]
     const EXECUTABLE_MODE: u32 = 0o755;
@@ -4525,6 +4607,65 @@ mod tests {
     }
 
     #[test]
+    fn materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "source-built recipe\n").unwrap();
+        write_test_route_plan_with_xpy_adapters(dir.path());
+
+        let materialized = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
+
+        assert_eq!(materialized.output_path, output);
+        assert!(validate_materialized_rust_source_provider(&output).is_ok());
+        assert!(
+            !scratch
+                .join(RUSTC_STAGE1_SOURCE_DIR)
+                .join("rust-1.91.1")
+                .join(RUSTC_STAGE1_SOURCE_BUILD_SCRIPT)
+                .exists()
+        );
+        assert!(scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_STAGE1_GENERATED_BUILD_SCRIPT).is_file());
+        let rustc_final_root = scratch.join(RUSTC_FINAL_DIR);
+        assert!(
+            !rustc_final_root
+                .join(RUSTC_FINAL_SOURCE_DIR)
+                .join("rust-1.94.0")
+                .join(RUSTC_FINAL_SOURCE_BUILD_SCRIPT)
+                .exists()
+        );
+        assert!(rustc_final_root.join(RUSTC_FINAL_BUILD_DIR).join(RUSTC_FINAL_GENERATED_BUILD_SCRIPT).is_file());
+        let rustc_stage1_log = fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
+        assert!(rustc_stage1_log.contains("using generated x.py Rust build adapter"));
+        assert!(rustc_stage1_log.contains("synthetic x.py for 1.91.1"));
+        let rustc_final_log = fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_BUILD_LOG_FILE)).unwrap();
+        assert!(rustc_final_log.contains("using generated x.py Rust build adapter"));
+        assert!(rustc_final_log.contains("synthetic x.py for 1.94.0"));
+    }
+
+    #[test]
+    fn materializer_rejects_rust_source_without_stage_script_or_xpy_without_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "source-built recipe\n").unwrap();
+        write_test_route_plan_missing_rust191_adapter(dir.path());
+
+        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+
+        let message = err.to_string();
+        assert!(message.contains("rustc stage1 source has no build script or x.py"));
+        assert!(!output.exists());
+        assert!(scratch.join(RUSTC_STAGE1_PLAN_FILE).is_file());
+        assert!(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE).is_file());
+        let rustc_stage1_log = fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
+        assert!(rustc_stage1_log.contains("rustc stage1 source has no build script or x.py"));
+        assert!(!scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_STAGE1_GENERATED_BUILD_SCRIPT).exists());
+    }
+
+    #[test]
     fn materializer_rejects_existing_output_before_scratch_work() {
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
@@ -4972,6 +5113,19 @@ mod tests {
         write_test_route_plan_with_sources(root, &sources, &sources.mrustc_sha256_hex);
     }
 
+    fn write_test_route_plan_with_xpy_adapters(root: &Path) {
+        let sources = write_test_source_archives_with_xpy_adapters(root);
+        write_test_route_plan_with_sources(root, &sources, &sources.mrustc_sha256_hex);
+    }
+
+    fn write_test_route_plan_missing_rust191_adapter(root: &Path) {
+        let mut sources = write_test_source_archives(root);
+        let rust191_path = root.join("test-source-archives").join("rust-1.91.1.tar.gz");
+        write_minimal_test_source_archive(&rust191_path, "rust-1.91.1", b"rust 1.91.1 source without adapter\n");
+        sources.rust191_sha256_hex = sha256_file_hex(&rust191_path);
+        write_test_route_plan_with_sources(root, &sources, &sources.mrustc_sha256_hex);
+    }
+
     fn write_test_route_plan_with_mrustc_sha(root: &Path, mrustc_sha256_hex: &str) {
         let sources = write_test_source_archives(root);
         write_test_route_plan_with_source_shas(
@@ -5250,6 +5404,14 @@ let Plan = {
     }
 
     fn write_test_source_archives(root: &Path) -> TestSourceArchives {
+        write_test_source_archives_with_adapter(root, false)
+    }
+
+    fn write_test_source_archives_with_xpy_adapters(root: &Path) -> TestSourceArchives {
+        write_test_source_archives_with_adapter(root, true)
+    }
+
+    fn write_test_source_archives_with_adapter(root: &Path, use_xpy_adapters: bool) -> TestSourceArchives {
         let archive_dir = root.join("test-source-archives");
         fs::create_dir_all(&archive_dir).unwrap();
         let mrustc_path = archive_dir.join("mrustc-0.12.0.tar.gz");
@@ -5258,12 +5420,12 @@ let Plan = {
         let rust192_path = archive_dir.join("rust-1.92.0.tar.gz");
         let rust193_path = archive_dir.join("rust-1.93.1.tar.gz");
         let rust194_path = archive_dir.join("rust-1.94.0.tar.gz");
-        write_test_source_archive(&mrustc_path, "mrustc-0.12.0", b"mrustc seed source\n");
-        write_test_source_archive(&rust190_path, "rust-1.90.0", b"rust 1.90 source\n");
-        write_test_source_archive(&rust191_path, "rust-1.91.1", b"rust 1.91.1 source\n");
-        write_test_source_archive(&rust192_path, "rust-1.92.0", b"rust 1.92.0 source\n");
-        write_test_source_archive(&rust193_path, "rust-1.93.1", b"rust 1.93.1 source\n");
-        write_test_source_archive(&rust194_path, "rust-1.94.0", b"rust 1.94 source\n");
+        write_test_source_archive(&mrustc_path, "mrustc-0.12.0", b"mrustc seed source\n", use_xpy_adapters);
+        write_test_source_archive(&rust190_path, "rust-1.90.0", b"rust 1.90 source\n", use_xpy_adapters);
+        write_test_source_archive(&rust191_path, "rust-1.91.1", b"rust 1.91.1 source\n", use_xpy_adapters);
+        write_test_source_archive(&rust192_path, "rust-1.92.0", b"rust 1.92.0 source\n", use_xpy_adapters);
+        write_test_source_archive(&rust193_path, "rust-1.93.1", b"rust 1.93.1 source\n", use_xpy_adapters);
+        write_test_source_archive(&rust194_path, "rust-1.94.0", b"rust 1.94 source\n", use_xpy_adapters);
         TestSourceArchives {
             mrustc_url: url::Url::from_file_path(&mrustc_path).unwrap().to_string(),
             mrustc_sha256_hex: sha256_file_hex(&mrustc_path),
@@ -5280,7 +5442,17 @@ let Plan = {
         }
     }
 
-    fn write_test_source_archive(path: &Path, top_dir: &str, readme: &[u8]) {
+    fn write_minimal_test_source_archive(path: &Path, top_dir: &str, readme: &[u8]) {
+        let file = File::create(path).unwrap();
+        let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        let mut builder = tar::Builder::new(encoder);
+        append_test_tar_file(&mut builder, &format!("{top_dir}/README.txt"), readme);
+        builder.finish().unwrap();
+        let encoder = builder.into_inner().unwrap();
+        encoder.finish().unwrap();
+    }
+
+    fn write_test_source_archive(path: &Path, top_dir: &str, readme: &[u8], use_xpy_adapters: bool) {
         let file = File::create(path).unwrap();
         let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
         let mut builder = tar::Builder::new(encoder);
@@ -5299,18 +5471,36 @@ let Plan = {
             );
         }
         if matches!(top_dir, "rust-1.91.1" | "rust-1.92.0" | "rust-1.93.1") {
-            append_test_tar_file(
-                &mut builder,
-                &format!("{top_dir}/{RUSTC_STAGE1_SOURCE_BUILD_SCRIPT}"),
-                test_rustc_stage1_build_script(),
-            );
+            if use_xpy_adapters {
+                append_test_tar_file_with_mode(
+                    &mut builder,
+                    &format!("{top_dir}/{RUSTC_SOURCE_XPY_SCRIPT}"),
+                    test_rustc_xpy_script(),
+                    SOURCE_ARCHIVE_EXECUTABLE_FILE_MODE,
+                );
+            } else {
+                append_test_tar_file(
+                    &mut builder,
+                    &format!("{top_dir}/{RUSTC_STAGE1_SOURCE_BUILD_SCRIPT}"),
+                    test_rustc_stage1_build_script(),
+                );
+            }
         }
         if top_dir == "rust-1.94.0" {
-            append_test_tar_file(
-                &mut builder,
-                &format!("{top_dir}/{RUSTC_FINAL_SOURCE_BUILD_SCRIPT}"),
-                test_rustc_final_build_script(),
-            );
+            if use_xpy_adapters {
+                append_test_tar_file_with_mode(
+                    &mut builder,
+                    &format!("{top_dir}/{RUSTC_SOURCE_XPY_SCRIPT}"),
+                    test_rustc_xpy_script(),
+                    SOURCE_ARCHIVE_EXECUTABLE_FILE_MODE,
+                );
+            } else {
+                append_test_tar_file(
+                    &mut builder,
+                    &format!("{top_dir}/{RUSTC_FINAL_SOURCE_BUILD_SCRIPT}"),
+                    test_rustc_final_build_script(),
+                );
+            }
         }
         builder.finish().unwrap();
         let encoder = builder.into_inner().unwrap();
@@ -5318,9 +5508,18 @@ let Plan = {
     }
 
     fn append_test_tar_file(builder: &mut tar::Builder<flate2::write::GzEncoder<File>>, path: &str, bytes: &[u8]) {
+        append_test_tar_file_with_mode(builder, path, bytes, SOURCE_ARCHIVE_FILE_MODE);
+    }
+
+    fn append_test_tar_file_with_mode(
+        builder: &mut tar::Builder<flate2::write::GzEncoder<File>>,
+        path: &str,
+        bytes: &[u8],
+        mode: u32,
+    ) {
         let mut header = tar::Header::new_gnu();
         header.set_size(u64::try_from(bytes.len()).unwrap());
-        header.set_mode(SOURCE_ARCHIVE_FILE_MODE);
+        header.set_mode(mode);
         header.set_cksum();
         builder.append_data(&mut header, path, bytes).unwrap();
     }
@@ -5343,6 +5542,10 @@ let Plan = {
 
     fn test_rustc_final_build_script() -> &'static [u8] {
         b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic final cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+    }
+
+    fn test_rustc_xpy_script() -> &'static [u8] {
+        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic xpy cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\ncase \" $MANTLE_RUST_BUILD_GOALS \" in *' rustdoc '*) printf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"; chmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\" ;; esac\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {
