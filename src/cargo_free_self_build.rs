@@ -2030,6 +2030,7 @@ mod tests {
     const FIXED_POINT_TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const FIXED_POINT_TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT: usize = 4;
+    const FIXED_POINT_TEST_SEED_EXCEPTION_COUNT: usize = 1;
     const RUST_PROVIDER_HOST_TRIPLE: &str = "x86_64-unknown-linux-gnu";
     const RUST_PROVIDER_TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
     const RUST_PROVIDER_SOURCE_ID: &str = "rust-src";
@@ -2253,35 +2254,28 @@ mod tests {
 
     #[test]
     fn fixed_point_summary_omits_closure_non_claim_when_provider_supplies_claim() {
-        let root = Path::new("/repo/mantle");
-        let out_dir = Path::new("/tmp/mantle-fixed-point");
-        let rustc = Path::new("/toolchain/bin/rustc");
-        let plan = plan_fixed_point_paths(root, out_dir, rustc, &[]).unwrap();
-        let compatibility = RustcCompatibilitySummary {
-            requested_rustc: rustc.to_path_buf(),
-            stage_rustc: rustc.to_path_buf(),
-            normalization: NORMALIZATION_NONE,
-            wrapper: None,
-            wrapper_blake3: None,
-        };
         let toolchain_closure = provided_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
-        let stage1 = fixed_point_stage_run(STAGE1_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
-        let stage2 = fixed_point_stage_run(STAGE2_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
-        let rust_source_provider = absent_rust_source_provider_binding();
 
-        let summary = fixed_point_summary(
-            &plan,
-            &compatibility,
-            &toolchain_closure,
-            &rust_source_provider,
-            &stage1,
-            Some(&stage2),
-            SUCCESS_STATUS,
-        );
+        let summary = fixed_point_summary_with_toolchain_closure(toolchain_closure);
 
         assert!(summary.fixed_point);
         assert!(summary.source_built_toolchain_closure.claim);
         assert_eq!(summary.source_built_toolchain_closure.status, "provided");
+        assert!(summary.source_built_toolchain_closure.non_claim.is_none());
+        assert!(!summary.non_claims.contains(&"not-source-built-toolchain-closure"));
+        assert!(summary.non_claims.contains(&"not-release-reproducibility"));
+        assert!(summary.non_claims.contains(&"not-full-cargo-compatibility"));
+    }
+
+    #[test]
+    fn fixed_point_summary_omits_closure_non_claim_when_explicit_complete_closure_claims() {
+        let toolchain_closure = complete_enforced_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
+
+        let summary = fixed_point_summary_with_toolchain_closure(toolchain_closure);
+
+        assert!(summary.fixed_point);
+        assert!(summary.source_built_toolchain_closure.claim);
+        assert_eq!(summary.source_built_toolchain_closure.status, "enforced-source-built");
         assert!(summary.source_built_toolchain_closure.non_claim.is_none());
         assert!(!summary.non_claims.contains(&"not-source-built-toolchain-closure"));
         assert!(summary.non_claims.contains(&"not-release-reproducibility"));
@@ -2437,6 +2431,24 @@ mod tests {
             manifest_path: Some(PathBuf::from("/tmp/toolchain-closure.json")),
             policy_digest_blake3: Some(policy_digest.to_string()),
             member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
+            source_built_member_count: Some(
+                FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT - FIXED_POINT_TEST_SEED_EXCEPTION_COUNT,
+            ),
+            seed_exception_count: Some(FIXED_POINT_TEST_SEED_EXCEPTION_COUNT),
+        }
+    }
+
+    fn complete_enforced_test_toolchain_closure(
+        policy_digest: &str,
+    ) -> crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus {
+        crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus {
+            schema: crate::source_toolchain_closure::SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
+            status: "enforced-source-built",
+            claim: true,
+            non_claim: None,
+            manifest_path: Some(PathBuf::from("/tmp/toolchain-closure.json")),
+            policy_digest_blake3: Some(policy_digest.to_string()),
+            member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
             source_built_member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
             seed_exception_count: Some(0),
         }
@@ -2456,6 +2468,35 @@ mod tests {
             source_built_member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
             seed_exception_count: Some(0),
         }
+    }
+
+    fn fixed_point_summary_with_toolchain_closure(
+        toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    ) -> FixedPointSummary {
+        let root = Path::new("/repo/mantle");
+        let out_dir = Path::new("/tmp/mantle-fixed-point");
+        let rustc = Path::new("/toolchain/bin/rustc");
+        let plan = plan_fixed_point_paths(root, out_dir, rustc, &[]).unwrap();
+        let compatibility = RustcCompatibilitySummary {
+            requested_rustc: rustc.to_path_buf(),
+            stage_rustc: rustc.to_path_buf(),
+            normalization: NORMALIZATION_NONE,
+            wrapper: None,
+            wrapper_blake3: None,
+        };
+        let stage1 = fixed_point_stage_run(STAGE1_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
+        let stage2 = fixed_point_stage_run(STAGE2_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
+        let rust_source_provider = absent_rust_source_provider_binding();
+
+        fixed_point_summary(
+            &plan,
+            &compatibility,
+            &toolchain_closure,
+            &rust_source_provider,
+            &stage1,
+            Some(&stage2),
+            SUCCESS_STATUS,
+        )
     }
 
     #[cfg(unix)]

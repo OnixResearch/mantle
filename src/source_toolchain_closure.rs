@@ -20,6 +20,7 @@ const ABSENT_CLOSURE_STATUS: &str = "not-provided";
 pub(crate) const SOURCE_BUILT_NON_CLAIM: &str = "not-source-built-toolchain-closure";
 const VALIDATED_NOT_ENFORCED_STATUS: &str = "validated-not-enforced";
 const VALIDATED_ENFORCED_STATUS: &str = "validated-enforced";
+const ENFORCED_SOURCE_BUILT_STATUS: &str = "enforced-source-built";
 const PROVIDED_CLOSURE_STATUS: &str = "provided";
 const POLICY_DIGEST_CONTEXT: &str = "mantle-source-built-toolchain-policy-digest-v1";
 const MAX_TOOLCHAIN_MEMBERS: usize = 128;
@@ -400,14 +401,15 @@ pub(crate) fn validated_source_built_toolchain_closure(
     manifest_path: PathBuf,
     validation: &ToolchainClosureValidation,
 ) -> SourceBuiltToolchainClosureStatus {
-    source_built_toolchain_closure_status(manifest_path, validation, VALIDATED_NOT_ENFORCED_STATUS)
+    source_built_toolchain_closure_status(manifest_path, validation, VALIDATED_NOT_ENFORCED_STATUS, false)
 }
 
 pub(crate) fn enforced_source_built_toolchain_closure(
     manifest_path: PathBuf,
     validation: &ToolchainClosureValidation,
 ) -> SourceBuiltToolchainClosureStatus {
-    source_built_toolchain_closure_status(manifest_path, validation, VALIDATED_ENFORCED_STATUS)
+    let (status, claim) = enforced_closure_claim(validation);
+    source_built_toolchain_closure_status(manifest_path, validation, status, claim)
 }
 
 pub(crate) fn provided_source_built_rust_provider_closure(
@@ -431,18 +433,36 @@ fn source_built_toolchain_closure_status(
     manifest_path: PathBuf,
     validation: &ToolchainClosureValidation,
     status: &'static str,
+    claim: bool,
 ) -> SourceBuiltToolchainClosureStatus {
     SourceBuiltToolchainClosureStatus {
         schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
         status,
-        claim: false,
-        non_claim: Some(SOURCE_BUILT_NON_CLAIM),
+        claim,
+        non_claim: non_claim_for_source_built_status(claim),
         manifest_path: Some(manifest_path),
         policy_digest_blake3: Some(validation.policy_digest_blake3.clone()),
         member_count: Some(validation.member_count),
         source_built_member_count: Some(validation.source_built_member_count),
         seed_exception_count: Some(validation.seed_exception_count),
     }
+}
+
+fn enforced_closure_claim(validation: &ToolchainClosureValidation) -> (&'static str, bool) {
+    if validation.seed_exception_count != 0 {
+        return (VALIDATED_ENFORCED_STATUS, false);
+    }
+    if validation.source_built_member_count != validation.member_count {
+        return (VALIDATED_ENFORCED_STATUS, false);
+    }
+    (ENFORCED_SOURCE_BUILT_STATUS, true)
+}
+
+fn non_claim_for_source_built_status(claim: bool) -> Option<&'static str> {
+    if claim {
+        return None;
+    }
+    Some(SOURCE_BUILT_NON_CLAIM)
 }
 
 pub(crate) fn validate_toolchain_closure_manifest(
@@ -1847,8 +1867,24 @@ mod tests {
     }
 
     #[test]
-    fn enforced_closure_status_still_keeps_claim_disabled_until_real_proof_lands() {
+    fn enforced_complete_closure_status_promotes_source_built_claim() {
         let manifest = valid_manifest();
+        let validation = validate_toolchain_closure_manifest(&manifest).unwrap();
+
+        let status = enforced_source_built_toolchain_closure(PathBuf::from("/tmp/toolchain.json"), &validation);
+
+        assert_eq!(status.schema, SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
+        assert_eq!(status.status, ENFORCED_SOURCE_BUILT_STATUS);
+        assert!(status.claim);
+        assert_eq!(status.non_claim, None);
+        assert_eq!(status.policy_digest_blake3, Some(validation.policy_digest_blake3));
+        assert_eq!(status.seed_exception_count, Some(0));
+    }
+
+    #[test]
+    fn enforced_seed_exception_closure_status_keeps_non_claim() {
+        let mut manifest = valid_manifest();
+        make_seed_member(&mut manifest, 0);
         let validation = validate_toolchain_closure_manifest(&manifest).unwrap();
 
         let status = enforced_source_built_toolchain_closure(PathBuf::from("/tmp/toolchain.json"), &validation);
@@ -1857,7 +1893,8 @@ mod tests {
         assert_eq!(status.status, VALIDATED_ENFORCED_STATUS);
         assert!(!status.claim);
         assert_eq!(status.non_claim, Some(SOURCE_BUILT_NON_CLAIM));
-        assert_eq!(status.policy_digest_blake3, Some(validation.policy_digest_blake3));
+        assert_eq!(status.source_built_member_count, Some(REQUIRED_TOOLCHAIN_ROLES.len() - 1));
+        assert_eq!(status.seed_exception_count, Some(1));
     }
 
     #[test]
