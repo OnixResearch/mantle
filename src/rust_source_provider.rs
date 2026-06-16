@@ -720,13 +720,23 @@ pub(crate) fn materialize_rust_source_provider(
     scratch_dir: &Path,
     verbose: bool,
 ) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
+    materialize_rust_source_provider_with_route_plan(recipe_path, None, output_dir, scratch_dir, verbose)
+}
+
+pub(crate) fn materialize_rust_source_provider_with_route_plan(
+    recipe_path: &Path,
+    route_plan_path: Option<&Path>,
+    output_dir: &Path,
+    scratch_dir: &Path,
+    verbose: bool,
+) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
     let recipe_bytes = fs::read(recipe_path)
         .map_err(|err| RustSourceProviderError::Read(format!("recipe {}: {err}", recipe_path.display())))?;
     if recipe_bytes.is_empty() {
         return Err(RustSourceProviderError::Read(format!("recipe {} is empty", recipe_path.display())));
     }
     let recipe_digest_blake3 = blake3::hash(&recipe_bytes).to_hex().to_string();
-    let plan = plan_materialization(recipe_path, output_dir, scratch_dir, &recipe_digest_blake3)?;
+    let plan = plan_materialization(recipe_path, route_plan_path, output_dir, scratch_dir, &recipe_digest_blake3)?;
     let route = load_rust_source_provider_route(&plan.route_plan_path)?;
     let boundary = prepare_first_stage_boundary(&plan, &route)?;
     write_first_stage_boundary(&boundary)?;
@@ -1126,6 +1136,7 @@ fn validate_import_request(import_dir: &Path, output_dir: &Path) -> Result<(), R
 
 fn plan_materialization(
     recipe_path: &Path,
+    route_plan_path: Option<&Path>,
     output_dir: &Path,
     scratch_dir: &Path,
     recipe_digest_blake3: &str,
@@ -1145,7 +1156,10 @@ fn plan_materialization(
     if recipe_digest_blake3.is_empty() {
         return Err(RustSourceProviderError::Digest("recipe digest is empty".to_string()));
     }
-    let route_plan_path = route_plan_path_for_recipe(recipe_path)?;
+    let route_plan_path = match route_plan_path {
+        Some(path) => validate_explicit_route_plan_path(path)?,
+        None => route_plan_path_for_recipe(recipe_path)?,
+    };
     Ok(RustSourceProviderMaterializationPlan {
         recipe_path: recipe_path.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
@@ -1153,6 +1167,13 @@ fn plan_materialization(
         recipe_digest_blake3: recipe_digest_blake3.to_string(),
         route_plan_path,
     })
+}
+
+fn validate_explicit_route_plan_path(path: &Path) -> Result<PathBuf, RustSourceProviderError> {
+    if path.as_os_str().is_empty() {
+        return Err(RustSourceProviderError::Read("route plan path is empty".to_string()));
+    }
+    Ok(path.to_path_buf())
 }
 
 fn route_plan_path_for_recipe(recipe_path: &Path) -> Result<PathBuf, RustSourceProviderError> {
@@ -5477,6 +5498,26 @@ mod tests {
         assert!(host_run_rustc_index < target_assignment_index);
         assert!(target_assignment_index < target_linker_index);
         assert!(target_linker_index < target_sysroot_index);
+    }
+
+    #[test]
+    fn materializer_uses_explicit_route_plan_when_default_plan_is_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let explicit_plan = dir.path().join("custom-rust-source-plan.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "source-built recipe\n").unwrap();
+        write_test_route_plan(dir.path());
+        fs::rename(dir.path().join(RUST_SOURCE_PROVIDER_PLAN_FILE), &explicit_plan).unwrap();
+
+        let materialized =
+            materialize_rust_source_provider_with_route_plan(&recipe, Some(&explicit_plan), &output, &scratch, false)
+                .unwrap();
+
+        assert_eq!(materialized.output_path, output);
+        assert!(!dir.path().join(RUST_SOURCE_PROVIDER_PLAN_FILE).exists());
+        assert!(materialized.metadata_path.is_file());
     }
 
     #[test]

@@ -690,6 +690,11 @@ enum BootstrapAction {
         #[arg(long, default_value = "bootstrap/rust-source.ncl")]
         recipe: PathBuf,
 
+        /// Explicit Rust source provider route plan; defaults to recipe-relative
+        /// rust-source-plan.ncl
+        #[arg(long)]
+        route_plan: Option<PathBuf>,
+
         /// Existing provider directory to validate and import instead of materializing
         #[arg(long)]
         import_dir: Option<PathBuf>,
@@ -2023,12 +2028,14 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
         }
         BootstrapAction::RustSourceProvider {
             recipe,
+            route_plan,
             import_dir,
             smoke,
             smoke_evidence_dir,
             output_dir,
         } => cmd_bootstrap_rust_source_provider(
             recipe,
+            route_plan.as_deref(),
             import_dir.as_deref(),
             output_dir,
             &ctx.store,
@@ -2073,6 +2080,7 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
 
 fn cmd_bootstrap_rust_source_provider(
     recipe: &Path,
+    route_plan: Option<&Path>,
     import_dir: Option<&Path>,
     output_dir: &Path,
     _store_dir: &Path,
@@ -2087,7 +2095,13 @@ fn cmd_bootstrap_rust_source_provider(
         .prefix("mantle-rust-source-provider-")
         .tempdir()
         .map_err(|err| RunError::Internal(format!("creating Rust provider scratch: {err}")))?;
-    match rust_source_provider::materialize_rust_source_provider(recipe, output_dir, scratch.path(), verbose) {
+    match rust_source_provider::materialize_rust_source_provider_with_route_plan(
+        recipe,
+        route_plan,
+        output_dir,
+        scratch.path(),
+        verbose,
+    ) {
         Ok(materialized) => {
             eprintln!("Materialized Rust source provider {}", materialized.output_path.display());
             eprintln!("  recipe_digest_blake3: {}", materialized.recipe_digest_blake3);
@@ -3373,6 +3387,7 @@ mod tests {
             action:
                 Some(BootstrapAction::RustSourceProvider {
                     recipe,
+                    route_plan,
                     import_dir,
                     smoke,
                     smoke_evidence_dir,
@@ -3384,9 +3399,37 @@ mod tests {
             panic!("expected rust-source-provider bootstrap action");
         };
         assert_eq!(recipe, PathBuf::from("bootstrap/rust-source.ncl"));
+        assert!(route_plan.is_none());
         assert!(import_dir.is_none());
         assert!(!smoke);
         assert!(smoke_evidence_dir.is_none());
+        assert_eq!(output_dir, PathBuf::from("/tmp/mantle-rust-provider"));
+    }
+
+    #[test]
+    fn bootstrap_rust_source_provider_action_parses_route_plan() {
+        let args = Args::parse_from([
+            "mantle",
+            "bootstrap",
+            "rust-source-provider",
+            "--recipe",
+            "bootstrap/rust-source.ncl",
+            "--route-plan",
+            "bootstrap/rust-source-musl-host-plan.ncl",
+            "--output-dir",
+            "/tmp/mantle-rust-provider",
+        ]);
+
+        let Command::Bootstrap {
+            action: Some(BootstrapAction::RustSourceProvider {
+                route_plan, output_dir, ..
+            }),
+            ..
+        } = args.command
+        else {
+            panic!("expected rust-source-provider bootstrap action");
+        };
+        assert_eq!(route_plan, Some(PathBuf::from("bootstrap/rust-source-musl-host-plan.ncl")));
         assert_eq!(output_dir, PathBuf::from("/tmp/mantle-rust-provider"));
     }
 
@@ -3484,7 +3527,7 @@ mod tests {
         write_fast_failing_rust_source_route(dir.path(), &missing_source);
         fs::create_dir(&store).unwrap();
 
-        let err = cmd_bootstrap_rust_source_provider(&recipe, None, &output_dir, &store, false, false, None)
+        let err = cmd_bootstrap_rust_source_provider(&recipe, None, None, &output_dir, &store, false, false, None)
             .unwrap_err()
             .to_string();
 

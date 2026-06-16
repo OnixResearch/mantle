@@ -2570,6 +2570,32 @@ mod tests {
     }
 
     #[test]
+    fn checked_in_musl_host_rust_source_plan_loads_stagex_mrustc_route() {
+        let plan_path =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap/rust-source-musl-host-plan.ncl");
+        let import_paths: Vec<std::ffi::OsString> = Vec::new();
+        let plan: RustSourceProviderBootstrapPlan = crunch_eval::evaluate_and_deserialize(&plan_path, &import_paths)
+            .unwrap_or_else(|err| panic!("loading {}: {err}", plan_path.display()));
+
+        let validation = validate_rust_source_provider_bootstrap_plan(&plan).unwrap();
+
+        assert_eq!(plan.final_version, FINAL_RUST_VERSION);
+        assert_eq!(plan.host_triple, "x86_64-unknown-linux-musl");
+        assert_eq!(plan.target_triple, "x86_64-unknown-linux-musl");
+        assert!(plan.policy.source_built);
+        assert!(!plan.policy.uses_prebuilt_rust);
+        assert!(plan.policy.forbids_prebuilt_rust);
+        assert!(plan.final_outputs.iter().any(|output| {
+            output.role == RustProviderRole::HostRustlib && output.path == "lib/rustlib/x86_64-unknown-linux-musl/lib"
+        }));
+        assert!(plan.final_outputs.iter().any(|output| {
+            output.role == RustProviderRole::TargetRustlib && output.path == "lib/rustlib/x86_64-unknown-linux-musl/lib"
+        }));
+        assert_eq!(validation.source_count, EXPECTED_BOOTSTRAP_PLAN_SOURCE_COUNT);
+        assert_eq!(validation.stage_count, EXPECTED_BOOTSTRAP_PLAN_STAGE_COUNT);
+    }
+
+    #[test]
     fn rust_source_provider_bootstrap_plan_rejects_prebuilt_policy() {
         let mut plan = valid_rust_provider_bootstrap_plan();
         plan.policy.uses_prebuilt_rust = true;
