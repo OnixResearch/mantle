@@ -74,6 +74,38 @@ const CARGO_PROVIDER_PATH: &str = "bin/cargo";
 const RUSTDOC_PROVIDER_PATH: &str = "bin/rustdoc";
 const RUSTLIB_PROVIDER_PREFIX: &str = "lib/rustlib";
 const PROVIDER_RECEIPT_EXTENSION: &str = ".json";
+pub(crate) const NATIVE_RUSTC_NAME: &str = "rustc";
+pub(crate) const NATIVE_HOST_CC_NAME: &str = "cc";
+pub(crate) const NATIVE_HOST_LINKER_NAME: &str = "ld";
+pub(crate) const NATIVE_HOST_SYSROOT_NAME: &str = "host-sysroot";
+pub(crate) const NATIVE_HOST_CRT1_NAME: &str = "host-crt1.o";
+pub(crate) const NATIVE_HOST_LIBGCC_NAME: &str = "host-libgcc_s.so.1";
+pub(crate) const NATIVE_HOST_LIBC_NAME: &str = "host-libc.so";
+pub(crate) const NATIVE_TARGET_GCC_NAME: &str = "x86_64-linux-musl-gcc";
+pub(crate) const NATIVE_TARGET_GXX_NAME: &str = "x86_64-linux-musl-g++";
+pub(crate) const NATIVE_TARGET_LD_NAME: &str = "x86_64-linux-musl-ld";
+pub(crate) const NATIVE_TARGET_AR_NAME: &str = "x86_64-linux-musl-ar";
+pub(crate) const NATIVE_TARGET_RANLIB_NAME: &str = "x86_64-linux-musl-ranlib";
+pub(crate) const NATIVE_TARGET_CRT1_NAME: &str = "x86_64-linux-musl-crt1.o";
+pub(crate) const NATIVE_TARGET_LIBGCC_NAME: &str = "x86_64-linux-musl-libgcc_s.so.1";
+pub(crate) const NATIVE_TARGET_LIBC_NAME: &str = "x86_64-linux-musl-libc.so";
+const REQUIRED_NATIVE_CLOSURE_MEMBERS: &[&str] = &[
+    NATIVE_RUSTC_NAME,
+    NATIVE_HOST_CC_NAME,
+    NATIVE_HOST_LINKER_NAME,
+    NATIVE_HOST_SYSROOT_NAME,
+    NATIVE_HOST_CRT1_NAME,
+    NATIVE_HOST_LIBGCC_NAME,
+    NATIVE_HOST_LIBC_NAME,
+    NATIVE_TARGET_GCC_NAME,
+    NATIVE_TARGET_GXX_NAME,
+    NATIVE_TARGET_LD_NAME,
+    NATIVE_TARGET_AR_NAME,
+    NATIVE_TARGET_RANLIB_NAME,
+    NATIVE_TARGET_CRT1_NAME,
+    NATIVE_TARGET_LIBGCC_NAME,
+    NATIVE_TARGET_LIBC_NAME,
+];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub(crate) struct SourceBuiltToolchainClosureStatus {
@@ -353,6 +385,28 @@ pub(crate) struct ToolchainObservedInput {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NativeClosureCandidateMember {
+    pub(crate) role: ToolchainRole,
+    pub(crate) name: String,
+    pub(crate) execution_path: String,
+    pub(crate) content_digest_blake3: String,
+    pub(crate) source: ToolchainSourceIdentity,
+    pub(crate) build_receipt: ToolchainBuildReceiptIdentity,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NativeClosureMaterialization {
+    pub(crate) manifest: ToolchainClosureManifest,
+    pub(crate) validation: ToolchainClosureValidation,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NativeClosureMaterializationError {
+    missing_members: Vec<String>,
+    invalid_manifest: Option<ToolchainClosureError>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ToolchainClosureError {
     kind: ToolchainClosureErrorKind,
     message: String,
@@ -484,6 +538,30 @@ pub(crate) fn enforce_observed_toolchain_inputs(
     validation_from_normalized_manifest(&normalized)
 }
 
+pub(crate) fn materialize_source_built_native_closure(
+    candidates: &[NativeClosureCandidateMember],
+) -> Result<NativeClosureMaterialization, NativeClosureMaterializationError> {
+    assert!(!REQUIRED_NATIVE_CLOSURE_MEMBERS.is_empty());
+    let missing_members = missing_native_closure_members(candidates);
+    if !missing_members.is_empty() {
+        return Err(NativeClosureMaterializationError::missing(missing_members));
+    }
+    let manifest = ToolchainClosureManifest {
+        schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA.to_string(),
+        members: candidates.iter().map(native_candidate_to_member).collect(),
+        seed_exceptions: Vec::new(),
+    };
+    let validation =
+        validate_toolchain_closure_manifest(&manifest).map_err(NativeClosureMaterializationError::invalid)?;
+    debug_assert_eq!(validation.seed_exception_count, 0);
+    debug_assert_eq!(validation.source_built_member_count, validation.member_count);
+    Ok(NativeClosureMaterialization { manifest, validation })
+}
+
+pub(crate) fn required_native_closure_member_names() -> &'static [&'static str] {
+    REQUIRED_NATIVE_CLOSURE_MEMBERS
+}
+
 pub(crate) fn validate_rust_source_provider_metadata(
     metadata: &RustSourceProviderMetadata,
 ) -> Result<RustSourceProviderValidation, ToolchainClosureError> {
@@ -517,6 +595,43 @@ pub(crate) fn enforce_observed_rust_source_provider_receipts(
     let normalized = normalize_rust_source_provider_metadata(metadata)?;
     validate_observed_rust_provider_receipts(&normalized, observed)?;
     validation_from_normalized_rust_provider(&normalized)
+}
+
+impl NativeClosureMaterializationError {
+    fn missing(missing_members: Vec<String>) -> Self {
+        debug_assert!(!missing_members.is_empty());
+        Self {
+            missing_members,
+            invalid_manifest: None,
+        }
+    }
+
+    fn invalid(error: ToolchainClosureError) -> Self {
+        Self {
+            missing_members: Vec::new(),
+            invalid_manifest: Some(error),
+        }
+    }
+
+    pub(crate) fn message(&self) -> String {
+        if !self.missing_members.is_empty() {
+            return format!("missing native closure members: {}", self.missing_members.join(", "));
+        }
+        if let Some(error) = &self.invalid_manifest {
+            return format!("invalid native closure manifest: {}", error.message());
+        }
+        "invalid native closure materialization".to_string()
+    }
+
+    pub(crate) fn missing_members(&self) -> &[String] {
+        &self.missing_members
+    }
+}
+
+impl fmt::Display for NativeClosureMaterializationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message())
+    }
 }
 
 impl ToolchainClosureError {
@@ -571,6 +686,28 @@ fn validate_observed_inputs(observed: &[ToolchainObservedInput]) -> Result<(), T
         }
     }
     Ok(())
+}
+
+fn missing_native_closure_members(candidates: &[NativeClosureCandidateMember]) -> Vec<String> {
+    let present = candidates.iter().map(|candidate| candidate.name.as_str()).collect::<BTreeSet<_>>();
+    REQUIRED_NATIVE_CLOSURE_MEMBERS
+        .iter()
+        .copied()
+        .filter(|required| !present.contains(required))
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn native_candidate_to_member(candidate: &NativeClosureCandidateMember) -> ToolchainClosureMember {
+    ToolchainClosureMember {
+        role: candidate.role,
+        name: candidate.name.clone(),
+        execution_path: candidate.execution_path.clone(),
+        content_digest_blake3: candidate.content_digest_blake3.clone(),
+        trust: ToolchainTrust::SourceBuilt,
+        source: Some(candidate.source.clone()),
+        build_receipt: Some(candidate.build_receipt.clone()),
+    }
 }
 
 fn require_observed_input_declared(
@@ -2476,6 +2613,44 @@ mod tests {
         assert!(err.message().contains("unknown source_id"));
     }
 
+    #[test]
+    fn native_materialization_builds_zero_seed_manifest_from_complete_candidates() {
+        let candidates = native_closure_candidates();
+
+        let materialized = materialize_source_built_native_closure(&candidates).unwrap();
+
+        assert_eq!(materialized.manifest.schema, SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
+        assert_eq!(materialized.manifest.members.len(), required_native_closure_member_names().len());
+        assert!(materialized.manifest.seed_exceptions.is_empty());
+        assert_eq!(materialized.validation.seed_exception_count, 0);
+        assert_eq!(materialized.validation.source_built_member_count, materialized.validation.member_count);
+        assert!(materialized.manifest.members.iter().all(|member| member.trust == ToolchainTrust::SourceBuilt));
+    }
+
+    #[test]
+    fn native_materialization_rejects_missing_host_runtime_members() {
+        let mut candidates = native_closure_candidates();
+        candidates.retain(|candidate| candidate.name != NATIVE_HOST_LIBC_NAME);
+
+        let err = materialize_source_built_native_closure(&candidates).unwrap_err();
+
+        assert_eq!(err.missing_members(), &[NATIVE_HOST_LIBC_NAME.to_string()]);
+        assert!(err.message().contains("missing native closure members"));
+        assert!(err.message().contains(NATIVE_HOST_LIBC_NAME));
+    }
+
+    #[test]
+    fn native_materialization_rejects_missing_target_helper_members() {
+        let mut candidates = native_closure_candidates();
+        candidates.retain(|candidate| candidate.name != NATIVE_TARGET_RANLIB_NAME);
+
+        let err = materialize_source_built_native_closure(&candidates).unwrap_err();
+
+        assert_eq!(err.missing_members(), &[NATIVE_TARGET_RANLIB_NAME.to_string()]);
+        assert!(err.message().contains("missing native closure members"));
+        assert!(err.message().contains(NATIVE_TARGET_RANLIB_NAME));
+    }
+
     fn valid_manifest() -> ToolchainClosureManifest {
         ToolchainClosureManifest {
             schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA.to_string(),
@@ -2549,6 +2724,45 @@ mod tests {
             role,
             execution_path: execution_path.to_string(),
             content_digest_blake3: Some(digest.to_string()),
+        }
+    }
+
+    fn native_closure_candidates() -> Vec<NativeClosureCandidateMember> {
+        vec![
+            native_candidate(ToolchainRole::Rustc, NATIVE_RUSTC_NAME, DIGEST_A),
+            native_candidate(ToolchainRole::CCompiler, NATIVE_HOST_CC_NAME, DIGEST_B),
+            native_candidate(ToolchainRole::Linker, NATIVE_HOST_LINKER_NAME, DIGEST_C),
+            native_candidate(ToolchainRole::Sysroot, NATIVE_HOST_SYSROOT_NAME, DIGEST_D),
+            native_candidate(ToolchainRole::CrtObject, NATIVE_HOST_CRT1_NAME, DIGEST_E),
+            native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_HOST_LIBGCC_NAME, DIGEST_F),
+            native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_HOST_LIBC_NAME, DIGEST_A),
+            native_candidate(ToolchainRole::NativeHelper, NATIVE_TARGET_GCC_NAME, DIGEST_B),
+            native_candidate(ToolchainRole::NativeHelper, NATIVE_TARGET_GXX_NAME, DIGEST_C),
+            native_candidate(ToolchainRole::NativeHelper, NATIVE_TARGET_LD_NAME, DIGEST_D),
+            native_candidate(ToolchainRole::NativeHelper, NATIVE_TARGET_AR_NAME, DIGEST_E),
+            native_candidate(ToolchainRole::NativeHelper, NATIVE_TARGET_RANLIB_NAME, DIGEST_F),
+            native_candidate(ToolchainRole::CrtObject, NATIVE_TARGET_CRT1_NAME, DIGEST_A),
+            native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_TARGET_LIBGCC_NAME, DIGEST_B),
+            native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_TARGET_LIBC_NAME, DIGEST_C),
+        ]
+    }
+
+    fn native_candidate(role: ToolchainRole, name: &str, content_digest_blake3: &str) -> NativeClosureCandidateMember {
+        NativeClosureCandidateMember {
+            role,
+            name: name.to_string(),
+            execution_path: format!("/native-closure/{name}"),
+            content_digest_blake3: content_digest_blake3.to_string(),
+            source: ToolchainSourceIdentity {
+                kind: ToolchainSourceKind::LocalTree,
+                name: "mantle-source-built-native-closure".to_string(),
+                digest_blake3: DIGEST_D.to_string(),
+            },
+            build_receipt: ToolchainBuildReceiptIdentity {
+                kind: ToolchainBuildReceiptKind::ExternalAttestedBuild,
+                name: "mantle-source-built-native-closure-receipt".to_string(),
+                digest_blake3: DIGEST_E.to_string(),
+            },
         }
     }
 

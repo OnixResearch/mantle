@@ -20,6 +20,7 @@ mod frontend_artifact_export;
 mod frontend_artifact_spec;
 mod frontend_artifact_store;
 mod log_cmd;
+mod native_toolchain_closure;
 mod operator_diagnostics;
 mod project_build;
 mod project_cmd;
@@ -705,6 +706,25 @@ enum BootstrapAction {
         /// Planned output directory for the Rust provider
         #[arg(long)]
         output_dir: PathBuf,
+    },
+
+    /// Materialize a zero-seed source-built native toolchain closure manifest
+    NativeToolchainClosure {
+        /// Validated source-built Rust provider directory
+        #[arg(long)]
+        rust_source_provider: PathBuf,
+
+        /// Source-built host-native provider root containing cc/ld/libc/sysroot closure
+        #[arg(long)]
+        host_root: PathBuf,
+
+        /// Source-built target musl provider root containing target-prefixed helpers
+        #[arg(long)]
+        target_root: PathBuf,
+
+        /// Output manifest path; must not already exist
+        #[arg(long)]
+        output: PathBuf,
     },
 
     /// Run build-profile preflight, build a bootstrap derivation, and save evidence
@@ -2015,6 +2035,19 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
             ctx.verbose,
             *smoke,
             smoke_evidence_dir.as_deref(),
+        ),
+        BootstrapAction::NativeToolchainClosure {
+            rust_source_provider,
+            host_root,
+            target_root,
+            output,
+        } => native_toolchain_closure::cmd_materialize_native_toolchain_closure(
+            native_toolchain_closure::NativeToolchainClosureOptions {
+                rust_source_provider,
+                host_root,
+                target_root,
+                output,
+            },
         ),
         BootstrapAction::Validate {
             target,

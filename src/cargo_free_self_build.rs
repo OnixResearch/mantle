@@ -1478,6 +1478,9 @@ fn observed_toolchain_inputs(
     for member in optional_tool_members(manifest) {
         observed.push(observed_member_tool(member)?);
     }
+    for member in declared_file_members(manifest) {
+        observed.push(observed_member_file(member)?);
+    }
     Ok(observed)
 }
 
@@ -1498,6 +1501,17 @@ fn observed_member_tool(
     member: &crate::source_toolchain_closure::ToolchainClosureMember,
 ) -> Result<crate::source_toolchain_closure::ToolchainObservedInput, RunError> {
     observed_file_tool(member.role, Path::new(&member.execution_path))
+}
+
+fn observed_member_file(
+    member: &crate::source_toolchain_closure::ToolchainClosureMember,
+) -> Result<crate::source_toolchain_closure::ToolchainObservedInput, RunError> {
+    let path = canonicalize_toolchain_path(Path::new(&member.execution_path), member.role)?;
+    Ok(crate::source_toolchain_closure::ToolchainObservedInput {
+        role: member.role,
+        execution_path: path_to_string(&path)?,
+        content_digest_blake3: Some(blake3_file(&path)?),
+    })
 }
 
 fn observed_sysroot_tool(rustc: &Path) -> Result<crate::source_toolchain_closure::ToolchainObservedInput, RunError> {
@@ -1551,6 +1565,17 @@ fn optional_tool_members(
         .members
         .iter()
         .filter(|member| matches!(member.role, ToolchainRole::PkgConfig | ToolchainRole::NativeHelper))
+        .collect()
+}
+
+fn declared_file_members(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Vec<&crate::source_toolchain_closure::ToolchainClosureMember> {
+    use crate::source_toolchain_closure::ToolchainRole;
+    manifest
+        .members
+        .iter()
+        .filter(|member| matches!(member.role, ToolchainRole::CrtObject | ToolchainRole::RuntimeLibrary))
         .collect()
 }
 
@@ -2601,6 +2626,30 @@ mod tests {
 
         assert!(err.message().contains("host-tool-leakage"));
         assert!(err.message().contains("PkgConfig"));
+        assert!(err.message().contains("digest mismatch"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_enforcement_rejects_runtime_library_digest_mismatch() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let runtime = dir.path().join("toolchain").join("lib").join("libc.so");
+        fs::create_dir_all(runtime.parent().unwrap()).unwrap();
+        write_text(&runtime, "runtime-v1").unwrap();
+        let mut manifest = fake_toolchain_manifest(&tools, None);
+        manifest.members.push(fake_member(
+            crate::source_toolchain_closure::ToolchainRole::RuntimeLibrary,
+            "host-libc.so",
+            &runtime,
+            Some(&("host-libc.so", fake_digest())),
+        ));
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
+
+        let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
+
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("RuntimeLibrary"));
         assert!(err.message().contains("digest mismatch"));
     }
 
