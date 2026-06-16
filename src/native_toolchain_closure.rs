@@ -698,6 +698,57 @@ mod tests {
     }
 
     #[test]
+    fn musl_host_source_root_fixture_materializes_zero_seed_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let rust_provider = dir.path().join("rust-provider");
+        let source_root = dir.path().join("source-root-musl");
+        write_fixture_file(&rust_provider.join("bin").join("rustc"), b"rustc");
+        for tool in [
+            NATIVE_TARGET_GCC_NAME,
+            NATIVE_TARGET_GXX_NAME,
+            NATIVE_TARGET_LD_NAME,
+            NATIVE_TARGET_AR_NAME,
+            NATIVE_TARGET_RANLIB_NAME,
+        ] {
+            write_fixture_file(&source_root.join("bin").join(tool), tool.as_bytes());
+        }
+        let target_lib = source_root.join(TARGET_TRIPLE).join("lib");
+        write_fixture_file(&target_lib.join("crt1.o"), b"crt1");
+        write_fixture_file(&target_lib.join("libgcc_s.so.1"), b"libgcc");
+        write_fixture_file(&target_lib.join("libc.so"), b"libc");
+        let rust_identity = fake_provider_identity("rust-provider");
+        let source_root_identity = NativeRootIdentity {
+            identity: fake_provider_identity("source-root-musl"),
+            layout: NativeRootLayout::SourceRootMusl,
+        };
+
+        let candidates = collect_native_closure_candidates(
+            &rust_provider,
+            &source_root,
+            &source_root,
+            &rust_identity,
+            &source_root_identity,
+            &source_root_identity,
+        )
+        .unwrap();
+        let materialized =
+            crate::source_toolchain_closure::materialize_source_built_native_closure(&candidates).unwrap();
+
+        assert!(materialized.manifest.seed_exceptions.is_empty());
+        assert_eq!(materialized.validation.seed_exception_count, 0);
+        assert_eq!(materialized.validation.source_built_member_count, materialized.validation.member_count);
+        let cc = manifest_member(&materialized.manifest, NATIVE_HOST_CC_NAME);
+        let ld = manifest_member(&materialized.manifest, NATIVE_HOST_LINKER_NAME);
+        let libc = manifest_member(&materialized.manifest, NATIVE_HOST_LIBC_NAME);
+        assert!(cc.execution_path.ends_with(&format!("bin/{NATIVE_TARGET_GCC_NAME}")));
+        assert!(ld.execution_path.ends_with(&format!("bin/{NATIVE_TARGET_LD_NAME}")));
+        assert!(libc.execution_path.ends_with(&format!("{TARGET_TRIPLE}/lib/libc.so")));
+        assert_eq!(cc.trust, crate::source_toolchain_closure::ToolchainTrust::SourceBuilt);
+        assert!(cc.source.is_some());
+        assert!(cc.build_receipt.is_some());
+    }
+
+    #[test]
     fn directory_digest_changes_when_file_content_changes() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("tool");
@@ -734,5 +785,40 @@ mod tests {
             capabilities: capabilities.iter().map(|capability| (*capability).to_string()).collect(),
             provenance: None,
         }
+    }
+
+    fn fake_provider_identity(name: &str) -> ProviderIdentity {
+        ProviderIdentity {
+            source: ToolchainSourceIdentity {
+                kind: ToolchainSourceKind::Generated,
+                name: format!("{name}-source"),
+                digest_blake3: fake_digest(),
+            },
+            receipt: ToolchainBuildReceiptIdentity {
+                kind: ToolchainBuildReceiptKind::ExternalAttestedBuild,
+                name: format!("{name}-receipt"),
+                digest_blake3: fake_digest(),
+            },
+        }
+    }
+
+    fn manifest_member<'a>(
+        manifest: &'a crate::source_toolchain_closure::ToolchainClosureManifest,
+        name: &str,
+    ) -> &'a crate::source_toolchain_closure::ToolchainClosureMember {
+        manifest
+            .members
+            .iter()
+            .find(|member| member.name == name)
+            .unwrap_or_else(|| panic!("manifest member {name} missing"))
+    }
+
+    fn write_fixture_file(path: &Path, content: &[u8]) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    fn fake_digest() -> String {
+        "abababababababababababababababababababababababababababababababab".to_string()
     }
 }
