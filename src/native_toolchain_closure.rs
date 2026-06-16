@@ -2,6 +2,8 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use serde::Deserialize;
+
 use crate::errors::RunError;
 use crate::source_toolchain_closure::NATIVE_HOST_CC_NAME;
 use crate::source_toolchain_closure::NATIVE_HOST_CRT1_NAME;
@@ -27,9 +29,16 @@ use crate::source_toolchain_closure::ToolchainSourceKind;
 
 const SOURCE_ROOT_PROVIDER_METADATA_PATH: &str = "share/crunch-bootstrap/provider.json";
 const NATIVE_PROVIDER_METADATA_PATH: &str = "share/mantle-native-toolchain/provider.json";
+const NATIVE_PROVIDER_SCHEMA: &str = "mantle-native-toolchain-provider-v1";
+const NATIVE_PROVIDER_ID: &str = "mantle-native-toolchain";
+const SOURCE_ROOT_PROVIDER_ID: &str = "source-root-v1";
 const TARGET_TRIPLE: &str = "x86_64-linux-musl";
-const HOST_PROVIDER_METADATA_NAME: &str = "host-provider-metadata";
-const TARGET_PROVIDER_METADATA_NAME: &str = "target-provider-metadata";
+const HOST_ROOT_LABEL: &str = "host-root";
+const TARGET_ROOT_LABEL: &str = "target-root";
+const HOST_NATIVE_CAPABILITY: &str = "host-native";
+const TARGET_NATIVE_CAPABILITY: &str = "target-native";
+const UNKNOWN_VENDOR_TARGET_SEGMENT: &str = "-unknown-linux-";
+const VENDORLESS_LINUX_TARGET_SEGMENT: &str = "-linux-";
 const DIRECTORY_ENTRY_KIND_FILE: &str = "file";
 const DIRECTORY_ENTRY_KIND_DIR: &str = "dir";
 const DIRECTORY_ENTRY_KIND_SYMLINK: &str = "symlink";
@@ -49,6 +58,44 @@ struct ProviderIdentity {
     receipt: ToolchainBuildReceiptIdentity,
 }
 
+struct RustProviderIdentity {
+    identity: ProviderIdentity,
+    host_triple: String,
+    target_triple: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NativeRootRole {
+    Host,
+    Target,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProviderMetadataSummary {
+    #[serde(default)]
+    schema: Option<String>,
+    #[serde(default)]
+    provider_id: Option<String>,
+    #[serde(default)]
+    target: Option<String>,
+    #[serde(default)]
+    host_triple: Option<String>,
+    #[serde(default)]
+    target_triple: Option<String>,
+    #[serde(default)]
+    source_built: Option<bool>,
+    #[serde(default)]
+    capabilities: Vec<String>,
+    #[serde(default)]
+    provenance: Option<ProviderMetadataProvenance>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProviderMetadataProvenance {
+    #[serde(default)]
+    source_built: Option<bool>,
+}
+
 pub(crate) fn cmd_materialize_native_toolchain_closure(
     options: NativeToolchainClosureOptions<'_>,
 ) -> Result<(), RunError> {
@@ -60,13 +107,19 @@ pub(crate) fn cmd_materialize_native_toolchain_closure(
     }
 
     let rust_identity = rust_provider_identity(options.rust_source_provider)?;
-    let host_identity = native_root_identity(options.host_root, HOST_PROVIDER_METADATA_NAME)?;
-    let target_identity = native_root_identity(options.target_root, TARGET_PROVIDER_METADATA_NAME)?;
+    let host_identity =
+        native_root_identity(options.host_root, HOST_ROOT_LABEL, NativeRootRole::Host, &rust_identity.host_triple)?;
+    let target_identity = native_root_identity(
+        options.target_root,
+        TARGET_ROOT_LABEL,
+        NativeRootRole::Target,
+        &rust_identity.target_triple,
+    )?;
     let candidates = collect_native_closure_candidates(
         options.rust_source_provider,
         options.host_root,
         options.target_root,
-        &rust_identity,
+        &rust_identity.identity,
         &host_identity,
         &target_identity,
     )?;
@@ -92,7 +145,7 @@ pub(crate) fn cmd_materialize_native_toolchain_closure(
     Ok(())
 }
 
-fn rust_provider_identity(provider_root: &Path) -> Result<ProviderIdentity, RunError> {
+fn rust_provider_identity(provider_root: &Path) -> Result<RustProviderIdentity, RunError> {
     let validation =
         crate::rust_source_provider::validate_materialized_rust_source_provider(provider_root).map_err(|err| {
             RunError::Build(format!(
@@ -101,28 +154,47 @@ fn rust_provider_identity(provider_root: &Path) -> Result<ProviderIdentity, RunE
             ))
         })?;
     let digest = validation.validation.policy_digest_blake3;
-    Ok(ProviderIdentity {
-        source: ToolchainSourceIdentity {
-            kind: ToolchainSourceKind::LocalTree,
-            name: "mantle-rust-source-provider".to_string(),
-            digest_blake3: digest.clone(),
+    Ok(RustProviderIdentity {
+        identity: ProviderIdentity {
+            source: ToolchainSourceIdentity {
+                kind: ToolchainSourceKind::LocalTree,
+                name: "mantle-rust-source-provider".to_string(),
+                digest_blake3: digest.clone(),
+            },
+            receipt: ToolchainBuildReceiptIdentity {
+                kind: ToolchainBuildReceiptKind::MantleRustTopology,
+                name: "mantle-rust-source-provider-receipt".to_string(),
+                digest_blake3: digest,
+            },
         },
-        receipt: ToolchainBuildReceiptIdentity {
-            kind: ToolchainBuildReceiptKind::MantleRustTopology,
-            name: "mantle-rust-source-provider-receipt".to_string(),
-            digest_blake3: digest,
-        },
+        host_triple: validation.metadata.host_triple,
+        target_triple: validation.metadata.target_triple,
     })
 }
 
-fn native_root_identity(root: &Path, missing_label: &str) -> Result<ProviderIdentity, RunError> {
+fn native_root_identity(
+    root: &Path,
+    root_label: &str,
+    role: NativeRootRole,
+    expected_triple: &str,
+) -> Result<ProviderIdentity, RunError> {
     let metadata_path = provider_metadata_path(root).ok_or_else(|| {
         RunError::Build(format!(
-            "source-built native toolchain closure blocked: missing {missing_label} under {}",
+            "source-built native toolchain closure blocked: missing {root_label} provider metadata under {}",
             root.display()
         ))
     })?;
-    let digest = file_blake3(&metadata_path)?;
+    let bytes = fs::read(&metadata_path)
+        .map_err(|err| RunError::Build(format!("reading provider metadata {}: {err}", metadata_path.display())))?;
+    let metadata: ProviderMetadataSummary = serde_json::from_slice(&bytes)
+        .map_err(|err| RunError::Build(format!("parsing provider metadata {}: {err}", metadata_path.display())))?;
+    validate_native_root_capability(&metadata, role, expected_triple).map_err(|err| {
+        RunError::Build(format!(
+            "source-built native toolchain closure blocked: {root_label} capability mismatch under {}: {err}",
+            root.display()
+        ))
+    })?;
+    let digest = blake3::hash(&bytes).to_hex().to_string();
     Ok(ProviderIdentity {
         source: ToolchainSourceIdentity {
             kind: ToolchainSourceKind::LocalTree,
@@ -135,6 +207,132 @@ fn native_root_identity(root: &Path, missing_label: &str) -> Result<ProviderIden
             digest_blake3: digest,
         },
     })
+}
+
+fn validate_native_root_capability(
+    metadata: &ProviderMetadataSummary,
+    role: NativeRootRole,
+    expected_triple: &str,
+) -> Result<(), String> {
+    if expected_triple.trim().is_empty() {
+        return Err("expected triple is empty".to_string());
+    }
+    if is_source_root_provider(metadata) {
+        return validate_source_root_capability(metadata, role, expected_triple);
+    }
+    if is_native_provider(metadata) {
+        return validate_native_provider_capability(metadata, role, expected_triple);
+    }
+    Err(format!(
+        "unsupported provider metadata provider_id={:?} schema={:?}",
+        metadata.provider_id, metadata.schema
+    ))
+}
+
+fn validate_source_root_capability(
+    metadata: &ProviderMetadataSummary,
+    role: NativeRootRole,
+    expected_triple: &str,
+) -> Result<(), String> {
+    let target = metadata.target.as_deref().ok_or_else(|| "source-root metadata missing target".to_string())?;
+    if role == NativeRootRole::Host {
+        return Err(format!("source-root target `{target}` cannot satisfy host-root for `{expected_triple}`"));
+    }
+    if target_matches_expected(target, expected_triple) {
+        return Ok(());
+    }
+    Err(format!("source-root target `{target}` does not match requested target `{expected_triple}`"))
+}
+
+fn validate_native_provider_capability(
+    metadata: &ProviderMetadataSummary,
+    role: NativeRootRole,
+    expected_triple: &str,
+) -> Result<(), String> {
+    if !metadata_is_source_built(metadata) {
+        return Err("native provider metadata does not claim source_built=true".to_string());
+    }
+    let required_capability = required_native_capability(role);
+    if !metadata.capabilities.iter().any(|capability| capability == required_capability) {
+        return Err(format!("native provider metadata missing capability `{required_capability}`"));
+    }
+    if metadata_triple_matches(metadata, role, expected_triple) {
+        return Ok(());
+    }
+    Err(format!(
+        "native provider metadata triples {:?} do not match requested {} triple `{expected_triple}`",
+        advertised_triples(metadata),
+        native_root_role_label(role)
+    ))
+}
+
+fn is_source_root_provider(metadata: &ProviderMetadataSummary) -> bool {
+    metadata.provider_id.as_deref() == Some(SOURCE_ROOT_PROVIDER_ID)
+}
+
+fn is_native_provider(metadata: &ProviderMetadataSummary) -> bool {
+    metadata.provider_id.as_deref() == Some(NATIVE_PROVIDER_ID)
+        || metadata.schema.as_deref() == Some(NATIVE_PROVIDER_SCHEMA)
+}
+
+fn metadata_is_source_built(metadata: &ProviderMetadataSummary) -> bool {
+    metadata.source_built == Some(true)
+        || metadata.provenance.as_ref().and_then(|provenance| provenance.source_built) == Some(true)
+}
+
+fn required_native_capability(role: NativeRootRole) -> &'static str {
+    match role {
+        NativeRootRole::Host => HOST_NATIVE_CAPABILITY,
+        NativeRootRole::Target => TARGET_NATIVE_CAPABILITY,
+    }
+}
+
+fn native_root_role_label(role: NativeRootRole) -> &'static str {
+    match role {
+        NativeRootRole::Host => "host",
+        NativeRootRole::Target => "target",
+    }
+}
+
+fn metadata_triple_matches(metadata: &ProviderMetadataSummary, role: NativeRootRole, expected_triple: &str) -> bool {
+    advertised_triples(metadata)
+        .into_iter()
+        .any(|triple| triple_matches_role(&triple, role, expected_triple))
+}
+
+fn advertised_triples(metadata: &ProviderMetadataSummary) -> Vec<String> {
+    let mut triples = Vec::new();
+    for candidate in [&metadata.host_triple, &metadata.target_triple, &metadata.target] {
+        if let Some(triple) = candidate.as_deref() {
+            if !triple.trim().is_empty() && !triples.iter().any(|existing| existing == triple) {
+                triples.push(triple.to_string());
+            }
+        }
+    }
+    triples
+}
+
+fn triple_matches_role(candidate: &str, role: NativeRootRole, expected_triple: &str) -> bool {
+    match role {
+        NativeRootRole::Host => candidate == expected_triple,
+        NativeRootRole::Target => target_matches_expected(candidate, expected_triple),
+    }
+}
+
+fn target_matches_expected(candidate: &str, expected_triple: &str) -> bool {
+    accepted_target_triples(expected_triple).into_iter().any(|accepted| candidate == accepted)
+}
+
+fn accepted_target_triples(expected_triple: &str) -> Vec<String> {
+    let trimmed = expected_triple.trim();
+    let mut triples = vec![trimmed.to_string()];
+    if trimmed.contains(UNKNOWN_VENDOR_TARGET_SEGMENT) {
+        let vendorless = trimmed.replace(UNKNOWN_VENDOR_TARGET_SEGMENT, VENDORLESS_LINUX_TARGET_SEGMENT);
+        if !triples.iter().any(|existing| existing == &vendorless) {
+            triples.push(vendorless);
+        }
+    }
+    triples
 }
 
 fn provider_metadata_path(root: &Path) -> Option<PathBuf> {
@@ -378,6 +576,52 @@ mod tests {
     }
 
     #[test]
+    fn source_root_metadata_is_rejected_for_host_root() {
+        let metadata = source_root_metadata(TARGET_TRIPLE);
+
+        let err =
+            validate_native_root_capability(&metadata, NativeRootRole::Host, "x86_64-unknown-linux-gnu").unwrap_err();
+
+        assert!(err.contains("cannot satisfy host-root"));
+        assert!(err.contains(TARGET_TRIPLE));
+    }
+
+    #[test]
+    fn source_root_metadata_is_accepted_for_vendorless_target_root() {
+        let metadata = source_root_metadata(TARGET_TRIPLE);
+
+        validate_native_root_capability(&metadata, NativeRootRole::Target, "x86_64-unknown-linux-musl").unwrap();
+    }
+
+    #[test]
+    fn native_host_metadata_requires_host_capability() {
+        let metadata = native_metadata("x86_64-unknown-linux-gnu", &[TARGET_NATIVE_CAPABILITY], true);
+
+        let err =
+            validate_native_root_capability(&metadata, NativeRootRole::Host, "x86_64-unknown-linux-gnu").unwrap_err();
+
+        assert!(err.contains("missing capability"));
+        assert!(err.contains(HOST_NATIVE_CAPABILITY));
+    }
+
+    #[test]
+    fn native_host_metadata_accepts_matching_source_built_capability() {
+        let metadata = native_metadata("x86_64-unknown-linux-gnu", &[HOST_NATIVE_CAPABILITY], true);
+
+        validate_native_root_capability(&metadata, NativeRootRole::Host, "x86_64-unknown-linux-gnu").unwrap();
+    }
+
+    #[test]
+    fn native_metadata_rejects_non_source_built_root() {
+        let metadata = native_metadata("x86_64-unknown-linux-gnu", &[HOST_NATIVE_CAPABILITY], false);
+
+        let err =
+            validate_native_root_capability(&metadata, NativeRootRole::Host, "x86_64-unknown-linux-gnu").unwrap_err();
+
+        assert!(err.contains("source_built=true"));
+    }
+
+    #[test]
     fn directory_digest_changes_when_file_content_changes() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("tool");
@@ -388,5 +632,31 @@ mod tests {
         let new_digest = directory_blake3(dir.path()).unwrap();
 
         assert_ne!(old_digest, new_digest);
+    }
+
+    fn source_root_metadata(target: &str) -> ProviderMetadataSummary {
+        ProviderMetadataSummary {
+            schema: None,
+            provider_id: Some(SOURCE_ROOT_PROVIDER_ID.to_string()),
+            target: Some(target.to_string()),
+            host_triple: None,
+            target_triple: None,
+            source_built: None,
+            capabilities: Vec::new(),
+            provenance: None,
+        }
+    }
+
+    fn native_metadata(triple: &str, capabilities: &[&str], source_built: bool) -> ProviderMetadataSummary {
+        ProviderMetadataSummary {
+            schema: Some(NATIVE_PROVIDER_SCHEMA.to_string()),
+            provider_id: Some(NATIVE_PROVIDER_ID.to_string()),
+            target: None,
+            host_triple: Some(triple.to_string()),
+            target_triple: None,
+            source_built: Some(source_built),
+            capabilities: capabilities.iter().map(|capability| (*capability).to_string()).collect(),
+            provenance: None,
+        }
     }
 }
