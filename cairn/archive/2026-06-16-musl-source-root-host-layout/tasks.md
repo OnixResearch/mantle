@@ -6,3 +6,4 @@
 ## Phase 2: Current-provider guardrail
 
 - [x] [serial] V2 [evidence=cairn/changes/musl-source-root-host-layout/evidence/current-gnu-host-rejection-2026-06-16.md] Rerun the current GNU-host provider frontier and prove source-root musl is still rejected as a GNU host root. r[rust_package_planning.source_built_toolchain_closure.native_materialization]
+- [x] [serial] V3 [evidence=cairn/changes/musl-source-root-host-layout/evidence/archive-validation-2026-06-16.md] Archive and validate the completed musl-host layout slice. r[rust_package_planning.source_built_toolchain_closure.native_materialization]
