@@ -4443,6 +4443,8 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
         "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str("chmod +x \"$target_alias_dir/cc\"\n");
+    script.push_str("PATH=\"$target_alias_dir:$PATH\"\n");
+    script.push_str("export PATH\n");
     script.push_str("for target_tool in c++ ar ranlib; do case \"$target_tool\" in c++) target_program=\"$target_cxx_program\" ;; ar) target_program=\"$target_ar_program\" ;; ranlib) target_program=\"$target_ranlib_program\" ;; esac; if [ -x \"$target_tool_dir/$target_program\" ]; then printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_tool_dir/$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; fi; done\n");
     script.push_str(&format!("export {FIRST_STAGE_TARGET_MRUSTC_CC_ENV_VAR}=\"$target_alias_dir/cc\"\n"));
     script.push_str(&format!("export {FIRST_STAGE_TARGET_CARGO_CC_ENV_VAR}=\"$target_alias_dir/cc\"\n"));
@@ -5570,6 +5572,8 @@ mod tests {
         assert!(script.contains("target_libc_root=\"$target_wrapper_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT\""));
         assert!(script.contains("target_gcc_crt_machine=$target_cc_machine"));
         assert!(script.contains("target_cxx_program=$target_tool_prefix-g++"));
+        assert!(script.contains("PATH=\"$target_alias_dir:$PATH\""));
+        assert!(script.contains("export PATH"));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_ALIAS_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
