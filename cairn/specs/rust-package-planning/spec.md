@@ -3066,6 +3066,15 @@ THEN the manifest MUST contain only source-built members.
 AND it MUST contain no seed exceptions.
 AND every member MUST include a BLAKE3 content digest and source/build-receipt identity.
 
+#### Scenario: Complete source-root musl host fixture emits zero-seed manifest
+
+GIVEN a musl-host Rust provider identity
+AND source-root musl host and target roots expose target-prefixed helpers plus runtime/startup files
+WHEN Mantle collects and materializes native closure candidates from those roots
+THEN the manifest MUST contain no seed exceptions.
+AND host `cc`, host `ld`, and host runtime members MUST point at source-root musl layout paths.
+AND every manifest member MUST include a BLAKE3 content digest and source/build-receipt identity.
+
 #### Scenario: Source-root musl can satisfy a musl host root
 
 GIVEN a Rust provider host triple is `x86_64-unknown-linux-musl`
