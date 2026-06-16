@@ -70,6 +70,17 @@ enum NativeRootRole {
     Target,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NativeRootLayout {
+    NativeProvider,
+    SourceRootMusl,
+}
+
+struct NativeRootIdentity {
+    identity: ProviderIdentity,
+    layout: NativeRootLayout,
+}
+
 #[derive(Debug, Deserialize)]
 struct ProviderMetadataSummary {
     #[serde(default)]
@@ -177,7 +188,7 @@ fn native_root_identity(
     root_label: &str,
     role: NativeRootRole,
     expected_triple: &str,
-) -> Result<ProviderIdentity, RunError> {
+) -> Result<NativeRootIdentity, RunError> {
     let metadata_path = provider_metadata_path(root).ok_or_else(|| {
         RunError::Build(format!(
             "source-built native toolchain closure blocked: missing {root_label} provider metadata under {}",
@@ -188,24 +199,27 @@ fn native_root_identity(
         .map_err(|err| RunError::Build(format!("reading provider metadata {}: {err}", metadata_path.display())))?;
     let metadata: ProviderMetadataSummary = serde_json::from_slice(&bytes)
         .map_err(|err| RunError::Build(format!("parsing provider metadata {}: {err}", metadata_path.display())))?;
-    validate_native_root_capability(&metadata, role, expected_triple).map_err(|err| {
+    let layout = classify_native_root_capability(&metadata, role, expected_triple).map_err(|err| {
         RunError::Build(format!(
             "source-built native toolchain closure blocked: {root_label} capability mismatch under {}: {err}",
             root.display()
         ))
     })?;
     let digest = blake3::hash(&bytes).to_hex().to_string();
-    Ok(ProviderIdentity {
-        source: ToolchainSourceIdentity {
-            kind: ToolchainSourceKind::LocalTree,
-            name: "mantle-source-built-native-root".to_string(),
-            digest_blake3: digest.clone(),
+    Ok(NativeRootIdentity {
+        identity: ProviderIdentity {
+            source: ToolchainSourceIdentity {
+                kind: ToolchainSourceKind::LocalTree,
+                name: "mantle-source-built-native-root".to_string(),
+                digest_blake3: digest.clone(),
+            },
+            receipt: ToolchainBuildReceiptIdentity {
+                kind: ToolchainBuildReceiptKind::ExternalAttestedBuild,
+                name: "mantle-source-built-native-root-receipt".to_string(),
+                digest_blake3: digest,
+            },
         },
-        receipt: ToolchainBuildReceiptIdentity {
-            kind: ToolchainBuildReceiptKind::ExternalAttestedBuild,
-            name: "mantle-source-built-native-root-receipt".to_string(),
-            digest_blake3: digest,
-        },
+        layout,
     })
 }
 
@@ -214,6 +228,14 @@ fn validate_native_root_capability(
     role: NativeRootRole,
     expected_triple: &str,
 ) -> Result<(), String> {
+    classify_native_root_capability(metadata, role, expected_triple).map(|_layout| ())
+}
+
+fn classify_native_root_capability(
+    metadata: &ProviderMetadataSummary,
+    role: NativeRootRole,
+    expected_triple: &str,
+) -> Result<NativeRootLayout, String> {
     if expected_triple.trim().is_empty() {
         return Err("expected triple is empty".to_string());
     }
@@ -233,13 +255,13 @@ fn validate_source_root_capability(
     metadata: &ProviderMetadataSummary,
     role: NativeRootRole,
     expected_triple: &str,
-) -> Result<(), String> {
+) -> Result<NativeRootLayout, String> {
     let target = metadata.target.as_deref().ok_or_else(|| "source-root metadata missing target".to_string())?;
+    if target_matches_expected(target, expected_triple) {
+        return Ok(NativeRootLayout::SourceRootMusl);
+    }
     if role == NativeRootRole::Host {
         return Err(format!("source-root target `{target}` cannot satisfy host-root for `{expected_triple}`"));
-    }
-    if target_matches_expected(target, expected_triple) {
-        return Ok(());
     }
     Err(format!("source-root target `{target}` does not match requested target `{expected_triple}`"))
 }
@@ -248,7 +270,7 @@ fn validate_native_provider_capability(
     metadata: &ProviderMetadataSummary,
     role: NativeRootRole,
     expected_triple: &str,
-) -> Result<(), String> {
+) -> Result<NativeRootLayout, String> {
     if !metadata_is_source_built(metadata) {
         return Err("native provider metadata does not claim source_built=true".to_string());
     }
@@ -257,7 +279,7 @@ fn validate_native_provider_capability(
         return Err(format!("native provider metadata missing capability `{required_capability}`"));
     }
     if metadata_triple_matches(metadata, role, expected_triple) {
-        return Ok(());
+        return Ok(NativeRootLayout::NativeProvider);
     }
     Err(format!(
         "native provider metadata triples {:?} do not match requested {} triple `{expected_triple}`",
@@ -347,13 +369,43 @@ fn provider_metadata_path(root: &Path) -> Option<PathBuf> {
     None
 }
 
+struct HostMemberPaths {
+    c_compiler: PathBuf,
+    linker: PathBuf,
+    crt1: PathBuf,
+    libgcc_s: PathBuf,
+    libc: PathBuf,
+}
+
+fn host_member_paths(root: &Path, layout: NativeRootLayout) -> HostMemberPaths {
+    match layout {
+        NativeRootLayout::NativeProvider => HostMemberPaths {
+            c_compiler: root.join("bin").join("cc"),
+            linker: root.join("bin").join("ld"),
+            crt1: root.join("lib").join("crt1.o"),
+            libgcc_s: root.join("lib").join("libgcc_s.so.1"),
+            libc: root.join("lib").join("libc.so"),
+        },
+        NativeRootLayout::SourceRootMusl => {
+            let target_lib = root.join(TARGET_TRIPLE).join("lib");
+            HostMemberPaths {
+                c_compiler: root.join("bin").join(NATIVE_TARGET_GCC_NAME),
+                linker: root.join("bin").join(NATIVE_TARGET_LD_NAME),
+                crt1: target_lib.join("crt1.o"),
+                libgcc_s: target_lib.join("libgcc_s.so.1"),
+                libc: target_lib.join("libc.so"),
+            }
+        }
+    }
+}
+
 fn collect_native_closure_candidates(
     rust_provider: &Path,
     host_root: &Path,
     target_root: &Path,
     rust_identity: &ProviderIdentity,
-    host_identity: &ProviderIdentity,
-    target_identity: &ProviderIdentity,
+    host_identity: &NativeRootIdentity,
+    target_identity: &NativeRootIdentity,
 ) -> Result<Vec<NativeClosureCandidateMember>, RunError> {
     let mut missing = Vec::new();
     let mut candidates = Vec::new();
@@ -373,45 +425,46 @@ fn collect_native_closure_candidates(
         rust_provider,
         rust_identity,
     )?;
+    let host_paths = host_member_paths(host_root, host_identity.layout);
     push_candidate(
         &mut candidates,
         &mut missing,
         ToolchainRole::CCompiler,
         NATIVE_HOST_CC_NAME,
-        &host_root.join("bin").join("cc"),
-        host_identity,
+        &host_paths.c_compiler,
+        &host_identity.identity,
     )?;
     push_candidate(
         &mut candidates,
         &mut missing,
         ToolchainRole::Linker,
         NATIVE_HOST_LINKER_NAME,
-        &host_root.join("bin").join("ld"),
-        host_identity,
+        &host_paths.linker,
+        &host_identity.identity,
     )?;
     push_candidate(
         &mut candidates,
         &mut missing,
         ToolchainRole::CrtObject,
         NATIVE_HOST_CRT1_NAME,
-        &host_root.join("lib").join("crt1.o"),
-        host_identity,
+        &host_paths.crt1,
+        &host_identity.identity,
     )?;
     push_candidate(
         &mut candidates,
         &mut missing,
         ToolchainRole::RuntimeLibrary,
         NATIVE_HOST_LIBGCC_NAME,
-        &host_root.join("lib").join("libgcc_s.so.1"),
-        host_identity,
+        &host_paths.libgcc_s,
+        &host_identity.identity,
     )?;
     push_candidate(
         &mut candidates,
         &mut missing,
         ToolchainRole::RuntimeLibrary,
         NATIVE_HOST_LIBC_NAME,
-        &host_root.join("lib").join("libc.so"),
-        host_identity,
+        &host_paths.libc,
+        &host_identity.identity,
     )?;
     for (name, file_name) in [
         (NATIVE_TARGET_GCC_NAME, NATIVE_TARGET_GCC_NAME),
@@ -426,7 +479,7 @@ fn collect_native_closure_candidates(
             ToolchainRole::NativeHelper,
             name,
             &target_root.join("bin").join(file_name),
-            target_identity,
+            &target_identity.identity,
         )?;
     }
     let target_lib = target_root.join(TARGET_TRIPLE).join("lib");
@@ -436,7 +489,7 @@ fn collect_native_closure_candidates(
         ToolchainRole::CrtObject,
         NATIVE_TARGET_CRT1_NAME,
         &target_lib.join("crt1.o"),
-        target_identity,
+        &target_identity.identity,
     )?;
     push_candidate(
         &mut candidates,
@@ -444,7 +497,7 @@ fn collect_native_closure_candidates(
         ToolchainRole::RuntimeLibrary,
         NATIVE_TARGET_LIBGCC_NAME,
         &target_lib.join("libgcc_s.so.1"),
-        target_identity,
+        &target_identity.identity,
     )?;
     push_candidate(
         &mut candidates,
@@ -452,7 +505,7 @@ fn collect_native_closure_candidates(
         ToolchainRole::RuntimeLibrary,
         NATIVE_TARGET_LIBC_NAME,
         &target_lib.join("libc.so"),
-        target_identity,
+        &target_identity.identity,
     )?;
     if !missing.is_empty() {
         return Err(RunError::Build(format!(
@@ -591,6 +644,29 @@ mod tests {
         let metadata = source_root_metadata(TARGET_TRIPLE);
 
         validate_native_root_capability(&metadata, NativeRootRole::Target, "x86_64-unknown-linux-musl").unwrap();
+    }
+
+    #[test]
+    fn source_root_metadata_is_accepted_for_matching_musl_host_root() {
+        let metadata = source_root_metadata(TARGET_TRIPLE);
+
+        let layout =
+            classify_native_root_capability(&metadata, NativeRootRole::Host, "x86_64-unknown-linux-musl").unwrap();
+
+        assert_eq!(layout, NativeRootLayout::SourceRootMusl);
+    }
+
+    #[test]
+    fn source_root_host_layout_uses_target_prefixed_tools_and_target_libs() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let paths = host_member_paths(dir.path(), NativeRootLayout::SourceRootMusl);
+
+        assert!(paths.c_compiler.ends_with(format!("bin/{NATIVE_TARGET_GCC_NAME}")));
+        assert!(paths.linker.ends_with(format!("bin/{NATIVE_TARGET_LD_NAME}")));
+        assert!(paths.crt1.ends_with(format!("{TARGET_TRIPLE}/lib/crt1.o")));
+        assert!(paths.libgcc_s.ends_with(format!("{TARGET_TRIPLE}/lib/libgcc_s.so.1")));
+        assert!(paths.libc.ends_with(format!("{TARGET_TRIPLE}/lib/libc.so")));
     }
 
     #[test]
