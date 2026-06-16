@@ -4,6 +4,7 @@ use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -34,6 +35,7 @@ const LINKER_ALIAS: &str = "ld";
 const ARCHIVER_ALIAS: &str = "ar";
 const RANLIB_ALIAS: &str = "ranlib";
 const PKG_CONFIG_ALIAS: &str = "pkg-config";
+const MUSL_TARGET_GCC_ALIAS: &str = "x86_64-linux-musl-gcc";
 const PRODUCED_MANTLE_FILE: &str = "mantle";
 const MANTLE_TARGET_NAME: &str = "mantle";
 const MANTLE_TARGET_KIND: &str = "bin";
@@ -1584,6 +1586,7 @@ fn toolchain_path_aliases(
         let target = canonicalize_toolchain_path(Path::new(&member.execution_path), member.role)?;
         require_executable(&target)?;
         add_toolchain_alias(&mut aliases, path_file_name(&target)?, &target)?;
+        add_toolchain_alias(&mut aliases, safe_toolchain_alias(&member.name)?, &target)?;
         add_role_aliases(&mut aliases, member, &target)?;
     }
     Ok(aliases)
@@ -1631,6 +1634,8 @@ fn add_role_aliases(
 }
 
 fn add_toolchain_alias(aliases: &mut BTreeMap<String, PathBuf>, alias: String, target: &Path) -> Result<(), RunError> {
+    debug_assert!(!alias.is_empty());
+    debug_assert!(Path::new(&alias).components().count() == 1);
     if let Some(existing) = aliases.get(&alias) {
         if existing != target {
             return Err(RunError::Build(format!(
@@ -1659,7 +1664,22 @@ fn path_file_name(path: &Path) -> Result<String, RunError> {
     let name = path.file_name().and_then(OsStr::to_str).ok_or_else(|| {
         RunError::Build(format!("source-built toolchain closure blocked: invalid tool path {}", path.display()))
     })?;
-    Ok(name.to_string())
+    safe_toolchain_alias(name)
+}
+
+fn safe_toolchain_alias(alias: &str) -> Result<String, RunError> {
+    if alias.is_empty() {
+        return Err(RunError::Build("source-built toolchain closure blocked: empty PATH alias".to_string()));
+    }
+    if alias.contains('/') || alias.contains('\\') {
+        return Err(RunError::Build(format!("source-built toolchain closure blocked: unsafe PATH alias {alias}")));
+    }
+    let path = Path::new(alias);
+    let mut components = path.components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(value)), None) if value == OsStr::new(alias) => Ok(alias.to_string()),
+        _ => Err(RunError::Build(format!("source-built toolchain closure blocked: unsafe PATH alias {alias}"))),
+    }
 }
 
 fn path_to_string(path: &Path) -> Result<String, RunError> {
@@ -2553,9 +2573,76 @@ mod tests {
 
         assert_eq!(aliases.get("ld"), Some(&tools.linker));
         assert_eq!(aliases.get("cc"), Some(&tools.c_compiler));
+        assert_eq!(aliases.get("c-compiler"), Some(&tools.c_compiler));
         assert_eq!(aliases.get(ARCHIVER_ALIAS), Some(&tools.archiver));
         assert_eq!(aliases.get(RANLIB_ALIAS), Some(&tools.ranlib));
         assert!(!aliases.contains_key("cargo"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_path_aliases_expose_target_prefixed_member_name() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let target_tool = dir.path().join("toolchain").join("bin").join("musl-gcc-wrapper");
+        write_fake_executable(&target_tool, "#!/bin/sh\nexit 0\n");
+        let mut manifest = fake_toolchain_manifest(&tools, None);
+        manifest.members.push(fake_member(
+            crate::source_toolchain_closure::ToolchainRole::NativeHelper,
+            MUSL_TARGET_GCC_ALIAS,
+            &target_tool,
+            None,
+        ));
+
+        let aliases = toolchain_path_aliases(&manifest).unwrap();
+
+        assert_eq!(aliases.get(MUSL_TARGET_GCC_ALIAS), Some(&target_tool));
+        assert_eq!(aliases.get(C_COMPILER_ALIAS), Some(&tools.c_compiler));
+        assert_eq!(aliases.get("cc"), Some(&tools.c_compiler));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_path_aliases_reject_unsafe_member_name() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let mut manifest = fake_toolchain_manifest(&tools, None);
+        manifest
+            .members
+            .iter_mut()
+            .find(|member| member.role == crate::source_toolchain_closure::ToolchainRole::CCompiler)
+            .unwrap()
+            .name = "bin/gcc".to_string();
+
+        let err = toolchain_path_aliases(&manifest).unwrap_err();
+
+        assert!(err.message().contains("unsafe PATH alias"));
+        assert!(err.message().contains("bin/gcc"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_path_aliases_reject_member_name_conflict() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let mut manifest = fake_toolchain_manifest(&tools, None);
+        manifest
+            .members
+            .iter_mut()
+            .find(|member| member.role == crate::source_toolchain_closure::ToolchainRole::CCompiler)
+            .unwrap()
+            .name = MUSL_TARGET_GCC_ALIAS.to_string();
+        manifest.members.push(fake_member(
+            crate::source_toolchain_closure::ToolchainRole::NativeHelper,
+            MUSL_TARGET_GCC_ALIAS,
+            &tools.archiver,
+            None,
+        ));
+
+        let err = toolchain_path_aliases(&manifest).unwrap_err();
+
+        assert!(err.message().contains("PATH alias"));
+        assert!(err.message().contains("conflicting targets"));
     }
 
     #[cfg(unix)]
