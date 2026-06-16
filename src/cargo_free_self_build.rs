@@ -782,6 +782,7 @@ fn run_rust_plan_child(
         .arg(&paths.execution_dir)
         .current_dir(&paths.root)
         .env("CARGO", &paths.path_cargo_shim)
+        .env(RUSTC_BOOTSTRAP_ENV, "1")
         .env("PATH", path_env)
         .output()
         .map_err(|err| internal(format!("launch {} rust-plan: {err}", current_exe.display())))?;
@@ -827,6 +828,7 @@ fn execute_fixed_point_stage(
         .args(&stage.command.args)
         .current_dir(&stage.command.current_dir)
         .env("CARGO", &stage.command.cargo_env_value)
+        .env(RUSTC_BOOTSTRAP_ENV, "1")
         .env("PATH", path_env)
         .output();
     let output = match output {

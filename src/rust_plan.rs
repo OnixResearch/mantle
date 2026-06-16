@@ -23,7 +23,8 @@ const PATH_SOURCE_DIGEST_SKIP_ANYWHERE: &[&str] = &[".agent", ".git", ".jj", ".p
 const PATH_SOURCE_DIGEST_SKIP_AT_ROOT: &[&str] = &["cairn"];
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
 const SNIX_BUILD_SANDBOX_SHELL_ENV: &str = "SNIX_BUILD_SANDBOX_SHELL";
-const RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST: &[&str] = &[SNIX_BUILD_SANDBOX_SHELL_ENV];
+const RUSTC_BOOTSTRAP_ENV: &str = "RUSTC_BOOTSTRAP";
+const RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST: &[&str] = &[SNIX_BUILD_SANDBOX_SHELL_ENV, RUSTC_BOOTSTRAP_ENV];
 const BUILD_SCRIPT_OUT_DIR_ENV: &str = "OUT_DIR";
 const BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV: &str = "CARGO_MANIFEST_DIR";
 const BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV: &str = "CARGO_MANIFEST_LINKS";
@@ -15482,10 +15483,10 @@ rust-version = "1.80"
     #[test]
     fn rust_topology_child_env_forwards_allowlisted_compile_env() {
         let explicit = BTreeMap::new();
-        let inherited_compile_env = BTreeMap::from([(
-            SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(),
-            OsString::from("/nix/store/static-busybox/bin/busybox"),
-        )]);
+        let inherited_compile_env = BTreeMap::from([
+            (SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), OsString::from("/nix/store/static-busybox/bin/busybox")),
+            (RUSTC_BOOTSTRAP_ENV.to_string(), OsString::from("1")),
+        ]);
 
         let env = rust_topology_child_env(&explicit, None, &inherited_compile_env);
 
@@ -15493,7 +15494,8 @@ rust-version = "1.80"
             env.get(SNIX_BUILD_SANDBOX_SHELL_ENV),
             Some(&OsString::from("/nix/store/static-busybox/bin/busybox"))
         );
-        assert_eq!(env.len(), 1usize);
+        assert_eq!(env.get(RUSTC_BOOTSTRAP_ENV), Some(&OsString::from("1")));
+        assert_eq!(env.len(), 2usize);
     }
 
     #[test]
@@ -15513,6 +15515,7 @@ rust-version = "1.80"
     fn allowed_rust_topology_compile_env_rejects_unrelated_ambient_env() {
         let candidates = BTreeMap::from([
             (SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), OsString::from("/busybox")),
+            (RUSTC_BOOTSTRAP_ENV.to_string(), OsString::from("1")),
             ("LD_PRELOAD".to_string(), OsString::from("/tmp/inject.so")),
             ("SECRET_TOKEN".to_string(), OsString::from("do-not-forward")),
         ]);
@@ -15520,9 +15523,10 @@ rust-version = "1.80"
         let env = allowed_rust_topology_compile_env(&candidates);
 
         assert_eq!(env.get(SNIX_BUILD_SANDBOX_SHELL_ENV), Some(&OsString::from("/busybox")));
+        assert_eq!(env.get(RUSTC_BOOTSTRAP_ENV), Some(&OsString::from("1")));
         assert!(!env.contains_key("LD_PRELOAD"));
         assert!(!env.contains_key("SECRET_TOKEN"));
-        assert_eq!(env.len(), 1usize);
+        assert_eq!(env.len(), 2usize);
     }
 
     #[test]
