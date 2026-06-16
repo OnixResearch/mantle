@@ -162,10 +162,13 @@ const FIRST_STAGE_CMAKE_PROGRAM: &str = "cmake";
 const FIRST_STAGE_CC_PROGRAM: &str = "cc";
 const FIRST_STAGE_CXX_PROGRAM: &str = "c++";
 const FIRST_STAGE_MUSL_TRIPLE: &str = "x86_64-unknown-linux-musl";
+const FIRST_STAGE_SOURCE_ROOT_MUSL_PREFIX: &str = "x86_64-linux-musl";
 const FIRST_STAGE_TARGET_CC_PROGRAM: &str = "x86_64-unknown-linux-musl-gcc";
 const FIRST_STAGE_TARGET_CXX_PROGRAM: &str = "x86_64-unknown-linux-musl-g++";
 const FIRST_STAGE_TARGET_AR_PROGRAM: &str = "x86_64-unknown-linux-musl-ar";
 const FIRST_STAGE_TARGET_RANLIB_PROGRAM: &str = "x86_64-unknown-linux-musl-ranlib";
+const FIRST_STAGE_TARGET_MUSL_TOOL_PREFIXES: &[&str] = &[FIRST_STAGE_MUSL_TRIPLE, FIRST_STAGE_SOURCE_ROOT_MUSL_PREFIX];
+const FIRST_STAGE_TARGET_MUSL_MACHINE_ALIASES: &[&str] = FIRST_STAGE_TARGET_MUSL_TOOL_PREFIXES;
 const FIRST_STAGE_TARGET_LINKER_ALIAS_DIR: &str = "target-linker-bin";
 const FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR: &str = "target-linker-runtime";
 const FIRST_STAGE_STATIC_MUSL_DYLIB_EXT: &str = "rlib";
@@ -1992,6 +1995,23 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("=${");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str(":-}\n");
+    script.push_str("MANTLE_TARGET_MUSL_MACHINE_ALIASES=");
+    script.push_str(&shell_quote(&musl_target_machine_aliases_shell_words()));
+    script.push_str("\n");
+    script.push_str("MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT=");
+    script.push_str(&shell_quote(FIRST_STAGE_SOURCE_ROOT_MUSL_PREFIX));
+    script.push_str("\n");
+    script.push_str("if [ -z \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("\" ]; then\n");
+    script.push_str("  for candidate_name in ");
+    script.push_str(&musl_target_tool_program_candidates_shell_words("gcc"));
+    script.push_str("; do\n");
+    script.push_str("    if command -v \"$candidate_name\" >/dev/null 2>&1; then ");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("=\"$(command -v \"$candidate_name\")\"; break; fi\n");
+    script.push_str("  done\n");
+    script.push_str("fi\n");
     script.push_str("if [ -z \"$");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str("\" ]; then\n");
@@ -2009,21 +2029,36 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("  target_tool_dir=${");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str("%/*}\n");
+    script.push_str("  target_cc_basename=${");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("##*/}\n");
+    script.push_str("  target_cc_machine=$(\"$");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("\" -dumpmachine 2>/dev/null || true)\n");
+    script.push_str("  case \" $MANTLE_TARGET_MUSL_MACHINE_ALIASES \" in *\" $target_cc_machine \"*) ;; *) printf '%s\\n' \"Rust bootstrap target gcc machine expected one of: $MANTLE_TARGET_MUSL_MACHINE_ALIASES; got $target_cc_machine\" >&2; ");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("= ;; esac\n");
+    script.push_str("fi\n");
+    script.push_str("if [ -n \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("\" ]; then\n");
+    script.push_str("  case \"$target_cc_basename\" in *-gcc) target_tool_prefix=${target_cc_basename%-gcc} ;; *) target_tool_prefix= ;; esac\n");
+    script.push_str("  if [ -z \"$target_tool_prefix\" ]; then ");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("=; fi\n");
+    script.push_str("fi\n");
+    script.push_str("if [ -n \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("\" ]; then\n");
     script.push_str("  ");
     script.push_str(RUSTC_SOURCE_TARGET_CXX_VAR);
-    script.push_str("=\"$target_tool_dir/");
-    script.push_str(FIRST_STAGE_TARGET_CXX_PROGRAM);
-    script.push_str("\"\n");
+    script.push_str("=\"$target_tool_dir/$target_tool_prefix-g++\"\n");
     script.push_str("  ");
     script.push_str(RUSTC_SOURCE_TARGET_AR_VAR);
-    script.push_str("=\"$target_tool_dir/");
-    script.push_str(FIRST_STAGE_TARGET_AR_PROGRAM);
-    script.push_str("\"\n");
+    script.push_str("=\"$target_tool_dir/$target_tool_prefix-ar\"\n");
     script.push_str("  ");
     script.push_str(RUSTC_SOURCE_TARGET_RANLIB_VAR);
-    script.push_str("=\"$target_tool_dir/");
-    script.push_str(FIRST_STAGE_TARGET_RANLIB_PROGRAM);
-    script.push_str("\"\n");
+    script.push_str("=\"$target_tool_dir/$target_tool_prefix-ranlib\"\n");
     script.push_str("  target_wrapper_root=${target_tool_dir%/*}\n");
     script.push_str("  ");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
@@ -2041,6 +2076,14 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE);
     script.push_str("\" || true\n");
     script.push_str("  fi\n");
+    script.push_str("  if [ -z \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
+    script
+        .push_str("\" ] && [ -f \"$target_wrapper_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/libc.a\" ]; then\n");
+    script.push_str("    ");
+    script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
+    script.push_str("=\"$target_wrapper_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT\"\n");
+    script.push_str("  fi\n");
     script.push_str("  if [ -x \"$");
     script.push_str(RUSTC_SOURCE_TARGET_CXX_VAR);
     script.push_str("\" ] && [ -x \"$");
@@ -2051,7 +2094,11 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str("\" ] && [ -f \"$");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
-    script.push_str("/lib/libc.a\" ]; then\n");
+    script.push_str("/lib/libc.a\" ] && [ -f \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
+    script.push_str("/lib/crt1.o\" ] && [ -f \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
+    script.push_str("/lib/rcrt1.o\" ]; then\n");
     script.push_str("    PATH=\"$target_tool_dir:$PATH\"\n");
     script.push_str("    export ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
@@ -4035,6 +4082,16 @@ fn push_first_stage_script_header(
     script.push_str(&format!("TARGET_AR_PROGRAM={}\n", shell_quote(FIRST_STAGE_TARGET_AR_PROGRAM)));
     script.push_str(&format!("TARGET_RANLIB_PROGRAM={}\n", shell_quote(FIRST_STAGE_TARGET_RANLIB_PROGRAM)));
     script.push_str(&format!(
+        "TARGET_CC_PROGRAM_CANDIDATES={}\n",
+        shell_quote(&musl_target_tool_program_candidates_shell_words("gcc"))
+    ));
+    script.push_str(&format!("TARGET_MUSL_TOOL_PREFIXES={}\n", shell_quote(&musl_target_tool_prefixes_shell_words())));
+    script.push_str(&format!(
+        "TARGET_MUSL_MACHINE_ALIASES={}\n",
+        shell_quote(&musl_target_machine_aliases_shell_words())
+    ));
+    script.push_str(&format!("TARGET_MUSL_SOURCE_ROOT_SYSROOT={}\n", shell_quote(FIRST_STAGE_SOURCE_ROOT_MUSL_PREFIX)));
+    script.push_str(&format!(
         "TARGET_MUSL_GCC_FALLBACK_GLOB={}\n",
         shell_quote(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB)
     ));
@@ -4307,32 +4364,46 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str(&format!(
         "if [ \"$RUSTC_TARGET\" = \"$RUSTC_PROVIDER_TARGET_TRIPLE\" ] && [ \"$RUSTC_TARGET\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"
     ));
+    script.push_str("if ! command -v \"$TARGET_CC_PROGRAM\" >/dev/null 2>&1; then for candidate_name in $TARGET_CC_PROGRAM_CANDIDATES; do if command -v \"$candidate_name\" >/dev/null 2>&1; then TARGET_CC_PROGRAM=\"$candidate_name\"; break; fi; done; fi\n");
     script.push_str("if ! command -v \"$TARGET_CC_PROGRAM\" >/dev/null 2>&1; then for candidate in $TARGET_MUSL_GCC_FALLBACK_GLOB; do if [ -x \"$candidate\" ]; then TARGET_CC_PROGRAM=\"$candidate\"; break; fi; done; fi\n");
     script.push_str(&format!(
         "if ! command -v \"$TARGET_CC_PROGRAM\" >/dev/null 2>&1; then printf '%s\\n' 'x86_64 musl target gcc is required for run_rustc target linking' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
     script.push_str("target_cc_path=$(command -v \"$TARGET_CC_PROGRAM\")\n");
     script.push_str("target_cc_machine=$(\"$target_cc_path\" -dumpmachine 2>/dev/null || true)\n");
-    script.push_str(&format!(
-        "if [ \"$target_cc_machine\" != \"$RUSTC_TARGET\" ]; then printf '%s\\n' \"target gcc machine expected $RUSTC_TARGET, got $target_cc_machine\" >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
+    script.push_str("case \" $TARGET_MUSL_MACHINE_ALIASES \" in *\" $target_cc_machine \"*) ;; *) printf '%s\\n' \"target gcc machine expected one of: $TARGET_MUSL_MACHINE_ALIASES; got $target_cc_machine\" >&2; exit ");
+    script.push_str(&FIRST_STAGE_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str(" ;; esac\n");
     script.push_str("target_tool_dir=$(dirname \"$target_cc_path\")\n");
     script.push_str("target_wrapper_root=$(dirname \"$target_tool_dir\")\n");
+    script.push_str("target_cc_basename=${target_cc_path##*/}\n");
+    script.push_str("case \"$target_cc_basename\" in *-gcc) target_tool_prefix=${target_cc_basename%-gcc} ;; *) target_tool_prefix= ;; esac\n");
+    script.push_str("if [ -z \"$target_tool_prefix\" ]; then printf '%s\\n' \"target gcc name does not end in -gcc: $target_cc_basename\" >&2; exit ");
+    script.push_str(&FIRST_STAGE_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; fi\n");
+    script.push_str("target_cxx_program=$target_tool_prefix-g++\n");
+    script.push_str("target_ar_program=$target_tool_prefix-ar\n");
+    script.push_str("target_ranlib_program=$target_tool_prefix-ranlib\n");
     script.push_str(&format!("target_nix_support=\"$target_wrapper_root/{FIRST_STAGE_TARGET_NIX_SUPPORT_DIR}\"\n"));
     script
         .push_str(&format!("target_orig_libc_file=\"$target_nix_support/{FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE}\"\n"));
     script.push_str(&format!("target_orig_cc_file=\"$target_nix_support/{FIRST_STAGE_TARGET_NIX_ORIG_CC_FILE}\"\n"));
-    script.push_str(&format!(
-        "if [ ! -f \"$target_orig_libc_file\" ] || [ ! -f \"$target_orig_cc_file\" ]; then printf '%s\\n' 'target gcc wrapper is missing nix-support origin files' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("target_libc_root=$(cat \"$target_orig_libc_file\")\n");
-    script.push_str("target_orig_cc_root=$(cat \"$target_orig_cc_file\")\n");
+    script.push_str("if [ -f \"$target_orig_libc_file\" ] && [ -f \"$target_orig_cc_file\" ]; then\n");
+    script.push_str("  target_libc_root=$(cat \"$target_orig_libc_file\")\n");
+    script.push_str("  target_orig_cc_root=$(cat \"$target_orig_cc_file\")\n");
+    script.push_str("  target_gcc_crt_machine=$RUSTC_TARGET\n");
+    script.push_str("else\n");
+    script.push_str("  target_libc_root=\"$target_wrapper_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT\"\n");
+    script.push_str("  target_orig_cc_root=\"$target_wrapper_root\"\n");
+    script.push_str("  target_gcc_crt_machine=$target_cc_machine\n");
+    script.push_str("fi\n");
     script.push_str("target_musl_crt_dir=\"$target_libc_root/lib\"\n");
     script.push_str("target_gcc_version=$(\"$target_cc_path\" -dumpfullversion 2>/dev/null || \"$target_cc_path\" -dumpversion 2>/dev/null || true)\n");
-    script.push_str("target_gcc_crt_dir=\"$target_orig_cc_root/lib/gcc/$RUSTC_TARGET/$target_gcc_version\"\n");
-    script.push_str("if [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ]; then for candidate_dir in \"$target_orig_cc_root\"/lib/gcc/\"$RUSTC_TARGET\"/*; do if [ -f \"$candidate_dir/crtbeginS.o\" ]; then target_gcc_crt_dir=\"$candidate_dir\"; break; fi; done; fi\n");
+    script
+        .push_str("target_gcc_crt_dir=\"$target_orig_cc_root/lib/gcc/$target_gcc_crt_machine/$target_gcc_version\"\n");
+    script.push_str("if [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ]; then for candidate_dir in \"$target_orig_cc_root\"/lib/gcc/\"$target_gcc_crt_machine\"/*; do if [ -f \"$candidate_dir/crtbeginS.o\" ]; then target_gcc_crt_dir=\"$candidate_dir\"; break; fi; done; fi\n");
     script.push_str(&format!(
-        "if [ ! -f \"$target_musl_crt_dir/rcrt1.o\" ] || [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ] || [ ! -f \"$target_gcc_crt_dir/libgcc.a\" ]; then printf '%s\\n' 'target gcc wrapper does not expose musl/gcc CRT and unwinder objects' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+        "if [ ! -f \"$target_musl_crt_dir/rcrt1.o\" ] || [ ! -f \"$target_musl_crt_dir/crti.o\" ] || [ ! -f \"$target_musl_crt_dir/crtn.o\" ] || [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ] || [ ! -f \"$target_gcc_crt_dir/libgcc.a\" ]; then printf '%s\\n' 'target gcc toolchain does not expose musl/gcc CRT and unwinder objects' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
     script.push_str(&format!("export {FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR}=1\n"));
     script.push_str("export COPY_PROGRAM\n");
@@ -4372,7 +4443,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
         "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str("chmod +x \"$target_alias_dir/cc\"\n");
-    script.push_str("for target_tool in c++ ar ranlib; do case \"$target_tool\" in c++) target_program=\"$TARGET_CXX_PROGRAM\" ;; ar) target_program=\"$TARGET_AR_PROGRAM\" ;; ranlib) target_program=\"$TARGET_RANLIB_PROGRAM\" ;; esac; if [ -x \"$target_tool_dir/$target_program\" ]; then printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_tool_dir/$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; fi; done\n");
+    script.push_str("for target_tool in c++ ar ranlib; do case \"$target_tool\" in c++) target_program=\"$target_cxx_program\" ;; ar) target_program=\"$target_ar_program\" ;; ranlib) target_program=\"$target_ranlib_program\" ;; esac; if [ -x \"$target_tool_dir/$target_program\" ]; then printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_tool_dir/$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; fi; done\n");
     script.push_str(&format!("export {FIRST_STAGE_TARGET_MRUSTC_CC_ENV_VAR}=\"$target_alias_dir/cc\"\n"));
     script.push_str(&format!("export {FIRST_STAGE_TARGET_CARGO_CC_ENV_VAR}=\"$target_alias_dir/cc\"\n"));
     script.push_str(&format!(
@@ -4547,6 +4618,37 @@ fn push_required_shell_command_check(script: &mut String, shell_var: &str, messa
         shell_quote(message),
         FIRST_STAGE_BUILD_FAILED_EXIT_CODE
     ));
+}
+
+fn musl_target_tool_program_candidates(tool_suffix: &str) -> Vec<String> {
+    assert!(!tool_suffix.trim().is_empty());
+    assert!(!FIRST_STAGE_TARGET_MUSL_TOOL_PREFIXES.is_empty());
+    FIRST_STAGE_TARGET_MUSL_TOOL_PREFIXES
+        .iter()
+        .map(|prefix| format!("{prefix}-{tool_suffix}"))
+        .collect()
+}
+
+fn musl_target_tool_prefixes_shell_words() -> String {
+    shell_words(FIRST_STAGE_TARGET_MUSL_TOOL_PREFIXES.iter().copied())
+}
+
+fn musl_target_machine_aliases_shell_words() -> String {
+    shell_words(FIRST_STAGE_TARGET_MUSL_MACHINE_ALIASES.iter().copied())
+}
+
+fn musl_target_tool_program_candidates_shell_words(tool_suffix: &str) -> String {
+    let candidates = musl_target_tool_program_candidates(tool_suffix);
+    assert!(!candidates.is_empty());
+    shell_words(candidates.iter().map(String::as_str))
+}
+
+fn shell_words<'a>(values: impl IntoIterator<Item = &'a str>) -> String {
+    let words: Vec<&str> = values.into_iter().collect();
+    assert!(!words.is_empty());
+    assert!(words.iter().all(|word| !word.trim().is_empty()));
+    assert!(words.iter().all(|word| !word.chars().any(char::is_whitespace)));
+    words.join(" ")
 }
 
 fn shell_quote(value: &str) -> String {
@@ -4899,6 +5001,22 @@ mod tests {
     const SHA256_HEX_CHAR_COUNT: usize = 64;
     #[cfg(unix)]
     const EXECUTABLE_MODE: u32 = 0o755;
+
+    #[test]
+    fn musl_target_tool_candidates_include_source_root_aliases_only() {
+        let candidates = musl_target_tool_program_candidates("gcc");
+        let words = musl_target_tool_program_candidates_shell_words("gcc");
+        let machine_aliases = musl_target_machine_aliases_shell_words();
+
+        assert_eq!(candidates[0], "x86_64-unknown-linux-musl-gcc");
+        assert!(candidates.iter().any(|candidate| candidate == "x86_64-linux-musl-gcc"));
+        assert!(words.contains("x86_64-unknown-linux-musl-gcc"));
+        assert!(words.contains("x86_64-linux-musl-gcc"));
+        assert!(machine_aliases.contains("x86_64-unknown-linux-musl"));
+        assert!(machine_aliases.contains("x86_64-linux-musl"));
+        assert!(!candidates.iter().any(|candidate| candidate == "cc"));
+        assert!(!words.contains(" ld "));
+    }
 
     #[test]
     fn directory_digest_entry_limit_covers_observed_rust_source_tree() {
@@ -5446,6 +5564,12 @@ mod tests {
         assert!(script.contains("using target linker wrapper"));
         assert!(script.contains("using compiler-host linker"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB));
+        assert!(script.contains("TARGET_CC_PROGRAM_CANDIDATES='x86_64-unknown-linux-musl-gcc x86_64-linux-musl-gcc'"));
+        assert!(script.contains("TARGET_MUSL_MACHINE_ALIASES='x86_64-unknown-linux-musl x86_64-linux-musl'"));
+        assert!(script.contains("TARGET_MUSL_SOURCE_ROOT_SYSROOT='x86_64-linux-musl'"));
+        assert!(script.contains("target_libc_root=\"$target_wrapper_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT\""));
+        assert!(script.contains("target_gcc_crt_machine=$target_cc_machine"));
+        assert!(script.contains("target_cxx_program=$target_tool_prefix-g++"));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_ALIAS_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
@@ -5498,6 +5622,34 @@ mod tests {
         assert!(host_run_rustc_index < target_assignment_index);
         assert!(target_assignment_index < target_linker_index);
         assert!(target_linker_index < target_sysroot_index);
+    }
+
+    #[test]
+    fn materializer_writes_musl_host_provider_metadata_from_route_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "source-built recipe\n").unwrap();
+        write_test_musl_host_route_plan(dir.path());
+
+        let materialized = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap();
+        let validation = validate_materialized_rust_source_provider(&materialized.output_path).unwrap();
+
+        assert_eq!(validation.metadata.host_triple, TARGET_TRIPLE);
+        assert_eq!(validation.metadata.target_triple, TARGET_TRIPLE);
+        assert!(validation.metadata.artifacts.iter().any(|artifact| {
+            artifact.role == RustProviderRole::HostRustlib
+                && artifact.path == provider_rustlib_relative_path(TARGET_TRIPLE)
+        }));
+        assert!(validation.metadata.artifacts.iter().any(|artifact| {
+            artifact.role == RustProviderRole::TargetRustlib
+                && artifact.path == provider_rustlib_relative_path(TARGET_TRIPLE)
+        }));
+        assert!(!validation.metadata.artifacts.iter().any(|artifact| {
+            artifact.role == RustProviderRole::HostRustlib
+                && artifact.path == provider_rustlib_relative_path(HOST_TRIPLE)
+        }));
     }
 
     #[test]
@@ -5564,6 +5716,19 @@ mod tests {
         assert!(generated_stage1_script.contains(FIRST_STAGE_MAKE_FALLBACK_GLOB));
         assert!(generated_stage1_script.contains(FIRST_STAGE_CMAKE_FALLBACK_GLOB));
         assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB));
+        assert!(
+            generated_stage1_script
+                .contains("for candidate_name in x86_64-unknown-linux-musl-gcc x86_64-linux-musl-gcc")
+        );
+        assert!(
+            generated_stage1_script
+                .contains("MANTLE_TARGET_MUSL_MACHINE_ALIASES='x86_64-unknown-linux-musl x86_64-linux-musl'")
+        );
+        assert!(generated_stage1_script.contains("MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT='x86_64-linux-musl'"));
+        assert!(
+            generated_stage1_script.contains("$target_wrapper_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/libc.a")
+        );
+        assert!(generated_stage1_script.contains("$MANTLE_TARGET_MUSL_ROOT/lib/crt1.o"));
         assert!(generated_stage1_script.contains("[target.$MANTLE_TARGET_TRIPLE]"));
         assert!(generated_stage1_script.contains("cc = \"$MANTLE_TARGET_CC\""));
         assert!(generated_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
@@ -6101,6 +6266,21 @@ mod tests {
         write_test_route_plan_with_sources(root, &sources, &sources.mrustc_sha256_hex);
     }
 
+    fn write_test_musl_host_route_plan(root: &Path) {
+        write_test_route_plan(root);
+        let route_path = root.join(RUST_SOURCE_PROVIDER_PLAN_FILE);
+        let gnu_host_rustlib = provider_rustlib_relative_path(HOST_TRIPLE);
+        let musl_host_rustlib = provider_rustlib_relative_path(TARGET_TRIPLE);
+        let text = fs::read_to_string(&route_path)
+            .unwrap()
+            .replace("host_triple = \"x86_64-unknown-linux-gnu\"", "host_triple = \"x86_64-unknown-linux-musl\"")
+            .replace(
+                &format!("{{ role = \"host-rustlib\", path = \"{gnu_host_rustlib}\" }}"),
+                &format!("{{ role = \"host-rustlib\", path = \"{musl_host_rustlib}\" }}"),
+            );
+        fs::write(route_path, text).unwrap();
+    }
+
     fn write_test_route_plan_with_xpy_adapters(root: &Path) {
         let sources = write_test_source_archives_with_xpy_adapters(root);
         write_test_route_plan_with_sources(root, &sources, &sources.mrustc_sha256_hex);
@@ -6528,7 +6708,7 @@ let Plan = {
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
-        b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
+        b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
     }
 
     fn test_rustc_stage1_build_script() -> &'static [u8] {
