@@ -20,6 +20,7 @@ const ABSENT_CLOSURE_STATUS: &str = "not-provided";
 pub(crate) const SOURCE_BUILT_NON_CLAIM: &str = "not-source-built-toolchain-closure";
 const VALIDATED_NOT_ENFORCED_STATUS: &str = "validated-not-enforced";
 const VALIDATED_ENFORCED_STATUS: &str = "validated-enforced";
+const PROVIDED_CLOSURE_STATUS: &str = "provided";
 const POLICY_DIGEST_CONTEXT: &str = "mantle-source-built-toolchain-policy-digest-v1";
 const MAX_TOOLCHAIN_MEMBERS: usize = 128;
 const MAX_SEED_EXCEPTIONS: usize = 32;
@@ -78,7 +79,8 @@ pub(crate) struct SourceBuiltToolchainClosureStatus {
     pub(crate) schema: &'static str,
     pub(crate) status: &'static str,
     pub(crate) claim: bool,
-    pub(crate) non_claim: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) non_claim: Option<&'static str>,
     pub(crate) manifest_path: Option<PathBuf>,
     pub(crate) policy_digest_blake3: Option<String>,
     pub(crate) member_count: Option<usize>,
@@ -385,7 +387,7 @@ pub(crate) fn absent_source_built_toolchain_closure() -> SourceBuiltToolchainClo
         schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
         status: ABSENT_CLOSURE_STATUS,
         claim: false,
-        non_claim: SOURCE_BUILT_NON_CLAIM,
+        non_claim: Some(SOURCE_BUILT_NON_CLAIM),
         manifest_path: None,
         policy_digest_blake3: None,
         member_count: None,
@@ -408,6 +410,23 @@ pub(crate) fn enforced_source_built_toolchain_closure(
     source_built_toolchain_closure_status(manifest_path, validation, VALIDATED_ENFORCED_STATUS)
 }
 
+pub(crate) fn provided_source_built_rust_provider_closure(
+    metadata_path: PathBuf,
+    validation: &RustSourceProviderValidation,
+) -> SourceBuiltToolchainClosureStatus {
+    SourceBuiltToolchainClosureStatus {
+        schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
+        status: PROVIDED_CLOSURE_STATUS,
+        claim: true,
+        non_claim: None,
+        manifest_path: Some(metadata_path),
+        policy_digest_blake3: Some(validation.policy_digest_blake3.clone()),
+        member_count: Some(validation.artifact_count),
+        source_built_member_count: Some(validation.artifact_count),
+        seed_exception_count: Some(0),
+    }
+}
+
 fn source_built_toolchain_closure_status(
     manifest_path: PathBuf,
     validation: &ToolchainClosureValidation,
@@ -417,7 +436,7 @@ fn source_built_toolchain_closure_status(
         schema: SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
         status,
         claim: false,
-        non_claim: SOURCE_BUILT_NON_CLAIM,
+        non_claim: Some(SOURCE_BUILT_NON_CLAIM),
         manifest_path: Some(manifest_path),
         policy_digest_blake3: Some(validation.policy_digest_blake3.clone()),
         member_count: Some(validation.member_count),
@@ -1719,6 +1738,9 @@ mod tests {
     const EXPECTED_BOOTSTRAP_PLAN_SOURCE_COUNT: usize = 6;
     const EXPECTED_BOOTSTRAP_PLAN_STAGE_COUNT: usize = 5;
     const EXPECTED_BOOTSTRAP_PLAN_FINAL_OUTPUT_COUNT: usize = 6;
+    const EXPECTED_PROVIDER_STATUS_ARTIFACT_COUNT: usize = 6;
+    const EXPECTED_PROVIDER_STATUS_SOURCE_COUNT: usize = 6;
+    const EXPECTED_PROVIDER_STATUS_RECEIPT_COUNT: usize = 1;
     const MRUSTC_SOURCE_SHA256_HEX: &str = "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56";
     const FINAL_RUST_VERSION: &str = "1.94.0";
 
@@ -1729,7 +1751,7 @@ mod tests {
         assert_eq!(status.schema, SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
         assert_eq!(status.status, ABSENT_CLOSURE_STATUS);
         assert!(!status.claim);
-        assert_eq!(status.non_claim, SOURCE_BUILT_NON_CLAIM);
+        assert_eq!(status.non_claim, Some(SOURCE_BUILT_NON_CLAIM));
         assert!(status.manifest_path.is_none());
         assert!(status.policy_digest_blake3.is_none());
     }
@@ -1818,7 +1840,7 @@ mod tests {
         assert_eq!(status.schema, SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
         assert_eq!(status.status, VALIDATED_NOT_ENFORCED_STATUS);
         assert!(!status.claim);
-        assert_eq!(status.non_claim, SOURCE_BUILT_NON_CLAIM);
+        assert_eq!(status.non_claim, Some(SOURCE_BUILT_NON_CLAIM));
         assert_eq!(status.manifest_path, Some(PathBuf::from("/tmp/toolchain.json")));
         assert_eq!(status.policy_digest_blake3, Some(validation.policy_digest_blake3));
         assert_eq!(status.member_count, Some(REQUIRED_TOOLCHAIN_ROLES.len()));
@@ -1834,8 +1856,30 @@ mod tests {
         assert_eq!(status.schema, SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
         assert_eq!(status.status, VALIDATED_ENFORCED_STATUS);
         assert!(!status.claim);
-        assert_eq!(status.non_claim, SOURCE_BUILT_NON_CLAIM);
+        assert_eq!(status.non_claim, Some(SOURCE_BUILT_NON_CLAIM));
         assert_eq!(status.policy_digest_blake3, Some(validation.policy_digest_blake3));
+    }
+
+    #[test]
+    fn provided_rust_provider_status_promotes_source_built_claim() {
+        let validation = RustSourceProviderValidation {
+            policy_digest_blake3: DIGEST_A.to_string(),
+            artifact_count: EXPECTED_PROVIDER_STATUS_ARTIFACT_COUNT,
+            source_count: EXPECTED_PROVIDER_STATUS_SOURCE_COUNT,
+            receipt_count: EXPECTED_PROVIDER_STATUS_RECEIPT_COUNT,
+        };
+
+        let status = provided_source_built_rust_provider_closure(PathBuf::from("/tmp/provider.json"), &validation);
+
+        assert_eq!(status.schema, SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA);
+        assert_eq!(status.status, PROVIDED_CLOSURE_STATUS);
+        assert!(status.claim);
+        assert_eq!(status.non_claim, None);
+        assert_eq!(status.manifest_path, Some(PathBuf::from("/tmp/provider.json")));
+        assert_eq!(status.policy_digest_blake3, Some(DIGEST_A.to_string()));
+        assert_eq!(status.member_count, Some(EXPECTED_PROVIDER_STATUS_ARTIFACT_COUNT));
+        assert_eq!(status.source_built_member_count, Some(EXPECTED_PROVIDER_STATUS_ARTIFACT_COUNT));
+        assert_eq!(status.seed_exception_count, Some(0));
     }
 
     #[test]

@@ -107,6 +107,7 @@ struct LoadedToolchainClosure {
 struct LoadedRustSourceProvider {
     status: RustSourceProviderBindingStatus,
     rustc: Option<PathBuf>,
+    toolchain_closure_status: Option<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -317,14 +318,20 @@ struct SelfBuildSummary {
 pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) -> Result<(), RunError> {
     let paths = prepare_paths(options.root, options.out_dir)?;
     prepare_output_dir(&paths)?;
-    write_non_claims(&paths.out_dir)?;
     write_cargo_shim(&paths.explicit_cargo_shim, &paths.marker_path)?;
     write_cargo_shim(&paths.path_cargo_shim, &paths.marker_path)?;
     let loaded_rust_provider = load_rust_source_provider(options.rust_source_provider)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
+    let initial_toolchain_status =
+        effective_source_built_toolchain_closure(&loaded_toolchain_closure, &loaded_rust_provider);
+    write_non_claims(&paths.out_dir, &initial_toolchain_status)?;
     let requested_rustc = selected_cargo_free_rustc(&loaded_rust_provider, options.rustc);
-    let execution_toolchain =
-        prepare_execution_toolchain(&paths.guard_path_dir, requested_rustc, &loaded_toolchain_closure)?;
+    let execution_toolchain = prepare_execution_toolchain(
+        &paths.guard_path_dir,
+        requested_rustc,
+        &loaded_toolchain_closure,
+        &loaded_rust_provider,
+    )?;
 
     let mut child =
         run_rust_plan_child(&paths, &execution_toolchain.rustc, options.targets, &execution_toolchain.path_env)?;
@@ -357,9 +364,12 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let compatibility_rustc = prepare_rustc_for_compatibility(requested_rustc, &loaded_toolchain_closure)?;
     let compatibility = prepare_rustc_compatibility(&bundle_dir, &compatibility_rustc)?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc, options.targets)?;
-    let toolchain_status =
-        enforce_fixed_point_toolchain(&compatibility.summary.stage_rustc, &loaded_toolchain_closure)?;
-    write_fixed_point_non_claims(&plan.bundle_dir)?;
+    let toolchain_status = enforce_fixed_point_toolchain(
+        &compatibility.summary.stage_rustc,
+        &loaded_toolchain_closure,
+        &loaded_rust_provider,
+    )?;
+    write_fixed_point_non_claims(&plan.bundle_dir, &toolchain_status)?;
     write_fixed_point_preflight(&plan, &compatibility.summary, &toolchain_status, &loaded_rust_provider.status)?;
 
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
@@ -1072,6 +1082,7 @@ fn fixed_point_summary(
     stage2: Option<&FixedPointStageRun>,
     status: &str,
 ) -> FixedPointSummary {
+    let non_claims = fixed_point_non_claims(toolchain_closure);
     FixedPointSummary {
         schema: FIXED_POINT_SCHEMA,
         status: status.to_string(),
@@ -1090,7 +1101,7 @@ fn fixed_point_summary(
         source_built_toolchain_closure: toolchain_closure.clone(),
         rust_source_provider: rust_source_provider.clone(),
         blocker: fixed_point_blocker(stage1, stage2, status),
-        non_claims: fixed_point_non_claims(),
+        non_claims,
     }
 }
 
@@ -1260,6 +1271,7 @@ fn summarize(
     rust_source_provider: RustSourceProviderBindingStatus,
 ) -> SelfBuildSummary {
     let receipt = child.receipt.as_ref();
+    let non_claims = self_build_non_claims(&toolchain_closure);
     SelfBuildSummary {
         schema: SCHEMA,
         status: if child.blocker.is_none() {
@@ -1285,12 +1297,7 @@ fn summarize(
         blocker: child.blocker.clone(),
         source_built_toolchain_closure: toolchain_closure,
         rust_source_provider,
-        non_claims: vec![
-            "not-crunch-bootstrap",
-            "not-release-reproducibility",
-            "not-source-built-toolchain-closure",
-            "not-full-cargo-compatibility",
-        ],
+        non_claims,
     }
 }
 
@@ -1375,12 +1382,13 @@ fn prepare_execution_toolchain(
     guard_path_dir: &Path,
     requested_rustc: &Path,
     toolchain_closure: &LoadedToolchainClosure,
+    rust_source_provider: &LoadedRustSourceProvider,
 ) -> Result<ExecutionToolchain, RunError> {
     let Some(manifest) = &toolchain_closure.manifest else {
         return Ok(ExecutionToolchain {
             rustc: requested_rustc.to_path_buf(),
             path_env: guarded_path(guard_path_dir)?,
-            status: toolchain_closure.status.clone(),
+            status: effective_source_built_toolchain_closure(toolchain_closure, rust_source_provider),
         });
     };
     let rustc = resolve_executable(requested_rustc, "rustc")?;
@@ -1410,11 +1418,25 @@ fn prepare_rustc_for_compatibility(
 fn enforce_fixed_point_toolchain(
     stage_rustc: &Path,
     toolchain_closure: &LoadedToolchainClosure,
+    rust_source_provider: &LoadedRustSourceProvider,
 ) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
     let Some(manifest) = &toolchain_closure.manifest else {
-        return Ok(toolchain_closure.status.clone());
+        return Ok(effective_source_built_toolchain_closure(toolchain_closure, rust_source_provider));
     };
     enforce_receipt_bound_toolchain(stage_rustc, toolchain_closure, manifest)
+}
+
+fn effective_source_built_toolchain_closure(
+    toolchain_closure: &LoadedToolchainClosure,
+    rust_source_provider: &LoadedRustSourceProvider,
+) -> crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus {
+    if toolchain_closure.manifest.is_some() {
+        return toolchain_closure.status.clone();
+    }
+    rust_source_provider
+        .toolchain_closure_status
+        .clone()
+        .unwrap_or_else(|| toolchain_closure.status.clone())
 }
 
 fn enforce_receipt_bound_toolchain(
@@ -1731,39 +1753,76 @@ fn blake3_file(path: &Path) -> Result<String, RunError> {
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
-fn write_non_claims(out_dir: &Path) -> Result<(), RunError> {
-    let text = [
-        "This build claims only bounded Mantle Cargo-free Rust topology execution.",
-        "This build does not claim Crunch bootstrap or release reproducibility.",
-        "This build does not claim source-built compiler/toolchain closure provenance.",
-        "This build does not claim full Cargo compatibility, tests, doctests, examples, or general resolver parity.",
-    ]
-    .join("\n");
+fn write_non_claims(
+    out_dir: &Path,
+    toolchain_status: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> Result<(), RunError> {
+    let text = self_build_non_claims_text(toolchain_status).join("\n");
     write_text(&out_dir.join(NON_CLAIMS_FILE), &format!("{text}\n"))
 }
 
-fn write_fixed_point_non_claims(bundle_dir: &Path) -> Result<(), RunError> {
-    let text = fixed_point_non_claims_text().join("\n");
+fn self_build_non_claims_text(
+    toolchain_status: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> Vec<&'static str> {
+    let mut lines = vec![
+        "This build claims only bounded Mantle Cargo-free Rust topology execution.",
+        "This build does not claim Crunch bootstrap or release reproducibility.",
+    ];
+    if !toolchain_status.claim {
+        lines.push("This build does not claim source-built compiler/toolchain closure provenance.");
+    }
+    lines.push(
+        "This build does not claim full Cargo compatibility, tests, doctests, examples, or general resolver parity.",
+    );
+    lines
+}
+
+fn write_fixed_point_non_claims(
+    bundle_dir: &Path,
+    toolchain_status: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> Result<(), RunError> {
+    let text = fixed_point_non_claims_text(toolchain_status).join("\n");
     write_text(&bundle_dir.join(NON_CLAIMS_FILE), &format!("{text}\n"))
 }
 
-fn fixed_point_non_claims_text() -> Vec<&'static str> {
-    vec![
+fn fixed_point_non_claims_text(
+    toolchain_status: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> Vec<&'static str> {
+    let mut lines = vec![
         "This proof claims only a bounded Mantle stage1/stage2 fixed point through native Rust topology execution.",
         "This proof does not claim Crunch bootstrap or release reproducibility.",
-        "This proof does not claim source-built compiler/toolchain closure provenance.",
+    ];
+    if !toolchain_status.claim {
+        lines.push("This proof does not claim source-built compiler/toolchain closure provenance.");
+    }
+    lines.push(
         "This proof does not claim full Cargo compatibility, tests, doctests, examples, or general resolver parity.",
-        "This proof still depends on the recorded host rustc/linker/tool environment.",
-    ]
+    );
+    lines.push("This proof still depends on recorded non-Rust host linker/tool environment unless a separate toolchain closure manifest is supplied.");
+    lines
 }
 
-fn fixed_point_non_claims() -> Vec<&'static str> {
-    vec![
-        "not-crunch-bootstrap",
-        "not-release-reproducibility",
-        "not-source-built-toolchain-closure",
-        "not-full-cargo-compatibility",
-    ]
+fn self_build_non_claims(
+    toolchain_status: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> Vec<&'static str> {
+    base_cargo_free_non_claims(toolchain_status)
+}
+
+fn fixed_point_non_claims(
+    toolchain_status: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> Vec<&'static str> {
+    base_cargo_free_non_claims(toolchain_status)
+}
+
+fn base_cargo_free_non_claims(
+    toolchain_status: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> Vec<&'static str> {
+    let mut non_claims = vec!["not-crunch-bootstrap", "not-release-reproducibility"];
+    if let Some(non_claim) = toolchain_status.non_claim {
+        non_claims.push(non_claim);
+    }
+    non_claims.push("not-full-cargo-compatibility");
+    non_claims
 }
 
 fn selected_cargo_free_rustc<'a>(loaded_provider: &'a LoadedRustSourceProvider, fallback_rustc: &'a Path) -> &'a Path {
@@ -1775,6 +1834,7 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
         return Ok(LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: None,
+            toolchain_closure_status: None,
         });
     };
     let provider_dir = fs::canonicalize(provider_dir)
@@ -1792,9 +1852,14 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
         crate::source_toolchain_closure::RustProviderRole::Rustc,
     )?;
     require_executable(&rustc_path)?;
+    let toolchain_closure_status = crate::source_toolchain_closure::provided_source_built_rust_provider_closure(
+        validation.metadata_path.clone(),
+        &validation.validation,
+    );
     Ok(LoadedRustSourceProvider {
         status: validated_rust_source_provider_binding(&provider_dir, &validation, &rustc_path),
         rustc: Some(rustc_path),
+        toolchain_closure_status: Some(toolchain_closure_status),
     })
 }
 
@@ -2161,9 +2226,62 @@ mod tests {
 
         assert!(summary.fixed_point);
         assert!(!summary.source_built_toolchain_closure.claim);
-        assert_eq!(summary.source_built_toolchain_closure.non_claim, "not-source-built-toolchain-closure");
+        assert_eq!(summary.source_built_toolchain_closure.non_claim, Some("not-source-built-toolchain-closure"));
         assert_eq!(summary.rust_source_provider.status, RUST_SOURCE_PROVIDER_STATUS_ABSENT);
         assert!(summary.non_claims.contains(&"not-source-built-toolchain-closure"));
+    }
+
+    #[test]
+    fn fixed_point_summary_omits_closure_non_claim_when_provider_supplies_claim() {
+        let root = Path::new("/repo/mantle");
+        let out_dir = Path::new("/tmp/mantle-fixed-point");
+        let rustc = Path::new("/toolchain/bin/rustc");
+        let plan = plan_fixed_point_paths(root, out_dir, rustc, &[]).unwrap();
+        let compatibility = RustcCompatibilitySummary {
+            requested_rustc: rustc.to_path_buf(),
+            stage_rustc: rustc.to_path_buf(),
+            normalization: NORMALIZATION_NONE,
+            wrapper: None,
+            wrapper_blake3: None,
+        };
+        let toolchain_closure = provided_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
+        let stage1 = fixed_point_stage_run(STAGE1_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
+        let stage2 = fixed_point_stage_run(STAGE2_DIR, FIXED_POINT_TEST_DIGEST_A, Some(FIXED_POINT_TEST_DIGEST_A));
+        let rust_source_provider = absent_rust_source_provider_binding();
+
+        let summary = fixed_point_summary(
+            &plan,
+            &compatibility,
+            &toolchain_closure,
+            &rust_source_provider,
+            &stage1,
+            Some(&stage2),
+            SUCCESS_STATUS,
+        );
+
+        assert!(summary.fixed_point);
+        assert!(summary.source_built_toolchain_closure.claim);
+        assert_eq!(summary.source_built_toolchain_closure.status, "provided");
+        assert!(summary.source_built_toolchain_closure.non_claim.is_none());
+        assert!(!summary.non_claims.contains(&"not-source-built-toolchain-closure"));
+        assert!(summary.non_claims.contains(&"not-release-reproducibility"));
+        assert!(summary.non_claims.contains(&"not-full-cargo-compatibility"));
+    }
+
+    #[test]
+    fn self_build_non_claims_omit_closure_non_claim_when_provider_supplies_claim() {
+        let provided = provided_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
+        let absent = crate::source_toolchain_closure::absent_source_built_toolchain_closure();
+
+        let provided_non_claims = self_build_non_claims(&provided);
+        let absent_non_claims = self_build_non_claims(&absent);
+        let provided_text = self_build_non_claims_text(&provided).join("\n");
+        let absent_text = self_build_non_claims_text(&absent).join("\n");
+
+        assert!(!provided_non_claims.contains(&"not-source-built-toolchain-closure"));
+        assert!(absent_non_claims.contains(&"not-source-built-toolchain-closure"));
+        assert!(!provided_text.contains("source-built compiler/toolchain closure provenance"));
+        assert!(absent_text.contains("source-built compiler/toolchain closure provenance"));
     }
 
     #[cfg(unix)]
@@ -2185,6 +2303,11 @@ mod tests {
         assert_eq!(loaded.status.host_triple.as_deref(), Some(RUST_PROVIDER_HOST_TRIPLE));
         assert_eq!(loaded.status.target_triple.as_deref(), Some(RUST_PROVIDER_TARGET_TRIPLE));
         assert_eq!(loaded.rustc.as_deref(), Some(expected_rustc.as_path()));
+        let status = loaded.toolchain_closure_status.as_ref().unwrap();
+        assert_eq!(status.status, "provided");
+        assert!(status.claim);
+        assert!(status.non_claim.is_none());
+        assert_eq!(status.policy_digest_blake3, loaded.status.policy_digest_blake3);
     }
 
     #[test]
@@ -2194,16 +2317,51 @@ mod tests {
         let absent = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: None,
+            toolchain_closure_status: None,
         };
         let validated = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: Some(provider_rustc.clone()),
+            toolchain_closure_status: None,
         };
 
         assert_eq!(selected_cargo_free_rustc(&absent, &fallback), fallback.as_path());
         assert_ne!(selected_cargo_free_rustc(&absent, &fallback), provider_rustc.as_path());
         assert_eq!(selected_cargo_free_rustc(&validated, &fallback), provider_rustc.as_path());
         assert_ne!(selected_cargo_free_rustc(&validated, &fallback), fallback.as_path());
+    }
+
+    #[test]
+    fn effective_closure_uses_provider_only_when_manifest_absent() {
+        let absent_closure = load_source_built_toolchain_closure(None).unwrap();
+        let provider_status = provided_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
+        let provider = LoadedRustSourceProvider {
+            status: absent_rust_source_provider_binding(),
+            rustc: Some(PathBuf::from("/provider/bin/rustc")),
+            toolchain_closure_status: Some(provider_status.clone()),
+        };
+
+        let effective = effective_source_built_toolchain_closure(&absent_closure, &provider);
+
+        assert_eq!(effective.status, "provided");
+        assert!(effective.claim);
+        assert_eq!(effective.policy_digest_blake3, provider_status.policy_digest_blake3);
+    }
+
+    #[test]
+    fn effective_closure_keeps_absent_non_claim_without_provider() {
+        let absent_closure = load_source_built_toolchain_closure(None).unwrap();
+        let provider = LoadedRustSourceProvider {
+            status: absent_rust_source_provider_binding(),
+            rustc: None,
+            toolchain_closure_status: None,
+        };
+
+        let effective = effective_source_built_toolchain_closure(&absent_closure, &provider);
+
+        assert_eq!(effective.status, "not-provided");
+        assert!(!effective.claim);
+        assert_eq!(effective.non_claim, Some("not-source-built-toolchain-closure"));
     }
 
     #[cfg(unix)]
@@ -2255,13 +2413,51 @@ mod tests {
             schema: crate::source_toolchain_closure::SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
             status: "validated-enforced",
             claim: false,
-            non_claim: crate::source_toolchain_closure::SOURCE_BUILT_NON_CLAIM,
+            non_claim: Some(crate::source_toolchain_closure::SOURCE_BUILT_NON_CLAIM),
             manifest_path: Some(PathBuf::from("/tmp/toolchain-closure.json")),
             policy_digest_blake3: Some(policy_digest.to_string()),
             member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
             source_built_member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
             seed_exception_count: Some(0),
         }
+    }
+
+    fn provided_test_toolchain_closure(
+        policy_digest: &str,
+    ) -> crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus {
+        crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus {
+            schema: crate::source_toolchain_closure::SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
+            status: "provided",
+            claim: true,
+            non_claim: None,
+            manifest_path: Some(PathBuf::from("/tmp/rust-provider.json")),
+            policy_digest_blake3: Some(policy_digest.to_string()),
+            member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
+            source_built_member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
+            seed_exception_count: Some(0),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn effective_closure_prefers_explicit_manifest_over_provider_status() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest);
+        let provider_status = provided_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
+        let provider = LoadedRustSourceProvider {
+            status: absent_rust_source_provider_binding(),
+            rustc: Some(PathBuf::from("/provider/bin/rustc")),
+            toolchain_closure_status: Some(provider_status),
+        };
+
+        let effective = effective_source_built_toolchain_closure(&closure, &provider);
+
+        assert_eq!(effective.status, "validated-not-enforced");
+        assert!(!effective.claim);
+        assert_eq!(effective.non_claim, Some("not-source-built-toolchain-closure"));
+        assert_ne!(effective.policy_digest_blake3, Some(FIXED_POINT_TEST_DIGEST_A.to_string()));
     }
 
     #[cfg(unix)]
