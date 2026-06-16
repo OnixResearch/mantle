@@ -4423,6 +4423,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    rcrt1.o|crti.o|crtn.o|crtbeginS.o|crtendS.o) mapped_arg=\"$target_runtime_dir/$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' '    -static-pie) mapped_arg=\"-static\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    *) mapped_arg=\"$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  if [ \"$mapped_args_set\" = false ]; then set -- \"$mapped_arg\"; mapped_args_set=true; else set -- \"$@\" \"$mapped_arg\"; fi' >> \"$target_alias_dir/cc\"\n");
@@ -5574,6 +5575,7 @@ mod tests {
         assert!(script.contains("target_cxx_program=$target_tool_prefix-g++"));
         assert!(script.contains("PATH=\"$target_alias_dir:$PATH\""));
         assert!(script.contains("export PATH"));
+        assert!(script.contains("-static-pie) mapped_arg=\"-static\""));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_ALIAS_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
