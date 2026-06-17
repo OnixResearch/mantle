@@ -4412,7 +4412,12 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("mkdir -p \"$target_alias_dir\" \"$target_runtime_dir\"\n");
     script.push_str("for crt_name in rcrt1.o crti.o crtn.o; do rm -f \"$target_runtime_dir/$crt_name\"; $COPY_PROGRAM \"$target_musl_crt_dir/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n");
     script.push_str("for crt_name in crtbeginS.o crtendS.o; do rm -f \"$target_runtime_dir/$crt_name\"; $COPY_PROGRAM \"$target_gcc_crt_dir/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n");
-    script.push_str("rm -f \"$target_runtime_dir/libunwind.a\"; $COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libunwind.a\"\n");
+    script.push_str("target_unwind_archive=\"$target_gcc_crt_dir/libgcc_eh.a\"\n");
+    script.push_str(
+        "if [ ! -f \"$target_unwind_archive\" ]; then target_unwind_archive=\"$target_gcc_crt_dir/libgcc.a\"; fi\n",
+    );
+    script.push_str("rm -f \"$target_runtime_dir/libunwind.a\"; $COPY_PROGRAM \"$target_unwind_archive\" \"$target_runtime_dir/libunwind.a\"\n");
+    script.push_str("rm -f \"$target_runtime_dir/libgcc.a\"; $COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc.a\"\n");
     script.push_str("rm -f \"$target_runtime_dir/libgcc_s.a\"; $COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc_s.a\"\n");
     push_first_stage_target_musl_lfs_compat(script);
     script.push_str("printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
@@ -5584,6 +5589,7 @@ mod tests {
         assert!(script.contains("rcrt1.o"));
         assert!(script.contains("crtbeginS.o"));
         assert!(script.contains("libgcc.a"));
+        assert!(script.contains("libgcc_eh.a"));
         assert!(script.contains("libgcc_s.a"));
         assert!(script.contains("libunwind.a"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_SOURCE));
