@@ -179,6 +179,8 @@ const FIRST_STAGE_RUSTC_DRIVER_MANIFEST: &str = "rustc-${RUSTC_VERSION}-src/comp
 const FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"dylib\"]";
 const FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"rlib\"]";
 const FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE: &str = "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))";
+const FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE: &str =
+    "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(PREFIX_2)lib):\\$(abspath \\$(LIBDIR))";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_ENV_LINE: &str = "CARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE: &str = "CARGO_ENV_STAGE2_STD := $(RUSTC_ENV_VARS) CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT: &str = "libc.so";
@@ -4610,9 +4612,10 @@ fn push_first_stage_musl_proc_macro_runtime(script: &mut String) {
     script.push_str("run_rustc_ld_tmp=\"$BUILD_DIR/run-rustc-Makefile\"\n");
     script
         .push_str(&format!("run_rustc_ld_original_line={}\n", shell_quote(FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE)));
-    script.push_str(
-        "run_rustc_ld_runtime_line=\"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(LIBDIR))\"\n",
-    );
+    script.push_str(&format!(
+        "run_rustc_ld_runtime_line=\"{}\"\n",
+        FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE
+    ));
     script
         .push_str(&format!("run_rustc_stage2_original_line={}\n", shell_quote(FIRST_STAGE_RUN_RUSTC_STAGE2_ENV_LINE)));
     script.push_str(&format!(
@@ -5717,7 +5720,8 @@ mod tests {
         assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE));
         assert!(script.contains("run_rustc_ld_runtime_line"));
         assert!(script.contains("run_rustc_stage2_runtime_line"));
-        assert!(script.contains("LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(LIBDIR))"));
+        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE));
+        assert!(script.contains("\\$(abspath \\$(PREFIX_2)lib)"));
         assert!(script.contains("source-root musl libc.so missing for proc-macro runtime"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected LD_LIBRARY_PATH line"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected stage2 Cargo env line"));
