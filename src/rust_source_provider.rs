@@ -178,6 +178,8 @@ const FIRST_STAGE_RUSTC_DRIVER_MANIFEST_SUFFIX: &str = "compiler/rustc_driver/Ca
 const FIRST_STAGE_RUSTC_DRIVER_MANIFEST: &str = "rustc-${RUSTC_VERSION}-src/compiler/rustc_driver/Cargo.toml";
 const FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"dylib\"]";
 const FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"rlib\"]";
+const FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE: &str = "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))";
+const FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT: &str = "libc.so";
 const FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR: &str = "NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_musl";
 const FIRST_STAGE_TARGET_NIX_SUPPORT_DIR: &str = "nix-support";
 const FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE: &str = "orig-libc";
@@ -204,6 +206,7 @@ const FIRST_STAGE_ZLIB_PKG_CONFIG_FALLBACK_GLOB: &str =
 const FIRST_STAGE_ENV_SCRUB_VARS: &[&str] = &[
     "CARGO",
     "CARGO_BIN_NAME",
+    "CARGO_BUILD_RUSTC_WRAPPER",
     "CARGO_CFG_LINUX",
     "CARGO_CFG_TARGET_ABI",
     "CARGO_CFG_TARGET_ARCH",
@@ -4577,10 +4580,57 @@ fn push_first_stage_musl_rustc_driver_rlib_patch(script: &mut String) {
 fn push_first_stage_run_rustc_host(script: &mut String) {
     script.push_str("RUSTC_TARGET=\"$RUSTC_HOST_TRIPLE\"\n");
     push_first_stage_target_linker_wrapper(script);
+    push_first_stage_musl_proc_macro_runtime(script);
     push_first_stage_run_rustc_dylib_ext(script);
     script.push_str(&format!(
         "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\"; else $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR}; fi\n"
     ));
+}
+
+fn push_first_stage_musl_proc_macro_runtime(script: &mut String) {
+    script.push_str(&format!(
+        "if [ \"$RUSTC_TARGET\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ] && [ \"$RUSTC_PROVIDER_TARGET_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"
+    ));
+    script.push_str("printf '%s\\n' 'preparing source-root musl proc-macro runtime search path'\n");
+    script.push_str(&format!(
+        "target_musl_shared_libc=\"$target_musl_crt_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\"\n"
+    ));
+    script.push_str(&format!(
+        "if [ ! -f \"$target_musl_shared_libc\" ]; then printf '%s\\n' 'source-root musl libc.so missing for proc-macro runtime' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!(
+        "rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\"; $COPY_PROGRAM \"$target_musl_shared_libc\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\"\n"
+    ));
+    script.push_str(&format!("run_rustc_makefile={FIRST_STAGE_RUN_RUSTC_DIR}/Makefile\n"));
+    script.push_str(&format!(
+        "if [ ! -f \"$run_rustc_makefile\" ]; then printf '%s\\n' 'mrustc run_rustc Makefile missing before proc-macro runtime normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("run_rustc_ld_tmp=\"$BUILD_DIR/run-rustc-Makefile\"\n");
+    script
+        .push_str(&format!("run_rustc_ld_original_line={}\n", shell_quote(FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE)));
+    script.push_str(
+        "run_rustc_ld_runtime_line=\"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(LIBDIR))\"\n",
+    );
+    script.push_str("run_rustc_ld_replaced=false\n");
+    script.push_str("run_rustc_ld_seen_runtime=false\n");
+    script.push_str(": > \"$run_rustc_ld_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  if [ \"$line\" = \"$run_rustc_ld_original_line\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$run_rustc_ld_runtime_line\" >> \"$run_rustc_ld_tmp\"\n");
+    script.push_str("    run_rustc_ld_replaced=true\n");
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_ld_runtime_line\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_ld_tmp\"\n");
+    script.push_str("    run_rustc_ld_seen_runtime=true\n");
+    script.push_str("  else\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_ld_tmp\"\n");
+    script.push_str("  fi\n");
+    script.push_str("done < \"$run_rustc_makefile\"\n");
+    script.push_str(&format!(
+        "if [ \"$run_rustc_ld_replaced\" = false ] && [ \"$run_rustc_ld_seen_runtime\" = false ]; then printf '%s\\n' 'mrustc run_rustc Makefile lacks expected LD_LIBRARY_PATH line for proc-macro runtime normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$run_rustc_ld_tmp\" \"$run_rustc_makefile\"\n");
+    script.push_str("rm -f \"$run_rustc_ld_tmp\"\n");
+    script.push_str("fi\n");
 }
 
 fn push_first_stage_run_rustc_target(script: &mut String) {
@@ -5641,6 +5691,13 @@ mod tests {
         assert!(script.contains("libgcc_eh.a"));
         assert!(script.contains("libgcc_s.a"));
         assert!(script.contains("libunwind.a"));
+        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT));
+        assert!(script.contains("preparing source-root musl proc-macro runtime search path"));
+        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE));
+        assert!(script.contains("run_rustc_ld_runtime_line"));
+        assert!(script.contains("LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(LIBDIR))"));
+        assert!(script.contains("source-root musl libc.so missing for proc-macro runtime"));
+        assert!(script.contains("mrustc run_rustc Makefile lacks expected LD_LIBRARY_PATH line"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_SOURCE));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT));
         assert!(script.contains(FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE));
@@ -5668,6 +5725,7 @@ mod tests {
         assert!(script.contains("$COPY_PROGRAM output/rustc \"$target_bin_dir/rustc\""));
         assert!(script.contains("target rustlib build did not produce libstd.rlib"));
         assert!(script.contains("unset CARGO_PKG_VERSION"));
+        assert!(script.contains("unset CARGO_BUILD_RUSTC_WRAPPER"));
         assert!(script.contains("unset CARGO_MANIFEST_DIR"));
         assert!(script.contains("unset OUT_DIR"));
         assert!(script.contains("unset TARGET"));
@@ -5677,6 +5735,8 @@ mod tests {
         let workspace_index = script.find("writing minicargo workspace boundary").unwrap();
         let compiler_host_linker_index = script.find("using compiler-host linker").unwrap();
         let build_index = script.find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE}")).unwrap();
+        let proc_macro_runtime_index =
+            script.find("preparing source-root musl proc-macro runtime search path").unwrap();
         let host_run_rustc_index = script
             .find(&format!("if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR}"))
             .unwrap();
@@ -5686,7 +5746,8 @@ mod tests {
         assert!(scrub_index < build_index);
         assert!(workspace_index < build_index);
         assert!(build_index < compiler_host_linker_index);
-        assert!(compiler_host_linker_index < host_run_rustc_index);
+        assert!(compiler_host_linker_index < proc_macro_runtime_index);
+        assert!(proc_macro_runtime_index < host_run_rustc_index);
         assert!(host_run_rustc_index < target_assignment_index);
         assert!(target_assignment_index < target_linker_index);
         assert!(target_linker_index < target_sysroot_index);
@@ -6811,7 +6872,7 @@ let Plan = {
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
-        b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
+        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
     }
 
     fn test_rustc_driver_manifest() -> &'static [u8] {
