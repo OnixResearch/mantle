@@ -174,6 +174,10 @@ const FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR: &str = "target-linker-runtime";
 const FIRST_STAGE_STATIC_MUSL_DYLIB_EXT: &str = "rlib";
 const FIRST_STAGE_TARGET_OUTDIR_SUFFIX: &str = "-target";
 const FIRST_STAGE_TARGET_PREFIX_S_DIR: &str = "run_rustc/output$target_outdir_suffix/prefix-s";
+const FIRST_STAGE_RUSTC_DRIVER_MANIFEST_SUFFIX: &str = "compiler/rustc_driver/Cargo.toml";
+const FIRST_STAGE_RUSTC_DRIVER_MANIFEST: &str = "rustc-${RUSTC_VERSION}-src/compiler/rustc_driver/Cargo.toml";
+const FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"dylib\"]";
+const FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"rlib\"]";
 const FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR: &str = "NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_musl";
 const FIRST_STAGE_TARGET_NIX_SUPPORT_DIR: &str = "nix-support";
 const FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE: &str = "orig-libc";
@@ -4505,6 +4509,7 @@ fn push_first_stage_build_commands(script: &mut String) {
     script.push_str(&format!(
         "$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}\n"
     ));
+    push_first_stage_musl_rustc_driver_rlib_patch(script);
     push_first_stage_run_rustc_host(script);
     push_first_stage_run_rustc_target(script);
     push_required_relative_file_check(script, FIRST_STAGE_MRUSTC_BINARY, "mrustc build did not produce bin/mrustc");
@@ -4534,6 +4539,39 @@ fn push_first_stage_build_commands(script: &mut String) {
         "mrustc run_rustc did not produce prefix cargo",
     );
     script.push_str("printf '%s\\n' \"Rust 1.90 first-stage products ready\"\n");
+}
+
+fn push_first_stage_musl_rustc_driver_rlib_patch(script: &mut String) {
+    script.push_str(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script.push_str("printf '%s\\n' 'normalizing rustc_driver crate type for static musl compiler host'\n");
+    script.push_str(&format!("rustc_driver_manifest={FIRST_STAGE_RUSTC_DRIVER_MANIFEST}\n"));
+    script.push_str(&format!(
+        "if [ ! -f \"$rustc_driver_manifest\" ]; then printf '%s\\n' 'rustc_driver manifest missing before musl host normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("rustc_driver_manifest_tmp=\"$BUILD_DIR/rustc-driver-Cargo.toml\"\n");
+    script.push_str("rustc_driver_replaced=false\n");
+    script.push_str("rustc_driver_seen_rlib=false\n");
+    script.push_str(": > \"$rustc_driver_manifest_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  case \"$line\" in\n");
+    script.push_str(&format!(
+        "    {dylib}) printf '%s\\n' {rlib} >> \"$rustc_driver_manifest_tmp\"; rustc_driver_replaced=true ;;\n",
+        dylib = shell_quote(FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE),
+        rlib = shell_quote(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE),
+    ));
+    script.push_str(&format!(
+        "    {rlib}) printf '%s\\n' \"$line\" >> \"$rustc_driver_manifest_tmp\"; rustc_driver_seen_rlib=true ;;\n",
+        rlib = shell_quote(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE),
+    ));
+    script.push_str("    *) printf '%s\\n' \"$line\" >> \"$rustc_driver_manifest_tmp\" ;;\n");
+    script.push_str("  esac\n");
+    script.push_str("done < \"$rustc_driver_manifest\"\n");
+    script.push_str(&format!(
+        "if [ \"$rustc_driver_replaced\" = false ] && [ \"$rustc_driver_seen_rlib\" = false ]; then printf '%s\\n' 'rustc_driver manifest lacks expected crate-type line for musl host normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$rustc_driver_manifest_tmp\" \"$rustc_driver_manifest\"\n");
+    script.push_str("rm -f \"$rustc_driver_manifest_tmp\"\n");
+    script.push_str("fi\n");
 }
 
 fn push_first_stage_run_rustc_host(script: &mut String) {
@@ -5615,6 +5653,13 @@ mod tests {
         assert!(script.contains("CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=\"$target_alias_dir/cc\""));
         assert!(!script.contains("export CC=cc"));
         assert!(script.contains(&format!("RUN_RUSTC_DYLIB_EXT={FIRST_STAGE_STATIC_MUSL_DYLIB_EXT}")));
+        assert!(script.contains("normalizing rustc_driver crate type for static musl compiler host"));
+        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_MANIFEST));
+        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE));
+        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE));
+        assert!(script.contains("rustc_driver_replaced=false"));
+        assert!(script.contains("rustc_driver_seen_rlib=false"));
+        assert!(script.contains("rustc_driver manifest lacks expected crate-type line for musl host normalization"));
         assert!(script.contains("target_outdir_suffix"));
         assert!(script.contains("target_sysroot_source=\"rustc-${RUSTC_VERSION}-src/library/sysroot\""));
         assert!(script.contains("MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\""));
@@ -5661,6 +5706,10 @@ mod tests {
 
         assert_eq!(validation.metadata.host_triple, TARGET_TRIPLE);
         assert_eq!(validation.metadata.target_triple, TARGET_TRIPLE);
+        let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
+        assert!(script.contains(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then")));
+        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_MANIFEST));
+        assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE));
         assert!(validation.metadata.artifacts.iter().any(|artifact| {
             artifact.role == RustProviderRole::HostRustlib
                 && artifact.path == provider_rustlib_relative_path(TARGET_TRIPLE)
@@ -6655,6 +6704,13 @@ let Plan = {
                 b"[package]\nname = \"bootstrap\"\nversion = \"0.0.0\"\nedition = \"2024\"\n",
             );
         }
+        if top_dir == "rust-1.90.0" {
+            append_test_tar_file(
+                &mut builder,
+                &format!("{top_dir}/{FIRST_STAGE_RUSTC_DRIVER_MANIFEST_SUFFIX}"),
+                test_rustc_driver_manifest(),
+            );
+        }
         if top_dir.starts_with(FIRST_STAGE_MRUSTC_SOURCE_PREFIX) {
             append_test_tar_file(&mut builder, &format!("{top_dir}/{FIRST_STAGE_MAKEFILE}"), test_mrustc_makefile());
             append_test_tar_file(
@@ -6727,11 +6783,39 @@ let Plan = {
     }
 
     fn test_mrustc_minicargo_makefile() -> &'static [u8] {
-        b"bin/minicargo:\n\tmkdir -p bin\n\tprintf '%s\\n' '#!/bin/sh' 'set -eu' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"--output-dir\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"--output-dir\" ]; then prev=\"--output-dir\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output-dir >&2; exit 2; fi' 'mkdir -p \"$$out\"' 'printf \"synthetic target std\\\\n\" > \"$$out/libstd.rlib\"' > bin/minicargo\n\tchmod +x bin/minicargo\noutput/rustc:\n\tmkdir -p $(@D)\n\tprintf 'synthetic translated rustc\\n' > $@\n\tchmod +x $@\noutput-%/rustc:\n\tmkdir -p $(@D)\n\tprintf 'synthetic translated rustc\\n' > $@\n\tchmod +x $@\noutput/cargo:\n\tmkdir -p $(@D)\n\tprintf 'synthetic translated cargo\\n' > $@\n\tchmod +x $@\noutput-%/cargo:\n\tmkdir -p $(@D)\n\tprintf 'synthetic translated cargo\\n' > $@\n\tchmod +x $@\n"
+        concat!(
+            "bin/minicargo:\n",
+            "\tmkdir -p bin\n",
+            "\tprintf '%s\\n' '#!/bin/sh' 'set -eu' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"--output-dir\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"--output-dir\" ]; then prev=\"--output-dir\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output-dir >&2; exit 2; fi' 'mkdir -p \"$$out\"' 'printf \"synthetic target std\\\\n\" > \"$$out/libstd.rlib\"' > bin/minicargo\n",
+            "\tchmod +x bin/minicargo\n",
+            "output/rustc:\n",
+            "\tmkdir -p $(@D)\n",
+            "\tmkdir -p rustc-$${RUSTC_VERSION}-src/compiler/rustc_driver\n",
+            "\tprintf '%s\\n' '[package]' 'name = \"rustc_driver\"' 'version = \"0.0.0\"' 'edition = \"2024\"' '' '[lib]' 'crate-type = [\"dylib\"]' > rustc-$${RUSTC_VERSION}-src/compiler/rustc_driver/Cargo.toml\n",
+            "\tprintf 'synthetic translated rustc\\n' > $@\n",
+            "\tchmod +x $@\n",
+            "output-%/rustc:\n",
+            "\tmkdir -p $(@D)\n",
+            "\tprintf 'synthetic translated rustc\\n' > $@\n",
+            "\tchmod +x $@\n",
+            "output/cargo:\n",
+            "\tmkdir -p $(@D)\n",
+            "\tprintf 'synthetic translated cargo\\n' > $@\n",
+            "\tchmod +x $@\n",
+            "output-%/cargo:\n",
+            "\tmkdir -p $(@D)\n",
+            "\tprintf 'synthetic translated cargo\\n' > $@\n",
+            "\tchmod +x $@\n",
+        )
+        .as_bytes()
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
         b"all:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
+    }
+
+    fn test_rustc_driver_manifest() -> &'static [u8] {
+        b"[package]\nname = \"rustc_driver\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[lib]\ncrate-type = [\"dylib\"]\n"
     }
 
     fn test_rustc_stage1_build_script() -> &'static [u8] {
