@@ -4403,14 +4403,14 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
         .push_str("target_gcc_crt_dir=\"$target_orig_cc_root/lib/gcc/$target_gcc_crt_machine/$target_gcc_version\"\n");
     script.push_str("if [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ]; then for candidate_dir in \"$target_orig_cc_root\"/lib/gcc/\"$target_gcc_crt_machine\"/*; do if [ -f \"$candidate_dir/crtbeginS.o\" ]; then target_gcc_crt_dir=\"$candidate_dir\"; break; fi; done; fi\n");
     script.push_str(&format!(
-        "if [ ! -f \"$target_musl_crt_dir/rcrt1.o\" ] || [ ! -f \"$target_musl_crt_dir/crti.o\" ] || [ ! -f \"$target_musl_crt_dir/crtn.o\" ] || [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ] || [ ! -f \"$target_gcc_crt_dir/libgcc.a\" ]; then printf '%s\\n' 'target gcc toolchain does not expose musl/gcc CRT and unwinder objects' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+        "if [ ! -f \"$target_musl_crt_dir/crt1.o\" ] || [ ! -f \"$target_musl_crt_dir/rcrt1.o\" ] || [ ! -f \"$target_musl_crt_dir/crti.o\" ] || [ ! -f \"$target_musl_crt_dir/crtn.o\" ] || [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ] || [ ! -f \"$target_gcc_crt_dir/libgcc.a\" ]; then printf '%s\\n' 'target gcc toolchain does not expose musl/gcc CRT and unwinder objects' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
     script.push_str(&format!("export {FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR}=1\n"));
     script.push_str("export COPY_PROGRAM\n");
     script.push_str(&format!("target_alias_dir=\"$BUILD_DIR/{FIRST_STAGE_TARGET_LINKER_ALIAS_DIR}\"\n"));
     script.push_str(&format!("target_runtime_dir=\"$BUILD_DIR/{FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR}\"\n"));
     script.push_str("mkdir -p \"$target_alias_dir\" \"$target_runtime_dir\"\n");
-    script.push_str("for crt_name in rcrt1.o crti.o crtn.o; do rm -f \"$target_runtime_dir/$crt_name\"; $COPY_PROGRAM \"$target_musl_crt_dir/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n");
+    script.push_str("for crt_name in crt1.o rcrt1.o crti.o crtn.o; do rm -f \"$target_runtime_dir/$crt_name\"; $COPY_PROGRAM \"$target_musl_crt_dir/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n");
     script.push_str("for crt_name in crtbeginS.o crtendS.o; do rm -f \"$target_runtime_dir/$crt_name\"; $COPY_PROGRAM \"$target_gcc_crt_dir/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n");
     script.push_str("target_unwind_archive=\"$target_gcc_crt_dir/libgcc_eh.a\"\n");
     script.push_str(
@@ -4424,10 +4424,17 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("printf '%s\\n' 'set -eu' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' \"target_cc_path=\\\"$target_cc_path\\\"\" >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' \"target_runtime_dir=\\\"$target_runtime_dir\\\"\" >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' 'static_pie_normalized=false' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' '    -static-pie) static_pie_normalized=true ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'mapped_args_set=false' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
-    script.push_str("printf '%s\\n' '    rcrt1.o|crti.o|crtn.o|crtbeginS.o|crtendS.o) mapped_arg=\"$target_runtime_dir/$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' '    rcrt1.o) if [ \"$static_pie_normalized\" = true ]; then mapped_arg=\"$target_runtime_dir/crt1.o\"; else mapped_arg=\"$target_runtime_dir/rcrt1.o\"; fi ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' '    crt1.o|crti.o|crtn.o|crtbeginS.o|crtendS.o) mapped_arg=\"$target_runtime_dir/$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    -static-pie) mapped_arg=\"-static\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    *) mapped_arg=\"$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
@@ -5580,12 +5587,16 @@ mod tests {
         assert!(script.contains("target_cxx_program=$target_tool_prefix-g++"));
         assert!(script.contains("PATH=\"$target_alias_dir:$PATH\""));
         assert!(script.contains("export PATH"));
+        assert!(script.contains("static_pie_normalized=false"));
+        assert!(script.contains("-static-pie) static_pie_normalized=true"));
+        assert!(script.contains("rcrt1.o) if [ \"$static_pie_normalized\" = true ]; then mapped_arg=\"$target_runtime_dir/crt1.o\"; else mapped_arg=\"$target_runtime_dir/rcrt1.o\"; fi"));
         assert!(script.contains("-static-pie) mapped_arg=\"-static\""));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_ALIAS_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR));
         assert!(script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
         assert!(script.contains(FIRST_STAGE_TARGET_NIX_ORIG_CC_FILE));
         assert!(script.contains(&format!("export {FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR}=1")));
+        assert!(script.contains("crt1.o"));
         assert!(script.contains("rcrt1.o"));
         assert!(script.contains("crtbeginS.o"));
         assert!(script.contains("libgcc.a"));
