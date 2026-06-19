@@ -4540,13 +4540,17 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
         "printf '%s\\n' 'if [ \"$mapped_args_set\" = false ]; then set --; fi' >> \"$target_alias_dir/cc\"\n",
     );
     script.push_str("printf '%s\\n' 'link_command=true' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' 'static_support_link=true' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    -c|-S|-E) link_command=false ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str(
+        "printf '%s\\n' '    -shared|-dynamiclib) static_support_link=false ;;' >> \"$target_alias_dir/cc\"\n",
+    );
     script.push_str("printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
     script.push_str(&format!(
-        "printf '%s\\n' 'if [ \"$link_command\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
+        "printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str(&format!(
         "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
@@ -5872,6 +5876,7 @@ mod tests {
         assert!(script.contains("export PATH"));
         assert!(script.contains("static_pie_normalized=false"));
         assert!(script.contains("MANTLE_TARGET_CC_PATH"));
+        assert!(script.contains("-shared|-dynamiclib) static_support_link=false"));
         assert!(script.contains("-static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"));
         assert!(script.contains("-static-pie) static_pie_normalized=true"));
         assert!(script.contains("rcrt1.o) if [ \"$static_pie_normalized\" = true ]; then mapped_arg=\"$target_runtime_dir/crt1.o\"; else mapped_arg=\"$target_runtime_dir/rcrt1.o\"; fi"));
