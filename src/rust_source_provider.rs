@@ -194,9 +194,9 @@ const FIRST_STAGE_RUN_RUSTC_STAGE2_RUSTC_RULE_LINE: &str = "$(BINDIR_2)rustc: ..
 const FIRST_STAGE_RUN_RUSTC_COPY_PREREQ_LINE: &str = "\tcp $< $@";
 const FIRST_STAGE_RUN_RUSTC_STAGE_SYSROOT_SYMLINK_LINE: &str = "\tln -sf \"$(abspath $<)\" \"$@.bin\"";
 const FIRST_STAGE_RUN_RUSTC_STAGE1_SYSROOT_WRAPPER_LINE: &str =
-    "\tprintf '#!/bin/sh\\nexec \"$0.bin\" --sysroot \"$(abspath $(PREFIX_S))\" \"$$@\"\\n' >$@";
+    "\tprintf '#!/bin/sh\\nexec \"$$0.bin\" --sysroot \"$(abspath $(PREFIX_S))\" \"$$@\"\\n' >$@";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_SYSROOT_WRAPPER_LINE: &str =
-    "\tprintf '#!/bin/sh\\nexec \"$0.bin\" --sysroot \"$(abspath $(PREFIX_2))\" \"$$@\"\\n' >$@";
+    "\tprintf '#!/bin/sh\\nexec \"$$0.bin\" --sysroot \"$(abspath $(PREFIX_2))\" \"$$@\"\\n' >$@";
 const FIRST_STAGE_RUN_RUSTC_CHMOD_LINE: &str = "\tchmod +x $@";
 const FIRST_STAGE_RUN_RUSTC_FINAL_WRAPPER_LINE: &str = "\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@";
 const FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_SYMLINK_LINE: &str = "\t$Vln -sf rustc_binary $(BINDIR)rustc_binary.sysroot";
