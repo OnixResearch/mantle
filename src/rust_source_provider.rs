@@ -175,6 +175,15 @@ const FIRST_STAGE_STATIC_MUSL_DYLIB_EXT: &str = "rlib";
 const FIRST_STAGE_TARGET_OUTDIR_SUFFIX: &str = "-target";
 const FIRST_STAGE_TARGET_PREFIX_S_DIR: &str = "run_rustc/output$target_outdir_suffix/prefix-s";
 const FIRST_STAGE_RUSTC_DRIVER_MANIFEST_SUFFIX: &str = "compiler/rustc_driver/Cargo.toml";
+const FIRST_STAGE_RUSTC_CONFIG_SOURCE: &str = "rustc-${RUSTC_VERSION}-src/compiler/rustc_session/src/config.rs";
+const FIRST_STAGE_RUSTC_CONFIG_SYSROOT_ORIGINAL_LINE: &str =
+    "        Sysroot { explicit, default: filesearch::default_sysroot() }";
+const FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_1: &str = "        match explicit {";
+const FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_2: &str =
+    "            Some(explicit) => Sysroot { default: explicit.clone(), explicit: Some(explicit) },";
+const FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_3: &str =
+    "            None => Sysroot { explicit: None, default: filesearch::default_sysroot() },";
+const FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_4: &str = "        }";
 const FIRST_STAGE_RUSTC_DRIVER_MANIFEST: &str = "rustc-${RUSTC_VERSION}-src/compiler/rustc_driver/Cargo.toml";
 const FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"dylib\"]";
 const FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"rlib\"]";
@@ -4724,6 +4733,8 @@ fn push_first_stage_build_commands(script: &mut String) {
         .push_str("$MAKE_PROGRAM CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n");
     script.push_str(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"));
     push_first_stage_musl_host_llvm_runtime(script);
+    script.push_str(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC\n"));
+    push_first_stage_rustc_explicit_sysroot_patch(script);
     script.push_str(&format!(
         "$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}\n"
     ));
@@ -4811,6 +4822,57 @@ fn push_first_stage_minicargo_build_out_dir_patch(script: &mut String) {
     ));
     script.push_str("$COPY_PROGRAM \"$minicargo_out_dir_tmp\" \"$minicargo_build_source\"\n");
     script.push_str("rm -f \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("fi\n");
+}
+
+fn push_first_stage_rustc_explicit_sysroot_patch(script: &mut String) {
+    script.push_str(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script.push_str("printf '%s\\n' 'normalizing Rust explicit sysroot handling for static musl rustc'\n");
+    script.push_str(&format!("rustc_config_source={FIRST_STAGE_RUSTC_CONFIG_SOURCE}\n"));
+    script.push_str(&format!(
+        "if [ ! -f \"$rustc_config_source\" ]; then printf '%s\\n' 'rustc_session config.rs missing before sysroot normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("rustc_config_tmp=\"$BUILD_DIR/rustc-session-config-sysroot.rs\"\n");
+    script.push_str(&format!(
+        "rustc_sysroot_original_line={}\n",
+        shell_quote(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_ORIGINAL_LINE)
+    ));
+    script.push_str(&format!(
+        "rustc_sysroot_replacement_line_1={}\n",
+        shell_quote(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_1)
+    ));
+    script.push_str(&format!(
+        "rustc_sysroot_replacement_line_2={}\n",
+        shell_quote(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_2)
+    ));
+    script.push_str(&format!(
+        "rustc_sysroot_replacement_line_3={}\n",
+        shell_quote(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_3)
+    ));
+    script.push_str(&format!(
+        "rustc_sysroot_replacement_line_4={}\n",
+        shell_quote(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_4)
+    ));
+    script.push_str("rustc_sysroot_replaced=false\n");
+    script.push_str("rustc_sysroot_seen=false\n");
+    script.push_str(": > \"$rustc_config_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  if [ \"$line\" = \"$rustc_sysroot_original_line\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$rustc_sysroot_replacement_line_1\" >> \"$rustc_config_tmp\"\n");
+    script.push_str("    printf '%s\\n' \"$rustc_sysroot_replacement_line_2\" >> \"$rustc_config_tmp\"\n");
+    script.push_str("    printf '%s\\n' \"$rustc_sysroot_replacement_line_3\" >> \"$rustc_config_tmp\"\n");
+    script.push_str("    printf '%s\\n' \"$rustc_sysroot_replacement_line_4\" >> \"$rustc_config_tmp\"\n");
+    script.push_str("    rustc_sysroot_replaced=true\n");
+    script.push_str("  else\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$rustc_config_tmp\"\n");
+    script.push_str("    if [ \"$line\" = \"$rustc_sysroot_replacement_line_1\" ]; then rustc_sysroot_seen=true; fi\n");
+    script.push_str("  fi\n");
+    script.push_str("done < \"$rustc_config_source\"\n");
+    script.push_str(&format!(
+        "if [ \"$rustc_sysroot_replaced\" = false ] && [ \"$rustc_sysroot_seen\" = false ]; then printf '%s\\n' 'rustc_session Sysroot::new no longer has expected default_sysroot shape' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$rustc_config_tmp\" \"$rustc_config_source\"\n");
+    script.push_str("rm -f \"$rustc_config_tmp\"\n");
     script.push_str("fi\n");
 }
 
@@ -6123,6 +6185,14 @@ mod tests {
         assert!(script.contains("source-root musl libc.so missing for proc-macro runtime"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected LD_LIBRARY_PATH line"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected stage2 Cargo env line"));
+        assert!(script.contains("normalizing Rust explicit sysroot handling for static musl rustc"));
+        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SOURCE));
+        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_ORIGINAL_LINE));
+        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_1));
+        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_2));
+        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_REPLACEMENT_LINE_3));
+        assert!(script.contains("rustc_session Sysroot::new no longer has expected default_sysroot shape"));
+        assert!(script.contains(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC")));
         assert!(script.contains("normalizing run_rustc static rustc sysroot wrappers"));
         assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE1_RUSTC_RULE_LINE));
         assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE2_RUSTC_RULE_LINE));
@@ -6181,6 +6251,10 @@ mod tests {
         let minicargo_build_index = script
             .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"))
             .unwrap();
+        let rust_source_extract_index =
+            script.find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC")).unwrap();
+        let rust_explicit_sysroot_patch_index =
+            script.find("normalizing Rust explicit sysroot handling for static musl rustc").unwrap();
         let translated_rustc_build_index = script
             .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}"))
             .unwrap();
@@ -6202,7 +6276,9 @@ mod tests {
         assert!(workspace_index < minicargo_build_index);
         assert!(minicargo_out_dir_patch_index < minicargo_build_index);
         assert!(minicargo_build_index < llvm_host_setup_index);
-        assert!(llvm_host_setup_index < translated_rustc_build_index);
+        assert!(llvm_host_setup_index < rust_source_extract_index);
+        assert!(rust_source_extract_index < rust_explicit_sysroot_patch_index);
+        assert!(rust_explicit_sysroot_patch_index < translated_rustc_build_index);
         assert!(translated_rustc_build_index < translated_cargo_build_index);
         assert!(translated_cargo_build_index < compiler_host_linker_index);
         assert!(compiler_host_linker_index < proc_macro_runtime_index);
@@ -6235,6 +6311,9 @@ mod tests {
         assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
         assert!(script.contains("normalizing minicargo build-script OUT_DIR for static musl compiler host"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER));
+        assert!(script.contains("normalizing Rust explicit sysroot handling for static musl rustc"));
+        assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SOURCE));
+        assert!(script.contains(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC")));
         assert!(script.contains("normalizing run_rustc static rustc sysroot wrappers"));
         assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_STAGE_SYSROOT_SYMLINK_LINE)));
         assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_STAGE1_SYSROOT_WRAPPER_LINE)));
@@ -6244,11 +6323,17 @@ mod tests {
         let minicargo_build_index = script
             .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"))
             .unwrap();
+        let rust_source_extract_index =
+            script.find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} RUSTCSRC")).unwrap();
+        let rust_explicit_sysroot_patch_index =
+            script.find("normalizing Rust explicit sysroot handling for static musl rustc").unwrap();
         let first_rustc_build_index = script
             .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}"))
             .unwrap();
         assert!(minicargo_build_index < llvm_host_setup_index);
-        assert!(llvm_host_setup_index < first_rustc_build_index);
+        assert!(llvm_host_setup_index < rust_source_extract_index);
+        assert!(rust_source_extract_index < rust_explicit_sysroot_patch_index);
+        assert!(rust_explicit_sysroot_patch_index < first_rustc_build_index);
         assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_MANIFEST));
         assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE));
         assert!(validation.metadata.artifacts.iter().any(|artifact| {
@@ -7346,10 +7431,13 @@ let Plan = {
             "\tmkdir -p bin\n",
             "\tprintf '%s\\n' '#!/bin/sh' 'set -eu' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"--output-dir\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"--output-dir\" ]; then prev=\"--output-dir\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output-dir >&2; exit 2; fi' 'mkdir -p \"$$out\"' 'printf \"synthetic target std\\\\n\" > \"$$out/libstd.rlib\"' > bin/minicargo\n",
             "\tchmod +x bin/minicargo\n",
+            "RUSTCSRC:\n",
+            "\tmkdir -p rustc-$${RUSTC_VERSION}-src/compiler/rustc_driver rustc-$${RUSTC_VERSION}-src/compiler/rustc_session/src\n",
+            "\tprintf '%s\\n' '[package]' 'name = \"rustc_driver\"' 'version = \"0.0.0\"' 'edition = \"2024\"' '' '[lib]' 'crate-type = [\"dylib\"]' > rustc-$${RUSTC_VERSION}-src/compiler/rustc_driver/Cargo.toml\n",
+            "\tprintf '%s\\n' 'impl Sysroot {' '    pub fn new(explicit: Option<PathBuf>) -> Sysroot {' '        Sysroot { explicit, default: filesearch::default_sysroot() }' '    }' '}' > rustc-$${RUSTC_VERSION}-src/compiler/rustc_session/src/config.rs\n",
+            "\ttouch rustc-$${RUSTC_VERSION}-src/dl-version\n",
             "output/rustc:\n",
             "\tmkdir -p $(@D)\n",
-            "\tmkdir -p rustc-$${RUSTC_VERSION}-src/compiler/rustc_driver\n",
-            "\tprintf '%s\\n' '[package]' 'name = \"rustc_driver\"' 'version = \"0.0.0\"' 'edition = \"2024\"' '' '[lib]' 'crate-type = [\"dylib\"]' > rustc-$${RUSTC_VERSION}-src/compiler/rustc_driver/Cargo.toml\n",
             "\tprintf 'synthetic translated rustc\\n' > $@\n",
             "\tchmod +x $@\n",
             "output-%/rustc:\n",
