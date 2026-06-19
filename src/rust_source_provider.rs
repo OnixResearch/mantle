@@ -4533,8 +4533,15 @@ fn push_first_stage_musl_host_llvm_runtime(script: &mut String) {
     script.push_str("MRUSTC_CXXFLAGS=\"$MRUSTC_CXXFLAGS -static-libstdc++ -static-libgcc\"\n");
     script.push_str("ZLIB_CFLAGS=\n");
     script.push_str("ZLIB_LIBS=\n");
+    script.push_str("CC=\"$CC_PROGRAM\"\n");
+    script.push_str("CXX=\"$CXX_PROGRAM\"\n");
+    script.push_str("CFLAGS=\"$ZLIB_CFLAGS\"\n");
+    script.push_str("CPPFLAGS=\"$ZLIB_CFLAGS\"\n");
+    script.push_str("CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
+    script.push_str("LDFLAGS=\"$ZLIB_LIBS\"\n");
+    script.push_str("LIBS=\"$ZLIB_LIBS\"\n");
     script.push_str("if [ -n \"${LLVM_LINKER_FLAGS:-}\" ]; then LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind $LLVM_LINKER_FLAGS\"; else LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind\"; fi\n");
-    script.push_str("export CC_PROGRAM CXX_PROGRAM AR RANLIB CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_AR CMAKE_RANLIB CMAKE_C_COMPILER_AR CMAKE_CXX_COMPILER_AR CMAKE_C_COMPILER_RANLIB CMAKE_CXX_COMPILER_RANLIB LLVM_STATIC_STDCPP LLVM_LINKER_FLAGS\n");
+    script.push_str("export CC_PROGRAM CXX_PROGRAM CC CXX CFLAGS CPPFLAGS CXXFLAGS LDFLAGS LIBS AR RANLIB CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_AR CMAKE_RANLIB CMAKE_C_COMPILER_AR CMAKE_CXX_COMPILER_AR CMAKE_C_COMPILER_RANLIB CMAKE_CXX_COMPILER_RANLIB LLVM_STATIC_STDCPP LLVM_LINKER_FLAGS\n");
     script.push_str(
         "printf '%s\\n' \"using source-root musl LLVM host wrappers: CC=$CC_PROGRAM CXX=$CXX_PROGRAM LLVM_STATIC_STDCPP=${LLVM_STATIC_STDCPP:-} LLVM_LINKER_FLAGS=$LLVM_LINKER_FLAGS\"\n",
     );
@@ -5755,6 +5762,11 @@ mod tests {
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE));
         assert!(script.contains("CC_PROGRAM=\"$target_alias_dir/cc\""));
         assert!(script.contains("CXX_PROGRAM=\"$target_alias_dir/c++\""));
+        assert!(script.contains("CC=\"$CC_PROGRAM\""));
+        assert!(script.contains("CXX=\"$CXX_PROGRAM\""));
+        assert!(script.contains("CFLAGS=\"$ZLIB_CFLAGS\""));
+        assert!(script.contains("CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\""));
+        assert!(script.contains("LDFLAGS=\"$ZLIB_LIBS\""));
         assert!(script.contains("CMAKE_C_COMPILER=\"$target_alias_dir/cc\""));
         assert!(script.contains("CMAKE_CXX_COMPILER=\"$target_alias_dir/c++\""));
         assert!(script.contains("CMAKE_AR=\"$target_alias_dir/ar\""));

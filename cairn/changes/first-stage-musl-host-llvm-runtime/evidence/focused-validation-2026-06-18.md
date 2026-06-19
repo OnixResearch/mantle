@@ -12,13 +12,13 @@ $ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_wr
 warning: /home/brittonr/git/mantle/Cargo.toml: file `/home/brittonr/git/mantle/src/main.rs` found to be present in multiple build targets:
   * `bin` target `crunch`
   * `bin` target `mantle`
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
      Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-a789c34159ead64f)
 
 running 1 test
 test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 1.27s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 1.25s
 
 
 $ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan -- --exact --nocapture
@@ -31,7 +31,7 @@ warning: /home/brittonr/git/mantle/Cargo.toml: file `/home/brittonr/git/mantle/s
 running 1 test
 test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 1.29s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 1.22s
 
 
 $ git diff --check
