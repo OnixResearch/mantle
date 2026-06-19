@@ -11,6 +11,7 @@ AND `RUSTC_PROVIDER_TARGET_TRIPLE=x86_64-unknown-linux-musl`
 WHEN the script prepares the first mrustc/LLVM build
 THEN it MUST create the private source-root musl wrapper directory before invoking the first `minicargo.mk output/rustc` build.
 AND it MUST set the first-stage C, C++, archive, ranlib, and CMake compiler variables to private source-root musl wrapper paths.
+AND it MUST provide a private `libatomic.a` archive in the source-root musl runtime directory for mrustc helper links that append `-latomic`.
 
 #### Scenario: LLVM runtime link hints use source-root musl archives
 

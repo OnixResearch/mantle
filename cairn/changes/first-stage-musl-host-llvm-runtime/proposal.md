@@ -14,6 +14,7 @@ Keep the behavior route-local. Generic host aliases (`cc`, `ld`, `ld.lld`) remai
 
 - Generated first-stage scripts build host mrustc/minicargo first, then prepare the source-root musl target wrapper before the first `minicargo.mk output/rustc` build on musl-host routes.
 - LLVM CMake uses private source-root musl `cc`/`c++`/`ar`/`ranlib` wrappers and does not inherit ambient glibc zlib flags on that route.
+- A private `libatomic.a` archive exists in the musl runtime directory for mrustc helper links that append `-latomic`.
 - `LLVM_STATIC_STDCPP` and `LLVM_LINKER_FLAGS` point at the private runtime directory so `rustc_llvm` links source-root musl C++ and GCC runtime archives.
 - Focused tests, formatting, diff checks, and Cairn validation/gates record the generated-script invariants.
 - A fresh real provider rerun is queued or captured to prove the next source-built Rust frontier from committed code.

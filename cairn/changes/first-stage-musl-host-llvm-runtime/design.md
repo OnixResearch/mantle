@@ -26,6 +26,8 @@ When both match, Mantle keeps the bootstrap mrustc/minicargo C++ tools on the co
 
 The setup also clears `ZLIB_CFLAGS` and `ZLIB_LIBS` only after host mrustc/minicargo are built, so those bootstrap tools can still use their host zlib while ambient GNU/glibc zlib paths do not leak into a musl LLVM build. LLVM is already configured with zlib disabled in the observed cache, so this removes an accidental host link surface from the translated rustc/LLVM phase rather than removing a required input from the bootstrap tools.
 
+The source-root toolchain does not ship `libatomic.a`, while mrustc's translated helper link still appends `-latomic`. The setup creates a private empty `libatomic.a` archive with the source-root `ar`; on x86_64 the needed atomics should lower inline, and any real unresolved libatomic symbol still fails at link time instead of being hidden.
+
 For Rust's `compiler/rustc_llvm/build.rs`, the setup copies or reuses source-root runtime archives in the private runtime directory and exports:
 
 - `LLVM_STATIC_STDCPP=$target_runtime_dir/libstdc++.a`

@@ -185,6 +185,7 @@ const FIRST_STAGE_RUN_RUSTC_STAGE2_ENV_LINE: &str = "CARGO_ENV_STAGE2_STD := CAR
 const FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE: &str = "CARGO_ENV_STAGE2_STD := $(RUSTC_ENV_VARS) CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT: &str = "libc.so";
 const FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE: &str = "libstdc++.a";
+const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE: &str = "libatomic.a";
 const FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR: &str = "NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_musl";
 const FIRST_STAGE_TARGET_NIX_SUPPORT_DIR: &str = "nix-support";
 const FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE: &str = "orig-libc";
@@ -4500,6 +4501,9 @@ fn push_first_stage_musl_host_llvm_runtime(script: &mut String) {
         "if [ ! -x \"$target_alias_dir/cc\" ] || [ ! -x \"$target_alias_dir/c++\" ] || [ ! -x \"$target_alias_dir/ar\" ] || [ ! -x \"$target_alias_dir/ranlib\" ]; then printf '%s\\n' 'source-root musl LLVM host wrapper tools are incomplete' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
     script.push_str(&format!(
+        "rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\"; \"$target_alias_dir/ar\" rcs \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\"\n"
+    ));
+    script.push_str(&format!(
         "target_static_stdcxx_archive=\"$target_musl_crt_dir/{FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE}\"\n"
     ));
     script.push_str(&format!(
@@ -5760,6 +5764,8 @@ mod tests {
         assert!(script.contains("source-root musl LLVM host wrapper tools are incomplete"));
         assert!(script.contains("source-root musl libstdc++.a missing for LLVM host build"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE));
+        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE));
+        assert!(script.contains("$target_alias_dir/ar\" rcs \"$target_runtime_dir/libatomic.a"));
         assert!(script.contains("CC_PROGRAM=\"$target_alias_dir/cc\""));
         assert!(script.contains("CXX_PROGRAM=\"$target_alias_dir/c++\""));
         assert!(script.contains("CC=\"$CC_PROGRAM\""));
