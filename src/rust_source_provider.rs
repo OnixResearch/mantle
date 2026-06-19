@@ -186,6 +186,8 @@ const FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE: &str = "CARGO_ENV_STAGE2_ST
 const FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT: &str = "libc.so";
 const FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE: &str = "libstdc++.a";
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE: &str = "libatomic.a";
+const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_SOURCE: &str = "mantle-libatomic-shim.c";
+const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_OBJECT: &str = "mantle-libatomic-shim.o";
 const FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR: &str = "NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_musl";
 const FIRST_STAGE_TARGET_NIX_SUPPORT_DIR: &str = "nix-support";
 const FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE: &str = "orig-libc";
@@ -4373,6 +4375,85 @@ int stat64(const char *pathname, struct stat *buf) {
     ));
 }
 
+fn push_first_stage_target_musl_libatomic_shim(script: &mut String) {
+    script.push_str(&format!(
+        "target_libatomic_source=\"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_SOURCE}\"\n"
+    ));
+    script.push_str(&format!(
+        "target_libatomic_object=\"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_OBJECT}\"\n"
+    ));
+    script.push_str("cat > \"$target_libatomic_source\" <<'MANTLE_MUSL_LIBATOMIC_C'\n");
+    script.push_str(
+        r#"typedef unsigned char mantle_atomic_u8;
+
+enum {
+    ATOMIC_WIDTH_BYTES = sizeof(unsigned __int128),
+    ATOMIC_LOCK_FREE = 0,
+    ATOMIC_LOCK_HELD = 1,
+};
+
+static volatile int mantle_atomic_lock = ATOMIC_LOCK_FREE;
+
+static void mantle_atomic_lock_acquire(void) {
+    while (__sync_lock_test_and_set(&mantle_atomic_lock, ATOMIC_LOCK_HELD) != ATOMIC_LOCK_FREE) {
+    }
+}
+
+static void mantle_atomic_lock_release(void) {
+    __sync_lock_release(&mantle_atomic_lock);
+}
+
+_Bool __atomic_compare_exchange_16(
+    volatile void *mem,
+    void *expected,
+    unsigned __int128 desired,
+    _Bool weak,
+    int success_memorder,
+    int failure_memorder
+) {
+    (void)weak;
+    (void)success_memorder;
+    (void)failure_memorder;
+
+    volatile mantle_atomic_u8 *actual_bytes = (volatile mantle_atomic_u8 *)mem;
+    mantle_atomic_u8 *expected_bytes = (mantle_atomic_u8 *)expected;
+    mantle_atomic_u8 *desired_bytes = (mantle_atomic_u8 *)&desired;
+    mantle_atomic_u8 observed_bytes[ATOMIC_WIDTH_BYTES];
+    _Bool matches = 1;
+
+    mantle_atomic_lock_acquire();
+    for (unsigned int byte_index = 0; byte_index < ATOMIC_WIDTH_BYTES; byte_index += 1) {
+        observed_bytes[byte_index] = actual_bytes[byte_index];
+        if (observed_bytes[byte_index] != expected_bytes[byte_index]) {
+            matches = 0;
+        }
+    }
+    if (matches) {
+        for (unsigned int byte_index = 0; byte_index < ATOMIC_WIDTH_BYTES; byte_index += 1) {
+            actual_bytes[byte_index] = desired_bytes[byte_index];
+        }
+    } else {
+        for (unsigned int byte_index = 0; byte_index < ATOMIC_WIDTH_BYTES; byte_index += 1) {
+            expected_bytes[byte_index] = observed_bytes[byte_index];
+        }
+    }
+    mantle_atomic_lock_release();
+    return matches;
+}
+"#,
+    );
+    script.push_str("MANTLE_MUSL_LIBATOMIC_C\n");
+    script.push_str(&format!(
+        "\"$target_cc_path\" -fPIC {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -c \"$target_libatomic_source\" -o \"$target_libatomic_object\"\n"
+    ));
+    script.push_str(&format!(
+        "rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\"; \"$target_alias_dir/ar\" rcs \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\" \"$target_libatomic_object\"\n"
+    ));
+    script.push_str(&format!(
+        "\"$target_alias_dir/ranlib\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\"\n"
+    ));
+}
+
 fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str(&format!(
         "if [ \"$RUSTC_TARGET\" = \"$RUSTC_PROVIDER_TARGET_TRIPLE\" ] && [ \"$RUSTC_TARGET\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"
@@ -4431,11 +4512,13 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     );
     script.push_str("rm -f \"$target_runtime_dir/libunwind.a\"; $COPY_PROGRAM \"$target_unwind_archive\" \"$target_runtime_dir/libunwind.a\"\n");
     script.push_str("rm -f \"$target_runtime_dir/libgcc.a\"; $COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc.a\"\n");
-    script.push_str("rm -f \"$target_runtime_dir/libgcc_s.a\"; $COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc_s.a\"\n");
+    script.push_str("rm -f \"$target_runtime_dir/libgcc_s.a\" \"$target_runtime_dir/libgcc_s.so\" \"$target_runtime_dir/libgcc_s.so.1\"\n");
+    script.push_str("$COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc_s.a\"\n");
+    script.push_str("for target_libgcc_shared_name in libgcc_s.so libgcc_s.so.1; do if [ -f \"$target_musl_crt_dir/$target_libgcc_shared_name\" ]; then $COPY_PROGRAM \"$target_musl_crt_dir/$target_libgcc_shared_name\" \"$target_runtime_dir/$target_libgcc_shared_name\"; fi; done\n");
     push_first_stage_target_musl_lfs_compat(script);
     script.push_str("printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'set -eu' >> \"$target_alias_dir/cc\"\n");
-    script.push_str("printf '%s\\n' \"target_cc_path=\\\"$target_cc_path\\\"\" >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' \"target_cc_path=\\\"\\${MANTLE_TARGET_CC_PATH:-$target_cc_path}\\\"\" >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' \"target_runtime_dir=\\\"$target_runtime_dir\\\"\" >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'static_pie_normalized=false' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
@@ -4463,15 +4546,16 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
     script.push_str(&format!(
-        "printf '%s\\n' 'if [ \"$link_command\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\"; fi' >> \"$target_alias_dir/cc\"\n"
+        "printf '%s\\n' 'if [ \"$link_command\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str(&format!(
         "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str("chmod +x \"$target_alias_dir/cc\"\n");
+    script.push_str("if [ -x \"$target_tool_dir/$target_cxx_program\" ]; then printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/c++\"; printf '%s\\n' 'set -eu' >> \"$target_alias_dir/c++\"; printf '%s\\n' \"MANTLE_TARGET_CC_PATH=\\\"$target_tool_dir/$target_cxx_program\\\"\" >> \"$target_alias_dir/c++\"; printf '%s\\n' 'export MANTLE_TARGET_CC_PATH' >> \"$target_alias_dir/c++\"; printf '%s\\n' \"exec \\\"$target_alias_dir/cc\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/c++\"; chmod +x \"$target_alias_dir/c++\"; fi\n");
     script.push_str("PATH=\"$target_alias_dir:$PATH\"\n");
     script.push_str("export PATH\n");
-    script.push_str("for target_tool in c++ ar ranlib; do case \"$target_tool\" in c++) target_program=\"$target_cxx_program\" ;; ar) target_program=\"$target_ar_program\" ;; ranlib) target_program=\"$target_ranlib_program\" ;; esac; if [ -x \"$target_tool_dir/$target_program\" ]; then printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_tool_dir/$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; fi; done\n");
+    script.push_str("for target_tool in ar ranlib; do case \"$target_tool\" in ar) target_program=\"$target_ar_program\" ;; ranlib) target_program=\"$target_ranlib_program\" ;; esac; if [ -x \"$target_tool_dir/$target_program\" ]; then printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_tool_dir/$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; fi; done\n");
     script.push_str(&format!("export {FIRST_STAGE_TARGET_MRUSTC_CC_ENV_VAR}=\"$target_alias_dir/cc\"\n"));
     script.push_str(&format!("export {FIRST_STAGE_TARGET_CARGO_CC_ENV_VAR}=\"$target_alias_dir/cc\"\n"));
     script.push_str(&format!(
@@ -4500,9 +4584,9 @@ fn push_first_stage_musl_host_llvm_runtime(script: &mut String) {
     script.push_str(&format!(
         "if [ ! -x \"$target_alias_dir/cc\" ] || [ ! -x \"$target_alias_dir/c++\" ] || [ ! -x \"$target_alias_dir/ar\" ] || [ ! -x \"$target_alias_dir/ranlib\" ]; then printf '%s\\n' 'source-root musl LLVM host wrapper tools are incomplete' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
-    script.push_str(&format!(
-        "rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\"; \"$target_alias_dir/ar\" rcs \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\"\n"
-    ));
+    push_first_stage_target_musl_libatomic_shim(script);
+    script.push_str("MINICARGO_FLAGS=\"${MINICARGO_FLAGS:-} --target $RUSTC_HOST_TRIPLE\"\n");
+    script.push_str("export MINICARGO_FLAGS\n");
     script.push_str(&format!(
         "target_static_stdcxx_archive=\"$target_musl_crt_dir/{FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE}\"\n"
     ));
@@ -5765,7 +5849,10 @@ mod tests {
         assert!(script.contains("source-root musl libstdc++.a missing for LLVM host build"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE));
-        assert!(script.contains("$target_alias_dir/ar\" rcs \"$target_runtime_dir/libatomic.a"));
+        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_SOURCE));
+        assert!(script.contains("__atomic_compare_exchange_16"));
+        assert!(script.contains("ATOMIC_WIDTH_BYTES"));
+        assert!(script.contains("--target $RUSTC_HOST_TRIPLE"));
         assert!(script.contains("CC_PROGRAM=\"$target_alias_dir/cc\""));
         assert!(script.contains("CXX_PROGRAM=\"$target_alias_dir/c++\""));
         assert!(script.contains("CC=\"$CC_PROGRAM\""));
@@ -5784,6 +5871,8 @@ mod tests {
         assert!(script.contains("PATH=\"$target_alias_dir:$PATH\""));
         assert!(script.contains("export PATH"));
         assert!(script.contains("static_pie_normalized=false"));
+        assert!(script.contains("MANTLE_TARGET_CC_PATH"));
+        assert!(script.contains("-static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"));
         assert!(script.contains("-static-pie) static_pie_normalized=true"));
         assert!(script.contains("rcrt1.o) if [ \"$static_pie_normalized\" = true ]; then mapped_arg=\"$target_runtime_dir/crt1.o\"; else mapped_arg=\"$target_runtime_dir/rcrt1.o\"; fi"));
         assert!(script.contains("-static-pie) mapped_arg=\"-static\""));
@@ -5797,7 +5886,8 @@ mod tests {
         assert!(script.contains("crtbeginS.o"));
         assert!(script.contains("libgcc.a"));
         assert!(script.contains("libgcc_eh.a"));
-        assert!(script.contains("libgcc_s.a"));
+        assert!(script.contains("libgcc_s.so"));
+        assert!(script.contains("libgcc_s.so.1"));
         assert!(script.contains("libunwind.a"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT));
         assert!(script.contains("preparing source-root musl proc-macro runtime search path"));
