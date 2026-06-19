@@ -4546,7 +4546,6 @@ fn push_first_stage_build_commands(script: &mut String) {
         "printf '%s\\n' \"verified sources manifest: $SOURCE_MANIFEST\"\nprintf '%s\\n' \"build dir: $BUILD_DIR\"\nprintf '%s\\n' \"output dir: $OUTPUT_DIR\"\n",
     );
     script.push_str("mkdir -p \"$BUILD_DIR\"\n");
-    push_first_stage_musl_host_llvm_runtime(script);
     script.push_str("$COPY_PROGRAM \"$RUST_ARCHIVE\" \"$MRUSTC_SOURCE/rustc-${RUSTC_VERSION}-src.tar.gz\"\n");
     script.push_str("cd \"$MRUSTC_SOURCE\"\n");
     push_first_stage_minicargo_workspace_boundary(script);
@@ -4564,6 +4563,7 @@ fn push_first_stage_build_commands(script: &mut String) {
     script
         .push_str("$MAKE_PROGRAM CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n");
     script.push_str(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"));
+    push_first_stage_musl_host_llvm_runtime(script);
     script.push_str(&format!(
         "$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}\n"
     ));
@@ -5828,9 +5828,17 @@ mod tests {
         assert!(!script.contains("unset RUSTC_TARGET"));
         let scrub_index = script.find("unset CARGO_PKG_VERSION").unwrap();
         let workspace_index = script.find("writing minicargo workspace boundary").unwrap();
-        let build_index = script.find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE}")).unwrap();
-        let compiler_host_linker_index =
-            build_index + script[build_index..].find("using compiler-host linker").unwrap();
+        let minicargo_build_index = script
+            .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"))
+            .unwrap();
+        let translated_rustc_build_index = script
+            .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}"))
+            .unwrap();
+        let translated_cargo_build_index = script
+            .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}"))
+            .unwrap();
+        let compiler_host_linker_index = translated_cargo_build_index
+            + script[translated_cargo_build_index..].find("using compiler-host linker").unwrap();
         let proc_macro_runtime_index =
             script.find("preparing source-root musl proc-macro runtime search path").unwrap();
         let host_run_rustc_index = script
@@ -5840,10 +5848,12 @@ mod tests {
         let target_linker_index = script.rfind("using target linker wrapper").unwrap();
         let target_sysroot_index = script.rfind("target_sysroot_source").unwrap();
         let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
-        assert!(scrub_index < build_index);
-        assert!(llvm_host_setup_index < build_index);
-        assert!(workspace_index < build_index);
-        assert!(build_index < compiler_host_linker_index);
+        assert!(scrub_index < minicargo_build_index);
+        assert!(workspace_index < minicargo_build_index);
+        assert!(minicargo_build_index < llvm_host_setup_index);
+        assert!(llvm_host_setup_index < translated_rustc_build_index);
+        assert!(translated_rustc_build_index < translated_cargo_build_index);
+        assert!(translated_cargo_build_index < compiler_host_linker_index);
         assert!(compiler_host_linker_index < proc_macro_runtime_index);
         assert!(proc_macro_runtime_index < host_run_rustc_index);
         assert!(host_run_rustc_index < target_assignment_index);
@@ -5873,9 +5883,13 @@ mod tests {
         assert!(script.contains("LLVM_STATIC_STDCPP=\"$target_runtime_dir/libstdc++.a\""));
         assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
         let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
+        let minicargo_build_index = script
+            .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"))
+            .unwrap();
         let first_rustc_build_index = script
             .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}"))
             .unwrap();
+        assert!(minicargo_build_index < llvm_host_setup_index);
         assert!(llvm_host_setup_index < first_rustc_build_index);
         assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_MANIFEST));
         assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE));

@@ -8,12 +8,12 @@ That setup currently happens only immediately before `run_rustc`. The earlier mr
 
 ## Core behavior
 
-Add a generated-script setup step before the first mrustc/LLVM build. The step is guarded by both route dimensions:
+Add a generated-script setup step after the host mrustc/minicargo bootstrap tools are built and before the first translated `output/rustc`/LLVM build. The step is guarded by both route dimensions:
 
 - `RUSTC_HOST_TRIPLE=x86_64-unknown-linux-musl`
 - `RUSTC_PROVIDER_TARGET_TRIPLE=x86_64-unknown-linux-musl`
 
-When both match, Mantle sets `RUSTC_TARGET` to the host triple, emits the existing private source-root musl linker wrapper, and then switches the first-stage compiler variables to the wrapper directory:
+When both match, Mantle keeps the bootstrap mrustc/minicargo C++ tools on the compiler-host environment, then sets `RUSTC_TARGET` to the host triple, emits the existing private source-root musl linker wrapper, and switches translated rustc/LLVM compiler variables to the wrapper directory:
 
 - `CC_PROGRAM=$target_alias_dir/cc`
 - `CXX_PROGRAM=$target_alias_dir/c++`
@@ -24,7 +24,7 @@ When both match, Mantle sets `RUSTC_TARGET` to the host triple, emits the existi
 - `CMAKE_AR=$target_alias_dir/ar`
 - `CMAKE_RANLIB=$target_alias_dir/ranlib`
 
-The setup also clears `ZLIB_CFLAGS` and `ZLIB_LIBS` in this route so ambient GNU/glibc zlib paths do not leak into a musl LLVM build. LLVM is already configured with zlib disabled in the observed cache, so this removes an accidental host link surface rather than removing a required input.
+The setup also clears `ZLIB_CFLAGS` and `ZLIB_LIBS` only after host mrustc/minicargo are built, so those bootstrap tools can still use their host zlib while ambient GNU/glibc zlib paths do not leak into a musl LLVM build. LLVM is already configured with zlib disabled in the observed cache, so this removes an accidental host link surface from the translated rustc/LLVM phase rather than removing a required input from the bootstrap tools.
 
 For Rust's `compiler/rustc_llvm/build.rs`, the setup copies or reuses source-root runtime archives in the private runtime directory and exports:
 
