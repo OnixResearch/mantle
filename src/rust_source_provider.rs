@@ -184,6 +184,7 @@ const FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE: &str =
 const FIRST_STAGE_RUN_RUSTC_STAGE2_ENV_LINE: &str = "CARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE: &str = "CARGO_ENV_STAGE2_STD := $(RUSTC_ENV_VARS) CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT: &str = "libc.so";
+const FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE: &str = "libstdc++.a";
 const FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR: &str = "NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_musl";
 const FIRST_STAGE_TARGET_NIX_SUPPORT_DIR: &str = "nix-support";
 const FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE: &str = "orig-libc";
@@ -4488,11 +4489,64 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("fi\n");
 }
 
+fn push_first_stage_musl_host_llvm_runtime(script: &mut String) {
+    script.push_str(&format!(
+        "if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ] && [ \"$RUSTC_PROVIDER_TARGET_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"
+    ));
+    script.push_str("printf '%s\\n' 'preparing source-root musl LLVM host compiler runtime'\n");
+    script.push_str("RUSTC_TARGET=\"$RUSTC_HOST_TRIPLE\"\n");
+    push_first_stage_target_linker_wrapper(script);
+    script.push_str(&format!(
+        "if [ ! -x \"$target_alias_dir/cc\" ] || [ ! -x \"$target_alias_dir/c++\" ] || [ ! -x \"$target_alias_dir/ar\" ] || [ ! -x \"$target_alias_dir/ranlib\" ]; then printf '%s\\n' 'source-root musl LLVM host wrapper tools are incomplete' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!(
+        "target_static_stdcxx_archive=\"$target_musl_crt_dir/{FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE}\"\n"
+    ));
+    script.push_str(&format!(
+        "if [ ! -f \"$target_static_stdcxx_archive\" ]; then target_static_stdcxx_archive=\"$target_orig_cc_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/{FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE}\"; fi\n"
+    ));
+    script.push_str("if [ -f \"$target_static_stdcxx_archive\" ]; then\n");
+    script.push_str(&format!(
+        "  rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE}\"; $COPY_PROGRAM \"$target_static_stdcxx_archive\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE}\"\n"
+    ));
+    script.push_str(&format!(
+        "  LLVM_STATIC_STDCPP=\"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE}\"\n"
+    ));
+    script.push_str("else\n");
+    script.push_str(&format!(
+        "  if [ ! -f \"$target_orig_cc_file\" ]; then printf '%s\\n' 'source-root musl libstdc++.a missing for LLVM host build' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  printf '%s\\n' 'source-root musl libstdc++.a unavailable; continuing only for wrapper-backed synthetic route without LLVM_STATIC_STDCPP'\n");
+    script.push_str("fi\n");
+    script.push_str("CC_PROGRAM=\"$target_alias_dir/cc\"\n");
+    script.push_str("CXX_PROGRAM=\"$target_alias_dir/c++\"\n");
+    script.push_str("AR=\"$target_alias_dir/ar\"\n");
+    script.push_str("RANLIB=\"$target_alias_dir/ranlib\"\n");
+    script.push_str("CMAKE_C_COMPILER=\"$target_alias_dir/cc\"\n");
+    script.push_str("CMAKE_CXX_COMPILER=\"$target_alias_dir/c++\"\n");
+    script.push_str("CMAKE_AR=\"$target_alias_dir/ar\"\n");
+    script.push_str("CMAKE_RANLIB=\"$target_alias_dir/ranlib\"\n");
+    script.push_str("CMAKE_C_COMPILER_AR=\"$target_alias_dir/ar\"\n");
+    script.push_str("CMAKE_CXX_COMPILER_AR=\"$target_alias_dir/ar\"\n");
+    script.push_str("CMAKE_C_COMPILER_RANLIB=\"$target_alias_dir/ranlib\"\n");
+    script.push_str("CMAKE_CXX_COMPILER_RANLIB=\"$target_alias_dir/ranlib\"\n");
+    script.push_str("MRUSTC_CXXFLAGS=\"$MRUSTC_CXXFLAGS -static-libstdc++ -static-libgcc\"\n");
+    script.push_str("ZLIB_CFLAGS=\n");
+    script.push_str("ZLIB_LIBS=\n");
+    script.push_str("if [ -n \"${LLVM_LINKER_FLAGS:-}\" ]; then LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind $LLVM_LINKER_FLAGS\"; else LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind\"; fi\n");
+    script.push_str("export CC_PROGRAM CXX_PROGRAM AR RANLIB CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_AR CMAKE_RANLIB CMAKE_C_COMPILER_AR CMAKE_CXX_COMPILER_AR CMAKE_C_COMPILER_RANLIB CMAKE_CXX_COMPILER_RANLIB LLVM_STATIC_STDCPP LLVM_LINKER_FLAGS\n");
+    script.push_str(
+        "printf '%s\\n' \"using source-root musl LLVM host wrappers: CC=$CC_PROGRAM CXX=$CXX_PROGRAM LLVM_STATIC_STDCPP=${LLVM_STATIC_STDCPP:-} LLVM_LINKER_FLAGS=$LLVM_LINKER_FLAGS\"\n",
+    );
+    script.push_str("fi\n");
+}
+
 fn push_first_stage_build_commands(script: &mut String) {
     script.push_str(
         "printf '%s\\n' \"verified sources manifest: $SOURCE_MANIFEST\"\nprintf '%s\\n' \"build dir: $BUILD_DIR\"\nprintf '%s\\n' \"output dir: $OUTPUT_DIR\"\n",
     );
     script.push_str("mkdir -p \"$BUILD_DIR\"\n");
+    push_first_stage_musl_host_llvm_runtime(script);
     script.push_str("$COPY_PROGRAM \"$RUST_ARCHIVE\" \"$MRUSTC_SOURCE/rustc-${RUSTC_VERSION}-src.tar.gz\"\n");
     script.push_str("cd \"$MRUSTC_SOURCE\"\n");
     push_first_stage_minicargo_workspace_boundary(script);
@@ -5695,6 +5749,20 @@ mod tests {
         assert!(script.contains("target_libc_root=\"$target_wrapper_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT\""));
         assert!(script.contains("target_gcc_crt_machine=$target_cc_machine"));
         assert!(script.contains("target_cxx_program=$target_tool_prefix-g++"));
+        assert!(script.contains("preparing source-root musl LLVM host compiler runtime"));
+        assert!(script.contains("source-root musl LLVM host wrapper tools are incomplete"));
+        assert!(script.contains("source-root musl libstdc++.a missing for LLVM host build"));
+        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE));
+        assert!(script.contains("CC_PROGRAM=\"$target_alias_dir/cc\""));
+        assert!(script.contains("CXX_PROGRAM=\"$target_alias_dir/c++\""));
+        assert!(script.contains("CMAKE_C_COMPILER=\"$target_alias_dir/cc\""));
+        assert!(script.contains("CMAKE_CXX_COMPILER=\"$target_alias_dir/c++\""));
+        assert!(script.contains("CMAKE_AR=\"$target_alias_dir/ar\""));
+        assert!(script.contains("CMAKE_RANLIB=\"$target_alias_dir/ranlib\""));
+        assert!(script.contains("MRUSTC_CXXFLAGS=\"$MRUSTC_CXXFLAGS -static-libstdc++ -static-libgcc\""));
+        assert!(script.contains("ZLIB_CFLAGS=\nZLIB_LIBS="));
+        assert!(script.contains("LLVM_STATIC_STDCPP=\"$target_runtime_dir/libstdc++.a\""));
+        assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
         assert!(script.contains("PATH=\"$target_alias_dir:$PATH\""));
         assert!(script.contains("export PATH"));
         assert!(script.contains("static_pie_normalized=false"));
@@ -5760,8 +5828,9 @@ mod tests {
         assert!(!script.contains("unset RUSTC_TARGET"));
         let scrub_index = script.find("unset CARGO_PKG_VERSION").unwrap();
         let workspace_index = script.find("writing minicargo workspace boundary").unwrap();
-        let compiler_host_linker_index = script.find("using compiler-host linker").unwrap();
         let build_index = script.find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE}")).unwrap();
+        let compiler_host_linker_index =
+            build_index + script[build_index..].find("using compiler-host linker").unwrap();
         let proc_macro_runtime_index =
             script.find("preparing source-root musl proc-macro runtime search path").unwrap();
         let host_run_rustc_index = script
@@ -5770,7 +5839,9 @@ mod tests {
         let target_assignment_index = script.rfind("RUSTC_TARGET=\"$RUSTC_PROVIDER_TARGET_TRIPLE\"").unwrap();
         let target_linker_index = script.rfind("using target linker wrapper").unwrap();
         let target_sysroot_index = script.rfind("target_sysroot_source").unwrap();
+        let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
         assert!(scrub_index < build_index);
+        assert!(llvm_host_setup_index < build_index);
         assert!(workspace_index < build_index);
         assert!(build_index < compiler_host_linker_index);
         assert!(compiler_host_linker_index < proc_macro_runtime_index);
@@ -5796,6 +5867,16 @@ mod tests {
         assert_eq!(validation.metadata.target_triple, TARGET_TRIPLE);
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then")));
+        assert!(script.contains("preparing source-root musl LLVM host compiler runtime"));
+        assert!(script.contains("using source-root musl LLVM host wrappers"));
+        assert!(script.contains("CC_PROGRAM=\"$target_alias_dir/cc\""));
+        assert!(script.contains("LLVM_STATIC_STDCPP=\"$target_runtime_dir/libstdc++.a\""));
+        assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
+        let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
+        let first_rustc_build_index = script
+            .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}"))
+            .unwrap();
+        assert!(llvm_host_setup_index < first_rustc_build_index);
         assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_MANIFEST));
         assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE));
         assert!(validation.metadata.artifacts.iter().any(|artifact| {

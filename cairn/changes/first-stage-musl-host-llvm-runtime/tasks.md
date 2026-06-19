@@ -1,0 +1,7 @@
+# Tasks
+
+- [x] [serial] I1 Add a musl-host-only early first-stage setup that prepares the private source-root musl compiler wrapper before LLVM/mrustc builds and switches CC/CXX/AR/RANLIB/CMake variables to it. r[rust_package_planning.source_built_toolchain_closure.first_stage_musl_host_llvm_runtime]
+- [x] [serial] I2 Export route-local LLVM runtime link hints for source-root musl `libstdc++.a`, `libgcc.a`, and unwind archives while clearing ambient GNU zlib flags. r[rust_package_planning.source_built_toolchain_closure.first_stage_musl_host_llvm_runtime]
+- [x] [serial] V1 [evidence=cairn/changes/first-stage-musl-host-llvm-runtime/evidence/focused-validation-2026-06-18.md] Run focused generated-script tests, formatting, diff checks, and Cairn validation/gates. r[rust_package_planning.source_built_toolchain_closure.first_stage_musl_host_llvm_runtime]
+  Evidence summary: focused first-stage script/materializer tests passed for the default GNU-host/musl-target route and the synthetic musl-host route; `rustfmt --edition 2024 --check`, `git diff --check`, `cairn validate --root .`, and proposal/design/tasks gates passed.
+- [ ] [serial] V2 [evidence=cairn/changes/first-stage-musl-host-llvm-runtime/evidence/provider-rerun-2026-06-18.md] Queue or capture a fresh real source-root musl-host provider rerun from committed code and record whether it moves past the `__popcountdi2` rustc-main link frontier. r[rust_package_planning.source_built_toolchain_closure.first_stage_musl_host_llvm_runtime]
