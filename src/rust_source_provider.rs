@@ -178,6 +178,12 @@ const FIRST_STAGE_RUSTC_DRIVER_MANIFEST_SUFFIX: &str = "compiler/rustc_driver/Ca
 const FIRST_STAGE_RUSTC_DRIVER_MANIFEST: &str = "rustc-${RUSTC_VERSION}-src/compiler/rustc_driver/Cargo.toml";
 const FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"dylib\"]";
 const FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE: &str = "crate-type = [\"rlib\"]";
+const FIRST_STAGE_MINICARGO_BUILD_SOURCE: &str = "tools/minicargo/build.cpp";
+const FIRST_STAGE_MINICARGO_OUT_DIR_ORIGINAL_LINE: &str =
+    "    auto out_dir = parent.get_output_dir(m_is_for_host).to_absolute() / parent.get_build_script_out(m_manifest);";
+const FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER: &str = "    if( m_manifest.build_script() != \"\" ) {";
+const FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_LINE: &str =
+    "        out_dir = parent.get_output_dir(true).to_absolute() / parent.get_build_script_out(m_manifest);";
 const FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE: &str = "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))";
 const FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE: &str =
     "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(PREFIX_2)lib):\\$(abspath \\$(LIBDIR))";
@@ -4659,6 +4665,7 @@ fn push_first_stage_build_commands(script: &mut String) {
     script.push_str("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
     script.push_str("export LDFLAGS=\"$ZLIB_LIBS\"\n");
     script.push_str("export LIBS=\"$ZLIB_LIBS\"\n");
+    push_first_stage_minicargo_build_out_dir_patch(script);
     script
         .push_str("$MAKE_PROGRAM CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n");
     script.push_str(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"));
@@ -4699,6 +4706,58 @@ fn push_first_stage_build_commands(script: &mut String) {
         "mrustc run_rustc did not produce prefix cargo",
     );
     script.push_str("printf '%s\\n' \"Rust 1.90 first-stage products ready\"\n");
+}
+
+fn push_first_stage_minicargo_build_out_dir_patch(script: &mut String) {
+    script.push_str(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script.push_str("printf '%s\\n' 'normalizing minicargo build-script OUT_DIR for static musl compiler host'\n");
+    script.push_str(&format!("minicargo_build_source={FIRST_STAGE_MINICARGO_BUILD_SOURCE}\n"));
+    script.push_str(&format!(
+        "if [ ! -f \"$minicargo_build_source\" ]; then printf '%s\\n' 'minicargo build.cpp missing before musl host OUT_DIR normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("minicargo_out_dir_tmp=\"$BUILD_DIR/minicargo-build.cpp\"\n");
+    script.push_str(&format!(
+        "minicargo_out_dir_original={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_OUT_DIR_ORIGINAL_LINE)
+    ));
+    script.push_str(&format!("minicargo_out_dir_marker={}\n", shell_quote(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER)));
+    script
+        .push_str(&format!("minicargo_out_dir_patch_line={}\n", shell_quote(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_LINE)));
+    script.push_str("minicargo_out_dir_replaced=false\n");
+    script.push_str("minicargo_out_dir_seen=false\n");
+    script.push_str("minicargo_out_dir_pending=false\n");
+    script.push_str(": > \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  if [ \"$minicargo_out_dir_pending\" = true ]; then\n");
+    script.push_str("    if [ \"$line\" = \"$minicargo_out_dir_marker\" ]; then\n");
+    script.push_str("      minicargo_out_dir_seen=true\n");
+    script.push_str("    else\n");
+    script.push_str("      printf '%s\\n' \"$minicargo_out_dir_marker\" >> \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("      printf '%s\\n' \"$minicargo_out_dir_patch_line\" >> \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("      printf '%s\\n' '    }' >> \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("      minicargo_out_dir_replaced=true\n");
+    script.push_str("    fi\n");
+    script.push_str("    minicargo_out_dir_pending=false\n");
+    script.push_str("  fi\n");
+    script.push_str("  if [ \"$line\" = \"$minicargo_out_dir_original\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("    minicargo_out_dir_pending=true\n");
+    script.push_str("  else\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("  fi\n");
+    script.push_str("done < \"$minicargo_build_source\"\n");
+    script.push_str("if [ \"$minicargo_out_dir_pending\" = true ]; then\n");
+    script.push_str("  printf '%s\\n' \"$minicargo_out_dir_marker\" >> \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("  printf '%s\\n' \"$minicargo_out_dir_patch_line\" >> \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("  printf '%s\\n' '    }' >> \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("  minicargo_out_dir_replaced=true\n");
+    script.push_str("fi\n");
+    script.push_str(&format!(
+        "if [ \"$minicargo_out_dir_replaced\" = false ] && [ \"$minicargo_out_dir_seen\" = false ]; then printf '%s\\n' 'minicargo build.cpp lacks expected OUT_DIR line for musl host normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$minicargo_out_dir_tmp\" \"$minicargo_build_source\"\n");
+    script.push_str("rm -f \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("fi\n");
 }
 
 fn push_first_stage_musl_rustc_driver_rlib_patch(script: &mut String) {
@@ -5918,6 +5977,12 @@ mod tests {
         assert!(script.contains("CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=\"$target_alias_dir/cc\""));
         assert!(!script.contains("export CC=cc"));
         assert!(script.contains(&format!("RUN_RUSTC_DYLIB_EXT={FIRST_STAGE_STATIC_MUSL_DYLIB_EXT}")));
+        assert!(script.contains("normalizing minicargo build-script OUT_DIR for static musl compiler host"));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_BUILD_SOURCE));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_ORIGINAL_LINE));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_LINE));
+        assert!(script.contains("minicargo build.cpp lacks expected OUT_DIR line"));
         assert!(script.contains("normalizing rustc_driver crate type for static musl compiler host"));
         assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_MANIFEST));
         assert!(script.contains(FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE));
@@ -5941,6 +6006,8 @@ mod tests {
         assert!(!script.contains("unset RUSTC_TARGET"));
         let scrub_index = script.find("unset CARGO_PKG_VERSION").unwrap();
         let workspace_index = script.find("writing minicargo workspace boundary").unwrap();
+        let minicargo_out_dir_patch_index =
+            script.find("normalizing minicargo build-script OUT_DIR for static musl compiler host").unwrap();
         let minicargo_build_index = script
             .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"))
             .unwrap();
@@ -5963,6 +6030,7 @@ mod tests {
         let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
         assert!(scrub_index < minicargo_build_index);
         assert!(workspace_index < minicargo_build_index);
+        assert!(minicargo_out_dir_patch_index < minicargo_build_index);
         assert!(minicargo_build_index < llvm_host_setup_index);
         assert!(llvm_host_setup_index < translated_rustc_build_index);
         assert!(translated_rustc_build_index < translated_cargo_build_index);
@@ -5995,6 +6063,8 @@ mod tests {
         assert!(script.contains("CC_PROGRAM=\"$target_alias_dir/cc\""));
         assert!(script.contains("LLVM_STATIC_STDCPP=\"$target_runtime_dir/libstdc++.a\""));
         assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
+        assert!(script.contains("normalizing minicargo build-script OUT_DIR for static musl compiler host"));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER));
         let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
         let minicargo_build_index = script
             .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"))
@@ -7019,6 +7089,11 @@ let Plan = {
                 &format!("{top_dir}/{FIRST_STAGE_RUN_RUSTC_DIR}/{FIRST_STAGE_MAKEFILE}"),
                 test_mrustc_run_rustc_makefile(),
             );
+            append_test_tar_file(
+                &mut builder,
+                &format!("{top_dir}/{FIRST_STAGE_MINICARGO_BUILD_SOURCE}"),
+                test_mrustc_minicargo_build_source(),
+            );
         }
         if matches!(top_dir, "rust-1.91.1" | "rust-1.92.0" | "rust-1.93.1") {
             if use_xpy_adapters {
@@ -7076,6 +7151,10 @@ let Plan = {
 
     fn test_mrustc_makefile() -> &'static [u8] {
         b"all:\n\tmkdir -p bin\n\tprintf 'synthetic mrustc\\n' > bin/mrustc\n\tchmod +x bin/mrustc\n"
+    }
+
+    fn test_mrustc_minicargo_build_source() -> &'static [u8] {
+        b"void synthetic_minicargo_build_source() {\n    auto out_dir = parent.get_output_dir(m_is_for_host).to_absolute() / parent.get_build_script_out(m_manifest);\n    env.push_back(\"OUT_DIR\", out_dir.str());\n}\n"
     }
 
     fn test_mrustc_minicargo_makefile() -> &'static [u8] {
