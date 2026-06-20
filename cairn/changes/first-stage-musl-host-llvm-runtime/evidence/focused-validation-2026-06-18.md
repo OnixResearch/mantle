@@ -956,3 +956,91 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-20 addendum: dynamic mrustc-built rustc for proc macros
+
+Commit: `698bc0eb let mrustc rustc load proc macros dynamically`
+
+Rerun 16 proved prefix-2 `PROXY_MRUSTC` was necessary but insufficient: the final rustc build still failed while consuming `tracing_attributes`. Scratch diagnosis proved the mrustc-built static musl rustc could not `dlopen` proc-macro dylibs. This addendum validates the generated-script fix that links only the mrustc-built rustc executable dynamically, keeps the pthread TLS-key `--wrap` shim, compiles Mantle's compat object as PIC with no-op musl `backtrace*` stubs, recognizes mrustc's `rustc_main` response-file link, and makes prefix-s/prefix-2 wrappers launch through source-root musl `libc.so` with the runtime library path.
+
+Focused validation after the change:
+
+```text
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 src/rust_source_provider.rs
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+
+$ cargo test -p mantle --bin mantle first_stage_wrapper_normalization -- --nocapture
+# pueue task 31
+running 2 tests
+test rust_source_provider::tests::first_stage_wrapper_normalization_rejects_missing_rustc_binary ... ok
+test rust_source_provider::tests::first_stage_wrapper_normalization_makes_mrustc_rustc_env_clear_safe ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 807 filtered out; finished in 0.01s
+
+$ cargo test -p mantle --bin mantle materializer_writes_musl_host_provider_metadata_from_route_plan -- --nocapture
+# pueue task 27
+running 1 test
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 0.75s
+
+$ cargo test -p mantle --bin mantle first_stage_provider_candidate_rejects_tampered_artifact -- --nocapture
+# pueue task 27
+running 1 test
+test rust_source_provider::tests::first_stage_provider_candidate_rejects_tampered_artifact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 0.72s
+
+$ git diff --check -- src/rust_source_provider.rs
+# pueue task 27 completed successfully.
+```
+
+Scratch proof from rerun 16 is recorded in `provider-rerun-2026-06-18.md` and includes pueue task `24` passing the exact saved `tracing` command with status `0`.
+
+## 2026-06-20 addendum: post-dynamic-rustc Cairn validation
+
+Transcript saved at `target/first-stage-musl-host-llvm-runtime-cairn-2026-06-20-dynamic-rustc.txt`.
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 1,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```

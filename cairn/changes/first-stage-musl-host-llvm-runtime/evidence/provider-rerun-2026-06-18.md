@@ -366,3 +366,42 @@ make: *** [Makefile:211: output/prefix/bin/rustc] Error 101
 ```
 
 This proves the final `PROXY_MRUSTC` prefix-2 normalization landed in the generated Makefile but is not sufficient. The next frontier is therefore not just producer/compiler prefix skew; the final compiler still rejects or aborts while loading the proc-macro shared object. The next investigation should inspect the proc-macro dylib metadata/runtime ABI from `output/build-rustc/release/deps/libtracing_attributes-ff185336839ede13.so`, compare the compile/load compiler hashes and host runtime paths, and determine why rustc reports E0463 instead of a more specific dynamic-load error.
+
+## Scratch diagnosis after rerun 16: dynamic musl rustc clears `tracing_attributes`
+
+- Base run root: `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20`
+- Scratch tree: `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20/tmp/mantle-rust-source-provider-LPDjFg`
+- Exact repro command: `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20/scratch-repro-tracing-command.txt`
+- Dynamic relink proof: pueue task `24`, status `0`
+- Focused repro result: pueue task `24`, status `0`
+
+Diagnosis sequence:
+
+1. The exact saved `tracing` rustc command reproduced rerun 16's `error[E0463]: can't find crate for 'tracing_attributes'` with status `134` when run through the static musl `prefix-2` rustc.
+2. `libtracing_attributes-ff185336839ede13.so` had a `.rustc` metadata section and exported `__rustc_proc_macro_decls_ff64408706824b2a__`; adding `LD_LIBRARY_PATH` alone did not change the failure.
+3. A static musl `dlopen` probe failed with `Dynamic loading not supported`, while a dynamic musl probe launched through the source-root musl loader succeeded. The root cause was therefore that the mrustc-built static musl rustc could not load proc-macro dylibs.
+4. A scratch relink of `output/rustc` succeeded only after the target wrapper treated `output/rustc-build/rustc_main` / `@output/rustc-build/rustc_main_cmd.txt` as the special dynamic rustc link, copied `Scrt1.o`, compiled Mantle's compat object with `-fPIC`, linked with `-Wl,-Bdynamic -pie`, and kept the pthread TLS-key `--wrap` shim enabled without defining public `pthread_*` symbols.
+5. The patched `run_rustc/output/prefix-2/bin/rustc` wrapper launched the dynamic `rustc.bin` through source-root musl `libc.so` and reported `rustc 1.90.0-stable-mrustc`.
+
+Dynamic relink evidence from task `24`:
+
+```text
+output/rustc: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter .../build/target-linker-runtime/libc.so, with debug_info, not stripped
+  INTERP         ...
+  DYNAMIC        ...
+  0x0000000000000001 (NEEDED)       Shared library: [libc.so]
+  0x0000000000000001 (NEEDED)       Shared library: [libgcc_s.so.1]
+rustc 1.90.0-stable-mrustc
+```
+
+The minimal `tracing` repro then passed and emitted the expected artifacts instead of `E0463`:
+
+```text
+status=0
+--- stderr tail ---
+{"$message_type":"artifact","artifact":".../tracing-9a8e86c7dafef91d.d","emit":"dep-info"}
+{"$message_type":"artifact","artifact":".../libtracing-9a8e86c7dafef91d.rmeta","emit":"metadata"}
+{"$message_type":"artifact","artifact":".../libtracing-9a8e86c7dafef91d.rlib","emit":"link"}
+```
+
+This is scratch evidence only, not a full provider rerun. It proves the next code change should make the generated target wrapper dynamically link only the mrustc-built rustc executable, keep ordinary first-stage executables static, skip executable-only static support for shared libraries, and make generated prefix-s/prefix-2 rustc wrappers launch through the source-root musl loader with the proc-macro runtime search path.
