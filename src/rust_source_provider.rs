@@ -203,6 +203,8 @@ const FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE: &str =
     "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(PREFIX_2)lib):\\$(abspath \\$(LIBDIR))";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_ENV_LINE: &str = "CARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE: &str = "CARGO_ENV_STAGE2_STD := $(RUSTC_ENV_VARS) CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)";
+const FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE: &str = "CARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)";
+const FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE: &str = "CARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_2)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_RUN_RUSTC_STAGE1_RUSTC_RULE_LINE: &str = "$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_RUSTC_RULE_LINE: &str = "$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc";
 const FIRST_STAGE_RUN_RUSTC_COPY_PREREQ_LINE: &str = "\tcp $< $@";
@@ -5085,10 +5087,17 @@ fn push_first_stage_musl_proc_macro_runtime(script: &mut String) {
         "run_rustc_stage2_runtime_line={}\n",
         shell_quote(FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE)
     ));
+    script.push_str(&format!("run_rustc_final_original_line={}\n", shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE)));
+    script.push_str(&format!(
+        "run_rustc_final_prefix2_line={}\n",
+        shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE)
+    ));
     script.push_str("run_rustc_ld_replaced=false\n");
     script.push_str("run_rustc_ld_seen_runtime=false\n");
     script.push_str("run_rustc_stage2_replaced=false\n");
     script.push_str("run_rustc_stage2_seen_runtime=false\n");
+    script.push_str("run_rustc_final_replaced=false\n");
+    script.push_str("run_rustc_final_seen_prefix2=false\n");
     script.push_str(": > \"$run_rustc_ld_tmp\"\n");
     script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
     script.push_str("  if [ \"$line\" = \"$run_rustc_ld_original_line\" ]; then\n");
@@ -5103,6 +5112,12 @@ fn push_first_stage_musl_proc_macro_runtime(script: &mut String) {
     script.push_str("  elif [ \"$line\" = \"$run_rustc_stage2_runtime_line\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_ld_tmp\"\n");
     script.push_str("    run_rustc_stage2_seen_runtime=true\n");
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_final_original_line\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$run_rustc_final_prefix2_line\" >> \"$run_rustc_ld_tmp\"\n");
+    script.push_str("    run_rustc_final_replaced=true\n");
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_final_prefix2_line\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_ld_tmp\"\n");
+    script.push_str("    run_rustc_final_seen_prefix2=true\n");
     script.push_str("  else\n");
     script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_ld_tmp\"\n");
     script.push_str("  fi\n");
@@ -5112,6 +5127,9 @@ fn push_first_stage_musl_proc_macro_runtime(script: &mut String) {
     ));
     script.push_str(&format!(
         "if [ \"$run_rustc_stage2_replaced\" = false ] && [ \"$run_rustc_stage2_seen_runtime\" = false ]; then printf '%s\\n' 'mrustc run_rustc Makefile lacks expected stage2 Cargo env line for runtime normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!(
+        "if [ \"$run_rustc_final_replaced\" = false ] && [ \"$run_rustc_final_seen_prefix2\" = false ]; then printf '%s\\n' 'mrustc run_rustc Makefile lacks expected final rustc Cargo env line for prefix-2 host normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
     script.push_str("$COPY_PROGRAM \"$run_rustc_ld_tmp\" \"$run_rustc_makefile\"\n");
     script.push_str("rm -f \"$run_rustc_ld_tmp\"\n");
@@ -6316,13 +6334,17 @@ mod tests {
         assert!(script.contains(FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE));
         assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE2_ENV_LINE));
         assert!(script.contains(FIRST_STAGE_RUN_RUSTC_STAGE2_RUNTIME_ENV_LINE));
+        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE));
+        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE));
         assert!(script.contains("run_rustc_ld_runtime_line"));
         assert!(script.contains("run_rustc_stage2_runtime_line"));
+        assert!(script.contains("run_rustc_final_prefix2_line"));
         assert!(script.contains(FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE));
         assert!(script.contains("\\$(abspath \\$(PREFIX_2)lib)"));
         assert!(script.contains("source-root musl libc.so missing for proc-macro runtime"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected LD_LIBRARY_PATH line"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected stage2 Cargo env line"));
+        assert!(script.contains("mrustc run_rustc Makefile lacks expected final rustc Cargo env line"));
         assert!(script.contains("normalizing minicargo rustc worker threads for static musl compiler host"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_FORCE_UNSTABLE_LINE));
         assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_MARKER_LINE));
@@ -6472,6 +6494,16 @@ mod tests {
         assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_STAGE1_SYSROOT_WRAPPER_LINE)));
         assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_SYMLINK_LINE)));
         assert!(script.contains(&shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_WRAPPER_LINE)));
+        let run_rustc_makefile = fs::read_to_string(
+            scratch
+                .join(FIRST_STAGE_SOURCE_DIR)
+                .join("mrustc-0.12.0")
+                .join(FIRST_STAGE_RUN_RUSTC_DIR)
+                .join(FIRST_STAGE_MAKEFILE),
+        )
+        .unwrap();
+        assert!(run_rustc_makefile.contains(FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE));
+        assert!(!run_rustc_makefile.contains(FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE));
         let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
         let minicargo_build_index = script
             .find(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}"))
@@ -7610,7 +7642,7 @@ let Plan = {
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
-        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\nCARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\n$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR)rustc: $(BINDIR_2)rustc\n\t@mkdir -p $(BINDIR)\n\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@\n\t$Vchmod +x $@\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
+        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\nCARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\nCARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\n$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR)rustc: $(BINDIR_2)rustc\n\t@mkdir -p $(BINDIR)\n\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@\n\t$Vchmod +x $@\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
     }
 
     fn test_rustc_driver_manifest() -> &'static [u8] {
