@@ -221,6 +221,7 @@ const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE: &str = "libatomic.a";
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_SOURCE: &str = "mantle-libatomic-shim.c";
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_OBJECT: &str = "mantle-libatomic-shim.o";
 const FIRST_STAGE_TARGET_MUSL_TLS_KEY_CAPACITY: u32 = 4_096;
+const FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS: &str = "-Wl,--wrap=pthread_key_create -Wl,--wrap=pthread_key_delete -Wl,--wrap=pthread_getspecific -Wl,--wrap=pthread_setspecific";
 const FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR: &str = "NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_musl";
 const FIRST_STAGE_TARGET_NIX_SUPPORT_DIR: &str = "nix-support";
 const FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE: &str = "orig-libc";
@@ -4391,7 +4392,7 @@ static int mantle_pthread_tls_key_is_valid(pthread_key_t key) {
     return 1;
 }
 
-int pthread_key_create(pthread_key_t *key, void (*destructor)(void *)) {
+int __wrap_pthread_key_create(pthread_key_t *key, void (*destructor)(void *)) {
     if (key == NULL) {
         return EINVAL;
     }
@@ -4407,7 +4408,7 @@ int pthread_key_create(pthread_key_t *key, void (*destructor)(void *)) {
     return EAGAIN;
 }
 
-int pthread_key_delete(pthread_key_t key) {
+int __wrap_pthread_key_delete(pthread_key_t key) {
     if (mantle_pthread_tls_key_is_valid(key) == 0) {
         return EINVAL;
     }
@@ -4418,14 +4419,14 @@ int pthread_key_delete(pthread_key_t key) {
     return 0;
 }
 
-void *pthread_getspecific(pthread_key_t key) {
+void *__wrap_pthread_getspecific(pthread_key_t key) {
     if (mantle_pthread_tls_key_is_valid(key) == 0) {
         return NULL;
     }
     return mantle_pthread_tls_values[(unsigned int)key];
 }
 
-int pthread_setspecific(pthread_key_t key, const void *value) {
+int __wrap_pthread_setspecific(pthread_key_t key, const void *value) {
     if (mantle_pthread_tls_key_is_valid(key) == 0) {
         return EINVAL;
     }
@@ -4695,7 +4696,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
     script.push_str(&format!(
-        "printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
+        "printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -static {FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS} -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str(&format!(
         "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
@@ -6290,7 +6291,10 @@ mod tests {
         assert!(script.contains("static_pie_normalized=false"));
         assert!(script.contains("MANTLE_TARGET_CC_PATH"));
         assert!(script.contains("-shared|-dynamiclib) static_support_link=false"));
-        assert!(script.contains("-static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"));
+        assert!(script.contains(FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS));
+        assert!(script.contains(
+            "-static -Wl,--wrap=pthread_key_create -Wl,--wrap=pthread_key_delete -Wl,--wrap=pthread_getspecific -Wl,--wrap=pthread_setspecific -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"
+        ));
         assert!(script.contains("-static-pie) static_pie_normalized=true"));
         assert!(script.contains("rcrt1.o) if [ \"$static_pie_normalized\" = true ]; then mapped_arg=\"$target_runtime_dir/crt1.o\"; else mapped_arg=\"$target_runtime_dir/rcrt1.o\"; fi"));
         assert!(script.contains("-static-pie) mapped_arg=\"-static\""));
@@ -6352,10 +6356,10 @@ mod tests {
         assert!(
             script.contains(&format!("MANTLE_PTHREAD_TLS_KEY_CAPACITY {}u", FIRST_STAGE_TARGET_MUSL_TLS_KEY_CAPACITY))
         );
-        assert!(script.contains("pthread_key_create"));
-        assert!(script.contains("pthread_getspecific"));
-        assert!(script.contains("pthread_setspecific"));
-        assert!(script.contains("pthread_key_delete"));
+        assert!(script.contains("__wrap_pthread_key_create"));
+        assert!(script.contains("__wrap_pthread_getspecific"));
+        assert!(script.contains("__wrap_pthread_setspecific"));
+        assert!(script.contains("__wrap_pthread_key_delete"));
         assert!(script.contains(FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE));
         assert!(script.contains(FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG));
         assert!(script.contains(FIRST_STAGE_TARGET_MRUSTC_CC_ENV_VAR));
