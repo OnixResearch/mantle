@@ -193,6 +193,11 @@ const FIRST_STAGE_MINICARGO_OUT_DIR_ORIGINAL_LINE: &str =
 const FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER: &str = "    if( m_manifest.build_script() != \"\" ) {";
 const FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_LINE: &str =
     "        out_dir = parent.get_output_dir(true).to_absolute() / parent.get_build_script_out(m_manifest);";
+const FIRST_STAGE_MINICARGO_RUSTC_FORCE_UNSTABLE_LINE: &str = "        args.push_back(\"force-unstable-if-unmarked\");";
+const FIRST_STAGE_MINICARGO_RUSTC_THREADS_MARKER_LINE: &str =
+    "        // Mantle: keep static musl first-stage rustc single-threaded.";
+const FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE: &str = "        args.push_back(\"-Z\");";
+const FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE: &str = "        args.push_back(\"threads=1\");";
 const FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE: &str = "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))";
 const FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE: &str =
     "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(PREFIX_2)lib):\\$(abspath \\$(LIBDIR))";
@@ -4729,6 +4734,7 @@ fn push_first_stage_build_commands(script: &mut String) {
     script.push_str("export LDFLAGS=\"$ZLIB_LIBS\"\n");
     script.push_str("export LIBS=\"$ZLIB_LIBS\"\n");
     push_first_stage_minicargo_build_out_dir_patch(script);
+    push_first_stage_minicargo_rustc_threads_patch(script);
     script
         .push_str("$MAKE_PROGRAM CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n");
     script.push_str(&format!("$MAKE_PROGRAM -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"));
@@ -4822,6 +4828,63 @@ fn push_first_stage_minicargo_build_out_dir_patch(script: &mut String) {
     ));
     script.push_str("$COPY_PROGRAM \"$minicargo_out_dir_tmp\" \"$minicargo_build_source\"\n");
     script.push_str("rm -f \"$minicargo_out_dir_tmp\"\n");
+    script.push_str("fi\n");
+}
+
+fn push_first_stage_minicargo_rustc_threads_patch(script: &mut String) {
+    script.push_str(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script.push_str("printf '%s\\n' 'normalizing minicargo rustc worker threads for static musl compiler host'\n");
+    script.push_str(&format!("minicargo_threads_source={FIRST_STAGE_MINICARGO_BUILD_SOURCE}\n"));
+    script.push_str(&format!(
+        "if [ ! -f \"$minicargo_threads_source\" ]; then printf '%s\\n' 'minicargo build.cpp missing before rustc thread normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("minicargo_threads_tmp=\"$BUILD_DIR/minicargo-rustc-threads-build.cpp\"\n");
+    script.push_str(&format!(
+        "minicargo_threads_anchor={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_RUSTC_FORCE_UNSTABLE_LINE)
+    ));
+    script.push_str(&format!(
+        "minicargo_threads_marker_line={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_RUSTC_THREADS_MARKER_LINE)
+    ));
+    script.push_str(&format!(
+        "minicargo_threads_flag_line={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE)
+    ));
+    script.push_str(&format!(
+        "minicargo_threads_value_line={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE)
+    ));
+    script.push_str("minicargo_threads_inserted=false\n");
+    script.push_str("minicargo_threads_pending=false\n");
+    script.push_str("minicargo_threads_seen=false\n");
+    script.push_str(": > \"$minicargo_threads_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  if [ \"$minicargo_threads_pending\" = true ]; then\n");
+    script.push_str("    if [ \"$line\" = \"$minicargo_threads_marker_line\" ]; then\n");
+    script.push_str("      minicargo_threads_seen=true\n");
+    script.push_str("    else\n");
+    script.push_str("      printf '%s\\n' \"$minicargo_threads_marker_line\" >> \"$minicargo_threads_tmp\"\n");
+    script.push_str("      printf '%s\\n' \"$minicargo_threads_flag_line\" >> \"$minicargo_threads_tmp\"\n");
+    script.push_str("      printf '%s\\n' \"$minicargo_threads_value_line\" >> \"$minicargo_threads_tmp\"\n");
+    script.push_str("      minicargo_threads_inserted=true\n");
+    script.push_str("    fi\n");
+    script.push_str("    minicargo_threads_pending=false\n");
+    script.push_str("  fi\n");
+    script.push_str("  printf '%s\\n' \"$line\" >> \"$minicargo_threads_tmp\"\n");
+    script.push_str("  if [ \"$line\" = \"$minicargo_threads_anchor\" ]; then minicargo_threads_pending=true; fi\n");
+    script.push_str("done < \"$minicargo_threads_source\"\n");
+    script.push_str("if [ \"$minicargo_threads_pending\" = true ]; then\n");
+    script.push_str("  printf '%s\\n' \"$minicargo_threads_marker_line\" >> \"$minicargo_threads_tmp\"\n");
+    script.push_str("  printf '%s\\n' \"$minicargo_threads_flag_line\" >> \"$minicargo_threads_tmp\"\n");
+    script.push_str("  printf '%s\\n' \"$minicargo_threads_value_line\" >> \"$minicargo_threads_tmp\"\n");
+    script.push_str("  minicargo_threads_inserted=true\n");
+    script.push_str("fi\n");
+    script.push_str(&format!(
+        "if [ \"$minicargo_threads_inserted\" = false ] && [ \"$minicargo_threads_seen\" = false ]; then printf '%s\\n' 'minicargo build.cpp lacks expected rustc force-unstable line for thread normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$minicargo_threads_tmp\" \"$minicargo_threads_source\"\n");
+    script.push_str("rm -f \"$minicargo_threads_tmp\"\n");
     script.push_str("fi\n");
 }
 
@@ -6185,6 +6248,14 @@ mod tests {
         assert!(script.contains("source-root musl libc.so missing for proc-macro runtime"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected LD_LIBRARY_PATH line"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected stage2 Cargo env line"));
+        assert!(script.contains("normalizing minicargo rustc worker threads for static musl compiler host"));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_FORCE_UNSTABLE_LINE));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_MARKER_LINE));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE));
+        assert!(
+            script.contains("minicargo build.cpp lacks expected rustc force-unstable line for thread normalization")
+        );
         assert!(script.contains("normalizing Rust explicit sysroot handling for static musl rustc"));
         assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SOURCE));
         assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SYSROOT_ORIGINAL_LINE));
@@ -7422,7 +7493,7 @@ let Plan = {
     }
 
     fn test_mrustc_minicargo_build_source() -> &'static [u8] {
-        b"void synthetic_minicargo_build_source() {\n    auto out_dir = parent.get_output_dir(m_is_for_host).to_absolute() / parent.get_build_script_out(m_manifest);\n    env.push_back(\"OUT_DIR\", out_dir.str());\n}\n"
+        b"void synthetic_minicargo_build_source() {\n    auto out_dir = parent.get_output_dir(m_is_for_host).to_absolute() / parent.get_build_script_out(m_manifest);\n    env.push_back(\"OUT_DIR\", out_dir.str());\n    if( parent.is_rustc() ) {\n        args.push_back(\"-Z\");\n        args.push_back(\"force-unstable-if-unmarked\");\n    }\n}\n"
     }
 
     fn test_mrustc_minicargo_makefile() -> &'static [u8] {
