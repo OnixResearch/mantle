@@ -326,14 +326,43 @@ make: *** [Makefile:211: output/prefix/bin/rustc] Error 101
 
 This run proves commit `1f178373` cleared the strong pthread-symbol collision and advanced through the previous TLS-key frontier, through translated Cargo, through stage-1 sysroot, and into the final `cargo build` for rustc. The new frontier is final-stage host/proc-macro normalization: Cargo built `tracing_attributes` as a host proc macro, but the final compiler that consumes it could not load it. The follow-up fix is commit `142955c5 keep final rustc proc macros on prefix-2`, which rewrites the generated final `CARGO_ENV_RUSTC` so `PROXY_MRUSTC=$(abspath $(BINDIR_2)rustc)` as well as `PROXY_RUSTC=$(abspath $(BINDIR_2)rustc)`, keeping final host/proc-macro artifacts built and consumed by the same prefix-2 compiler.
 
-Fresh real-provider rerun `1180` is running from commit `142955c51f294919557362ab82fe95523269f6d9` at `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20`.
+## Rerun 16: prefix-2 host/proc-macro normalization still hits `tracing_attributes`
 
-Launch status excerpt:
+- Pueue task: `1180`
+- Commit: `142955c51f294919557362ab82fe95523269f6d9`
+- Run root: `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20`
+- Result: failed at the same final `tracing_attributes` loading frontier.
+- Status file: `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20/status.txt`
+- Log: `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20/tmp/mantle-rust-source-provider-LPDjFg/mrustc-first-stage-build.log`
+
+Status excerpt:
 
 ```text
-run_root=/home/brittonr/git/mantle/target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20
-source_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
-output=/home/brittonr/git/mantle/target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20/provider-out
-tmpdir=/home/brittonr/git/mantle/target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20/tmp
 commit=142955c51f294919557362ab82fe95523269f6d9
+status=1
 ```
+
+Generated Makefile confirmation:
+
+```text
+CARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_2)rustc) $(CARGO_ENV)
+```
+
+Final frontier excerpt:
+
+```text
+Compiling tracing-attributes v0.1.30
+Running `.../run_rustc/rustc_proxy.sh --crate-name tracing_attributes ... --crate-type proc-macro ... --out-dir .../run_rustc/output/build-rustc/release/deps ...`
+Compiling tracing v0.1.37
+Running `.../run_rustc/rustc_proxy.sh --crate-name tracing ... --extern tracing_attributes=.../run_rustc/output/build-rustc/release/deps/libtracing_attributes-ff185336839ede13.so ...`
+error[E0463]: can't find crate for `tracing_attributes`
+   --> .../rustc-1.90.0-src/vendor/tracing-0.1.37/src/lib.rs:959:9
+    |
+959 | pub use tracing_attributes::instrument;
+    |         ^^^^^^^^^^^^^^^^^^ can't find crate
+.../run_rustc/rustc_proxy.sh: line 22: ... Aborted (core dumped) ${PROXY_RUSTC} "$@"
+error: could not compile `tracing` (lib) due to 1 previous error
+make: *** [Makefile:211: output/prefix/bin/rustc] Error 101
+```
+
+This proves the final `PROXY_MRUSTC` prefix-2 normalization landed in the generated Makefile but is not sufficient. The next frontier is therefore not just producer/compiler prefix skew; the final compiler still rejects or aborts while loading the proc-macro shared object. The next investigation should inspect the proc-macro dylib metadata/runtime ABI from `output/build-rustc/release/deps/libtracing_attributes-ff185336839ede13.so`, compare the compile/load compiler hashes and host runtime paths, and determine why rustc reports E0463 instead of a more specific dynamic-load error.

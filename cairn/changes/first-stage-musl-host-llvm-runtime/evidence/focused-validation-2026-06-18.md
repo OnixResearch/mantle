@@ -820,7 +820,7 @@ $ git diff --check -- src/rust_source_provider.rs
 # pueue task 1176 completed successfully.
 ```
 
-Fresh real-provider rerun `1180` is running from commit `142955c51f294919557362ab82fe95523269f6d9` at `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20`; its result belongs in `provider-rerun-2026-06-18.md` after completion.
+Real-provider rerun `1180` from commit `142955c51f294919557362ab82fe95523269f6d9` at `target/rust-source-provider-musl-host-route-prefix2-procmacro-rerun16-2026-06-20` is now recorded in `provider-rerun-2026-06-18.md`; it confirms the prefix-2 `PROXY_MRUSTC` Makefile rewrite landed but was insufficient to clear the final `tracing_attributes` proc-macro loading frontier.
 
 ## 2026-06-20 addendum: post-prefix2 Cairn validation
 
@@ -903,6 +903,54 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "policy": "cairn-default",
   "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
   "receipt_hash": "ee964ecd6fe369f8908e5ba1b59e78c6fa29f200d273b4faa98b8dc4d1619cb0",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+## 2026-06-20 addendum: post-rerun16 Cairn validation
+
+Transcript saved at `target/first-stage-musl-host-llvm-runtime-cairn-2026-06-20-rerun16.txt`.
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 1,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
   "stage": "tasks",
   "valid": true,
   "verdict": "PASS"
