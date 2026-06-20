@@ -220,6 +220,7 @@ const FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE: &str = "libstdc++.a";
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE: &str = "libatomic.a";
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_SOURCE: &str = "mantle-libatomic-shim.c";
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_OBJECT: &str = "mantle-libatomic-shim.o";
+const FIRST_STAGE_TARGET_MUSL_TLS_KEY_CAPACITY: u32 = 4_096;
 const FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR: &str = "NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_musl";
 const FIRST_STAGE_TARGET_NIX_SUPPORT_DIR: &str = "nix-support";
 const FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE: &str = "orig-libc";
@@ -4313,9 +4314,12 @@ fn push_first_stage_target_musl_lfs_compat(script: &mut String) {
     script.push_str(
         r#"#define _LARGEFILE64_SOURCE 1
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/mman.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
@@ -4361,6 +4365,73 @@ fn push_first_stage_target_musl_lfs_compat(script: &mut String) {
 #ifdef stat64
 #undef stat64
 #endif
+
+"#,
+    );
+    script.push_str(&format!(
+        "#define MANTLE_PTHREAD_TLS_KEY_CAPACITY {}u\n\n",
+        FIRST_STAGE_TARGET_MUSL_TLS_KEY_CAPACITY
+    ));
+    script.push_str(
+        r#"typedef void (*mantle_pthread_tls_destructor)(void *);
+
+static int mantle_pthread_tls_used[MANTLE_PTHREAD_TLS_KEY_CAPACITY];
+static mantle_pthread_tls_destructor mantle_pthread_tls_destructors[MANTLE_PTHREAD_TLS_KEY_CAPACITY];
+static __thread void *mantle_pthread_tls_values[MANTLE_PTHREAD_TLS_KEY_CAPACITY];
+static unsigned int mantle_pthread_tls_next_key;
+
+static int mantle_pthread_tls_key_is_valid(pthread_key_t key) {
+    unsigned int index = (unsigned int)key;
+    if (index >= MANTLE_PTHREAD_TLS_KEY_CAPACITY) {
+        return 0;
+    }
+    if (__sync_add_and_fetch(&mantle_pthread_tls_used[index], 0) == 0) {
+        return 0;
+    }
+    return 1;
+}
+
+int pthread_key_create(pthread_key_t *key, void (*destructor)(void *)) {
+    if (key == NULL) {
+        return EINVAL;
+    }
+    for (unsigned int offset = 0; offset < MANTLE_PTHREAD_TLS_KEY_CAPACITY; offset++) {
+        unsigned int candidate = (mantle_pthread_tls_next_key + offset) % MANTLE_PTHREAD_TLS_KEY_CAPACITY;
+        if (__sync_bool_compare_and_swap(&mantle_pthread_tls_used[candidate], 0, 1) != 0) {
+            mantle_pthread_tls_destructors[candidate] = destructor;
+            *key = (pthread_key_t)candidate;
+            mantle_pthread_tls_next_key = (candidate + 1) % MANTLE_PTHREAD_TLS_KEY_CAPACITY;
+            return 0;
+        }
+    }
+    return EAGAIN;
+}
+
+int pthread_key_delete(pthread_key_t key) {
+    if (mantle_pthread_tls_key_is_valid(key) == 0) {
+        return EINVAL;
+    }
+    unsigned int index = (unsigned int)key;
+    mantle_pthread_tls_values[index] = NULL;
+    mantle_pthread_tls_destructors[index] = NULL;
+    __sync_lock_release(&mantle_pthread_tls_used[index]);
+    return 0;
+}
+
+void *pthread_getspecific(pthread_key_t key) {
+    if (mantle_pthread_tls_key_is_valid(key) == 0) {
+        return NULL;
+    }
+    return mantle_pthread_tls_values[(unsigned int)key];
+}
+
+int pthread_setspecific(pthread_key_t key, const void *value) {
+    if (mantle_pthread_tls_key_is_valid(key) == 0) {
+        return EINVAL;
+    }
+    mantle_pthread_tls_values[(unsigned int)key] = (void *)value;
+    return 0;
+}
 
 static int mantle_open_flags_need_mode(int flags) {
     if ((flags & O_CREAT) != 0) {
@@ -6278,6 +6349,13 @@ mod tests {
         assert!(script.contains("mrustc run_rustc Makefile lacks expected final rustc wrapper"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_SOURCE));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT));
+        assert!(
+            script.contains(&format!("MANTLE_PTHREAD_TLS_KEY_CAPACITY {}u", FIRST_STAGE_TARGET_MUSL_TLS_KEY_CAPACITY))
+        );
+        assert!(script.contains("pthread_key_create"));
+        assert!(script.contains("pthread_getspecific"));
+        assert!(script.contains("pthread_setspecific"));
+        assert!(script.contains("pthread_key_delete"));
         assert!(script.contains(FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE));
         assert!(script.contains(FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG));
         assert!(script.contains(FIRST_STAGE_TARGET_MRUSTC_CC_ENV_VAR));
