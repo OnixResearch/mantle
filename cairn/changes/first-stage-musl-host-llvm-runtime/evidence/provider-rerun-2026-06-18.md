@@ -545,3 +545,81 @@ PassWrapper compile cleared after vt_gen
 ```
 
 This run proves adding `llvm-headers` cleared the missing `Attributes.inc` frontier but not the generated CodeGen value-type header used by `MachineValueType.h`. The CMake target evidence shows `vt_gen` is the narrow generated-header target that must be built alongside `llvm-headers` and `llvm-config` before `rustc_llvm` runs.
+
+## Rerun 22: `vt_gen` clears; `llvm-config --link-static --libs` needs static archives
+
+- Pueue task: `135`
+- Commit: `d979c15f`
+- Run root: `target/rust-source-provider-musl-host-route-vt-gen-rerun22-2026-06-21`
+- Result: failed in `rustc_llvm`'s build script after generated headers were present.
+- Status file: `target/rust-source-provider-musl-host-route-vt-gen-rerun22-2026-06-21/status.txt`
+- Log: `target/rust-source-provider-musl-host-route-vt-gen-rerun22-2026-06-21/tmp/mantle-rust-source-provider-UtHopo/mrustc-first-stage-build.log`
+
+Status excerpt:
+
+```text
+commit=d979c15f
+status=1
+```
+
+Progress excerpt:
+
+```text
+[100%] Building GenVT.inc...
+[100%] Built target vt_gen
+--- RUNNING rustc_llvm v0.0.0 (script run)
+```
+
+Final frontier excerpt:
+
+```text
+llvm-config: error: missing: .../build/lib/libLLVMBinaryFormat.a
+llvm-config: error: missing: .../build/lib/libLLVMMC.a
+llvm-config: error: missing: .../build/lib/libLLVMAArch64Info.a
+...
+llvm-config: error: missing: .../build/lib/libLLVMX86TargetMCA.a
+
+thread 'main' panicked at :0:0:
+command did not execute successfully: ".../build/bin/llvm-config" "--link-static" "--libs" "aarch64" "arm" "asmparser" "bitreader" "bitwriter" "coverage" "instrumentation" "ipo" "linker" "lto" "x86"
+expected success, got: exit status: 1
+```
+
+This run proves `llvm-headers vt_gen llvm-config` cleared both generated-header frontiers but still left `rustc_llvm` without the static LLVM component archives that its build script obtains through `llvm-config --link-static --libs ...`.
+
+Scratch target proof from the same configured rerun 22 LLVM build tree:
+
+```text
+$ make -C .../rustc-1.90.0-src/build -j 4 \
+  llvm-headers vt_gen llvm-config \
+  LLVMBinaryFormat LLVMMC LLVMAArch64Info LLVMBitstreamReader LLVMRemarks LLVMCore \
+  LLVMAArch64Utils LLVMCodeGenTypes LLVMAArch64Desc LLVMBitReader LLVMAsmParser \
+  LLVMIRReader LLVMMCParser LLVMTextAPI LLVMObject LLVMDebugInfoDWARF \
+  LLVMDebugInfoCodeView LLVMDebugInfoMSF LLVMDebugInfoPDB LLVMDebugInfoBTF \
+  LLVMSymbolize LLVMProfileData LLVMAnalysis LLVMBitWriter LLVMCGData \
+  LLVMTransformUtils LLVMObjCARCOpts LLVMAggressiveInstCombine LLVMInstCombine \
+  LLVMScalarOpts LLVMTarget LLVMCodeGen LLVMAsmPrinter LLVMCFGuard \
+  LLVMSelectionDAG LLVMGlobalISel LLVMSandboxIR LLVMVectorize LLVMAArch64CodeGen \
+  LLVMAArch64AsmParser LLVMMCDisassembler LLVMAArch64Disassembler LLVMARMInfo \
+  LLVMARMUtils LLVMARMDesc LLVMFrontendOffloading LLVMFrontendAtomic LLVMFrontendOpenMP \
+  LLVMLinker LLVMInstrumentation LLVMipo LLVMARMCodeGen LLVMARMAsmParser \
+  LLVMARMDisassembler LLVMCoverage LLVMExtensions LLVMCoroutines LLVMHipStdPar \
+  LLVMIRPrinter LLVMPasses LLVMLTO LLVMX86Info LLVMX86Desc LLVMX86CodeGen \
+  LLVMX86AsmParser LLVMX86Disassembler LLVMMCA LLVMX86TargetMCA
+[100%] Built target LLVMX86TargetMCA
+
+$ ./bin/llvm-config --link-static --libs aarch64 arm asmparser bitreader bitwriter coverage instrumentation ipo linker lto x86
+llvm static archive target proof passed
+1217 /tmp/mantle-rerun22-llvm-config-static-libs.txt
+```
+
+Commit `a7d858cb build rustc LLVM static archives during musl bootstrap` follows this frontier by making the generated minicargo Makefile build the exact static archive target set before `rustc_llvm` runs, while keeping `LLVM_BUILD_TOOLS=OFF` and `LLVM_TOOL_LTO_BUILD=OFF` so optional shared LLVM tools/modules stay disabled.
+
+A fresh committed rerun 23 is queued as pueue task `345` from commit `a7d858cb` at `target/rust-source-provider-musl-host-route-static-archives-rerun23-2026-06-21`. Launch status excerpt:
+
+```text
+run_root=/home/brittonr/git/mantle/target/rust-source-provider-musl-host-route-static-archives-rerun23-2026-06-21
+source_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+output=/home/brittonr/git/mantle/target/rust-source-provider-musl-host-route-static-archives-rerun23-2026-06-21/provider-out
+tmpdir=/home/brittonr/git/mantle/target/rust-source-provider-musl-host-route-static-archives-rerun23-2026-06-21/tmp
+commit=a7d858cb
+```

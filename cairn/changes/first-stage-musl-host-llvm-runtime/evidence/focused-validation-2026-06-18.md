@@ -1142,3 +1142,128 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-21 addendum: LLVM static archive targets for `rustc_llvm`
+
+Commit: `a7d858cb build rustc LLVM static archives during musl bootstrap`
+
+Rerun 22 proved `llvm-headers vt_gen llvm-config` cleared the generated-header frontiers but failed in `rustc_llvm` because `llvm-config --link-static --libs aarch64 arm asmparser bitreader bitwriter coverage instrumentation ipo linker lto x86` rejected missing static LLVM component archives. This addendum validates the generated-script fix that adds the exact CMake static archive targets while keeping optional LLVM shared tools/modules disabled.
+
+```text
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan -- --exact --nocapture
+# pueue task 277
+running 1 test
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 1.29s
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate -- --exact --nocapture
+# pueue task 279
+running 1 test
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 1.03s
+
+$ git diff --check
+# pueue tasks 284 and 346 completed successfully.
+```
+
+Directional scratch proof against rerun 22's configured LLVM build tree:
+
+```text
+$ /nix/store/...-gnumake-4.4.1/bin/make -C .../rustc-1.90.0-src/build -j 4 <static archive target list>
+# pueue task 257
+[100%] Built target LLVMX86TargetMCA
+
+$ ./bin/llvm-config --link-static --libs aarch64 arm asmparser bitreader bitwriter coverage instrumentation ipo linker lto x86
+llvm static archive target proof passed
+1217 /tmp/mantle-rerun22-llvm-config-static-libs.txt
+```
+
+The direct `build_rustc_llvm_run` binary was not used as proof because replaying it outside minicargo requires the complete generated Cargo environment; the narrow failed `llvm-config` command is the proven frontier here.
+
+Cairn validation transcript saved at `target/first-stage-musl-host-llvm-runtime-cairn-2026-06-21-static-archives.txt`:
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "b4a2256612c5aa6126aa10a6571e06689cac71a08f89fa3294f3d1fcf6c79045",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "818158f4917262f3d08f019c0259b27378d71e0ece5933bcda1bbd28a0f4dc23",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "2ed88c45bc561fa34e75d286e18cb3db04c61b5dfdfca4bcb045d4be57001c8b",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "c9e492472392290029719d886d6202c7d40481fe95b18ddfb418c007b21f74d0",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "d7583dac75797937cd724ba5e318dc0d2faaaff56afb7d3ca75f4a7f40e93f4d",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "d64debb1d9688ab30b01a54803592c4c36ee12c9221f191754063cd1a3126292",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
