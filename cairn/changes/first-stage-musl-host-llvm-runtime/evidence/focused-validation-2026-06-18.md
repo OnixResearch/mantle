@@ -997,6 +997,56 @@ $ git diff --check -- src/rust_source_provider.rs
 
 Scratch proof from rerun 16 is recorded in `provider-rerun-2026-06-18.md` and includes pueue task `24` passing the exact saved `tracing` command with status `0`.
 
+## 2026-06-21 addendum: LLVM vt_gen generated header target
+
+Commit under edit: working tree after `928d35a0 generate LLVM headers during musl bootstrap`
+
+Rerun 21 proved `llvm-headers llvm-config` cleared the missing `Attributes.inc` frontier but still failed in `rustc_llvm` because `MachineValueType.h` includes `llvm/CodeGen/GenVT.inc`. The generated LLVM build tree showed the narrow CMake target is `vt_gen`, and pueue tasks `70` and `108` proved that target generates `GenVT.inc` and clears the exact failed `PassWrapper.cpp` C++ command. This addendum validates the generated-script change that builds `llvm-headers vt_gen llvm-config` before invoking Rust's `rustc_llvm` bridge.
+
+Baseline before the change:
+
+```text
+$ cargo test -p mantle --bin mantle materializer_writes_musl_host_provider_metadata_from_route_plan -- --nocapture
+# pueue task 87
+running 1 test
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 0.86s
+```
+
+Directional scratch proof from rerun 21:
+
+```text
+$ /nix/store/...-gnumake-4.4.1/bin/make -C target/rust-source-provider-musl-host-route-llvm-headers-rerun21-2026-06-21/.../rustc-1.90.0-src/build -j 4 vt_gen
+# pueue task 70
+[100%] Building GenVT.inc...
+[100%] Built target vt_gen
+GenVT generated: 43121 bytes
+
+$ <exact failed cc-rs C++ command for llvm-wrapper/PassWrapper.cpp>
+# pueue task 108
+PassWrapper compile cleared after vt_gen
+```
+
+Focused validation after the change:
+
+```text
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 src/rust_source_provider.rs
+# pueue task 91 completed successfully
+
+$ cargo test -p mantle --bin mantle materializer_writes_musl_host_provider_metadata_from_route_plan -- --nocapture
+# pueue task 93
+running 1 test
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 1.16s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs && git diff --check -- src/rust_source_provider.rs
+# pueue task 100 completed successfully
+```
+
+Real-provider rerun `17` through `21` frontier movement is recorded in `provider-rerun-2026-06-18.md`; rerun 21 is not a full success claim, only proof that the next committed rerun must include `vt_gen` to materialize `GenVT.inc`.
+
 ## 2026-06-20 addendum: post-dynamic-rustc Cairn validation
 
 Transcript saved at `target/first-stage-musl-host-llvm-runtime-cairn-2026-06-20-dynamic-rustc.txt`.
@@ -1011,6 +1061,54 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
   "policy": "cairn-default",
   "spec_issues": [],
   "specs_validated": 6,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+## 2026-06-21 addendum: post-vt-gen Cairn validation
+
+Transcript saved at `target/first-stage-musl-host-llvm-runtime-cairn-2026-06-21-vt-gen.txt`.
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
   "valid": true
 }
 

@@ -405,3 +405,143 @@ status=0
 ```
 
 This is scratch evidence only, not a full provider rerun. It proves the next code change should make the generated target wrapper dynamically link only the mrustc-built rustc executable, keep ordinary first-stage executables static, skip executable-only static support for shared libraries, and make generated prefix-s/prefix-2 rustc wrappers launch through the source-root musl loader with the proc-macro runtime search path.
+
+## Rerun 17: dynamic rustc clears proc-macro loading, reaches LLVM backtrace probe
+
+- Commit: `027a59be9620181dfd4d0a992aa4684f8abc1580`
+- Run root: `target/rust-source-provider-musl-host-route-dynamic-rustc-rerun17-2026-06-20`
+- Result: failed while compiling LLVM `Signals.cpp`.
+- Status file: `target/rust-source-provider-musl-host-route-dynamic-rustc-rerun17-2026-06-20/status.txt`
+- Log: `target/rust-source-provider-musl-host-route-dynamic-rustc-rerun17-2026-06-20/tmp/mantle-rust-source-provider-NJr7o7/mrustc-first-stage-build.log`
+
+Status excerpt:
+
+```text
+commit=027a59be9620181dfd4d0a992aa4684f8abc1580
+status=1
+```
+
+Final frontier excerpt:
+
+```text
+.../llvm/lib/Support/Signals.cpp:277:
+.../build/include/llvm/Config/config.h:33:26: fatal error: execinfo.h: No such file or directory
+   33 | #define BACKTRACE_HEADER <execinfo.h>
+```
+
+This run proves the committed dynamic mrustc-built `rustc` path cleared the rerun-16 proc-macro loading frontier and moved the build back into LLVM. The new frontier was LLVM CMake detecting backtrace support through Mantle's compat stubs while the musl sysroot still lacks `<execinfo.h>`.
+
+## Rerun 18: disabled LLVM backtraces reaches shared `libLTO.so`
+
+- Run root: `target/rust-source-provider-musl-host-route-backtrace-off-rerun18-2026-06-20`
+- Result: failed while linking LLVM `libLTO.so`.
+- Status file: `target/rust-source-provider-musl-host-route-backtrace-off-rerun18-2026-06-20/status.txt`
+- Log: `target/rust-source-provider-musl-host-route-backtrace-off-rerun18-2026-06-20/tmp/mantle-rust-source-provider-hjdKuX/mrustc-first-stage-build.log`
+
+Status excerpt:
+
+```text
+status=1
+```
+
+Progress and final frontier excerpt:
+
+```text
+[  8%] Building GenVT.inc...
+[  8%] Built target vt_gen
+[  8%] Building Attributes.inc...
+[ 82%] Linking CXX shared library ../../lib/libLTO.so
+.../libstdc++.a(eh_terminate.o): relocation R_X86_64_32 against symbol `__gxx_personality_v0' can not be used when making a shared object; recompile with -fPIC
+collect2: error: ld returned 1 exit status
+```
+
+This run proves disabling LLVM backtrace probing cleared the `<execinfo.h>` frontier. The new frontier was the non-PIC source-root musl `libstdc++.a` being linked into LLVM's optional LTO shared library.
+
+## Rerun 19: disabled LTO shared library reaches Bugpoint module
+
+- Run root: `target/rust-source-provider-musl-host-route-lto-off-rerun19-2026-06-20`
+- Result: failed while linking LLVM `BugpointPasses.so`.
+- Status file: `target/rust-source-provider-musl-host-route-lto-off-rerun19-2026-06-20/status.txt`
+- Log: `target/rust-source-provider-musl-host-route-lto-off-rerun19-2026-06-20/tmp/mantle-rust-source-provider-yJXtDt/mrustc-first-stage-build.log`
+
+Status excerpt:
+
+```text
+status=1
+```
+
+Progress and final frontier excerpt:
+
+```text
+[  8%] Building GenVT.inc...
+[  8%] Building Attributes.inc...
+[ 82%] Built target bugpoint
+[ 82%] Linking CXX shared module ../../lib/BugpointPasses.so
+.../libstdc++.a(new_op.o): relocation R_X86_64_32 against symbol `_ZNSt9bad_allocD1Ev' can not be used when making a shared object; recompile with -fPIC
+collect2: error: ld returned 1 exit status
+```
+
+This run proves disabling `LLVM_TOOL_LTO_BUILD` cleared the `libLTO.so` frontier but the default LLVM build still tried to build optional shared tools/modules. The next generated-script fix must avoid the default `make all` path.
+
+## Rerun 20: llvm-config-only build reaches missing generated IR headers
+
+- Run root: `target/rust-source-provider-musl-host-route-llvm-config-only-rerun20-2026-06-21`
+- Result: failed in `rustc_llvm`'s build script while compiling `llvm-wrapper/PassWrapper.cpp`.
+- Status file: `target/rust-source-provider-musl-host-route-llvm-config-only-rerun20-2026-06-21/status.txt`
+- Failed build-script output: `target/rust-source-provider-musl-host-route-llvm-config-only-rerun20-2026-06-21/tmp/mantle-rust-source-provider-TDebeV/sources/mrustc-0.12.0/output/rustc-build/host/build_rustc_llvm.txt_failed.txt`
+
+Status excerpt:
+
+```text
+status=1
+```
+
+Final frontier excerpt:
+
+```text
+.../llvm/include/llvm/IR/Attributes.h:90:14: fatal error: llvm/IR/Attributes.inc: No such file or directory
+   90 |     #include "llvm/IR/Attributes.inc"
+compilation terminated.
+```
+
+This run proves `LLVM_BUILD_TOOLS=OFF` plus building only `llvm-config` avoided the optional shared-tool/module frontier and advanced into the Rust `rustc_llvm` bridge. The new frontier was that `llvm-config` alone does not materialize generated LLVM headers used by Rust's C++ wrapper.
+
+## Rerun 21: llvm-headers build reaches missing generated CodeGen value-type header
+
+- Commit: `928d35a0`
+- Run root: `target/rust-source-provider-musl-host-route-llvm-headers-rerun21-2026-06-21`
+- Result: failed in `rustc_llvm`'s build script while compiling `llvm-wrapper/PassWrapper.cpp`.
+- Status file: `target/rust-source-provider-musl-host-route-llvm-headers-rerun21-2026-06-21/status.txt`
+- Failed build-script output: `target/rust-source-provider-musl-host-route-llvm-headers-rerun21-2026-06-21/tmp/mantle-rust-source-provider-nspbQr/sources/mrustc-0.12.0/output/rustc-build/host/build_rustc_llvm.txt_failed.txt`
+- Directional scratch proof: pueue task `70` generated `build/include/llvm/CodeGen/GenVT.inc`; pueue task `108` then re-ran the exact failed `PassWrapper.cpp` C++ command successfully.
+
+Status excerpt:
+
+```text
+status=1
+```
+
+Progress and final frontier excerpt:
+
+```text
+[ 88%] Building Attributes.inc...
+[ 88%] Building IntrinsicImpl.inc...
+[ 88%] Building IntrinsicEnums.inc...
+.../llvm/include/llvm/CodeGenTypes/MachineValueType.h:45:10: fatal error: llvm/CodeGen/GenVT.inc: No such file or directory
+   45 | #include "llvm/CodeGen/GenVT.inc"
+compilation terminated.
+```
+
+Scratch target proof:
+
+```text
+$ /nix/store/...-gnumake-4.4.1/bin/make -C .../rustc-1.90.0-src/build -j 4 vt_gen
+[100%] Building GenVT.inc...
+[100%] Built target vt_gen
+GenVT generated: 43121 bytes
+
+$ <exact failed c++ PassWrapper.cpp command>
+PassWrapper compile cleared after vt_gen
+```
+
+This run proves adding `llvm-headers` cleared the missing `Attributes.inc` frontier but not the generated CodeGen value-type header used by `MachineValueType.h`. The CMake target evidence shows `vt_gen` is the narrow generated-header target that must be built alongside `llvm-headers` and `llvm-config` before `rustc_llvm` runs.
