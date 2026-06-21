@@ -203,8 +203,23 @@ const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE: &str =
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF LLVM_ENABLE_BACKTRACES=OFF CMAKE_DISABLE_FIND_PACKAGE_Backtrace=ON LLVM_TOOL_LTO_BUILD=OFF LLVM_BUILD_TOOLS=OFF";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE: &str =
     "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL)";
-const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE: &str =
+const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_PREFIX: &str =
     "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL) llvm-headers vt_gen llvm-config";
+const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_STATIC_ARCHIVE_TARGETS: &str = "\
+LLVMBinaryFormat LLVMMC LLVMAArch64Info LLVMBitstreamReader LLVMRemarks LLVMCore \
+LLVMAArch64Utils LLVMCodeGenTypes LLVMAArch64Desc LLVMBitReader LLVMAsmParser \
+LLVMIRReader LLVMMCParser LLVMTextAPI LLVMObject LLVMDebugInfoDWARF \
+LLVMDebugInfoCodeView LLVMDebugInfoMSF LLVMDebugInfoPDB LLVMDebugInfoBTF \
+LLVMSymbolize LLVMProfileData LLVMAnalysis LLVMBitWriter LLVMCGData \
+LLVMTransformUtils LLVMObjCARCOpts LLVMAggressiveInstCombine LLVMInstCombine \
+LLVMScalarOpts LLVMTarget LLVMCodeGen LLVMAsmPrinter LLVMCFGuard \
+LLVMSelectionDAG LLVMGlobalISel LLVMSandboxIR LLVMVectorize LLVMAArch64CodeGen \
+LLVMAArch64AsmParser LLVMMCDisassembler LLVMAArch64Disassembler LLVMARMInfo \
+LLVMARMUtils LLVMARMDesc LLVMFrontendOffloading LLVMFrontendAtomic LLVMFrontendOpenMP \
+LLVMLinker LLVMInstrumentation LLVMipo LLVMARMCodeGen LLVMARMAsmParser \
+LLVMARMDisassembler LLVMCoverage LLVMExtensions LLVMCoroutines LLVMHipStdPar \
+LLVMIRPrinter LLVMPasses LLVMLTO LLVMX86Info LLVMX86Desc LLVMX86CodeGen \
+LLVMX86AsmParser LLVMX86Disassembler LLVMMCA LLVMX86TargetMCA";
 const FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE: &str = "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))";
 const FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE: &str =
     "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(PREFIX_2)lib):\\$(abspath \\$(LIBDIR))";
@@ -4945,6 +4960,12 @@ fn push_first_stage_minicargo_build_out_dir_patch(script: &mut String) {
     script.push_str("fi\n");
 }
 
+fn first_stage_minicargo_makefile_llvm_config_build_patched_line() -> String {
+    format!(
+        "{FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_PREFIX} {FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_STATIC_ARCHIVE_TARGETS}"
+    )
+}
+
 fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
     script.push_str(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
     script.push_str("printf '%s\\n' 'disabling LLVM shared-tool and execinfo backtraces for source-root musl host'\n");
@@ -4969,10 +4990,8 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
         "minicargo_llvm_config_original={}\n",
         shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE)
     ));
-    script.push_str(&format!(
-        "minicargo_llvm_config_patched={}\n",
-        shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE)
-    ));
+    let minicargo_llvm_config_patched = first_stage_minicargo_makefile_llvm_config_build_patched_line();
+    script.push_str(&format!("minicargo_llvm_config_patched={}\n", shell_quote(&minicargo_llvm_config_patched)));
     script.push_str("while IFS= read -r line; do\n");
     script.push_str("  if [ \"$line\" = \"$minicargo_llvm_options_original\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$minicargo_llvm_options_patched\" >> \"$minicargo_llvm_tmp\"\n");
@@ -6445,9 +6464,13 @@ mod tests {
         assert!(script.contains("disabling LLVM shared-tool and execinfo backtraces for source-root musl host"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE));
+        let llvm_config_patched_line = first_stage_minicargo_makefile_llvm_config_build_patched_line();
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE));
+        assert!(script.contains(&llvm_config_patched_line));
         assert!(script.contains("llvm-headers vt_gen llvm-config"));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_STATIC_ARCHIVE_TARGETS));
+        assert!(script.contains("LLVMLTO"));
+        assert!(script.contains("LLVMX86CodeGen"));
         assert!(script.contains("minicargo Makefile lacks expected LLVM CMake options line for musl normalization"));
         assert!(script.contains("minicargo Makefile lacks expected llvm-config build line for musl normalization"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_FORCE_UNSTABLE_LINE));
@@ -6596,8 +6619,10 @@ mod tests {
         assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
         assert!(script.contains("normalizing minicargo build-script OUT_DIR for static musl compiler host"));
         assert!(script.contains("disabling LLVM shared-tool and execinfo backtraces for source-root musl host"));
+        let llvm_config_patched_line = first_stage_minicargo_makefile_llvm_config_build_patched_line();
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE));
+        assert!(script.contains(&llvm_config_patched_line));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_STATIC_ARCHIVE_TARGETS));
         assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER));
         assert!(script.contains("normalizing Rust explicit sysroot handling for static musl rustc"));
         assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SOURCE));
