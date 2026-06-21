@@ -1267,3 +1267,95 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-21 addendum: absolute `rcrt1.o` CRT normalization for final static rustc
+
+Commit: `f00b2b6e normalize absolute musl CRT paths`
+
+Rerun 23 proved the static LLVM archive target list cleared the `rustc_llvm` frontier: Cargo completed the `rustc_llvm` build script and produced `librustc_llvm.rlib`. The next failure moved to the final Cargo-built static `rustc`, which copied into `run_rustc/output/prefix/bin/rustc` and then segfaulted on Cargo's `rustc -vV` probe. GDB showed the crash before Rust `main` in musl `_start_c`, dereferencing a null `_DYNAMIC`; the final linker argv contained an absolute `.../target-linker-runtime/rcrt1.o`, which the wrapper did not normalize because it only matched bare `rcrt1.o`.
+
+The fix makes the generated target linker wrapper match both bare and absolute CRT object paths. Non-dynamic `rcrt1.o` now maps to `crt1.o`, while dynamic temporary rustc links still map to `Scrt1.o`; compile-only and `-shared|-dynamiclib` static-support skips remain unchanged.
+
+Focused validation after the change:
+
+```text
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate -- --exact --nocapture
+# pueue task 26
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 0.96s
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan -- --exact --nocapture
+# pueue task 26
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 808 filtered out; finished in 0.88s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+$ git diff --check -- src/rust_source_provider.rs
+# pueue task 31 completed successfully.
+```
+
+Directional scratch proof against rerun 23's final `rustc_main` command:
+
+```text
+$ <replay line 11168 from rerun23 mrustc-first-stage-build.log with patched scratch wrapper>
+# pueue task 30
+replay-status=0
+.../rustc_main-d16b0f50cc7b51b0: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, not stripped
+  Type:                              EXEC (Executable file)
+  Entry point address:               0x6a7e35
+rustc 1.90.0-stable-mrustc
+direct-version-exit=0
+rustc 1.90.0-stable-mrustc
+binary: rustc
+commit-hash: unknown
+commit-date: unknown
+host: x86_64-unknown-linux-musl
+release: 1.90.0
+LLVM version: 20.1.8
+direct-vv-exit=0
+```
+
+Cairn validation transcript saved at `target/first-stage-musl-host-llvm-runtime-cairn-2026-06-21-crt-normalization-final.txt`:
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```

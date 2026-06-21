@@ -623,3 +623,92 @@ output=/home/brittonr/git/mantle/target/rust-source-provider-musl-host-route-sta
 tmpdir=/home/brittonr/git/mantle/target/rust-source-provider-musl-host-route-static-archives-rerun23-2026-06-21/tmp
 commit=a7d858cb
 ```
+
+## Rerun 23: static LLVM archives clear; final static rustc hits absolute `rcrt1.o`
+
+- Pueue task: `345`
+- Commit: `a7d858cb`
+- Run root: `target/rust-source-provider-musl-host-route-static-archives-rerun23-2026-06-21`
+- Result: failed after the final Cargo-built static `rustc` was copied into `run_rustc/output/prefix/bin/rustc` and Cargo probed it with `-vV`.
+- Status file: `target/rust-source-provider-musl-host-route-static-archives-rerun23-2026-06-21/status.txt`
+- Log: `target/rust-source-provider-musl-host-route-static-archives-rerun23-2026-06-21/tmp/mantle-rust-source-provider-miUpka/mrustc-first-stage-build.log`
+
+Status excerpt:
+
+```text
+commit=a7d858cb
+status=1
+```
+
+Progress excerpts:
+
+```text
+[100%] Built target LLVMLTO
+[100%] Built target LLVMX86CodeGen
+--- RUNNING rustc_llvm v0.0.0 (script run)
+Completed rustc_llvm v0.0.0 (script run)
+--- BUILDING rustc_llvm v0.0.0
+Completed rustc_llvm v0.0.0
+...
+   Compiling rustc_driver_impl v0.0.0
+   Compiling rustc-main v0.0.0
+```
+
+Final frontier excerpt:
+
+```text
+[CP] libraries and results (output/prefix/bin/rustc)
+.../run_rustc/output/prefix/bin/rustc -vV
+.../run_rustc/output/prefix/bin/rustc: line 3: ... Segmentation fault (core dumped) LD_LIBRARY_PATH=".../output/prefix/lib:.../output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib" $d/rustc_binary.sysroot --sysroot "$d/.." "$@"
+error: process didn't exit successfully: `.../run_rustc/output/prefix/bin/rustc -vV` (exit status: 139)
+make: *** [Makefile:253: output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib] Error 101
+```
+
+This run proves commit `a7d858cb` cleared the rerun-22 `rustc_llvm` missing-static-archive frontier. The new frontier is an ELF startup crash in the final static Rust-built compiler, not LLVM archive generation.
+
+GDB and captured linker argv from the preserved rerun 23 scratch narrowed the crash:
+
+```text
+Program received signal SIGSEGV, Segmentation fault.
+0x00000000006a7ed2 in _start_c ()
+#0  0x00000000006a7ed2 in _start_c ()
+#1  0x00000000006a7e4b in _start ()
+...
+6a7ed2: 48 8b 02  mov (%rdx),%rax
+```
+
+The final `rustc_main` linker argv began with an absolute runtime CRT path:
+
+```text
+.../musl-seed-toolchain/bin/x86_64-linux-musl-gcc
+-D_LARGEFILE64_SOURCE
+-fno-asynchronous-unwind-tables
+-B.../build/target-linker-runtime/
+-L.../build/target-linker-runtime
+-m64
+.../build/target-linker-runtime/rcrt1.o
+.../build/target-linker-runtime/crti.o
+.../build/target-linker-runtime/crtbeginS.o
+```
+
+The generated wrapper normalized only bare `rcrt1.o`, so this absolute path survived and linked the static executable with musl's static-PIE startup object. Because the resulting binary was static `EXEC` with no dynamic section, `_start_c` dereferenced a null `_DYNAMIC` before reaching Rust `main`.
+
+Directional scratch proof from the same configured rerun 23 final link command patched only the scratch wrapper to normalize `rcrt1.o|*/rcrt1.o` to `crt1.o` for non-dynamic links while preserving the dynamic temporary rustc `Scrt1.o` path:
+
+```text
+# pueue task 30
+replay-status=0
+.../rustc_main-d16b0f50cc7b51b0: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, not stripped
+rustc 1.90.0-stable-mrustc
+direct-version-exit=0
+rustc 1.90.0-stable-mrustc
+binary: rustc
+host: x86_64-unknown-linux-musl
+release: 1.90.0
+LLVM version: 20.1.8
+direct-vv-exit=0
+```
+
+Commit `f00b2b6e normalize absolute musl CRT paths` follows this frontier by mapping both bare and absolute CRT object arguments in the generated target linker wrapper.
+
+The scratch continuation is directional only. A fresh committed full rerun from the CRT-normalization fix is required before claiming provider completion.
