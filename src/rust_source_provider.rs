@@ -200,7 +200,11 @@ const FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE: &str = "        args.push_b
 const FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE: &str = "        args.push_back(\"threads=1\");";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE: &str =
     "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF";
-const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF LLVM_ENABLE_BACKTRACES=OFF CMAKE_DISABLE_FIND_PACKAGE_Backtrace=ON LLVM_TOOL_LTO_BUILD=OFF";
+const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF LLVM_ENABLE_BACKTRACES=OFF CMAKE_DISABLE_FIND_PACKAGE_Backtrace=ON LLVM_TOOL_LTO_BUILD=OFF LLVM_BUILD_TOOLS=OFF";
+const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE: &str =
+    "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL)";
+const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE: &str =
+    "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL) llvm-config";
 const FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE: &str = "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))";
 const FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE: &str =
     "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(PREFIX_2)lib):\\$(abspath \\$(LIBDIR))";
@@ -4943,33 +4947,52 @@ fn push_first_stage_minicargo_build_out_dir_patch(script: &mut String) {
 
 fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
     script.push_str(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
-    script.push_str("printf '%s\\n' 'disabling LLVM execinfo backtraces for source-root musl host'\n");
+    script.push_str("printf '%s\\n' 'disabling LLVM shared-tool and execinfo backtraces for source-root musl host'\n");
     script.push_str(&format!("minicargo_makefile={FIRST_STAGE_MINICARGO_MAKEFILE}\n"));
     script.push_str(&format!(
-        "if [ ! -f \"$minicargo_makefile\" ]; then printf '%s\\n' 'minicargo Makefile missing before LLVM backtrace normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+        "if [ ! -f \"$minicargo_makefile\" ]; then printf '%s\\n' 'minicargo Makefile missing before LLVM normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
     script.push_str("minicargo_llvm_tmp=\"$BUILD_DIR/minicargo-llvm-backtrace.mk\"\n");
-    script.push_str("minicargo_llvm_replaced=false\n");
-    script.push_str("minicargo_llvm_seen_patched=false\n");
+    script.push_str("minicargo_llvm_options_replaced=false\n");
+    script.push_str("minicargo_llvm_options_seen_patched=false\n");
+    script.push_str("minicargo_llvm_config_replaced=false\n");
+    script.push_str("minicargo_llvm_config_seen_patched=false\n");
     script.push_str(&format!(
-        "minicargo_llvm_original={}\n",
+        "minicargo_llvm_options_original={}\n",
         shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE)
     ));
     script.push_str(&format!(
-        "minicargo_llvm_patched={}\n",
+        "minicargo_llvm_options_patched={}\n",
         shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE)
     ));
+    script.push_str(&format!(
+        "minicargo_llvm_config_original={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE)
+    ));
+    script.push_str(&format!(
+        "minicargo_llvm_config_patched={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE)
+    ));
     script.push_str("while IFS= read -r line; do\n");
-    script.push_str("  if [ \"$line\" = \"$minicargo_llvm_original\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$minicargo_llvm_patched\" >> \"$minicargo_llvm_tmp\"\n");
-    script.push_str("    minicargo_llvm_replaced=true\n");
+    script.push_str("  if [ \"$line\" = \"$minicargo_llvm_options_original\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$minicargo_llvm_options_patched\" >> \"$minicargo_llvm_tmp\"\n");
+    script.push_str("    minicargo_llvm_options_replaced=true\n");
+    script.push_str("  elif [ \"$line\" = \"$minicargo_llvm_config_original\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$minicargo_llvm_config_patched\" >> \"$minicargo_llvm_tmp\"\n");
+    script.push_str("    minicargo_llvm_config_replaced=true\n");
     script.push_str("  else\n");
-    script.push_str("    if [ \"$line\" = \"$minicargo_llvm_patched\" ]; then minicargo_llvm_seen_patched=true; fi\n");
+    script.push_str("    if [ \"$line\" = \"$minicargo_llvm_options_patched\" ]; then minicargo_llvm_options_seen_patched=true; fi\n");
+    script.push_str(
+        "    if [ \"$line\" = \"$minicargo_llvm_config_patched\" ]; then minicargo_llvm_config_seen_patched=true; fi\n",
+    );
     script.push_str("    printf '%s\\n' \"$line\" >> \"$minicargo_llvm_tmp\"\n");
     script.push_str("  fi\n");
     script.push_str("done < \"$minicargo_makefile\"\n");
     script.push_str(&format!(
-        "if [ \"$minicargo_llvm_replaced\" = false ] && [ \"$minicargo_llvm_seen_patched\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks expected LLVM CMake options line for musl backtrace normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+        "if [ \"$minicargo_llvm_options_replaced\" = false ] && [ \"$minicargo_llvm_options_seen_patched\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks expected LLVM CMake options line for musl normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!(
+        "if [ \"$minicargo_llvm_config_replaced\" = false ] && [ \"$minicargo_llvm_config_seen_patched\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks expected llvm-config build line for musl normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
     script.push_str("$COPY_PROGRAM \"$minicargo_llvm_tmp\" \"$minicargo_makefile\"\n");
     script.push_str("rm -f \"$minicargo_llvm_tmp\"\n");
@@ -6419,13 +6442,13 @@ mod tests {
         assert!(script.contains("mrustc run_rustc Makefile lacks expected stage2 Cargo env line"));
         assert!(script.contains("mrustc run_rustc Makefile lacks expected final rustc Cargo env line"));
         assert!(script.contains("normalizing minicargo rustc worker threads for static musl compiler host"));
-        assert!(script.contains("disabling LLVM execinfo backtraces for source-root musl host"));
+        assert!(script.contains("disabling LLVM shared-tool and execinfo backtraces for source-root musl host"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE));
-        assert!(
-            script
-                .contains("minicargo Makefile lacks expected LLVM CMake options line for musl backtrace normalization")
-        );
+        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE));
+        assert!(script.contains("minicargo Makefile lacks expected LLVM CMake options line for musl normalization"));
+        assert!(script.contains("minicargo Makefile lacks expected llvm-config build line for musl normalization"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_FORCE_UNSTABLE_LINE));
         assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_MARKER_LINE));
         assert!(script.contains(FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE));
@@ -6571,8 +6594,9 @@ mod tests {
         assert!(script.contains("LLVM_STATIC_STDCPP=\"$target_runtime_dir/libstdc++.a\""));
         assert!(script.contains("LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind"));
         assert!(script.contains("normalizing minicargo build-script OUT_DIR for static musl compiler host"));
-        assert!(script.contains("disabling LLVM execinfo backtraces for source-root musl host"));
+        assert!(script.contains("disabling LLVM shared-tool and execinfo backtraces for source-root musl host"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE));
         assert!(script.contains(FIRST_STAGE_MINICARGO_OUT_DIR_PATCH_MARKER));
         assert!(script.contains("normalizing Rust explicit sysroot handling for static musl rustc"));
         assert!(script.contains(FIRST_STAGE_RUSTC_CONFIG_SOURCE));
@@ -7707,6 +7731,8 @@ let Plan = {
             "\tprintf '%s\\n' '#!/bin/sh' 'set -eu' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"--output-dir\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"--output-dir\" ]; then prev=\"--output-dir\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output-dir >&2; exit 2; fi' 'mkdir -p \"$$out\"' 'printf \"synthetic target std\\\\n\" > \"$$out/libstd.rlib\"' > bin/minicargo\n",
             "\tchmod +x bin/minicargo\n",
             "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF\n",
+            "$(RUSTCSRC)build/bin/llvm-config: $(RUSTCSRC)build/Makefile\n",
+            "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL)\n",
             "RUSTCSRC:\n",
             "\tmkdir -p rustc-$${RUSTC_VERSION}-src/compiler/rustc_driver rustc-$${RUSTC_VERSION}-src/compiler/rustc_session/src\n",
             "\tprintf '%s\\n' '[package]' 'name = \"rustc_driver\"' 'version = \"0.0.0\"' 'edition = \"2024\"' '' '[lib]' 'crate-type = [\"dylib\"]' > rustc-$${RUSTC_VERSION}-src/compiler/rustc_driver/Cargo.toml\n",
