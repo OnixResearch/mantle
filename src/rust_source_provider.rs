@@ -4728,10 +4728,10 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
     script.push_str(&format!(
-        "printf '%s\\n' '    rcrt1.o) if [ \"$dynamic_rustc_link\" = true ]; then mapped_arg=\"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}\"; elif [ \"$static_pie_normalized\" = true ]; then mapped_arg=\"$target_runtime_dir/crt1.o\"; else mapped_arg=\"$target_runtime_dir/rcrt1.o\"; fi ;;' >> \"$target_alias_dir/cc\"\n"
+        "printf '%s\\n' '    rcrt1.o|*/rcrt1.o) if [ \"$dynamic_rustc_link\" = true ]; then mapped_arg=\"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}\"; else mapped_arg=\"$target_runtime_dir/crt1.o\"; fi ;;' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str(&format!(
-        "printf '%s\\n' '    crt1.o|{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|crti.o|crtn.o|crtbeginS.o|crtendS.o) mapped_arg=\"$target_runtime_dir/$arg\" ;;' >> \"$target_alias_dir/cc\"\n"
+        "printf '%s\\n' '    crt1.o|*/crt1.o|{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|*/{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|crti.o|*/crti.o|crtn.o|*/crtn.o|crtbeginS.o|*/crtbeginS.o|crtendS.o|*/crtendS.o) mapped_arg=\"$target_runtime_dir/${{arg##*/}}\" ;;' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str("printf '%s\\n' '    -static-pie) if [ \"$dynamic_rustc_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    *) mapped_arg=\"$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
@@ -6426,7 +6426,8 @@ mod tests {
         assert!(script.contains("if [ \"$rustc_main_response_file\" = true ]; then dynamic_rustc_link=true; fi"));
         assert!(script.contains("*/output/rustc|output/rustc|*/output/rustc-build/rustc_main|output/rustc-build/rustc_main) dynamic_rustc_link=true"));
         assert!(script.contains("if [ \"$link_command\" = true ] && [ \"$dynamic_rustc_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/musl-lfs-compat.o\" -Wl,-Bdynamic -pie \"-Wl,-dynamic-linker,$target_runtime_dir/libc.so\" -Wl,--wrap=pthread_key_create -Wl,--wrap=pthread_key_delete -Wl,--wrap=pthread_getspecific -Wl,--wrap=pthread_setspecific -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"));
-        assert!(script.contains("rcrt1.o) if [ \"$dynamic_rustc_link\" = true ]; then mapped_arg=\"$target_runtime_dir/Scrt1.o\"; elif [ \"$static_pie_normalized\" = true ]; then mapped_arg=\"$target_runtime_dir/crt1.o\"; else mapped_arg=\"$target_runtime_dir/rcrt1.o\"; fi"));
+        assert!(script.contains("rcrt1.o|*/rcrt1.o) if [ \"$dynamic_rustc_link\" = true ]; then mapped_arg=\"$target_runtime_dir/Scrt1.o\"; else mapped_arg=\"$target_runtime_dir/crt1.o\"; fi"));
+        assert!(script.contains("crt1.o|*/crt1.o|Scrt1.o|*/Scrt1.o|crti.o|*/crti.o|crtn.o|*/crtn.o|crtbeginS.o|*/crtbeginS.o|crtendS.o|*/crtendS.o) mapped_arg=\"$target_runtime_dir/${arg##*/}\""));
         assert!(script.contains(
             "-static-pie) if [ \"$dynamic_rustc_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
         ));
