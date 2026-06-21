@@ -204,7 +204,7 @@ const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_C
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_ORIGINAL_LINE: &str =
     "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL)";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_LINE: &str =
-    "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL) llvm-config";
+    "\t$Vcd $(RUSTCSRC)build && $(MAKE) -j $(PARLEVEL) llvm-headers llvm-config";
 const FIRST_STAGE_RUN_RUSTC_LD_LIBRARY_PATH_LINE: &str = "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))";
 const FIRST_STAGE_RUN_RUSTC_RUNTIME_LD_LIBRARY_PATH_TEMPLATE: &str =
     "RUSTC_ENV_VARS += LD_LIBRARY_PATH=$target_runtime_dir:\\$(abspath \\$(PREFIX_2)lib):\\$(abspath \\$(LIBDIR))";
