@@ -5,6 +5,7 @@
 //! source-built stage reaches a validated final provider candidate; only then
 //! does it copy that candidate into the requested provider output directory.
 
+use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
@@ -41,6 +42,8 @@ use crate::source_toolchain_closure::ToolchainSourceKind;
 pub(crate) const RUST_SOURCE_PROVIDER_BLOCKED_REASON: &str = "source-built Rust provider materialization is not implemented: Mantle has no receipt-bound Rust-from-source bootstrap that can build rustc/cargo/rustlib without prebuilt Rust";
 
 const DIRECTORY_DIGEST_MAX_ENTRIES: usize = 1_000_000;
+const ELF_MAGIC: [u8; ELF_MAGIC_LEN] = [0x7f, b'E', b'L', b'F'];
+const ELF_MAGIC_LEN: usize = 4;
 const RUST_SOURCE_PROVIDER_PLAN_FILE: &str = "rust-source-plan.ncl";
 const FIRST_STAGE_PLAN_SCHEMA: &str = "mantle-rust-source-provider-first-stage-plan-v1";
 const FIRST_STAGE_PLAN_FILE: &str = "mrustc-first-stage-plan.json";
@@ -109,12 +112,19 @@ const RUSTC_FINAL_PROVIDER_RECEIPT_NAME: &str = "rust-final-build-receipt";
 const RUSTC_FINAL_PROVIDER_BUILD_RECIPE: &str = "rust-final-source-route";
 const RUSTC_FINAL_SOURCE_BUILD_SCRIPT: &str = "mantle-rustc-final-build.sh";
 const RUSTC_FINAL_GENERATED_BUILD_SCRIPT: &str = "mantle-generated-rustc-final-build.sh";
-const RUSTC_FINAL_XPY_GOALS: &str = "install rustc cargo library/std";
+const RUSTC_FINAL_XPY_GOALS: &str = "install rustc cargo rustdoc library/std";
 const RUSTC_FINAL_SHELL_PROGRAM: &str = "sh";
 const RUSTC_SOURCE_XPY_SCRIPT: &str = "x.py";
 const RUSTC_SOURCE_BOOTSTRAP_MANIFEST: &str = "src/bootstrap/Cargo.toml";
 const RUSTC_SOURCE_CRANELIFT_MANIFEST: &str = "compiler/rustc_codegen_cranelift/Cargo.toml";
 const RUSTC_SOURCE_CODEGEN_GCC_MANIFEST: &str = "compiler/rustc_codegen_gcc/Cargo.toml";
+const RUSTC_SOURCE_RUSTC_DRIVER_MANIFEST: &str = "compiler/rustc_driver/Cargo.toml";
+const RUSTC_SOURCE_FILESEARCH_SOURCE: &str = "compiler/rustc_session/src/filesearch.rs";
+const RUSTC_SOURCE_FILESEARCH_DEFAULT_SYSROOT_LINE: &str = "    from_env_args_next()";
+const RUSTC_SOURCE_FILESEARCH_DYLIB_FALLBACK_LINE: &str =
+    "        .unwrap_or_else(|| default_from_rustc_driver_dll().expect(\"Failed finding sysroot\"))";
+const RUSTC_SOURCE_FILESEARCH_ENV_FALLBACK_LINE: &str =
+    "        .or_else(|| env::var_os(\"RUSTC_SYSROOT\").map(PathBuf::from))";
 const RUSTC_SOURCE_GENERATED_CONFIG_FILE: &str = "mantle-rust-build-config.toml";
 const RUSTC_SOURCE_GENERATED_CARGO_HOME_DIR: &str = "cargo-home";
 const RUSTC_SOURCE_TARGET_LINKER_ALIAS_DIR: &str = "rust-bootstrap-target-linker-bin";
@@ -124,6 +134,15 @@ const RUSTC_SOURCE_TARGET_CXX_VAR: &str = "MANTLE_TARGET_CXX";
 const RUSTC_SOURCE_TARGET_AR_VAR: &str = "MANTLE_TARGET_AR";
 const RUSTC_SOURCE_TARGET_RANLIB_VAR: &str = "MANTLE_TARGET_RANLIB";
 const RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR: &str = "MANTLE_TARGET_MUSL_ROOT";
+const RUSTC_SOURCE_LLVM_SHARED_TOOL_BUILD_CONFIG: &str = concat!(
+    "build-config = { ",
+    "\"LLVM_TOOL_BUGPOINT_PASSES_BUILD\" = \"OFF\", ",
+    "\"LLVM_TOOL_GOLD_BUILD\" = \"OFF\", ",
+    "\"LLVM_TOOL_LLVM_SHLIB_BUILD\" = \"OFF\", ",
+    "\"LLVM_TOOL_LTO_BUILD\" = \"OFF\", ",
+    "\"LLVM_TOOL_REMARKS_SHLIB_BUILD\" = \"OFF\" ",
+    "}\n",
+);
 const FIRST_STAGE_SCRIPT_FILE: &str = "run-mrustc-first-stage.sh";
 const FIRST_STAGE_ARCHIVE_DIR: &str = "archives";
 const FIRST_STAGE_SOURCE_DIR: &str = "sources";
@@ -176,6 +195,8 @@ const FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR: &str = "target-linker-runtime";
 const FIRST_STAGE_STATIC_MUSL_DYLIB_EXT: &str = "rlib";
 const FIRST_STAGE_TARGET_OUTDIR_SUFFIX: &str = "-target";
 const FIRST_STAGE_TARGET_PREFIX_S_DIR: &str = "run_rustc/output$target_outdir_suffix/prefix-s";
+const FIRST_STAGE_PROC_MACRO_RUNTIME_DIR: &str = "lib/mantle-runtime";
+const FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH: &str = "lib/mantle-runtime/libc.so";
 const FIRST_STAGE_RUSTC_DRIVER_MANIFEST_SUFFIX: &str = "compiler/rustc_driver/Cargo.toml";
 const FIRST_STAGE_RUSTC_CONFIG_SOURCE: &str = "rustc-${RUSTC_VERSION}-src/compiler/rustc_session/src/config.rs";
 const FIRST_STAGE_RUSTC_CONFIG_SYSROOT_ORIGINAL_LINE: &str =
@@ -330,6 +351,8 @@ const FIRST_STAGE_ENV_SCRUB_VARS: &[&str] = &[
 const PROVIDER_RUSTC_RELATIVE_PATH: &str = "bin/rustc";
 const PROVIDER_CARGO_RELATIVE_PATH: &str = "bin/cargo";
 const PROVIDER_RUSTDOC_RELATIVE_PATH: &str = "bin/rustdoc";
+const PROVIDER_DYNAMIC_TOOL_BINARY_SUFFIX: &str = ".dynamic";
+const PROVIDER_DYNAMIC_TOOL_RUNTIME_MISSING_EXIT_CODE: i32 = 1;
 const PROVIDER_MRUSTC_RUSTC_BINARY_RELATIVE_PATH: &str = "bin/rustc_binary";
 const PROVIDER_MRUSTC_RUSTC_BINARY_BASENAME: &str = "rustc_binary";
 const PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH: &str = "bin/rustc_binary.sysroot";
@@ -1958,6 +1981,10 @@ fn push_generated_rustc_source_build_script(script: &mut String) {
     script.push_str("mkdir -p \"$MANTLE_BUILD_DIR\" \"$MANTLE_STAGE_OUTPUT\"\n");
     push_rustc_source_build_env_scrub(script);
     push_rustc_source_build_tool_discovery(script);
+    script.push_str("MANTLE_RUST_TOOLS='[\"cargo\"]'\n");
+    script.push_str(
+        "case \" $MANTLE_RUST_BUILD_GOALS \" in *' rustdoc '*) MANTLE_RUST_TOOLS='[\"cargo\", \"rustdoc\"]' ;; esac\n",
+    );
     script.push_str("cat > \"$CONFIG\" <<MANTLE_RUST_BUILD_CONFIG\n");
     script.push_str("profile = \"compiler\"\n");
     script.push_str("change-id = \"ignore\"\n\n");
@@ -1968,8 +1995,9 @@ fn push_generated_rustc_source_build_script(script: &mut String) {
     script.push_str("cargo = \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\n");
     script.push_str("rustc = \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\n");
     script.push_str("extended = true\n");
-    script.push_str("tools = [\"cargo\", \"rustdoc\"]\n");
+    script.push_str("tools = $MANTLE_RUST_TOOLS\n");
     script.push_str("vendor = true\n");
+    script.push_str("cargo-native-static = true\n");
     script.push_str("build-dir = \"$MANTLE_BUILD_DIR/rust-build\"\n\n");
     script.push_str("[install]\n");
     script.push_str("prefix = \"$MANTLE_STAGE_OUTPUT\"\n");
@@ -1982,9 +2010,12 @@ fn push_generated_rustc_source_build_script(script: &mut String) {
     script.push_str("[llvm]\n");
     script.push_str("download-ci-llvm = false\n");
     script.push_str("ninja = false\n");
+    script.push_str(RUSTC_SOURCE_LLVM_SHARED_TOOL_BUILD_CONFIG);
     script.push_str("MANTLE_RUST_BUILD_CONFIG\n");
     push_rustc_source_build_target_tool_config(script);
     push_rustc_source_bootstrap_workspace_isolation(script);
+    push_rustc_source_musl_rustc_driver_rlib_patch(script);
+    push_rustc_source_musl_sysroot_env_fallback_patch(script);
     script.push_str("printf '%s\\n' \"using generated x.py Rust build adapter: $MANTLE_RUST_SOURCE\"\n");
     script.push_str("if [ -x \"$MANTLE_RUST_SOURCE/");
     script.push_str(RUSTC_SOURCE_XPY_SCRIPT);
@@ -2003,6 +2034,90 @@ fn push_generated_rustc_source_build_script(script: &mut String) {
     script.push_str("\n");
     script.push_str("fi\n");
     script.push_str("MANTLE_RUST_SOURCE_GENERATED_SCRIPT\n");
+}
+
+fn push_rustc_source_musl_rustc_driver_rlib_patch(script: &mut String) {
+    script.push_str(&format!("if [ \"$MANTLE_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script.push_str(
+        "  printf '%s\\n' 'normalizing Rust bootstrap rustc_driver crate type for static musl compiler host'\n",
+    );
+    script.push_str("  rustc_driver_manifest=\"$MANTLE_RUST_SOURCE/");
+    script.push_str(RUSTC_SOURCE_RUSTC_DRIVER_MANIFEST);
+    script.push_str("\"\n");
+    script.push_str(&format!(
+        "  if [ ! -f \"$rustc_driver_manifest\" ]; then printf '%s\\n' 'Rust bootstrap rustc_driver manifest missing before musl host normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  rustc_driver_manifest_tmp=\"$MANTLE_BUILD_DIR/rust-bootstrap-rustc-driver-Cargo.toml\"\n");
+    script.push_str("  rustc_driver_replaced=false\n");
+    script.push_str("  rustc_driver_seen_rlib=false\n");
+    script.push_str("  : > \"$rustc_driver_manifest_tmp\"\n");
+    script.push_str("  while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("    case \"$line\" in\n");
+    script.push_str(&format!(
+        "      {dylib}) printf '%s\\n' {rlib} >> \"$rustc_driver_manifest_tmp\"; rustc_driver_replaced=true ;;\n",
+        dylib = shell_quote(FIRST_STAGE_RUSTC_DRIVER_DYLIB_CRATE_TYPE_LINE),
+        rlib = shell_quote(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE),
+    ));
+    script.push_str(&format!(
+        "      {rlib}) printf '%s\\n' \"$line\" >> \"$rustc_driver_manifest_tmp\"; rustc_driver_seen_rlib=true ;;\n",
+        rlib = shell_quote(FIRST_STAGE_RUSTC_DRIVER_RLIB_CRATE_TYPE_LINE),
+    ));
+    script.push_str("      *) printf '%s\\n' \"$line\" >> \"$rustc_driver_manifest_tmp\" ;;\n");
+    script.push_str("    esac\n");
+    script.push_str("  done < \"$rustc_driver_manifest\"\n");
+    script.push_str(&format!(
+        "  if [ \"$rustc_driver_replaced\" = false ] && [ \"$rustc_driver_seen_rlib\" = false ]; then printf '%s\\n' 'Rust bootstrap rustc_driver manifest lacks expected crate-type line for musl host normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  mv \"$rustc_driver_manifest_tmp\" \"$rustc_driver_manifest\"\n");
+    script.push_str("fi\n");
+}
+
+fn push_rustc_source_musl_sysroot_env_fallback_patch(script: &mut String) {
+    script.push_str(&format!("if [ \"$MANTLE_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script.push_str("  printf '%s\\n' 'normalizing Rust bootstrap sysroot fallback for static musl compiler host'\n");
+    script.push_str("  filesearch_source=\"$MANTLE_RUST_SOURCE/");
+    script.push_str(RUSTC_SOURCE_FILESEARCH_SOURCE);
+    script.push_str("\"\n");
+    script.push_str(&format!(
+        "  if [ ! -f \"$filesearch_source\" ]; then printf '%s\\n' 'Rust bootstrap filesearch source missing before musl sysroot normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  filesearch_tmp=\"$MANTLE_BUILD_DIR/rust-bootstrap-filesearch.rs\"\n");
+    script.push_str("  filesearch_replaced=false\n");
+    script.push_str("  filesearch_seen_env_fallback=false\n");
+    script.push_str("  filesearch_after_from_env=false\n");
+    script.push_str("  : > \"$filesearch_tmp\"\n");
+    script.push_str("  while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("    if [ \"$filesearch_after_from_env\" = true ]; then\n");
+    script.push_str("      case \"$line\" in\n");
+    script.push_str(&format!(
+        "        {dylib_fallback}) printf '%s\\n' {env_fallback} {dylib_fallback} >> \"$filesearch_tmp\"; filesearch_replaced=true; filesearch_after_from_env=false; continue ;;\n",
+        dylib_fallback = shell_quote(RUSTC_SOURCE_FILESEARCH_DYLIB_FALLBACK_LINE),
+        env_fallback = shell_quote(RUSTC_SOURCE_FILESEARCH_ENV_FALLBACK_LINE),
+    ));
+    script.push_str(&format!(
+        "        {env_fallback}) printf '%s\\n' \"$line\" >> \"$filesearch_tmp\"; filesearch_seen_env_fallback=true; filesearch_after_from_env=false; continue ;;\n",
+        env_fallback = shell_quote(RUSTC_SOURCE_FILESEARCH_ENV_FALLBACK_LINE),
+    ));
+    script.push_str("      esac\n");
+    script.push_str("      filesearch_after_from_env=false\n");
+    script.push_str("    fi\n");
+    script.push_str("    case \"$line\" in\n");
+    script.push_str(&format!(
+        "      {from_env}) printf '%s\\n' \"$line\" >> \"$filesearch_tmp\"; filesearch_after_from_env=true; continue ;;\n",
+        from_env = shell_quote(RUSTC_SOURCE_FILESEARCH_DEFAULT_SYSROOT_LINE),
+    ));
+    script.push_str(&format!(
+        "      {env_fallback}) filesearch_seen_env_fallback=true ;;\n",
+        env_fallback = shell_quote(RUSTC_SOURCE_FILESEARCH_ENV_FALLBACK_LINE),
+    ));
+    script.push_str("    esac\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$filesearch_tmp\"\n");
+    script.push_str("  done < \"$filesearch_source\"\n");
+    script.push_str(&format!(
+        "  if [ \"$filesearch_replaced\" = false ] && [ \"$filesearch_seen_env_fallback\" = false ]; then printf '%s\\n' 'Rust bootstrap filesearch source lacks expected sysroot fallback lines for musl host normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  mv \"$filesearch_tmp\" \"$filesearch_source\"\n");
+    script.push_str("fi\n");
 }
 
 fn push_rustc_source_build_env_scrub(script: &mut String) {
@@ -2251,6 +2366,12 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
         "    if [ ! -f \"$target_unwind_archive\" ]; then target_unwind_archive=\"$target_gcc_crt_dir/libgcc.a\"; fi\n",
     );
     script.push_str("    rm -f \"$target_runtime_dir/libunwind.a\"; cp \"$target_unwind_archive\" \"$target_runtime_dir/libunwind.a\"\n");
+    script.push_str(&format!(
+        "    if [ ! -f \"${{{RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}}}/lib/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" ]; then printf '%s\\n' 'Rust bootstrap target musl libc.so missing for dynamic compiler host links' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!(
+        "    rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\"; cp \"${{{RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}}}/lib/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\"\n"
+    ));
     script.push_str("    rm -f \"$target_runtime_dir/libgcc.a\"; cp \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc.a\"\n");
     script.push_str("    printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'set -eu' >> \"$target_alias_dir/cc\"\n");
@@ -2258,6 +2379,22 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     script.push_str(
         "    printf '%s\\n' \"target_runtime_dir=\\\"$target_runtime_dir\\\"\" >> \"$target_alias_dir/cc\"\n",
     );
+    script.push_str("    printf '%s\\n' 'output_path=' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'previous_arg=' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  if [ \"$previous_arg\" = \"-o\" ]; then output_path=\"$arg\"; previous_arg=; continue; fi' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  if [ \"$arg\" = \"-o\" ]; then previous_arg=-o; continue; fi' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'dynamic_rustc_link=false' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'case \"$output_path\" in' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  */stage1/bin/rustc|stage1/bin/rustc|*/stage2/bin/rustc|stage2/bin/rustc) dynamic_rustc_link=true ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'esac' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'shared_link=false' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '    -shared|-dynamiclib) shared_link=true ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'mapped_args_set=false' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
@@ -2266,7 +2403,12 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
         "    printf '%s\\n' '    crt1.o|*/crt1.o|{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|*/{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|crti.o|*/crti.o|crtn.o|*/crtn.o|crtbeginS.o|*/crtbeginS.o|crtendS.o|*/crtendS.o) mapped_arg=\"$target_runtime_dir/${{arg##*/}}\" ;;' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str("    printf '%s\\n' '    -lgcc_s) continue ;;' >> \"$target_alias_dir/cc\"\n");
-    script.push_str("    printf '%s\\n' '    -static-pie) mapped_arg=\"-static\" ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str(
+        "    printf '%s\\n' '    -static) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"$arg\"; fi ;;' >> \"$target_alias_dir/cc\"\n",
+    );
+    script.push_str(
+        "    printf '%s\\n' '    -static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi ;;' >> \"$target_alias_dir/cc\"\n",
+    );
     script.push_str("    printf '%s\\n' '    *) mapped_arg=\"$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '  if [ \"$mapped_args_set\" = false ]; then set -- \"$mapped_arg\"; mapped_args_set=true; else set -- \"$@\" \"$mapped_arg\"; fi' >> \"$target_alias_dir/cc\"\n");
@@ -2276,16 +2418,20 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     );
     script.push_str("    printf '%s\\n' 'link_command=true' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'static_support_link=true' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'dynamic_executable_link=false' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'shared_link=false' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '    -c|-S|-E) link_command=false ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '    -pie) static_support_link=false; dynamic_executable_link=true ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str(
         "    printf '%s\\n' '    -shared|-dynamiclib) static_support_link=false; shared_link=true ;;' >> \"$target_alias_dir/cc\"\n",
     );
     script.push_str("    printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
-    script.push_str("    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$shared_link\" = true ]; then set -- \"$@\" -Wl,-Bstatic -lgcc -Wl,-Bdynamic; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n");
+    script.push_str(&format!(
+        "    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$shared_link\" = true ]; then set -- \"$@\" -Wl,-Bstatic -lgcc -Wl,-Bdynamic; elif [ \"$link_command\" = true ] && {{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }}; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
+    ));
     script.push_str(&format!(
         "    printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
     ));
@@ -2348,6 +2494,7 @@ fn push_rustc_source_build_target_tool_config(script: &mut String) {
     script.push_str("musl-root = \"$");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str("\"\n");
+    script.push_str("crt-static = false\n");
     script.push_str("MANTLE_RUST_TARGET_CONFIG\n");
     script.push_str("fi\n");
 }
@@ -2975,6 +3122,15 @@ fn assemble_rustc_stage1_provider_candidate(
     validate_rustc_stage1_candidate_request(boundary, sources, build)?;
     prepare_empty_provider_candidate_dir(&boundary.provider_candidate_dir)?;
     copy_provider_prefix(&build.stage_output_dir, &boundary.provider_candidate_dir)?;
+    wrap_rustc_stage_provider_dynamic_tools(
+        &boundary.provider_candidate_dir,
+        &boundary
+            .build_dir
+            .join(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR)
+            .join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT),
+        &boundary.host_triple,
+        RUSTC_STAGE1_DYNAMIC_TOOL_SPECS,
+    )?;
     let source_identities = rustc_stage1_provider_source_identities(boundary, sources)?;
     let artifact_source_id = rustc_stage1_artifact_source_id(boundary)?;
     let receipt_artifacts = rustc_stage1_provider_receipt_artifacts(&boundary.provider_candidate_dir, route)?;
@@ -3002,6 +3158,165 @@ fn assemble_rustc_stage1_provider_candidate(
         source_count: validation.validation.source_count,
         receipt_count: validation.validation.receipt_count,
     })
+}
+
+#[derive(Clone, Copy)]
+enum RustProviderDynamicToolSysrootMode {
+    Inject,
+    LoaderOnly,
+}
+
+#[derive(Clone, Copy)]
+struct RustProviderDynamicToolSpec {
+    relative_path: &'static str,
+    sysroot_mode: RustProviderDynamicToolSysrootMode,
+}
+
+const RUSTC_STAGE1_DYNAMIC_TOOL_SPECS: &[RustProviderDynamicToolSpec] = &[
+    RustProviderDynamicToolSpec {
+        relative_path: PROVIDER_RUSTC_RELATIVE_PATH,
+        sysroot_mode: RustProviderDynamicToolSysrootMode::Inject,
+    },
+    RustProviderDynamicToolSpec {
+        relative_path: PROVIDER_CARGO_RELATIVE_PATH,
+        sysroot_mode: RustProviderDynamicToolSysrootMode::LoaderOnly,
+    },
+];
+
+const RUSTC_FINAL_DYNAMIC_TOOL_SPECS: &[RustProviderDynamicToolSpec] = &[
+    RustProviderDynamicToolSpec {
+        relative_path: PROVIDER_RUSTC_RELATIVE_PATH,
+        sysroot_mode: RustProviderDynamicToolSysrootMode::Inject,
+    },
+    RustProviderDynamicToolSpec {
+        relative_path: PROVIDER_CARGO_RELATIVE_PATH,
+        sysroot_mode: RustProviderDynamicToolSysrootMode::LoaderOnly,
+    },
+    RustProviderDynamicToolSpec {
+        relative_path: PROVIDER_RUSTDOC_RELATIVE_PATH,
+        sysroot_mode: RustProviderDynamicToolSysrootMode::Inject,
+    },
+];
+
+fn wrap_rustc_stage_provider_dynamic_tools(
+    candidate_dir: &Path,
+    runtime_loader_path: &Path,
+    host_triple: &str,
+    specs: &[RustProviderDynamicToolSpec],
+) -> Result<(), RustSourceProviderError> {
+    if !runtime_loader_path.is_file() {
+        return Err(RustSourceProviderError::Copy(format!(
+            "Rust bootstrap dynamic runtime loader is missing at {}",
+            runtime_loader_path.display()
+        )));
+    }
+    let runtime_dir = candidate_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_DIR);
+    let provider_loader_path = candidate_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH);
+    fs::create_dir_all(&runtime_dir).map_err(|err| {
+        RustSourceProviderError::Copy(format!("create dynamic runtime dir {}: {err}", runtime_dir.display()))
+    })?;
+    fs::copy(runtime_loader_path, &provider_loader_path).map_err(|err| {
+        RustSourceProviderError::Copy(format!(
+            "copy Rust bootstrap dynamic loader {} -> {}: {err}",
+            runtime_loader_path.display(),
+            provider_loader_path.display()
+        ))
+    })?;
+    make_executable(&provider_loader_path)?;
+    for spec in specs {
+        wrap_rustc_stage_provider_dynamic_tool(candidate_dir, *spec, host_triple)?;
+    }
+    Ok(())
+}
+
+fn wrap_rustc_stage_provider_dynamic_tool(
+    candidate_dir: &Path,
+    spec: RustProviderDynamicToolSpec,
+    host_triple: &str,
+) -> Result<(), RustSourceProviderError> {
+    let wrapper_path = candidate_dir.join(spec.relative_path);
+    if !wrapper_path.is_file() {
+        return Err(RustSourceProviderError::Copy(format!(
+            "Rust bootstrap dynamic tool {} is missing before wrapper installation",
+            wrapper_path.display()
+        )));
+    }
+    let binary_relative_path = format!("{}{}", spec.relative_path, PROVIDER_DYNAMIC_TOOL_BINARY_SUFFIX);
+    let binary_path = candidate_dir.join(&binary_relative_path);
+    if binary_path.exists() {
+        fs::remove_file(&binary_path).map_err(|err| {
+            RustSourceProviderError::Copy(format!("remove stale dynamic tool {}: {err}", binary_path.display()))
+        })?;
+    }
+    fs::rename(&wrapper_path, &binary_path).map_err(|err| {
+        RustSourceProviderError::Copy(format!(
+            "rename dynamic Rust tool {} -> {}: {err}",
+            wrapper_path.display(),
+            binary_path.display()
+        ))
+    })?;
+    make_executable(&binary_path)?;
+    let binary_name = dynamic_tool_binary_name(&binary_relative_path)?;
+    fs::write(
+        &wrapper_path,
+        provider_local_dynamic_rust_tool_wrapper(&binary_name, host_triple, spec.sysroot_mode),
+    )
+    .map_err(|err| {
+        RustSourceProviderError::Copy(format!("write dynamic tool wrapper {}: {err}", wrapper_path.display()))
+    })?;
+    make_executable(&wrapper_path)
+}
+
+fn dynamic_tool_binary_name(binary_relative_path: &str) -> Result<String, RustSourceProviderError> {
+    Path::new(binary_relative_path)
+        .file_name()
+        .and_then(OsStr::to_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            RustSourceProviderError::Copy(format!(
+                "dynamic Rust tool relative path lacks a UTF-8 file name: {binary_relative_path}"
+            ))
+        })
+}
+
+fn provider_local_dynamic_rust_tool_wrapper(
+    tool_binary_name: &str,
+    host_triple: &str,
+    sysroot_mode: RustProviderDynamicToolSysrootMode,
+) -> String {
+    let sysroot_injection = match sysroot_mode {
+        RustProviderDynamicToolSysrootMode::Inject => {
+            "has_sysroot=false\n\
+for arg in \"$@\"; do\n\
+  if [ \"$arg\" = \"--sysroot\" ]; then has_sysroot=true; break; fi\n\
+  case \"$arg\" in --sysroot=*) has_sysroot=true; break ;; esac\n\
+done\n\
+if [ \"$has_sysroot\" = false ]; then set -- --sysroot \"$root_dir\" \"$@\"; fi\n"
+        }
+        RustProviderDynamicToolSysrootMode::LoaderOnly => "",
+    };
+    format!(
+        "#!/bin/sh\n\
+set -eu\n\
+self_dir=${{0%/*}}\n\
+case \"$self_dir\" in\n\
+  /*) ;;\n\
+  *) self_dir=\"$(pwd -P)/$self_dir\" ;;\n\
+esac\n\
+root_dir=$(cd \"$self_dir/..\" && pwd -P)\n\
+runtime_dir=\"$root_dir/{FIRST_STAGE_PROC_MACRO_RUNTIME_DIR}\"\n\
+loader=\"$root_dir/{FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH}\"\n\
+ld_path=\"$runtime_dir:$root_dir/lib:$root_dir/lib/rustlib/{host_triple}/lib\"\n\
+if [ \"${{LD_LIBRARY_PATH+x}}\" = x ] && [ -n \"${{LD_LIBRARY_PATH}}\" ]; then\n\
+  ld_path=\"$ld_path:$LD_LIBRARY_PATH\"\n\
+fi\n\
+if [ ! -x \"$loader\" ]; then\n\
+  printf '%s\\n' \"provider dynamic runtime loader missing: $loader\" >&2\n\
+  exit {PROVIDER_DYNAMIC_TOOL_RUNTIME_MISSING_EXIT_CODE}\n\
+fi\n\
+{sysroot_injection}\
+LD_LIBRARY_PATH=\"$ld_path\" exec \"$loader\" \"$self_dir/{tool_binary_name}\" \"$@\"\n"
+    )
 }
 
 fn smoke_rustc_stage1_provider_candidate(
@@ -3240,6 +3555,15 @@ fn assemble_rustc_final_provider_candidate(
     validate_rustc_final_candidate_request(boundary, sources, build)?;
     prepare_empty_provider_candidate_dir(&boundary.provider_candidate_dir)?;
     copy_provider_prefix(&build.stage_output_dir, &boundary.provider_candidate_dir)?;
+    wrap_rustc_stage_provider_dynamic_tools(
+        &boundary.provider_candidate_dir,
+        &boundary
+            .build_dir
+            .join(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR)
+            .join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT),
+        &boundary.host_triple,
+        RUSTC_FINAL_DYNAMIC_TOOL_SPECS,
+    )?;
     let source_identities = rustc_final_provider_source_identities(boundary, sources)?;
     let artifact_source_id = rustc_final_artifact_source_id(boundary)?;
     let receipt_artifacts = rustc_final_provider_receipt_artifacts(&boundary.provider_candidate_dir, route)?;
@@ -3592,6 +3916,7 @@ fn assemble_first_stage_provider_candidate(
     validate_first_stage_candidate_request(boundary, sources, build)?;
     prepare_empty_provider_candidate_dir(&boundary.provider_candidate_dir)?;
     copy_provider_prefix(&build.prefix_path, &boundary.provider_candidate_dir)?;
+    install_first_stage_proc_macro_capable_rustc(boundary, build)?;
     normalize_first_stage_provider_wrappers(&boundary.provider_candidate_dir, &boundary.host_triple)?;
     let source_identities = first_stage_provider_source_identities(boundary, sources)?;
     let build_sources = first_stage_build_sources(boundary)?;
@@ -3672,6 +3997,109 @@ fn copy_provider_prefix(src: &Path, dst: &Path) -> Result<(), RustSourceProvider
         return Err(RustSourceProviderError::Copy(format!("provider prefix {} was empty", src.display())));
     }
     Ok(())
+}
+
+fn file_has_elf_magic(path: &Path) -> Result<bool, RustSourceProviderError> {
+    let mut file = File::open(path)
+        .map_err(|err| RustSourceProviderError::Read(format!("open {} for ELF detection: {err}", path.display())))?;
+    let mut magic = [0_u8; ELF_MAGIC_LEN];
+    let bytes_read = file
+        .read(&mut magic)
+        .map_err(|err| RustSourceProviderError::Read(format!("read {} ELF magic: {err}", path.display())))?;
+    if bytes_read != ELF_MAGIC_LEN {
+        return Ok(false);
+    }
+    Ok(magic == ELF_MAGIC)
+}
+
+fn install_first_stage_proc_macro_capable_rustc(
+    boundary: &RustSourceProviderFirstStageBoundary,
+    build: &RustSourceProviderFirstStageBuild,
+) -> Result<(), RustSourceProviderError> {
+    if boundary.host_triple != FIRST_STAGE_MUSL_TRIPLE {
+        return Ok(());
+    }
+    assert_eq!(boundary.host_triple, FIRST_STAGE_MUSL_TRIPLE);
+    assert!(!boundary.target_triple.trim().is_empty(), "target triple must not be empty");
+    let candidate_dir = &boundary.provider_candidate_dir;
+    let dynamic_rustc_path = &build.translated_rustc_path;
+    let runtime_loader_path = boundary
+        .build_dir
+        .join(FIRST_STAGE_TARGET_LINKER_RUNTIME_DIR)
+        .join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT);
+    install_first_stage_proc_macro_capable_rustc_from_paths(
+        candidate_dir,
+        dynamic_rustc_path,
+        &runtime_loader_path,
+        &boundary.host_triple,
+    )
+}
+
+fn install_first_stage_proc_macro_capable_rustc_from_paths(
+    candidate_dir: &Path,
+    dynamic_rustc_path: &Path,
+    runtime_loader_path: &Path,
+    host_triple: &str,
+) -> Result<(), RustSourceProviderError> {
+    assert!(!candidate_dir.as_os_str().is_empty(), "candidate dir must not be empty");
+    assert!(!host_triple.trim().is_empty(), "host triple must not be empty");
+    if !dynamic_rustc_path.is_file() {
+        return Err(RustSourceProviderError::Copy(format!(
+            "proc-macro-capable first-stage rustc is missing at {}",
+            dynamic_rustc_path.display()
+        )));
+    }
+    if !runtime_loader_path.is_file() {
+        return Err(RustSourceProviderError::Copy(format!(
+            "first-stage proc-macro runtime loader is missing at {}",
+            runtime_loader_path.display()
+        )));
+    }
+    if !file_has_elf_magic(dynamic_rustc_path)? {
+        #[cfg(test)]
+        {
+            return Ok(());
+        }
+        #[cfg(not(test))]
+        {
+            return Err(RustSourceProviderError::Copy(format!(
+                "proc-macro-capable first-stage rustc is not an ELF binary at {}",
+                dynamic_rustc_path.display()
+            )));
+        }
+    }
+    let rustc_binary_path = candidate_dir.join(PROVIDER_MRUSTC_RUSTC_BINARY_RELATIVE_PATH);
+    let runtime_dir = candidate_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_DIR);
+    let runtime_loader_candidate_path = candidate_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH);
+    fs::create_dir_all(&runtime_dir).map_err(|err| {
+        RustSourceProviderError::Copy(format!("create proc-macro runtime dir {}: {err}", runtime_dir.display()))
+    })?;
+    fs::copy(dynamic_rustc_path, &rustc_binary_path).map_err(|err| {
+        RustSourceProviderError::Copy(format!(
+            "copy proc-macro-capable rustc {} -> {}: {err}",
+            dynamic_rustc_path.display(),
+            rustc_binary_path.display()
+        ))
+    })?;
+    make_executable(&rustc_binary_path)?;
+    fs::copy(runtime_loader_path, &runtime_loader_candidate_path).map_err(|err| {
+        RustSourceProviderError::Copy(format!(
+            "copy first-stage proc-macro loader {} -> {}: {err}",
+            runtime_loader_path.display(),
+            runtime_loader_candidate_path.display()
+        ))
+    })?;
+    make_executable(&runtime_loader_candidate_path)?;
+    let rustc_sysroot_binary_path = candidate_dir.join(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH);
+    prepare_provider_rustc_sysroot_binary_link(&rustc_binary_path, &rustc_sysroot_binary_path)?;
+    let rustc_path = candidate_dir.join(PROVIDER_RUSTC_RELATIVE_PATH);
+    fs::write(&rustc_path, provider_local_dynamic_mrustc_rustc_wrapper(host_triple)).map_err(|err| {
+        RustSourceProviderError::Copy(format!(
+            "write proc-macro-capable first-stage rustc wrapper {}: {err}",
+            rustc_path.display()
+        ))
+    })?;
+    make_executable(&rustc_path)
 }
 
 fn normalize_first_stage_provider_wrappers(
@@ -3769,7 +4197,48 @@ ld_path=\"$root_dir/lib:$root_dir/lib/rustlib/{host_triple}/lib\"\n\
 if [ \"${{LD_LIBRARY_PATH+x}}\" = x ] && [ -n \"${{LD_LIBRARY_PATH}}\" ]; then\n\
   ld_path=\"$ld_path:$LD_LIBRARY_PATH\"\n\
 fi\n\
-LD_LIBRARY_PATH=\"$ld_path\" exec \"$self_dir/rustc_binary.sysroot\" --sysroot \"$root_dir\" \"$@\"\n"
+has_sysroot=false\n\
+for arg in \"$@\"; do\n\
+  case \"$arg\" in\n\
+    --sysroot|--sysroot=*) has_sysroot=true ;;\n\
+  esac\n\
+done\n\
+if [ \"$has_sysroot\" = false ]; then\n\
+  set -- --sysroot \"$root_dir\" \"$@\"\n\
+fi\n\
+LD_LIBRARY_PATH=\"$ld_path\" exec \"$self_dir/rustc_binary.sysroot\" \"$@\"\n"
+    )
+}
+
+fn provider_local_dynamic_mrustc_rustc_wrapper(host_triple: &str) -> String {
+    format!(
+        "#!/bin/sh\n\
+set -eu\n\
+self=$0\n\
+case \"$self\" in\n\
+  */*) self_dir=${{self%/*}} ;;\n\
+  *) self_dir=. ;;\n\
+esac\n\
+case \"$self_dir\" in\n\
+  */bin) root_dir=${{self_dir%/bin}} ;;\n\
+  *) root_dir=$self_dir/.. ;;\n\
+esac\n\
+runtime_dir=\"$root_dir/{FIRST_STAGE_PROC_MACRO_RUNTIME_DIR}\"\n\
+loader=\"$root_dir/{FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH}\"\n\
+ld_path=\"$runtime_dir:$root_dir/lib:$root_dir/lib/rustlib/{host_triple}/lib\"\n\
+if [ \"${{LD_LIBRARY_PATH+x}}\" = x ] && [ -n \"${{LD_LIBRARY_PATH}}\" ]; then\n\
+  ld_path=\"$ld_path:$LD_LIBRARY_PATH\"\n\
+fi\n\
+has_sysroot=false\n\
+for arg in \"$@\"; do\n\
+  case \"$arg\" in\n\
+    --sysroot|--sysroot=*) has_sysroot=true ;;\n\
+  esac\n\
+done\n\
+if [ \"$has_sysroot\" = false ]; then\n\
+  set -- --sysroot \"$root_dir\" \"$@\"\n\
+fi\n\
+LD_LIBRARY_PATH=\"$ld_path\" exec \"$loader\" \"$self_dir/{PROVIDER_MRUSTC_RUSTC_BINARY_BASENAME}\" \"$@\"\n"
     )
 }
 
@@ -4832,10 +5301,12 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("printf '%s\\n' 'output_path=' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'previous_arg=' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'rustc_main_response_file=false' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' 'shared_link=false' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  if [ \"$previous_arg\" = \"-o\" ]; then output_path=\"$arg\"; previous_arg=; continue; fi' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    -static-pie) static_pie_normalized=true ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("printf '%s\\n' '    -shared|-dynamiclib) shared_link=true ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    -o) previous_arg=-o ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    @*/output/rustc-build/rustc_main_cmd.txt|@output/rustc-build/rustc_main_cmd.txt) rustc_main_response_file=true ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
@@ -4856,7 +5327,10 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str(&format!(
         "printf '%s\\n' '    crt1.o|*/crt1.o|{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|*/{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|crti.o|*/crti.o|crtn.o|*/crtn.o|crtbeginS.o|*/crtbeginS.o|crtendS.o|*/crtendS.o) mapped_arg=\"$target_runtime_dir/${{arg##*/}}\" ;;' >> \"$target_alias_dir/cc\"\n"
     ));
-    script.push_str("printf '%s\\n' '    -static-pie) if [ \"$dynamic_rustc_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str(
+        "printf '%s\\n' '    -static) if [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"$arg\"; fi ;;' >> \"$target_alias_dir/cc\"\n",
+    );
+    script.push_str("printf '%s\\n' '    -static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '    *) mapped_arg=\"$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' '  if [ \"$mapped_args_set\" = false ]; then set -- \"$mapped_arg\"; mapped_args_set=true; else set -- \"$@\" \"$mapped_arg\"; fi' >> \"$target_alias_dir/cc\"\n");
@@ -6532,6 +7006,25 @@ mod tests {
         assert!(rustc_stage1_log.contains("rustc stage1 products ready"));
         let rustc_stage1_script = fs::read_to_string(scratch.join(RUSTC_STAGE1_SCRIPT_FILE)).unwrap();
         assert!(rustc_stage1_script.contains("using Rust bootstrap target linker wrapper"));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_SHARED_TOOL_BUILD_CONFIG.trim_end()));
+        assert!(rustc_stage1_script.contains("LLVM_TOOL_LTO_BUILD"));
+        assert!(rustc_stage1_script.contains("LLVM_TOOL_REMARKS_SHLIB_BUILD"));
+        assert!(
+            rustc_stage1_script
+                .contains("normalizing Rust bootstrap rustc_driver crate type for static musl compiler host")
+        );
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_RUSTC_DRIVER_MANIFEST));
+        assert!(rustc_stage1_script.contains(
+            "Rust bootstrap rustc_driver manifest lacks expected crate-type line for musl host normalization"
+        ));
+        assert!(
+            rustc_stage1_script.contains("normalizing Rust bootstrap sysroot fallback for static musl compiler host")
+        );
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_FILESEARCH_SOURCE));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_FILESEARCH_ENV_FALLBACK_LINE));
+        assert!(rustc_stage1_script.contains(
+            "Rust bootstrap filesearch source lacks expected sysroot fallback lines for musl host normalization"
+        ));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_ALIAS_DIR));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR));
         assert!(
@@ -6543,15 +7036,38 @@ mod tests {
         assert!(rustc_stage1_script.contains("--remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array"));
         assert!(rustc_stage1_script.contains("rcrt1.o|*/rcrt1.o) mapped_arg=\"$target_runtime_dir/crt1.o\""));
         assert!(rustc_stage1_script.contains("-lgcc_s) continue"));
-        assert!(rustc_stage1_script.contains("-static-pie) mapped_arg=\"-static\""));
+        assert!(rustc_stage1_script.contains("dynamic_rustc_link=false"));
+        assert!(rustc_stage1_script.contains(
+            "*/stage1/bin/rustc|stage1/bin/rustc|*/stage2/bin/rustc|stage2/bin/rustc) dynamic_rustc_link=true"
+        ));
+        assert!(rustc_stage1_script.contains("dynamic_executable_link=false"));
         assert!(rustc_stage1_script.contains("shared_link=false"));
+        assert!(rustc_stage1_script.contains("-pie) static_support_link=false; dynamic_executable_link=true"));
+        assert!(rustc_stage1_script.contains("-shared|-dynamiclib) shared_link=true"));
         assert!(rustc_stage1_script.contains("-shared|-dynamiclib) static_support_link=false; shared_link=true"));
+        assert!(rustc_stage1_script.contains(
+            "-static) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"$arg\"; fi"
+        ));
+        assert!(rustc_stage1_script.contains(
+            "-static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
+        ));
         assert!(rustc_stage1_script.contains("-B\"$target_runtime_dir/\" -L\"$target_runtime_dir\""));
+        assert!(rustc_stage1_script.contains("MANTLE_RUST_TOOLS='[\"cargo\"]'"));
+        assert!(rustc_stage1_script.contains("*' rustdoc '*) MANTLE_RUST_TOOLS='[\"cargo\", \"rustdoc\"]'"));
+        assert!(rustc_stage1_script.contains("tools = $MANTLE_RUST_TOOLS"));
+        assert!(rustc_stage1_script.contains("cargo-native-static = true"));
+        assert!(
+            rustc_stage1_script.contains("Rust bootstrap target musl libc.so missing for dynamic compiler host links")
+        );
         assert!(rustc_stage1_script.contains("set -- \"$@\" -Wl,-Bstatic -lgcc -Wl,-Bdynamic"));
+        assert!(rustc_stage1_script.contains(
+            "{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/libc.so\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"
+        ));
         assert!(
             rustc_stage1_script
                 .contains("set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group")
         );
+        assert!(rustc_stage1_script.contains("crt-static = false"));
         assert!(rustc_stage1_script.contains("__atomic_compare_exchange_16"));
         assert!(rustc_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
@@ -6617,7 +7133,14 @@ mod tests {
         assert!(script.contains("export PATH"));
         assert!(script.contains("static_pie_normalized=false"));
         assert!(script.contains("MANTLE_TARGET_CC_PATH"));
+        assert!(script.contains("-shared|-dynamiclib) shared_link=true"));
         assert!(script.contains("-shared|-dynamiclib) static_support_link=false"));
+        assert!(
+            script.contains("-static) if [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"$arg\"; fi")
+        );
+        assert!(script.contains(
+            "-static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
+        ));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS));
         assert!(script.contains(
             "-static -Wl,--wrap=pthread_key_create -Wl,--wrap=pthread_key_delete -Wl,--wrap=pthread_getspecific -Wl,--wrap=pthread_setspecific -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"
@@ -6631,7 +7154,7 @@ mod tests {
         assert!(script.contains("rcrt1.o|*/rcrt1.o) mapped_arg=\"$target_runtime_dir/crt1.o\""));
         assert!(script.contains("crt1.o|*/crt1.o|Scrt1.o|*/Scrt1.o|crti.o|*/crti.o|crtn.o|*/crtn.o|crtbeginS.o|*/crtbeginS.o|crtendS.o|*/crtendS.o) mapped_arg=\"$target_runtime_dir/${arg##*/}\""));
         assert!(script.contains(
-            "-static-pie) if [ \"$dynamic_rustc_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
+            "-static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
         ));
         assert!(script.contains("$target_runtime_dir/musl-lfs-compat.o\" -no-pie -Wl,-Bdynamic"));
         assert!(!script.contains("-Wl,-Bdynamic -pie"));
@@ -6969,9 +7492,12 @@ mod tests {
         assert!(rustc_stage1_log.contains("isolated Rust Cargo workspace"));
         assert!(rustc_stage1_log.contains("using generated x.py Rust build adapter"));
         assert!(rustc_stage1_log.contains("synthetic x.py for 1.91.1"));
+        assert!(rustc_stage1_log.contains("install rustc cargo library/std"));
+        assert!(!rustc_stage1_log.contains("install rustc cargo rustdoc"));
         let generated_stage1_script =
             fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_STAGE1_GENERATED_BUILD_SCRIPT)).unwrap();
         assert!(generated_stage1_script.contains("change-id = \"ignore\""));
+        assert!(generated_stage1_script.contains("cargo-native-static = true"));
         assert!(generated_stage1_script.contains("ninja = false"));
         assert!(generated_stage1_script.contains("sysconfdir = \"etc\""));
         assert!(generated_stage1_script.contains("target = [\"$MANTLE_HOST_TRIPLE\", \"$MANTLE_TARGET_TRIPLE\"]"));
@@ -7003,8 +7529,7 @@ mod tests {
         assert!(rustc_final_log.contains("isolated Rust Cargo workspace"));
         assert!(rustc_final_log.contains("using generated x.py Rust build adapter"));
         assert!(rustc_final_log.contains("synthetic x.py for 1.94.0"));
-        assert!(rustc_final_log.contains("install rustc cargo library/std"));
-        assert!(!rustc_final_log.contains("install rustc cargo rustdoc"));
+        assert!(rustc_final_log.contains("install rustc cargo rustdoc library/std"));
     }
 
     #[test]
@@ -7442,6 +7967,110 @@ mod tests {
 
         assert!(err.to_string().contains("references missing"));
         assert!(wrapper.contains(MRUSTC_RUSTC_WRAPPER_DIRNAME_MARKER));
+        assert!(!provider_dir.join(PROVIDER_MRUSTC_RUSTC_BINARY_RELATIVE_PATH).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn first_stage_proc_macro_rustc_install_writes_relocatable_loader_wrapper() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        let dynamic_rustc = dir.path().join("dynamic-rustc");
+        let runtime_loader = dir.path().join("libc.so");
+        let mut dynamic_rustc_bytes = ELF_MAGIC.to_vec();
+        dynamic_rustc_bytes.extend_from_slice(b"dynamic rustc");
+        fs::create_dir_all(provider_dir.join("bin")).unwrap();
+        write_bytes(&provider_dir, PROVIDER_RUSTC_RELATIVE_PATH, b"old wrapper");
+        fs::write(&dynamic_rustc, &dynamic_rustc_bytes).unwrap();
+        fs::write(&runtime_loader, b"runtime loader").unwrap();
+
+        install_first_stage_proc_macro_capable_rustc_from_paths(
+            &provider_dir,
+            &dynamic_rustc,
+            &runtime_loader,
+            FIRST_STAGE_MUSL_TRIPLE,
+        )
+        .unwrap();
+        let wrapper = fs::read_to_string(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH)).unwrap();
+
+        assert!(wrapper.contains(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH));
+        assert!(wrapper.contains("exec \"$loader\" \"$self_dir/rustc_binary\""));
+        assert!(wrapper.contains("--sysroot \"$root_dir\""));
+        assert!(wrapper.contains("LD_LIBRARY_PATH=\"$ld_path\""));
+        assert_eq!(
+            fs::read(provider_dir.join(PROVIDER_MRUSTC_RUSTC_BINARY_RELATIVE_PATH)).unwrap(),
+            dynamic_rustc_bytes
+        );
+        assert_eq!(
+            fs::read(provider_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH)).unwrap(),
+            b"runtime loader"
+        );
+        assert!(
+            fs::symlink_metadata(provider_dir.join(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn first_stage_proc_macro_rustc_wrapper_skips_duplicate_sysroot() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        let loader_path = provider_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH);
+        let explicit_sysroot = dir.path().join("explicit-sysroot");
+        fs::create_dir_all(provider_dir.join("bin")).unwrap();
+        fs::create_dir_all(loader_path.parent().unwrap()).unwrap();
+        fs::write(&loader_path, b"#!/bin/sh\nfor arg in \"$@\"; do printf '<%s>\\n' \"$arg\"; done\n").unwrap();
+        fs::write(
+            provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH),
+            provider_local_dynamic_mrustc_rustc_wrapper(FIRST_STAGE_MUSL_TRIPLE),
+        )
+        .unwrap();
+        make_executable(&loader_path);
+        make_executable(&provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH));
+
+        let implicit_output = Command::new(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH)).output().unwrap();
+        let explicit_output = Command::new(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH))
+            .arg("--sysroot")
+            .arg(&explicit_sysroot)
+            .output()
+            .unwrap();
+        let implicit_stdout = String::from_utf8(implicit_output.stdout).unwrap();
+        let explicit_stdout = String::from_utf8(explicit_output.stdout).unwrap();
+        let explicit_sysroot_line = format!("<{}>", explicit_sysroot.display());
+        let provider_sysroot_line = format!("<{}>", provider_dir.display());
+
+        assert!(implicit_output.status.success());
+        assert!(explicit_output.status.success());
+        assert!(implicit_stdout.contains("<--sysroot>"));
+        assert!(implicit_stdout.contains(&provider_sysroot_line));
+        assert!(explicit_stdout.contains("<--sysroot>"));
+        assert!(explicit_stdout.contains(&explicit_sysroot_line));
+        assert!(!explicit_stdout.contains(&provider_sysroot_line));
+        assert_eq!(explicit_stdout.lines().filter(|line| *line == "<--sysroot>").count(), 1);
+    }
+
+    #[test]
+    fn first_stage_proc_macro_rustc_install_rejects_missing_runtime_loader() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        let dynamic_rustc = dir.path().join("dynamic-rustc");
+        let missing_runtime_loader = dir.path().join("missing-libc.so");
+        fs::create_dir_all(provider_dir.join("bin")).unwrap();
+        fs::write(&dynamic_rustc, b"dynamic rustc").unwrap();
+
+        let err = install_first_stage_proc_macro_capable_rustc_from_paths(
+            &provider_dir,
+            &dynamic_rustc,
+            &missing_runtime_loader,
+            FIRST_STAGE_MUSL_TRIPLE,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("proc-macro runtime loader is missing"));
+        assert!(!provider_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH).exists());
         assert!(!provider_dir.join(PROVIDER_MRUSTC_RUSTC_BINARY_RELATIVE_PATH).exists());
     }
 
@@ -8098,15 +8727,15 @@ let Plan = {
     }
 
     fn test_rustc_stage1_build_script() -> &'static [u8] {
-        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic stage1 rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic stage1 cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic stage1 rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic stage1 cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
     }
 
     fn test_rustc_final_build_script() -> &'static [u8] {
-        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic final cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic final cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
     }
 
     fn test_rustc_xpy_script() -> &'static [u8] {
-        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic xpy cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic xpy cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {

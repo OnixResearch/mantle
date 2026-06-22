@@ -1523,3 +1523,146 @@ The generated-script assertions now require `-lgcc_s` to be dropped,
 `shared_link` tracking, the shared-only `-Wl,-Bstatic -lgcc -Wl,-Bdynamic`
 fallback, and the existing executable-only static support path. Rerun 30 is the
 authoritative full-provider proof.
+
+## 2026-06-22 addendum: Rust bootstrap Cargo static feature config
+
+Commit under edit after rerun 30 Cargo/OpenSSL diagnosis.
+
+Rerun 30 and its scratch continuations reached Rust-bootstrap Cargo tool
+build/install work. Cargo's default feature set pulled the curl/OpenSSL path and
+failed because the source-root musl provider does not expose an OpenSSL
+installation to `openssl-sys`. Rust bootstrap already has a reviewable config
+knob for this route: `[build] cargo-native-static = true`. The source fix writes
+that knob into the generated x.py config, which makes bootstrap add Cargo's
+`all-static` feature instead of relying on ambient OpenSSL. The same edit keeps
+stage1 `tools = ["cargo"]` and reserves `tools = ["cargo", "rustdoc"]` for final
+build goals containing `rustdoc`.
+
+Local validation also repaired two stale test-fixture issues in the same source
+area: escaped the shell grouping braces inside the generated Rust-bootstrap
+linker wrapper's Rust `format!` string, and made synthetic x.py/stage scripts
+remove the copied read-only musl `libc.so` before writing their fake loader.
+
+Focused validation after the change:
+
+```text
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts --jobs 1 -- --nocapture
+# pueue task 186
+test rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 813 filtered out; finished in 2.18s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts --jobs 1 -- --nocapture
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo test -p mantle --bin mantle rust_source_provider::tests::first_stage_proc_macro_rustc_wrapper_skips_duplicate_sysroot --jobs 1 -- --nocapture
+# pueue task 199
+test rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 813 filtered out; finished in 2.10s
+
+test rust_source_provider::tests::first_stage_proc_macro_rustc_wrapper_skips_duplicate_sysroot ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 813 filtered out; finished in 0.01s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan --jobs 1 -- --nocapture
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate --jobs 1 -- --nocapture
+# pueue task 41
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 813 filtered out; finished in 0.92s
+
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 813 filtered out; finished in 0.88s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs && git diff --check
+# pueue task 45 completed successfully.
+```
+
+The generated-script assertions now require `cargo-native-static = true`, the
+stage1 cargo-only/final rustdoc tool split, duplicate-sysroot preservation in
+provider rustc wrappers, and the existing shared/static linker wrapper branches.
+A fresh committed full rerun is still required before claiming provider
+completion.
+
+Cairn validation transcript saved at
+`target/first-stage-musl-host-llvm-runtime-cairn-2026-06-22-cargo-static.txt`:
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "803388ce9574ff5e8af7826bbda61396f07e5bdf7ba3e370287073aff85cbe88",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "e5d8b99d26b51ab1ba6cfb6966fecb444131f289c7d8741bf4f20238e8448eac",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "4f8ed8a193c57329b90adfe810d2658e9765d1ba1511364bf5ae7202e06b4391",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "b9afac7e3499f279b4f3b3ec2a3b21c41cfe2055ed1736f9f529bc4ec6fb1ac0",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "c62c3f4ae6aa017062968569d566491882073a4bc9430b9dada17f67c95dc41e",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "e0f5cf2c6387538e81b43146f76f4c92d40d34616e59693074512295f882f36a",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```

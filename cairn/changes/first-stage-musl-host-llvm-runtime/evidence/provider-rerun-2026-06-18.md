@@ -860,3 +860,45 @@ against appending executable-only `-static` while giving proc-macro dylibs a
 reviewable libgcc source. Focused validation is recorded in
 `focused-validation-2026-06-18.md`; a fresh committed rerun 30 is required to
 prove full provider progress beyond rerun 29.
+
+## Rerun 30 scratch: Rust bootstrap Cargo static feature diagnosis
+
+Rerun 30 is preserved at
+`target/rust-source-provider-musl-host-route-crt-normalization-rerun30-2026-06-22`.
+The authoritative source result before the latest edit reached Rust-bootstrap
+Cargo tool work and exposed the Cargo/OpenSSL frontier: Cargo's default
+`http-transport-curl` feature path pulled `openssl-sys`, which failed because the
+source-root musl route has no declared OpenSSL installation.
+
+A scratch continuation manually inserted `cargo-native-static = true` into the
+rerun30 generated Rust-bootstrap config and confirmed the written config carried
+that knob:
+
+```text
+$ rg 'cargo-native-static|tools =|vendor = true|build-dir' .../rustc-stage1-build/mantle-rust-build-config.toml
+10-extended = true
+11:tools = ["cargo"]
+12:vendor = true
+13:cargo-native-static = true
+14:build-dir = ".../rustc-stage1-build/rust-build"
+```
+
+The attempted continuation was queued as pueue task `193` and failed with status
+`1`, but it is not authoritative provider evidence: the outer scratch runner was
+from an older generated heredoc and overwrote the dynamic Rust-bootstrap linker
+branches that the current source now generates. Its failure therefore regressed
+to a stale proc-macro lookup symptom instead of proving the next real frontier:
+
+```text
+error[E0463]: can't find crate for `ref_cast_impl`
+   --> .../vendor/ref-cast-1.0.24/src/lib.rs:155:9
+155 | pub use ref_cast_impl::{ref_cast_custom, RefCast, RefCastCustom};
+    |         ^^^^^^^^^^^^^ can't find crate
+error: could not compile `ref-cast` (lib) due to 1 previous error
+Build completed unsuccessfully in 0:02:01
+```
+
+Focused validation for the committed source-side `cargo-native-static` config is
+recorded in `focused-validation-2026-06-18.md`. A fresh committed rerun 31 from a
+regenerated script is required before claiming frontier movement beyond the
+Cargo/OpenSSL diagnosis or provider completion.
