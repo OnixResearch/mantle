@@ -1014,21 +1014,10 @@ pub(crate) fn smoke_rust_source_provider(
     fs::write(&plan.source_path, source).map_err(|err| {
         RustSourceProviderError::Smoke(format!("write smoke source {}: {err}", plan.source_path.display()))
     })?;
+    let rustc_args = smoke_rustc_args(&plan);
     let output = Command::new(&plan.rustc_path)
         .env_clear()
-        .arg("--sysroot")
-        .arg(&plan.provider_dir)
-        .arg("--target")
-        .arg(&plan.target_triple)
-        .arg("--crate-name")
-        .arg(SMOKE_CRATE_NAME)
-        .arg("--crate-type")
-        .arg("lib")
-        .arg("--emit")
-        .arg("link")
-        .arg(&plan.source_path)
-        .arg("-o")
-        .arg(&plan.output_path)
+        .args(&rustc_args)
         .output()
         .map_err(|err| RustSourceProviderError::Smoke(format!("launch {}: {err}", plan.rustc_path.display())))?;
     let stdout = bounded_output_text(&output.stdout);
@@ -5558,6 +5547,25 @@ fn smoke_source_text() -> String {
     )
 }
 
+fn smoke_rustc_args(plan: &RustSourceProviderSmokePlan) -> Vec<OsString> {
+    let args = vec![
+        OsString::from("--target"),
+        OsString::from(&plan.target_triple),
+        OsString::from("--crate-name"),
+        OsString::from(SMOKE_CRATE_NAME),
+        OsString::from("--crate-type"),
+        OsString::from("lib"),
+        OsString::from("--emit"),
+        OsString::from("link"),
+        plan.source_path.clone().into_os_string(),
+        OsString::from("-o"),
+        plan.output_path.clone().into_os_string(),
+    ];
+    debug_assert!(args.iter().any(|arg| arg == "--target"));
+    debug_assert!(!args.iter().any(|arg| arg == "--sysroot"));
+    args
+}
+
 fn bounded_output_text(bytes: &[u8]) -> String {
     if bytes.len() <= SMOKE_OUTPUT_CAPTURE_BYTES {
         return String::from_utf8_lossy(bytes).to_string();
@@ -5838,6 +5846,7 @@ mod tests {
     const HOST_TRIPLE: &str = "x86_64-unknown-linux-gnu";
     const TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
     const SYNTHETIC_RLIB_BYTES: &[u8] = b"synthetic rlib\n";
+    const SYNTHETIC_RUSTC_UNEXPECTED_SYSROOT_EXIT_CODE: u32 = 3;
     const FIRST_STAGE_TEST_SOURCE_COUNT: usize = 2;
     const RUSTC_STAGE1_TEST_SOURCE_COUNT: usize = 1;
     const RUSTC_STAGE1_BOOTSTRAP_PROVIDER_SOURCE_COUNT: usize = 1;
@@ -7296,6 +7305,29 @@ mod tests {
         assert!(smoke.stderr.is_empty());
     }
 
+    #[test]
+    fn smoke_rustc_args_do_not_duplicate_provider_wrapper_sysroot() {
+        let provider_dir = PathBuf::from("provider");
+        let scratch_dir = PathBuf::from("scratch");
+        let plan = RustSourceProviderSmokePlan {
+            provider_dir: provider_dir.clone(),
+            scratch_dir: scratch_dir.clone(),
+            rustc_path: provider_dir.join("bin/rustc"),
+            source_path: scratch_dir.join(SMOKE_SOURCE_FILE),
+            output_path: scratch_dir.join(SMOKE_OUTPUT_FILE),
+            target_triple: TARGET_TRIPLE.to_string(),
+        };
+
+        let args = smoke_rustc_args(&plan);
+
+        assert!(!args.iter().any(|arg| arg == "--sysroot"));
+        assert!(!args.iter().any(|arg| arg.to_string_lossy().starts_with("--sysroot=")));
+        assert!(args.iter().any(|arg| arg == "--target"));
+        assert!(args.iter().any(|arg| arg == TARGET_TRIPLE));
+        assert!(args.iter().any(|arg| arg == SMOKE_CRATE_NAME));
+        assert!(args.iter().any(|arg| arg.to_string_lossy().ends_with(SMOKE_OUTPUT_FILE)));
+    }
+
     #[cfg(unix)]
     #[test]
     fn smoke_evidence_persists_summary_output_and_metadata() {
@@ -7942,7 +7974,7 @@ let Plan = {
 
     #[cfg(unix)]
     fn write_synthetic_smoke_provider(root: &Path, sentinel_path: Option<&Path>) -> RustSourceProviderMetadata {
-        write_bytes(root, "bin/rustc", synthetic_rustc_script(sentinel_path).as_bytes());
+        write_bytes(root, "bin/rustc", synthetic_smoke_rustc_script(sentinel_path).as_bytes());
         make_executable(&root.join("bin/rustc"));
         write_bytes(root, "bin/cargo", b"cargo");
         write_bytes(root, "lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib", b"host-std");
@@ -7964,6 +7996,15 @@ let Plan = {
             sentinel_path.map(|path| format!("printf launched > '{}'\n", path.display())).unwrap_or_default();
         format!(
             "#!/bin/sh\n{sentinel_write}out=''\nprev=''\nfor arg in \"$@\"; do\n  if [ \"$prev\" = '-o' ]; then out=\"$arg\"; prev=''; continue; fi\n  if [ \"$arg\" = '-o' ]; then prev='-o'; continue; fi\ndone\nif [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi\nprintf 'synthetic rlib\\n' > \"$out\"\necho synthetic rustc smoke\n"
+        )
+    }
+
+    #[cfg(unix)]
+    fn synthetic_smoke_rustc_script(sentinel_path: Option<&Path>) -> String {
+        let sentinel_write =
+            sentinel_path.map(|path| format!("printf launched > '{}'\n", path.display())).unwrap_or_default();
+        format!(
+            "#!/bin/sh\n{sentinel_write}out=''\nprev=''\nfor arg in \"$@\"; do\n  if [ \"$prev\" = '--sysroot' ]; then echo unexpected-sysroot-value >&2; exit {SYNTHETIC_RUSTC_UNEXPECTED_SYSROOT_EXIT_CODE}; fi\n  case \"$arg\" in --sysroot|--sysroot=*) echo unexpected-sysroot >&2; exit {SYNTHETIC_RUSTC_UNEXPECTED_SYSROOT_EXIT_CODE} ;; esac\n  if [ \"$prev\" = '-o' ]; then out=\"$arg\"; prev=''; continue; fi\n  if [ \"$arg\" = '-o' ]; then prev='-o'; continue; fi\ndone\nif [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi\nprintf 'synthetic rlib\\n' > \"$out\"\necho synthetic rustc smoke\n"
         )
     }
 
