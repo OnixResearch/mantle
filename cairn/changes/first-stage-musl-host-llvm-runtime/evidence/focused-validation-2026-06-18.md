@@ -1445,3 +1445,48 @@ produced `libtest-79eac707c335c2b4.rlib` with no `error:`, `SIGSEGV`, or
 `failed` markers in stderr. This scratch continuation is directional only; a
 fresh committed full rerun is still required before claiming provider
 completion.
+
+## 2026-06-22 addendum: Rust bootstrap target linker wrapper
+
+Commit under edit after rerun 28 diagnosis.
+
+Rerun 28 proved the `crtbeginS.o` frame-init sanitization cleared rerun 27 and
+advanced into the Rust 1.91.1 stage1 bootstrap. The new failure was not a
+first-stage mrustc frontier: x.py/Cargo used the source-root musl GCC directly
+for target build-script links, so bare `rcrt1.o`/`crti.o`/`crtbeginS.o` and
+`-lunwind` could not be found. The source fix makes the generated Rust-bootstrap
+adapter create a target linker alias/runtime directory, copy/sanitize CRT and
+unwind objects, build the local `libatomic.a` shim, and write Rust bootstrap
+`[target.<triple>]` `cc`/`cxx`/`ar`/`ranlib`/`linker` entries that point at those
+aliases.
+
+Focused validation after the change:
+
+```text
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan -- --nocapture
+# pueue task 548
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 810 filtered out; finished in 0.98s
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate -- --nocapture
+# pueue task 548
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 810 filtered out; finished in 0.67s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+$ git diff --check
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+# pueue task 549 completed successfully; tasks gate verdict: PASS
+```
+
+The generated-script assertions now require the Rust-bootstrap wrapper path,
+private runtime directory, CRT object mapping, `-static-pie` to `-static`
+normalization, `-B`/`-L` runtime flags, local `libatomic.a` shim source, and
+`linker = "$MANTLE_TARGET_CC"` after `MANTLE_TARGET_CC` is rewritten to the
+wrapper alias. This remains focused validation; rerun 29 is the authoritative
+full-provider proof.

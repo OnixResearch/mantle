@@ -117,6 +117,8 @@ const RUSTC_SOURCE_CRANELIFT_MANIFEST: &str = "compiler/rustc_codegen_cranelift/
 const RUSTC_SOURCE_CODEGEN_GCC_MANIFEST: &str = "compiler/rustc_codegen_gcc/Cargo.toml";
 const RUSTC_SOURCE_GENERATED_CONFIG_FILE: &str = "mantle-rust-build-config.toml";
 const RUSTC_SOURCE_GENERATED_CARGO_HOME_DIR: &str = "cargo-home";
+const RUSTC_SOURCE_TARGET_LINKER_ALIAS_DIR: &str = "rust-bootstrap-target-linker-bin";
+const RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR: &str = "rust-bootstrap-target-linker-runtime";
 const RUSTC_SOURCE_TARGET_CC_VAR: &str = "MANTLE_TARGET_CC";
 const RUSTC_SOURCE_TARGET_CXX_VAR: &str = "MANTLE_TARGET_CXX";
 const RUSTC_SOURCE_TARGET_AR_VAR: &str = "MANTLE_TARGET_AR";
@@ -2167,7 +2169,8 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("/lib/crt1.o\" ] && [ -f \"$");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str("/lib/rcrt1.o\" ]; then\n");
-    script.push_str("    PATH=\"$target_tool_dir:$PATH\"\n");
+    push_rustc_source_target_linker_wrapper(script);
+    script.push_str("    PATH=\"$target_alias_dir:$target_tool_dir:$PATH\"\n");
     script.push_str("    export ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str(" ");
@@ -2179,7 +2182,7 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str(" ");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str(" PATH\n");
-    script.push_str("    printf '%s\\n' \"using Rust bootstrap target tools from: $target_tool_dir\"\n");
+    script.push_str("    printf '%s\\n' \"using Rust bootstrap target linker wrapper: $target_alias_dir/cc -> $target_cc_path; runtime CRT/unwind dir: $target_runtime_dir\"\n");
     script.push_str("  else\n");
     script
         .push_str("    printf '%s\\n' \"Rust bootstrap target tool directory is incomplete: $target_tool_dir\" >&2\n");
@@ -2192,6 +2195,123 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
         "  printf '%s\\n' 'Rust bootstrap target musl compiler was not found in PATH or fallback store paths' >&2\n",
     );
     script.push_str("fi\n");
+}
+
+fn push_rustc_source_target_linker_wrapper(script: &mut String) {
+    script.push_str("    target_cc_path=\"$");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("\"\n");
+    script.push_str("    target_cxx_path=\"$");
+    script.push_str(RUSTC_SOURCE_TARGET_CXX_VAR);
+    script.push_str("\"\n");
+    script.push_str("    target_ar_path=\"$");
+    script.push_str(RUSTC_SOURCE_TARGET_AR_VAR);
+    script.push_str("\"\n");
+    script.push_str("    target_ranlib_path=\"$");
+    script.push_str(RUSTC_SOURCE_TARGET_RANLIB_VAR);
+    script.push_str("\"\n");
+    script.push_str("    target_objcopy_program=$target_tool_prefix-objcopy\n");
+    script.push_str("    target_orig_cc_root=\"$target_wrapper_root\"\n");
+    script.push_str("    if [ -f \"$target_wrapper_root/");
+    script.push_str(FIRST_STAGE_TARGET_NIX_SUPPORT_DIR);
+    script.push_str("/");
+    script.push_str(FIRST_STAGE_TARGET_NIX_ORIG_CC_FILE);
+    script.push_str("\" ]; then\n");
+    script.push_str("      IFS= read -r target_orig_cc_root < \"$target_wrapper_root/");
+    script.push_str(FIRST_STAGE_TARGET_NIX_SUPPORT_DIR);
+    script.push_str("/");
+    script.push_str(FIRST_STAGE_TARGET_NIX_ORIG_CC_FILE);
+    script.push_str("\" || true\n");
+    script.push_str("    fi\n");
+    script.push_str("    target_gcc_crt_machine=$target_cc_machine\n");
+    script.push_str("    target_gcc_version=$(\"$target_cc_path\" -dumpfullversion 2>/dev/null || \"$target_cc_path\" -dumpversion 2>/dev/null || true)\n");
+    script.push_str(
+        "    target_gcc_crt_dir=\"$target_orig_cc_root/lib/gcc/$target_gcc_crt_machine/$target_gcc_version\"\n",
+    );
+    script.push_str("    if [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ]; then for candidate_dir in \"$target_orig_cc_root\"/lib/gcc/\"$target_gcc_crt_machine\"/*; do if [ -f \"$candidate_dir/crtbeginS.o\" ]; then target_gcc_crt_dir=\"$candidate_dir\"; break; fi; done; fi\n");
+    script.push_str(&format!(
+        "    if [ ! -f \"${RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}/lib/crt1.o\" ] || [ ! -f \"${RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}/lib/{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}\" ] || [ ! -f \"${RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}/lib/rcrt1.o\" ] || [ ! -f \"${RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}/lib/crti.o\" ] || [ ! -f \"${RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}/lib/crtn.o\" ] || [ ! -f \"$target_gcc_crt_dir/crtbeginS.o\" ] || [ ! -f \"$target_gcc_crt_dir/crtendS.o\" ] || [ ! -f \"$target_gcc_crt_dir/libgcc.a\" ] || [ ! -x \"$target_tool_dir/$target_objcopy_program\" ]; then printf '%s\\n' 'Rust bootstrap target toolchain does not expose musl/gcc CRT, unwinder, and objcopy objects' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!("    target_alias_dir=\"$MANTLE_BUILD_DIR/{RUSTC_SOURCE_TARGET_LINKER_ALIAS_DIR}\"\n"));
+    script
+        .push_str(&format!("    target_runtime_dir=\"$MANTLE_BUILD_DIR/{RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR}\"\n"));
+    script.push_str("    mkdir -p \"$target_alias_dir\" \"$target_runtime_dir\"\n");
+    script.push_str(&format!(
+        "    for crt_name in crt1.o {FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT} rcrt1.o crti.o crtn.o; do rm -f \"$target_runtime_dir/$crt_name\"; cp \"${RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}/lib/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n"
+    ));
+    script.push_str("    for crt_name in crtbeginS.o crtendS.o; do rm -f \"$target_runtime_dir/$crt_name\"; cp \"$target_gcc_crt_dir/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n");
+    script.push_str("    target_crtbegin_no_frame_init=\"$target_runtime_dir/crtbeginS.o.no-frame-init\"\n");
+    script.push_str("    rm -f \"$target_crtbegin_no_frame_init\"\n");
+    script.push_str("    \"$target_tool_dir/$target_objcopy_program\" --remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array \"$target_runtime_dir/crtbeginS.o\" \"$target_crtbegin_no_frame_init\"\n");
+    script.push_str("    rm -f \"$target_runtime_dir/crtbeginS.o\"\n");
+    script.push_str("    cp \"$target_crtbegin_no_frame_init\" \"$target_runtime_dir/crtbeginS.o\"\n");
+    script.push_str("    rm -f \"$target_crtbegin_no_frame_init\"\n");
+    script.push_str("    target_unwind_archive=\"$target_gcc_crt_dir/libgcc_eh.a\"\n");
+    script.push_str(
+        "    if [ ! -f \"$target_unwind_archive\" ]; then target_unwind_archive=\"$target_gcc_crt_dir/libgcc.a\"; fi\n",
+    );
+    script.push_str("    rm -f \"$target_runtime_dir/libunwind.a\"; cp \"$target_unwind_archive\" \"$target_runtime_dir/libunwind.a\"\n");
+    script.push_str("    rm -f \"$target_runtime_dir/libgcc.a\"; cp \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc.a\"\n");
+    script.push_str("    printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'set -eu' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' \"target_cc_path=\\\"\\${MANTLE_TARGET_CC_PATH:-$target_cc_path}\\\"\" >> \"$target_alias_dir/cc\"\n");
+    script.push_str(
+        "    printf '%s\\n' \"target_runtime_dir=\\\"$target_runtime_dir\\\"\" >> \"$target_alias_dir/cc\"\n",
+    );
+    script.push_str("    printf '%s\\n' 'mapped_args_set=false' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '    rcrt1.o|*/rcrt1.o) mapped_arg=\"$target_runtime_dir/crt1.o\" ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str(&format!(
+        "    printf '%s\\n' '    crt1.o|*/crt1.o|{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|*/{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|crti.o|*/crti.o|crtn.o|*/crtn.o|crtbeginS.o|*/crtbeginS.o|crtendS.o|*/crtendS.o) mapped_arg=\"$target_runtime_dir/${{arg##*/}}\" ;;' >> \"$target_alias_dir/cc\"\n"
+    ));
+    script.push_str("    printf '%s\\n' '    -static-pie) mapped_arg=\"-static\" ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '    *) mapped_arg=\"$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  if [ \"$mapped_args_set\" = false ]; then set -- \"$mapped_arg\"; mapped_args_set=true; else set -- \"$@\" \"$mapped_arg\"; fi' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
+    script.push_str(
+        "    printf '%s\\n' 'if [ \"$mapped_args_set\" = false ]; then set --; fi' >> \"$target_alias_dir/cc\"\n",
+    );
+    script.push_str("    printf '%s\\n' 'link_command=true' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'static_support_link=true' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '    -c|-S|-E) link_command=false ;;' >> \"$target_alias_dir/cc\"\n");
+    script.push_str(
+        "    printf '%s\\n' '    -shared|-dynamiclib) static_support_link=false ;;' >> \"$target_alias_dir/cc\"\n",
+    );
+    script.push_str("    printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n");
+    script.push_str(&format!(
+        "    printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
+    ));
+    script.push_str("    chmod +x \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/c++\"\n");
+    script.push_str("    printf '%s\\n' 'set -eu' >> \"$target_alias_dir/c++\"\n");
+    script.push_str(
+        "    printf '%s\\n' \"MANTLE_TARGET_CC_PATH=\\\"$target_cxx_path\\\"\" >> \"$target_alias_dir/c++\"\n",
+    );
+    script.push_str("    printf '%s\\n' 'export MANTLE_TARGET_CC_PATH' >> \"$target_alias_dir/c++\"\n");
+    script.push_str(
+        "    printf '%s\\n' \"exec \\\"$target_alias_dir/cc\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/c++\"\n",
+    );
+    script.push_str("    chmod +x \"$target_alias_dir/c++\"\n");
+    script.push_str("    for target_tool in ar ranlib; do case \"$target_tool\" in ar) target_program=\"$target_ar_path\" ;; ranlib) target_program=\"$target_ranlib_path\" ;; esac; printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; done\n");
+    push_first_stage_target_musl_libatomic_shim(script);
+    script.push_str("    ");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("=\"$target_alias_dir/cc\"\n");
+    script.push_str("    ");
+    script.push_str(RUSTC_SOURCE_TARGET_CXX_VAR);
+    script.push_str("=\"$target_alias_dir/c++\"\n");
+    script.push_str("    ");
+    script.push_str(RUSTC_SOURCE_TARGET_AR_VAR);
+    script.push_str("=\"$target_alias_dir/ar\"\n");
+    script.push_str("    ");
+    script.push_str(RUSTC_SOURCE_TARGET_RANLIB_VAR);
+    script.push_str("=\"$target_alias_dir/ranlib\"\n");
 }
 
 fn push_rustc_source_build_target_tool_config(script: &mut String) {
@@ -6408,6 +6528,26 @@ mod tests {
         let rustc_stage1_log = fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
         assert!(rustc_stage1_log.contains("mantle rustc stage1"));
         assert!(rustc_stage1_log.contains("rustc stage1 products ready"));
+        let rustc_stage1_script = fs::read_to_string(scratch.join(RUSTC_STAGE1_SCRIPT_FILE)).unwrap();
+        assert!(rustc_stage1_script.contains("using Rust bootstrap target linker wrapper"));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_ALIAS_DIR));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR));
+        assert!(
+            rustc_stage1_script.contains(
+                "Rust bootstrap target toolchain does not expose musl/gcc CRT, unwinder, and objcopy objects"
+            )
+        );
+        assert!(rustc_stage1_script.contains("target_objcopy_program=$target_tool_prefix-objcopy"));
+        assert!(rustc_stage1_script.contains("--remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array"));
+        assert!(rustc_stage1_script.contains("rcrt1.o|*/rcrt1.o) mapped_arg=\"$target_runtime_dir/crt1.o\""));
+        assert!(rustc_stage1_script.contains("-static-pie) mapped_arg=\"-static\""));
+        assert!(rustc_stage1_script.contains("-B\"$target_runtime_dir/\" -L\"$target_runtime_dir\""));
+        assert!(
+            rustc_stage1_script
+                .contains("set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group")
+        );
+        assert!(rustc_stage1_script.contains("__atomic_compare_exchange_16"));
+        assert!(rustc_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains("missing verified source"));
         assert!(script.contains("verified sources manifest"));

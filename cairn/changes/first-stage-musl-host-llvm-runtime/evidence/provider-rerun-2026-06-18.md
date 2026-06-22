@@ -781,5 +781,50 @@ the target GCC and strips those frame-init/fini sections from the copied
 `crtbeginS.o` in the first-stage target runtime directory. Focused validation is
 recorded in `focused-validation-2026-06-18.md` and the durable transcript
 `target/rust-source-provider-crtbegin-frame-init-validation-2026-06-22.log`.
-This remains directional until a fresh committed rerun 28 proves the full
-provider moves past rerun 27.
+
+## Rerun 28: first Rust bootstrap target-linker runtime frontier
+
+Rerun 28 from commit `a8463ffa` proved the `crtbeginS.o` frame-init
+sanitization cleared the rerun-27 `compiler_builtins` build-script startup
+segfault and advanced past the mrustc first-stage provider into the next Rust
+bootstrap stage:
+
+- Pueue task: `541`
+- Commit: `a8463ffa`
+- Run root: `target/rust-source-provider-musl-host-route-crt-normalization-rerun28-2026-06-22`
+- Result: failed closed with status `1` in `rustc-stage1-build`.
+- Log: `target/rust-source-provider-musl-host-route-crt-normalization-rerun28-2026-06-22/tmp/mantle-rust-source-provider-2OEGdf/rustc-stage1-build.log`
+
+Top-level status excerpt:
+
+```text
+commit=a8463ffa
+run_root=target/rust-source-provider-musl-host-route-crt-normalization-rerun28-2026-06-22
+status=1
+```
+
+The new frontier is that Rust's x.py/Cargo bootstrap invoked the source-root
+musl GCC directly for host/target build scripts, bypassing Mantle's private CRT
+runtime linker wrapper. The failing `serde_json`/`serde`/`semver`/`proc-macro2`
+build-script links therefore passed bare CRT and unwind arguments without the
+private `-B`/`-L` runtime directory:
+
+```text
+linking with `/nix/store/...-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin/x86_64-unknown-linux-musl-gcc` failed
+... "rcrt1.o" "crti.o" "crtbeginS.o" ... "-lunwind" ... "crtendS.o" "crtn.o"
+ld: cannot find rcrt1.o: No such file or directory
+ld: cannot find crti.o: No such file or directory
+ld: cannot find crtbeginS.o: No such file or directory
+ld: cannot find -lunwind: No such file or directory
+ld: cannot find crtendS.o: No such file or directory
+ld: cannot find crtn.o: No such file or directory
+```
+
+The follow-up source fix extends the generated Rust-bootstrap build adapter to
+prepare its own target linker runtime/alias directory under the stage1 build
+directory. The adapter copies musl CRT objects, copies GCC CRT/unwind archives,
+strips the same `crtbeginS.o` frame init/fini hooks with target `objcopy`, builds
+the local `libatomic.a` shim, and points Rust bootstrap `[target.<triple>]`
+`cc`/`cxx`/`ar`/`ranlib`/`linker` entries at those aliases. Focused validation is
+recorded in `focused-validation-2026-06-18.md`. A fresh committed rerun 29 is
+required to prove full provider progress beyond rerun 28.
