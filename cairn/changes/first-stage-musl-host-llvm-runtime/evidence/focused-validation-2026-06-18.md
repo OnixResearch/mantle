@@ -1359,3 +1359,89 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-22 addendum: `crtbeginS.o` frame-init sanitization
+
+Commit under edit after rerun 27 diagnosis.
+
+Rerun 27 reached `run_rustc` stage-2 `compiler_builtins` and failed before the
+build script's `main`: the generated `build_script_build-*` binary was a static
+`ET_EXEC` with no dynamic section and exited with signal 139. GDB showed the
+crash in `strlen -> get_cie_encoding -> classify_object_over_fdes ->
+__register_frame_info -> frame_dummy`. Scratch inspection showed the copied
+first-stage target `crtbeginS.o` contributes `frame_dummy` through
+`.init_array`/`.fini_array` and an empty `.eh_frame`, causing bad frame
+registration at process startup. The source fix makes the generated target
+runtime setup require target `objcopy` and strip `.init_array`,
+`.rela.init_array`, `.fini_array`, and `.rela.fini_array` from the copied
+`crtbeginS.o` before the target linker wrapper maps CRT arguments to that
+runtime copy.
+
+Focused validation transcript saved at
+`target/rust-source-provider-crtbegin-frame-init-validation-2026-06-22.log`:
+
+```text
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan -- --nocapture
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 810 filtered out; finished in 0.72s
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate -- --nocapture
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 810 filtered out; finished in 0.64s
+
+$ git diff --check
+diff-check: ok
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+Directional scratch proof from rerun 27 is included in the same transcript: the
+scratch wrapper was restored to static behavior, only `crtbeginS.o` frame
+init/fini hooks were stripped, and rerunning
+`make -C run_rustc DYLIB_EXT=rlib output/prefix-2/lib/rustlib/x86_64-unknown-linux-musl/lib/libtest.rlib`
+produced `libtest-79eac707c335c2b4.rlib` with no `error:`, `SIGSEGV`, or
+`failed` markers in stderr. This scratch continuation is directional only; a
+fresh committed full rerun is still required before claiming provider
+completion.

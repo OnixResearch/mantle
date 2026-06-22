@@ -4652,6 +4652,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("target_cxx_program=$target_tool_prefix-g++\n");
     script.push_str("target_ar_program=$target_tool_prefix-ar\n");
     script.push_str("target_ranlib_program=$target_tool_prefix-ranlib\n");
+    script.push_str("target_objcopy_program=$target_tool_prefix-objcopy\n");
     script.push_str(&format!("target_nix_support=\"$target_wrapper_root/{FIRST_STAGE_TARGET_NIX_SUPPORT_DIR}\"\n"));
     script
         .push_str(&format!("target_orig_libc_file=\"$target_nix_support/{FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE}\"\n"));
@@ -4682,6 +4683,15 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
         "for crt_name in crt1.o {FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT} rcrt1.o crti.o crtn.o; do rm -f \"$target_runtime_dir/$crt_name\"; $COPY_PROGRAM \"$target_musl_crt_dir/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n"
     ));
     script.push_str("for crt_name in crtbeginS.o crtendS.o; do rm -f \"$target_runtime_dir/$crt_name\"; $COPY_PROGRAM \"$target_gcc_crt_dir/$crt_name\" \"$target_runtime_dir/$crt_name\"; done\n");
+    script.push_str(&format!(
+        "if [ ! -x \"$target_tool_dir/$target_objcopy_program\" ]; then printf '%s\\n' 'target gcc toolchain does not expose objcopy for CRT normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("target_crtbegin_no_frame_init=\"$target_runtime_dir/crtbeginS.o.no-frame-init\"\n");
+    script.push_str("rm -f \"$target_crtbegin_no_frame_init\"\n");
+    script.push_str("\"$target_tool_dir/$target_objcopy_program\" --remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array \"$target_runtime_dir/crtbeginS.o\" \"$target_crtbegin_no_frame_init\"\n");
+    script.push_str("rm -f \"$target_runtime_dir/crtbeginS.o\"\n");
+    script.push_str("$COPY_PROGRAM \"$target_crtbegin_no_frame_init\" \"$target_runtime_dir/crtbeginS.o\"\n");
+    script.push_str("rm -f \"$target_crtbegin_no_frame_init\"\n");
     script.push_str("target_unwind_archive=\"$target_gcc_crt_dir/libgcc_eh.a\"\n");
     script.push_str(
         "if [ ! -f \"$target_unwind_archive\" ]; then target_unwind_archive=\"$target_gcc_crt_dir/libgcc.a\"; fi\n",
@@ -6429,6 +6439,10 @@ mod tests {
         assert!(script.contains("target_libc_root=\"$target_wrapper_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT\""));
         assert!(script.contains("target_gcc_crt_machine=$target_cc_machine"));
         assert!(script.contains("target_cxx_program=$target_tool_prefix-g++"));
+        assert!(script.contains("target_objcopy_program=$target_tool_prefix-objcopy"));
+        assert!(script.contains("target gcc toolchain does not expose objcopy for CRT normalization"));
+        assert!(script.contains("--remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array"));
+        assert!(script.contains("target_crtbegin_no_frame_init=\"$target_runtime_dir/crtbeginS.o.no-frame-init\""));
         assert!(script.contains("preparing source-root musl LLVM host compiler runtime"));
         assert!(script.contains("source-root musl LLVM host wrapper tools are incomplete"));
         assert!(script.contains("source-root musl libstdc++.a missing for LLVM host build"));

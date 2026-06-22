@@ -712,3 +712,74 @@ direct-vv-exit=0
 Commit `f00b2b6e normalize absolute musl CRT paths` follows this frontier by mapping both bare and absolute CRT object arguments in the generated target linker wrapper.
 
 The scratch continuation is directional only. A fresh committed full rerun from the CRT-normalization fix is required before claiming provider completion.
+
+## Reruns 24-27: final Cargo static-link and `crtbeginS.o` frame-init frontiers
+
+Rerun 24 from the absolute-CRT normalization fix reached the final Cargo binary
+link and failed resolving OpenSSL libraries (`cannot find -lssl` and `cannot
+find -lcrypto`). Commit `2af48ba1 make first-stage Cargo self-contained`
+patches the first-stage `run_rustc/Makefile` Cargo build line to use
+`--features all-static`, switching Cargo away from the default curl/OpenSSL
+transport. Focused validation for that commit is recorded in
+`focused-validation-2026-06-18.md` and the durable transcript
+`target/rust-source-provider-crtbegin-frame-init-validation-2026-06-22.log`
+inherits its generated-script assertions.
+
+Rerun 25 then exposed a provider smoke problem, not a build frontier: Mantle's
+smoke command passed `--sysroot` to the normalized provider `bin/rustc` wrapper,
+which already injects its explicit sysroot. Commit `324e4253 avoid duplicate
+provider sysroot in smoke` removes the smoke-side duplicate while preserving the
+provider wrapper's explicit sysroot behavior.
+
+Rerun 26 advanced to the dynamic `rustc_main` temporary executable and failed
+because the wrapper tried to link it as PIE against the source-root musl
+`libstdc++.a` non-PIE archive. Commit `81981479 link first-stage rustc main
+without PIE` keeps only the dynamic temporary rustc link non-PIE using `crt1.o`,
+`-no-pie`, and `-Wl,-Bdynamic`; executable-only static support still skips
+`-shared|-dynamiclib`, and final static links still use the static path.
+
+Rerun 27 from commit `81981479` reached the `run_rustc` stage-2 sysroot and
+failed while executing the generated `compiler_builtins` build script:
+
+- Pueue task: `499`
+- Commit: `81981479`
+- Run root: `target/rust-source-provider-musl-host-route-crt-normalization-rerun27-2026-06-22`
+- Result: failed closed with status `1` after `build_script_build-*` exited with signal 139.
+- Log: `target/rust-source-provider-musl-host-route-crt-normalization-rerun27-2026-06-22/tmp/mantle-rust-source-provider-gA92zy/mrustc-first-stage-build.log`
+
+Diagnostic artifacts preserved under `target/` show the binary was static
+`ET_EXEC`, had no dynamic section, and crashed in startup before Rust `main`:
+
+```text
+SIGSEGV in strlen -> get_cie_encoding -> classify_object_over_fdes ->
+__register_frame_info -> frame_dummy
+```
+
+Dynamic-linking only that build script was tested directionally and still
+segfaulted in the same `frame_dummy` registration path, so the fix must not be
+implemented by disabling build scripts or by dynamically linking build scripts.
+The actual CRT root cause is the copied target `crtbeginS.o`: it contributes a
+`frame_dummy` `.init_array` entry and an empty `.eh_frame`, causing
+`__register_frame_info` to register a bad frame range before the build script's
+main function.
+
+A rerun-27 scratch continuation restored the original static wrapper behavior,
+then sanitized only the copied `crtbeginS.o` by removing `.init_array`,
+`.rela.init_array`, `.fini_array`, and `.rela.fini_array`. Rerunning the focused
+stage-2 target succeeded:
+
+```text
+$ make -C run_rustc DYLIB_EXT=rlib output/prefix-2/lib/rustlib/x86_64-unknown-linux-musl/lib/libtest.rlib
+[CARGO] ../rustc-1.90.0-src/library/test/Cargo.toml > output/build-std2
+scratch-error-scan: no error/SIGSEGV/failed markers
+scratch produced libtest artifacts:
+.../libtest-79eac707c335c2b4.rlib
+```
+
+The source fix generated after that diagnosis requires target `objcopy` next to
+the target GCC and strips those frame-init/fini sections from the copied
+`crtbeginS.o` in the first-stage target runtime directory. Focused validation is
+recorded in `focused-validation-2026-06-18.md` and the durable transcript
+`target/rust-source-provider-crtbegin-frame-init-validation-2026-06-22.log`.
+This remains directional until a fresh committed rerun 28 proves the full
+provider moves past rerun 27.
