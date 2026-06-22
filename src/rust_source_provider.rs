@@ -2265,6 +2265,7 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     script.push_str(&format!(
         "    printf '%s\\n' '    crt1.o|*/crt1.o|{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|*/{FIRST_STAGE_TARGET_MUSL_DYNAMIC_PIE_CRT_OBJECT}|crti.o|*/crti.o|crtn.o|*/crtn.o|crtbeginS.o|*/crtbeginS.o|crtendS.o|*/crtendS.o) mapped_arg=\"$target_runtime_dir/${{arg##*/}}\" ;;' >> \"$target_alias_dir/cc\"\n"
     ));
+    script.push_str("    printf '%s\\n' '    -lgcc_s) continue ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '    -static-pie) mapped_arg=\"-static\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '    *) mapped_arg=\"$arg\" ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
@@ -2275,15 +2276,16 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     );
     script.push_str("    printf '%s\\n' 'link_command=true' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'static_support_link=true' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'shared_link=false' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'for arg in \"$@\"; do' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '  case \"$arg\" in' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' '    -c|-S|-E) link_command=false ;;' >> \"$target_alias_dir/cc\"\n");
     script.push_str(
-        "    printf '%s\\n' '    -shared|-dynamiclib) static_support_link=false ;;' >> \"$target_alias_dir/cc\"\n",
+        "    printf '%s\\n' '    -shared|-dynamiclib) static_support_link=false; shared_link=true ;;' >> \"$target_alias_dir/cc\"\n",
     );
     script.push_str("    printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
-    script.push_str("    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n");
+    script.push_str("    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$shared_link\" = true ]; then set -- \"$@\" -Wl,-Bstatic -lgcc -Wl,-Bdynamic; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n");
     script.push_str(&format!(
         "    printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
     ));
@@ -6540,8 +6542,12 @@ mod tests {
         assert!(rustc_stage1_script.contains("target_objcopy_program=$target_tool_prefix-objcopy"));
         assert!(rustc_stage1_script.contains("--remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array"));
         assert!(rustc_stage1_script.contains("rcrt1.o|*/rcrt1.o) mapped_arg=\"$target_runtime_dir/crt1.o\""));
+        assert!(rustc_stage1_script.contains("-lgcc_s) continue"));
         assert!(rustc_stage1_script.contains("-static-pie) mapped_arg=\"-static\""));
+        assert!(rustc_stage1_script.contains("shared_link=false"));
+        assert!(rustc_stage1_script.contains("-shared|-dynamiclib) static_support_link=false; shared_link=true"));
         assert!(rustc_stage1_script.contains("-B\"$target_runtime_dir/\" -L\"$target_runtime_dir\""));
+        assert!(rustc_stage1_script.contains("set -- \"$@\" -Wl,-Bstatic -lgcc -Wl,-Bdynamic"));
         assert!(
             rustc_stage1_script
                 .contains("set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group")

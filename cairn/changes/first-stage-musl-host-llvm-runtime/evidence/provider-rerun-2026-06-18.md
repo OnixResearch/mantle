@@ -826,5 +826,37 @@ directory. The adapter copies musl CRT objects, copies GCC CRT/unwind archives,
 strips the same `crtbeginS.o` frame init/fini hooks with target `objcopy`, builds
 the local `libatomic.a` shim, and points Rust bootstrap `[target.<triple>]`
 `cc`/`cxx`/`ar`/`ranlib`/`linker` entries at those aliases. Focused validation is
-recorded in `focused-validation-2026-06-18.md`. A fresh committed rerun 29 is
-required to prove full provider progress beyond rerun 28.
+recorded in `focused-validation-2026-06-18.md`.
+
+## Rerun 29: Rust bootstrap shared proc-macro libgcc frontier
+
+Rerun 29 from commit `a95e22cd` proved the Rust-bootstrap target linker wrapper
+cleared rerun 28's missing bare CRT and `-lunwind` failure for early build
+scripts. It advanced to shared proc-macro links in the Rust bootstrap graph:
+
+- Pueue task: `554`
+- Commit: `a95e22cd`
+- Run root: `target/rust-source-provider-musl-host-route-crt-normalization-rerun29-2026-06-22`
+- Result: failed closed with status `1` in `rustc-stage1-build`.
+- Log: `target/rust-source-provider-musl-host-route-crt-normalization-rerun29-2026-06-22/tmp/mantle-rust-source-provider-ablJPC/rustc-stage1-build.log`
+
+The new frontier is shared `proc-macro` dylib linking. Rust passed `-shared` and
+`-lgcc_s`, but the source-root musl GCC closure has only static `libgcc.a` and no
+`libgcc_s.so*`:
+
+```text
+using Rust bootstrap target linker wrapper: .../rust-bootstrap-target-linker-bin/cc -> /nix/store/...-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin/x86_64-unknown-linux-musl-gcc
+error: linking with `.../rust-bootstrap-target-linker-bin/cc` failed
+... "-Wl,-Bdynamic" "-lgcc_s" "-lc" ... "-shared" ...
+ld: cannot find -lgcc_s: No such file or directory
+error: could not compile `clap_derive` (lib) due to 1 previous error
+error: could not compile `serde_derive` (lib) due to 1 previous error
+```
+
+The follow-up source fix keeps the wrapper's executable-only static support, but
+for shared links drops unavailable `-lgcc_s` and appends static `-lgcc` under
+`-Wl,-Bstatic ... -Wl,-Bdynamic`. This preserves the `-shared|-dynamiclib` guard
+against appending executable-only `-static` while giving proc-macro dylibs a
+reviewable libgcc source. Focused validation is recorded in
+`focused-validation-2026-06-18.md`; a fresh committed rerun 30 is required to
+prove full provider progress beyond rerun 29.

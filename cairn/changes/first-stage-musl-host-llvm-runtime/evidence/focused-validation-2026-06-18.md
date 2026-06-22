@@ -1490,3 +1490,36 @@ normalization, `-B`/`-L` runtime flags, local `libatomic.a` shim source, and
 `linker = "$MANTLE_TARGET_CC"` after `MANTLE_TARGET_CC` is rewritten to the
 wrapper alias. This remains focused validation; rerun 29 is the authoritative
 full-provider proof.
+
+## 2026-06-22 addendum: Rust bootstrap shared libgcc fallback
+
+Commit under edit after rerun 29 diagnosis.
+
+Rerun 29 proved the Rust-bootstrap target linker wrapper cleared the missing
+bare CRT and `-lunwind` frontier for early build-script links. It advanced to
+shared proc-macro links (`clap_derive`, `serde_derive`) where Rust passed
+`-shared` and `-lgcc_s`, but the source-root musl GCC closure has no
+`libgcc_s.so*`. The source fix keeps `-shared|-dynamiclib` links out of the
+executable-only `-static` support path, drops unavailable `-lgcc_s`, and appends
+`-Wl,-Bstatic -lgcc -Wl,-Bdynamic` only for shared links.
+
+Focused validation after the change:
+
+```text
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan -- --nocapture
+# pueue task 581
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 810 filtered out; finished in 1.09s
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate -- --nocapture
+# pueue task 581
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 810 filtered out; finished in 0.72s
+```
+
+The generated-script assertions now require `-lgcc_s` to be dropped,
+`shared_link` tracking, the shared-only `-Wl,-Bstatic -lgcc -Wl,-Bdynamic`
+fallback, and the existing executable-only static support path. Rerun 30 is the
+authoritative full-provider proof.
