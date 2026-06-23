@@ -1666,3 +1666,136 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-22 addendum: shared libgcc runtime packaging for dynamic rustc wrappers
+
+Commit under edit: working tree after `076188dd keep Rust bootstrap Cargo off ambient OpenSSL`.
+
+Rerun 31 failed after the mrustc first-stage build completed, while smoke-running
+the packaged provider candidate. The candidate wrapper used the dynamic musl
+loader but the candidate package omitted `libgcc_s.so.1`, so `rustc_binary`
+reported a missing shared library and unresolved `_Unwind_*` / `__popcountdi2`
+symbols. The source fix centralizes copying the dynamic libgcc runtime closure:
+`libgcc_s.so.1` is required, `libgcc_s.so` is copied when present, first-stage
+proc-macro rustc candidate packaging uses that helper, and Rust-bootstrap
+dynamic-tool wrapping uses the same helper.
+
+Focused validation after the change:
+
+```text
+$ cargo test -p mantle --bin mantle first_stage_proc_macro_rustc_install -- --nocapture
+$ cargo test -p mantle --bin mantle rustc_stage_dynamic_tool_wrapping -- --nocapture
+# pueue task 34
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 814 filtered out; finished in 0.02s
+
+running 2 tests
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_rejects_missing_shared_libgcc_runtime ... ok
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_copies_shared_libgcc_runtime ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.02s
+
+$ cargo test -p mantle --bin mantle materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts -- --nocapture
+$ cargo test -p mantle --bin mantle materializer_writes_musl_host_provider_metadata_from_route_plan -- --nocapture
+# pueue task 32
+test rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 2.27s
+
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 1.04s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+$ git diff --check
+# pueue task 36 completed successfully
+```
+
+Post-evidence Cairn validation transcript saved at
+`target/first-stage-musl-host-llvm-runtime-cairn-2026-06-22-libgcc-runtime.txt`:
+
+```text
+$ git diff --check
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "7b3d661b2fd8f58d8fa1f4c1b7855684b81274308c6318edff92973992f85183",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "c6098afdcc3c39ac747f1e087197d67194612667d9d64b2ca495dfd582688b10",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "a1fe4ea205ea6ccf0a5e764073d4e46ddde72372b55a5a2b46efffb39cb35659",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "b42abc063cc1c0ca32e43f5c52e4f84132bd4bc816d05e4d7320ace22082f85a",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "3c38ad795815ee886ea322be686f486b2be3a6bef7606779a01e1a212c39a241",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "e1d844237ff2878e94487753766820f5c10d6aa5c3765d7ea128a7fe762a00b4",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```

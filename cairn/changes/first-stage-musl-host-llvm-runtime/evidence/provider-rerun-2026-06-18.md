@@ -899,6 +899,67 @@ Build completed unsuccessfully in 0:02:01
 ```
 
 Focused validation for the committed source-side `cargo-native-static` config is
-recorded in `focused-validation-2026-06-18.md`. A fresh committed rerun 31 from a
-regenerated script is required before claiming frontier movement beyond the
-Cargo/OpenSSL diagnosis or provider completion.
+recorded in `focused-validation-2026-06-18.md`. Rerun 31 below is the first
+committed regenerated-script rerun after that source change.
+
+## Rerun 31: first-stage provider candidate `libgcc_s.so.1` runtime frontier
+
+Rerun 31 from commit `076188dd` proved the regenerated source advanced through a
+full mrustc first-stage Rust/Cargo graph, including vendored OpenSSL/Cargo work,
+but failed closed while smoke-validating the packaged first-stage provider
+candidate. It did not reach the later Rust-bootstrap x.py stage, so final-stage
+rustdoc and the x.py `cargo-native-static` path remain pending for the next full
+rerun.
+
+- Pueue task: `73` (task log unavailable after cleanup; run-root files preserved)
+- Commit: `076188dd`
+- Run root: `target/rust-source-provider-musl-host-route-cargo-static-rerun31-2026-06-22`
+- Result: failed closed with status `1` during provider-candidate smoke
+- Status file: `target/rust-source-provider-musl-host-route-cargo-static-rerun31-2026-06-22/status.txt`
+- Provider stderr: `target/rust-source-provider-musl-host-route-cargo-static-rerun31-2026-06-22/stderr.txt`
+- First-stage log: `target/rust-source-provider-musl-host-route-cargo-static-rerun31-2026-06-22/tmp/mantle-rust-source-provider-DXls2m/mrustc-first-stage-build.log`
+
+Top-level status excerpt:
+
+```text
+commit=076188dd
+run_root=target/rust-source-provider-musl-host-route-cargo-static-rerun31-2026-06-22
+status=1
+```
+
+The mrustc first-stage log shows the route moved through first-stage Cargo and
+vendored OpenSSL work before candidate packaging failed:
+
+```text
+bin/minicargo rustc-1.90.0-src/src/tools/cargo ... --features vendored-openssl
+Completed openssl-sys v0.9.109 (script run)
+Completed openssl-sys v0.9.109
+Completed cargo v0.91.0 [bin cargo]
+Finished `release` profile [optimized] target(s) in 34m 30s
+[CP] libraries and results (output/prefix/bin/rustc)
+... --cfg 'feature="all-static"' --cfg 'feature="vendored-openssl"' ... src/bin/cargo/main.rs
+Finished `release` profile [optimized] target(s) in 17m 28s
+```
+
+The new authoritative frontier is a packaging gap for the dynamic rustc runtime
+closure. The build runtime directory had shared libgcc members, but the packaged
+provider candidate omitted them; smoke then ran `rustc_binary` without
+`libgcc_s.so.1` and failed with unresolved unwind/runtime symbols:
+
+```text
+Rust source provider materialization failed closed: smoke: rustc smoke failed with status exit status: 127
+Error loading shared library libgcc_s.so.1: No such file or directory
+  (needed by .../mrustc-first-stage-provider-candidate/bin/rustc_binary)
+Error relocating .../rustc_binary: _Unwind_GetRegionStart: symbol not found
+Error relocating .../rustc_binary: _Unwind_RaiseException: symbol not found
+Error relocating .../rustc_binary: __popcountdi2: symbol not found
+```
+
+The follow-up source fix keeps the dynamic-loader wrapper model but closes the
+packaging hole: first-stage proc-macro rustc candidates now copy required
+`libgcc_s.so.1` and optional `libgcc_s.so`, and Rust-bootstrap dynamic-tool
+wrapping uses the same helper so later dynamically linked tools carry the same
+runtime closure. Focused positive/negative validation is recorded in
+`focused-validation-2026-06-18.md`. A fresh rerun 32 from the updated source is
+required before claiming provider completion, final rustdoc validation, or
+movement through the later x.py Rust-bootstrap stage.

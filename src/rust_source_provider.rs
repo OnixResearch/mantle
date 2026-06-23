@@ -265,7 +265,11 @@ const FIRST_STAGE_RUN_RUSTC_FINAL_WRAPPER_LINE: &str = "\t$Vprintf '#!/bin/sh\\n
 const FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_SYMLINK_LINE: &str = "\t$Vln -sf rustc_binary $(BINDIR)rustc_binary.sysroot";
 const FIRST_STAGE_RUN_RUSTC_FINAL_SYSROOT_WRAPPER_LINE: &str = "\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary.sysroot --sysroot \"$$d/..\" \"$$@\"' >$@";
 const FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT: &str = "libc.so";
+const FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT: &str = "libgcc_s.so";
+const FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT: &str = "libgcc_s.so.1";
 const FIRST_STAGE_TARGET_MUSL_LIBSTDCXX_STATIC_ARCHIVE: &str = "libstdc++.a";
+const REQUIRED_DYNAMIC_RUNTIME_SHARED_OBJECTS: &[&str] = &[FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT];
+const OPTIONAL_DYNAMIC_RUNTIME_SHARED_OBJECTS: &[&str] = &[FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT];
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE: &str = "libatomic.a";
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_SOURCE: &str = "mantle-libatomic-shim.c";
 const FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SHIM_OBJECT: &str = "mantle-libatomic-shim.o";
@@ -2373,6 +2377,12 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
         "    rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\"; cp \"${{{RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}}}/lib/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\"\n"
     ));
     script.push_str("    rm -f \"$target_runtime_dir/libgcc.a\"; cp \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc.a\"\n");
+    script.push_str(&format!(
+        "    rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT}\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}\"\n"
+    ));
+    script.push_str(&format!(
+        "    for target_libgcc_shared_name in {FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT} {FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}; do if [ -f \"${{{RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}}}/lib/$target_libgcc_shared_name\" ]; then cp \"${{{RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}}}/lib/$target_libgcc_shared_name\" \"$target_runtime_dir/$target_libgcc_shared_name\"; fi; done\n"
+    ));
     script.push_str("    printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'set -eu' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' \"target_cc_path=\\\"\\${MANTLE_TARGET_CC_PATH:-$target_cc_path}\\\"\" >> \"$target_alias_dir/cc\"\n");
@@ -3223,9 +3233,70 @@ fn wrap_rustc_stage_provider_dynamic_tools(
         ))
     })?;
     make_executable(&provider_loader_path)?;
+    copy_dynamic_runtime_shared_objects(runtime_loader_path, &runtime_dir, "Rust bootstrap")?;
     for spec in specs {
         wrap_rustc_stage_provider_dynamic_tool(candidate_dir, *spec, host_triple)?;
     }
+    Ok(())
+}
+
+fn copy_dynamic_runtime_shared_objects(
+    runtime_loader_path: &Path,
+    runtime_dir: &Path,
+    context: &str,
+) -> Result<(), RustSourceProviderError> {
+    assert!(runtime_loader_path.is_file(), "runtime loader must exist before runtime copy");
+    assert!(runtime_dir.is_dir(), "runtime dir must exist before runtime copy");
+    let source_dir = runtime_loader_path.parent().ok_or_else(|| {
+        RustSourceProviderError::Copy(format!(
+            "{context} dynamic runtime loader has no parent directory: {}",
+            runtime_loader_path.display()
+        ))
+    })?;
+    for object_name in REQUIRED_DYNAMIC_RUNTIME_SHARED_OBJECTS {
+        copy_dynamic_runtime_shared_object(source_dir, runtime_dir, object_name, context, true)?;
+    }
+    for object_name in OPTIONAL_DYNAMIC_RUNTIME_SHARED_OBJECTS {
+        copy_dynamic_runtime_shared_object(source_dir, runtime_dir, object_name, context, false)?;
+    }
+    Ok(())
+}
+
+fn copy_dynamic_runtime_shared_object(
+    source_dir: &Path,
+    runtime_dir: &Path,
+    object_name: &str,
+    context: &str,
+    required: bool,
+) -> Result<(), RustSourceProviderError> {
+    assert!(!object_name.trim().is_empty(), "runtime object name must not be empty");
+    assert!(runtime_dir.is_dir(), "runtime dir must exist before object copy");
+    let source_path = source_dir.join(object_name);
+    if !source_path.is_file() {
+        if required {
+            return Err(RustSourceProviderError::Copy(format!(
+                "{context} dynamic runtime shared object is missing at {}",
+                source_path.display()
+            )));
+        }
+        return Ok(());
+    }
+    let destination_path = runtime_dir.join(object_name);
+    if fs::symlink_metadata(&destination_path).is_ok() {
+        fs::remove_file(&destination_path).map_err(|err| {
+            RustSourceProviderError::Copy(format!(
+                "remove stale {context} dynamic runtime shared object {}: {err}",
+                destination_path.display()
+            ))
+        })?;
+    }
+    fs::copy(&source_path, &destination_path).map_err(|err| {
+        RustSourceProviderError::Copy(format!(
+            "copy {context} dynamic runtime shared object {} -> {}: {err}",
+            source_path.display(),
+            destination_path.display()
+        ))
+    })?;
     Ok(())
 }
 
@@ -4074,14 +4145,6 @@ fn install_first_stage_proc_macro_capable_rustc_from_paths(
     fs::create_dir_all(&runtime_dir).map_err(|err| {
         RustSourceProviderError::Copy(format!("create proc-macro runtime dir {}: {err}", runtime_dir.display()))
     })?;
-    fs::copy(dynamic_rustc_path, &rustc_binary_path).map_err(|err| {
-        RustSourceProviderError::Copy(format!(
-            "copy proc-macro-capable rustc {} -> {}: {err}",
-            dynamic_rustc_path.display(),
-            rustc_binary_path.display()
-        ))
-    })?;
-    make_executable(&rustc_binary_path)?;
     fs::copy(runtime_loader_path, &runtime_loader_candidate_path).map_err(|err| {
         RustSourceProviderError::Copy(format!(
             "copy first-stage proc-macro loader {} -> {}: {err}",
@@ -4090,6 +4153,15 @@ fn install_first_stage_proc_macro_capable_rustc_from_paths(
         ))
     })?;
     make_executable(&runtime_loader_candidate_path)?;
+    copy_dynamic_runtime_shared_objects(runtime_loader_path, &runtime_dir, "first-stage proc-macro")?;
+    fs::copy(dynamic_rustc_path, &rustc_binary_path).map_err(|err| {
+        RustSourceProviderError::Copy(format!(
+            "copy proc-macro-capable rustc {} -> {}: {err}",
+            dynamic_rustc_path.display(),
+            rustc_binary_path.display()
+        ))
+    })?;
+    make_executable(&rustc_binary_path)?;
     let rustc_sysroot_binary_path = candidate_dir.join(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH);
     prepare_provider_rustc_sysroot_binary_link(&rustc_binary_path, &rustc_sysroot_binary_path)?;
     let rustc_path = candidate_dir.join(PROVIDER_RUSTC_RELATIVE_PATH);
@@ -5289,9 +5361,13 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     );
     script.push_str("rm -f \"$target_runtime_dir/libunwind.a\"; $COPY_PROGRAM \"$target_unwind_archive\" \"$target_runtime_dir/libunwind.a\"\n");
     script.push_str("rm -f \"$target_runtime_dir/libgcc.a\"; $COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc.a\"\n");
-    script.push_str("rm -f \"$target_runtime_dir/libgcc_s.a\" \"$target_runtime_dir/libgcc_s.so\" \"$target_runtime_dir/libgcc_s.so.1\"\n");
+    script.push_str(&format!(
+        "rm -f \"$target_runtime_dir/libgcc_s.a\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT}\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}\"\n"
+    ));
     script.push_str("$COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc_s.a\"\n");
-    script.push_str("for target_libgcc_shared_name in libgcc_s.so libgcc_s.so.1; do if [ -f \"$target_musl_crt_dir/$target_libgcc_shared_name\" ]; then $COPY_PROGRAM \"$target_musl_crt_dir/$target_libgcc_shared_name\" \"$target_runtime_dir/$target_libgcc_shared_name\"; fi; done\n");
+    script.push_str(&format!(
+        "for target_libgcc_shared_name in {FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT} {FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}; do if [ -f \"$target_musl_crt_dir/$target_libgcc_shared_name\" ]; then $COPY_PROGRAM \"$target_musl_crt_dir/$target_libgcc_shared_name\" \"$target_runtime_dir/$target_libgcc_shared_name\"; fi; done\n"
+    ));
     push_first_stage_target_musl_lfs_compat(script);
     script.push_str("printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'set -eu' >> \"$target_alias_dir/cc\"\n");
@@ -7983,6 +8059,16 @@ mod tests {
         write_bytes(&provider_dir, PROVIDER_RUSTC_RELATIVE_PATH, b"old wrapper");
         fs::write(&dynamic_rustc, &dynamic_rustc_bytes).unwrap();
         fs::write(&runtime_loader, b"runtime loader").unwrap();
+        fs::write(
+            runtime_loader.with_file_name(FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT),
+            b"versioned shared libgcc runtime",
+        )
+        .unwrap();
+        fs::write(
+            runtime_loader.with_file_name(FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT),
+            b"shared libgcc linker name",
+        )
+        .unwrap();
 
         install_first_stage_proc_macro_capable_rustc_from_paths(
             &provider_dir,
@@ -8005,12 +8091,128 @@ mod tests {
             fs::read(provider_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH)).unwrap(),
             b"runtime loader"
         );
+        assert_eq!(
+            fs::read(
+                provider_dir
+                    .join(FIRST_STAGE_PROC_MACRO_RUNTIME_DIR)
+                    .join(FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT)
+            )
+            .unwrap(),
+            b"versioned shared libgcc runtime"
+        );
+        assert_eq!(
+            fs::read(
+                provider_dir
+                    .join(FIRST_STAGE_PROC_MACRO_RUNTIME_DIR)
+                    .join(FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT)
+            )
+            .unwrap(),
+            b"shared libgcc linker name"
+        );
         assert!(
             fs::symlink_metadata(provider_dir.join(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH))
                 .unwrap()
                 .file_type()
                 .is_symlink()
         );
+    }
+
+    #[test]
+    fn first_stage_proc_macro_rustc_install_rejects_missing_shared_libgcc_runtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        let dynamic_rustc = dir.path().join("dynamic-rustc");
+        let runtime_loader = dir.path().join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT);
+        let mut dynamic_rustc_bytes = ELF_MAGIC.to_vec();
+        dynamic_rustc_bytes.extend_from_slice(b"dynamic rustc");
+        fs::create_dir_all(provider_dir.join("bin")).unwrap();
+        fs::write(&dynamic_rustc, &dynamic_rustc_bytes).unwrap();
+        fs::write(&runtime_loader, b"runtime loader").unwrap();
+
+        let err = install_first_stage_proc_macro_capable_rustc_from_paths(
+            &provider_dir,
+            &dynamic_rustc,
+            &runtime_loader,
+            FIRST_STAGE_MUSL_TRIPLE,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("dynamic runtime shared object is missing"));
+        assert!(err.to_string().contains(FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT));
+        assert!(!provider_dir.join(PROVIDER_MRUSTC_RUSTC_BINARY_RELATIVE_PATH).exists());
+    }
+
+    #[test]
+    fn rustc_stage_dynamic_tool_wrapping_copies_shared_libgcc_runtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        let runtime_source_dir = dir.path().join("runtime-source");
+        let runtime_loader = runtime_source_dir.join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT);
+        fs::create_dir_all(provider_dir.join("bin")).unwrap();
+        fs::create_dir_all(&runtime_source_dir).unwrap();
+        fs::write(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH), b"rustc binary").unwrap();
+        fs::write(provider_dir.join(PROVIDER_CARGO_RELATIVE_PATH), b"cargo binary").unwrap();
+        fs::write(&runtime_loader, b"runtime loader").unwrap();
+        fs::write(
+            runtime_source_dir.join(FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT),
+            b"versioned shared libgcc runtime",
+        )
+        .unwrap();
+        fs::write(runtime_source_dir.join(FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT), b"shared libgcc linker name")
+            .unwrap();
+
+        wrap_rustc_stage_provider_dynamic_tools(
+            &provider_dir,
+            &runtime_loader,
+            FIRST_STAGE_MUSL_TRIPLE,
+            RUSTC_STAGE1_DYNAMIC_TOOL_SPECS,
+        )
+        .unwrap();
+        let rustc_wrapper = fs::read_to_string(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH)).unwrap();
+        let cargo_wrapper = fs::read_to_string(provider_dir.join(PROVIDER_CARGO_RELATIVE_PATH)).unwrap();
+
+        assert!(rustc_wrapper.contains("--sysroot \"$root_dir\""));
+        assert!(!cargo_wrapper.contains("--sysroot \"$root_dir\""));
+        assert_eq!(fs::read(provider_dir.join("bin/rustc.dynamic")).unwrap(), b"rustc binary");
+        assert_eq!(fs::read(provider_dir.join("bin/cargo.dynamic")).unwrap(), b"cargo binary");
+        assert_eq!(
+            fs::read(provider_dir.join(FIRST_STAGE_PROC_MACRO_RUNTIME_LOADER_RELATIVE_PATH)).unwrap(),
+            b"runtime loader"
+        );
+        assert_eq!(
+            fs::read(
+                provider_dir
+                    .join(FIRST_STAGE_PROC_MACRO_RUNTIME_DIR)
+                    .join(FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT)
+            )
+            .unwrap(),
+            b"versioned shared libgcc runtime"
+        );
+    }
+
+    #[test]
+    fn rustc_stage_dynamic_tool_wrapping_rejects_missing_shared_libgcc_runtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let provider_dir = dir.path().join("provider");
+        let runtime_source_dir = dir.path().join("runtime-source");
+        let runtime_loader = runtime_source_dir.join(FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT);
+        fs::create_dir_all(provider_dir.join("bin")).unwrap();
+        fs::create_dir_all(&runtime_source_dir).unwrap();
+        fs::write(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH), b"rustc binary").unwrap();
+        fs::write(&runtime_loader, b"runtime loader").unwrap();
+        let specs = [RustProviderDynamicToolSpec {
+            relative_path: PROVIDER_RUSTC_RELATIVE_PATH,
+            sysroot_mode: RustProviderDynamicToolSysrootMode::Inject,
+        }];
+
+        let err =
+            wrap_rustc_stage_provider_dynamic_tools(&provider_dir, &runtime_loader, FIRST_STAGE_MUSL_TRIPLE, &specs)
+                .unwrap_err();
+
+        assert!(err.to_string().contains("dynamic runtime shared object is missing"));
+        assert!(err.to_string().contains(FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT));
+        assert_eq!(fs::read(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH)).unwrap(), b"rustc binary");
+        assert!(!provider_dir.join("bin/rustc.dynamic").exists());
     }
 
     #[cfg(unix)]
@@ -8727,15 +8929,15 @@ let Plan = {
     }
 
     fn test_rustc_stage1_build_script() -> &'static [u8] {
-        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic stage1 rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic stage1 cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic stage1 rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic stage1 cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
     }
 
     fn test_rustc_final_build_script() -> &'static [u8] {
-        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic final cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic final cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
     }
 
     fn test_rustc_xpy_script() -> &'static [u8] {
-        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic xpy cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic xpy cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {
