@@ -963,3 +963,46 @@ runtime closure. Focused positive/negative validation is recorded in
 `focused-validation-2026-06-18.md`. A fresh rerun 32 from the updated source is
 required before claiming provider completion, final rustdoc validation, or
 movement through the later x.py Rust-bootstrap stage.
+
+## Rerun 32: source-root shared libgcc layout frontier
+
+Rerun 32 from commit `06c0112e` proved the runtime-packaging check fails closed
+before producing a provider when the first-stage target runtime directory lacks
+`libgcc_s.so.1`. The run did not reach provider-candidate smoke, Rust-bootstrap
+x.py, or final rustdoc validation.
+
+- Pueue task: `85`
+- Commit: `06c0112e`
+- Run root: `target/rust-source-provider-musl-host-route-libgcc-runtime-rerun32-2026-06-22`
+- Result: failed closed with status `1` after the mrustc first-stage build
+- Status file: `target/rust-source-provider-musl-host-route-libgcc-runtime-rerun32-2026-06-22/status.txt`
+- Provider stderr: `target/rust-source-provider-musl-host-route-libgcc-runtime-rerun32-2026-06-22/stderr.txt`
+- First-stage script: `target/rust-source-provider-musl-host-route-libgcc-runtime-rerun32-2026-06-22/tmp/mantle-rust-source-provider-1EtZjA/run-mrustc-first-stage.sh`
+
+Status excerpt:
+
+```text
+commit=06c0112e
+run_root=target/rust-source-provider-musl-host-route-libgcc-runtime-rerun32-2026-06-22
+status=1
+```
+
+Top-level failure excerpt:
+
+```text
+error: build failed
+Rust source provider materialization failed closed: copy: first-stage proc-macro dynamic runtime shared object is missing at .../build/target-linker-runtime/libgcc_s.so.1 preserved_scratch=.../tmp/mantle-rust-source-provider-1EtZjA
+```
+
+The preserved source-root layout shows the real provider has the required shared
+runtime under the target sysroot libdir, not under the musl libc CRT dir that the
+generated script searched:
+
+```text
+.pi/source-root-provider-run-20260531T231455Z/store/...-musl-seed-toolchain/x86_64-linux-musl/lib/libgcc_s.so
+.pi/source-root-provider-run-20260531T231455Z/store/...-musl-seed-toolchain/x86_64-linux-musl/lib/libgcc_s.so.1
+```
+
+The follow-up source fix keeps `libgcc_s.so.1` required at the packaging
+boundary, but teaches both generated target-linker runtime setup paths to search
+the musl CRT dir, the target sysroot libdir (`$target_orig_cc_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib` / `$target_orig_cc_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib`), and the GCC CRT dir before packaging dynamic rustc wrappers. Focused validation is recorded in `focused-validation-2026-06-18.md`. A fresh rerun 33 from this fix is required before claiming movement through the provider-candidate smoke, x.py Rust-bootstrap, or final rustdoc frontiers.

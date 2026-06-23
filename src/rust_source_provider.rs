@@ -2316,6 +2316,21 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("fi\n");
 }
 
+fn push_rustc_source_target_libgcc_shared_copy(script: &mut String) {
+    script.push_str(&format!(
+        "    for target_libgcc_shared_name in {FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT} {FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}; do\n"
+    ));
+    script.push_str("      for target_libgcc_shared_dir in ");
+    script.push_str("\"${");
+    script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
+    script.push_str("}/lib\" ");
+    script.push_str("\"$target_orig_cc_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib\" ");
+    script.push_str("\"$target_gcc_crt_dir\"; do\n");
+    script.push_str("        if [ -f \"$target_libgcc_shared_dir/$target_libgcc_shared_name\" ]; then cp \"$target_libgcc_shared_dir/$target_libgcc_shared_name\" \"$target_runtime_dir/$target_libgcc_shared_name\"; break; fi\n");
+    script.push_str("      done\n");
+    script.push_str("    done\n");
+}
+
 fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     script.push_str("    target_cc_path=\"$");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
@@ -2380,9 +2395,7 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     script.push_str(&format!(
         "    rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT}\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}\"\n"
     ));
-    script.push_str(&format!(
-        "    for target_libgcc_shared_name in {FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT} {FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}; do if [ -f \"${{{RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}}}/lib/$target_libgcc_shared_name\" ]; then cp \"${{{RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR}}}/lib/$target_libgcc_shared_name\" \"$target_runtime_dir/$target_libgcc_shared_name\"; fi; done\n"
-    ));
+    push_rustc_source_target_libgcc_shared_copy(script);
     script.push_str("    printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'set -eu' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' \"target_cc_path=\\\"\\${MANTLE_TARGET_CC_PATH:-$target_cc_path}\\\"\" >> \"$target_alias_dir/cc\"\n");
@@ -5291,6 +5304,16 @@ _Bool __atomic_compare_exchange_16(
     ));
 }
 
+fn push_first_stage_target_libgcc_shared_copy(script: &mut String) {
+    script.push_str(&format!(
+        "for target_libgcc_shared_name in {FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT} {FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}; do\n"
+    ));
+    script.push_str("  for target_libgcc_shared_dir in \"$target_musl_crt_dir\" \"$target_orig_cc_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib\" \"$target_gcc_crt_dir\"; do\n");
+    script.push_str("    if [ -f \"$target_libgcc_shared_dir/$target_libgcc_shared_name\" ]; then $COPY_PROGRAM \"$target_libgcc_shared_dir/$target_libgcc_shared_name\" \"$target_runtime_dir/$target_libgcc_shared_name\"; break; fi\n");
+    script.push_str("  done\n");
+    script.push_str("done\n");
+}
+
 fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str(&format!(
         "if [ \"$RUSTC_TARGET\" = \"$RUSTC_PROVIDER_TARGET_TRIPLE\" ] && [ \"$RUSTC_TARGET\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"
@@ -5365,9 +5388,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
         "rm -f \"$target_runtime_dir/libgcc_s.a\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT}\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}\"\n"
     ));
     script.push_str("$COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc_s.a\"\n");
-    script.push_str(&format!(
-        "for target_libgcc_shared_name in {FIRST_STAGE_TARGET_MUSL_LIBGCC_SHARED_OBJECT} {FIRST_STAGE_TARGET_MUSL_LIBGCC_VERSIONED_SHARED_OBJECT}; do if [ -f \"$target_musl_crt_dir/$target_libgcc_shared_name\" ]; then $COPY_PROGRAM \"$target_musl_crt_dir/$target_libgcc_shared_name\" \"$target_runtime_dir/$target_libgcc_shared_name\"; fi; done\n"
-    ));
+    push_first_stage_target_libgcc_shared_copy(script);
     push_first_stage_target_musl_lfs_compat(script);
     script.push_str("printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
     script.push_str("printf '%s\\n' 'set -eu' >> \"$target_alias_dir/cc\"\n");
@@ -7135,6 +7156,7 @@ mod tests {
         assert!(
             rustc_stage1_script.contains("Rust bootstrap target musl libc.so missing for dynamic compiler host links")
         );
+        assert!(rustc_stage1_script.contains("$target_orig_cc_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib"));
         assert!(rustc_stage1_script.contains("set -- \"$@\" -Wl,-Bstatic -lgcc -Wl,-Bdynamic"));
         assert!(rustc_stage1_script.contains(
             "{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/libc.so\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"
@@ -7175,6 +7197,7 @@ mod tests {
         assert!(script.contains("TARGET_MUSL_MACHINE_ALIASES='x86_64-unknown-linux-musl x86_64-linux-musl'"));
         assert!(script.contains("TARGET_MUSL_SOURCE_ROOT_SYSROOT='x86_64-linux-musl'"));
         assert!(script.contains("target_libc_root=\"$target_wrapper_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT\""));
+        assert!(script.contains("$target_orig_cc_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib"));
         assert!(script.contains("target_gcc_crt_machine=$target_cc_machine"));
         assert!(script.contains("target_cxx_program=$target_tool_prefix-g++"));
         assert!(script.contains("target_objcopy_program=$target_tool_prefix-objcopy"));

@@ -1799,3 +1799,101 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-23 addendum: shared libgcc target-sysroot fallback
+
+Rerun 32 proved the previous packaging fix failed closed before smoke because
+the generated first-stage target runtime only searched the musl CRT dir for
+`libgcc_s.so.1`, while the source-root provider exposes it under the target
+sysroot libdir. The source fix adds that target-sysroot libdir fallback to both
+first-stage and Rust-bootstrap generated linker runtime setup. The packaging
+boundary still requires `libgcc_s.so.1`; the generated scripts only broaden the
+source search.
+
+Focused validation:
+
+```text
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_ -- --nocapture
+# pueue task 175
+running 12 tests
+test rust_source_provider::tests::materializer_rejects_missing_route_plan_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_existing_output_before_scratch_work ... ok
+test rust_source_provider::tests::materializer_rejects_first_stage_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_rust_source_without_stage_script_or_xpy_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_chained_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_final_chained_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_rustc_final_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_uses_explicit_route_plan_when_default_plan_is_absent ... ok
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+test rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 805 filtered out; finished in 3.42s
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::first_stage_proc_macro_rustc_install -- --nocapture
+# pueue task 160
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 814 filtered out
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping -- --nocapture
+# pueue task 160
+running 2 tests
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_rejects_missing_shared_libgcc_runtime ... ok
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_copies_shared_libgcc_runtime ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 815 filtered out; finished in 0.02s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs && git diff --check
+# pueue task 163 completed successfully
+```
+
+Post-addendum Cairn validation transcript saved at
+`target/first-stage-musl-host-llvm-runtime-cairn-2026-06-23-libgcc-sysroot-fallback.txt`:
+
+```text
+$ git diff --check
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
