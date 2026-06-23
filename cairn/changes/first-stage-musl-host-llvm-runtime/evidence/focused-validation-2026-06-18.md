@@ -1897,3 +1897,161 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-23 addendum: explicit source-root target toolchain binding
+
+Rerun 33 proved the target-sysroot `libgcc_s.so.1` search was not enough when
+generated scripts discovered a Nix musl GCC wrapper before the source-root
+compiler. The source fix makes both first-stage and Rust-bootstrap generated
+scripts prefer `MANTLE_TARGET_TOOLCHAIN_ROOT`, with `SOURCE_ROOT` as fallback,
+before PATH/Nix discovery. Explicit roots now validate the target compiler,
+C++ compiler, `ar`, `ranlib`, `objcopy`, `libc.so`, and `libgcc_s.so.1`; invalid
+explicit roots fail closed.
+
+Source-root fixture check:
+
+```text
+$ SOURCE_ROOT=.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+$ "$SOURCE_ROOT/bin/x86_64-linux-musl-gcc" -dumpmachine
+x86_64-linux-musl
+$ "$SOURCE_ROOT/bin/x86_64-linux-musl-gcc" --version | head -1
+x86_64-linux-musl-gcc (GCC) 10.5.0
+$ test -x "$SOURCE_ROOT/bin/x86_64-linux-musl-gcc"
+$ test -x "$SOURCE_ROOT/bin/x86_64-linux-musl-g++"
+$ test -x "$SOURCE_ROOT/bin/x86_64-linux-musl-ar"
+$ test -x "$SOURCE_ROOT/bin/x86_64-linux-musl-ranlib"
+$ test -x "$SOURCE_ROOT/bin/x86_64-linux-musl-objcopy"
+$ test -f "$SOURCE_ROOT/x86_64-linux-musl/lib/libc.so"
+$ test -f "$SOURCE_ROOT/x86_64-linux-musl/lib/libgcc_s.so.1"
+# pueue task 204 completed successfully
+```
+
+Focused validation:
+
+```text
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 src/rust_source_provider.rs
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+# pueue task 186 completed successfully
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_ -- --nocapture
+# pueue task 188
+running 14 tests
+test rust_source_provider::tests::materializer_rejects_existing_output_before_scratch_work ... ok
+test rust_source_provider::tests::materializer_rejects_first_stage_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_invalid_explicit_source_root_env_in_subprocess ... ok
+test rust_source_provider::tests::materializer_rejects_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_rust_source_without_stage_script_or_xpy_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_chained_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_final_chained_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_rustc_final_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_uses_explicit_route_plan_when_default_plan_is_absent ... ok
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+test rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 805 filtered out; finished in 2.97s
+
+$ cargo test -p mantle --bin mantle first_stage_proc_macro_rustc_install -- --nocapture
+$ cargo test -p mantle --bin mantle rustc_stage_dynamic_tool_wrapping -- --nocapture
+# pueue task 192
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.03s
+
+running 2 tests
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_rejects_missing_shared_libgcc_runtime ... ok
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_copies_shared_libgcc_runtime ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 817 filtered out; finished in 0.03s
+
+$ git diff --check
+# pueue task 197 completed successfully
+```
+
+Post-addendum Cairn validation transcript saved at
+`target/first-stage-musl-host-llvm-runtime-cairn-2026-06-23-explicit-source-root-binding.txt`:
+
+```text
+$ git diff --check
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "05374af44ec76964991c8b752edfc4cf0683f080180decd4aa3e80033b992b41",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "da96dfb161571f6720d535cf1dd75c4a50e1740b2d0a1faeacfcc2f2472c8c61",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "38b39e7019722c32c1d29821edc0537b64a1a0dc7587b4880459284ebafa8a97",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "bb96ac0b25c44d60d48fe93695055679d2296e2093a0da0c7eae0ac079633b61",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "52799f6b932535a7a87756e8311e1fd4a648a1a35dbe70691b574ae744c9ab0e",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "0ea6b75e51399ffd13ee5718df95e5a4a12febad4f8d3c1246eee247363bb60a",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```

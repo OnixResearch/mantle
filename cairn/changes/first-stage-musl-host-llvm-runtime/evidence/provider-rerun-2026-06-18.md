@@ -1005,4 +1005,67 @@ generated script searched:
 
 The follow-up source fix keeps `libgcc_s.so.1` required at the packaging
 boundary, but teaches both generated target-linker runtime setup paths to search
-the musl CRT dir, the target sysroot libdir (`$target_orig_cc_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib` / `$target_orig_cc_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib`), and the GCC CRT dir before packaging dynamic rustc wrappers. Focused validation is recorded in `focused-validation-2026-06-18.md`. A fresh rerun 33 from this fix is required before claiming movement through the provider-candidate smoke, x.py Rust-bootstrap, or final rustdoc frontiers.
+the musl CRT dir, the target sysroot libdir (`$target_orig_cc_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib` / `$target_orig_cc_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib`), and the GCC CRT dir before packaging dynamic rustc wrappers. Focused validation is recorded in `focused-validation-2026-06-18.md`.
+
+## Rerun 33: explicit source-root target binding frontier
+
+Rerun 33 from commit `872bbb5d` proved the target-sysroot `libgcc_s.so.1`
+fallback is insufficient while generated scripts still discover a Nix musl GCC
+wrapper before the source-root target compiler. The run did not reach
+provider-candidate smoke, Rust-bootstrap x.py, or final rustdoc validation.
+
+- Pueue task: `103`
+- Commit: `872bbb5d`
+- Run root: `target/rust-source-provider-musl-host-route-libgcc-sysroot-rerun33-2026-06-23`
+- Source root: `.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain`
+- Result: failed closed with status `1` after the mrustc first-stage build
+- Status file: `target/rust-source-provider-musl-host-route-libgcc-sysroot-rerun33-2026-06-23/status.txt`
+- Provider stderr: `target/rust-source-provider-musl-host-route-libgcc-sysroot-rerun33-2026-06-23/stderr.txt`
+- First-stage build log: `target/rust-source-provider-musl-host-route-libgcc-sysroot-rerun33-2026-06-23/tmp/mantle-rust-source-provider-Unydqk/mrustc-first-stage-build.log`
+
+Status excerpt:
+
+```text
+commit=872bbb5d
+run_root=target/rust-source-provider-musl-host-route-libgcc-sysroot-rerun33-2026-06-23
+source_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+status=1
+```
+
+Top-level failure excerpt:
+
+```text
+Rust source provider materialization failed closed: copy: first-stage proc-macro dynamic runtime shared object is missing at .../build/target-linker-runtime/libgcc_s.so.1 preserved_scratch=.../tmp/mantle-rust-source-provider-Unydqk
+```
+
+The source root had the required target toolchain and dynamic runtime objects:
+
+```text
+x86_64-linux-musl
+x86_64-linux-musl-gcc (GCC) 10.5.0
+.../bin/x86_64-linux-musl-gcc
+.../bin/x86_64-linux-musl-g++
+.../bin/x86_64-linux-musl-ar
+.../bin/x86_64-linux-musl-ranlib
+.../bin/x86_64-linux-musl-objcopy
+.../x86_64-linux-musl/lib/libc.so
+.../x86_64-linux-musl/lib/libgcc_s.so.1
+```
+
+The preserved first-stage build log shows the generated wrapper selected a Nix
+musl GCC wrapper instead of the explicit source-root compiler, so the later
+source-root sysroot search never saw the real `libgcc_s.so.1`:
+
+```text
+using target linker wrapper: .../build/target-linker-bin/cc -> /nix/store/4f328rnbry1cyaw94nja4ksg5rb2ksd3-x86_64-unknown-linux-musl-gcc-wrapper-15.2.0/bin/x86_64-unknown-linux-musl-gcc (x86_64-unknown-linux-musl); runtime CRT/unwind dir: .../build/target-linker-runtime
+```
+
+The follow-up source fix makes generated first-stage and Rust-bootstrap x.py
+scripts prefer `MANTLE_TARGET_TOOLCHAIN_ROOT`, falling back to `SOURCE_ROOT`,
+before any PATH or Nix wrapper fallback. Explicit roots are validated for
+`x86_64-linux-musl-{gcc,g++,ar,ranlib,objcopy}`,
+`x86_64-linux-musl/lib/libc.so`, and `x86_64-linux-musl/lib/libgcc_s.so.1`, and
+invalid explicit roots fail closed instead of silently falling back to Nix.
+Focused validation is recorded in `focused-validation-2026-06-18.md`. A fresh
+rerun 34 from this fix is required before claiming provider-candidate smoke,
+Rust-bootstrap x.py, or final rustdoc completion.

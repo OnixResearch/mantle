@@ -184,6 +184,10 @@ const FIRST_STAGE_CC_PROGRAM: &str = "cc";
 const FIRST_STAGE_CXX_PROGRAM: &str = "c++";
 const FIRST_STAGE_MUSL_TRIPLE: &str = "x86_64-unknown-linux-musl";
 const FIRST_STAGE_SOURCE_ROOT_MUSL_PREFIX: &str = "x86_64-linux-musl";
+const FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR: &str = "MANTLE_TARGET_TOOLCHAIN_ROOT";
+const FIRST_STAGE_SOURCE_ROOT_VAR: &str = "SOURCE_ROOT";
+const FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING: &str = "source-root musl target gcc missing under root bin";
+const FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE: &str = "source-root musl target toolchain root is incomplete";
 const FIRST_STAGE_TARGET_CC_PROGRAM: &str = "x86_64-unknown-linux-musl-gcc";
 const FIRST_STAGE_TARGET_CXX_PROGRAM: &str = "x86_64-unknown-linux-musl-g++";
 const FIRST_STAGE_TARGET_AR_PROGRAM: &str = "x86_64-unknown-linux-musl-ar";
@@ -2139,6 +2143,113 @@ fn push_rustc_source_build_env_scrub(script: &mut String) {
     script.push_str("export RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER\n");
 }
 
+fn push_rustc_source_target_toolchain_root_preference(script: &mut String) {
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("=${");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str(":-${");
+    script.push_str(FIRST_STAGE_SOURCE_ROOT_VAR);
+    script.push_str(":-}}\n");
+    script.push_str("if [ -n \"$");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("\" ]; then\n");
+    script.push_str("  ");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("=\n");
+    script.push_str("  for candidate_name in ");
+    script.push_str(&musl_target_tool_program_candidates_shell_words("gcc"));
+    script.push_str("; do\n");
+    script.push_str("    if [ -x \"$");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("/bin/$candidate_name\" ]; then ");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("=\"$");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("/bin/$candidate_name\"; break; fi\n");
+    script.push_str("  done\n");
+    script.push_str("  if [ -z \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
+    script.push_str("\" ]; then printf '%s\\n' ");
+    script.push_str(&shell_quote(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING));
+    script.push_str(" >&2; exit ");
+    script.push_str(&RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; fi\n");
+    script.push_str("  printf '%s\\n' \"using explicit Rust bootstrap source-root musl target toolchain: $");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("\"\n");
+    script.push_str("fi\n");
+}
+
+fn push_rustc_source_target_toolchain_root_validation(script: &mut String) {
+    script.push_str("  if [ -n \"$");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("\" ]; then\n");
+    script.push_str("    for target_required_tool in \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_CXX_VAR);
+    script.push_str("\" \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_AR_VAR);
+    script.push_str("\" \"$");
+    script.push_str(RUSTC_SOURCE_TARGET_RANLIB_VAR);
+    script.push_str("\" \"$target_tool_dir/$target_tool_prefix-objcopy\"; do\n");
+    script.push_str("      if [ ! -x \"$target_required_tool\" ]; then printf '%s\\n' \"");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE);
+    script.push_str(": $target_required_tool\" >&2; exit ");
+    script.push_str(&RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; fi\n");
+    script.push_str("    done\n");
+    script.push_str("    for target_required_file in \"$");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/libc.so\" \"$");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/libgcc_s.so.1\"; do\n");
+    script.push_str("      if [ ! -f \"$target_required_file\" ]; then printf '%s\\n' \"");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE);
+    script.push_str(": $target_required_file\" >&2; exit ");
+    script.push_str(&RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; fi\n");
+    script.push_str("    done\n");
+    script.push_str("  fi\n");
+}
+
+fn push_first_stage_target_toolchain_root_preference(script: &mut String) {
+    script.push_str("target_toolchain_root=${");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str(":-${");
+    script.push_str(FIRST_STAGE_SOURCE_ROOT_VAR);
+    script.push_str(":-}}\n");
+    script.push_str("if [ -n \"$target_toolchain_root\" ]; then\n");
+    script.push_str("  TARGET_CC_PROGRAM=\n");
+    script.push_str("  for candidate_name in $TARGET_CC_PROGRAM_CANDIDATES; do\n");
+    script.push_str("    if [ -x \"$target_toolchain_root/bin/$candidate_name\" ]; then TARGET_CC_PROGRAM=\"$target_toolchain_root/bin/$candidate_name\"; break; fi\n");
+    script.push_str("  done\n");
+    script.push_str("  if [ -z \"$TARGET_CC_PROGRAM\" ]; then printf '%s\\n' ");
+    script.push_str(&shell_quote(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING));
+    script.push_str(" >&2; exit ");
+    script.push_str(&FIRST_STAGE_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; fi\n");
+    script.push_str("  printf '%s\\n' \"using explicit source-root musl target toolchain: $target_toolchain_root\"\n");
+    script.push_str("fi\n");
+}
+
+fn push_first_stage_target_toolchain_root_validation(script: &mut String) {
+    script.push_str("if [ -n \"$target_toolchain_root\" ]; then\n");
+    script.push_str("  for target_required_tool in \"$target_tool_dir/$target_cxx_program\" \"$target_tool_dir/$target_ar_program\" \"$target_tool_dir/$target_ranlib_program\" \"$target_tool_dir/$target_objcopy_program\"; do\n");
+    script.push_str("    if [ ! -x \"$target_required_tool\" ]; then printf '%s\\n' \"");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE);
+    script.push_str(": $target_required_tool\" >&2; exit ");
+    script.push_str(&FIRST_STAGE_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; fi\n");
+    script.push_str("  done\n");
+    script.push_str("  for target_required_file in \"$target_toolchain_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/libc.so\" \"$target_toolchain_root/$TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/libgcc_s.so.1\"; do\n");
+    script.push_str("    if [ ! -f \"$target_required_file\" ]; then printf '%s\\n' \"");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE);
+    script.push_str(": $target_required_file\" >&2; exit ");
+    script.push_str(&FIRST_STAGE_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; fi\n");
+    script.push_str("  done\n");
+    script.push_str("fi\n");
+}
+
 fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("MAKE_PROGRAM=${MAKE_PROGRAM:-");
     script.push_str(FIRST_STAGE_MAKE_PROGRAM);
@@ -2190,6 +2301,7 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT=");
     script.push_str(&shell_quote(FIRST_STAGE_SOURCE_ROOT_MUSL_PREFIX));
     script.push_str("\n");
+    push_rustc_source_target_toolchain_root_preference(script);
     script.push_str("if [ -z \"$");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str("\" ]; then\n");
@@ -2224,17 +2336,27 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("  target_cc_machine=$(\"$");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str("\" -dumpmachine 2>/dev/null || true)\n");
-    script.push_str("  case \" $MANTLE_TARGET_MUSL_MACHINE_ALIASES \" in *\" $target_cc_machine \"*) ;; *) printf '%s\\n' \"Rust bootstrap target gcc machine expected one of: $MANTLE_TARGET_MUSL_MACHINE_ALIASES; got $target_cc_machine\" >&2; ");
+    script.push_str("  case \" $MANTLE_TARGET_MUSL_MACHINE_ALIASES \" in *\" $target_cc_machine \"*) ;; *) printf '%s\\n' \"Rust bootstrap target gcc machine expected one of: $MANTLE_TARGET_MUSL_MACHINE_ALIASES; got $target_cc_machine\" >&2; if [ -n \"$");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("\" ]; then exit ");
+    script.push_str(&RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; else ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
-    script.push_str("= ;; esac\n");
+    script.push_str("=; fi ;; esac\n");
     script.push_str("fi\n");
     script.push_str("if [ -n \"$");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str("\" ]; then\n");
     script.push_str("  case \"$target_cc_basename\" in *-gcc) target_tool_prefix=${target_cc_basename%-gcc} ;; *) target_tool_prefix= ;; esac\n");
-    script.push_str("  if [ -z \"$target_tool_prefix\" ]; then ");
+    script.push_str("  if [ -z \"$target_tool_prefix\" ]; then if [ -n \"$");
+    script.push_str(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR);
+    script.push_str("\" ]; then printf '%s\\n' ");
+    script.push_str(&shell_quote(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE));
+    script.push_str(" >&2; exit ");
+    script.push_str(&RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE.to_string());
+    script.push_str("; else ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
-    script.push_str("=; fi\n");
+    script.push_str("=; fi; fi\n");
     script.push_str("fi\n");
     script.push_str("if [ -n \"$");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
@@ -2248,6 +2370,7 @@ fn push_rustc_source_build_tool_discovery(script: &mut String) {
     script.push_str("  ");
     script.push_str(RUSTC_SOURCE_TARGET_RANLIB_VAR);
     script.push_str("=\"$target_tool_dir/$target_tool_prefix-ranlib\"\n");
+    push_rustc_source_target_toolchain_root_validation(script);
     script.push_str("  target_wrapper_root=${target_tool_dir%/*}\n");
     script.push_str("  ");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
@@ -5318,6 +5441,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str(&format!(
         "if [ \"$RUSTC_TARGET\" = \"$RUSTC_PROVIDER_TARGET_TRIPLE\" ] && [ \"$RUSTC_TARGET\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"
     ));
+    push_first_stage_target_toolchain_root_preference(script);
     script.push_str("if ! command -v \"$TARGET_CC_PROGRAM\" >/dev/null 2>&1; then for candidate_name in $TARGET_CC_PROGRAM_CANDIDATES; do if command -v \"$candidate_name\" >/dev/null 2>&1; then TARGET_CC_PROGRAM=\"$candidate_name\"; break; fi; done; fi\n");
     script.push_str("if ! command -v \"$TARGET_CC_PROGRAM\" >/dev/null 2>&1; then for candidate in $TARGET_MUSL_GCC_FALLBACK_GLOB; do if [ -x \"$candidate\" ]; then TARGET_CC_PROGRAM=\"$candidate\"; break; fi; done; fi\n");
     script.push_str(&format!(
@@ -5339,6 +5463,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String) {
     script.push_str("target_ar_program=$target_tool_prefix-ar\n");
     script.push_str("target_ranlib_program=$target_tool_prefix-ranlib\n");
     script.push_str("target_objcopy_program=$target_tool_prefix-objcopy\n");
+    push_first_stage_target_toolchain_root_validation(script);
     script.push_str(&format!("target_nix_support=\"$target_wrapper_root/{FIRST_STAGE_TARGET_NIX_SUPPORT_DIR}\"\n"));
     script
         .push_str(&format!("target_orig_libc_file=\"$target_nix_support/{FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE}\"\n"));
@@ -7193,6 +7318,10 @@ mod tests {
         assert!(script.contains("using target linker wrapper"));
         assert!(script.contains("using compiler-host linker"));
         assert!(script.contains(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB));
+        assert!(script.contains("target_toolchain_root=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}"));
+        assert!(script.contains("using explicit source-root musl target toolchain"));
+        assert!(script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING));
+        assert!(script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE));
         assert!(script.contains("TARGET_CC_PROGRAM_CANDIDATES='x86_64-unknown-linux-musl-gcc x86_64-linux-musl-gcc'"));
         assert!(script.contains("TARGET_MUSL_MACHINE_ALIASES='x86_64-unknown-linux-musl x86_64-linux-musl'"));
         assert!(script.contains("TARGET_MUSL_SOURCE_ROOT_SYSROOT='x86_64-linux-musl'"));
@@ -7410,6 +7539,9 @@ mod tests {
             .find(&format!("if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM -C {FIRST_STAGE_RUN_RUSTC_DIR}"))
             .unwrap();
         let target_assignment_index = script.rfind("RUSTC_TARGET=\"$RUSTC_PROVIDER_TARGET_TRIPLE\"").unwrap();
+        let target_root_preference_index =
+            script.rfind("target_toolchain_root=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}").unwrap();
+        let target_nix_fallback_index = script.rfind("for candidate in $TARGET_MUSL_GCC_FALLBACK_GLOB").unwrap();
         let target_linker_index = script.rfind("using target linker wrapper").unwrap();
         let target_sysroot_index = script.rfind("target_sysroot_source").unwrap();
         let llvm_host_setup_index = script.find("preparing source-root musl LLVM host compiler runtime").unwrap();
@@ -7425,7 +7557,9 @@ mod tests {
         assert!(compiler_host_linker_index < proc_macro_runtime_index);
         assert!(proc_macro_runtime_index < host_run_rustc_index);
         assert!(host_run_rustc_index < target_assignment_index);
-        assert!(target_assignment_index < target_linker_index);
+        assert!(target_assignment_index < target_root_preference_index);
+        assert!(target_root_preference_index < target_nix_fallback_index);
+        assert!(target_nix_fallback_index < target_linker_index);
         assert!(target_linker_index < target_sysroot_index);
     }
 
@@ -7537,6 +7671,50 @@ mod tests {
     }
 
     #[test]
+    fn materializer_rejects_invalid_explicit_source_root_env_in_subprocess() {
+        let invalid_root_parent = tempfile::tempdir().unwrap();
+        let invalid_root = invalid_root_parent.path().join("missing-source-root");
+        let output = Command::new(std::env::current_exe().unwrap())
+            .arg("rust_source_provider::tests::materializer_invalid_explicit_source_root_child")
+            .arg("--exact")
+            .arg("--nocapture")
+            .env("MANTLE_TEST_INVALID_SOURCE_ROOT_CHILD", "1")
+            .env(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_VAR, &invalid_root)
+            .env_remove(FIRST_STAGE_SOURCE_ROOT_VAR)
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "child status: {:?}\nstdout:\n{}\nstderr:\n{}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn materializer_invalid_explicit_source_root_child() {
+        if std::env::var_os("MANTLE_TEST_INVALID_SOURCE_ROOT_CHILD").is_none() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let recipe = dir.path().join("rust-source.ncl");
+        let output = dir.path().join("out");
+        let scratch = dir.path().join("scratch");
+        fs::write(&recipe, "source-built recipe\n").unwrap();
+        write_test_musl_host_route_plan(dir.path());
+
+        let err = materialize_rust_source_provider(&recipe, &output, &scratch, false).unwrap_err();
+
+        let message = err.to_string();
+        assert!(message.contains("first-stage mrustc/minicargo build failed"));
+        let build_log = fs::read_to_string(scratch.join(FIRST_STAGE_BUILD_LOG_FILE)).unwrap();
+        assert!(build_log.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING));
+        assert!(!output.exists());
+    }
+
+    #[test]
     fn materializer_uses_explicit_route_plan_when_default_plan_is_absent() {
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
@@ -7605,6 +7783,13 @@ mod tests {
         assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB));
         assert!(
             generated_stage1_script
+                .contains("MANTLE_TARGET_TOOLCHAIN_ROOT=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}")
+        );
+        assert!(generated_stage1_script.contains("using explicit Rust bootstrap source-root musl target toolchain"));
+        assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING));
+        assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE));
+        assert!(
+            generated_stage1_script
                 .contains("for candidate_name in x86_64-unknown-linux-musl-gcc x86_64-linux-musl-gcc")
         );
         assert!(
@@ -7621,6 +7806,13 @@ mod tests {
         assert!(generated_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
         assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
         assert!(generated_stage1_script.contains("musl-root = \"$MANTLE_TARGET_MUSL_ROOT\""));
+        let rustc_source_root_preference_index = generated_stage1_script
+            .find("MANTLE_TARGET_TOOLCHAIN_ROOT=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}")
+            .unwrap();
+        let rustc_nix_fallback_index = generated_stage1_script
+            .find(&format!("for candidate in {FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB}"))
+            .unwrap();
+        assert!(rustc_source_root_preference_index < rustc_nix_fallback_index);
         assert!(generated_stage1_script.contains(RUSTC_SOURCE_CRANELIFT_MANIFEST));
         assert!(generated_stage1_script.contains(RUSTC_SOURCE_CODEGEN_GCC_MANIFEST));
         let rustc_final_log = fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_BUILD_LOG_FILE)).unwrap();
