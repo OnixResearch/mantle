@@ -1069,3 +1069,55 @@ invalid explicit roots fail closed instead of silently falling back to Nix.
 Focused validation is recorded in `focused-validation-2026-06-18.md`. A fresh
 rerun 34 from this fix is required before claiming provider-candidate smoke,
 Rust-bootstrap x.py, or final rustdoc completion.
+
+## Rerun 34: Rust-bootstrap shared proc-macro unwinder frontier
+
+Rerun 34 from commit `ed27d570` proved the explicit source-root target binding
+clears the rerun-33 Nix-wrapper misbinding and advances into the Rust-bootstrap
+x.py build. It did not complete the Rust-bootstrap stage1 provider, final x.py
+stage, or final rustdoc validation.
+
+- Pueue task: `255`
+- Commit: `ed27d570`
+- Run root: `target/rust-source-provider-musl-host-route-explicit-toolchain-rerun34-2026-06-23`
+- Source root / target toolchain root: `.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain`
+- Result: failed closed with status `1` during `rustc-stage1` x.py work
+- Status file: `target/rust-source-provider-musl-host-route-explicit-toolchain-rerun34-2026-06-23/status.txt`
+- Rust-bootstrap log: `target/rust-source-provider-musl-host-route-explicit-toolchain-rerun34-2026-06-23/tmp/mantle-rust-source-provider-Rv5EvA/rustc-stage1-build.log`
+
+Status excerpt:
+
+```text
+commit=ed27d570
+run_root=target/rust-source-provider-musl-host-route-explicit-toolchain-rerun34-2026-06-23
+source_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+target_toolchain_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+status=1
+```
+
+The Rust-bootstrap log confirms the generated x.py wrapper used the explicit
+source-root target compiler, not a Nix musl GCC wrapper:
+
+```text
+using explicit Rust bootstrap source-root musl target toolchain: /home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+using Rust bootstrap target linker wrapper: .../rust-bootstrap-target-linker-bin/cc -> /home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain/bin/x86_64-linux-musl-gcc
+Building stage2 compiler artifacts (stage1 -> stage2, x86_64-unknown-linux-musl)
+error[E0463]: can't find crate for `ref_cast_impl`
+error: could not compile `ref-cast` (lib) due to 1 previous error
+```
+
+A preserved-scratch probe against the stage2 proc-macro artifact showed the
+underlying loader frontier: the proc-macro dylib was ABI-compatible with stage1
+`rustc`, but `dlopen` failed because `_Unwind_Resume` was unresolved:
+
+```text
+rustc 1.91.1 (ed61e7d7e 2025-11-07) (built from a source tarball)
+error: .../stage2-rustc/release/deps/libref_cast_impl-7b9bbac3ef35d417.so: Error relocating .../libref_cast_impl-7b9bbac3ef35d417.so: _Unwind_Resume: symbol not found
+```
+
+The follow-up source fix keeps shared proc-macro dylibs dynamic but links them
+against the packaged static unwind archive as well as static libgcc:
+`-Wl,-Bstatic -lunwind -lgcc -Wl,-Bdynamic`. Focused validation is recorded in
+`focused-validation-2026-06-18.md`. A fresh rerun 35 is required before claiming
+Rust-bootstrap stage1 provider completion, final x.py completion, or final
+rustdoc validation.

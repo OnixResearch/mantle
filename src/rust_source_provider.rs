@@ -2576,7 +2576,7 @@ fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     script.push_str("    printf '%s\\n' '  esac' >> \"$target_alias_dir/cc\"\n");
     script.push_str("    printf '%s\\n' 'done' >> \"$target_alias_dir/cc\"\n");
     script.push_str(&format!(
-        "    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$shared_link\" = true ]; then set -- \"$@\" -Wl,-Bstatic -lgcc -Wl,-Bdynamic; elif [ \"$link_command\" = true ] && {{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }}; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
+        "    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$shared_link\" = true ]; then set -- \"$@\" -Wl,-Bstatic -lunwind -lgcc -Wl,-Bdynamic; elif [ \"$link_command\" = true ] && {{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }}; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str(&format!(
         "    printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
@@ -7282,7 +7282,7 @@ mod tests {
             rustc_stage1_script.contains("Rust bootstrap target musl libc.so missing for dynamic compiler host links")
         );
         assert!(rustc_stage1_script.contains("$target_orig_cc_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib"));
-        assert!(rustc_stage1_script.contains("set -- \"$@\" -Wl,-Bstatic -lgcc -Wl,-Bdynamic"));
+        assert!(rustc_stage1_script.contains("set -- \"$@\" -Wl,-Bstatic -lunwind -lgcc -Wl,-Bdynamic"));
         assert!(rustc_stage1_script.contains(
             "{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/libc.so\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"
         ));
