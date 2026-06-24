@@ -122,6 +122,13 @@ const RUSTC_SOURCE_CRANELIFT_MANIFEST: &str = "compiler/rustc_codegen_cranelift/
 const RUSTC_SOURCE_CODEGEN_GCC_MANIFEST: &str = "compiler/rustc_codegen_gcc/Cargo.toml";
 const RUSTC_SOURCE_RUSTC_DRIVER_MANIFEST: &str = "compiler/rustc_driver/Cargo.toml";
 const RUSTC_SOURCE_FILESEARCH_SOURCE: &str = "compiler/rustc_session/src/filesearch.rs";
+const RUSTC_SOURCE_TOOL_BUILD_SOURCE: &str = "src/bootstrap/src/core/build_steps/tool.rs";
+const RUSTC_SOURCE_TOOL_BUILD_CARGO_ANCHOR_LINE: &str = "        let mut cargo = prepare_tool_cargo(";
+const RUSTC_SOURCE_TOOL_BUILD_CARGO_END_LINE: &str = "        );";
+const RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_MARKER: &str =
+    "normalizing Rust bootstrap rustc-private tool rlib lookup for static musl compiler host";
+const RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_ERROR: &str =
+    "Rust bootstrap tool source lacks expected ToolBuild cargo construction for rustc-private rlib lookup";
 const RUSTC_SOURCE_FILESEARCH_DEFAULT_SYSROOT_LINE: &str = "    from_env_args_next()";
 const RUSTC_SOURCE_FILESEARCH_DYLIB_FALLBACK_LINE: &str =
     "        .unwrap_or_else(|| default_from_rustc_driver_dll().expect(\"Failed finding sysroot\"))";
@@ -2026,6 +2033,7 @@ fn push_generated_rustc_source_build_script(script: &mut String) {
     push_rustc_source_bootstrap_workspace_isolation(script);
     push_rustc_source_musl_rustc_driver_rlib_patch(script);
     push_rustc_source_musl_sysroot_env_fallback_patch(script);
+    push_rustc_source_musl_rustc_private_tool_sysroot_patch(script);
     script.push_str("printf '%s\\n' \"using generated x.py Rust build adapter: $MANTLE_RUST_SOURCE\"\n");
     script.push_str("if [ -x \"$MANTLE_RUST_SOURCE/");
     script.push_str(RUSTC_SOURCE_XPY_SCRIPT);
@@ -2127,6 +2135,61 @@ fn push_rustc_source_musl_sysroot_env_fallback_patch(script: &mut String) {
         "  if [ \"$filesearch_replaced\" = false ] && [ \"$filesearch_seen_env_fallback\" = false ]; then printf '%s\\n' 'Rust bootstrap filesearch source lacks expected sysroot fallback lines for musl host normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
     script.push_str("  mv \"$filesearch_tmp\" \"$filesearch_source\"\n");
+    script.push_str("fi\n");
+}
+
+fn push_rustc_source_musl_rustc_private_tool_sysroot_patch(script: &mut String) {
+    script.push_str(&format!("if [ \"$MANTLE_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script.push_str("  printf '%s\\n' ");
+    script.push_str(&shell_quote(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_MARKER));
+    script.push_str("\n");
+    script.push_str("  tool_build_source=\"$MANTLE_RUST_SOURCE/");
+    script.push_str(RUSTC_SOURCE_TOOL_BUILD_SOURCE);
+    script.push_str("\"\n");
+    script.push_str(&format!(
+        "  if [ ! -f \"$tool_build_source\" ]; then printf '%s\\n' 'Rust bootstrap tool source missing before rustc-private rlib lookup normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  tool_build_tmp=\"$MANTLE_BUILD_DIR/rust-bootstrap-tool.rs\"\n");
+    script.push_str("  tool_build_after_cargo_anchor=false\n");
+    script.push_str("  tool_build_inserted=false\n");
+    script.push_str("  : > \"$tool_build_tmp\"\n");
+    script.push_str("  while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$tool_build_tmp\"\n");
+    script.push_str("    if [ \"$tool_build_after_cargo_anchor\" = true ]; then\n");
+    script.push_str("      case \"$line\" in\n");
+    script
+        .push_str(&format!("        {cargo_end})\n", cargo_end = shell_quote(RUSTC_SOURCE_TOOL_BUILD_CARGO_END_LINE),));
+    script.push_str("          printf '%s\\n' \\\n");
+    script.push_str("'        if self.mode == Mode::ToolRustcPrivate {' \\\n");
+    script.push_str("'            cargo.append_to_env(' \\\n");
+    script.push_str("'                \"RUSTC_ADDITIONAL_SYSROOT_PATHS\",' \\\n");
+    script.push_str("'                builder' \\\n");
+    script.push_str("'                    .cargo_out(self.build_compiler, Mode::Rustc, target)' \\\n");
+    script.push_str("'                    .join(\"deps\")' \\\n");
+    script.push_str("'                    .to_str()' \\\n");
+    script.push_str("'                    .expect(\"rustc private tool rlib path should be UTF-8\")' \\\n");
+    script.push_str("'                    .to_owned(),' \\\n");
+    script.push_str("'                \",\",' \\\n");
+    script.push_str("'            );' \\\n");
+    script.push_str("'        }' >> \"$tool_build_tmp\"\n");
+    script.push_str("          tool_build_inserted=true\n");
+    script.push_str("          tool_build_after_cargo_anchor=false\n");
+    script.push_str("          continue\n");
+    script.push_str("          ;;\n");
+    script.push_str("      esac\n");
+    script.push_str("    fi\n");
+    script.push_str("    case \"$line\" in\n");
+    script.push_str(&format!(
+        "      {cargo_anchor}) tool_build_after_cargo_anchor=true ;;\n",
+        cargo_anchor = shell_quote(RUSTC_SOURCE_TOOL_BUILD_CARGO_ANCHOR_LINE),
+    ));
+    script.push_str("    esac\n");
+    script.push_str("  done < \"$tool_build_source\"\n");
+    script.push_str(&format!(
+        "  if [ \"$tool_build_inserted\" = false ]; then printf '%s\\n' {error} >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n",
+        error = shell_quote(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_ERROR),
+    ));
+    script.push_str("  mv \"$tool_build_tmp\" \"$tool_build_source\"\n");
     script.push_str("fi\n");
 }
 
@@ -7251,6 +7314,12 @@ mod tests {
         assert!(rustc_stage1_script.contains(
             "Rust bootstrap filesearch source lacks expected sysroot fallback lines for musl host normalization"
         ));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_MARKER));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_SOURCE));
+        assert!(rustc_stage1_script.contains("RUSTC_ADDITIONAL_SYSROOT_PATHS"));
+        assert!(rustc_stage1_script.contains("Mode::ToolRustcPrivate"));
+        assert!(rustc_stage1_script.contains("Mode::Rustc, target"));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_ERROR));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_ALIAS_DIR));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR));
         assert!(
@@ -7819,6 +7888,8 @@ mod tests {
         assert!(rustc_source_root_preference_index < rustc_nix_fallback_index);
         assert!(generated_stage1_script.contains(RUSTC_SOURCE_CRANELIFT_MANIFEST));
         assert!(generated_stage1_script.contains(RUSTC_SOURCE_CODEGEN_GCC_MANIFEST));
+        assert!(generated_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_MARKER));
+        assert!(generated_stage1_script.contains("RUSTC_ADDITIONAL_SYSROOT_PATHS"));
         let rustc_final_log = fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_BUILD_LOG_FILE)).unwrap();
         assert!(rustc_final_log.contains("scrubbing inherited Rust bootstrap Cargo environment"));
         assert!(rustc_final_log.contains("isolated Rust Cargo workspace"));

@@ -2299,3 +2299,120 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-24 addendum: rustdoc rustc-private tool rlib lookup
+
+Rerun 36 cleared the invalid final `install rustdoc` x.py goal and reached
+`rustdoc_tool_binary`, then failed because Rust bootstrap's rustc-private tool
+build saw only sysroot `.rmeta` metadata for compiler/private crates while the
+required `.rlib` artifacts already existed under the stage2 `Mode::Rustc`
+`release/deps` output. The source fix patches generated musl-host x.py adapters
+to add that `deps` directory to `RUSTC_ADDITIONAL_SYSROOT_PATHS` for
+`Mode::ToolRustcPrivate` builds.
+
+Baseline before the change was attempted with the normal focused test command,
+but the host clang wrapper rejected the repo's configured `-fuse-ld=mold` before
+any source assertion ran. No source baseline claim is made from that blocked
+run.
+
+Focused validation after the change:
+
+```text
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 src/rust_source_provider.rs
+# pueue task 17 completed successfully.
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan -- --exact
+# pueue task 34, with a local clang wrapper that strips the stale -fuse-ld=mold host flag
+running 1 test
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 818 filtered out; finished in 1.44s
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts -- --exact
+# pueue task 43, same local clang wrapper
+running 1 test
+test rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 818 filtered out; finished in 2.64s
+
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_rejects_rust_source_without_stage_script_or_xpy_without_output -- --exact
+# pueue task 161, same local clang wrapper
+running 1 test
+test rust_source_provider::tests::materializer_rejects_rust_source_without_stage_script_or_xpy_without_output ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 818 filtered out; finished in 0.79s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+$ git diff --check
+# pueue task 169 completed successfully.
+```
+
+Directional scratch continuation from rerun 36:
+
+```text
+$ sh ./run-rustc-final.sh > rustc-final-tool-sysroot-continuation.log 2>&1
+# pueue task 53 in target/.../rustc-final after manually applying the generated-source patch
+Building stage2 rustdoc_tool_binary (stage1 -> stage2, x86_64-unknown-linux-musl)
+...
+Build completed successfully in 0:14:09
+rustc final products ready
+
+$ target/.../rustc-final-output/bin/rustdoc --version
+# pueue task 141
+rustdoc 1.94.0 (4a4ef493e 2026-03-02) (built from a source tarball)
+```
+
+This scratch proof is not authoritative provider completion evidence. A fresh
+full rerun from the committed source is still required before claiming the final
+provider or final rustdoc route complete.
+
+Post-addendum Cairn validation transcript saved at
+`target/first-stage-musl-host-llvm-runtime-cairn-2026-06-24-rustdoc-rlib.txt`:
+
+```text
+$ git diff --check
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "issues": [],
+  "layout": "cairn",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```

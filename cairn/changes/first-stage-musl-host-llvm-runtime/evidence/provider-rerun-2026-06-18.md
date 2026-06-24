@@ -1167,3 +1167,76 @@ runs the valid `install rustc cargo library/std` goals while the generated confi
 still sets `tools = ["cargo", "rustdoc"]`. Focused validation is recorded in
 `focused-validation-2026-06-18.md`. A fresh rerun 36 is required before claiming
 final x.py completion or final rustdoc validation.
+
+## Rerun 36: final rustdoc rustc-private rlib lookup frontier
+
+Rerun 36 relaunch from commit `6e3ca930` proved the final x.py goal/tool split
+clears rerun 35's invalid `install rustdoc` frontier. The final Rust 1.94 x.py
+stage used the valid `install rustc cargo library/std` goals with bootstrap
+tools `["cargo", "rustdoc"]`, built stage2 rustc, created the stage2 sysroot,
+and then failed while compiling the local `rustdoc_tool_binary`. It did not
+complete final provider packaging or final rustdoc validation.
+
+- Pueue task: `20` (later unavailable after pueue cleanup; run-root files preserved)
+- Commit: `6e3ca930`
+- Run root: `target/rust-source-provider-musl-host-route-final-rustdoc-goal-rerun36-relaunch-2026-06-24`
+- Source root / target toolchain root: `.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain`
+- Result: failed closed with status `1` during `rustc-final` x.py work
+- Status file: `target/rust-source-provider-musl-host-route-final-rustdoc-goal-rerun36-relaunch-2026-06-24/status.txt`
+- Final Rust-bootstrap log: `target/rust-source-provider-musl-host-route-final-rustdoc-goal-rerun36-relaunch-2026-06-24/tmp/mantle-rust-source-provider-KEDOfZ/rustc-final/rustc-final-build.log`
+
+Status excerpt:
+
+```text
+commit=6e3ca930
+run_root=target/rust-source-provider-musl-host-route-final-rustdoc-goal-rerun36-relaunch-2026-06-24
+source_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+target_toolchain_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+status=1
+```
+
+The final x.py log shows rerun 36 reached the rustdoc tool build instead of the
+old install-target rejection:
+
+```text
+Building stage2 rustdoc_tool_binary (stage1 -> stage2, x86_64-unknown-linux-musl)
+   Compiling rustdoc-tool v0.0.0 (.../src/tools/rustdoc)
+error: crate `rustc_abi` required to be available in rlib format, but was not found in this form
+error: crate `bitflags` required to be available in rlib format, but was not found in this form
+...
+error: crate `ctrlc` required to be available in rlib format, but was not found in this form
+error: crate `nix` required to be available in rlib format, but was not found in this form
+error: could not compile `rustdoc-tool` (bin "rustdoc_tool_binary") due to 225 previous errors
+```
+
+A preserved-scratch continuation manually added Rust bootstrap's existing
+`RUSTC_ADDITIONAL_SYSROOT_PATHS` hook for `Mode::ToolRustcPrivate`, pointing it
+at the already-built `Mode::Rustc` `deps` directory where the stage2 compiler
+rlibs exist. Pueue task `53` reran only the final `run-rustc-final.sh` in the
+preserved scratch and completed successfully:
+
+```text
+Building stage2 rustdoc_tool_binary (stage1 -> stage2, x86_64-unknown-linux-musl)
+...
+Dist rustc-1.94.0-x86_64-unknown-linux-musl
+Installing stage2 rustc (stage1 -> stage2, x86_64-unknown-linux-musl)
+Dist cargo-1.94.0-x86_64-unknown-linux-musl
+Installing stage2 cargo (stage1 -> stage2, x86_64-unknown-linux-musl)
+Dist rust-std-1.94.0-x86_64-unknown-linux-musl
+Installing stage2 std (stage1 -> stage2, x86_64-unknown-linux-musl)
+Build completed successfully in 0:14:09
+rustc final products ready
+```
+
+The scratch output also produced a runnable final rustdoc:
+
+```text
+$ target/.../rustc-final-output/bin/rustdoc --version
+rustdoc 1.94.0 (4a4ef493e 2026-03-02) (built from a source tarball)
+```
+
+This scratch continuation is directional only. The follow-up source fix patches
+the generated Rust-bootstrap adapter so musl-host generated x.py sources insert
+that `RUSTC_ADDITIONAL_SYSROOT_PATHS` path before building rustc-private tools.
+A fresh committed full rerun is required before claiming provider completion or
+final rustdoc validation.
