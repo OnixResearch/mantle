@@ -1118,6 +1118,52 @@ error: .../stage2-rustc/release/deps/libref_cast_impl-7b9bbac3ef35d417.so: Error
 The follow-up source fix keeps shared proc-macro dylibs dynamic but links them
 against the packaged static unwind archive as well as static libgcc:
 `-Wl,-Bstatic -lunwind -lgcc -Wl,-Bdynamic`. Focused validation is recorded in
-`focused-validation-2026-06-18.md`. A fresh rerun 35 is required before claiming
-Rust-bootstrap stage1 provider completion, final x.py completion, or final
-rustdoc validation.
+`focused-validation-2026-06-18.md`.
+
+## Rerun 35: final x.py rustdoc install-target frontier
+
+Rerun 35 from commit `b5a52a9e` proved the shared-proc-macro unwinder fix clears
+rerun 34's `_Unwind_Resume` loader frontier. The run completed the mrustc
+first-stage build, the intermediate Rust-bootstrap stage1 x.py chain, and
+advanced into the final Rust 1.94 x.py install stage. It did not complete the
+final provider or final rustdoc validation.
+
+- Pueue task: `23`
+- Commit: `b5a52a9e`
+- Run root: `target/rust-source-provider-musl-host-route-procmacro-unwind-rerun35-2026-06-23`
+- Source root / target toolchain root: `.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain`
+- Result: failed closed with status `1` during `rustc-final` x.py startup
+- Status file: `target/rust-source-provider-musl-host-route-procmacro-unwind-rerun35-2026-06-23/status.txt`
+- Final Rust-bootstrap log: `target/rust-source-provider-musl-host-route-procmacro-unwind-rerun35-2026-06-23/tmp/mantle-rust-source-provider-S91S2N/rustc-final/rustc-final-build.log`
+
+Status excerpt:
+
+```text
+commit=b5a52a9e
+run_root=target/rust-source-provider-musl-host-route-procmacro-unwind-rerun35-2026-06-23
+source_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+target_toolchain_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+status=1
+```
+
+The final x.py log shows the route reached the Rust 1.94 final install stage and
+failed before final Rust sources compiled:
+
+```text
+using generated x.py Rust build adapter: .../rustc-final-sources/rust-1.94.0
+Building bootstrap
+Finished `dev` profile [unoptimized] target(s) in 23.33s
+ERROR: no `install` rules matched [rustdoc]
+HELP: run `x.py install --help --verbose` to show a list of available paths
+Build completed unsuccessfully in 0:00:23
+```
+
+The preserved Rust 1.94 bootstrap sources explain the frontier: `install.rs`
+registers installable rustc as `compiler/rustc`, cargo as alias `cargo`, and std
+as `library/std`; there is no `install rustdoc` alias. The Rustc dist step copies
+`bin/rustdoc` when bootstrap `tools` contains `"rustdoc"`. The follow-up source
+fix therefore separates x.py CLI goals from bootstrap tool selection: final x.py
+runs the valid `install rustc cargo library/std` goals while the generated config
+still sets `tools = ["cargo", "rustdoc"]`. Focused validation is recorded in
+`focused-validation-2026-06-18.md`. A fresh rerun 36 is required before claiming
+final x.py completion or final rustdoc validation.

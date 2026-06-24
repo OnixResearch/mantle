@@ -2156,3 +2156,146 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-23 addendum: final x.py rustdoc install-goal split
+
+Rerun 35 proved the Rust-bootstrap shared proc-macro unwinder fix by advancing
+past the rerun-34 `_Unwind_Resume` failure and into the Rust 1.94 final x.py
+stage. The final stage then failed before compiling final Rust sources because
+Rust 1.94 has no `install rustdoc` path. The source fix keeps final rustdoc in
+the provider by separating x.py CLI goals from bootstrap tool selection: final
+x.py now runs `install rustc cargo library/std`, while the generated config still
+sets bootstrap `tools = ["cargo", "rustdoc"]` so the Rustc dist component copies
+`bin/rustdoc`. Stage1 remains cargo-only.
+
+Baseline before the change:
+
+```text
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_
+# pueue task 79
+running 14 tests
+...
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 805 filtered out; finished in 3.87s
+```
+
+Focused validation after the change:
+
+```text
+$ cargo test -p mantle --bin mantle rust_source_provider::tests::materializer_
+# pueue task 97
+running 14 tests
+...
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 805 filtered out; finished in 4.19s
+
+$ cargo test -p mantle --bin mantle rustc_stage_dynamic_tool_wrapping
+# pueue task 114
+running 2 tests
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_rejects_missing_shared_libgcc_runtime ... ok
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_copies_shared_libgcc_runtime ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 817 filtered out; finished in 0.05s
+
+$ cargo test -p mantle --bin mantle first_stage_proc_macro_rustc_install
+# pueue task 110
+running 3 tests
+test rust_source_provider::tests::first_stage_proc_macro_rustc_install_rejects_missing_runtime_loader ... ok
+test rust_source_provider::tests::first_stage_proc_macro_rustc_install_rejects_missing_shared_libgcc_runtime ... ok
+test rust_source_provider::tests::first_stage_proc_macro_rustc_install_writes_relocatable_loader_wrapper ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 816 filtered out; finished in 0.03s
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+$ git diff --check
+# pueue task 116
+rustfmt-check-and-diff-check: ok
+```
+
+Post-addendum Cairn validation transcript saved at
+`target/first-stage-musl-host-llvm-runtime-cairn-2026-06-23-final-rustdoc-goal.txt`:
+
+```text
+$ git diff --check
+
+$ /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustfmt --edition 2024 --check src/rust_source_provider.rs
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "e3cafffedf5eadce1a8791a220387a2bac0b929e0ed0da6ebee0936655f73bc3",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "4d5eee759965371aafa29dec70fd5deaf811bf8e86135e43ddf3e824e0812db3",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "c137a9dcda225930dbd041a5acb1c1ecc1129173fbee7fb24fa11b25a5ae4f8d",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "888c009af4cb68509f43c1a5de229594e56f0efc2956465d3533ff8ce52c7b4b",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-host-llvm-runtime --root .
+{
+  "change": "first-stage-musl-host-llvm-runtime",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "7d757b8f2731f9cc8614a1b858784d128ff40097742cf03ccfaf62328f06901d",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "b478ad0142d0e9879fd38ac1b17d36c86d1e038ddf0163a2da7f23c60e5f25ae",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```

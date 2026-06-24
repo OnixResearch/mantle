@@ -87,6 +87,7 @@ const RUSTC_STAGE1_PROVIDER_BUILD_RECIPE: &str = "rustc-stage1-source-route";
 const RUSTC_STAGE1_SOURCE_BUILD_SCRIPT: &str = "mantle-rustc-stage1-build.sh";
 const RUSTC_STAGE1_GENERATED_BUILD_SCRIPT: &str = "mantle-generated-rustc-stage1-build.sh";
 const RUSTC_STAGE1_XPY_GOALS: &str = "install rustc cargo library/std";
+const RUSTC_STAGE1_BOOTSTRAP_TOOLS_JSON: &str = "[\"cargo\"]";
 const RUSTC_STAGE1_SHELL_PROGRAM: &str = "sh";
 const RUSTC_FINAL_DIR: &str = "rustc-final";
 const RUSTC_FINAL_PLAN_SCHEMA: &str = "mantle-rust-source-provider-rustc-final-plan-v1";
@@ -112,7 +113,8 @@ const RUSTC_FINAL_PROVIDER_RECEIPT_NAME: &str = "rust-final-build-receipt";
 const RUSTC_FINAL_PROVIDER_BUILD_RECIPE: &str = "rust-final-source-route";
 const RUSTC_FINAL_SOURCE_BUILD_SCRIPT: &str = "mantle-rustc-final-build.sh";
 const RUSTC_FINAL_GENERATED_BUILD_SCRIPT: &str = "mantle-generated-rustc-final-build.sh";
-const RUSTC_FINAL_XPY_GOALS: &str = "install rustc cargo rustdoc library/std";
+const RUSTC_FINAL_XPY_GOALS: &str = "install rustc cargo library/std";
+const RUSTC_FINAL_BOOTSTRAP_TOOLS_JSON: &str = "[\"cargo\", \"rustdoc\"]";
 const RUSTC_FINAL_SHELL_PROGRAM: &str = "sh";
 const RUSTC_SOURCE_XPY_SCRIPT: &str = "x.py";
 const RUSTC_SOURCE_BOOTSTRAP_MANIFEST: &str = "src/bootstrap/Cargo.toml";
@@ -1989,7 +1991,7 @@ fn push_generated_rustc_source_build_script(script: &mut String) {
     script.push_str("mkdir -p \"$MANTLE_BUILD_DIR\" \"$MANTLE_STAGE_OUTPUT\"\n");
     push_rustc_source_build_env_scrub(script);
     push_rustc_source_build_tool_discovery(script);
-    script.push_str("MANTLE_RUST_TOOLS='[\"cargo\"]'\n");
+    script.push_str("MANTLE_RUST_TOOLS=${MANTLE_RUST_BOOTSTRAP_TOOLS:-'[\"cargo\"]'}\n");
     script.push_str(
         "case \" $MANTLE_RUST_BUILD_GOALS \" in *' rustdoc '*) MANTLE_RUST_TOOLS='[\"cargo\", \"rustdoc\"]' ;; esac\n",
     );
@@ -2672,11 +2674,13 @@ fn push_rustc_source_bootstrap_workspace_isolation(script: &mut String) {
     script.push_str("done\n");
 }
 
-fn push_rustc_source_build_script_launch(script: &mut String, goals: &str) {
+fn push_rustc_source_build_script_launch(script: &mut String, goals: &str, bootstrap_tools_json: &str) {
     script.push_str(
         "MANTLE_BOOTSTRAP_PROVIDER=\"$BOOTSTRAP_PROVIDER\" MANTLE_STAGE_OUTPUT=\"$STAGE_OUTPUT\" MANTLE_BUILD_DIR=\"$BUILD_DIR\" MANTLE_RUST_SOURCE=\"$RUST_SOURCE\" MANTLE_RUST_BUILD_GOALS=",
     );
     script.push_str(&shell_quote(goals));
+    script.push_str(" MANTLE_RUST_BOOTSTRAP_TOOLS=");
+    script.push_str(&shell_quote(bootstrap_tools_json));
     script.push_str(
         " MANTLE_RUST_VERSION=\"$RUSTC_VERSION\" MANTLE_HOST_TRIPLE=\"$HOST_TRIPLE\" MANTLE_TARGET_TRIPLE=\"$TARGET_TRIPLE\" \"$SHELL_PROGRAM\" \"$RESOLVED_BUILD_SCRIPT\"\n",
     );
@@ -2684,7 +2688,7 @@ fn push_rustc_source_build_script_launch(script: &mut String, goals: &str) {
 
 fn push_rustc_stage1_script_build_commands(script: &mut String) {
     script.push_str("mkdir -p \"$BUILD_DIR\" \"$STAGE_OUTPUT\"\n");
-    push_rustc_source_build_script_launch(script, RUSTC_STAGE1_XPY_GOALS);
+    push_rustc_source_build_script_launch(script, RUSTC_STAGE1_XPY_GOALS, RUSTC_STAGE1_BOOTSTRAP_TOOLS_JSON);
     push_required_shell_path_file_check(
         script,
         "\"$STAGE_OUTPUT/bin/rustc\"",
@@ -2779,7 +2783,7 @@ fn push_rustc_final_script_input_checks(script: &mut String) {
 
 fn push_rustc_final_script_build_commands(script: &mut String) {
     script.push_str("mkdir -p \"$BUILD_DIR\" \"$STAGE_OUTPUT\"\n");
-    push_rustc_source_build_script_launch(script, RUSTC_FINAL_XPY_GOALS);
+    push_rustc_source_build_script_launch(script, RUSTC_FINAL_XPY_GOALS, RUSTC_FINAL_BOOTSTRAP_TOOLS_JSON);
     push_required_shell_path_file_check(
         script,
         "\"$STAGE_OUTPUT/bin/rustc\"",
@@ -7274,7 +7278,7 @@ mod tests {
             "-static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
         ));
         assert!(rustc_stage1_script.contains("-B\"$target_runtime_dir/\" -L\"$target_runtime_dir\""));
-        assert!(rustc_stage1_script.contains("MANTLE_RUST_TOOLS='[\"cargo\"]'"));
+        assert!(rustc_stage1_script.contains("MANTLE_RUST_TOOLS=${MANTLE_RUST_BOOTSTRAP_TOOLS:-'[\"cargo\"]'}"));
         assert!(rustc_stage1_script.contains("*' rustdoc '*) MANTLE_RUST_TOOLS='[\"cargo\", \"rustdoc\"]'"));
         assert!(rustc_stage1_script.contains("tools = $MANTLE_RUST_TOOLS"));
         assert!(rustc_stage1_script.contains("cargo-native-static = true"));
@@ -7820,7 +7824,14 @@ mod tests {
         assert!(rustc_final_log.contains("isolated Rust Cargo workspace"));
         assert!(rustc_final_log.contains("using generated x.py Rust build adapter"));
         assert!(rustc_final_log.contains("synthetic x.py for 1.94.0"));
-        assert!(rustc_final_log.contains("install rustc cargo rustdoc library/std"));
+        assert!(rustc_final_log.contains("install rustc cargo library/std"));
+        assert!(!rustc_final_log.contains("install rustc cargo rustdoc"));
+        let generated_final_script =
+            fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_BUILD_DIR).join(RUSTC_FINAL_GENERATED_BUILD_SCRIPT))
+                .unwrap();
+        assert!(generated_final_script.contains("tools = $MANTLE_RUST_TOOLS"));
+        let final_script = fs::read_to_string(rustc_final_root.join(RUSTC_FINAL_SCRIPT_FILE)).unwrap();
+        assert!(final_script.contains("MANTLE_RUST_BOOTSTRAP_TOOLS='[\"cargo\", \"rustdoc\"]'"));
     }
 
     #[test]
