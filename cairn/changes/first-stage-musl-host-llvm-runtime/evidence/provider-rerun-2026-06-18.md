@@ -1240,3 +1240,98 @@ the generated Rust-bootstrap adapter so musl-host generated x.py sources insert
 that `RUSTC_ADDITIONAL_SYSROOT_PATHS` path before building rustc-private tools.
 A fresh committed full rerun is required before claiming provider completion or
 final rustdoc validation.
+
+## Rerun 37: committed full provider and final rustdoc validation
+
+Rerun 37 from commit `2701c9d8` is the authoritative committed rerun for the
+Rust-bootstrap rustc-private tool rlib lookup fix. It completed the full
+source-root musl-host route, materialized the final provider, preserved smoke
+evidence, and produced runnable `rustdoc`, `rustc`, and `cargo` binaries from
+Rust 1.94.0 source.
+
+- Pueue task: `249`
+- Commit: `2701c9d8`
+- Run root: `target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24`
+- Source root / target toolchain root: `.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain`
+- Result: completed successfully with status `0`
+- Status file: `target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/status.txt`
+- Provider output: `target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out`
+- Provider metadata: `target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out/share/mantle-rust-provider/provider.json`
+- Provider receipt: `target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out/share/mantle-rust-provider/receipts/build.json`
+- Smoke evidence: `target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/smoke/smoke.json`
+
+Status excerpt:
+
+```text
+commit=2701c9d8
+run_root=target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24
+source_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+target_toolchain_root=/home/brittonr/git/mantle/.pi/source-root-provider-run-20260531T231455Z/store/0jp0idh7pj86vlraa7vcq8igfqp4wrvh-musl-seed-toolchain
+output=target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out
+status=0
+finished_unix=1782354810
+```
+
+Provider materialization and smoke excerpt from `stderr.txt`:
+
+```text
+Materialized Rust source provider target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out
+  metadata_path: target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out/share/mantle-rust-provider/provider.json
+  metadata_digest_blake3: 7c69ccd8806748e7472d6eb0d4f629503d5561541e51d4535ed57dcbb92258fd
+Smoked Rust source provider target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out
+  rustc_path: target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out/bin/rustc
+  target_triple: x86_64-unknown-linux-musl
+  smoke_output_digest_blake3: 9f0d53605192ecf7ff861a09e9e26721d3dfc7c4e52be8987192759cf1b56577
+  smoke_evidence_summary: target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/smoke/smoke.json
+  smoke_evidence_metadata_digest_blake3: 7c69ccd8806748e7472d6eb0d4f629503d5561541e51d4535ed57dcbb92258fd
+  smoke_evidence_policy_digest_blake3: d74b5713c8dc13ad57d9aa269e9e8052f020da49904aaef1828641b5ed627562
+```
+
+Smoke evidence excerpt:
+
+```json
+{
+  "schema": "mantle-rust-source-provider-smoke-evidence-v1",
+  "provider_path": "target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out",
+  "rustc_path": "target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out/bin/rustc",
+  "target_triple": "x86_64-unknown-linux-musl",
+  "output_digest_blake3": "9f0d53605192ecf7ff861a09e9e26721d3dfc7c4e52be8987192759cf1b56577",
+  "metadata": {
+    "metadata_digest_blake3": "7c69ccd8806748e7472d6eb0d4f629503d5561541e51d4535ed57dcbb92258fd",
+    "policy_digest_blake3": "d74b5713c8dc13ad57d9aa269e9e8052f020da49904aaef1828641b5ed627562"
+  }
+}
+```
+
+Provider metadata records the final Rust 1.94 artifacts and digests:
+
+```text
+rustc:   fc8954789b9c63e3fa820aefeb882158d4abec75acf339d8b62fe005f5104b61
+cargo:   d3c5a0fdda5d1aad2b49a0d10d449b97c86a500f4f7b7ed633664bbcbf1cd5c1
+rustdoc: 2e87d90e03552622e88da51f2b3f3e1c8e38ae9189210d47d0b2b527f16b1adc
+receipt: b1f57da3fa9f0c775e966c08c022463932e7e6179a1e016f7c1417a201516b04
+```
+
+Post-run binary check:
+
+```text
+$ target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out/bin/rustdoc --version
+rustdoc 1.94.0 (4a4ef493e 2026-03-02) (built from a source tarball)
+
+$ target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out/bin/rustc --version
+rustc 1.94.0 (4a4ef493e 2026-03-02) (built from a source tarball)
+
+$ target/rust-source-provider-musl-host-route-rustdoc-rlib-rerun37-2026-06-24/provider-out/bin/cargo --version
+cargo 1.94.0 (85eff7c80 2026-01-15) (built from a source tarball)
+```
+
+Live monitoring before the successful materializer cleanup observed the final
+Rust-bootstrap build log reach `Building stage2 rustdoc_tool_binary` with the
+committed `normalizing Rust bootstrap rustc-private tool rlib lookup for static
+musl compiler host` patch marker present and no old `required to be available in
+rlib format` errors. The durable acceptance evidence above is the completed
+status, provider metadata/receipt, smoke bundle, and runnable final `rustdoc`.
+
+This run proves the committed rlib lookup fix clears rerun 36's rustdoc-tool
+frontier and that the source-root musl-host Rust provider route can materialize
+and smoke a final Rust 1.94.0 provider containing `rustdoc`.
