@@ -1315,6 +1315,22 @@ The lockfile (`mantle.lock`) stores resolved revisions and NAR hashes.
 hashing) and updates both `mantle.lock` and `.mantle/inputs.ncl`
 (generated Nickel bindings).
 
+### Offline Cargo package builds
+
+The near-term Rust project-build lane is sandboxed offline Cargo, not native
+`rust-plan`. In a compatibility-named `crunch.ncl` project root, declare a
+package with `mantle.offlineCargoPackage { ... }`, pass explicit source,
+bootstrap Rust, seed toolchain, and musl inputs, then build it with
+`mantle build .#name` or run it with `mantle run .#name`.
+
+The helper writes `share/mantle/offline-cargo-build.json` into the output and
+JSON build reports surface that sidecar under `cargo_build_evidence[]` when the
+output is materialized locally. The evidence class is
+`cargo-inside-mantle-sandbox`; it binds the inspected source closure,
+toolchain paths, output path, and artifact attestation reference. It explicitly
+does not claim Cargo-free execution, full Cargo compatibility, compiler
+correctness, release reproducibility, or bootstrap correctness.
+
 ## Build-tool boundary
 
 Mantle is a build tool, not a NixOS-style module layer. Frontends such as Onix

@@ -5,6 +5,7 @@ use crunch_pipeline::PipelineResult;
 use crunch_pipeline::drv_key_for;
 use crunch_pipeline::label_for_key;
 use nix_compat::store_path::StorePath;
+use serde::Deserialize;
 use serde::Serialize;
 use snix_store::path_info::PathInfo;
 
@@ -25,6 +26,7 @@ pub struct BuildJsonReport {
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub frontend_artifact_attestations: Vec<FrontendArtifactAdmissionAttestation>,
+    pub cargo_build_evidence: Vec<BuildJsonCargoBuildEvidence>,
     pub diagnostic_persistence_failures: Vec<DiagnosticPersistenceFailure>,
     pub counts: BuildJsonCounts,
     pub outcomes: Vec<BuildJsonOutcome>,
@@ -99,6 +101,41 @@ pub struct BuildJsonFodMismatch {
     pub actual_sri: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct BuildJsonCargoBuildEvidence {
+    pub label: String,
+    pub output_name: String,
+    pub claim_class: String,
+    pub project_build_status: String,
+    pub evidence_path: String,
+    pub source_closure: Vec<BuildJsonCargoSourceClosureEntry>,
+    pub toolchain: BuildJsonCargoToolchainEvidence,
+    pub non_claims: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct BuildJsonCargoSourceClosureEntry {
+    pub role: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct BuildJsonCargoToolchainEvidence {
+    pub cargo: String,
+    pub rustc: String,
+    pub linker: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfflineCargoEvidenceFile {
+    schema: String,
+    claim_class: String,
+    project_build_status: String,
+    source_closure: Vec<BuildJsonCargoSourceClosureEntry>,
+    toolchain: BuildJsonCargoToolchainEvidence,
+    non_claims: Vec<String>,
+}
+
 pub fn render_build_json_report(
     config: &BuildConfig,
     result: &PipelineResult,
@@ -135,6 +172,7 @@ fn build_json_report(
 ) -> BuildJsonReport {
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
     let outcome_reports = build_outcome_reports(config, result, logs_dir);
+    let cargo_build_evidence = build_cargo_build_evidence_reports(&outcome_reports);
     let failure_reports = build_failure_envelopes(result, &config.store_dir, logs_dir);
     let counts = build_counts(&outcome_reports, &failure_reports);
     let hermeticity_audit_events = result
@@ -166,6 +204,7 @@ fn build_json_report(
         hermeticity_audit_events,
         native_dynamic_plans,
         frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
+        cargo_build_evidence,
         diagnostic_persistence_failures: diagnostic_persistence_failures.to_vec(),
         counts,
         outcomes: outcome_reports,
@@ -257,6 +296,53 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
     reports
 }
 
+fn build_cargo_build_evidence_reports(outcomes: &[BuildJsonOutcome]) -> Vec<BuildJsonCargoBuildEvidence> {
+    let mut reports = Vec::new();
+    for outcome in outcomes {
+        for output in &outcome.outputs {
+            let Some(report) = cargo_build_evidence_for_output(outcome, output) else {
+                continue;
+            };
+            reports.push(report);
+        }
+    }
+    reports.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
+    reports
+}
+
+fn cargo_build_evidence_for_output(
+    outcome: &BuildJsonOutcome,
+    output: &BuildJsonOutput,
+) -> Option<BuildJsonCargoBuildEvidence> {
+    let evidence_path = Path::new(&output.path).join(crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_RELATIVE_PATH);
+    let evidence = read_offline_cargo_evidence(&evidence_path)?;
+    Some(BuildJsonCargoBuildEvidence {
+        label: outcome.label.clone(),
+        output_name: output.name.clone(),
+        claim_class: evidence.claim_class,
+        project_build_status: evidence.project_build_status,
+        evidence_path: evidence_path.display().to_string(),
+        source_closure: evidence.source_closure,
+        toolchain: evidence.toolchain,
+        non_claims: evidence.non_claims,
+    })
+}
+
+fn read_offline_cargo_evidence(path: &Path) -> Option<OfflineCargoEvidenceFile> {
+    if !path.is_file() {
+        return None;
+    }
+    let text = std::fs::read_to_string(path).ok()?;
+    let evidence: OfflineCargoEvidenceFile = serde_json::from_str(&text).ok()?;
+    if evidence.schema != crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA {
+        return None;
+    }
+    if evidence.claim_class != crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_CLASS {
+        return None;
+    }
+    Some(evidence)
+}
+
 fn success_log_file(logs_dir: &Path, outcome: &crunch_build::BuildOutcome) -> Option<String> {
     if outcome.log.is_none() && outcome.cached {
         return None;
@@ -271,6 +357,8 @@ fn count_as_u32(count: usize) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use serde_json::json;
 
     use super::*;
@@ -537,6 +625,132 @@ mod tests {
     }
 
     #[test]
+    fn build_json_report_surfaces_offline_cargo_evidence_sidecar() {
+        use std::collections::HashMap;
+
+        const MIN_MAX_JOBS: u32 = 1;
+        const NAR_SIZE_BYTES: u64 = 1;
+        const TRANSFERRED_BYTES: u64 = 0;
+        const REUSED_BYTES: u64 = 0;
+        const NAR_HASH_BYTE: u8 = 0x33;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let logs_dir = tempfile::tempdir().unwrap();
+        let signing_key = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let config = BuildConfig {
+            file: output_dir.path().join("demo.ncl"),
+            import_paths: Vec::new(),
+            output_dir: output_dir.path().to_path_buf(),
+            state_dir: state_dir.path().to_path_buf(),
+            store_dir: "/crunch/store".to_string(),
+            verbose: false,
+            max_jobs: MIN_MAX_JOBS,
+            substituter_url: None,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            keypair: signing_key,
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+            root_retention_source: None,
+        };
+        let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo.drv", [5u8; 20]).unwrap();
+        let output_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("demo", [6u8; 20]).unwrap();
+        let exported_path =
+            PathBuf::from(output_path.to_absolute_path_with_prefix(config.output_dir.to_str().unwrap()));
+        let evidence_path = exported_path.join(crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_RELATIVE_PATH);
+        std::fs::create_dir_all(evidence_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &evidence_path,
+            serde_json::json!({
+                "schema": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA,
+                "claim_class": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_CLASS,
+                "project_build_status": crate::offline_cargo::OFFLINE_CARGO_PROJECT_BUILD_STATUS,
+                "source_closure": [{"role": "package-source", "path": "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo-src"}],
+                "toolchain": {
+                    "cargo": "/crunch/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-rust/bin/cargo",
+                    "rustc": "/crunch/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-rust/bin/rustc",
+                    "linker": "/crunch/store/cccccccccccccccccccccccccccccccc-seed/bin/x86_64-linux-musl-gcc",
+                },
+                "non_claims": ["not-cargo-free-execution", "not-full-cargo-compatibility"],
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let path_info = snix_store::path_info::PathInfo {
+            store_path: output_path.clone(),
+            node: snix_castore::Node::Symlink {
+                target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size: NAR_SIZE_BYTES,
+            nar_sha256: [NAR_HASH_BYTE; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        let outcome = crunch_build::BuildOutcome {
+            drv_path: drv_path.clone(),
+            outputs: std::collections::BTreeMap::from([("out".to_string(), path_info)]),
+            substitutions: std::collections::BTreeMap::from([(
+                "out".to_string(),
+                crunch_store::OutputSubstitutionReport {
+                    mode: crunch_store::OutputSubstitutionMode::Full,
+                    transferred_bytes: TRANSFERRED_BYTES,
+                    reused_bytes: REUSED_BYTES,
+                    fallback_reason: None,
+                },
+            )]),
+            cached: false,
+            log: None,
+        };
+        let result = PipelineResult {
+            outcomes: vec![outcome],
+            failed: Vec::new(),
+            fod_mismatches: Vec::new(),
+            root_labels: HashMap::from([(drv_key_for(&config.store_dir, &drv_path), "demo".to_string())]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
+            native_dynamic_plans: Vec::new(),
+        };
+
+        let report = build_json_report(&config, &result, logs_dir.path(), &[], &[]);
+
+        assert_eq!(report.cargo_build_evidence.len(), 1);
+        assert_eq!(report.cargo_build_evidence[0].label, "demo");
+        assert_eq!(report.cargo_build_evidence[0].claim_class, crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_CLASS);
+        assert_eq!(
+            report.cargo_build_evidence[0].project_build_status,
+            crate::offline_cargo::OFFLINE_CARGO_PROJECT_BUILD_STATUS
+        );
+        assert_eq!(report.cargo_build_evidence[0].evidence_path, evidence_path.display().to_string());
+        assert!(report.cargo_build_evidence[0].non_claims.contains(&"not-full-cargo-compatibility".to_string()));
+    }
+
+    #[test]
+    fn build_json_report_ignores_malformed_offline_cargo_evidence_sidecar() {
+        let output = BuildJsonOutput {
+            name: "out".to_string(),
+            path: tempfile::tempdir().unwrap().path().display().to_string(),
+            artifact_attestation: BuildJsonAttestationReference {
+                logical_path: "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo".to_string(),
+                path: "attestation.json".to_string(),
+            },
+            substitution: None,
+        };
+        let outcome = BuildJsonOutcome {
+            drv_key: "drv".to_string(),
+            label: "demo".to_string(),
+            cached: false,
+            log_file: None,
+            outputs: vec![output],
+        };
+
+        let reports = build_cargo_build_evidence_reports(&[outcome]);
+
+        assert!(reports.is_empty());
+    }
+
+    #[test]
     fn render_build_json_report_serializes_frontend_artifact_attestation() {
         use std::collections::BTreeMap;
         use std::collections::HashMap;
@@ -614,14 +828,11 @@ mod tests {
         assert!(admission.admitted, "{:#?}", admission.diagnostics);
         let attestation = admission.attestation.expect("admission attestation");
 
-        let json_report = render_build_json_report_with_frontend_artifact_attestations(
-            &config,
-            &result,
-            logs_dir.path(),
-            &[],
-            &[attestation],
-        )
-        .unwrap();
+        let json_report =
+            render_build_json_report_with_frontend_artifact_attestations(&config, &result, logs_dir.path(), &[], &[
+                attestation,
+            ])
+            .unwrap();
         let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
         let attestation = &json_value["frontend_artifact_attestations"][0];
 
@@ -737,6 +948,7 @@ mod tests {
                 }],
                 "native_dynamic_plans": [],
                 "frontend_artifact_attestations": [],
+                "cargo_build_evidence": [],
                 "diagnostic_persistence_failures": [{
                     "operation": "write-build-log",
                     "artifact": "build-log",

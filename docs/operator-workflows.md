@@ -164,6 +164,27 @@ Structured build reports surface the same operator facts in stable fields:
 That last block gives both the logical store path and the persisted sidecar
 path for the artifact attestation.
 
+## Offline Cargo project-build lane
+
+Use `mantle build .#name` for the supported near-term Rust project workflow.
+A project package can use `mantle.offlineCargoPackage { ... }` to lower a
+declared Cargo package into an ordinary derivation that runs `cargo build
+--locked --offline` inside Mantle's sandbox with isolated `HOME`, `CARGO_HOME`,
+and `CARGO_TARGET_DIR`.
+
+Required inputs are explicit: package source, lockfile identity in the source,
+bootstrap Rust toolchain, seed C toolchain, musl runtime, and optional vendored
+registry source material. Missing source material fails closed before a result is
+accepted; the helper does not search ambient Cargo caches, target directories,
+or network sources.
+
+Structured JSON reports include `cargo_build_evidence[]` when the output
+contains `share/mantle/offline-cargo-build.json`. The claim class is
+`cargo-inside-mantle-sandbox`; it is evidence that the declared Cargo action
+produced the inspected output under Mantle's sandbox policy. It is not evidence
+of Cargo-free execution, full Cargo compatibility, compiler correctness, release
+reproducibility, or bootstrap correctness.
+
 ## Rust project verification lane
 
 Use `mantle rust-plan` only when you want explicit native Rust planner evidence.

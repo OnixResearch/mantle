@@ -21,6 +21,8 @@ mod frontend_artifact_spec;
 mod frontend_artifact_store;
 mod log_cmd;
 mod native_toolchain_closure;
+#[allow(dead_code)]
+mod offline_cargo;
 mod operator_diagnostics;
 mod project_build;
 mod project_cmd;

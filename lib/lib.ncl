@@ -6,6 +6,7 @@ let contracts = import "contracts.ncl" in
 let { FixedOutput } = import "fixed_output.ncl" in
 let helpers = import "helpers.ncl" in
 let fetch = import "fetch.ncl" in
+let offline_cargo = import "offline_cargo.ncl" in
 
 {
   # The main derivation contract. Apply with: record | crunch.Derivation
@@ -41,6 +42,10 @@ let fetch = import "fetch.ncl" in
 
   # Project outputs contract. Apply with: record | crunch.Project
   Project = import "project_outputs.ncl",
+
+  # Bounded Rust project package helper.
+  offlineCargoPackage = offline_cargo.offlineCargoPackage,
+  offlineCargoEvidence = offline_cargo.offlineCargoEvidence,
 
   # Output selection
   select
