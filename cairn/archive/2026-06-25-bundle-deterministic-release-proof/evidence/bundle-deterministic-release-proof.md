@@ -212,3 +212,71 @@ Post-sync gate receipt ended with:
   "verdict": "PASS"
 }
 ```
+
+### Post-archive validation
+
+Commands:
+
+```sh
+find cairn/changes -maxdepth 1 -type d -print | sort
+find cairn/archive -maxdepth 1 -type d -name '*bundle-deterministic-release-proof' -print | sort
+nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+```
+
+Evidence: pueue task 140, with final validation rerun after this evidence moved to archive as pueue task 144.
+
+```text
+cairn/changes
+cairn/archive/2026-06-25-bundle-deterministic-release-proof
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
+
+Final validation rerun output:
+
+```json
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
+
+Post-commit status and validation rerun:
+
+```sh
+git status --short --branch
+nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+```
+
+Evidence: pueue tasks 151 and 152.
+
+```text
+## main...origin/main [ahead 4]
+```
+
+```json
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
