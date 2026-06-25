@@ -35,6 +35,7 @@ mod release_evidence;
 mod release_nix_witness;
 mod release_reproducibility;
 mod release_source;
+mod rust_bootstrap_patch_plan;
 mod rust_plan;
 #[allow(dead_code)]
 mod rust_source_provider;
