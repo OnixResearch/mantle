@@ -1246,6 +1246,7 @@ mod tests {
             binaries: vec![sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 2)],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 3),
             prerequisite_inventory: sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 4),
+            provider_fixed_point_proof: None,
             reproducibility_report: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {

@@ -40,6 +40,7 @@ use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
 use crunch_release_core::NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS;
 use crunch_release_core::NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA;
+use crunch_release_core::PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE;
 use crunch_release_core::PURE_LOCAL_BUILD_EFFECTS;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
 use crunch_release_core::ReleaseReproducibilityReport;
@@ -61,6 +62,11 @@ const RELEASE_SIGNING_KEY: &str =
 const FAKE_WITNESS_DRIVER_MODE_ENV: &str = "CRUNCH_TEST_WITNESS_DRIVER_MODE";
 const FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_ENV: &str = "CRUNCH_TEST_WITNESS_DRIVER_LAUNCH_SIGNAL";
 const FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_CONTENT: &str = "launched";
+const PROVIDER_FIXED_POINT_SCHEMA: &str = "mantle-cargo-free-fixed-point-proof-v1";
+const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source-provider-binding-v1";
+const PROVIDER_FIXED_POINT_BINARY_BYTES: &[u8] = b"provider-fixed-point-binary";
+const PROVIDER_FIXED_POINT_EXTERNAL_BINARY_BYTES: &[u8] = b"external-provider-fixed-point-binary";
+const PROVIDER_FIXED_POINT_STAGE_UNIT_COUNT: u32 = 2;
 #[cfg(unix)]
 const TEST_SCRIPT_MODE: u32 = 0o755;
 
@@ -215,12 +221,132 @@ fn write_full_proof_bundle(proof_dir: &Path, stage2_digest_blake3: &str, invento
     write_file(proof_dir.join("stage0/stdout.txt").as_path(), b"stage0 stdout\n");
 }
 
+fn write_provider_fixed_point_proof_bundle(proof_dir: &Path, binary_bytes: &[u8]) {
+    let binary_digest = blake3::hash(binary_bytes).to_hex().to_string();
+    let policy_digest = sample_digest(12);
+    write_file(&proof_dir.join("stage1/mantle"), binary_bytes);
+    write_file(&proof_dir.join("stage2/mantle"), binary_bytes);
+    write_provider_stage_receipt(&proof_dir.join("stage1/receipt.json"));
+    write_provider_stage_receipt(&proof_dir.join("stage2/receipt.json"));
+    write_file(&proof_dir.join("non-claims.txt"), b"This proof does not claim Crunch bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n");
+    write_file(
+        &proof_dir.join("preflight.json"),
+        &serde_json::to_vec(&provider_preflight_json(&policy_digest)).unwrap(),
+    );
+    write_file(
+        &proof_dir.join("meta.json"),
+        &serde_json::to_vec(&provider_meta_json(proof_dir, &binary_digest, &policy_digest)).unwrap(),
+    );
+}
+
+fn write_provider_stage_receipt(path: &Path) {
+    write_file(
+        path,
+        &serde_json::to_vec(&serde_json::json!({
+            "topology_execution": {
+                "execution_status": "success",
+                "unit_executions": [
+                    { "unit_id": "unit-a", "execution_status": "success" },
+                    { "unit_id": "unit-b", "execution_status": "success" }
+                ]
+            }
+        }))
+        .unwrap(),
+    );
+}
+
+fn provider_stage_json(stage_name: &str, binary_digest: &str, policy_digest: &str) -> serde_json::Value {
+    serde_json::json!({
+        "name": stage_name,
+        "dir": stage_name,
+        "execution_dir": "execution",
+        "receipt": format!("{stage_name}/receipt.json"),
+        "stderr": format!("{stage_name}/stderr.txt"),
+        "status": format!("{stage_name}/status.txt"),
+        "status_code": 0,
+        "execution_status": "success",
+        "cargo_marker_absent": true,
+        "success": true,
+        "unit_count": PROVIDER_FIXED_POINT_STAGE_UNIT_COUNT,
+        "failed_unit_count": 0,
+        "binary": format!("{stage_name}/mantle"),
+        "binary_blake3": binary_digest,
+        "smoke_status_code": 0,
+        "source_built_toolchain_closure_policy_digest_blake3": policy_digest,
+        "blocker": null
+    })
+}
+
+fn provider_preflight_json(policy_digest: &str) -> serde_json::Value {
+    serde_json::json!({
+        "schema": PROVIDER_FIXED_POINT_SCHEMA,
+        "root": "/repo/mantle",
+        "bundle_dir": "/tmp/provider-fixed-point-proof",
+        "source_built_toolchain_closure": {
+            "status": "enforced-source-built",
+            "claim": true,
+            "policy_digest_blake3": policy_digest
+        }
+    })
+}
+
+fn provider_meta_json(proof_dir: &Path, binary_digest: &str, policy_digest: &str) -> serde_json::Value {
+    serde_json::json!({
+        "schema": PROVIDER_FIXED_POINT_SCHEMA,
+        "status": "success",
+        "root": "/repo/mantle",
+        "bundle_dir": proof_dir,
+        "fixed_point": true,
+        "stage1": provider_stage_json("stage1", binary_digest, policy_digest),
+        "stage2": provider_stage_json("stage2", binary_digest, policy_digest),
+        "source_built_toolchain_closure": {
+            "schema": "mantle-source-built-toolchain-closure-v1",
+            "status": "enforced-source-built",
+            "claim": true,
+            "non_claim": null,
+            "manifest_path": "/tmp/toolchain-closure.json",
+            "policy_digest_blake3": policy_digest,
+            "member_count": PROVIDER_FIXED_POINT_STAGE_UNIT_COUNT,
+            "source_built_member_count": PROVIDER_FIXED_POINT_STAGE_UNIT_COUNT,
+            "seed_exception_count": 0
+        },
+        "rust_source_provider": {
+            "schema": RUST_SOURCE_PROVIDER_BINDING_SCHEMA,
+            "status": "validated",
+            "provider_dir": "/provider",
+            "metadata_path": "/provider/share/mantle-rust-provider/provider.json",
+            "metadata_digest_blake3": sample_digest(13),
+            "policy_digest_blake3": policy_digest,
+            "host_triple": "x86_64-unknown-linux-musl",
+            "target_triple": "x86_64-unknown-linux-musl",
+            "artifact_count": 6,
+            "source_count": 2,
+            "receipt_count": 1,
+            "rustc_path": "/provider/bin/rustc"
+        },
+        "blocker": null,
+        "non_claims": [
+            "not-crunch-bootstrap",
+            "not-release-reproducibility",
+            "not-full-cargo-compatibility"
+        ]
+    })
+}
+
 fn sample_digest(seed: u8) -> String {
     let nibble = format!("{:x}", seed % 16);
     nibble.repeat(BLAKE3_HEX_LEN)
 }
 
 fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
+    make_release_bundle(false)
+}
+
+fn make_valid_bundle_with_provider() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
+    make_release_bundle(true)
+}
+
+fn make_release_bundle(include_provider_fixed_point: bool) -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
     let temp = tempfile::tempdir().unwrap();
     create_minimal_release_repo(temp.path());
 
@@ -230,9 +356,14 @@ fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
     let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
     let proof_dir = temp.path().join("proof-input");
     write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    let provider_proof_dir = temp.path().join("provider-fixed-point-input");
+    if include_provider_fixed_point {
+        write_provider_fixed_point_proof_bundle(&provider_proof_dir, PROVIDER_FIXED_POINT_BINARY_BYTES);
+    }
 
     let bundle_dir = temp.path().join("bundle");
-    crunch()
+    let mut command = crunch();
+    command
         .current_dir(temp.path())
         .arg("release")
         .arg("create")
@@ -243,10 +374,11 @@ fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
         .arg("--binary")
         .arg(&binary_path)
         .arg("--proof-bundle")
-        .arg(&proof_dir)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("release id: mantle-0.1.0-rc1"));
+        .arg(&proof_dir);
+    if include_provider_fixed_point {
+        command.arg("--provider-fixed-point-proof").arg(&provider_proof_dir);
+    }
+    command.assert().success().stdout(predicate::str::contains("release id: mantle-0.1.0-rc1"));
 
     let manifest: ReleaseEvidenceManifest =
         serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
@@ -1644,6 +1776,118 @@ fn release_reproduce_fails_on_output_name_drift() {
         .stderr(predicate::str::contains("output-name drift"));
 
     assert!(report_path.exists());
+}
+
+#[test]
+fn release_create_can_package_provider_fixed_point_proof() {
+    let (_temp, bundle_dir, manifest) = make_valid_bundle_with_provider();
+    let proof = manifest.provider_fixed_point_proof.as_ref().unwrap();
+
+    assert_eq!(proof.relative_path, "proof/provider-fixed-point");
+    assert_eq!(proof.evidence_role, PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE);
+    assert!(bundle_dir.join("proof/provider-fixed-point/meta.json").exists());
+}
+
+#[test]
+fn release_create_rejects_invalid_provider_fixed_point_proof() {
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    write_file(&binary_path, b"crunch-binary");
+    let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+    let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+    let proof_dir = temp.path().join("proof-input");
+    write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    let invalid_provider_dir = temp.path().join("invalid-provider-fixed-point");
+    write_file(&invalid_provider_dir.join("meta.json"), br#"{}"#);
+    let bundle_dir = temp.path().join("bundle");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-0.1.0-rc1")
+        .arg("--bundle-dir")
+        .arg(&bundle_dir)
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .arg("--provider-fixed-point-proof")
+        .arg(&invalid_provider_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("provider fixed-point proof is invalid"));
+
+    assert!(!bundle_dir.join("manifest.json").exists());
+}
+
+#[test]
+fn release_verify_required_provider_fixed_point_uses_bundled_proof() {
+    let (_temp, bundle_dir, manifest) = make_valid_bundle_with_provider();
+    let proof = manifest.provider_fixed_point_proof.as_ref().unwrap();
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-provider-fixed-point-proof")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("provider fixed-point proof: valid"))
+        .stdout(predicate::str::contains("provider fixed-point proof source: bundled"))
+        .stdout(predicate::str::contains(format!(
+            "provider fixed-point proof artifact digest: {}",
+            proof.digest_blake3
+        )))
+        .stdout(predicate::str::contains("provider fixed-point closure policy digest:"))
+        .stdout(predicate::str::contains("provider fixed-point stage binary digest:"))
+        .stdout(predicate::str::contains("provider fixed-point non-claim: not-release-reproducibility"))
+        .stdout(predicate::str::contains("provider fixed-point non-claim: not-full-cargo-compatibility"));
+}
+
+#[test]
+fn release_verify_required_provider_fixed_point_fails_when_missing() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-provider-fixed-point-proof")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("provider fixed-point proof required"))
+        .stderr(predicate::str::contains("missing provider fixed-point proof bundle"));
+}
+
+#[test]
+fn release_verify_provider_fixed_point_external_override_reports_source() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle_with_provider();
+    let external_proof_dir = temp.path().join("external-provider-fixed-point");
+    write_provider_fixed_point_proof_bundle(&external_proof_dir, PROVIDER_FIXED_POINT_EXTERNAL_BINARY_BYTES);
+
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-provider-fixed-point-proof")
+        .arg("--provider-fixed-point-proof")
+        .arg(&external_proof_dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+
+    assert_eq!(json["provider_fixed_point_proof"]["status"], "valid");
+    assert_eq!(json["provider_fixed_point_proof"]["proof_source"], "external");
+    assert_eq!(json["provider_fixed_point_proof"]["proof_dir"], external_proof_dir.display().to_string());
+    assert_eq!(
+        json["manifest"]["provider_fixed_point_proof"]["relative_path"],
+        manifest.provider_fixed_point_proof.as_ref().unwrap().relative_path
+    );
 }
 
 #[cfg(unix)]
@@ -4508,6 +4752,15 @@ struct ReleaseWorkflowIdentity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ProviderFixedPointProofArtifact {
+    kind: BundledArtifactKind,
+    relative_path: String,
+    size_bytes: u64,
+    digest_blake3: String,
+    evidence_role: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct ReleaseProofLinkage {
     release_id: String,
     source_archive_digest_blake3: String,
@@ -4530,6 +4783,8 @@ struct ReleaseEvidenceManifest {
     binaries: Vec<BundledArtifact>,
     proof_bundle: BundledArtifact,
     prerequisite_inventory: BundledArtifact,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    provider_fixed_point_proof: Option<ProviderFixedPointProofArtifact>,
     proof_linkage: ReleaseProofLinkage,
 }
 

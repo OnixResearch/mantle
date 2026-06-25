@@ -14,6 +14,7 @@ pub const FULL_SELF_HOSTING_PROOF_SCHEMA: &str = "mantle-self-hosting-proof-v2";
 pub const CLAIM_SCOPE_PACKAGED_INTEGRITY: &str = "packaged-integrity-evidence";
 pub const DEFAULT_PROOF_WORKFLOW_COMMAND: &str = "./scripts/prove-self-hosting.sh";
 pub const DEFAULT_PROOF_WORKFLOW_VERSION: &str = "mantle-self-hosting-proof-v2";
+pub const PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE: &str = "cargo-free-source-built-handoff-evidence";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 
 const MAX_BINARY_ARTIFACTS_COUNT: u32 = 16;
@@ -58,6 +59,15 @@ pub struct ReleaseWorkflowIdentity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderFixedPointProofArtifact {
+    pub kind: BundledArtifactKind,
+    pub relative_path: String,
+    pub size_bytes: u64,
+    pub digest_blake3: String,
+    pub evidence_role: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseProofLinkage {
     pub release_id: String,
     pub source_archive_digest_blake3: String,
@@ -80,6 +90,8 @@ pub struct ReleaseEvidenceManifest {
     pub binaries: Vec<BundledArtifact>,
     pub proof_bundle: BundledArtifact,
     pub prerequisite_inventory: BundledArtifact,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_fixed_point_proof: Option<ProviderFixedPointProofArtifact>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reproducibility_report: Option<BundledArtifact>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -225,6 +237,9 @@ fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(),
     validate_and_record_path(&manifest.source_archive, "source_archive", &mut seen_paths)?;
     validate_and_record_path(&manifest.proof_bundle, "proof_bundle", &mut seen_paths)?;
     validate_and_record_path(&manifest.prerequisite_inventory, "prerequisite_inventory", &mut seen_paths)?;
+    if let Some(proof) = &manifest.provider_fixed_point_proof {
+        validate_provider_fixed_point_proof_artifact(proof, &mut seen_paths)?;
+    }
     if let Some(report) = &manifest.reproducibility_report {
         validate_and_record_path(report, "reproducibility_report", &mut seen_paths)?;
         if report.kind != BundledArtifactKind::File {
@@ -260,10 +275,44 @@ fn validate_and_record_path(
     seen_paths: &mut BTreeSet<String>,
 ) -> Result<(), ReleaseEvidenceError> {
     validate_bundled_artifact(artifact, field_name)?;
-    if !seen_paths.insert(artifact.relative_path.clone()) {
+    record_unique_artifact_path(&artifact.relative_path, seen_paths)
+}
+
+fn validate_provider_fixed_point_proof_artifact(
+    artifact: &ProviderFixedPointProofArtifact,
+    seen_paths: &mut BTreeSet<String>,
+) -> Result<(), ReleaseEvidenceError> {
+    validate_bundled_artifact(&provider_fixed_point_bundled_artifact(artifact), "provider_fixed_point_proof")?;
+    if artifact.kind != BundledArtifactKind::Directory {
+        return Err(validation_error(
+            "release evidence provider_fixed_point_proof must be recorded as a directory artifact".to_string(),
+        ));
+    }
+    if artifact.evidence_role != PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE {
         return Err(validation_error(format!(
-            "release evidence contains duplicate bundle member path {}",
-            artifact.relative_path
+            "release evidence provider_fixed_point_proof.evidence_role must be {PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE}, got {}",
+            artifact.evidence_role
+        )));
+    }
+    record_unique_artifact_path(&artifact.relative_path, seen_paths)
+}
+
+fn provider_fixed_point_bundled_artifact(artifact: &ProviderFixedPointProofArtifact) -> BundledArtifact {
+    BundledArtifact {
+        kind: artifact.kind,
+        relative_path: artifact.relative_path.clone(),
+        size_bytes: artifact.size_bytes,
+        digest_blake3: artifact.digest_blake3.clone(),
+    }
+}
+
+fn record_unique_artifact_path(
+    relative_path: &str,
+    seen_paths: &mut BTreeSet<String>,
+) -> Result<(), ReleaseEvidenceError> {
+    if !seen_paths.insert(relative_path.to_string()) {
+        return Err(validation_error(format!(
+            "release evidence contains duplicate bundle member path {relative_path}"
         )));
     }
     Ok(())
@@ -492,6 +541,16 @@ mod tests {
         }
     }
 
+    fn sample_provider_fixed_point_artifact(seed: u8) -> ProviderFixedPointProofArtifact {
+        ProviderFixedPointProofArtifact {
+            kind: BundledArtifactKind::Directory,
+            relative_path: "proof/provider-fixed-point".to_string(),
+            size_bytes: 123,
+            digest_blake3: sample_digest(seed),
+            evidence_role: PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE.to_string(),
+        }
+    }
+
     fn sample_manifest() -> ReleaseEvidenceManifest {
         let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 3);
         let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
@@ -507,6 +566,7 @@ mod tests {
             binaries: vec![stage2_binary.clone()],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
+            provider_fixed_point_proof: None,
             reproducibility_report: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
@@ -608,6 +668,42 @@ mod tests {
         manifest.source_archive.relative_path = "/tmp/source.tar".to_string();
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
         assert!(err.to_string().contains("must be relative"));
+    }
+
+    #[test]
+    fn validate_accepts_provider_fixed_point_proof_artifact() {
+        let mut manifest = sample_manifest();
+        manifest.provider_fixed_point_proof = Some(sample_provider_fixed_point_artifact(8));
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains("provider_fixed_point_proof"));
+        assert!(text.contains(PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE));
+    }
+
+    #[test]
+    fn validate_rejects_provider_fixed_point_proof_with_wrong_role() {
+        let mut manifest = sample_manifest();
+        let mut proof = sample_provider_fixed_point_artifact(8);
+        proof.evidence_role = "release-reproducibility".to_string();
+        manifest.provider_fixed_point_proof = Some(proof);
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("provider_fixed_point_proof.evidence_role"));
+    }
+
+    #[test]
+    fn validate_rejects_provider_fixed_point_proof_file_kind() {
+        let mut manifest = sample_manifest();
+        let mut proof = sample_provider_fixed_point_artifact(8);
+        proof.kind = BundledArtifactKind::File;
+        manifest.provider_fixed_point_proof = Some(proof);
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("must be recorded as a directory artifact"));
     }
 
     #[test]

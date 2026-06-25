@@ -788,6 +788,11 @@ pub enum ReleaseAction {
         #[arg(long)]
         proof_bundle: PathBuf,
 
+        /// Provider-backed Cargo-free fixed-point proof bundle to package as bounded
+        /// release-adjacent evidence
+        #[arg(long)]
+        provider_fixed_point_proof: Option<PathBuf>,
+
         /// Optional canonical reproducibility report to package in the bundle
         #[arg(long)]
         reproducibility_report: Option<PathBuf>,
@@ -3720,6 +3725,29 @@ let Plan = {
             "trust_notes": [],
             "expected_outputs": expected_outputs,
         })
+    }
+
+    #[test]
+    fn release_create_accepts_provider_fixed_point_proof_flag() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "create",
+            "--release-id",
+            "mantle-0.1.0-rc1",
+            "--binary",
+            "/tmp/mantle",
+            "--proof-bundle",
+            "/tmp/self-hosting-proof",
+            "--provider-fixed-point-proof",
+            "/tmp/provider-fixed-point-proof",
+        ]);
+        assert!(matches!(args.command, Command::Release {
+            action: ReleaseAction::Create {
+                provider_fixed_point_proof: Some(_),
+                ..
+            }
+        }));
     }
 
     #[test]

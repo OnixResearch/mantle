@@ -38,6 +38,8 @@ pub use manifest::DEFAULT_PROOF_WORKFLOW_COMMAND;
 pub use manifest::DEFAULT_PROOF_WORKFLOW_VERSION;
 pub use manifest::FULL_SELF_HOSTING_PROOF_SCHEMA;
 pub use manifest::FullSelfHostingProofIdentityFields;
+pub use manifest::PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE;
+pub use manifest::ProviderFixedPointProofArtifact;
 pub use manifest::RELEASE_EVIDENCE_SCHEMA;
 pub use manifest::ReleaseEvidenceManifest;
 pub use manifest::ReleaseProofLinkage;

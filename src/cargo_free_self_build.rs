@@ -307,7 +307,10 @@ struct FixedPointStageSummary {
 pub(crate) struct ProviderFixedPointProofVerification {
     pub(crate) status: String,
     pub(crate) valid: bool,
+    pub(crate) proof_source: String,
     pub(crate) proof_dir: Option<PathBuf>,
+    pub(crate) proof_artifact_digest_blake3: Option<String>,
+    pub(crate) bounded_evidence_role: Option<String>,
     pub(crate) meta_digest_blake3: Option<String>,
     pub(crate) closure_policy_digest_blake3: Option<String>,
     pub(crate) stage_binary_digest_blake3: Option<String>,
@@ -327,7 +330,10 @@ impl ProviderFixedPointProofVerification {
         Self {
             status: PROVIDER_FIXED_POINT_STATUS_ABSENT.to_string(),
             valid: false,
+            proof_source: PROVIDER_FIXED_POINT_STATUS_ABSENT.to_string(),
             proof_dir: None,
+            proof_artifact_digest_blake3: None,
+            bounded_evidence_role: None,
             meta_digest_blake3: None,
             closure_policy_digest_blake3: None,
             stage_binary_digest_blake3: None,
@@ -466,7 +472,10 @@ fn provider_fixed_point_result(
         }
         .to_string(),
         valid,
+        proof_source: "direct".to_string(),
         proof_dir: Some(proof_dir),
+        proof_artifact_digest_blake3: None,
+        bounded_evidence_role: None,
         meta_digest_blake3,
         closure_policy_digest_blake3: closure_policy_digest,
         stage_binary_digest_blake3: stage_binary_digest,

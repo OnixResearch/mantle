@@ -39,6 +39,9 @@ use crate::witness_rebuild::run_witness_rebuild_workflow;
 use crate::witness_rebuild::validate_successful_rebuild;
 use crate::witness_rebuild::write_audit_meta;
 
+const PROVIDER_FIXED_POINT_SOURCE_BUNDLED: &str = "bundled";
+const PROVIDER_FIXED_POINT_SOURCE_EXTERNAL: &str = "external";
+
 pub(crate) fn cmd_release(
     action: crate::ReleaseAction,
     current_dir: &Path,
@@ -51,6 +54,7 @@ pub(crate) fn cmd_release(
             bundle_dir,
             binary,
             proof_bundle,
+            provider_fixed_point_proof,
             reproducibility_report,
             workflow_command,
             workflow_version,
@@ -61,6 +65,7 @@ pub(crate) fn cmd_release(
             bundle_dir,
             binary,
             proof_bundle,
+            provider_fixed_point_proof,
             reproducibility_report,
             workflow_command,
             workflow_version,
@@ -181,6 +186,7 @@ fn cmd_release_create(
     bundle_dir: Option<PathBuf>,
     binary: Vec<PathBuf>,
     proof_bundle: PathBuf,
+    provider_fixed_point_proof: Option<PathBuf>,
     reproducibility_report: Option<PathBuf>,
     workflow_command: String,
     workflow_version: String,
@@ -200,6 +206,7 @@ fn cmd_release_create(
         workflow_command: normalized_workflow_command,
         workflow_version: normalized_workflow_version,
         reproducibility_report_path: reproducibility_report.map(|path| resolve_input_path(current_dir, path)),
+        provider_fixed_point_proof_dir: provider_fixed_point_proof.map(|path| resolve_input_path(current_dir, path)),
     };
     let manifest = create_release_evidence_bundle(&request)?;
     if json {
@@ -212,6 +219,9 @@ fn cmd_release_create(
         println!("source archive: {}", manifest.source_archive.relative_path);
         println!("proof bundle: {}", manifest.proof_bundle.relative_path);
         println!("binaries: {}", manifest.binaries.len());
+        if let Some(proof) = &manifest.provider_fixed_point_proof {
+            println!("provider fixed-point proof: {}", proof.relative_path);
+        }
         if let Some(report) = &manifest.reproducibility_report {
             println!("reproducibility report: {}", report.relative_path);
         }
@@ -239,12 +249,14 @@ fn cmd_release_verify(
         deterministic_sandbox_isolation_evidence,
         require_deterministic_release,
     );
+    let manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
     let provider_fixed_point_result = evaluate_provider_fixed_point_proof(
         current_dir,
+        &resolved_bundle_dir,
+        &manifest,
         provider_fixed_point_proof,
         require_provider_fixed_point_proof,
     );
-    let manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
     let reproducibility = load_bundle_reproducibility_report(&resolved_bundle_dir, &manifest)?;
     let reproducibility_status = reproducibility_status(reproducibility.as_ref());
     let deterministic_result = evaluate_deterministic_release_claim(&manifest, deterministic_request)?;
@@ -338,14 +350,45 @@ impl DeterministicVerifyRequest {
 
 fn evaluate_provider_fixed_point_proof(
     current_dir: &Path,
+    bundle_dir: &Path,
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
     proof_path: Option<PathBuf>,
     required: bool,
 ) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
-    let Some(proof_path) = proof_path else {
+    if let Some(proof_path) = proof_path {
+        let resolved = resolve_input_path(current_dir, proof_path);
+        return verify_provider_fixed_point_with_release_context(
+            &resolved,
+            PROVIDER_FIXED_POINT_SOURCE_EXTERNAL,
+            None,
+            None,
+        );
+    }
+    let Some(artifact) = &manifest.provider_fixed_point_proof else {
         return crate::cargo_free_self_build::ProviderFixedPointProofVerification::absent(required);
     };
-    let resolved = resolve_input_path(current_dir, proof_path);
-    crate::cargo_free_self_build::verify_provider_fixed_point_proof_bundle(&resolved)
+    let resolved = bundle_dir.join(&artifact.relative_path);
+    verify_provider_fixed_point_with_release_context(
+        &resolved,
+        PROVIDER_FIXED_POINT_SOURCE_BUNDLED,
+        Some(artifact.digest_blake3.clone()),
+        Some(artifact.evidence_role.clone()),
+    )
+}
+
+fn verify_provider_fixed_point_with_release_context(
+    proof_dir: &Path,
+    proof_source: &str,
+    manifest_artifact_digest_blake3: Option<String>,
+    bounded_evidence_role: Option<String>,
+) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
+    let artifact_digest =
+        manifest_artifact_digest_blake3.or_else(|| crate::release_evidence::compute_path_blake3_digest(proof_dir).ok());
+    let mut result = crate::cargo_free_self_build::verify_provider_fixed_point_proof_bundle(proof_dir);
+    result.proof_source = proof_source.to_string();
+    result.proof_artifact_digest_blake3 = artifact_digest;
+    result.bounded_evidence_role = bounded_evidence_role;
+    result
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -522,14 +565,24 @@ fn reproducibility_status(reproducibility: Option<&VerifiedReproducibilityReport
 
 fn print_provider_fixed_point_summary(result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification) {
     println!("provider fixed-point proof: {}", result.status);
+    println!("provider fixed-point proof source: {}", result.proof_source);
     if let Some(path) = &result.proof_dir {
         println!("provider fixed-point proof bundle: {}", path.display());
+    }
+    if let Some(role) = &result.bounded_evidence_role {
+        println!("provider fixed-point bounded evidence role: {role}");
+    }
+    if let Some(digest) = &result.proof_artifact_digest_blake3 {
+        println!("provider fixed-point proof artifact digest: {digest}");
     }
     if let Some(digest) = &result.stage_binary_digest_blake3 {
         println!("provider fixed-point stage binary digest: {digest}");
     }
     if let Some(digest) = &result.closure_policy_digest_blake3 {
         println!("provider fixed-point closure policy digest: {digest}");
+    }
+    for non_claim in &result.non_claims {
+        println!("provider fixed-point non-claim: {non_claim}");
     }
     for blocker in &result.blockers {
         println!("  provider fixed-point blocker: {blocker}");
@@ -1130,7 +1183,9 @@ mod tests {
 
     #[test]
     fn provider_fixed_point_request_absent_is_optional_by_default() {
-        let result = evaluate_provider_fixed_point_proof(Path::new("/repo"), None, false);
+        let manifest = test_manifest();
+        let result =
+            evaluate_provider_fixed_point_proof(Path::new("/repo"), Path::new("/bundle"), &manifest, None, false);
 
         assert!(!result.valid);
         assert_eq!(result.status, "absent");
@@ -1139,7 +1194,9 @@ mod tests {
 
     #[test]
     fn provider_fixed_point_request_absent_records_required_blocker() {
-        let result = evaluate_provider_fixed_point_proof(Path::new("/repo"), None, true);
+        let manifest = test_manifest();
+        let result =
+            evaluate_provider_fixed_point_proof(Path::new("/repo"), Path::new("/bundle"), &manifest, None, true);
 
         assert!(!result.valid);
         assert_eq!(result.status, "absent");
@@ -1187,6 +1244,7 @@ mod tests {
                 size_bytes: 1,
                 digest_blake3: "c".repeat(64),
             },
+            provider_fixed_point_proof: None,
             reproducibility_report: None,
             independent_agreement_report: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
@@ -1238,6 +1296,7 @@ mod tests {
                 size_bytes: 1,
                 digest_blake3: "d".repeat(64),
             },
+            provider_fixed_point_proof: None,
             reproducibility_report: None,
             independent_agreement_report: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {

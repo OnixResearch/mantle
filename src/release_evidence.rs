@@ -12,6 +12,8 @@ pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_COMMAND;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_VERSION;
 #[cfg(test)]
 pub(crate) use crunch_release_core::FULL_SELF_HOSTING_PROOF_SCHEMA;
+use crunch_release_core::PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE;
+use crunch_release_core::ProviderFixedPointProofArtifact;
 pub(crate) use crunch_release_core::RELEASE_EVIDENCE_SCHEMA;
 use crunch_release_core::ReleaseEvidenceError;
 pub(crate) use crunch_release_core::ReleaseEvidenceManifest;
@@ -53,6 +55,7 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub workflow_command: String,
     pub workflow_version: String,
     pub reproducibility_report_path: Option<PathBuf>,
+    pub provider_fixed_point_proof_dir: Option<PathBuf>,
 }
 
 impl ReleaseBundleCreateRequest {
@@ -73,6 +76,7 @@ impl ReleaseBundleCreateRequest {
             workflow_command: DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
             workflow_version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             reproducibility_report_path: None,
+            provider_fixed_point_proof_dir: None,
         }
     }
 }
@@ -85,6 +89,7 @@ pub(crate) fn create_release_evidence_bundle(
     request: &ReleaseBundleCreateRequest,
 ) -> Result<ReleaseEvidenceManifest, RunError> {
     validate_create_request(request)?;
+    validate_optional_provider_fixed_point_proof(request)?;
     prepare_output_bundle_dir(&request.bundle_dir)?;
 
     let proof_identity = load_full_self_hosting_proof_identity(&request.proof_bundle_dir)?;
@@ -99,6 +104,7 @@ pub(crate) fn create_release_evidence_bundle(
     let inventory_path = request.proof_bundle_dir.join(PROOF_INVENTORY_RELATIVE_PATH);
     let prerequisite_inventory =
         copy_file_into_bundle(&inventory_path, &request.bundle_dir, Path::new("proof/inventory.md"))?;
+    let provider_fixed_point_proof = copy_optional_provider_fixed_point_proof(request)?;
     let reproducibility_report =
         copy_optional_reproducibility_report(request, &source_archive, &binaries, &proof_bundle)?;
     let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
@@ -115,6 +121,7 @@ pub(crate) fn create_release_evidence_bundle(
         binaries,
         proof_bundle,
         prerequisite_inventory: prerequisite_inventory.clone(),
+        provider_fixed_point_proof,
         reproducibility_report,
         independent_agreement_report: None,
         proof_linkage: ReleaseProofLinkage {
@@ -266,6 +273,36 @@ fn copy_binary_set_into_bundle(binary_paths: &[PathBuf], bundle_dir: &Path) -> R
     }
     assert!(!bundled.is_empty(), "binary bundle copy must emit at least one artifact");
     Ok(bundled)
+}
+
+fn validate_optional_provider_fixed_point_proof(request: &ReleaseBundleCreateRequest) -> Result<(), RunError> {
+    let Some(proof_dir) = &request.provider_fixed_point_proof_dir else {
+        return Ok(());
+    };
+    let result = crate::cargo_free_self_build::verify_provider_fixed_point_proof_bundle(proof_dir);
+    if result.valid {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "release evidence provider fixed-point proof is invalid: {}",
+        result.blockers.join("; ")
+    )))
+}
+
+fn copy_optional_provider_fixed_point_proof(
+    request: &ReleaseBundleCreateRequest,
+) -> Result<Option<ProviderFixedPointProofArtifact>, RunError> {
+    let Some(proof_dir) = &request.provider_fixed_point_proof_dir else {
+        return Ok(None);
+    };
+    let artifact = copy_directory_into_bundle(proof_dir, &request.bundle_dir, Path::new("proof/provider-fixed-point"))?;
+    Ok(Some(ProviderFixedPointProofArtifact {
+        kind: artifact.kind,
+        relative_path: artifact.relative_path,
+        size_bytes: artifact.size_bytes,
+        digest_blake3: artifact.digest_blake3,
+        evidence_role: PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE.to_string(),
+    }))
 }
 
 fn copy_optional_reproducibility_report(
@@ -572,6 +609,9 @@ fn verify_manifest_artifacts(manifest: &ReleaseEvidenceManifest, bundle_dir: &Pa
     verify_artifact_matches_bundle(&manifest.source_archive, bundle_dir, "source_archive")?;
     verify_artifact_matches_bundle(&manifest.proof_bundle, bundle_dir, "proof_bundle")?;
     verify_artifact_matches_bundle(&manifest.prerequisite_inventory, bundle_dir, "prerequisite_inventory")?;
+    if let Some(artifact) = &manifest.provider_fixed_point_proof {
+        verify_provider_fixed_point_artifact_matches_bundle(artifact, bundle_dir)?;
+    }
     for (index_usize, artifact) in manifest.binaries.iter().enumerate() {
         let index_u32: u32 = index_usize
             .try_into()
@@ -585,6 +625,19 @@ fn verify_manifest_artifacts(manifest: &ReleaseEvidenceManifest, bundle_dir: &Pa
         verify_artifact_matches_bundle(report, bundle_dir, "independent_agreement_report")?;
     }
     Ok(())
+}
+
+fn verify_provider_fixed_point_artifact_matches_bundle(
+    artifact: &ProviderFixedPointProofArtifact,
+    bundle_dir: &Path,
+) -> Result<(), RunError> {
+    let bundled = BundledArtifact {
+        kind: artifact.kind,
+        relative_path: artifact.relative_path.clone(),
+        size_bytes: artifact.size_bytes,
+        digest_blake3: artifact.digest_blake3.clone(),
+    };
+    verify_artifact_matches_bundle(&bundled, bundle_dir, "provider_fixed_point_proof")
 }
 
 fn verify_artifact_matches_bundle(
@@ -654,6 +707,11 @@ mod tests {
 
     use super::*;
 
+    const PROVIDER_FIXED_POINT_SCHEMA: &str = "mantle-cargo-free-fixed-point-proof-v1";
+    const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source-provider-binding-v1";
+    const PROVIDER_BINARY_BYTES: &[u8] = b"provider-fixed-point-binary";
+    const PROVIDER_STAGE_UNIT_COUNT: u32 = 2;
+
     fn sample_digest(seed: u8) -> String {
         let byte = format!("{:x}", seed % 16);
         byte.repeat(BLAKE3_HEX_LEN)
@@ -690,6 +748,7 @@ mod tests {
             binaries: vec![stage2_binary.clone()],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
+            provider_fixed_point_proof: None,
             reproducibility_report: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
@@ -780,6 +839,120 @@ mod tests {
         write_file(&bundle_dir.join("stage0/stdout.txt"), b"stage0 stdout");
     }
 
+    fn write_provider_fixed_point_proof_bundle(bundle_dir: &Path, binary_bytes: &[u8]) {
+        let binary_digest = blake3::hash(binary_bytes).to_hex().to_string();
+        let policy_digest = sample_digest(12);
+        write_file(&bundle_dir.join("stage1/mantle"), binary_bytes);
+        write_file(&bundle_dir.join("stage2/mantle"), binary_bytes);
+        write_provider_stage_receipt(&bundle_dir.join("stage1/receipt.json"));
+        write_provider_stage_receipt(&bundle_dir.join("stage2/receipt.json"));
+        write_file(&bundle_dir.join("non-claims.txt"), b"This proof does not claim Crunch bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n");
+        write_file(
+            &bundle_dir.join("preflight.json"),
+            &serde_json::to_vec(&provider_preflight_json(&policy_digest)).unwrap(),
+        );
+        write_file(
+            &bundle_dir.join("meta.json"),
+            &serde_json::to_vec(&provider_meta_json(bundle_dir, &binary_digest, &policy_digest)).unwrap(),
+        );
+    }
+
+    fn write_provider_stage_receipt(path: &Path) {
+        write_file(
+            path,
+            &serde_json::to_vec(&json!({
+                "topology_execution": {
+                    "execution_status": "success",
+                    "unit_executions": [
+                        { "unit_id": "unit-a", "execution_status": "success" },
+                        { "unit_id": "unit-b", "execution_status": "success" }
+                    ]
+                }
+            }))
+            .unwrap(),
+        );
+    }
+
+    fn provider_stage_json(stage_name: &str, binary_digest: &str, policy_digest: &str) -> serde_json::Value {
+        let receipt = format!("{stage_name}/receipt.json");
+        let binary = format!("{stage_name}/mantle");
+        json!({
+            "name": stage_name,
+            "dir": stage_name,
+            "execution_dir": "execution",
+            "receipt": receipt,
+            "stderr": format!("{stage_name}/stderr.txt"),
+            "status": format!("{stage_name}/status.txt"),
+            "status_code": 0,
+            "execution_status": "success",
+            "cargo_marker_absent": true,
+            "success": true,
+            "unit_count": PROVIDER_STAGE_UNIT_COUNT,
+            "failed_unit_count": 0,
+            "binary": binary,
+            "binary_blake3": binary_digest,
+            "smoke_status_code": 0,
+            "source_built_toolchain_closure_policy_digest_blake3": policy_digest,
+            "blocker": null
+        })
+    }
+
+    fn provider_preflight_json(policy_digest: &str) -> serde_json::Value {
+        json!({
+            "schema": PROVIDER_FIXED_POINT_SCHEMA,
+            "root": "/repo/mantle",
+            "bundle_dir": "/tmp/provider-fixed-point-proof",
+            "source_built_toolchain_closure": {
+                "status": "enforced-source-built",
+                "claim": true,
+                "policy_digest_blake3": policy_digest
+            }
+        })
+    }
+
+    fn provider_meta_json(bundle_dir: &Path, binary_digest: &str, policy_digest: &str) -> serde_json::Value {
+        json!({
+            "schema": PROVIDER_FIXED_POINT_SCHEMA,
+            "status": "success",
+            "root": "/repo/mantle",
+            "bundle_dir": bundle_dir,
+            "fixed_point": true,
+            "stage1": provider_stage_json("stage1", binary_digest, policy_digest),
+            "stage2": provider_stage_json("stage2", binary_digest, policy_digest),
+            "source_built_toolchain_closure": {
+                "schema": "mantle-source-built-toolchain-closure-v1",
+                "status": "enforced-source-built",
+                "claim": true,
+                "non_claim": null,
+                "manifest_path": "/tmp/toolchain-closure.json",
+                "policy_digest_blake3": policy_digest,
+                "member_count": PROVIDER_STAGE_UNIT_COUNT,
+                "source_built_member_count": PROVIDER_STAGE_UNIT_COUNT,
+                "seed_exception_count": 0
+            },
+            "rust_source_provider": {
+                "schema": RUST_SOURCE_PROVIDER_BINDING_SCHEMA,
+                "status": "validated",
+                "provider_dir": "/provider",
+                "metadata_path": "/provider/share/mantle-rust-provider/provider.json",
+                "metadata_digest_blake3": sample_digest(13),
+                "policy_digest_blake3": policy_digest,
+                "host_triple": "x86_64-unknown-linux-musl",
+                "target_triple": "x86_64-unknown-linux-musl",
+                "artifact_count": 6,
+                "source_count": 2,
+                "receipt_count": 1,
+                "rustc_path": "/provider/bin/rustc"
+            },
+            "blocker": null,
+            "non_claims": [
+                "not-crunch-bootstrap",
+                "not-release-reproducibility",
+                "not-full-cargo-compatibility"
+            ]
+        })
+    }
+
     #[test]
     fn canonical_bytes_are_stable_and_compact() {
         let manifest = sample_manifest();
@@ -864,6 +1037,70 @@ mod tests {
         assert!(output_bundle_dir.join("proof/self-hosting/manifest.json").exists());
         assert!(output_bundle_dir.join("proof/inventory.md").exists());
         assert!(output_bundle_dir.join("manifest.json").exists());
+    }
+
+    #[test]
+    fn create_and_verify_release_bundle_with_provider_fixed_point_proof() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let provider_proof_dir = temp.path().join("provider-fixed-point-input");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+        write_provider_fixed_point_proof_bundle(&provider_proof_dir, PROVIDER_BINARY_BYTES);
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.provider_fixed_point_proof_dir = Some(provider_proof_dir);
+        let created = create_release_evidence_bundle(&request).unwrap();
+        let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
+        let provider_artifact = created.provider_fixed_point_proof.as_ref().unwrap();
+
+        assert_eq!(created, verified);
+        assert_eq!(provider_artifact.relative_path, "proof/provider-fixed-point");
+        assert_eq!(provider_artifact.evidence_role, PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE);
+        assert!(output_bundle_dir.join("proof/provider-fixed-point/meta.json").exists());
+    }
+
+    #[test]
+    fn create_rejects_invalid_provider_fixed_point_proof_before_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let provider_proof_dir = temp.path().join("invalid-provider-fixed-point");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+        write_file(&provider_proof_dir.join("meta.json"), br#"{}"#);
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.provider_fixed_point_proof_dir = Some(provider_proof_dir);
+        let err = create_release_evidence_bundle(&request).unwrap_err();
+
+        assert!(err.to_string().contains("provider fixed-point proof is invalid"));
+        assert!(!output_bundle_dir.join("manifest.json").exists());
     }
 
     #[test]
