@@ -172,18 +172,25 @@ declared Cargo package into an ordinary derivation that runs `cargo build
 --locked --offline` inside Mantle's sandbox with isolated `HOME`, `CARGO_HOME`,
 and `CARGO_TARGET_DIR`.
 
+For existing Cargo workspaces, use `mantle import cargo --plan` first. The plan
+prints deterministic file operations, content digests, selected package/binary
+facts, source input placeholders, and blockers without mutating files. Use
+`mantle import cargo --apply` only after reviewing that plan; apply writes only
+the accepted Mantle-owned files and fails before writing if conflicts or
+unsupported Cargo surfaces remain.
+
 Required inputs are explicit: package source, lockfile identity in the source,
 bootstrap Rust toolchain, seed C toolchain, musl runtime, and optional vendored
 registry source material. Missing source material fails closed before a result is
-accepted; the helper does not search ambient Cargo caches, target directories,
-or network sources.
+accepted; the helper and import scaffold do not search ambient Cargo caches,
+target directories, or network sources.
 
 Structured JSON reports include `cargo_build_evidence[]` when the output
 contains `share/mantle/offline-cargo-build.json`. The claim class is
 `cargo-inside-mantle-sandbox`; it is evidence that the declared Cargo action
 produced the inspected output under Mantle's sandbox policy. It is not evidence
 of Cargo-free execution, full Cargo compatibility, compiler correctness, release
-reproducibility, or bootstrap correctness.
+reproducibility, bootstrap correctness, or module-layer semantics.
 
 ## Rust project verification lane
 

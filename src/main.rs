@@ -14,6 +14,7 @@ mod build_log;
 mod build_plan;
 mod build_report;
 mod cargo_free_self_build;
+mod cargo_import;
 mod errors;
 mod fix;
 mod frontend_artifact_export;
@@ -184,6 +185,12 @@ enum Command {
         /// Workflow profile to check
         #[arg(long, value_enum, default_value_t = DoctorProfile::Build)]
         profile: DoctorProfile,
+    },
+
+    /// Import external project metadata into Mantle-owned build files
+    Import {
+        #[command(subcommand)]
+        action: ImportAction,
     },
 
     /// Show a semantic build graph rooted at an output/proof/source identity or alias
@@ -615,6 +622,44 @@ enum Command {
         /// Arguments to pass to the executable (after --)
         #[arg(last = true)]
         run_args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum ImportAction {
+    /// Plan or apply a Cargo workspace scaffold for the offline Cargo build lane
+    Cargo {
+        /// Render the no-mutate plan (default when --apply is absent)
+        #[arg(long)]
+        plan: bool,
+
+        /// Write the accepted scaffold files if the plan has no blockers
+        #[arg(long)]
+        apply: bool,
+
+        /// Select a package when the workspace has multiple members
+        #[arg(long)]
+        package: Option<String>,
+
+        /// Select a binary when the package has multiple binary targets
+        #[arg(long)]
+        binary: Option<String>,
+
+        /// Generated Mantle project file
+        #[arg(long, default_value = "mantle-project.ncl")]
+        project_file: String,
+
+        /// Generated Mantle inputs file
+        #[arg(long, default_value = ".mantle/inputs.ncl")]
+        inputs_file: String,
+
+        /// Cargo target triple for the offline build package
+        #[arg(long, default_value = "x86_64-unknown-linux-musl")]
+        target: String,
+
+        /// Cargo profile for the generated package
+        #[arg(long, default_value = "release")]
+        profile: String,
     },
 }
 
@@ -1402,6 +1447,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)
         }
         Command::Attest { action } => run_attest_command(ctx, action.clone()),
+        Command::Import { action } => run_import_command(ctx, action.clone()),
         Command::Init
         | Command::Check
         | Command::Show
@@ -1413,6 +1459,37 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
+    }
+}
+
+fn run_import_command(ctx: &RunContext, action: ImportAction) -> Result<(), RunError> {
+    match action {
+        ImportAction::Cargo {
+            plan,
+            apply,
+            package,
+            binary,
+            project_file,
+            inputs_file,
+            target,
+            profile,
+        } => {
+            if plan && apply {
+                return Err(RunError::Internal("cargo import accepts either --plan or --apply, not both".to_string()));
+            }
+            let root = current_dir_or_error()?;
+            cargo_import::run_cargo_import(cargo_import::CargoImportShellOptions {
+                root: &root,
+                selected_package: package.as_deref(),
+                selected_binary: binary.as_deref(),
+                project_file: &project_file,
+                inputs_file: &inputs_file,
+                target_triple: &target,
+                profile: &profile,
+                apply,
+                json: ctx.json,
+            })
+        }
     }
 }
 

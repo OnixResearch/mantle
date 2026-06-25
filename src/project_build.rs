@@ -1,7 +1,7 @@
 //! Project-aware build resolution.
 //!
-//! Discovers `crunch.ncl`, parses `.#name` selectors, and extracts
-//! derivations from the Project output schema.
+//! Discovers `mantle-project.ncl`/`crunch.ncl`, parses `.#name` selectors,
+//! and extracts derivations from the Project output schema.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -9,8 +9,10 @@ use std::path::PathBuf;
 
 use crate::errors::RunError;
 
-/// The standard project root file name.
-const PROJECT_ROOT_FILE: &str = "crunch.ncl";
+/// The canonical project root file name.
+const CANONICAL_PROJECT_ROOT_FILE: &str = "mantle-project.ncl";
+/// The legacy compatibility project root file name.
+const LEGACY_PROJECT_ROOT_FILE: &str = "crunch.ncl";
 
 /// Maximum ancestor directories to search for a project root.
 const MAX_SEARCH_DEPTH: u32 = 64;
@@ -35,7 +37,7 @@ pub struct Selector {
 
 /// Resolved project with the root file and any narrowing.
 pub struct ResolvedProject {
-    /// Path to the crunch.ncl file.
+    /// Path to the project root Nickel file.
     pub root_file: PathBuf,
     /// Which attribute(s) to extract from the evaluated output.
     pub target: ProjectTarget,
@@ -90,19 +92,35 @@ fn parse_selector(s: &str) -> Option<Selector> {
     Some(Selector { segments })
 }
 
-/// Find the nearest `crunch.ncl` by walking up from `start_dir`.
+/// Find the nearest project root by walking up from `start_dir`.
 pub fn find_project_root(start_dir: &Path) -> Option<PathBuf> {
+    find_project_root_checked(start_dir).ok().flatten()
+}
+
+fn find_project_root_checked(start_dir: &Path) -> Result<Option<PathBuf>, RunError> {
     let mut dir = start_dir.to_path_buf();
     for _ in 0..MAX_SEARCH_DEPTH {
-        let candidate = dir.join(PROJECT_ROOT_FILE);
-        if candidate.is_file() {
-            return Some(candidate);
+        let canonical = dir.join(CANONICAL_PROJECT_ROOT_FILE);
+        let legacy = dir.join(LEGACY_PROJECT_ROOT_FILE);
+        let canonical_exists = canonical.is_file();
+        let legacy_exists = legacy.is_file();
+        if canonical_exists && legacy_exists {
+            return Err(RunError::Internal(format!(
+                "both {CANONICAL_PROJECT_ROOT_FILE} and {LEGACY_PROJECT_ROOT_FILE} exist in {}; keep one project surface",
+                dir.display()
+            )));
+        }
+        if canonical_exists {
+            return Ok(Some(canonical));
+        }
+        if legacy_exists {
+            return Ok(Some(legacy));
         }
         if !dir.pop() {
             break;
         }
     }
-    None
+    Ok(None)
 }
 
 /// Resolve a build target into a project file + extraction plan.
@@ -111,10 +129,10 @@ pub fn resolve_project_target(
     cwd: &Path,
     user_import_paths: &[PathBuf],
 ) -> Result<ResolvedProject, RunError> {
-    let root_file = find_project_root(cwd).ok_or_else(|| {
+    let root_file = find_project_root_checked(cwd)?.ok_or_else(|| {
         RunError::Internal(format!(
-            "no {PROJECT_ROOT_FILE} found in {} or any parent directory.\n\
-             Either specify a .ncl file or run `crunch init` to create a project.",
+            "no {CANONICAL_PROJECT_ROOT_FILE} or {LEGACY_PROJECT_ROOT_FILE} found in {} or any parent directory.\n\
+             Either specify a .ncl file or run `mantle init` to create a project.",
             cwd.display()
         ))
     })?;
@@ -309,7 +327,15 @@ mod tests {
     }
 
     #[test]
-    fn find_project_root_finds_in_current_dir() {
+    fn find_project_root_finds_canonical_in_current_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("mantle-project.ncl"), "{}").unwrap();
+        let found = find_project_root(tmp.path()).unwrap();
+        assert_eq!(found, tmp.path().join("mantle-project.ncl"));
+    }
+
+    #[test]
+    fn find_project_root_still_finds_legacy_in_current_dir() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("crunch.ncl"), "{}").unwrap();
         let found = find_project_root(tmp.path()).unwrap();
@@ -324,5 +350,15 @@ mod tests {
         std::fs::create_dir_all(&child).unwrap();
         let found = find_project_root(&child).unwrap();
         assert_eq!(found, tmp.path().join("crunch.ncl"));
+    }
+
+    #[test]
+    fn find_project_root_rejects_mixed_canonical_and_legacy_surfaces() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("mantle-project.ncl"), "{}").unwrap();
+        std::fs::write(tmp.path().join("crunch.ncl"), "{}").unwrap();
+
+        let err = find_project_root_checked(tmp.path()).unwrap_err();
+        assert!(err.to_string().contains("both mantle-project.ncl and crunch.ncl"));
     }
 }

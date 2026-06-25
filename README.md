@@ -1318,10 +1318,19 @@ hashing) and updates both `mantle.lock` and `.mantle/inputs.ncl`
 ### Offline Cargo package builds
 
 The near-term Rust project-build lane is sandboxed offline Cargo, not native
-`rust-plan`. In a compatibility-named `crunch.ncl` project root, declare a
-package with `mantle.offlineCargoPackage { ... }`, pass explicit source,
-bootstrap Rust, seed toolchain, and musl inputs, then build it with
-`mantle build .#name` or run it with `mantle run .#name`.
+`rust-plan`. In a canonical `mantle-project.ncl` project root (legacy
+`crunch.ncl` remains accepted), declare a package with
+`mantle.offlineCargoPackage { ... }`, pass explicit source, bootstrap Rust,
+seed toolchain, and musl inputs, then build it with `mantle build .#name` or run
+it with `mantle run .#name`.
+
+`mantle import cargo --plan` reads supported Cargo workspace facts and prints a
+reviewable scaffold plan without writing files. `mantle import cargo --apply`
+only writes the bounded files named by that plan (`mantle-project.ncl` and
+`.mantle/inputs.ncl` today) when no blockers remain. Unsupported registry/git
+sources, missing lockfiles, ambiguous packages/binaries, malformed names, and
+conflicting existing files block the apply path instead of generating partial
+project files.
 
 The helper writes `share/mantle/offline-cargo-build.json` into the output and
 JSON build reports surface that sidecar under `cargo_build_evidence[]` when the
@@ -1329,7 +1338,8 @@ output is materialized locally. The evidence class is
 `cargo-inside-mantle-sandbox`; it binds the inspected source closure,
 toolchain paths, output path, and artifact attestation reference. It explicitly
 does not claim Cargo-free execution, full Cargo compatibility, compiler
-correctness, release reproducibility, or bootstrap correctness.
+correctness, release reproducibility, bootstrap correctness, or module-layer
+semantics.
 
 ## Build-tool boundary
 
