@@ -2508,3 +2508,23 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks first-stage-musl-hos
   "verdict": "PASS"
 }
 ```
+
+## 2026-06-24 post-archive validation
+
+The change was archived with `CAIRN_ARCHIVE_DATE=2026-06-24`. Current
+post-archive validation output:
+
+```text
+$ git diff --check
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 1,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
