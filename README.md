@@ -1332,6 +1332,12 @@ sources, missing lockfiles, ambiguous packages/binaries, malformed names, and
 conflicting existing files block the apply path instead of generating partial
 project files.
 
+The representative Rust compatibility rail lives in
+`examples/rust_compatibility_rail.rs` and `tests/rust_compatibility_rail.rs`.
+It generates a workspace with a binary, local library, vendored registry source,
+proc macro, and build script metadata. Passing that rail is evidence for that
+fixture and lane only; it is not proof of full Cargo compatibility.
+
 The helper writes `share/mantle/offline-cargo-build.json` into the output and
 JSON build reports surface that sidecar under `cargo_build_evidence[]` when the
 output is materialized locally. The evidence class is

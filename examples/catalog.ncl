@@ -246,6 +246,18 @@ let Example = {
       skip_reason = "requires generated examples/project/seed.ncl that is valid for the current host store",
     },
     {
+      id = "rust-compatibility-rail",
+      path = "examples/rust_compatibility_rail.rs",
+      title = "Representative Rust compatibility rail",
+      summary = "Documents the generated Rust workspace rail for sandboxed offline Cargo and explicit rust-plan evidence.",
+      lane = "project-workflow",
+      kind = "rust-example",
+      support_tier = "fast",
+      requirements = { network = false, generated_seed = false, linux_bwrap = true, heavyweight = false, benchmark = false },
+      validation_rails = ["representative-offline-cargo-rail", "representative-rust-plan-rail", "representative-claim-non-overreach"],
+      skip_reason = "",
+    },
+    {
       id = "seed",
       path = "examples/seed.ncl",
       title = "Generated host seed paths",
