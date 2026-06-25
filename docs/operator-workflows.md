@@ -164,6 +164,25 @@ Structured build reports surface the same operator facts in stable fields:
 That last block gives both the logical store path and the persisted sidecar
 path for the artifact attestation.
 
+## Rust project verification lane
+
+Use `mantle rust-plan` only when you want explicit native Rust planner evidence.
+Ordinary project builds stay on `mantle build .#name` and must not silently claim
+Cargo-free topology execution. Rust-plan receipts classify their bounded role in
+`cargo_mode.compatibility_class`:
+
+- `cargo-oracle-evidence` means Cargo metadata or unit-graph material was used
+  as an oracle for comparison.
+- `cargo-free-bounded-topology` means `--no-cargo-oracle` planned or executed the
+  supported native topology without invoking Cargo.
+- `blocked-unsupported-surface` means native planning failed closed on an
+  unsupported surface instead of falling back to hidden Cargo orchestration.
+
+The same receipt records `cargo_mode.project_build_status =
+"not-default-project-build"`. Do not treat rust-plan evidence as proof of full
+Cargo compatibility, compiler correctness, release reproducibility, or bootstrap
+correctness.
+
 ## Structured refactor sessions
 
 Mantle migrations should be represented as structured refactor session records instead of ad hoc text rewrites. The built-in `crunch-to-mantle-project-identity` session records `mantle` as canonical, `crunch` as a retained compatibility alias, `mantle-project.ncl`/`mantle.lock`/`.mantle/` as canonical project surfaces, `crunch-project.ncl`/`crunch.lock`/`.crunch/` as legacy surfaces, `/mantle/store` as the canonical store prefix, and `/crunch/store` as an explicit compatibility prefix.

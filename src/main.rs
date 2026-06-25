@@ -3342,6 +3342,13 @@ mod tests {
     }
 
     #[test]
+    fn build_cli_project_selector_is_not_implicit_rust_plan() {
+        let args = Args::parse_from(["mantle", "build", ".#app"]);
+        assert!(matches!(args.command, Command::Build { .. }));
+        assert!(!matches!(args.command, Command::RustPlan { .. }));
+    }
+
+    #[test]
     fn self_build_cli_accepts_impure_mode() {
         let args = Args::parse_from(["mantle", "self-build", "--impure"]);
         assert!(matches!(args.command, Command::SelfBuild {

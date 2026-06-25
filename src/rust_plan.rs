@@ -124,6 +124,16 @@ const COMPILER_POLICY_STANDARDS_STATUS_ARTIFACT_VERIFIED: &str = "policy-artifac
 const COMPILER_POLICY_CLAIM_CONFIGURED_PROFILE: &str = "configured compiler-policy profile compliance only";
 const COMPILER_POLICY_CLAIM_NO_COMPLIANCE: &str =
     "no compiler-policy compliance claim because policy execution did not pass";
+const RUST_PLAN_CLASS_CARGO_ORACLE_EVIDENCE: &str = "cargo-oracle-evidence";
+const RUST_PLAN_CLASS_CARGO_FREE_BOUNDED_TOPOLOGY: &str = "cargo-free-bounded-topology";
+const RUST_PLAN_CLASS_BLOCKED_UNSUPPORTED_SURFACE: &str = "blocked-unsupported-surface";
+const RUST_PLAN_STATUS_NOT_DEFAULT_PROJECT_BUILD: &str = "not-default-project-build";
+const RUST_PLAN_COMMON_NON_CLAIMS: &[&str] = &[
+    "not-full-cargo-compatibility",
+    "not-compiler-correctness",
+    "not-release-reproducibility",
+    "not-bootstrap-correctness",
+];
 const COMPILER_POLICY_NON_CLAIMS: &[&str] = &[
     "program-correctness",
     "complete-fcis-proof",
@@ -149,6 +159,7 @@ pub(crate) struct RustPlanOptions {
 pub(crate) struct RustPlanCargoModeSummary {
     pub(crate) no_cargo_oracle: bool,
     pub(crate) compatibility_class: String,
+    pub(crate) project_build_status: String,
     pub(crate) blockers: Vec<String>,
     pub(crate) non_claims: Vec<String>,
 }
@@ -1266,12 +1277,29 @@ pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanRec
 }
 
 fn rust_plan_cargo_mode(no_cargo_oracle: bool, blockers: Vec<String>) -> RustPlanCargoModeSummary {
-    let compatibility_class = if no_cargo_oracle {
-        "cargo-free-native-path-topology-v1"
-    } else {
-        "cargo-oracle-assisted-v1"
-    };
-    let non_claims = if no_cargo_oracle {
+    let compatibility_class = rust_plan_compatibility_class(no_cargo_oracle, &blockers);
+    let non_claims = rust_plan_non_claims(no_cargo_oracle);
+    RustPlanCargoModeSummary {
+        no_cargo_oracle,
+        compatibility_class: compatibility_class.to_string(),
+        project_build_status: RUST_PLAN_STATUS_NOT_DEFAULT_PROJECT_BUILD.to_string(),
+        blockers,
+        non_claims,
+    }
+}
+
+fn rust_plan_compatibility_class(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {
+    if !no_cargo_oracle {
+        return RUST_PLAN_CLASS_CARGO_ORACLE_EVIDENCE;
+    }
+    if blockers.is_empty() {
+        return RUST_PLAN_CLASS_CARGO_FREE_BOUNDED_TOPOLOGY;
+    }
+    RUST_PLAN_CLASS_BLOCKED_UNSUPPORTED_SURFACE
+}
+
+fn rust_plan_non_claims(no_cargo_oracle: bool) -> Vec<String> {
+    let mut non_claims = if no_cargo_oracle {
         vec![
             "bounded-path-workspace-only".to_string(),
             "not-full-cargo-feature-resolution".to_string(),
@@ -1281,12 +1309,10 @@ fn rust_plan_cargo_mode(no_cargo_oracle: bool, blockers: Vec<String>) -> RustPla
     } else {
         vec!["cargo-used-for-oracle-metadata-and-unit-graph".to_string()]
     };
-    RustPlanCargoModeSummary {
-        no_cargo_oracle,
-        compatibility_class: compatibility_class.to_string(),
-        blockers,
-        non_claims,
-    }
+    non_claims.extend(RUST_PLAN_COMMON_NON_CLAIMS.iter().map(|claim| (*claim).to_string()));
+    non_claims.sort();
+    non_claims.dedup();
+    non_claims
 }
 
 fn capture_rust_plan_with_oracle(
