@@ -56,6 +56,9 @@ const HELP_FLAG: &str = "--help";
 const TOOLCHAIN_DIR: &str = "toolchain";
 const RUSTC_WRAPPER_FILE: &str = "rustc-normalized";
 const COMPATIBILITY_FILE: &str = "compatibility.json";
+const TOOLCHAIN_COMPATIBILITY_PATH_DIR: &str = "receipt-bound-path";
+const TOOLCHAIN_ALIAS_RUNTIME_DIR: &str = ".toolchain-runtime";
+const TOOLCHAIN_ALIAS_UNWIND_ARCHIVE: &str = "libunwind.a";
 const RUSTC_PROBE_DIR: &str = "rustc-probe";
 const RUSTC_PROBE_SOURCE_FILE: &str = "probe.rs";
 const RUSTC_PROBE_SOURCE: &str = "fn main() {}\n";
@@ -364,7 +367,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
     let requested_rustc = selected_cargo_free_rustc(&loaded_rust_provider, options.rustc);
     let compatibility_rustc = prepare_rustc_for_compatibility(requested_rustc, &loaded_toolchain_closure)?;
-    let compatibility = prepare_rustc_compatibility(&bundle_dir, &compatibility_rustc)?;
+    let compatibility = prepare_rustc_compatibility(&bundle_dir, &compatibility_rustc, &loaded_toolchain_closure)?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc, options.targets)?;
     let toolchain_status = enforce_fixed_point_toolchain(
         &compatibility.summary.stage_rustc,
@@ -610,12 +613,17 @@ fn prepare_fixed_point_output_dir(bundle_dir: &Path) -> Result<(), RunError> {
     fs::create_dir_all(bundle_dir).map_err(|err| internal(format!("create {}: {err}", bundle_dir.display())))
 }
 
-fn prepare_rustc_compatibility(bundle_dir: &Path, requested: &Path) -> Result<RustcCompatibility, RunError> {
+fn prepare_rustc_compatibility(
+    bundle_dir: &Path,
+    requested: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+) -> Result<RustcCompatibility, RunError> {
     let requested_rustc = resolve_executable(requested, "rustc")?;
     let toolchain_dir = bundle_dir.join(TOOLCHAIN_DIR);
     fs::create_dir_all(&toolchain_dir)
         .map_err(|err| internal(format!("create toolchain dir {}: {err}", toolchain_dir.display())))?;
-    if rustc_accepts_link_self_contained_no(&requested_rustc, &toolchain_dir) {
+    let probe_path_env = prepare_rustc_compatibility_path_env(&toolchain_dir, toolchain_closure)?;
+    if rustc_accepts_link_self_contained_no(&requested_rustc, &toolchain_dir, probe_path_env.as_deref()) {
         let summary = RustcCompatibilitySummary {
             requested_rustc: requested_rustc.clone(),
             stage_rustc: requested_rustc,
@@ -625,6 +633,12 @@ fn prepare_rustc_compatibility(bundle_dir: &Path, requested: &Path) -> Result<Ru
         };
         write_rustc_compatibility(&toolchain_dir.join(COMPATIBILITY_FILE), &summary)?;
         return Ok(RustcCompatibility { summary });
+    }
+    if toolchain_closure.manifest.is_some() {
+        return Err(RunError::Build(
+            "source-built toolchain closure blocked: rustc compatibility probe failed under receipt-bound toolchain PATH"
+                .to_string(),
+        ));
     }
     let wrapper = toolchain_dir.join(RUSTC_WRAPPER_FILE);
     write_rustc_wrapper(&wrapper, &requested_rustc)?;
@@ -638,6 +652,23 @@ fn prepare_rustc_compatibility(bundle_dir: &Path, requested: &Path) -> Result<Ru
     };
     write_rustc_compatibility(&toolchain_dir.join(COMPATIBILITY_FILE), &summary)?;
     Ok(RustcCompatibility { summary })
+}
+
+fn prepare_rustc_compatibility_path_env(
+    toolchain_dir: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+) -> Result<Option<OsString>, RunError> {
+    let Some(manifest) = &toolchain_closure.manifest else {
+        return Ok(None);
+    };
+    let path_dir = toolchain_dir.join(TOOLCHAIN_COMPATIBILITY_PATH_DIR);
+    remove_owned_path(&path_dir)?;
+    fs::create_dir_all(&path_dir)
+        .map_err(|err| internal(format!("create receipt-bound rustc probe PATH dir {}: {err}", path_dir.display())))?;
+    write_toolchain_path_aliases(&path_dir, manifest)?;
+    let path_env = env::join_paths([path_dir])
+        .map_err(|err| internal(format!("construct receipt-bound rustc probe PATH: {err}")))?;
+    Ok(Some(path_env))
 }
 
 fn resolve_executable(path: &Path, name: &str) -> Result<PathBuf, RunError> {
@@ -665,7 +696,7 @@ fn resolve_executable_on_path(path: &Path, name: &str) -> Result<PathBuf, RunErr
     Err(internal(format!("required tool not found on PATH: {name}")))
 }
 
-fn rustc_accepts_link_self_contained_no(rustc: &Path, toolchain_dir: &Path) -> bool {
+fn rustc_accepts_link_self_contained_no(rustc: &Path, toolchain_dir: &Path, path_env: Option<&OsStr>) -> bool {
     let probe_dir = toolchain_dir.join(RUSTC_PROBE_DIR);
     let probe_source = probe_dir.join(RUSTC_PROBE_SOURCE_FILE);
     if remove_owned_path(&probe_dir).is_err() {
@@ -678,16 +709,19 @@ fn rustc_accepts_link_self_contained_no(rustc: &Path, toolchain_dir: &Path) -> b
         let _ = remove_owned_path(&probe_dir);
         return false;
     }
-    let success = Command::new(rustc)
+    let mut command = Command::new(rustc);
+    command
         .arg("--crate-type")
         .arg("bin")
         .arg("-C")
         .arg(LINK_SELF_CONTAINED_PROBE_ARG)
         .arg(&probe_source)
         .arg("--out-dir")
-        .arg(&probe_dir)
-        .output()
-        .is_ok_and(|output| output.status.success());
+        .arg(&probe_dir);
+    if let Some(path_env) = path_env {
+        command.env("PATH", path_env);
+    }
+    let success = command.output().is_ok_and(|output| output.status.success());
     let _ = remove_owned_path(&probe_dir);
     success
 }
@@ -1592,12 +1626,20 @@ fn write_toolchain_path_aliases(
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<(), RunError> {
     let aliases = toolchain_path_aliases(manifest)?;
+    let c_compiler = c_compiler_alias_target(manifest)?;
+    let unwind_archive = declared_unwind_archive(manifest)?;
     for (alias, target) in aliases {
         let link = guard_path_dir.join(alias);
         if link.file_name() == Some(OsStr::new(CARGO_SHIM_NAME)) {
             return Err(RunError::Build("source-built toolchain closure blocked: Cargo must stay guarded".to_string()));
         }
         remove_owned_path(&link)?;
+        if c_compiler.as_ref().is_some_and(|compiler| compiler == &target) {
+            if let Some(unwind_archive) = &unwind_archive {
+                write_c_compiler_toolchain_alias(&target, unwind_archive, &link)?;
+                continue;
+            }
+        }
         write_toolchain_alias(&target, &link)?;
     }
     Ok(())
@@ -1615,6 +1657,37 @@ fn toolchain_path_aliases(
         add_role_aliases(&mut aliases, member, &target)?;
     }
     Ok(aliases)
+}
+
+fn c_compiler_alias_target(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<Option<PathBuf>, RunError> {
+    use crate::source_toolchain_closure::ToolchainRole;
+    let members = manifest.members.iter().filter(|member| member.role == ToolchainRole::CCompiler).collect::<Vec<_>>();
+    match members.as_slice() {
+        [member] => Ok(Some(canonicalize_toolchain_path(Path::new(&member.execution_path), member.role)?)),
+        [] => Ok(None),
+        _many => Err(RunError::Build(
+            "source-built toolchain closure blocked: multiple CCompiler members for PATH alias generation".to_string(),
+        )),
+    }
+}
+
+fn declared_unwind_archive(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<Option<PathBuf>, RunError> {
+    let members = manifest
+        .members
+        .iter()
+        .filter(|member| member.name == crate::source_toolchain_closure::NATIVE_HOST_LIBUNWIND_NAME)
+        .collect::<Vec<_>>();
+    match members.as_slice() {
+        [member] => Ok(Some(canonicalize_toolchain_path(Path::new(&member.execution_path), member.role)?)),
+        [] => Ok(None),
+        _many => Err(RunError::Build(
+            "source-built toolchain closure blocked: multiple host libunwind runtime members".to_string(),
+        )),
+    }
 }
 
 fn executable_path_members(
@@ -1719,11 +1792,41 @@ fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
     set_executable(link)
 }
 
+#[cfg(unix)]
+fn write_c_compiler_toolchain_alias(target: &Path, unwind_archive: &Path, link: &Path) -> Result<(), RunError> {
+    let runtime_dir = link
+        .parent()
+        .ok_or_else(|| internal(format!("{} has no parent", link.display())))?
+        .join(TOOLCHAIN_ALIAS_RUNTIME_DIR);
+    fs::create_dir_all(&runtime_dir)
+        .map_err(|err| internal(format!("create toolchain alias runtime dir {}: {err}", runtime_dir.display())))?;
+    let runtime_unwind = runtime_dir.join(TOOLCHAIN_ALIAS_UNWIND_ARCHIVE);
+    fs::copy(unwind_archive, &runtime_unwind).map_err(|err| {
+        internal(format!(
+            "copy declared unwind archive {} -> {}: {err}",
+            unwind_archive.display(),
+            runtime_unwind.display()
+        ))
+    })?;
+    let script = format!(
+        "#!/bin/sh\nremaining=$#\nwhile [ \"$remaining\" -gt 0 ]; do\n  arg=$1\n  shift\n  case \"$arg\" in\n    -static-pie) set -- \"$@\" -static ;;\n    *) set -- \"$@\" \"$arg\" ;;\n  esac\n  remaining=$((remaining - 1))\ndone\nexec {} -L{} \"$@\"\n",
+        shell_quote(target),
+        shell_quote(&runtime_dir)
+    );
+    write_text(link, &script)?;
+    set_executable(link)
+}
+
 #[cfg(not(unix))]
 fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
     fs::copy(target, link)
         .map_err(|err| internal(format!("copy {} -> {}: {err}", target.display(), link.display())))?;
     set_executable(link)
+}
+
+#[cfg(not(unix))]
+fn write_c_compiler_toolchain_alias(target: &Path, _unwind_archive: &Path, link: &Path) -> Result<(), RunError> {
+    write_toolchain_alias(target, link)
 }
 
 fn guarded_path(cargo_path_dir: &Path) -> Result<OsString, RunError> {
@@ -2567,6 +2670,65 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn receipt_bound_c_compiler_alias_materializes_declared_unwind_archive() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let guard_dir = dir.path().join("guard-bin");
+        fs::create_dir_all(&guard_dir).unwrap();
+
+        write_toolchain_path_aliases(&guard_dir, &manifest).unwrap();
+
+        let cc_alias = fs::read_to_string(guard_dir.join(C_COMPILER_ALIAS)).unwrap();
+        let runtime_unwind = guard_dir.join(TOOLCHAIN_ALIAS_RUNTIME_DIR).join(TOOLCHAIN_ALIAS_UNWIND_ARCHIVE);
+        assert!(cc_alias.contains("-L"));
+        assert!(cc_alias.contains(TOOLCHAIN_ALIAS_RUNTIME_DIR));
+        assert!(cc_alias.contains("remaining=$#"));
+        assert!(cc_alias.contains("-static-pie) set -- \"$@\" -static ;;"));
+        assert_eq!(fs::read(&runtime_unwind).unwrap(), fs::read(&tools.unwind_archive).unwrap());
+        assert!(!guard_dir.join(CARGO_SHIM_NAME).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn compatibility_probe_uses_receipt_bound_path_for_explicit_closure() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let probe_report = dir.path().join("probe-path.txt");
+        write_fake_executable(
+            &tools.rustc,
+            &format!("#!/bin/sh\nprintf '%s\\n' \"$PATH\" > {}\nexit 0\n", shell_quote(&probe_report)),
+        );
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest);
+        let bundle_dir = dir.path().join("bundle");
+
+        let compatibility = prepare_rustc_compatibility(&bundle_dir, &tools.rustc, &closure).unwrap();
+        let recorded_path = fs::read_to_string(&probe_report).unwrap();
+
+        assert_eq!(compatibility.summary.normalization, NORMALIZATION_NONE);
+        assert!(recorded_path.contains(TOOLCHAIN_COMPATIBILITY_PATH_DIR));
+        assert!(!recorded_path.contains("/run/current-system/sw"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn compatibility_probe_failure_with_explicit_closure_fails_closed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        write_fake_executable(&tools.rustc, "#!/bin/sh\nexit 42\n");
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest);
+        let bundle_dir = dir.path().join("bundle");
+
+        let err = prepare_rustc_compatibility(&bundle_dir, &tools.rustc, &closure).unwrap_err();
+
+        assert!(err.message().contains("receipt-bound toolchain PATH"));
+        assert!(!bundle_dir.join(TOOLCHAIN_DIR).join(RUSTC_WRAPPER_FILE).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn receipt_bound_enforcement_rejects_sysroot_leakage() {
         let dir = tempfile::TempDir::new().unwrap();
         let tools = fake_toolchain(&dir, false);
@@ -2783,6 +2945,7 @@ mod tests {
         ranlib: PathBuf,
         sysroot: PathBuf,
         pkg_config: Option<PathBuf>,
+        unwind_archive: PathBuf,
     }
 
     #[cfg(unix)]
@@ -2955,18 +3118,22 @@ mod tests {
     fn fake_toolchain(dir: &tempfile::TempDir, include_pkg_config: bool) -> FakeToolchain {
         let tool_dir = dir.path().join("toolchain").join("bin");
         let sysroot = dir.path().join("toolchain").join("sysroot");
+        let runtime_dir = dir.path().join("toolchain").join("lib");
         fs::create_dir_all(&tool_dir).unwrap();
         fs::create_dir_all(&sysroot).unwrap();
+        fs::create_dir_all(&runtime_dir).unwrap();
         let rustc = tool_dir.join("rustc");
         let linker = tool_dir.join("ld");
         let c_compiler = tool_dir.join("cc");
         let archiver = tool_dir.join(ARCHIVER_ALIAS);
         let ranlib = tool_dir.join(RANLIB_ALIAS);
+        let unwind_archive = runtime_dir.join("libgcc_eh.a");
         write_fake_executable(&rustc, &rustc_sysroot_script(&sysroot));
         write_fake_executable(&linker, "#!/bin/sh\nexit 0\n");
         write_fake_executable(&c_compiler, "#!/bin/sh\nexit 0\n");
         write_fake_executable(&archiver, "#!/bin/sh\nexit 0\n");
         write_fake_executable(&ranlib, "#!/bin/sh\nexit 0\n");
+        write_text(&unwind_archive, "fake unwind archive\n").unwrap();
         let pkg_config = include_pkg_config.then(|| {
             let path = tool_dir.join(PKG_CONFIG_ALIAS);
             write_fake_executable(&path, "#!/bin/sh\nexit 0\n");
@@ -2980,6 +3147,7 @@ mod tests {
             ranlib,
             sysroot,
             pkg_config,
+            unwind_archive,
         }
     }
 
@@ -2999,6 +3167,12 @@ mod tests {
             fake_member(ToolchainRole::CCompiler, "c-compiler", &tools.c_compiler, override_digest.as_ref()),
             fake_member(ToolchainRole::NativeHelper, ARCHIVER_ALIAS, &tools.archiver, override_digest.as_ref()),
             fake_member(ToolchainRole::NativeHelper, RANLIB_ALIAS, &tools.ranlib, override_digest.as_ref()),
+            fake_member(
+                ToolchainRole::RuntimeLibrary,
+                NATIVE_HOST_LIBUNWIND_NAME,
+                &tools.unwind_archive,
+                override_digest.as_ref(),
+            ),
             fake_member(ToolchainRole::Sysroot, "sysroot", &tools.sysroot, override_digest.as_ref()),
         ];
         if let Some(pkg_config) = &tools.pkg_config {

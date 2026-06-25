@@ -80,6 +80,7 @@ pub(crate) const NATIVE_HOST_LINKER_NAME: &str = "ld";
 pub(crate) const NATIVE_HOST_SYSROOT_NAME: &str = "host-sysroot";
 pub(crate) const NATIVE_HOST_CRT1_NAME: &str = "host-crt1.o";
 pub(crate) const NATIVE_HOST_LIBGCC_NAME: &str = "host-libgcc_s.so.1";
+pub(crate) const NATIVE_HOST_LIBUNWIND_NAME: &str = "host-libunwind.a";
 pub(crate) const NATIVE_HOST_LIBC_NAME: &str = "host-libc.so";
 pub(crate) const NATIVE_TARGET_GCC_NAME: &str = "x86_64-linux-musl-gcc";
 pub(crate) const NATIVE_TARGET_GXX_NAME: &str = "x86_64-linux-musl-g++";
@@ -88,6 +89,7 @@ pub(crate) const NATIVE_TARGET_AR_NAME: &str = "x86_64-linux-musl-ar";
 pub(crate) const NATIVE_TARGET_RANLIB_NAME: &str = "x86_64-linux-musl-ranlib";
 pub(crate) const NATIVE_TARGET_CRT1_NAME: &str = "x86_64-linux-musl-crt1.o";
 pub(crate) const NATIVE_TARGET_LIBGCC_NAME: &str = "x86_64-linux-musl-libgcc_s.so.1";
+pub(crate) const NATIVE_TARGET_LIBUNWIND_NAME: &str = "x86_64-linux-musl-libunwind.a";
 pub(crate) const NATIVE_TARGET_LIBC_NAME: &str = "x86_64-linux-musl-libc.so";
 const REQUIRED_NATIVE_CLOSURE_MEMBERS: &[&str] = &[
     NATIVE_RUSTC_NAME,
@@ -96,6 +98,7 @@ const REQUIRED_NATIVE_CLOSURE_MEMBERS: &[&str] = &[
     NATIVE_HOST_SYSROOT_NAME,
     NATIVE_HOST_CRT1_NAME,
     NATIVE_HOST_LIBGCC_NAME,
+    NATIVE_HOST_LIBUNWIND_NAME,
     NATIVE_HOST_LIBC_NAME,
     NATIVE_TARGET_GCC_NAME,
     NATIVE_TARGET_GXX_NAME,
@@ -104,6 +107,7 @@ const REQUIRED_NATIVE_CLOSURE_MEMBERS: &[&str] = &[
     NATIVE_TARGET_RANLIB_NAME,
     NATIVE_TARGET_CRT1_NAME,
     NATIVE_TARGET_LIBGCC_NAME,
+    NATIVE_TARGET_LIBUNWIND_NAME,
     NATIVE_TARGET_LIBC_NAME,
 ];
 
@@ -2761,6 +2765,7 @@ mod tests {
             native_candidate(ToolchainRole::Sysroot, NATIVE_HOST_SYSROOT_NAME, DIGEST_D),
             native_candidate(ToolchainRole::CrtObject, NATIVE_HOST_CRT1_NAME, DIGEST_E),
             native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_HOST_LIBGCC_NAME, DIGEST_F),
+            native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_HOST_LIBUNWIND_NAME, DIGEST_B),
             native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_HOST_LIBC_NAME, DIGEST_A),
             native_candidate(ToolchainRole::NativeHelper, NATIVE_TARGET_GCC_NAME, DIGEST_B),
             native_candidate(ToolchainRole::NativeHelper, NATIVE_TARGET_GXX_NAME, DIGEST_C),
@@ -2769,6 +2774,7 @@ mod tests {
             native_candidate(ToolchainRole::NativeHelper, NATIVE_TARGET_RANLIB_NAME, DIGEST_F),
             native_candidate(ToolchainRole::CrtObject, NATIVE_TARGET_CRT1_NAME, DIGEST_A),
             native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_TARGET_LIBGCC_NAME, DIGEST_B),
+            native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_TARGET_LIBUNWIND_NAME, DIGEST_D),
             native_candidate(ToolchainRole::RuntimeLibrary, NATIVE_TARGET_LIBC_NAME, DIGEST_C),
         ]
     }

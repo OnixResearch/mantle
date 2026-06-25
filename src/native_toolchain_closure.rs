@@ -9,6 +9,7 @@ use crate::source_toolchain_closure::NATIVE_HOST_CC_NAME;
 use crate::source_toolchain_closure::NATIVE_HOST_CRT1_NAME;
 use crate::source_toolchain_closure::NATIVE_HOST_LIBC_NAME;
 use crate::source_toolchain_closure::NATIVE_HOST_LIBGCC_NAME;
+use crate::source_toolchain_closure::NATIVE_HOST_LIBUNWIND_NAME;
 use crate::source_toolchain_closure::NATIVE_HOST_LINKER_NAME;
 use crate::source_toolchain_closure::NATIVE_HOST_SYSROOT_NAME;
 use crate::source_toolchain_closure::NATIVE_RUSTC_NAME;
@@ -19,6 +20,7 @@ use crate::source_toolchain_closure::NATIVE_TARGET_GXX_NAME;
 use crate::source_toolchain_closure::NATIVE_TARGET_LD_NAME;
 use crate::source_toolchain_closure::NATIVE_TARGET_LIBC_NAME;
 use crate::source_toolchain_closure::NATIVE_TARGET_LIBGCC_NAME;
+use crate::source_toolchain_closure::NATIVE_TARGET_LIBUNWIND_NAME;
 use crate::source_toolchain_closure::NATIVE_TARGET_RANLIB_NAME;
 use crate::source_toolchain_closure::NativeClosureCandidateMember;
 use crate::source_toolchain_closure::ToolchainBuildReceiptIdentity;
@@ -33,6 +35,9 @@ const NATIVE_PROVIDER_SCHEMA: &str = "mantle-native-toolchain-provider-v1";
 const NATIVE_PROVIDER_ID: &str = "mantle-native-toolchain";
 const SOURCE_ROOT_PROVIDER_ID: &str = "source-root-v1";
 const TARGET_TRIPLE: &str = "x86_64-linux-musl";
+const SOURCE_ROOT_GCC_LIB_DIR: &str = "lib/gcc";
+const SOURCE_ROOT_LIBUNWIND_ARCHIVE: &str = "libgcc_eh.a";
+const NATIVE_PROVIDER_LIBUNWIND_ARCHIVE: &str = "libunwind.a";
 const HOST_ROOT_LABEL: &str = "host-root";
 const TARGET_ROOT_LABEL: &str = "target-root";
 const HOST_NATIVE_CAPABILITY: &str = "host-native";
@@ -374,28 +379,77 @@ struct HostMemberPaths {
     linker: PathBuf,
     crt1: PathBuf,
     libgcc_s: PathBuf,
+    libunwind: PathBuf,
     libc: PathBuf,
 }
 
-fn host_member_paths(root: &Path, layout: NativeRootLayout) -> HostMemberPaths {
+fn host_member_paths(root: &Path, layout: NativeRootLayout) -> Result<HostMemberPaths, RunError> {
     match layout {
-        NativeRootLayout::NativeProvider => HostMemberPaths {
+        NativeRootLayout::NativeProvider => Ok(HostMemberPaths {
             c_compiler: root.join("bin").join("cc"),
             linker: root.join("bin").join("ld"),
             crt1: root.join("lib").join("crt1.o"),
             libgcc_s: root.join("lib").join("libgcc_s.so.1"),
+            libunwind: root.join("lib").join(NATIVE_PROVIDER_LIBUNWIND_ARCHIVE),
             libc: root.join("lib").join("libc.so"),
-        },
+        }),
         NativeRootLayout::SourceRootMusl => {
             let target_lib = root.join(TARGET_TRIPLE).join("lib");
-            HostMemberPaths {
+            Ok(HostMemberPaths {
                 c_compiler: root.join("bin").join(NATIVE_TARGET_GCC_NAME),
                 linker: root.join("bin").join(NATIVE_TARGET_LD_NAME),
                 crt1: target_lib.join("crt1.o"),
                 libgcc_s: target_lib.join("libgcc_s.so.1"),
+                libunwind: source_root_gcc_runtime_archive(root, SOURCE_ROOT_LIBUNWIND_ARCHIVE)?,
                 libc: target_lib.join("libc.so"),
-            }
+            })
         }
+    }
+}
+
+fn source_root_gcc_runtime_archive(root: &Path, archive_name: &str) -> Result<PathBuf, RunError> {
+    if archive_name.trim().is_empty() {
+        return Err(RunError::Internal("source-root GCC archive name is empty".to_string()));
+    }
+    let gcc_root = root.join(SOURCE_ROOT_GCC_LIB_DIR).join(TARGET_TRIPLE);
+    let entries = fs::read_dir(&gcc_root)
+        .map_err(|err| RunError::Build(format!("read source-root GCC runtime dir {}: {err}", gcc_root.display())))?;
+    let mut candidates = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|err| {
+            RunError::Build(format!("read source-root GCC runtime entry under {}: {err}", gcc_root.display()))
+        })?;
+        let file_type = entry.file_type().map_err(|err| {
+            RunError::Build(format!("stat source-root GCC runtime entry {}: {err}", entry.path().display()))
+        })?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let candidate = entry.path().join(archive_name);
+        if candidate.is_file() {
+            candidates.push(candidate);
+        }
+    }
+    candidates.sort();
+    match candidates.as_slice() {
+        [candidate] => Ok(candidate.clone()),
+        [] => Err(RunError::Build(format!(
+            "source-built native toolchain closure blocked: missing source-root GCC runtime archive {archive_name} under {}",
+            gcc_root.display()
+        ))),
+        _many => Err(RunError::Build(format!(
+            "source-built native toolchain closure blocked: multiple source-root GCC runtime archives named {archive_name} under {}",
+            gcc_root.display()
+        ))),
+    }
+}
+
+fn target_libunwind_path(root: &Path, layout: NativeRootLayout) -> Result<PathBuf, RunError> {
+    match layout {
+        NativeRootLayout::NativeProvider => {
+            Ok(root.join(TARGET_TRIPLE).join("lib").join(NATIVE_PROVIDER_LIBUNWIND_ARCHIVE))
+        }
+        NativeRootLayout::SourceRootMusl => source_root_gcc_runtime_archive(root, SOURCE_ROOT_LIBUNWIND_ARCHIVE),
     }
 }
 
@@ -425,7 +479,7 @@ fn collect_native_closure_candidates(
         rust_provider,
         rust_identity,
     )?;
-    let host_paths = host_member_paths(host_root, host_identity.layout);
+    let host_paths = host_member_paths(host_root, host_identity.layout)?;
     push_candidate(
         &mut candidates,
         &mut missing,
@@ -456,6 +510,14 @@ fn collect_native_closure_candidates(
         ToolchainRole::RuntimeLibrary,
         NATIVE_HOST_LIBGCC_NAME,
         &host_paths.libgcc_s,
+        &host_identity.identity,
+    )?;
+    push_candidate(
+        &mut candidates,
+        &mut missing,
+        ToolchainRole::RuntimeLibrary,
+        NATIVE_HOST_LIBUNWIND_NAME,
+        &host_paths.libunwind,
         &host_identity.identity,
     )?;
     push_candidate(
@@ -497,6 +559,14 @@ fn collect_native_closure_candidates(
         ToolchainRole::RuntimeLibrary,
         NATIVE_TARGET_LIBGCC_NAME,
         &target_lib.join("libgcc_s.so.1"),
+        &target_identity.identity,
+    )?;
+    push_candidate(
+        &mut candidates,
+        &mut missing,
+        ToolchainRole::RuntimeLibrary,
+        NATIVE_TARGET_LIBUNWIND_NAME,
+        &target_libunwind_path(target_root, target_identity.layout)?,
         &target_identity.identity,
     )?;
     push_candidate(
@@ -660,12 +730,20 @@ mod tests {
     fn source_root_host_layout_uses_target_prefixed_tools_and_target_libs() {
         let dir = tempfile::tempdir().unwrap();
 
-        let paths = host_member_paths(dir.path(), NativeRootLayout::SourceRootMusl);
+        let gcc_runtime = dir.path().join(SOURCE_ROOT_GCC_LIB_DIR).join(TARGET_TRIPLE).join("10.5.0");
+        fs::create_dir_all(&gcc_runtime).unwrap();
+        fs::write(gcc_runtime.join(SOURCE_ROOT_LIBUNWIND_ARCHIVE), b"unwind").unwrap();
+        let paths = host_member_paths(dir.path(), NativeRootLayout::SourceRootMusl).unwrap();
 
         assert!(paths.c_compiler.ends_with(format!("bin/{NATIVE_TARGET_GCC_NAME}")));
         assert!(paths.linker.ends_with(format!("bin/{NATIVE_TARGET_LD_NAME}")));
         assert!(paths.crt1.ends_with(format!("{TARGET_TRIPLE}/lib/crt1.o")));
         assert!(paths.libgcc_s.ends_with(format!("{TARGET_TRIPLE}/lib/libgcc_s.so.1")));
+        assert!(
+            paths
+                .libunwind
+                .ends_with(format!("{SOURCE_ROOT_GCC_LIB_DIR}/{TARGET_TRIPLE}/10.5.0/{SOURCE_ROOT_LIBUNWIND_ARCHIVE}"))
+        );
         assert!(paths.libc.ends_with(format!("{TARGET_TRIPLE}/lib/libc.so")));
     }
 
@@ -716,6 +794,14 @@ mod tests {
         write_fixture_file(&target_lib.join("crt1.o"), b"crt1");
         write_fixture_file(&target_lib.join("libgcc_s.so.1"), b"libgcc");
         write_fixture_file(&target_lib.join("libc.so"), b"libc");
+        write_fixture_file(
+            &source_root
+                .join(SOURCE_ROOT_GCC_LIB_DIR)
+                .join(TARGET_TRIPLE)
+                .join("10.5.0")
+                .join(SOURCE_ROOT_LIBUNWIND_ARCHIVE),
+            b"unwind",
+        );
         let rust_identity = fake_provider_identity("rust-provider");
         let source_root_identity = NativeRootIdentity {
             identity: fake_provider_identity("source-root-musl"),
@@ -739,9 +825,15 @@ mod tests {
         assert_eq!(materialized.validation.source_built_member_count, materialized.validation.member_count);
         let cc = manifest_member(&materialized.manifest, NATIVE_HOST_CC_NAME);
         let ld = manifest_member(&materialized.manifest, NATIVE_HOST_LINKER_NAME);
+        let libunwind = manifest_member(&materialized.manifest, NATIVE_HOST_LIBUNWIND_NAME);
         let libc = manifest_member(&materialized.manifest, NATIVE_HOST_LIBC_NAME);
         assert!(cc.execution_path.ends_with(&format!("bin/{NATIVE_TARGET_GCC_NAME}")));
         assert!(ld.execution_path.ends_with(&format!("bin/{NATIVE_TARGET_LD_NAME}")));
+        assert!(
+            libunwind.execution_path.ends_with(&format!(
+                "{SOURCE_ROOT_GCC_LIB_DIR}/{TARGET_TRIPLE}/10.5.0/{SOURCE_ROOT_LIBUNWIND_ARCHIVE}"
+            ))
+        );
         assert!(libc.execution_path.ends_with(&format!("{TARGET_TRIPLE}/lib/libc.so")));
         assert_eq!(cc.trust, crate::source_toolchain_closure::ToolchainTrust::SourceBuilt);
         assert!(cc.source.is_some());
