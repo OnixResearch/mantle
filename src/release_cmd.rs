@@ -72,6 +72,8 @@ pub(crate) fn cmd_release(
             deterministic_proof,
             deterministic_sandbox_isolation_evidence,
             require_deterministic_release,
+            provider_fixed_point_proof,
+            require_provider_fixed_point_proof,
         } => cmd_release_verify(
             current_dir,
             json,
@@ -81,6 +83,8 @@ pub(crate) fn cmd_release(
             deterministic_proof,
             deterministic_sandbox_isolation_evidence,
             require_deterministic_release,
+            provider_fixed_point_proof,
+            require_provider_fixed_point_proof,
         ),
         crate::ReleaseAction::Reproduce {
             bundle_dir,
@@ -225,6 +229,8 @@ fn cmd_release_verify(
     deterministic_proof: Option<PathBuf>,
     deterministic_sandbox_isolation_evidence: Option<PathBuf>,
     require_deterministic_release: bool,
+    provider_fixed_point_proof: Option<PathBuf>,
+    require_provider_fixed_point_proof: bool,
 ) -> Result<(), RunError> {
     let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
     let deterministic_request = DeterministicVerifyRequest::new(
@@ -232,6 +238,11 @@ fn cmd_release_verify(
         deterministic_proof,
         deterministic_sandbox_isolation_evidence,
         require_deterministic_release,
+    );
+    let provider_fixed_point_result = evaluate_provider_fixed_point_proof(
+        current_dir,
+        provider_fixed_point_proof,
+        require_provider_fixed_point_proof,
     );
     let manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
     let reproducibility = load_bundle_reproducibility_report(&resolved_bundle_dir, &manifest)?;
@@ -251,6 +262,7 @@ fn cmd_release_verify(
             reproducibility_status,
             stagex_result.as_ref(),
             &deterministic_result,
+            &provider_fixed_point_result,
         )?;
     } else {
         println!("release evidence verified: {}", resolved_bundle_dir.display());
@@ -261,6 +273,7 @@ fn cmd_release_verify(
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
         print_reproducibility_summary(reproducibility.as_ref());
         print_deterministic_release_summary(&deterministic_result);
+        print_provider_fixed_point_summary(&provider_fixed_point_result);
         if let Some(ref result) = stagex_result {
             println!("stagex no-quorum profile: {}", result.status);
             if !result.failure_reasons.is_empty() {
@@ -281,6 +294,13 @@ fn cmd_release_verify(
             "deterministic release evidence required but status is {}: {}",
             deterministic_result.status,
             deterministic_result.blockers.join("; ")
+        )));
+    }
+    if require_provider_fixed_point_proof && !provider_fixed_point_result.valid {
+        return Err(RunError::Internal(format!(
+            "provider fixed-point proof required but status is {}: {}",
+            provider_fixed_point_result.status,
+            provider_fixed_point_result.blockers.join("; ")
         )));
     }
     if let Some(ref result) = stagex_result {
@@ -314,6 +334,18 @@ impl DeterministicVerifyRequest {
             required,
         }
     }
+}
+
+fn evaluate_provider_fixed_point_proof(
+    current_dir: &Path,
+    proof_path: Option<PathBuf>,
+    required: bool,
+) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
+    let Some(proof_path) = proof_path else {
+        return crate::cargo_free_self_build::ProviderFixedPointProofVerification::absent(required);
+    };
+    let resolved = resolve_input_path(current_dir, proof_path);
+    crate::cargo_free_self_build::verify_provider_fixed_point_proof_bundle(&resolved)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -443,6 +475,7 @@ fn print_release_verify_json(
     status: ReproducibilityStatus,
     stagex_result: Option<&crunch_bootstrap_core::StagexNoQuorumResult>,
     deterministic_result: &DeterministicReleaseVerifyResult,
+    provider_fixed_point_result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification,
 ) -> Result<(), RunError> {
     let report_json = reproducibility.map(|report| {
         serde_json::json!({
@@ -469,6 +502,7 @@ fn print_release_verify_json(
         "reproducibility_status": status.as_str(),
         "reproducibility_report": report_json,
         "deterministic_release": deterministic_json,
+        "provider_fixed_point_proof": provider_fixed_point_result,
     });
     if let Some(result) = stagex_result {
         rendered["stagex_no_quorum"] = serde_json::to_value(result)
@@ -484,6 +518,22 @@ fn print_release_verify_json(
 
 fn reproducibility_status(reproducibility: Option<&VerifiedReproducibilityReport>) -> ReproducibilityStatus {
     reproducibility.map(|report| report.status).unwrap_or(ReproducibilityStatus::Absent)
+}
+
+fn print_provider_fixed_point_summary(result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification) {
+    println!("provider fixed-point proof: {}", result.status);
+    if let Some(path) = &result.proof_dir {
+        println!("provider fixed-point proof bundle: {}", path.display());
+    }
+    if let Some(digest) = &result.stage_binary_digest_blake3 {
+        println!("provider fixed-point stage binary digest: {digest}");
+    }
+    if let Some(digest) = &result.closure_policy_digest_blake3 {
+        println!("provider fixed-point closure policy digest: {digest}");
+    }
+    for blocker in &result.blockers {
+        println!("  provider fixed-point blocker: {blocker}");
+    }
 }
 
 fn print_reproducibility_summary(reproducibility: Option<&VerifiedReproducibilityReport>) {
@@ -1076,6 +1126,24 @@ mod tests {
             digest_blake3: "b".repeat(64),
         };
         assert_ne!(compute_artifact_set_digest(&[a]), compute_artifact_set_digest(&[b]),);
+    }
+
+    #[test]
+    fn provider_fixed_point_request_absent_is_optional_by_default() {
+        let result = evaluate_provider_fixed_point_proof(Path::new("/repo"), None, false);
+
+        assert!(!result.valid);
+        assert_eq!(result.status, "absent");
+        assert!(result.blockers.is_empty());
+    }
+
+    #[test]
+    fn provider_fixed_point_request_absent_records_required_blocker() {
+        let result = evaluate_provider_fixed_point_proof(Path::new("/repo"), None, true);
+
+        assert!(!result.valid);
+        assert_eq!(result.status, "absent");
+        assert!(result.blockers.iter().any(|blocker| blocker.contains("missing provider fixed-point proof")));
     }
 
     #[test]

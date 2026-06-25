@@ -824,6 +824,15 @@ pub enum ReleaseAction {
         /// Fail unless deterministic proof artifacts prove release-artifact determinism
         #[arg(long)]
         require_deterministic_release: bool,
+
+        /// Cargo-free provider fixed-point proof bundle to validate as bounded release-adjacent
+        /// evidence
+        #[arg(long)]
+        provider_fixed_point_proof: Option<PathBuf>,
+
+        /// Fail unless a valid provider fixed-point proof bundle is supplied
+        #[arg(long)]
+        require_provider_fixed_point_proof: bool,
     },
     /// Rebuild and compare published release artifacts, then write a reproducibility report
     Reproduce {
@@ -3711,6 +3720,26 @@ let Plan = {
             "trust_notes": [],
             "expected_outputs": expected_outputs,
         })
+    }
+
+    #[test]
+    fn release_verify_accepts_provider_fixed_point_proof_flags() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "verify",
+            "/tmp/release-bundle",
+            "--provider-fixed-point-proof",
+            "/tmp/provider-fixed-point-proof",
+            "--require-provider-fixed-point-proof",
+        ]);
+        assert!(matches!(args.command, Command::Release {
+            action: ReleaseAction::Verify {
+                provider_fixed_point_proof: Some(_),
+                require_provider_fixed_point_proof: true,
+                ..
+            }
+        }));
     }
 
     #[test]

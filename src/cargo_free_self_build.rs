@@ -79,6 +79,13 @@ const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source
 const RUST_SOURCE_PROVIDER_STATUS_ABSENT: &str = "absent";
 const RUST_SOURCE_PROVIDER_STATUS_VALIDATED: &str = "validated";
 const RUST_SOURCE_PROVIDER_REQUIRED_ROLE_COUNT: usize = 1;
+const PROVIDER_FIXED_POINT_STATUS_ABSENT: &str = "absent";
+const PROVIDER_FIXED_POINT_STATUS_VALID: &str = "valid";
+const PROVIDER_FIXED_POINT_STATUS_INVALID: &str = "invalid";
+const ENFORCED_SOURCE_BUILT_STATUS: &str = "enforced-source-built";
+const NOT_CRUNCH_BOOTSTRAP_NON_CLAIM: &str = "not-crunch-bootstrap";
+const NOT_RELEASE_REPRODUCIBILITY_NON_CLAIM: &str = "not-release-reproducibility";
+const NOT_FULL_CARGO_COMPATIBILITY_NON_CLAIM: &str = "not-full-cargo-compatibility";
 const SOURCE_DIGEST_VALUE_FIELD: &str = "value";
 const SUCCESS_EXIT_CODE: i32 = 0;
 const FALLBACK_ERROR_EXIT_CODE: i32 = 1;
@@ -296,6 +303,56 @@ struct FixedPointStageSummary {
     blocker: Option<String>,
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct ProviderFixedPointProofVerification {
+    pub(crate) status: String,
+    pub(crate) valid: bool,
+    pub(crate) proof_dir: Option<PathBuf>,
+    pub(crate) meta_digest_blake3: Option<String>,
+    pub(crate) closure_policy_digest_blake3: Option<String>,
+    pub(crate) stage_binary_digest_blake3: Option<String>,
+    pub(crate) stage1_unit_count: Option<u64>,
+    pub(crate) stage2_unit_count: Option<u64>,
+    pub(crate) non_claims: Vec<String>,
+    pub(crate) blockers: Vec<String>,
+}
+
+impl ProviderFixedPointProofVerification {
+    pub(crate) fn absent(required: bool) -> Self {
+        let blockers = if required {
+            vec!["missing provider fixed-point proof bundle".to_string()]
+        } else {
+            Vec::new()
+        };
+        Self {
+            status: PROVIDER_FIXED_POINT_STATUS_ABSENT.to_string(),
+            valid: false,
+            proof_dir: None,
+            meta_digest_blake3: None,
+            closure_policy_digest_blake3: None,
+            stage_binary_digest_blake3: None,
+            stage1_unit_count: None,
+            stage2_unit_count: None,
+            non_claims: Vec::new(),
+            blockers,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ProviderFixedPointProofEvidence {
+    proof_dir: PathBuf,
+    meta: Option<Value>,
+    meta_digest_blake3: Option<String>,
+    preflight: Option<Value>,
+    non_claims_text: Option<String>,
+    stage1_binary_digest_actual: Option<String>,
+    stage2_binary_digest_actual: Option<String>,
+    stage1_receipt: Option<Value>,
+    stage2_receipt: Option<Value>,
+    shell_blockers: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct SelfBuildSummary {
     schema: &'static str,
@@ -318,6 +375,451 @@ struct SelfBuildSummary {
     source_built_toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     rust_source_provider: RustSourceProviderBindingStatus,
     non_claims: Vec<&'static str>,
+}
+
+pub(crate) fn verify_provider_fixed_point_proof_bundle(proof_dir: &Path) -> ProviderFixedPointProofVerification {
+    let mut shell_blockers = Vec::new();
+    let meta_path = proof_dir.join(META_FILE);
+    let preflight_path = proof_dir.join(PRE_FLIGHT_FILE);
+    let non_claims_path = proof_dir.join(NON_CLAIMS_FILE);
+    let (meta, meta_digest_blake3) = read_json_with_digest(&meta_path, "fixed-point meta", &mut shell_blockers);
+    let (preflight, _) = read_json_with_digest(&preflight_path, "fixed-point preflight", &mut shell_blockers);
+    let non_claims_text = read_text_optional(&non_claims_path, "fixed-point non-claims", &mut shell_blockers);
+    let stage1_binary_digest_actual =
+        stage_binary_digest_from_meta(proof_dir, meta.as_ref(), "/stage1/binary", "stage1 binary", &mut shell_blockers);
+    let stage2_binary_digest_actual =
+        stage_binary_digest_from_meta(proof_dir, meta.as_ref(), "/stage2/binary", "stage2 binary", &mut shell_blockers);
+    let stage1_receipt =
+        stage_receipt_from_meta(proof_dir, meta.as_ref(), "/stage1/receipt", "stage1 receipt", &mut shell_blockers);
+    let stage2_receipt =
+        stage_receipt_from_meta(proof_dir, meta.as_ref(), "/stage2/receipt", "stage2 receipt", &mut shell_blockers);
+    validate_provider_fixed_point_proof_evidence(ProviderFixedPointProofEvidence {
+        proof_dir: proof_dir.to_path_buf(),
+        meta,
+        meta_digest_blake3,
+        preflight,
+        non_claims_text,
+        stage1_binary_digest_actual,
+        stage2_binary_digest_actual,
+        stage1_receipt,
+        stage2_receipt,
+        shell_blockers,
+    })
+}
+
+fn validate_provider_fixed_point_proof_evidence(
+    mut evidence: ProviderFixedPointProofEvidence,
+) -> ProviderFixedPointProofVerification {
+    let mut blockers = std::mem::take(&mut evidence.shell_blockers);
+    let Some(meta) = evidence.meta.as_ref() else {
+        blockers.push("fixed-point meta.json is missing or invalid".to_string());
+        return provider_fixed_point_result(evidence, None, None, None, blockers);
+    };
+    validate_fixed_point_meta(meta, &mut blockers);
+    validate_fixed_point_preflight(meta, evidence.preflight.as_ref(), &mut blockers);
+    validate_fixed_point_non_claims(meta, evidence.non_claims_text.as_deref(), &mut blockers);
+    let closure_policy_digest = fixed_point_closure_policy_digest(meta, &mut blockers);
+    let stage1 = validate_fixed_point_stage(
+        meta,
+        "stage1",
+        evidence.stage1_binary_digest_actual.as_deref(),
+        evidence.stage1_receipt.as_ref(),
+        closure_policy_digest.as_deref(),
+        &mut blockers,
+    );
+    let stage2 = validate_fixed_point_stage(
+        meta,
+        "stage2",
+        evidence.stage2_binary_digest_actual.as_deref(),
+        evidence.stage2_receipt.as_ref(),
+        closure_policy_digest.as_deref(),
+        &mut blockers,
+    );
+    let matching_digest =
+        matching_stage_binary_digest(stage1.binary_digest.as_deref(), stage2.binary_digest.as_deref(), &mut blockers);
+    provider_fixed_point_result(
+        evidence,
+        closure_policy_digest,
+        matching_digest,
+        Some((stage1.unit_count, stage2.unit_count)),
+        blockers,
+    )
+}
+
+fn provider_fixed_point_result(
+    evidence: ProviderFixedPointProofEvidence,
+    closure_policy_digest: Option<String>,
+    stage_binary_digest: Option<String>,
+    stage_unit_counts: Option<(Option<u64>, Option<u64>)>,
+    blockers: Vec<String>,
+) -> ProviderFixedPointProofVerification {
+    let valid = blockers.is_empty();
+    let (stage1_unit_count, stage2_unit_count) = stage_unit_counts.unwrap_or((None, None));
+    let non_claims = non_claims_from_meta(evidence.meta.as_ref());
+    let proof_dir = evidence.proof_dir;
+    let meta_digest_blake3 = evidence.meta_digest_blake3;
+    ProviderFixedPointProofVerification {
+        status: if valid {
+            PROVIDER_FIXED_POINT_STATUS_VALID
+        } else {
+            PROVIDER_FIXED_POINT_STATUS_INVALID
+        }
+        .to_string(),
+        valid,
+        proof_dir: Some(proof_dir),
+        meta_digest_blake3,
+        closure_policy_digest_blake3: closure_policy_digest,
+        stage_binary_digest_blake3: stage_binary_digest,
+        stage1_unit_count,
+        stage2_unit_count,
+        non_claims,
+        blockers,
+    }
+}
+
+#[derive(Debug, Default)]
+struct StageProofFacts {
+    binary_digest: Option<String>,
+    unit_count: Option<u64>,
+}
+
+fn validate_fixed_point_meta(meta: &Value, blockers: &mut Vec<String>) {
+    expect_string(meta, "/schema", FIXED_POINT_SCHEMA, "fixed-point schema", blockers);
+    expect_string(meta, "/status", SUCCESS_STATUS, "fixed-point status", blockers);
+    expect_bool(meta, "/fixed_point", true, "fixed-point flag", blockers);
+    expect_null(meta, "/blocker", "fixed-point blocker", blockers);
+    expect_string(
+        meta,
+        "/source_built_toolchain_closure/status",
+        ENFORCED_SOURCE_BUILT_STATUS,
+        "source-built closure status",
+        blockers,
+    );
+    expect_bool(meta, "/source_built_toolchain_closure/claim", true, "source-built closure claim", blockers);
+    expect_u64(
+        meta,
+        "/source_built_toolchain_closure/seed_exception_count",
+        0,
+        "source-built seed exceptions",
+        blockers,
+    );
+    expect_string(
+        meta,
+        "/rust_source_provider/status",
+        RUST_SOURCE_PROVIDER_STATUS_VALIDATED,
+        "Rust source provider status",
+        blockers,
+    );
+    let member_count = optional_u64(meta, "/source_built_toolchain_closure/member_count");
+    let source_built_count = optional_u64(meta, "/source_built_toolchain_closure/source_built_member_count");
+    match (member_count, source_built_count) {
+        (Some(member_count), Some(source_built_count)) if member_count > 0 && member_count == source_built_count => {}
+        (Some(member_count), Some(source_built_count)) => blockers.push(format!(
+            "source-built closure member counts are not fully source-built: member_count={member_count} source_built_member_count={source_built_count}"
+        )),
+        _ => blockers.push("source-built closure member counts are missing".to_string()),
+    }
+}
+
+fn validate_fixed_point_preflight(meta: &Value, preflight: Option<&Value>, blockers: &mut Vec<String>) {
+    let Some(preflight) = preflight else {
+        blockers.push("fixed-point preflight.json is missing or invalid".to_string());
+        return;
+    };
+    expect_string(preflight, "/schema", FIXED_POINT_SCHEMA, "preflight schema", blockers);
+    let meta_policy = optional_str(meta, "/source_built_toolchain_closure/policy_digest_blake3");
+    let preflight_policy = optional_str(preflight, "/source_built_toolchain_closure/policy_digest_blake3");
+    if meta_policy.is_none() {
+        blockers.push("fixed-point meta is missing closure policy digest".to_string());
+    }
+    if preflight_policy.is_none() {
+        blockers.push("fixed-point preflight is missing closure policy digest".to_string());
+    }
+    if meta_policy.is_some() && preflight_policy.is_some() && meta_policy != preflight_policy {
+        blockers.push("fixed-point preflight closure policy digest does not match meta.json".to_string());
+    }
+}
+
+fn validate_fixed_point_non_claims(meta: &Value, non_claims_text: Option<&str>, blockers: &mut Vec<String>) {
+    let non_claims = non_claims_from_meta(Some(meta));
+    for required in [
+        NOT_CRUNCH_BOOTSTRAP_NON_CLAIM,
+        NOT_RELEASE_REPRODUCIBILITY_NON_CLAIM,
+        NOT_FULL_CARGO_COMPATIBILITY_NON_CLAIM,
+    ] {
+        if !non_claims.iter().any(|claim| claim == required) {
+            blockers.push(format!("fixed-point meta missing bounded non-claim {required}"));
+        }
+    }
+    if non_claims.iter().any(|claim| claim == crate::source_toolchain_closure::SOURCE_BUILT_NON_CLAIM) {
+        blockers.push("provider fixed-point proof still carries source-built closure non-claim".to_string());
+    }
+    let Some(text) = non_claims_text else {
+        blockers.push("fixed-point non-claims.txt is missing or unreadable".to_string());
+        return;
+    };
+    for phrase in ["does not claim", "release reproducibility", "full Cargo compatibility"] {
+        if !text.contains(phrase) {
+            blockers.push(format!("fixed-point non-claims.txt missing phrase: {phrase}"));
+        }
+    }
+}
+
+fn fixed_point_closure_policy_digest(meta: &Value, blockers: &mut Vec<String>) -> Option<String> {
+    let policy = optional_str(meta, "/source_built_toolchain_closure/policy_digest_blake3");
+    if policy.is_none() {
+        blockers.push("fixed-point closure policy digest is missing".to_string());
+    }
+    policy.map(ToOwned::to_owned)
+}
+
+fn validate_fixed_point_stage(
+    meta: &Value,
+    stage_name: &str,
+    actual_binary_digest: Option<&str>,
+    receipt: Option<&Value>,
+    expected_policy_digest: Option<&str>,
+    blockers: &mut Vec<String>,
+) -> StageProofFacts {
+    let prefix = format!("/{stage_name}");
+    expect_string(meta, &format!("{prefix}/name"), stage_name, "fixed-point stage name", blockers);
+    expect_bool(meta, &format!("{prefix}/success"), true, "fixed-point stage success", blockers);
+    expect_i64(
+        meta,
+        &format!("{prefix}/status_code"),
+        SUCCESS_EXIT_CODE as i64,
+        "fixed-point stage status code",
+        blockers,
+    );
+    expect_string(
+        meta,
+        &format!("{prefix}/execution_status"),
+        SUCCESS_STATUS,
+        "fixed-point stage execution status",
+        blockers,
+    );
+    expect_bool(meta, &format!("{prefix}/cargo_marker_absent"), true, "fixed-point stage Cargo guard", blockers);
+    expect_u64(meta, &format!("{prefix}/failed_unit_count"), 0, "fixed-point stage failed unit count", blockers);
+    expect_i64(
+        meta,
+        &format!("{prefix}/smoke_status_code"),
+        SUCCESS_EXIT_CODE as i64,
+        "fixed-point stage smoke status",
+        blockers,
+    );
+    expect_null(meta, &format!("{prefix}/blocker"), "fixed-point stage blocker", blockers);
+    let unit_count = optional_u64(meta, &format!("{prefix}/unit_count"));
+    if !matches!(unit_count, Some(count) if count > 0) {
+        blockers.push(format!("{stage_name} unit count is missing or zero"));
+    }
+    let declared_digest = optional_str(meta, &format!("{prefix}/binary_blake3")).map(ToOwned::to_owned);
+    match (declared_digest.as_deref(), actual_binary_digest) {
+        (Some(declared), Some(actual)) if declared == actual => {}
+        (Some(declared), Some(actual)) => {
+            blockers.push(format!("{stage_name} binary digest mismatch: declared {declared} actual {actual}"))
+        }
+        (Some(_), None) => blockers.push(format!("{stage_name} binary could not be hashed")),
+        (None, _) => blockers.push(format!("{stage_name} binary digest is missing")),
+    }
+    let stage_policy = optional_str(meta, &format!("{prefix}/{TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD}"));
+    if let (Some(stage_policy), Some(expected_policy)) = (stage_policy, expected_policy_digest) {
+        if stage_policy != expected_policy {
+            blockers.push(format!("{stage_name} closure policy digest does not match the proof closure digest"));
+        }
+    } else {
+        blockers.push(format!("{stage_name} closure policy digest is missing"));
+    }
+    validate_fixed_point_stage_receipt(stage_name, receipt, unit_count, blockers);
+    StageProofFacts {
+        binary_digest: declared_digest,
+        unit_count,
+    }
+}
+
+fn validate_fixed_point_stage_receipt(
+    stage_name: &str,
+    receipt: Option<&Value>,
+    expected_unit_count: Option<u64>,
+    blockers: &mut Vec<String>,
+) {
+    let Some(receipt) = receipt else {
+        blockers.push(format!("{stage_name} receipt is missing or invalid"));
+        return;
+    };
+    expect_string(
+        receipt,
+        "/topology_execution/execution_status",
+        SUCCESS_STATUS,
+        "stage receipt execution status",
+        blockers,
+    );
+    let Some(units) = receipt.pointer("/topology_execution/unit_executions").and_then(Value::as_array) else {
+        blockers.push(format!("{stage_name} receipt missing unit executions"));
+        return;
+    };
+    if let Some(expected_unit_count) = expected_unit_count {
+        if units.len() as u64 != expected_unit_count {
+            blockers.push(format!(
+                "{stage_name} receipt unit count {} does not match summary unit count {expected_unit_count}",
+                units.len()
+            ));
+        }
+    }
+    if units.iter().any(|unit| optional_str(unit, "/execution_status") != Some(SUCCESS_STATUS)) {
+        blockers.push(format!("{stage_name} receipt contains non-success unit executions"));
+    }
+}
+
+fn matching_stage_binary_digest(
+    stage1_digest: Option<&str>,
+    stage2_digest: Option<&str>,
+    blockers: &mut Vec<String>,
+) -> Option<String> {
+    match (stage1_digest, stage2_digest) {
+        (Some(stage1), Some(stage2)) if stage1 == stage2 => Some(stage1.to_string()),
+        (Some(stage1), Some(stage2)) => {
+            blockers.push(format!("fixed-point stage binary digests differ: stage1 {stage1} stage2 {stage2}"));
+            None
+        }
+        _ => {
+            blockers.push("fixed-point stage binary digests are incomplete".to_string());
+            None
+        }
+    }
+}
+
+fn read_json_with_digest(path: &Path, label: &str, blockers: &mut Vec<String>) -> (Option<Value>, Option<String>) {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            blockers.push(format!("read {label} {}: {err}", path.display()));
+            return (None, None);
+        }
+    };
+    let digest = blake3::hash(&bytes).to_hex().to_string();
+    match serde_json::from_slice::<Value>(&bytes) {
+        Ok(value) => (Some(value), Some(digest)),
+        Err(err) => {
+            blockers.push(format!("parse {label} {}: {err}", path.display()));
+            (None, Some(digest))
+        }
+    }
+}
+
+fn read_text_optional(path: &Path, label: &str, blockers: &mut Vec<String>) -> Option<String> {
+    match fs::read_to_string(path) {
+        Ok(text) => Some(text),
+        Err(err) => {
+            blockers.push(format!("read {label} {}: {err}", path.display()));
+            None
+        }
+    }
+}
+
+fn stage_binary_digest_from_meta(
+    proof_dir: &Path,
+    meta: Option<&Value>,
+    pointer: &str,
+    label: &str,
+    blockers: &mut Vec<String>,
+) -> Option<String> {
+    let path = proof_path_from_meta(proof_dir, meta, pointer, label, blockers)?;
+    match blake3_file(&path) {
+        Ok(digest) => Some(digest),
+        Err(err) => {
+            blockers.push(format!("hash {label} {}: {}", path.display(), err.message()));
+            None
+        }
+    }
+}
+
+fn stage_receipt_from_meta(
+    proof_dir: &Path,
+    meta: Option<&Value>,
+    pointer: &str,
+    label: &str,
+    blockers: &mut Vec<String>,
+) -> Option<Value> {
+    let path = proof_path_from_meta(proof_dir, meta, pointer, label, blockers)?;
+    let (value, _) = read_json_with_digest(&path, label, blockers);
+    value
+}
+
+fn proof_path_from_meta(
+    proof_dir: &Path,
+    meta: Option<&Value>,
+    pointer: &str,
+    label: &str,
+    blockers: &mut Vec<String>,
+) -> Option<PathBuf> {
+    let Some(meta) = meta else {
+        return None;
+    };
+    let Some(raw) = optional_str(meta, pointer) else {
+        blockers.push(format!("fixed-point meta missing {label} path at {pointer}"));
+        return None;
+    };
+    let path = Path::new(raw);
+    if path.is_absolute() {
+        Some(path.to_path_buf())
+    } else {
+        Some(proof_dir.join(path))
+    }
+}
+
+fn non_claims_from_meta(meta: Option<&Value>) -> Vec<String> {
+    meta.and_then(|meta| meta.pointer("/non_claims"))
+        .and_then(Value::as_array)
+        .map(|claims| claims.iter().filter_map(Value::as_str).map(ToOwned::to_owned).collect())
+        .unwrap_or_default()
+}
+
+fn optional_str<'a>(value: &'a Value, pointer: &str) -> Option<&'a str> {
+    value.pointer(pointer).and_then(Value::as_str)
+}
+
+fn optional_u64(value: &Value, pointer: &str) -> Option<u64> {
+    value.pointer(pointer).and_then(Value::as_u64)
+}
+
+fn expect_string(value: &Value, pointer: &str, expected: &str, label: &str, blockers: &mut Vec<String>) {
+    match optional_str(value, pointer) {
+        Some(actual) if actual == expected => {}
+        Some(actual) => blockers.push(format!("{label} expected {expected}, got {actual}")),
+        None => blockers.push(format!("{label} is missing at {pointer}")),
+    }
+}
+
+fn expect_bool(value: &Value, pointer: &str, expected: bool, label: &str, blockers: &mut Vec<String>) {
+    match value.pointer(pointer).and_then(Value::as_bool) {
+        Some(actual) if actual == expected => {}
+        Some(actual) => blockers.push(format!("{label} expected {expected}, got {actual}")),
+        None => blockers.push(format!("{label} is missing at {pointer}")),
+    }
+}
+
+fn expect_i64(value: &Value, pointer: &str, expected: i64, label: &str, blockers: &mut Vec<String>) {
+    match value.pointer(pointer).and_then(Value::as_i64) {
+        Some(actual) if actual == expected => {}
+        Some(actual) => blockers.push(format!("{label} expected {expected}, got {actual}")),
+        None => blockers.push(format!("{label} is missing at {pointer}")),
+    }
+}
+
+fn expect_u64(value: &Value, pointer: &str, expected: u64, label: &str, blockers: &mut Vec<String>) {
+    match optional_u64(value, pointer) {
+        Some(actual) if actual == expected => {}
+        Some(actual) => blockers.push(format!("{label} expected {expected}, got {actual}")),
+        None => blockers.push(format!("{label} is missing at {pointer}")),
+    }
+}
+
+fn expect_null(value: &Value, pointer: &str, label: &str, blockers: &mut Vec<String>) {
+    match value.pointer(pointer) {
+        Some(value) if value.is_null() => {}
+        Some(value) => blockers.push(format!("{label} expected null, got {value}")),
+        None => blockers.push(format!("{label} is missing at {pointer}")),
+    }
 }
 
 pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) -> Result<(), RunError> {
@@ -2159,6 +2661,7 @@ mod tests {
     const FIXED_POINT_TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT: usize = 4;
     const FIXED_POINT_TEST_SEED_EXCEPTION_COUNT: usize = 1;
+    const FIXED_POINT_TEST_UNIT_COUNT: u64 = 2;
     const RUST_PROVIDER_HOST_TRIPLE: &str = "x86_64-unknown-linux-gnu";
     const RUST_PROVIDER_TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
     const RUST_PROVIDER_SOURCE_ID: &str = "rust-src";
@@ -2411,6 +2914,69 @@ mod tests {
     }
 
     #[test]
+    fn provider_fixed_point_verifier_accepts_valid_bounded_bundle() {
+        let evidence = valid_provider_fixed_point_evidence();
+
+        let result = validate_provider_fixed_point_proof_evidence(evidence);
+
+        assert!(result.valid);
+        assert_eq!(result.status, PROVIDER_FIXED_POINT_STATUS_VALID);
+        assert_eq!(result.closure_policy_digest_blake3.as_deref(), Some(FIXED_POINT_TEST_DIGEST_B));
+        assert_eq!(result.stage_binary_digest_blake3.as_deref(), Some(FIXED_POINT_TEST_DIGEST_A));
+        assert_eq!(result.stage1_unit_count, Some(FIXED_POINT_TEST_UNIT_COUNT));
+        assert_eq!(result.stage2_unit_count, Some(FIXED_POINT_TEST_UNIT_COUNT));
+        assert!(result.blockers.is_empty());
+        assert!(result.non_claims.iter().any(|claim| claim == NOT_RELEASE_REPRODUCIBILITY_NON_CLAIM));
+        assert!(result.non_claims.iter().any(|claim| claim == NOT_FULL_CARGO_COMPATIBILITY_NON_CLAIM));
+    }
+
+    #[test]
+    fn provider_fixed_point_verifier_rejects_stage_digest_mismatch() {
+        let mut evidence = valid_provider_fixed_point_evidence();
+        *evidence.meta.as_mut().unwrap().pointer_mut("/stage2/binary_blake3").unwrap() =
+            Value::String(FIXED_POINT_TEST_DIGEST_B.to_string());
+        evidence.stage2_binary_digest_actual = Some(FIXED_POINT_TEST_DIGEST_B.to_string());
+
+        let result = validate_provider_fixed_point_proof_evidence(evidence);
+
+        assert!(!result.valid);
+        assert_eq!(result.status, PROVIDER_FIXED_POINT_STATUS_INVALID);
+        assert!(result.stage_binary_digest_blake3.is_none());
+        assert!(result.blockers.iter().any(|blocker| blocker.contains("stage binary digests differ")));
+    }
+
+    #[test]
+    fn provider_fixed_point_verifier_rejects_missing_enforced_closure() {
+        let mut evidence = valid_provider_fixed_point_evidence();
+        *evidence.meta.as_mut().unwrap().pointer_mut("/source_built_toolchain_closure/status").unwrap() =
+            Value::String("provided".to_string());
+
+        let result = validate_provider_fixed_point_proof_evidence(evidence);
+
+        assert!(!result.valid);
+        assert!(
+            result
+                .blockers
+                .iter()
+                .any(|blocker| blocker.contains("source-built closure status expected enforced-source-built"))
+        );
+    }
+
+    #[test]
+    fn provider_fixed_point_verifier_rejects_missing_bounded_non_claims() {
+        let mut evidence = valid_provider_fixed_point_evidence();
+        *evidence.meta.as_mut().unwrap().pointer_mut("/non_claims").unwrap() =
+            json!([NOT_CRUNCH_BOOTSTRAP_NON_CLAIM, NOT_RELEASE_REPRODUCIBILITY_NON_CLAIM]);
+        evidence.non_claims_text = Some("This proof does not claim release reproducibility.\n".to_string());
+
+        let result = validate_provider_fixed_point_proof_evidence(evidence);
+
+        assert!(!result.valid);
+        assert!(result.blockers.iter().any(|blocker| blocker.contains(NOT_FULL_CARGO_COMPATIBILITY_NON_CLAIM)));
+        assert!(result.blockers.iter().any(|blocker| blocker.contains("full Cargo compatibility")));
+    }
+
+    #[test]
     fn self_build_non_claims_omit_closure_non_claim_when_provider_supplies_claim() {
         let provided = provided_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
         let absent = crate::source_toolchain_closure::absent_source_built_toolchain_closure();
@@ -2596,6 +3162,119 @@ mod tests {
             source_built_member_count: Some(FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT),
             seed_exception_count: Some(0),
         }
+    }
+
+    fn valid_provider_fixed_point_evidence() -> ProviderFixedPointProofEvidence {
+        let proof_dir = PathBuf::from("/tmp/provider-fixed-point-proof");
+        let stage1 = fixed_point_stage_summary_json(STAGE1_DIR, FIXED_POINT_TEST_DIGEST_A, FIXED_POINT_TEST_DIGEST_B);
+        let stage2 = fixed_point_stage_summary_json(STAGE2_DIR, FIXED_POINT_TEST_DIGEST_A, FIXED_POINT_TEST_DIGEST_B);
+        let meta = json!({
+            "schema": FIXED_POINT_SCHEMA,
+            "status": SUCCESS_STATUS,
+            "root": "/repo/mantle",
+            "bundle_dir": proof_dir,
+            "fixed_point": true,
+            "stage1": stage1,
+            "stage2": stage2,
+            "rustc_compatibility": {
+                "requested_rustc": "/provider/bin/rustc",
+                "stage_rustc": "/provider/bin/rustc",
+                "normalization": NORMALIZATION_NONE,
+                "wrapper": null,
+                "wrapper_blake3": null
+            },
+            "source_built_toolchain_closure": {
+                "schema": crate::source_toolchain_closure::SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
+                "status": ENFORCED_SOURCE_BUILT_STATUS,
+                "claim": true,
+                "non_claim": null,
+                "manifest_path": "/tmp/toolchain-closure.json",
+                "policy_digest_blake3": FIXED_POINT_TEST_DIGEST_B,
+                "member_count": FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT,
+                "source_built_member_count": FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT,
+                "seed_exception_count": 0
+            },
+            "rust_source_provider": {
+                "schema": RUST_SOURCE_PROVIDER_BINDING_SCHEMA,
+                "status": RUST_SOURCE_PROVIDER_STATUS_VALIDATED,
+                "provider_dir": "/provider",
+                "metadata_path": "/provider/share/mantle-rust-provider/provider.json",
+                "metadata_digest_blake3": FIXED_POINT_TEST_DIGEST_A,
+                "policy_digest_blake3": FIXED_POINT_TEST_DIGEST_B,
+                "host_triple": RUST_PROVIDER_TARGET_TRIPLE,
+                "target_triple": RUST_PROVIDER_TARGET_TRIPLE,
+                "artifact_count": 6,
+                "source_count": 2,
+                "receipt_count": 1,
+                "rustc_path": "/provider/bin/rustc"
+            },
+            "blocker": null,
+            "non_claims": [
+                NOT_CRUNCH_BOOTSTRAP_NON_CLAIM,
+                NOT_RELEASE_REPRODUCIBILITY_NON_CLAIM,
+                NOT_FULL_CARGO_COMPATIBILITY_NON_CLAIM
+            ]
+        });
+        let preflight = json!({
+            "schema": FIXED_POINT_SCHEMA,
+            "root": "/repo/mantle",
+            "bundle_dir": "/tmp/provider-fixed-point-proof",
+            "source_built_toolchain_closure": {
+                "status": ENFORCED_SOURCE_BUILT_STATUS,
+                "claim": true,
+                "policy_digest_blake3": FIXED_POINT_TEST_DIGEST_B
+            }
+        });
+        ProviderFixedPointProofEvidence {
+            proof_dir,
+            meta: Some(meta),
+            meta_digest_blake3: Some(FIXED_POINT_TEST_DIGEST_A.to_string()),
+            preflight: Some(preflight),
+            non_claims_text: Some(
+                "This proof does not claim Crunch bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n"
+                    .to_string(),
+            ),
+            stage1_binary_digest_actual: Some(FIXED_POINT_TEST_DIGEST_A.to_string()),
+            stage2_binary_digest_actual: Some(FIXED_POINT_TEST_DIGEST_A.to_string()),
+            stage1_receipt: Some(fixed_point_stage_receipt_json()),
+            stage2_receipt: Some(fixed_point_stage_receipt_json()),
+            shell_blockers: Vec::new(),
+        }
+    }
+
+    fn fixed_point_stage_summary_json(stage_name: &str, binary_digest: &str, policy_digest: &str) -> Value {
+        let mut value = json!({
+            "name": stage_name,
+            "dir": format!("/tmp/provider-fixed-point-proof/{stage_name}"),
+            "execution_dir": "/tmp/provider-fixed-point-proof/execution",
+            "receipt": format!("/tmp/provider-fixed-point-proof/{stage_name}/receipt.json"),
+            "stderr": format!("/tmp/provider-fixed-point-proof/{stage_name}/stderr.txt"),
+            "status": format!("/tmp/provider-fixed-point-proof/{stage_name}/status.txt"),
+            "status_code": SUCCESS_EXIT_CODE,
+            "execution_status": SUCCESS_STATUS,
+            "cargo_marker_absent": true,
+            "success": true,
+            "unit_count": FIXED_POINT_TEST_UNIT_COUNT,
+            "failed_unit_count": 0,
+            "binary": format!("/tmp/provider-fixed-point-proof/{stage_name}/mantle"),
+            "binary_blake3": binary_digest,
+            "smoke_status_code": SUCCESS_EXIT_CODE,
+            "blocker": null
+        });
+        value[TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD] = Value::String(policy_digest.to_string());
+        value
+    }
+
+    fn fixed_point_stage_receipt_json() -> Value {
+        json!({
+            "topology_execution": {
+                "execution_status": SUCCESS_STATUS,
+                "unit_executions": [
+                    { "unit_id": "unit-1", "execution_status": SUCCESS_STATUS },
+                    { "unit_id": "unit-2", "execution_status": SUCCESS_STATUS }
+                ]
+            }
+        })
     }
 
     fn fixed_point_summary_with_toolchain_closure(
