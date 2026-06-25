@@ -9,7 +9,10 @@ use std::process::Command as ProcessCommand;
 
 use crunch_release_core::BUILD_EFFECT_POLICY_VERSION;
 use crunch_release_core::BundledArtifact;
+use crunch_release_core::BundledArtifactKind;
+use crunch_release_core::DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE;
 use crunch_release_core::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
+use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE;
 use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA;
 use crunch_release_core::DeterministicBuildProofReceipt;
 use crunch_release_core::DeterministicBuildProofReceiptInit;
@@ -29,6 +32,8 @@ use crunch_release_core::ReproducibilityArtifactComparison;
 use crunch_release_core::ReproducibilityComparisonResult;
 use crunch_release_core::ReproducibilityComparisonVerdict;
 use crunch_release_core::ReproducibilityProofClass;
+use crunch_release_core::RoleBoundedReleaseArtifact;
+use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_build_proof_receipt_digest_blake3;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
@@ -48,6 +53,9 @@ const REPRODUCE_OUTPUT_DIR_ENV: &str = "MANTLE_REPRODUCE_OUTPUT_DIR";
 const REPRODUCE_RELEASE_ID_ENV: &str = "MANTLE_REPRODUCE_RELEASE_ID";
 const DETERMINISTIC_PROOF_STORE_DIR_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_STORE_DIR";
 const DEFAULT_REPORT_RELATIVE_PATH: &str = "reproducibility/reproducibility-report.json";
+const DETERMINISTIC_BUILD_PROOF_BUNDLE_RELATIVE_PATH: &str = "deterministic-release/deterministic-build-proof.json";
+const DETERMINISTIC_SANDBOX_EVIDENCE_BUNDLE_RELATIVE_PATH: &str =
+    "deterministic-release/deterministic-sandbox-isolation-evidence.json";
 const HASH_BUFFER_BYTES: usize = 8192;
 const MAX_REBUILD_OUTPUT_ENTRIES: u32 = 4096;
 const PROOF_SANDBOX_BWRAP_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_BWRAP";
@@ -156,7 +164,7 @@ pub(crate) fn reproduce_release_artifacts(
     request: &ReleaseReproduceRequest,
 ) -> Result<ReleaseReproduceSummary, RunError> {
     validate_request(request)?;
-    let manifest = verify_release_evidence_bundle(&request.bundle_dir)?;
+    let mut manifest = verify_release_evidence_bundle(&request.bundle_dir)?;
     prepare_rebuild_output_dir(&request.rebuild_output_dir)?;
     run_rebuild_command(request, &manifest.release_id, &request.rebuild_output_dir, None, None)?;
     let unexpected_outputs = collect_unexpected_rebuilt_outputs(&manifest.binaries, &request.rebuild_output_dir)?;
@@ -167,6 +175,9 @@ pub(crate) fn reproduce_release_artifacts(
     write_report(&report_path, report.clone())?;
     fail_if_reproduction_drifted(&report, &unexpected_outputs, &report_path)?;
     let deterministic_proof = maybe_run_deterministic_proof(request, &manifest, &report_path)?;
+    if let Some(proof) = &deterministic_proof {
+        attach_deterministic_proof_artifacts(&request.bundle_dir, &mut manifest, proof)?;
+    }
     let deterministic_proof_unit = deterministic_proof.as_ref().map(|proof| {
         serde_json::json!({
             "target_artifact_identity": proof.receipt.proof_unit.target_artifact_identity.clone(),
@@ -375,6 +386,74 @@ struct DeterministicProofOutput {
     receipt: DeterministicBuildProofReceipt,
     isolation_evidence_path: PathBuf,
     isolation_evidence_digest_blake3: String,
+}
+
+fn attach_deterministic_proof_artifacts(
+    bundle_dir: &Path,
+    manifest: &mut ReleaseEvidenceManifest,
+    proof: &DeterministicProofOutput,
+) -> Result<(), RunError> {
+    let build_proof = copy_role_bounded_file_into_bundle(
+        &proof.path,
+        bundle_dir,
+        DETERMINISTIC_BUILD_PROOF_BUNDLE_RELATIVE_PATH,
+        DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE,
+        "deterministic build proof receipt",
+    )?;
+    let sandbox_evidence = copy_role_bounded_file_into_bundle(
+        &proof.isolation_evidence_path,
+        bundle_dir,
+        DETERMINISTIC_SANDBOX_EVIDENCE_BUNDLE_RELATIVE_PATH,
+        DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
+        "deterministic sandbox isolation evidence",
+    )?;
+    let mut updated = manifest.clone();
+    updated.deterministic_build_proof = Some(build_proof);
+    updated.deterministic_sandbox_isolation_evidence = Some(sandbox_evidence);
+    write_release_evidence_manifest(bundle_dir, &updated)?;
+    *manifest = updated;
+    Ok(())
+}
+
+fn copy_role_bounded_file_into_bundle(
+    source: &Path,
+    bundle_dir: &Path,
+    relative_path: &str,
+    evidence_role: &str,
+    label: &str,
+) -> Result<RoleBoundedReleaseArtifact, RunError> {
+    let destination = bundle_dir.join(relative_path);
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
+    }
+    std::fs::copy(source, &destination).map_err(|err| {
+        RunError::Internal(format!("copying {label} {} to {}: {err}", source.display(), destination.display()))
+    })?;
+    role_bounded_file_artifact_record(&destination, relative_path, evidence_role, label)
+}
+
+fn role_bounded_file_artifact_record(
+    path: &Path,
+    relative_path: &str,
+    evidence_role: &str,
+    label: &str,
+) -> Result<RoleBoundedReleaseArtifact, RunError> {
+    let (size_bytes, digest_blake3) = hash_file(path)
+        .map_err(|err| RunError::Internal(format!("hashing bundle-local {label} {}: {err}", path.display())))?;
+    Ok(RoleBoundedReleaseArtifact {
+        kind: BundledArtifactKind::File,
+        relative_path: relative_path.to_string(),
+        size_bytes,
+        digest_blake3,
+        evidence_role: evidence_role.to_string(),
+    })
+}
+
+fn write_release_evidence_manifest(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
+    let bytes = canonical_release_evidence_manifest(manifest.clone()).map_err(core_error)?;
+    let path = bundle_dir.join("manifest.json");
+    std::fs::write(&path, bytes).map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
 }
 
 fn maybe_run_deterministic_proof(

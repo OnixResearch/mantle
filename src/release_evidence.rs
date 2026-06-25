@@ -21,6 +21,7 @@ pub(crate) use crunch_release_core::ReleaseProofLinkage;
 use crunch_release_core::ReleaseReproducibilityReport;
 use crunch_release_core::ReleaseReproducibilityReportLinkage;
 pub(crate) use crunch_release_core::ReleaseWorkflowIdentity;
+use crunch_release_core::RoleBoundedReleaseArtifact;
 use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
@@ -123,6 +124,8 @@ pub(crate) fn create_release_evidence_bundle(
         prerequisite_inventory: prerequisite_inventory.clone(),
         provider_fixed_point_proof,
         reproducibility_report,
+        deterministic_build_proof: None,
+        deterministic_sandbox_isolation_evidence: None,
         independent_agreement_report: None,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
@@ -621,6 +624,12 @@ fn verify_manifest_artifacts(manifest: &ReleaseEvidenceManifest, bundle_dir: &Pa
     if let Some(report) = &manifest.reproducibility_report {
         verify_artifact_matches_bundle(report, bundle_dir, "reproducibility_report")?;
     }
+    if let Some(proof) = &manifest.deterministic_build_proof {
+        verify_role_bounded_artifact_matches_bundle(proof, bundle_dir, "deterministic_build_proof")?;
+    }
+    if let Some(evidence) = &manifest.deterministic_sandbox_isolation_evidence {
+        verify_role_bounded_artifact_matches_bundle(evidence, bundle_dir, "deterministic_sandbox_isolation_evidence")?;
+    }
     if let Some(report) = &manifest.independent_agreement_report {
         verify_artifact_matches_bundle(report, bundle_dir, "independent_agreement_report")?;
     }
@@ -638,6 +647,20 @@ fn verify_provider_fixed_point_artifact_matches_bundle(
         digest_blake3: artifact.digest_blake3.clone(),
     };
     verify_artifact_matches_bundle(&bundled, bundle_dir, "provider_fixed_point_proof")
+}
+
+fn verify_role_bounded_artifact_matches_bundle(
+    artifact: &RoleBoundedReleaseArtifact,
+    bundle_dir: &Path,
+    field_name: &str,
+) -> Result<(), RunError> {
+    let bundled = BundledArtifact {
+        kind: artifact.kind,
+        relative_path: artifact.relative_path.clone(),
+        size_bytes: artifact.size_bytes,
+        digest_blake3: artifact.digest_blake3.clone(),
+    };
+    verify_artifact_matches_bundle(&bundled, bundle_dir, field_name)
 }
 
 fn verify_artifact_matches_bundle(
@@ -750,6 +773,8 @@ mod tests {
             prerequisite_inventory: inventory.clone(),
             provider_fixed_point_proof: None,
             reproducibility_report: None,
+            deterministic_build_proof: None,
+            deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),

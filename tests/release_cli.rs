@@ -29,7 +29,9 @@ use crunch_attestation::independent_agreement_report_canonical_bytes;
 use crunch_build::KeyPair;
 use crunch_build::load_keypair;
 use crunch_release_core::BUILD_EFFECT_POLICY_VERSION;
+use crunch_release_core::DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE;
 use crunch_release_core::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
+use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE;
 use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_SCHEMA;
 use crunch_release_core::DeterministicBuildProofReceipt;
 use crunch_release_core::DeterministicBuildProofReceiptInit;
@@ -67,6 +69,9 @@ const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source
 const PROVIDER_FIXED_POINT_BINARY_BYTES: &[u8] = b"provider-fixed-point-binary";
 const PROVIDER_FIXED_POINT_EXTERNAL_BINARY_BYTES: &[u8] = b"external-provider-fixed-point-binary";
 const PROVIDER_FIXED_POINT_STAGE_UNIT_COUNT: u32 = 2;
+const TEST_BUNDLED_DETERMINISTIC_PROOF_PATH: &str = "deterministic-release/deterministic-build-proof.json";
+const TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH: &str =
+    "deterministic-release/deterministic-sandbox-isolation-evidence.json";
 #[cfg(unix)]
 const TEST_SCRIPT_MODE: u32 = 0o755;
 
@@ -929,6 +934,43 @@ fn write_deterministic_verify_artifacts(
     (proof_path, evidence_path, proof_digest, evidence_digest)
 }
 
+fn install_bundled_deterministic_artifacts(
+    bundle_dir: &Path,
+    manifest: &ReleaseEvidenceManifest,
+    proof_path: &Path,
+    evidence_path: &Path,
+) -> ReleaseEvidenceManifest {
+    let bundled_proof_path = bundle_dir.join(TEST_BUNDLED_DETERMINISTIC_PROOF_PATH);
+    let bundled_evidence_path = bundle_dir.join(TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH);
+    write_file(&bundled_proof_path, &std::fs::read(proof_path).unwrap());
+    write_file(&bundled_evidence_path, &std::fs::read(evidence_path).unwrap());
+
+    let mut updated = manifest.clone();
+    updated.deterministic_build_proof = Some(role_bounded_fixture_artifact(
+        &bundled_proof_path,
+        TEST_BUNDLED_DETERMINISTIC_PROOF_PATH,
+        DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE,
+    ));
+    updated.deterministic_sandbox_isolation_evidence = Some(role_bounded_fixture_artifact(
+        &bundled_evidence_path,
+        TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH,
+        DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
+    ));
+    write_file(&bundle_dir.join("manifest.json"), &serde_json::to_vec(&updated).unwrap());
+    updated
+}
+
+fn role_bounded_fixture_artifact(path: &Path, relative_path: &str, role: &str) -> ProviderFixedPointProofArtifact {
+    let bytes = std::fs::read(path).unwrap();
+    ProviderFixedPointProofArtifact {
+        kind: BundledArtifactKind::File,
+        relative_path: relative_path.to_string(),
+        size_bytes: bytes.len().try_into().unwrap(),
+        digest_blake3: blake3::hash(&bytes).to_hex().to_string(),
+        evidence_role: role.to_string(),
+    }
+}
+
 fn run_nix_witness_args(
     bundle_dir: &Path,
     nix_output_dir: &Path,
@@ -1306,6 +1348,155 @@ fn release_verify_rejects_noncanonical_deterministic_isolation_evidence() {
         .stderr(predicate::str::contains("deterministic sandbox isolation evidence is not canonical compact JSON"));
 }
 
+#[test]
+fn release_verify_uses_bundle_local_deterministic_release_artifacts() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let proof_dir = temp.path().join("deterministic-proof-artifacts");
+    let (proof_path, evidence_path, proof_digest, evidence_digest) =
+        write_deterministic_verify_artifacts(&proof_dir, &manifest);
+    install_bundled_deterministic_artifacts(&bundle_dir, &manifest, &proof_path, &evidence_path);
+
+    let assert = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-deterministic-release")
+        .assert()
+        .success();
+    let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
+
+    assert_eq!(stdout["deterministic_release"]["status"], "eligible");
+    assert_eq!(stdout["deterministic_release"]["proof_source"], "bundled");
+    assert_eq!(stdout["deterministic_release"]["proof_digest_blake3"], proof_digest);
+    assert_eq!(stdout["deterministic_release"]["sandbox_isolation_evidence_digest_blake3"], evidence_digest);
+    assert_eq!(
+        stdout["manifest"]["deterministic_build_proof"]["evidence_role"],
+        DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE
+    );
+    assert_eq!(
+        stdout["manifest"]["deterministic_sandbox_isolation_evidence"]["evidence_role"],
+        DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE
+    );
+}
+
+#[test]
+fn release_verify_reports_external_deterministic_override_source() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let bundled_dir = temp.path().join("bundled-proof-artifacts");
+    let (bundled_proof_path, bundled_evidence_path, _bundled_proof_digest, _bundled_evidence_digest) =
+        write_deterministic_verify_artifacts(&bundled_dir, &manifest);
+    install_bundled_deterministic_artifacts(&bundle_dir, &manifest, &bundled_proof_path, &bundled_evidence_path);
+    let external_dir = temp.path().join("external-proof-artifacts");
+    let (external_proof_path, external_evidence_path, external_proof_digest, _external_evidence_digest) =
+        write_deterministic_verify_artifacts(&external_dir, &manifest);
+
+    let assert = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--deterministic-proof")
+        .arg(&external_proof_path)
+        .arg("--deterministic-sandbox-isolation-evidence")
+        .arg(&external_evidence_path)
+        .arg("--require-deterministic-release")
+        .assert()
+        .success();
+    let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
+
+    assert_eq!(stdout["deterministic_release"]["status"], "eligible");
+    assert_eq!(stdout["deterministic_release"]["proof_source"], "external");
+    assert_eq!(stdout["deterministic_release"]["proof_digest_blake3"], external_proof_digest);
+    assert_eq!(
+        stdout["manifest"]["deterministic_build_proof"]["relative_path"],
+        TEST_BUNDLED_DETERMINISTIC_PROOF_PATH
+    );
+}
+
+#[test]
+fn release_verify_requires_bundled_deterministic_artifacts_when_no_override_is_supplied() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-deterministic-release")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("missing bundled deterministic proof artifact"));
+}
+
+#[test]
+fn release_verify_rejects_missing_bundled_deterministic_proof_file() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let proof_dir = temp.path().join("deterministic-proof-artifacts");
+    let (proof_path, evidence_path, _proof_digest, _evidence_digest) =
+        write_deterministic_verify_artifacts(&proof_dir, &manifest);
+    install_bundled_deterministic_artifacts(&bundle_dir, &manifest, &proof_path, &evidence_path);
+    std::fs::remove_file(bundle_dir.join(TEST_BUNDLED_DETERMINISTIC_PROOF_PATH)).unwrap();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-deterministic-release")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("deterministic_build_proof"));
+}
+
+#[test]
+fn release_verify_rejects_corrupted_bundled_deterministic_proof_file() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let proof_dir = temp.path().join("deterministic-proof-artifacts");
+    let (proof_path, evidence_path, _proof_digest, _evidence_digest) =
+        write_deterministic_verify_artifacts(&proof_dir, &manifest);
+    install_bundled_deterministic_artifacts(&bundle_dir, &manifest, &proof_path, &evidence_path);
+    write_file(&bundle_dir.join(TEST_BUNDLED_DETERMINISTIC_PROOF_PATH), b"corrupted-proof");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-deterministic-release")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("deterministic_build_proof does not match manifest"));
+}
+
+#[test]
+fn release_verify_blocks_bundled_deterministic_proof_digest_mismatch() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let mut wrong_manifest = manifest.clone();
+    wrong_manifest.binaries[0].digest_blake3 = sample_digest(7);
+    let proof_dir = temp.path().join("wrong-digest-proof-artifacts");
+    let (proof_path, evidence_path, _proof_digest, _evidence_digest) =
+        write_deterministic_verify_artifacts(&proof_dir, &wrong_manifest);
+    install_bundled_deterministic_artifacts(&bundle_dir, &manifest, &proof_path, &evidence_path);
+
+    let output = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-deterministic-release")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stdout = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+    assert_eq!(stdout["deterministic_release"]["status"], "blocked");
+    assert_eq!(stdout["deterministic_release"]["proof_source"], "bundled");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("deterministic proof artifacts do not prove"));
+}
+
 #[cfg(unix)]
 #[test]
 fn release_reproduce_writes_matched_report_from_isolated_rebuild_output() {
@@ -1414,6 +1605,23 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert!(stdout["deterministic_sandbox_isolation_evidence_digest_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
     assert!(proof_path.is_file());
     assert!(isolation_evidence_path.is_file());
+    let bundled_proof_path = bundle_dir.join(TEST_BUNDLED_DETERMINISTIC_PROOF_PATH);
+    let bundled_evidence_path = bundle_dir.join(TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH);
+    assert!(bundled_proof_path.is_file());
+    assert!(bundled_evidence_path.is_file());
+    let updated_manifest: ReleaseEvidenceManifest =
+        serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
+    let bundled_proof = updated_manifest.deterministic_build_proof.as_ref().unwrap();
+    let bundled_evidence = updated_manifest.deterministic_sandbox_isolation_evidence.as_ref().unwrap();
+    assert_eq!(bundled_proof.relative_path, TEST_BUNDLED_DETERMINISTIC_PROOF_PATH);
+    assert_eq!(bundled_proof.evidence_role, DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE);
+    assert_eq!(bundled_proof.digest_blake3, stdout["deterministic_proof_digest_blake3"].as_str().unwrap());
+    assert_eq!(bundled_evidence.relative_path, TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH);
+    assert_eq!(bundled_evidence.evidence_role, DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE);
+    assert_eq!(
+        bundled_evidence.digest_blake3,
+        stdout["deterministic_sandbox_isolation_evidence_digest_blake3"].as_str().unwrap()
+    );
     assert!(proof_dir.join("run-000/store/store-marker.txt").is_file());
     assert!(proof_dir.join("run-001/store/store-marker.txt").is_file());
     assert!(rebuild_output_dir.join(relative_path).is_file());
@@ -1548,6 +1756,28 @@ fn release_reproduce_generated_two_clean_store_proof_verifies_deterministic_rele
     );
     assert_eq!(
         verify_stdout["deterministic_release"]["sandbox_isolation_evidence_digest_blake3"],
+        reproduce_stdout["deterministic_sandbox_isolation_evidence_digest_blake3"]
+    );
+
+    let bundled_verify_assert = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-deterministic-release")
+        .assert()
+        .success();
+    let bundled_verify_stdout =
+        serde_json::from_slice::<serde_json::Value>(&bundled_verify_assert.get_output().stdout).unwrap();
+    assert_eq!(bundled_verify_stdout["deterministic_release"]["status"], "eligible");
+    assert_eq!(bundled_verify_stdout["deterministic_release"]["proof_source"], "bundled");
+    assert_eq!(
+        bundled_verify_stdout["deterministic_release"]["proof_digest_blake3"],
+        reproduce_stdout["deterministic_proof_digest_blake3"]
+    );
+    assert_eq!(
+        bundled_verify_stdout["deterministic_release"]["sandbox_isolation_evidence_digest_blake3"],
         reproduce_stdout["deterministic_sandbox_isolation_evidence_digest_blake3"]
     );
 }
@@ -4785,6 +5015,10 @@ struct ReleaseEvidenceManifest {
     prerequisite_inventory: BundledArtifact,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     provider_fixed_point_proof: Option<ProviderFixedPointProofArtifact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    deterministic_build_proof: Option<ProviderFixedPointProofArtifact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    deterministic_sandbox_isolation_evidence: Option<ProviderFixedPointProofArtifact>,
     proof_linkage: ReleaseProofLinkage,
 }
 

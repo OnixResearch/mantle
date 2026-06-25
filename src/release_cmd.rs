@@ -259,7 +259,8 @@ fn cmd_release_verify(
     );
     let reproducibility = load_bundle_reproducibility_report(&resolved_bundle_dir, &manifest)?;
     let reproducibility_status = reproducibility_status(reproducibility.as_ref());
-    let deterministic_result = evaluate_deterministic_release_claim(&manifest, deterministic_request)?;
+    let deterministic_result =
+        evaluate_deterministic_release_claim(&manifest, &resolved_bundle_dir, deterministic_request)?;
 
     let stagex_result = if require_stagex_no_quorum {
         Some(evaluate_stagex_profile(&manifest, &resolved_bundle_dir, reproducibility.as_ref()))
@@ -333,6 +334,28 @@ struct DeterministicVerifyRequest {
     required: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeterministicProofSource {
+    External,
+    Bundled,
+}
+
+impl DeterministicProofSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::External => "external",
+            Self::Bundled => "bundled",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedDeterministicProofPaths {
+    proof_path: PathBuf,
+    isolation_evidence_path: PathBuf,
+    source: DeterministicProofSource,
+}
+
 impl DeterministicVerifyRequest {
     fn new(
         current_dir: &Path,
@@ -399,6 +422,7 @@ struct DeterministicReleaseVerifyResult {
     proof_digest_blake3: Option<String>,
     isolation_evidence_path: Option<PathBuf>,
     isolation_evidence_digest_blake3: Option<String>,
+    proof_source: Option<&'static str>,
     blockers: Vec<String>,
 }
 
@@ -411,6 +435,7 @@ impl DeterministicReleaseVerifyResult {
             proof_digest_blake3: None,
             isolation_evidence_path: None,
             isolation_evidence_digest_blake3: None,
+            proof_source: None,
             blockers,
         }
     }
@@ -418,31 +443,16 @@ impl DeterministicReleaseVerifyResult {
 
 fn evaluate_deterministic_release_claim(
     manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    bundle_dir: &Path,
     request: DeterministicVerifyRequest,
 ) -> Result<DeterministicReleaseVerifyResult, RunError> {
-    if request.proof_path.is_none() && request.isolation_evidence_path.is_none() {
-        let blockers = if request.required {
-            vec![
-                "missing deterministic proof artifact".to_string(),
-                "missing deterministic sandbox isolation evidence".to_string(),
-            ]
-        } else {
-            Vec::new()
-        };
-        return Ok(DeterministicReleaseVerifyResult::absent(blockers));
-    }
-
-    let Some(proof_path) = request.proof_path else {
-        return Ok(DeterministicReleaseVerifyResult::absent(vec!["missing deterministic proof artifact".to_string()]));
-    };
-    let Some(isolation_evidence_path) = request.isolation_evidence_path else {
-        return Ok(DeterministicReleaseVerifyResult::absent(vec![
-            "missing deterministic sandbox isolation evidence".to_string(),
-        ]));
+    let missing_blockers = deterministic_missing_blockers(manifest, &request);
+    let Some(resolved) = resolve_deterministic_proof_paths(manifest, bundle_dir, &request) else {
+        return Ok(DeterministicReleaseVerifyResult::absent(missing_blockers));
     };
 
-    let proof = load_canonical_deterministic_proof(&proof_path)?;
-    let isolation_evidence = load_canonical_deterministic_isolation_evidence(&isolation_evidence_path)?;
+    let proof = load_canonical_deterministic_proof(&resolved.proof_path)?;
+    let isolation_evidence = load_canonical_deterministic_isolation_evidence(&resolved.isolation_evidence_path)?;
     let release_digest_set =
         manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect::<Vec<_>>();
     let eligible =
@@ -456,12 +466,68 @@ fn evaluate_deterministic_release_claim(
     Ok(DeterministicReleaseVerifyResult {
         status: if eligible { "eligible" } else { "blocked" },
         eligible,
-        proof_path: Some(proof_path),
+        proof_path: Some(resolved.proof_path),
         proof_digest_blake3: Some(proof.digest_blake3),
-        isolation_evidence_path: Some(isolation_evidence_path),
+        isolation_evidence_path: Some(resolved.isolation_evidence_path),
         isolation_evidence_digest_blake3: Some(isolation_evidence.digest_blake3),
+        proof_source: Some(resolved.source.as_str()),
         blockers,
     })
+}
+
+fn resolve_deterministic_proof_paths(
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    bundle_dir: &Path,
+    request: &DeterministicVerifyRequest,
+) -> Option<ResolvedDeterministicProofPaths> {
+    if request.proof_path.is_some() || request.isolation_evidence_path.is_some() {
+        return Some(ResolvedDeterministicProofPaths {
+            proof_path: request.proof_path.clone()?,
+            isolation_evidence_path: request.isolation_evidence_path.clone()?,
+            source: DeterministicProofSource::External,
+        });
+    }
+    Some(ResolvedDeterministicProofPaths {
+        proof_path: bundle_dir.join(&manifest.deterministic_build_proof.as_ref()?.relative_path),
+        isolation_evidence_path: bundle_dir
+            .join(&manifest.deterministic_sandbox_isolation_evidence.as_ref()?.relative_path),
+        source: DeterministicProofSource::Bundled,
+    })
+}
+
+fn deterministic_missing_blockers(
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    request: &DeterministicVerifyRequest,
+) -> Vec<String> {
+    if request.proof_path.is_some() || request.isolation_evidence_path.is_some() {
+        return explicit_deterministic_missing_blockers(request);
+    }
+    if !request.required {
+        return Vec::new();
+    }
+    bundled_deterministic_missing_blockers(manifest)
+}
+
+fn explicit_deterministic_missing_blockers(request: &DeterministicVerifyRequest) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if request.proof_path.is_none() {
+        blockers.push("missing deterministic proof artifact".to_string());
+    }
+    if request.isolation_evidence_path.is_none() {
+        blockers.push("missing deterministic sandbox isolation evidence".to_string());
+    }
+    blockers
+}
+
+fn bundled_deterministic_missing_blockers(manifest: &crate::release_evidence::ReleaseEvidenceManifest) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if manifest.deterministic_build_proof.is_none() {
+        blockers.push("missing bundled deterministic proof artifact".to_string());
+    }
+    if manifest.deterministic_sandbox_isolation_evidence.is_none() {
+        blockers.push("missing bundled deterministic sandbox isolation evidence".to_string());
+    }
+    blockers
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -531,6 +597,7 @@ fn print_release_verify_json(
         "eligible": deterministic_result.eligible,
         "proof_path": deterministic_result.proof_path.as_ref().map(|path| path.display().to_string()),
         "proof_digest_blake3": deterministic_result.proof_digest_blake3,
+        "proof_source": deterministic_result.proof_source,
         "sandbox_isolation_evidence_path": deterministic_result
             .isolation_evidence_path
             .as_ref()
@@ -609,6 +676,9 @@ fn print_deterministic_release_summary(result: &DeterministicReleaseVerifyResult
     }
     if let Some(digest) = &result.proof_digest_blake3 {
         println!("deterministic proof digest: {digest}");
+    }
+    if let Some(source) = result.proof_source {
+        println!("deterministic proof source: {source}");
     }
     if let Some(path) = &result.isolation_evidence_path {
         println!("deterministic sandbox isolation evidence: {}", path.display());
@@ -1246,6 +1316,8 @@ mod tests {
             },
             provider_fixed_point_proof: None,
             reproducibility_report: None,
+            deterministic_build_proof: None,
+            deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
@@ -1298,6 +1370,8 @@ mod tests {
             },
             provider_fixed_point_proof: None,
             reproducibility_report: None,
+            deterministic_build_proof: None,
+            deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),

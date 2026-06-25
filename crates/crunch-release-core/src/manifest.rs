@@ -15,6 +15,8 @@ pub const CLAIM_SCOPE_PACKAGED_INTEGRITY: &str = "packaged-integrity-evidence";
 pub const DEFAULT_PROOF_WORKFLOW_COMMAND: &str = "./scripts/prove-self-hosting.sh";
 pub const DEFAULT_PROOF_WORKFLOW_VERSION: &str = "mantle-self-hosting-proof-v2";
 pub const PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE: &str = "cargo-free-source-built-handoff-evidence";
+pub const DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE: &str = "deterministic-build-proof-receipt";
+pub const DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE: &str = "deterministic-sandbox-isolation-evidence";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 
 const MAX_BINARY_ARTIFACTS_COUNT: u32 = 16;
@@ -68,6 +70,15 @@ pub struct ProviderFixedPointProofArtifact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoleBoundedReleaseArtifact {
+    pub kind: BundledArtifactKind,
+    pub relative_path: String,
+    pub size_bytes: u64,
+    pub digest_blake3: String,
+    pub evidence_role: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseProofLinkage {
     pub release_id: String,
     pub source_archive_digest_blake3: String,
@@ -94,6 +105,10 @@ pub struct ReleaseEvidenceManifest {
     pub provider_fixed_point_proof: Option<ProviderFixedPointProofArtifact>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reproducibility_report: Option<BundledArtifact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deterministic_build_proof: Option<RoleBoundedReleaseArtifact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deterministic_sandbox_isolation_evidence: Option<RoleBoundedReleaseArtifact>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub independent_agreement_report: Option<BundledArtifact>,
     pub proof_linkage: ReleaseProofLinkage,
@@ -248,6 +263,24 @@ fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(),
             ));
         }
     }
+    if let Some(proof) = &manifest.deterministic_build_proof {
+        validate_role_bounded_release_artifact(
+            proof,
+            "deterministic_build_proof",
+            DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE,
+            "deterministic-release/deterministic-build-proof.json",
+            &mut seen_paths,
+        )?;
+    }
+    if let Some(evidence) = &manifest.deterministic_sandbox_isolation_evidence {
+        validate_role_bounded_release_artifact(
+            evidence,
+            "deterministic_sandbox_isolation_evidence",
+            DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
+            "deterministic-release/deterministic-sandbox-isolation-evidence.json",
+            &mut seen_paths,
+        )?;
+    }
     if let Some(report) = &manifest.independent_agreement_report {
         validate_and_record_path(report, "independent_agreement_report", &mut seen_paths)?;
         if report.kind != BundledArtifactKind::File {
@@ -298,6 +331,38 @@ fn validate_provider_fixed_point_proof_artifact(
 }
 
 fn provider_fixed_point_bundled_artifact(artifact: &ProviderFixedPointProofArtifact) -> BundledArtifact {
+    BundledArtifact {
+        kind: artifact.kind,
+        relative_path: artifact.relative_path.clone(),
+        size_bytes: artifact.size_bytes,
+        digest_blake3: artifact.digest_blake3.clone(),
+    }
+}
+
+fn validate_role_bounded_release_artifact(
+    artifact: &RoleBoundedReleaseArtifact,
+    field_name: &str,
+    expected_role: &str,
+    expected_relative_path: &str,
+    seen_paths: &mut BTreeSet<String>,
+) -> Result<(), ReleaseEvidenceError> {
+    validate_bundled_artifact(&role_bounded_bundled_artifact(artifact), field_name)?;
+    if artifact.kind != BundledArtifactKind::File {
+        return Err(validation_error(format!("release evidence {field_name} must be recorded as a file artifact")));
+    }
+    if artifact.evidence_role != expected_role {
+        return Err(validation_error(format!(
+            "release evidence {field_name}.evidence_role must be {expected_role}, got {}",
+            artifact.evidence_role
+        )));
+    }
+    if artifact.relative_path != expected_relative_path {
+        return Err(validation_error(format!("release evidence {field_name} must be {expected_relative_path}")));
+    }
+    record_unique_artifact_path(&artifact.relative_path, seen_paths)
+}
+
+fn role_bounded_bundled_artifact(artifact: &RoleBoundedReleaseArtifact) -> BundledArtifact {
     BundledArtifact {
         kind: artifact.kind,
         relative_path: artifact.relative_path.clone(),
@@ -551,6 +616,16 @@ mod tests {
         }
     }
 
+    fn sample_role_bounded_artifact(relative_path: &str, role: &str, seed: u8) -> RoleBoundedReleaseArtifact {
+        RoleBoundedReleaseArtifact {
+            kind: BundledArtifactKind::File,
+            relative_path: relative_path.to_string(),
+            size_bytes: 123,
+            digest_blake3: sample_digest(seed),
+            evidence_role: role.to_string(),
+        }
+    }
+
     fn sample_manifest() -> ReleaseEvidenceManifest {
         let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 3);
         let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
@@ -568,6 +643,8 @@ mod tests {
             prerequisite_inventory: inventory.clone(),
             provider_fixed_point_proof: None,
             reproducibility_report: None,
+            deterministic_build_proof: None,
+            deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
@@ -704,6 +781,73 @@ mod tests {
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
 
         assert!(err.to_string().contains("must be recorded as a directory artifact"));
+    }
+
+    #[test]
+    fn validate_accepts_deterministic_proof_artifacts() {
+        let mut manifest = sample_manifest();
+        manifest.deterministic_build_proof = Some(sample_role_bounded_artifact(
+            "deterministic-release/deterministic-build-proof.json",
+            DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE,
+            10,
+        ));
+        manifest.deterministic_sandbox_isolation_evidence = Some(sample_role_bounded_artifact(
+            "deterministic-release/deterministic-sandbox-isolation-evidence.json",
+            DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
+            11,
+        ));
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains("deterministic_build_proof"));
+        assert!(text.contains(DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE));
+        assert!(text.contains("deterministic_sandbox_isolation_evidence"));
+        assert!(text.contains(DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE));
+    }
+
+    #[test]
+    fn validate_rejects_deterministic_proof_with_wrong_role() {
+        let mut manifest = sample_manifest();
+        manifest.deterministic_build_proof = Some(sample_role_bounded_artifact(
+            "deterministic-release/deterministic-build-proof.json",
+            "wrong-role",
+            10,
+        ));
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("deterministic_build_proof.evidence_role"));
+    }
+
+    #[test]
+    fn validate_rejects_deterministic_proof_with_wrong_path() {
+        let mut manifest = sample_manifest();
+        manifest.deterministic_sandbox_isolation_evidence = Some(sample_role_bounded_artifact(
+            "deterministic-release/wrong.json",
+            DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
+            11,
+        ));
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("deterministic_sandbox_isolation_evidence"));
+        assert!(err.to_string().contains("deterministic-release/deterministic-sandbox-isolation-evidence.json"));
+    }
+
+    #[test]
+    fn validate_rejects_deterministic_proof_duplicate_path() {
+        let mut manifest = sample_manifest();
+        manifest.source_archive.relative_path = "deterministic-release/deterministic-build-proof.json".to_string();
+        manifest.deterministic_build_proof = Some(sample_role_bounded_artifact(
+            "deterministic-release/deterministic-build-proof.json",
+            DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE,
+            10,
+        ));
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("duplicate bundle member path"));
     }
 
     #[test]

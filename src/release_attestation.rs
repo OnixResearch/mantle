@@ -1248,6 +1248,8 @@ mod tests {
             prerequisite_inventory: sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 4),
             provider_fixed_point_proof: None,
             reproducibility_report: None,
+            deterministic_build_proof: None,
+            deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
