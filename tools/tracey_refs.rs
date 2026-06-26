@@ -204,13 +204,16 @@
 // r[impl verification_evidence.release_witness_rebuild_multi_output]
 // Implemented by `src/witness_rebuild.rs`: release witness rebuild plans derive
 // every expected published output from the release manifest plus signed release
-// attestation, then bind proof-bundle `binaries.stage1` / `binaries.stage2`
-// artifacts to those outputs by BLAKE3 digest before witness sidecar creation.
+// attestation, then bind self-hosting proof-bundle artifacts and validated
+// workflow-produced provider fixed-point stage binaries to those outputs by
+// BLAKE3 digest before witness sidecar creation.
 //
 // r[verify verification_evidence.release_witness_rebuild_multi_output]
 // Verified by `src/witness_rebuild.rs` unit tests, `tests/release_cli.rs`
-// witness-rebuild CLI tests, and archived evidence in
-// `cairn/archive/2026-06-26-witness-rebuild-two-output-release/evidence/`.
+// witness-rebuild CLI/helper tests, archived evidence in
+// `cairn/archive/2026-06-26-witness-rebuild-two-output-release/evidence/`, and
+// pending provider-bound replay evidence under
+// `cairn/changes/witness-provider-bound-replay/evidence/`.
 //
 // r[impl compiled-eval.cranelift-prototype-subset]
 // r[verify compiled-eval.cranelift-prototype-subset]

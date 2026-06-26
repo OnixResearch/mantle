@@ -3049,6 +3049,79 @@ fn witness_rebuild_helper_check_is_preflight_only() {
 }
 
 #[test]
+fn witness_rebuild_helper_check_accepts_provider_bound_inputs() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_dir = temp.path().join("scratch");
+    let provider_dir = temp.path().join("provider-out");
+    let closure_manifest = temp.path().join("native-toolchain-closure.json");
+    std::fs::create_dir_all(&provider_dir).unwrap();
+    write_file(&closure_manifest, br#"{}"#);
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    let output = ProcessCommand::new(witness_rebuild_helper_path())
+        .current_dir(temp.path())
+        .arg("--check")
+        .arg("--json")
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg(&request_dir)
+        .env("CRUNCH_WITNESS_REBUILD_CLI_BIN", env!("CARGO_BIN_EXE_crunch"))
+        .env("CRUNCH_WITNESS_RUST_SOURCE_PROVIDER", &provider_dir)
+        .env("CRUNCH_WITNESS_TOOLCHAIN_CLOSURE", &closure_manifest)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("provider-bound replay inputs: enabled"));
+    assert!(!scratch_dir.exists(), "provider check mode must not create scratch root");
+}
+
+#[test]
+fn witness_rebuild_helper_rejects_incomplete_provider_bound_inputs() {
+    let temp = tempfile::tempdir().unwrap();
+    let provider_dir = temp.path().join("provider-out");
+    let request_dir = temp.path().join("request");
+    std::fs::create_dir_all(&provider_dir).unwrap();
+
+    let output = ProcessCommand::new(witness_rebuild_helper_path())
+        .current_dir(temp.path())
+        .arg("--check")
+        .arg(&request_dir)
+        .env("CRUNCH_WITNESS_REBUILD_CLI_BIN", env!("CARGO_BIN_EXE_crunch"))
+        .env("CRUNCH_WITNESS_RUST_SOURCE_PROVIDER", &provider_dir)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "helper unexpectedly succeeded");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("CRUNCH_WITNESS_TOOLCHAIN_CLOSURE is required"));
+}
+
+#[test]
 fn witness_rebuild_helper_happy_path_writes_sidecars_and_audit() {
     let (temp, bundle_dir, manifest) = make_valid_bundle();
     let signing_key_path = temp.path().join("release.key");

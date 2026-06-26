@@ -6,6 +6,11 @@ readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 readonly DEFAULT_TOOLCHAIN="nightly"
 readonly WITNESS_SCRATCH_ENV="CRUNCH_WITNESS_SCRATCH_DIR"
 readonly WITNESS_CLI_BIN_ENV="CRUNCH_WITNESS_REBUILD_CLI_BIN"
+readonly WITNESS_DRIVER_ENV="CRUNCH_WITNESS_REBUILD_DRIVER"
+readonly WITNESS_RUST_SOURCE_PROVIDER_ENV="CRUNCH_WITNESS_RUST_SOURCE_PROVIDER"
+readonly WITNESS_TOOLCHAIN_CLOSURE_ENV="CRUNCH_WITNESS_TOOLCHAIN_CLOSURE"
+readonly WITNESS_RUSTC_ENV="CRUNCH_WITNESS_RUSTC"
+readonly PROVIDER_DRIVER_WRAPPER_NAME="provider-bound-witness-driver.sh"
 readonly TMP_SUBDIR="tmp"
 readonly CARGO_TARGET_SUBDIR="cargo-target"
 readonly MAX_PATH_DIRS=128
@@ -30,6 +35,12 @@ Examples:
     --host-class nixos-25.05
 
   ./scripts/rebuild-witness-request.sh --check request
+
+Provider-bound releases can also run a witness-produced provider fixed-point proof
+before the self-hosting proof by setting:
+  CRUNCH_WITNESS_RUST_SOURCE_PROVIDER=/path/to/provider-out
+  CRUNCH_WITNESS_TOOLCHAIN_CLOSURE=/path/to/native-toolchain-closure.json
+  CRUNCH_WITNESS_RUSTC=/path/to/rustc   # optional; provider rustc is default
 EOF
 }
 
@@ -280,13 +291,120 @@ resolve_cli_command() {
   local override_bin="${CRUNCH_WITNESS_REBUILD_CLI_BIN:-}"
 
   if [[ -n "$override_bin" ]]; then
+    override_bin="$(normalize_path "$override_bin")"
+    export "$WITNESS_CLI_BIN_ENV=$override_bin"
     cli_command_mode="binary"
-    CLI_COMMAND=("$(normalize_path "$override_bin")")
+    CLI_COMMAND=("$override_bin")
     return
   fi
 
   cli_command_mode="cargo"
   CLI_COMMAND=(cargo run --quiet --)
+}
+
+provider_env_supplied() {
+  [[ -n "${!WITNESS_RUST_SOURCE_PROVIDER_ENV:-}" ]] || \
+    [[ -n "${!WITNESS_TOOLCHAIN_CLOSURE_ENV:-}" ]] || \
+    [[ -n "${!WITNESS_RUSTC_ENV:-}" ]]
+}
+
+configure_provider_inputs() {
+  local provider_dir="${!WITNESS_RUST_SOURCE_PROVIDER_ENV:-}"
+  local closure_manifest="${!WITNESS_TOOLCHAIN_CLOSURE_ENV:-}"
+  local rustc_path="${!WITNESS_RUSTC_ENV:-}"
+
+  if ! provider_env_supplied; then
+    return
+  fi
+
+  if [[ -z "$provider_dir" ]]; then
+    die "$WITNESS_RUST_SOURCE_PROVIDER_ENV is required when provider-bound witness replay inputs are supplied"
+  fi
+  if [[ -z "$closure_manifest" ]]; then
+    die "$WITNESS_TOOLCHAIN_CLOSURE_ENV is required when provider-bound witness replay inputs are supplied"
+  fi
+
+  provider_dir="$(normalize_path "$provider_dir")"
+  closure_manifest="$(normalize_path "$closure_manifest")"
+  if [[ -n "$rustc_path" ]]; then
+    rustc_path="$(normalize_path "$rustc_path")"
+  fi
+
+  if [[ ! -d "$provider_dir" ]]; then
+    die "$WITNESS_RUST_SOURCE_PROVIDER_ENV is not a directory: $provider_dir"
+  fi
+  if [[ ! -f "$closure_manifest" ]]; then
+    die "$WITNESS_TOOLCHAIN_CLOSURE_ENV is not a file: $closure_manifest"
+  fi
+  if [[ -n "$rustc_path" && ! -x "$rustc_path" ]]; then
+    die "$WITNESS_RUSTC_ENV is not executable: $rustc_path"
+  fi
+
+  export "$WITNESS_RUST_SOURCE_PROVIDER_ENV=$provider_dir"
+  export "$WITNESS_TOOLCHAIN_CLOSURE_ENV=$closure_manifest"
+  if [[ -n "$rustc_path" ]]; then
+    export "$WITNESS_RUSTC_ENV=$rustc_path"
+  fi
+}
+
+configure_provider_bound_driver() {
+  local wrapper_path
+
+  if ! provider_env_supplied; then
+    return
+  fi
+  if [[ -n "${!WITNESS_DRIVER_ENV:-}" ]]; then
+    note "provider-bound inputs supplied; using caller-provided $WITNESS_DRIVER_ENV"
+    return
+  fi
+  if [[ "$check_only" -eq 1 ]]; then
+    note "provider-bound inputs supplied; check-only mode will not run provider fixed-point proof"
+    return
+  fi
+
+  wrapper_path="$scratch_root/$TMP_SUBDIR/$PROVIDER_DRIVER_WRAPPER_NAME"
+  cat >"$wrapper_path" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+run_mantle_cli() {
+  if [[ -n "${CRUNCH_WITNESS_REBUILD_CLI_BIN:-}" ]]; then
+    "${CRUNCH_WITNESS_REBUILD_CLI_BIN}" "$@"
+    return
+  fi
+  cargo run --quiet -- "$@"
+}
+
+: "${CRUNCH_WITNESS_REBUILD_REPO_DIR:?}"
+: "${CRUNCH_WITNESS_RELEASE_BUNDLE_DIR:?}"
+: "${CRUNCH_WITNESS_PROVIDER_FIXED_POINT_PROOF_BUNDLE_DIR:?}"
+: "${CRUNCH_WITNESS_RUST_SOURCE_PROVIDER:?}"
+: "${CRUNCH_WITNESS_TOOLCHAIN_CLOSURE:?}"
+
+if [[ -d "$CRUNCH_WITNESS_RELEASE_BUNDLE_DIR/proof/provider-fixed-point" ]]; then
+  rm -rf -- "$CRUNCH_WITNESS_PROVIDER_FIXED_POINT_PROOF_BUNDLE_DIR"
+  provider_args=(
+    self-build
+    --cargo-free
+    --fixed-point
+    --out "$CRUNCH_WITNESS_PROVIDER_FIXED_POINT_PROOF_BUNDLE_DIR"
+    --rust-source-provider "$CRUNCH_WITNESS_RUST_SOURCE_PROVIDER"
+    --toolchain-closure "$CRUNCH_WITNESS_TOOLCHAIN_CLOSURE"
+  )
+  if [[ -n "${CRUNCH_WITNESS_RUSTC:-}" ]]; then
+    provider_args+=(--rustc "$CRUNCH_WITNESS_RUSTC")
+  fi
+  (
+    cd -- "$CRUNCH_WITNESS_REBUILD_REPO_DIR"
+    run_mantle_cli "${provider_args[@]}"
+  )
+fi
+
+exec "$CRUNCH_WITNESS_REBUILD_REPO_DIR/scripts/prove-self-hosting.sh" "$@"
+EOF
+  chmod +x "$wrapper_path"
+  export "$WITNESS_DRIVER_ENV=$wrapper_path"
+  note "provider-bound witness driver: $wrapper_path"
 }
 
 parse_args() {
@@ -359,6 +477,8 @@ main() {
   configure_path
   configure_sandbox_shell
   configure_scratch_env "$request_dir"
+  configure_provider_inputs
+  configure_provider_bound_driver
   resolve_cli_command
 
   if [[ ! -d "$request_dir" ]]; then
@@ -369,6 +489,9 @@ main() {
   note "witness scratch root: $scratch_root"
   note "SNIX_BUILD_SANDBOX_SHELL: $SNIX_BUILD_SANDBOX_SHELL"
   note "bwrap: $(command -v bwrap)"
+  if provider_env_supplied; then
+    note "provider-bound replay inputs: enabled"
+  fi
 
   if [[ "$check_only" -eq 1 ]]; then
     note "check-only mode: this validates prerequisites and request parsing only; it does not produce publishable witness sidecars"

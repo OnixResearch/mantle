@@ -9,6 +9,7 @@ use std::time::UNIX_EPOCH;
 use crunch_attestation::ReleaseAttestation;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::errors::RunError;
 use crate::release_attestation::load_release_attestation_document;
@@ -25,10 +26,11 @@ use crate::witness_handoff::WitnessRequestDocument;
 pub(crate) const WITNESS_REBUILD_AUDIT_SCHEMA: &str = "mantle-witness-rebuild-audit-v1";
 pub(crate) const WITNESS_SCRATCH_ENV: &str = "MANTLE_WITNESS_SCRATCH_DIR";
 const MAX_EXPECTED_OUTPUTS: u32 = 16;
-const PROOF_BINARY_CANDIDATE_LIMIT: usize = 3;
+const PROOF_BINARY_CANDIDATE_LIMIT: usize = 5;
 const SCRATCH_REPO_DIR_NAME: &str = "source-tree";
 const SCRATCH_REBUILT_OUTPUTS_DIR_NAME: &str = "rebuilt-outputs";
 const SCRATCH_PROOF_BUNDLE_DIR_NAME: &str = "proof-bundle";
+const SCRATCH_PROVIDER_FIXED_POINT_PROOF_DIR_NAME: &str = "provider-fixed-point-proof";
 const SCRATCH_PROOF_WORK_DIR_NAME: &str = "proof-work";
 const SCRATCH_AUDIT_DIR_NAME: &str = "witness-rebuild-audit";
 const SCRATCH_TMP_DIR_NAME: &str = "tmp";
@@ -42,6 +44,8 @@ const WORKFLOW_REQUEST_DIR_ENV: &str = "CRUNCH_WITNESS_REQUEST_DIR";
 const WORKFLOW_RELEASE_BUNDLE_DIR_ENV: &str = "CRUNCH_WITNESS_RELEASE_BUNDLE_DIR";
 const WORKFLOW_VERIFICATION_SEED_DIR_ENV: &str = "CRUNCH_WITNESS_VERIFICATION_SEED_DIR";
 const WORKFLOW_RELEASE_ID_ENV: &str = "CRUNCH_WITNESS_RELEASE_ID";
+const WORKFLOW_REPO_DIR_ENV: &str = "CRUNCH_WITNESS_REBUILD_REPO_DIR";
+const WORKFLOW_PROVIDER_FIXED_POINT_PROOF_BUNDLE_ENV: &str = "CRUNCH_WITNESS_PROVIDER_FIXED_POINT_PROOF_BUNDLE_DIR";
 const SELF_HOSTING_PROOF_BUNDLE_ENV: &str = "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR";
 const SELF_HOSTING_PROOF_SCRATCH_ENV: &str = "CRUNCH_PROOF_SCRATCH_DIR";
 const SELF_HOSTING_LATER_STAGE_HERMETICITY_ENV: &str = "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE";
@@ -83,6 +87,7 @@ pub(crate) struct WitnessRebuildLayout {
     pub repo_dir: PathBuf,
     pub rebuilt_outputs_dir: PathBuf,
     pub proof_bundle_dir: PathBuf,
+    pub provider_fixed_point_proof_dir: PathBuf,
     pub proof_scratch_dir: PathBuf,
     pub audit_dir: PathBuf,
     pub tmp_dir: PathBuf,
@@ -141,6 +146,7 @@ pub(crate) struct WitnessRebuildAuditMeta {
     pub tmp_dir: String,
     pub cargo_target_dir: String,
     pub proof_bundle_dir: String,
+    pub provider_fixed_point_proof_dir: String,
     pub proof_scratch_dir: String,
     pub repo_dir: String,
     pub verification_dir: String,
@@ -268,6 +274,8 @@ pub(crate) fn run_witness_rebuild_workflow(plan: &WitnessRebuildPlan) -> Result<
     command.env(WORKFLOW_RELEASE_BUNDLE_DIR_ENV, &plan.request_bundle_dir);
     command.env(WORKFLOW_VERIFICATION_SEED_DIR_ENV, &plan.request_verification_seed_dir);
     command.env(WORKFLOW_RELEASE_ID_ENV, &plan.release_id);
+    command.env(WORKFLOW_REPO_DIR_ENV, &plan.scratch_layout.repo_dir);
+    command.env(WORKFLOW_PROVIDER_FIXED_POINT_PROOF_BUNDLE_ENV, &plan.scratch_layout.provider_fixed_point_proof_dir);
     command.env("TMPDIR", &plan.scratch_layout.tmp_dir);
     command.env("CARGO_TARGET_DIR", &plan.scratch_layout.cargo_target_dir);
     let started_unix_ms = unix_time_ms_now()?;
@@ -511,6 +519,7 @@ fn derive_witness_rebuild_layout(scratch_root: &Path, release_id: &str) -> Resul
         repo_dir: scratch_root.join(SCRATCH_REPO_DIR_NAME),
         rebuilt_outputs_dir: scratch_root.join(SCRATCH_REBUILT_OUTPUTS_DIR_NAME),
         proof_bundle_dir: scratch_root.join(SCRATCH_PROOF_BUNDLE_DIR_NAME),
+        provider_fixed_point_proof_dir: scratch_root.join(SCRATCH_PROVIDER_FIXED_POINT_PROOF_DIR_NAME),
         proof_scratch_dir: scratch_root.join(SCRATCH_PROOF_WORK_DIR_NAME),
         audit_dir: audit_dir.clone(),
         tmp_dir: scratch_root.join(SCRATCH_TMP_DIR_NAME),
@@ -687,7 +696,9 @@ fn write_command_logs(plan: &WitnessRebuildPlan, output: &Output) -> Result<(), 
 
 fn collect_rebuilt_output_paths(plan: &WitnessRebuildPlan) -> Result<Vec<PathBuf>, RunError> {
     let proof_manifest = load_proof_bundle_manifest(&plan.scratch_layout.proof_bundle_dir)?;
-    let candidates = collect_rebuilt_output_candidates(&plan.scratch_layout.proof_bundle_dir, &proof_manifest)?;
+    let mut candidates = collect_rebuilt_output_candidates(&plan.scratch_layout.proof_bundle_dir, &proof_manifest)?;
+    collect_provider_fixed_point_candidates(&plan.scratch_layout.provider_fixed_point_proof_dir, &mut candidates)?;
+    assert!(candidates.len() <= PROOF_BINARY_CANDIDATE_LIMIT);
     copy_matching_rebuilt_outputs(plan, &candidates)
 }
 
@@ -714,6 +725,119 @@ fn collect_rebuilt_output_candidates(
     }
     assert!(candidates.len() <= PROOF_BINARY_CANDIDATE_LIMIT);
     Ok(candidates)
+}
+
+fn collect_provider_fixed_point_candidates(
+    provider_proof_dir: &Path,
+    candidates: &mut Vec<RebuiltOutputCandidate>,
+) -> Result<(), RunError> {
+    if !provider_proof_dir.exists() {
+        return Ok(());
+    }
+    if !provider_proof_dir.is_dir() {
+        return Err(RunError::Build(format!(
+            "witness rebuild provider fixed-point proof path is not a directory: {}",
+            provider_proof_dir.display()
+        )));
+    }
+    let verification = crate::cargo_free_self_build::verify_provider_fixed_point_proof_bundle(provider_proof_dir);
+    if !verification.valid {
+        return Err(RunError::Build(format!(
+            "witness rebuild provider fixed-point proof is invalid: {}",
+            verification.blockers.join("; ")
+        )));
+    }
+    let stage_digest = verification.stage_binary_digest_blake3.as_deref().ok_or_else(|| {
+        RunError::Build("witness rebuild provider fixed-point proof has no stage binary digest".to_string())
+    })?;
+    let meta = load_provider_fixed_point_meta(provider_proof_dir)?;
+    push_provider_stage_candidate(candidates, provider_proof_dir, &meta, "stage2", stage_digest)?;
+    push_provider_stage_candidate(candidates, provider_proof_dir, &meta, "stage1", stage_digest)?;
+    Ok(())
+}
+
+fn load_provider_fixed_point_meta(provider_proof_dir: &Path) -> Result<Value, RunError> {
+    let meta_path = provider_proof_dir.join("meta.json");
+    let meta_bytes =
+        std::fs::read(&meta_path).map_err(|err| RunError::Build(format!("reading {}: {err}", meta_path.display())))?;
+    serde_json::from_slice(&meta_bytes)
+        .map_err(|err| RunError::Build(format!("parsing {}: {err}", meta_path.display())))
+}
+
+fn push_provider_stage_candidate(
+    candidates: &mut Vec<RebuiltOutputCandidate>,
+    provider_proof_dir: &Path,
+    meta: &Value,
+    stage_name: &'static str,
+    stage_digest: &str,
+) -> Result<(), RunError> {
+    let role = provider_fixed_point_stage_role(stage_name)?;
+    let path = resolve_provider_fixed_point_stage_binary(provider_proof_dir, meta, stage_name, role)?;
+    push_verified_candidate(candidates, role, path, Some(stage_digest))
+}
+
+fn provider_fixed_point_stage_role(stage_name: &str) -> Result<&'static str, RunError> {
+    if stage_name == "stage2" {
+        return Ok("provider-fixed-point.stage2");
+    }
+    if stage_name == "stage1" {
+        return Ok("provider-fixed-point.stage1");
+    }
+    Err(RunError::Internal(format!("unsupported provider fixed-point stage: {stage_name}")))
+}
+
+fn resolve_provider_fixed_point_stage_binary(
+    provider_proof_dir: &Path,
+    meta: &Value,
+    stage_name: &str,
+    role: &str,
+) -> Result<PathBuf, RunError> {
+    let pointer = format!("/{stage_name}/binary");
+    let recorded_path = meta.pointer(&pointer).and_then(Value::as_str).ok_or_else(|| {
+        RunError::Build(format!("provider fixed-point proof metadata missing {role} binary path at {pointer}"))
+    })?;
+    validate_non_empty_recorded_path(recorded_path, role)?;
+    let raw_path = PathBuf::from(recorded_path);
+    let candidate_path = if raw_path.is_absolute() {
+        raw_path
+    } else {
+        reject_escaping_relative_path(&raw_path, recorded_path, role)?;
+        provider_proof_dir.join(raw_path)
+    };
+    validate_provider_candidate_containment(provider_proof_dir, &candidate_path, recorded_path, role)?;
+    Ok(candidate_path)
+}
+
+fn validate_provider_candidate_containment(
+    provider_proof_dir: &Path,
+    candidate_path: &Path,
+    recorded_path: &str,
+    role: &str,
+) -> Result<(), RunError> {
+    if !candidate_path.is_file() {
+        return Err(RunError::Build(format!(
+            "witness rebuild proof candidate {role} is missing: {}",
+            candidate_path.display()
+        )));
+    }
+    let canonical_root = std::fs::canonicalize(provider_proof_dir).map_err(|err| {
+        RunError::Build(format!(
+            "canonicalizing provider fixed-point proof directory {}: {err}",
+            provider_proof_dir.display()
+        ))
+    })?;
+    let canonical_candidate = std::fs::canonicalize(candidate_path).map_err(|err| {
+        RunError::Build(format!(
+            "canonicalizing provider fixed-point proof candidate {}: {err}",
+            candidate_path.display()
+        ))
+    })?;
+    if canonical_candidate.starts_with(&canonical_root) {
+        return Ok(());
+    }
+    Err(RunError::Build(format!(
+        "{role} must stay inside provider fixed-point proof bundle: {recorded_path}"
+    )))
 }
 
 fn push_manifest_binary_candidate(
@@ -962,6 +1086,7 @@ fn build_audit_meta(
         tmp_dir: plan.scratch_layout.tmp_dir.display().to_string(),
         cargo_target_dir: plan.scratch_layout.cargo_target_dir.display().to_string(),
         proof_bundle_dir: plan.scratch_layout.proof_bundle_dir.display().to_string(),
+        provider_fixed_point_proof_dir: plan.scratch_layout.provider_fixed_point_proof_dir.display().to_string(),
         proof_scratch_dir: plan.scratch_layout.proof_scratch_dir.display().to_string(),
         repo_dir: plan.scratch_layout.repo_dir.display().to_string(),
         verification_dir: plan.scratch_layout.verification_dir.display().to_string(),
@@ -1027,6 +1152,11 @@ mod tests {
     use super::*;
 
     const TEST_BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+    const TEST_PROVIDER_FIXED_POINT_STAGE_UNIT_COUNT: u32 = 2;
+    const TEST_PROVIDER_TOOLCHAIN_MEMBER_COUNT: u32 = 17;
+    const TEST_PROVIDER_ARTIFACT_COUNT: u32 = 6;
+    const TEST_PROVIDER_SOURCE_COUNT: u32 = 2;
+    const TEST_PROVIDER_RECEIPT_COUNT: u32 = 1;
     const TEST_REQUEST_LAYOUT_VERSION: u32 = 1;
 
     #[test]
@@ -1166,6 +1296,122 @@ mod tests {
     }
 
     #[test]
+    fn collect_rebuilt_output_paths_uses_provider_fixed_point_candidate_by_digest() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let self_hosted_digest = write_proof_binary(&proof_bundle_dir, "binaries/stage2-mantle", b"self-host-stage");
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "binaries": {
+                    "stage2": {
+                        "path": "binaries/stage2-mantle",
+                        "digest_blake3": self_hosted_digest.clone(),
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let provider_proof_dir = temp.path().join(SCRATCH_PROVIDER_FIXED_POINT_PROOF_DIR_NAME);
+        let provider_digest = write_provider_fixed_point_proof_bundle(&provider_proof_dir, b"provider-stage", None);
+        let plan = witness_rebuild_test_plan(temp.path(), vec![
+            expected_output("binaries/01-mantle", &provider_digest),
+            expected_output("binaries/02-stage2-mantle", &self_hosted_digest),
+        ]);
+
+        let rebuilt_output_paths = collect_rebuilt_output_paths(&plan).unwrap();
+
+        let provider_output_path = temp.path().join(SCRATCH_REBUILT_OUTPUTS_DIR_NAME).join("binaries/01-mantle");
+        let self_hosted_output_path =
+            temp.path().join(SCRATCH_REBUILT_OUTPUTS_DIR_NAME).join("binaries/02-stage2-mantle");
+        assert_eq!(rebuilt_output_paths, vec![provider_output_path.clone(), self_hosted_output_path.clone()]);
+        assert_eq!(compute_path_blake3_digest(&provider_output_path).unwrap(), provider_digest);
+        assert_eq!(compute_path_blake3_digest(&self_hosted_output_path).unwrap(), self_hosted_digest);
+        validate_rebuilt_output_digests(&plan.expected_outputs, &rebuilt_output_paths).unwrap();
+    }
+
+    #[test]
+    fn collect_rebuilt_output_paths_rejects_invalid_provider_fixed_point_proof() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let self_hosted_digest = write_proof_binary(&proof_bundle_dir, "binaries/stage2-mantle", b"self-host-stage");
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "binaries": {
+                    "stage2": {
+                        "path": "binaries/stage2-mantle",
+                        "digest_blake3": self_hosted_digest,
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let provider_proof_dir = temp.path().join(SCRATCH_PROVIDER_FIXED_POINT_PROOF_DIR_NAME);
+        std::fs::create_dir_all(&provider_proof_dir).unwrap();
+        std::fs::write(provider_proof_dir.join("meta.json"), br#"{}"#).unwrap();
+        let plan = witness_rebuild_test_plan(temp.path(), vec![expected_output(
+            "binaries/01-mantle",
+            &"1".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
+        )]);
+
+        let err = collect_rebuilt_output_paths(&plan).unwrap_err();
+
+        assert!(err.message().contains("provider fixed-point proof is invalid"));
+    }
+
+    #[test]
+    fn collect_rebuilt_output_paths_rejects_provider_fixed_point_stage_escape() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let self_hosted_digest = write_proof_binary(&proof_bundle_dir, "binaries/stage2-mantle", b"self-host-stage");
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "binaries": {
+                    "stage2": {
+                        "path": "binaries/stage2-mantle",
+                        "digest_blake3": self_hosted_digest,
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let outside_binary = temp.path().join("outside-provider-mantle");
+        std::fs::write(&outside_binary, b"provider-stage").unwrap();
+        let provider_proof_dir = temp.path().join(SCRATCH_PROVIDER_FIXED_POINT_PROOF_DIR_NAME);
+        let provider_digest = write_provider_fixed_point_proof_bundle(
+            &provider_proof_dir,
+            b"provider-stage",
+            Some(outside_binary.as_path()),
+        );
+        let plan =
+            witness_rebuild_test_plan(temp.path(), vec![expected_output("binaries/01-mantle", &provider_digest)]);
+
+        let err = collect_rebuilt_output_paths(&plan).unwrap_err();
+
+        assert!(
+            err.message()
+                .contains("provider-fixed-point.stage2 must stay inside provider fixed-point proof bundle")
+        );
+    }
+
+    #[test]
     fn collect_rebuilt_output_paths_rejects_escaping_proof_binary_path() {
         let temp = tempfile::tempdir().unwrap();
         let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
@@ -1240,6 +1486,153 @@ mod tests {
 
     fn write_proof_manifest(proof_bundle_dir: &Path, value: serde_json::Value) {
         std::fs::write(proof_bundle_dir.join(PROOF_MANIFEST_FILE_NAME), serde_json::to_vec(&value).unwrap()).unwrap();
+    }
+
+    fn write_provider_fixed_point_proof_bundle(
+        provider_proof_dir: &Path,
+        binary_bytes: &[u8],
+        stage_binary_override: Option<&Path>,
+    ) -> String {
+        let binary_digest = blake3::hash(binary_bytes).to_hex().to_string();
+        let policy_digest = "2".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let metadata_digest = "3".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let stage1_binary = provider_stage_binary_path(provider_proof_dir, "stage1", stage_binary_override);
+        let stage2_binary = provider_stage_binary_path(provider_proof_dir, "stage2", stage_binary_override);
+        write_provider_binary(&stage1_binary, binary_bytes);
+        write_provider_binary(&stage2_binary, binary_bytes);
+        write_provider_stage_receipt(&provider_proof_dir.join("stage1/receipt.json"));
+        write_provider_stage_receipt(&provider_proof_dir.join("stage2/receipt.json"));
+        write_provider_non_claims(provider_proof_dir);
+        write_provider_preflight(provider_proof_dir, &policy_digest);
+        let meta = serde_json::json!({
+            "schema": "mantle-cargo-free-fixed-point-proof-v1",
+            "status": "success",
+            "root": "/repo/mantle",
+            "bundle_dir": provider_proof_dir,
+            "fixed_point": true,
+            "stage1": provider_stage_summary_json(provider_proof_dir, "stage1", &stage1_binary, &binary_digest, &policy_digest),
+            "stage2": provider_stage_summary_json(provider_proof_dir, "stage2", &stage2_binary, &binary_digest, &policy_digest),
+            "rustc_compatibility": {
+                "requested_rustc": "/provider/bin/rustc",
+                "stage_rustc": "/provider/bin/rustc",
+                "normalization": "none",
+                "wrapper": null,
+                "wrapper_blake3": null
+            },
+            "source_built_toolchain_closure": {
+                "schema": "mantle-source-built-toolchain-closure-v1",
+                "status": "enforced-source-built",
+                "claim": true,
+                "non_claim": null,
+                "manifest_path": "/tmp/toolchain-closure.json",
+                "policy_digest_blake3": policy_digest,
+                "member_count": TEST_PROVIDER_TOOLCHAIN_MEMBER_COUNT,
+                "source_built_member_count": TEST_PROVIDER_TOOLCHAIN_MEMBER_COUNT,
+                "seed_exception_count": 0
+            },
+            "rust_source_provider": {
+                "schema": "mantle-cargo-free-rust-source-provider-binding-v1",
+                "status": "validated",
+                "provider_dir": "/provider",
+                "metadata_path": "/provider/share/mantle-rust-provider/provider.json",
+                "metadata_digest_blake3": metadata_digest,
+                "policy_digest_blake3": policy_digest,
+                "host_triple": "x86_64-unknown-linux-musl",
+                "target_triple": "x86_64-unknown-linux-musl",
+                "artifact_count": TEST_PROVIDER_ARTIFACT_COUNT,
+                "source_count": TEST_PROVIDER_SOURCE_COUNT,
+                "receipt_count": TEST_PROVIDER_RECEIPT_COUNT,
+                "rustc_path": "/provider/bin/rustc"
+            },
+            "blocker": null,
+            "non_claims": [
+                "not-crunch-bootstrap",
+                "not-release-reproducibility",
+                "not-full-cargo-compatibility"
+            ]
+        });
+        std::fs::write(provider_proof_dir.join("meta.json"), serde_json::to_vec(&meta).unwrap()).unwrap();
+        binary_digest
+    }
+
+    fn provider_stage_binary_path(
+        provider_proof_dir: &Path,
+        stage_name: &str,
+        stage_binary_override: Option<&Path>,
+    ) -> PathBuf {
+        stage_binary_override
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| provider_proof_dir.join(stage_name).join("mantle"))
+    }
+
+    fn write_provider_binary(path: &Path, binary_bytes: &[u8]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, binary_bytes).unwrap();
+    }
+
+    fn write_provider_stage_receipt(path: &Path) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let receipt = serde_json::json!({
+            "topology_execution": {
+                "execution_status": "success",
+                "unit_executions": [
+                    { "unit_id": "unit-1", "execution_status": "success" },
+                    { "unit_id": "unit-2", "execution_status": "success" }
+                ]
+            }
+        });
+        std::fs::write(path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+    }
+
+    fn write_provider_non_claims(provider_proof_dir: &Path) {
+        std::fs::create_dir_all(provider_proof_dir).unwrap();
+        std::fs::write(
+            provider_proof_dir.join("non-claims.txt"),
+            b"This proof does not claim Crunch bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n",
+        )
+        .unwrap();
+    }
+
+    fn write_provider_preflight(provider_proof_dir: &Path, policy_digest: &str) {
+        let preflight = serde_json::json!({
+            "schema": "mantle-cargo-free-fixed-point-proof-v1",
+            "root": "/repo/mantle",
+            "bundle_dir": provider_proof_dir,
+            "source_built_toolchain_closure": {
+                "status": "enforced-source-built",
+                "claim": true,
+                "policy_digest_blake3": policy_digest
+            }
+        });
+        std::fs::write(provider_proof_dir.join("preflight.json"), serde_json::to_vec(&preflight).unwrap()).unwrap();
+    }
+
+    fn provider_stage_summary_json(
+        provider_proof_dir: &Path,
+        stage_name: &str,
+        binary_path: &Path,
+        binary_digest: &str,
+        policy_digest: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "name": stage_name,
+            "dir": provider_proof_dir.join(stage_name),
+            "execution_dir": provider_proof_dir.join("execution"),
+            "receipt": provider_proof_dir.join(stage_name).join("receipt.json"),
+            "stderr": provider_proof_dir.join(stage_name).join("stderr.txt"),
+            "status": provider_proof_dir.join(stage_name).join("status.txt"),
+            "status_code": 0,
+            "execution_status": "success",
+            "cargo_marker_absent": true,
+            "success": true,
+            "unit_count": TEST_PROVIDER_FIXED_POINT_STAGE_UNIT_COUNT,
+            "failed_unit_count": 0,
+            "binary": binary_path,
+            "binary_blake3": binary_digest,
+            "smoke_status_code": 0,
+            "source_built_toolchain_closure_policy_digest_blake3": policy_digest,
+            "blocker": null
+        })
     }
 
     fn expected_output(published_name: &str, expected_digest_blake3: &str) -> ExpectedRebuiltOutput {
