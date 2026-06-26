@@ -566,3 +566,21 @@ command: nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
 
 exit_status: 0
 ```
+
+## post-archive-cairn-validate
+
+```text
+command: nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+
+exit_status: 0
+```
