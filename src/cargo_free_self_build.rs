@@ -58,6 +58,11 @@ const COMPATIBILITY_FILE: &str = "compatibility.json";
 const TOOLCHAIN_COMPATIBILITY_PATH_DIR: &str = "receipt-bound-path";
 const TOOLCHAIN_ALIAS_RUNTIME_DIR: &str = ".toolchain-runtime";
 const TOOLCHAIN_ALIAS_UNWIND_ARCHIVE: &str = "libunwind.a";
+const TOOLCHAIN_ALIAS_CRT1_OBJECT: &str = "crt1.o";
+const TOOLCHAIN_ALIAS_STATIC_PIE_CRT_OBJECT: &str = "rcrt1.o";
+const TOOLCHAIN_ALIAS_STATIC_PIE_FLAG: &str = "-static-pie";
+const TOOLCHAIN_ALIAS_STATIC_FLAG: &str = "-static";
+const TOOLCHAIN_ALIAS_NON_PIE_FLAG: &str = "-no-pie";
 const RUSTC_PROBE_DIR: &str = "rustc-probe";
 const RUSTC_PROBE_SOURCE_FILE: &str = "probe.rs";
 const RUSTC_PROBE_SOURCE: &str = "fn main() {}\n";
@@ -144,6 +149,12 @@ struct ExecutionToolchain {
     path_env: OsString,
     status: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+}
+
+#[derive(Clone, Debug)]
+struct CCompilerAliasRuntimeInputs {
+    unwind_archive: Option<PathBuf>,
+    crt1_object: PathBuf,
 }
 
 #[derive(Debug)]
@@ -2219,7 +2230,7 @@ fn write_toolchain_path_aliases(
 ) -> Result<(), RunError> {
     let aliases = toolchain_path_aliases(manifest)?;
     let c_compiler = c_compiler_alias_target(manifest)?;
-    let unwind_archive = declared_unwind_archive(manifest)?;
+    let c_compiler_runtime = c_compiler_alias_runtime_inputs(manifest)?;
     for (alias, target) in aliases {
         let link = guard_path_dir.join(alias);
         if link.file_name() == Some(OsStr::new(CARGO_SHIM_NAME)) {
@@ -2227,10 +2238,8 @@ fn write_toolchain_path_aliases(
         }
         remove_owned_path(&link)?;
         if c_compiler.as_ref().is_some_and(|compiler| compiler == &target) {
-            if let Some(unwind_archive) = &unwind_archive {
-                write_c_compiler_toolchain_alias(&target, unwind_archive, &link)?;
-                continue;
-            }
+            write_c_compiler_toolchain_alias(&target, &c_compiler_runtime, &link)?;
+            continue;
         }
         write_toolchain_alias(&target, &link)?;
     }
@@ -2271,6 +2280,15 @@ fn c_compiler_alias_target(
     )?))
 }
 
+fn c_compiler_alias_runtime_inputs(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<CCompilerAliasRuntimeInputs, RunError> {
+    Ok(CCompilerAliasRuntimeInputs {
+        unwind_archive: declared_unwind_archive(manifest)?,
+        crt1_object: declared_target_crt1_object(manifest)?,
+    })
+}
+
 fn declared_unwind_archive(
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<Option<PathBuf>, RunError> {
@@ -2284,6 +2302,23 @@ fn declared_unwind_archive(
         [] => Ok(None),
         _many => Err(RunError::Build(
             "source-built toolchain closure blocked: multiple host libunwind runtime members".to_string(),
+        )),
+    }
+}
+
+fn declared_target_crt1_object(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<PathBuf, RunError> {
+    let members = manifest
+        .members
+        .iter()
+        .filter(|member| member.name == crate::source_toolchain_closure::NATIVE_TARGET_CRT1_NAME)
+        .collect::<Vec<_>>();
+    match members.as_slice() {
+        [member] => canonicalize_toolchain_path(Path::new(&member.execution_path), member.role),
+        [] => Err(RunError::Build("source-built toolchain closure blocked: missing target crt1.o member".to_string())),
+        _many => Err(RunError::Build(
+            "source-built toolchain closure blocked: multiple target crt1.o members".to_string(),
         )),
     }
 }
@@ -2391,28 +2426,45 @@ fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
 }
 
 #[cfg(unix)]
-fn write_c_compiler_toolchain_alias(target: &Path, unwind_archive: &Path, link: &Path) -> Result<(), RunError> {
+fn write_c_compiler_toolchain_alias(
+    target: &Path,
+    runtime_inputs: &CCompilerAliasRuntimeInputs,
+    link: &Path,
+) -> Result<(), RunError> {
     let runtime_dir = link
         .parent()
         .ok_or_else(|| internal(format!("{} has no parent", link.display())))?
         .join(TOOLCHAIN_ALIAS_RUNTIME_DIR);
     fs::create_dir_all(&runtime_dir)
         .map_err(|err| internal(format!("create toolchain alias runtime dir {}: {err}", runtime_dir.display())))?;
-    let runtime_unwind = runtime_dir.join(TOOLCHAIN_ALIAS_UNWIND_ARCHIVE);
-    fs::copy(unwind_archive, &runtime_unwind).map_err(|err| {
-        internal(format!(
-            "copy declared unwind archive {} -> {}: {err}",
-            unwind_archive.display(),
-            runtime_unwind.display()
-        ))
-    })?;
+    if let Some(unwind_archive) = &runtime_inputs.unwind_archive {
+        copy_alias_runtime_file(unwind_archive, &runtime_dir.join(TOOLCHAIN_ALIAS_UNWIND_ARCHIVE), "unwind archive")?;
+    }
+    copy_alias_runtime_file(
+        &runtime_inputs.crt1_object,
+        &runtime_dir.join(TOOLCHAIN_ALIAS_CRT1_OBJECT),
+        "target crt1.o",
+    )?;
     let script = format!(
-        "#!/bin/sh\nremaining=$#\nwhile [ \"$remaining\" -gt 0 ]; do\n  arg=$1\n  shift\n  case \"$arg\" in\n    -static-pie) set -- \"$@\" -static ;;\n    *) set -- \"$@\" \"$arg\" ;;\n  esac\n  remaining=$((remaining - 1))\ndone\nexec {} -L{} \"$@\"\n",
+        "#!/bin/sh\nruntime_dir={}\nmapped_args_set=false\nstatic_pie_normalized=false\nresponse_index=0\nrewrite_response_file() {{\n  response_source=$1\n  response_index=$((response_index + 1))\n  response_target=\"$runtime_dir/response-$response_index.rsp\"\n  : > \"$response_target\" || exit 1\n  while IFS= read -r response_arg || [ -n \"$response_arg\" ]; do\n    case \"$response_arg\" in\n      {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) response_arg=\"$runtime_dir/{crt1}\" ;;\n      {static_pie}) response_arg=\"{static}\"; static_pie_normalized=true ;;\n    esac\n    printf '%s\\n' \"$response_arg\" >> \"$response_target\" || exit 1\n  done < \"$response_source\" || exit 1\n  mapped_arg=\"@$response_target\"\n}}\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    @*) response_source=${{arg#@}}; if [ -r \"$response_source\" ]; then rewrite_response_file \"$response_source\"; else mapped_arg=\"$arg\"; fi ;;\n    {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) mapped_arg=\"$runtime_dir/{crt1}\" ;;\n    {static_pie}) mapped_arg=\"{static}\"; static_pie_normalized=true ;;\n    *) mapped_arg=\"$arg\" ;;\n  esac\n  if [ \"$mapped_args_set\" = false ]; then\n    set -- \"$mapped_arg\"\n    mapped_args_set=true\n  else\n    set -- \"$@\" \"$mapped_arg\"\n  fi\ndone\nif [ \"$static_pie_normalized\" = true ]; then\n  set -- \"$@\" {non_pie}\nfi\nexec {} -L\"$runtime_dir\" \"$@\"\n",
+        shell_quote(&runtime_dir),
         shell_quote(target),
-        shell_quote(&runtime_dir)
+        crt1 = TOOLCHAIN_ALIAS_CRT1_OBJECT,
+        rcrt1 = TOOLCHAIN_ALIAS_STATIC_PIE_CRT_OBJECT,
+        static_pie = TOOLCHAIN_ALIAS_STATIC_PIE_FLAG,
+        static = TOOLCHAIN_ALIAS_STATIC_FLAG,
+        non_pie = TOOLCHAIN_ALIAS_NON_PIE_FLAG
     );
     write_text(link, &script)?;
     set_executable(link)
+}
+
+fn copy_alias_runtime_file(source: &Path, destination: &Path, label: &str) -> Result<(), RunError> {
+    debug_assert!(!label.is_empty());
+    fs::copy(source, destination).map_err(|err| {
+        internal(format!("copy declared {label} {} -> {}: {err}", source.display(), destination.display()))
+    })?;
+    Ok(())
 }
 
 #[cfg(not(unix))]
@@ -2423,7 +2475,11 @@ fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
 }
 
 #[cfg(not(unix))]
-fn write_c_compiler_toolchain_alias(target: &Path, _unwind_archive: &Path, link: &Path) -> Result<(), RunError> {
+fn write_c_compiler_toolchain_alias(
+    target: &Path,
+    _runtime_inputs: &CCompilerAliasRuntimeInputs,
+    link: &Path,
+) -> Result<(), RunError> {
     write_toolchain_alias(target, link)
 }
 
@@ -3447,23 +3503,128 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn receipt_bound_c_compiler_alias_materializes_declared_unwind_archive() {
+    fn receipt_bound_c_compiler_alias_materializes_declared_runtime_inputs() {
         let dir = tempfile::TempDir::new().unwrap();
         let tools = fake_toolchain(&dir, false);
+        let observed_args = dir.path().join("observed-cc-args.txt");
+        write_fake_executable(
+            &tools.c_compiler,
+            &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nexit 0\n", shell_quote(&observed_args)),
+        );
         let manifest = fake_toolchain_manifest(&tools, None);
         let guard_dir = dir.path().join("guard-bin");
         fs::create_dir_all(&guard_dir).unwrap();
 
         write_toolchain_path_aliases(&guard_dir, &manifest).unwrap();
+        let status = Command::new(guard_dir.join(C_COMPILER_ALIAS))
+            .args([
+                TOOLCHAIN_ALIAS_STATIC_PIE_CRT_OBJECT,
+                TOOLCHAIN_ALIAS_STATIC_PIE_FLAG,
+                "input.o",
+            ])
+            .status()
+            .unwrap();
 
         let cc_alias = fs::read_to_string(guard_dir.join(C_COMPILER_ALIAS)).unwrap();
-        let runtime_unwind = guard_dir.join(TOOLCHAIN_ALIAS_RUNTIME_DIR).join(TOOLCHAIN_ALIAS_UNWIND_ARCHIVE);
-        assert!(cc_alias.contains("-L"));
+        let runtime_dir = guard_dir.join(TOOLCHAIN_ALIAS_RUNTIME_DIR);
+        let runtime_unwind = runtime_dir.join(TOOLCHAIN_ALIAS_UNWIND_ARCHIVE);
+        let runtime_crt1 = runtime_dir.join(TOOLCHAIN_ALIAS_CRT1_OBJECT);
+        let observed = fs::read_to_string(observed_args).unwrap();
+        assert!(status.success());
+        assert!(cc_alias.contains("-L\"$runtime_dir\""));
         assert!(cc_alias.contains(TOOLCHAIN_ALIAS_RUNTIME_DIR));
-        assert!(cc_alias.contains("remaining=$#"));
-        assert!(cc_alias.contains("-static-pie) set -- \"$@\" -static ;;"));
+        assert!(cc_alias.contains("rcrt1.o|*/rcrt1.o"));
+        assert!(cc_alias.contains("static_pie_normalized=false"));
+        assert!(cc_alias.contains("-static-pie) mapped_arg=\"-static\"; static_pie_normalized=true ;;"));
+        assert!(cc_alias.contains("set -- \"$@\" -no-pie"));
         assert_eq!(fs::read(&runtime_unwind).unwrap(), fs::read(&tools.unwind_archive).unwrap());
+        assert_eq!(fs::read(&runtime_crt1).unwrap(), fs::read(&tools.target_crt1).unwrap());
+        assert!(observed.contains(&runtime_crt1.to_string_lossy().to_string()));
+        assert!(observed.contains(TOOLCHAIN_ALIAS_STATIC_FLAG));
+        assert!(observed.contains(TOOLCHAIN_ALIAS_NON_PIE_FLAG));
+        assert!(!observed.contains(TOOLCHAIN_ALIAS_STATIC_PIE_CRT_OBJECT));
+        assert!(!observed.contains(TOOLCHAIN_ALIAS_STATIC_PIE_FLAG));
         assert!(!guard_dir.join(CARGO_SHIM_NAME).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_c_compiler_alias_rewrites_response_file_runtime_inputs() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let observed_args = dir.path().join("observed-cc-response-args.txt");
+        write_fake_executable(
+            &tools.c_compiler,
+            &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nexit 0\n", shell_quote(&observed_args)),
+        );
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let guard_dir = dir.path().join("guard-bin");
+        let response_file = dir.path().join("linker.rsp");
+        fs::create_dir_all(&guard_dir).unwrap();
+        fs::write(
+            &response_file,
+            format!("{}\n{}\ninput.o\n", TOOLCHAIN_ALIAS_STATIC_PIE_CRT_OBJECT, TOOLCHAIN_ALIAS_STATIC_PIE_FLAG),
+        )
+        .unwrap();
+
+        write_toolchain_path_aliases(&guard_dir, &manifest).unwrap();
+        let status = Command::new(guard_dir.join(C_COMPILER_ALIAS))
+            .arg(format!("@{}", response_file.display()))
+            .status()
+            .unwrap();
+
+        let runtime_dir = guard_dir.join(TOOLCHAIN_ALIAS_RUNTIME_DIR);
+        let runtime_response = runtime_dir.join("response-1.rsp");
+        let runtime_crt1 = runtime_dir.join(TOOLCHAIN_ALIAS_CRT1_OBJECT);
+        let observed = fs::read_to_string(observed_args).unwrap();
+        let rewritten = fs::read_to_string(&runtime_response).unwrap();
+        assert!(status.success());
+        assert!(observed.contains(&format!("@{}", runtime_response.display())));
+        assert!(observed.contains(TOOLCHAIN_ALIAS_NON_PIE_FLAG));
+        assert!(rewritten.contains(&runtime_crt1.to_string_lossy().to_string()));
+        assert!(rewritten.contains(TOOLCHAIN_ALIAS_STATIC_FLAG));
+        assert!(rewritten.contains("input.o"));
+        assert!(!rewritten.contains(TOOLCHAIN_ALIAS_STATIC_PIE_CRT_OBJECT));
+        assert!(!rewritten.contains(TOOLCHAIN_ALIAS_STATIC_PIE_FLAG));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_c_compiler_alias_rejects_missing_target_crt() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let mut manifest = fake_toolchain_manifest(&tools, None);
+        manifest
+            .members
+            .retain(|member| member.name != crate::source_toolchain_closure::NATIVE_TARGET_CRT1_NAME);
+        let guard_dir = dir.path().join("guard-bin");
+        fs::create_dir_all(&guard_dir).unwrap();
+
+        let err = write_toolchain_path_aliases(&guard_dir, &manifest).unwrap_err();
+
+        assert!(err.message().contains("missing target crt1.o member"));
+        assert!(!guard_dir.join(C_COMPILER_ALIAS).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_c_compiler_alias_rejects_ambiguous_target_crt() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let mut manifest = fake_toolchain_manifest(&tools, None);
+        manifest.members.push(fake_member(
+            crate::source_toolchain_closure::ToolchainRole::CrtObject,
+            crate::source_toolchain_closure::NATIVE_TARGET_CRT1_NAME,
+            &tools.target_crt1,
+            None,
+        ));
+        let guard_dir = dir.path().join("guard-bin");
+        fs::create_dir_all(&guard_dir).unwrap();
+
+        let err = write_toolchain_path_aliases(&guard_dir, &manifest).unwrap_err();
+
+        assert!(err.message().contains("duplicate member 'x86_64-linux-musl-crt1.o'"));
+        assert!(!guard_dir.join(C_COMPILER_ALIAS).exists());
     }
 
     #[cfg(unix)]
@@ -3723,6 +3884,7 @@ mod tests {
         sysroot: PathBuf,
         pkg_config: Option<PathBuf>,
         unwind_archive: PathBuf,
+        target_crt1: PathBuf,
     }
 
     #[cfg(unix)]
@@ -3905,12 +4067,14 @@ mod tests {
         let archiver = tool_dir.join(ARCHIVER_ALIAS);
         let ranlib = tool_dir.join(RANLIB_ALIAS);
         let unwind_archive = runtime_dir.join("libgcc_eh.a");
+        let target_crt1 = runtime_dir.join(TOOLCHAIN_ALIAS_CRT1_OBJECT);
         write_fake_executable(&rustc, &rustc_sysroot_script(&sysroot));
         write_fake_executable(&linker, "#!/bin/sh\nexit 0\n");
         write_fake_executable(&c_compiler, "#!/bin/sh\nexit 0\n");
         write_fake_executable(&archiver, "#!/bin/sh\nexit 0\n");
         write_fake_executable(&ranlib, "#!/bin/sh\nexit 0\n");
         write_text(&unwind_archive, "fake unwind archive\n").unwrap();
+        write_text(&target_crt1, "fake target crt1\n").unwrap();
         let pkg_config = include_pkg_config.then(|| {
             let path = tool_dir.join(PKG_CONFIG_ALIAS);
             write_fake_executable(&path, "#!/bin/sh\nexit 0\n");
@@ -3925,6 +4089,7 @@ mod tests {
             sysroot,
             pkg_config,
             unwind_archive,
+            target_crt1,
         }
     }
 
@@ -3948,6 +4113,12 @@ mod tests {
                 ToolchainRole::RuntimeLibrary,
                 NATIVE_HOST_LIBUNWIND_NAME,
                 &tools.unwind_archive,
+                override_digest.as_ref(),
+            ),
+            fake_member(
+                ToolchainRole::CrtObject,
+                NATIVE_TARGET_CRT1_NAME,
+                &tools.target_crt1,
                 override_digest.as_ref(),
             ),
             fake_member(ToolchainRole::Sysroot, "sysroot", &tools.sysroot, override_digest.as_ref()),
