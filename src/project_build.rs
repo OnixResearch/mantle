@@ -93,6 +93,7 @@ fn parse_selector(s: &str) -> Option<Selector> {
 }
 
 /// Find the nearest project root by walking up from `start_dir`.
+#[allow(dead_code)]
 pub fn find_project_root(start_dir: &Path) -> Option<PathBuf> {
     find_project_root_checked(start_dir).ok().flatten()
 }

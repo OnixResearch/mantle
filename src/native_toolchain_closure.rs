@@ -228,6 +228,7 @@ fn native_root_identity(
     })
 }
 
+#[allow(dead_code)]
 fn validate_native_root_capability(
     metadata: &ProviderMetadataSummary,
     role: NativeRootRole,

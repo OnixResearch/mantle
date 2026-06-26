@@ -10,6 +10,7 @@ use serde::Serialize;
 
 pub(crate) const RUST_BOOTSTRAP_PATCH_PLAN_SCHEMA: &str = "mantle-rust-bootstrap-patch-plan-v1";
 pub(crate) const MUSL_COMPILER_HOST_TRIPLE: &str = "x86_64-unknown-linux-musl";
+#[cfg(test)]
 pub(crate) const GNU_COMPILER_HOST_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 pub(crate) const SUPPORTED_MRUSTC_VERSION: &str = "0.12.0";
 pub(crate) const SUPPORTED_FIRST_STAGE_RUST_VERSION: &str = "1.90.0";
@@ -163,6 +164,7 @@ impl RustBootstrapPatchPlan {
         arguments
     }
 
+    #[cfg(test)]
     pub(crate) fn contains_operation(&self, kind: RustBootstrapPatchOperationKind) -> bool {
         self.operations.iter().any(|operation| operation.kind == kind)
     }

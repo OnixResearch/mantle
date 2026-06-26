@@ -35,7 +35,6 @@ const LINKER_ALIAS: &str = "ld";
 const ARCHIVER_ALIAS: &str = "ar";
 const RANLIB_ALIAS: &str = "ranlib";
 const PKG_CONFIG_ALIAS: &str = "pkg-config";
-const MUSL_TARGET_GCC_ALIAS: &str = "x86_64-linux-musl-gcc";
 const PRODUCED_MANTLE_FILE: &str = "mantle";
 const MANTLE_TARGET_NAME: &str = "mantle";
 const MANTLE_TARGET_KIND: &str = "bin";
@@ -2756,6 +2755,7 @@ mod tests {
 
     const FIXED_POINT_TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const FIXED_POINT_TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const MUSL_TARGET_GCC_ALIAS: &str = "x86_64-linux-musl-gcc";
     const FIXED_POINT_TEST_TOOLCHAIN_MEMBER_COUNT: usize = 4;
     const FIXED_POINT_TEST_SEED_EXCEPTION_COUNT: usize = 1;
     const FIXED_POINT_TEST_UNIT_COUNT: u64 = 2;

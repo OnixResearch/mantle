@@ -1210,18 +1210,21 @@ struct CargoLockPackageRecord {
     dependencies: Vec<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NativeTextInput {
     path: String,
     text: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NativeManifestLockInputTexts {
     manifests: Vec<NativeTextInput>,
     lockfile: NativeTextInput,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct NativeManifestLockUnsupportedBlocker {
     path: String,
@@ -1246,6 +1249,7 @@ struct NativeFeatureResolution {
     blockers: Vec<NativeFeatureResolutionBlocker>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NativeFeatureRoleResolutionRequest {
     normal: NativeFeatureResolutionRequest,
@@ -1253,6 +1257,7 @@ struct NativeFeatureRoleResolutionRequest {
     host: NativeFeatureResolutionRequest,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NativeFeatureRoleResolution {
     normal: NativeFeatureResolution,
@@ -3846,6 +3851,7 @@ fn read_native_manifest(path: &Path) -> Result<NativeManifest, String> {
     parse_native_manifest_text(&path.display().to_string(), &text)
 }
 
+#[allow(dead_code)]
 fn collect_native_manifest_lock_texts(root: &Path) -> Result<NativeManifestLockInputTexts, String> {
     let root_manifest_path = root.join("Cargo.toml");
     let root_manifest_input = read_native_text_input(&root_manifest_path, "root manifest")?;
@@ -3871,6 +3877,7 @@ fn collect_native_manifest_lock_texts(root: &Path) -> Result<NativeManifestLockI
     Ok(NativeManifestLockInputTexts { manifests, lockfile })
 }
 
+#[allow(dead_code)]
 fn read_native_text_input(path: &Path, label: &str) -> Result<NativeTextInput, String> {
     debug_assert!(!label.is_empty());
     let text = fs::read_to_string(path).map_err(|err| format!("reading native {label} {}: {err}", path.display()))?;
@@ -3880,6 +3887,7 @@ fn read_native_text_input(path: &Path, label: &str) -> Result<NativeTextInput, S
     })
 }
 
+#[allow(dead_code)]
 fn native_manifest_lock_unsupported_blockers(
     inputs: &NativeManifestLockInputTexts,
 ) -> Vec<NativeManifestLockUnsupportedBlocker> {
@@ -3893,6 +3901,7 @@ fn native_manifest_lock_unsupported_blockers(
     blockers
 }
 
+#[allow(dead_code)]
 fn native_manifest_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
     let mut blockers = Vec::new();
     let parsed = match input.text.parse::<toml::Value>() {
@@ -3924,6 +3933,7 @@ fn native_manifest_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeMa
     blockers
 }
 
+#[allow(dead_code)]
 fn native_target_table_unsupported_blockers(
     path: &str,
     target_table: Option<&toml::Value>,
@@ -3954,6 +3964,7 @@ fn native_target_table_unsupported_blockers(
     blockers
 }
 
+#[allow(dead_code)]
 fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeManifestLockUnsupportedBlocker> {
     let mut blockers = Vec::new();
     let facts = match parse_native_lockfile_text(&input.path, &input.text) {
@@ -3986,10 +3997,12 @@ fn native_lockfile_unsupported_blockers(input: &NativeTextInput) -> Vec<NativeMa
     blockers
 }
 
+#[allow(dead_code)]
 fn lock_source_supported(source: &str) -> bool {
     source.starts_with(CARGO_REGISTRY_SOURCE_PREFIX) || source.starts_with(CARGO_GIT_SOURCE_PREFIX)
 }
 
+#[allow(dead_code)]
 fn native_manifest_lock_blocker(path: &str, class: &str, message: &str) -> NativeManifestLockUnsupportedBlocker {
     debug_assert!(!path.is_empty());
     debug_assert!(!class.is_empty());
@@ -5260,6 +5273,7 @@ fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFea
     }
 }
 
+#[allow(dead_code)]
 fn resolve_native_feature_roles(request: NativeFeatureRoleResolutionRequest) -> NativeFeatureRoleResolution {
     NativeFeatureRoleResolution {
         normal: resolve_native_features(request.normal),
