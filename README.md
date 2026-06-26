@@ -1128,6 +1128,18 @@ from these recorded inputs under this sandbox and matched. It is still scoped
 release-artifact evidence; it does not claim full bootstrap reproducibility or
 global Nix-like determinism for all Mantle builds.
 
+Provider fixed-point proof evidence is release-adjacent unless it also binds to
+one packaged release binary. When `mantle release create
+--provider-fixed-point-proof <dir>` is used, Mantle now requires the provider
+proof's fixed-point stage binary BLAKE3 digest to match a bundled `--binary`
+artifact before writing manifest evidence. `mantle release verify
+--require-provider-fixed-point-proof` applies the same rule to bundled or
+external provider proof evidence and reports the matched release artifact
+relative path and digest. This proves only that the provider fixed-point proof
+matches that packaged artifact; it does not by itself prove deterministic release
+eligibility, full bootstrap reproducibility, compiler correctness, deploy
+success, or full Cargo compatibility.
+
 Later verification is bundle-local:
 
 ```bash

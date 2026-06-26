@@ -69,6 +69,12 @@ pub struct ProviderFixedPointProofArtifact {
     pub evidence_role: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderFixedPointReleaseArtifactBinding {
+    pub relative_path: String,
+    pub digest_blake3: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoleBoundedReleaseArtifact {
     pub kind: BundledArtifactKind,
@@ -117,6 +123,42 @@ pub struct ReleaseEvidenceManifest {
 pub fn canonical_release_evidence_manifest(manifest: ReleaseEvidenceManifest) -> Result<Vec<u8>, ReleaseEvidenceError> {
     validate_release_evidence_manifest(&manifest)?;
     serde_json::to_vec(&manifest).map_err(|err| parse_error(format!("serializing release evidence manifest: {err}")))
+}
+
+pub fn validate_provider_fixed_point_release_artifact_binding(
+    binaries: &[BundledArtifact],
+    provider_stage_binary_digest_blake3: &str,
+) -> Result<ProviderFixedPointReleaseArtifactBinding, ReleaseEvidenceError> {
+    validate_blake3_hex(provider_stage_binary_digest_blake3, "provider_fixed_point.stage_binary_digest_blake3")?;
+    validate_provider_binding_binary_count(binaries)?;
+    for (index_usize, artifact) in binaries.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "release evidence binary index overflowed u32")?;
+        validate_bundled_artifact(artifact, &format!("binaries[{index_u32}]"))?;
+        if artifact.digest_blake3 == provider_stage_binary_digest_blake3 {
+            return Ok(ProviderFixedPointReleaseArtifactBinding {
+                relative_path: artifact.relative_path.clone(),
+                digest_blake3: artifact.digest_blake3.clone(),
+            });
+        }
+    }
+    Err(validation_error(
+        "provider fixed-point proof stage binary digest does not match any bundled release binary artifact".to_string(),
+    ))
+}
+
+fn validate_provider_binding_binary_count(binaries: &[BundledArtifact]) -> Result<(), ReleaseEvidenceError> {
+    let binary_count = u32_count(binaries.len(), "release evidence binary artifact count overflowed u32")?;
+    if binary_count == 0 {
+        return Err(validation_error(
+            "provider fixed-point release artifact binding requires at least one binary artifact".to_string(),
+        ));
+    }
+    if binary_count > MAX_BINARY_ARTIFACTS_COUNT {
+        return Err(validation_error(format!(
+            "release evidence records {binary_count} binary artifacts, limit is {MAX_BINARY_ARTIFACTS_COUNT}"
+        )));
+    }
+    Ok(())
 }
 
 fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
@@ -781,6 +823,43 @@ mod tests {
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
 
         assert!(err.to_string().contains("must be recorded as a directory artifact"));
+    }
+
+    #[test]
+    fn provider_fixed_point_release_artifact_binding_accepts_matching_binary() {
+        let manifest = sample_manifest();
+        let stage_digest = manifest.binaries[0].digest_blake3.clone();
+
+        let binding =
+            validate_provider_fixed_point_release_artifact_binding(&manifest.binaries, &stage_digest).unwrap();
+
+        assert_eq!(binding.relative_path, "binaries/01-mantle");
+        assert_eq!(binding.digest_blake3, stage_digest);
+    }
+
+    #[test]
+    fn provider_fixed_point_release_artifact_binding_rejects_mismatch() {
+        let manifest = sample_manifest();
+        let err =
+            validate_provider_fixed_point_release_artifact_binding(&manifest.binaries, &sample_digest(12)).unwrap_err();
+
+        assert!(err.to_string().contains("does not match any bundled release binary artifact"));
+    }
+
+    #[test]
+    fn provider_fixed_point_release_artifact_binding_rejects_missing_binaries() {
+        let err = validate_provider_fixed_point_release_artifact_binding(&[], &sample_digest(12)).unwrap_err();
+
+        assert!(err.to_string().contains("at least one binary artifact"));
+    }
+
+    #[test]
+    fn provider_fixed_point_release_artifact_binding_rejects_malformed_digest() {
+        let manifest = sample_manifest();
+        let err =
+            validate_provider_fixed_point_release_artifact_binding(&manifest.binaries, "not-a-blake3").unwrap_err();
+
+        assert!(err.to_string().contains("provider_fixed_point.stage_binary_digest_blake3"));
     }
 
     #[test]

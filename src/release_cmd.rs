@@ -6,6 +6,7 @@ use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_release_claim_eligible;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
+use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
 
 use crate::errors::RunError;
 use crate::release_attestation::create_release_attestation;
@@ -385,6 +386,7 @@ fn evaluate_provider_fixed_point_proof(
             PROVIDER_FIXED_POINT_SOURCE_EXTERNAL,
             None,
             None,
+            &manifest.binaries,
         );
     }
     let Some(artifact) = &manifest.provider_fixed_point_proof else {
@@ -396,6 +398,7 @@ fn evaluate_provider_fixed_point_proof(
         PROVIDER_FIXED_POINT_SOURCE_BUNDLED,
         Some(artifact.digest_blake3.clone()),
         Some(artifact.evidence_role.clone()),
+        &manifest.binaries,
     )
 }
 
@@ -404,6 +407,7 @@ fn verify_provider_fixed_point_with_release_context(
     proof_source: &str,
     manifest_artifact_digest_blake3: Option<String>,
     bounded_evidence_role: Option<String>,
+    release_binaries: &[crate::release_evidence::BundledArtifact],
 ) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
     let artifact_digest =
         manifest_artifact_digest_blake3.or_else(|| crate::release_evidence::compute_path_blake3_digest(proof_dir).ok());
@@ -411,6 +415,38 @@ fn verify_provider_fixed_point_with_release_context(
     result.proof_source = proof_source.to_string();
     result.proof_artifact_digest_blake3 = artifact_digest;
     result.bounded_evidence_role = bounded_evidence_role;
+    bind_provider_fixed_point_release_artifact(result, release_binaries)
+}
+
+fn bind_provider_fixed_point_release_artifact(
+    mut result: crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+    release_binaries: &[crate::release_evidence::BundledArtifact],
+) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
+    if !result.valid {
+        return result;
+    }
+    let Some(stage_digest) = result.stage_binary_digest_blake3.as_deref() else {
+        result.blockers.push("provider fixed-point proof stage binary digest is missing".to_string());
+        return invalidate_provider_fixed_point_result(result);
+    };
+    match validate_provider_fixed_point_release_artifact_binding(release_binaries, stage_digest) {
+        Ok(binding) => {
+            result.release_artifact_relative_path = Some(binding.relative_path);
+            result.release_artifact_digest_blake3 = Some(binding.digest_blake3);
+            result
+        }
+        Err(err) => {
+            result.blockers.push(err.to_string());
+            invalidate_provider_fixed_point_result(result)
+        }
+    }
+}
+
+fn invalidate_provider_fixed_point_result(
+    mut result: crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
+    result.valid = false;
+    result.status = "invalid".to_string();
     result
 }
 
@@ -644,6 +680,12 @@ fn print_provider_fixed_point_summary(result: &crate::cargo_free_self_build::Pro
     }
     if let Some(digest) = &result.stage_binary_digest_blake3 {
         println!("provider fixed-point stage binary digest: {digest}");
+    }
+    if let Some(path) = &result.release_artifact_relative_path {
+        println!("provider fixed-point release artifact: {path}");
+    }
+    if let Some(digest) = &result.release_artifact_digest_blake3 {
+        println!("provider fixed-point release artifact digest: {digest}");
     }
     if let Some(digest) = &result.closure_policy_digest_blake3 {
         println!("provider fixed-point closure policy digest: {digest}");
@@ -1274,6 +1316,43 @@ mod tests {
     }
 
     #[test]
+    fn provider_fixed_point_binding_records_matching_release_artifact() {
+        let manifest = test_manifest();
+        let result = bind_provider_fixed_point_release_artifact(
+            valid_provider_fixed_point_result("b".repeat(64)),
+            &manifest.binaries,
+        );
+
+        let expected_digest = "b".repeat(64);
+
+        assert!(result.valid);
+        assert_eq!(result.status, "valid");
+        assert_eq!(result.release_artifact_relative_path.as_deref(), Some("binaries/crunch"));
+        assert_eq!(result.release_artifact_digest_blake3.as_deref(), Some(expected_digest.as_str()));
+    }
+
+    #[test]
+    fn provider_fixed_point_binding_rejects_mismatched_release_artifact() {
+        let manifest = test_manifest();
+        let result = bind_provider_fixed_point_release_artifact(
+            valid_provider_fixed_point_result("9".repeat(64)),
+            &manifest.binaries,
+        );
+
+        assert!(!result.valid);
+        assert_eq!(result.status, "invalid");
+        assert!(result.release_artifact_relative_path.is_none());
+        assert!(
+            result
+                .blockers
+                .iter()
+                .any(|blocker| blocker.contains("does not match any bundled release binary artifact")),
+            "mismatched provider proof must block required verification: {:?}",
+            result.blockers
+        );
+    }
+
+    #[test]
     fn stagex_profile_json_never_says_quorum_satisfied() {
         let result = crunch_bootstrap_core::StagexNoQuorumResult::unsatisfied(vec!["test".to_string()]);
         let json = serde_json::to_string(&result).unwrap();
@@ -1333,6 +1412,28 @@ mod tests {
         };
         let result = extract_stagex_proof_block(&manifest, bundle_dir);
         assert!(result.is_none(), "missing summary.txt must return None");
+    }
+
+    fn valid_provider_fixed_point_result(
+        stage_digest: String,
+    ) -> crate::cargo_free_self_build::ProviderFixedPointProofVerification {
+        crate::cargo_free_self_build::ProviderFixedPointProofVerification {
+            status: "valid".to_string(),
+            valid: true,
+            proof_source: "direct".to_string(),
+            proof_dir: Some(PathBuf::from("/tmp/provider-proof")),
+            proof_artifact_digest_blake3: Some("a".repeat(64)),
+            bounded_evidence_role: Some("cargo-free-source-built-handoff-evidence".to_string()),
+            meta_digest_blake3: Some("c".repeat(64)),
+            closure_policy_digest_blake3: Some("d".repeat(64)),
+            stage_binary_digest_blake3: Some(stage_digest),
+            release_artifact_relative_path: None,
+            release_artifact_digest_blake3: None,
+            stage1_unit_count: Some(1),
+            stage2_unit_count: Some(1),
+            non_claims: vec!["not-release-reproducibility".to_string()],
+            blockers: Vec::new(),
+        }
     }
 
     fn test_manifest() -> crate::release_evidence::ReleaseEvidenceManifest {

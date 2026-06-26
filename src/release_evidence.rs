@@ -26,6 +26,7 @@ use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use crunch_release_core::validate_bundled_artifact_record;
+use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
 use crunch_release_core::validate_release_reproducibility_report_artifact_names;
 use crunch_release_core::validate_release_reproducibility_report_linkage;
 
@@ -283,13 +284,39 @@ fn validate_optional_provider_fixed_point_proof(request: &ReleaseBundleCreateReq
         return Ok(());
     };
     let result = crate::cargo_free_self_build::verify_provider_fixed_point_proof_bundle(proof_dir);
-    if result.valid {
-        return Ok(());
+    if !result.valid {
+        return Err(RunError::Internal(format!(
+            "release evidence provider fixed-point proof is invalid: {}",
+            result.blockers.join("; ")
+        )));
     }
-    Err(RunError::Internal(format!(
-        "release evidence provider fixed-point proof is invalid: {}",
-        result.blockers.join("; ")
-    )))
+    validate_provider_fixed_point_matches_input_binaries(request, &result)
+}
+
+fn validate_provider_fixed_point_matches_input_binaries(
+    request: &ReleaseBundleCreateRequest,
+    result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+) -> Result<(), RunError> {
+    let Some(stage_digest) = result.stage_binary_digest_blake3.as_deref() else {
+        return Err(RunError::Internal(
+            "release evidence provider fixed-point proof stage binary digest is missing".to_string(),
+        ));
+    };
+    let binaries = build_input_binary_artifacts(&request.binary_paths)?;
+    validate_provider_fixed_point_release_artifact_binding(&binaries, stage_digest).map_err(core_error_to_run_error)?;
+    Ok(())
+}
+
+fn build_input_binary_artifacts(binary_paths: &[PathBuf]) -> Result<Vec<BundledArtifact>, RunError> {
+    let mut artifacts = Vec::with_capacity(binary_paths.len());
+    for (index_usize, binary_path) in binary_paths.iter().enumerate() {
+        let index_u32: u32 = index_usize
+            .try_into()
+            .map_err(|_| RunError::Internal("release evidence binary index overflowed u32".to_string()))?;
+        let relative = bundle_file_destination("binaries", binary_path, index_u32.saturating_add(1))?;
+        artifacts.push(build_artifact_record(binary_path, &relative, BundledArtifactKind::File)?);
+    }
+    Ok(artifacts)
 }
 
 fn copy_optional_provider_fixed_point_proof(
@@ -1074,9 +1101,9 @@ mod tests {
         let output_bundle_dir = temp.path().join("release-bundle");
 
         write_file(&source_archive, b"source-archive");
-        write_file(&binary_path, b"mantle-binary");
+        write_file(&binary_path, PROVIDER_BINARY_BYTES);
         let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
-        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        let stage2_digest = blake3::hash(PROVIDER_BINARY_BYTES).to_hex().to_string();
         write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
         write_provider_fixed_point_proof_bundle(&provider_proof_dir, PROVIDER_BINARY_BYTES);
 
@@ -1096,6 +1123,36 @@ mod tests {
         assert_eq!(provider_artifact.relative_path, "proof/provider-fixed-point");
         assert_eq!(provider_artifact.evidence_role, PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE);
         assert!(output_bundle_dir.join("proof/provider-fixed-point/meta.json").exists());
+    }
+
+    #[test]
+    fn create_rejects_provider_fixed_point_proof_for_different_binary() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let provider_proof_dir = temp.path().join("provider-fixed-point-input");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"legacy-release-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"legacy-release-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+        write_provider_fixed_point_proof_bundle(&provider_proof_dir, PROVIDER_BINARY_BYTES);
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.provider_fixed_point_proof_dir = Some(provider_proof_dir);
+        let err = create_release_evidence_bundle(&request).unwrap_err();
+
+        assert!(err.to_string().contains("does not match any bundled release binary artifact"));
+        assert!(!output_bundle_dir.join("manifest.json").exists());
     }
 
     #[test]

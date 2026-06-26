@@ -409,6 +409,14 @@ The checked-in proof bundle keeps durable copies of stage1 and stage2 under
 `binaries/`, so the packaged release binary can be the proven stage2 output
 rather than a scratch-store path that disappears when the proof exits.
 
+When `--provider-fixed-point-proof <dir>` is supplied to release creation, the
+provider proof must validate and its fixed-point stage binary digest must match
+one of those packaged `binaries/` artifacts. Required verification applies the
+same binding for bundled and external provider proof evidence and reports the
+matched release artifact path/digest. This is provider-backed artifact evidence,
+not a deterministic-release, compiler-correctness, full-bootstrap, deploy, or
+full Cargo compatibility claim.
+
 `mantle release verify` proves bundle-local integrity and proof-context by
 itself. It checks that required bundled artifacts exist, that the manifest stays
 canonical, that recorded digests still match, and that the nested proof bundle
