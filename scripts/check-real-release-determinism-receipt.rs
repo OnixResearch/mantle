@@ -152,17 +152,42 @@ impl ProofPaths {
             .and_then(|name| name.to_str())
             .ok_or_else(|| format!("release bundle has no usable directory name: {}", release_bundle.display()))?;
         let parent = release_bundle.parent().unwrap_or_else(|| Path::new("."));
-        let proof_dir = proof_dir.map(Path::to_path_buf).unwrap_or_else(|| parent.join(format!("{release_id}-proof")));
+        let (proof, sandbox) = deterministic_artifact_paths(&release_bundle, proof_dir, parent, release_id);
         let verify = verify_receipt
             .map(Path::to_path_buf)
             .unwrap_or_else(|| parent.join(format!("verify-{release_id}.json")));
         Ok(Self {
             manifest: release_bundle.join("manifest.json"),
-            proof: proof_dir.join("deterministic-build-proof.json"),
-            sandbox: proof_dir.join("deterministic-sandbox-isolation-evidence.json"),
+            proof,
+            sandbox,
             verify,
         })
     }
+}
+
+fn deterministic_artifact_paths(
+    release_bundle: &Path,
+    proof_dir: Option<&Path>,
+    parent: &Path,
+    release_id: &str,
+) -> (PathBuf, PathBuf) {
+    if let Some(proof_dir) = proof_dir {
+        return (
+            proof_dir.join("deterministic-build-proof.json"),
+            proof_dir.join("deterministic-sandbox-isolation-evidence.json"),
+        );
+    }
+    let bundled = release_bundle.join("deterministic-release");
+    let bundled_proof = bundled.join("deterministic-build-proof.json");
+    let bundled_sandbox = bundled.join("deterministic-sandbox-isolation-evidence.json");
+    if bundled_proof.is_file() && bundled_sandbox.is_file() {
+        return (bundled_proof, bundled_sandbox);
+    }
+    let sibling = parent.join(format!("{release_id}-proof"));
+    (
+        sibling.join("deterministic-build-proof.json"),
+        sibling.join("deterministic-sandbox-isolation-evidence.json"),
+    )
 }
 
 #[derive(Debug)]
@@ -238,7 +263,7 @@ fn validate_deterministic_proof(manifest: &Value, proof: &Value) -> Result<(), S
     let linkage = object_field(manifest, "proof_linkage")?;
     require_str(linkage, "selected_provider_kind", provider)?;
     require_str(linkage, "source_archive_digest_blake3", field_str(proof, "source_blake3")?)?;
-    require_str(linkage, "stage2_binary_digest_blake3", first_manifest_binary_digest(manifest)?)?;
+    require_stage2_binary_linkage(manifest)?;
     require_str(object_field(manifest, "source_archive")?, "digest_blake3", field_str(proof, "source_blake3")?)?;
     require_str(object_field(manifest, "proof_bundle")?, "digest_blake3", field_str(proof, "vendor_blake3")?)?;
     require_digest(field_str(proof, "source_blake3")?, "proof.source_blake3")?;
@@ -301,7 +326,24 @@ fn validate_verify_receipt(
         field_str(proof, "source_blake3")?,
     )?;
     require_str(object_field(verify_manifest, "proof_bundle")?, "digest_blake3", field_str(proof, "vendor_blake3")?)?;
+    validate_provider_bound_verify_receipt(verify_manifest, verify)?;
     let _ = sandbox; // Keep signature explicit: all four output documents are required.
+    Ok(())
+}
+
+fn validate_provider_bound_verify_receipt(manifest: &Value, verify: &Value) -> Result<(), String> {
+    if manifest.get("provider_fixed_point_proof").is_none() {
+        return Ok(());
+    }
+    let provider = object_field(verify, "provider_fixed_point_proof")?;
+    require_bool(provider, "valid", true)?;
+    require_str(provider, "status", "valid")?;
+    require_empty_array(provider, "blockers")?;
+    let release_path = field_str(provider, "release_artifact_relative_path")?;
+    let release_digest = field_str(provider, "release_artifact_digest_blake3")?;
+    require_digest(release_digest, "provider_fixed_point_proof.release_artifact_digest_blake3")?;
+    require_manifest_binary_pair(manifest, release_path, release_digest)?;
+    require_str(provider, "stage_binary_digest_blake3", release_digest)?;
     Ok(())
 }
 
@@ -408,11 +450,35 @@ fn runs(proof: &Value) -> Result<&[Value], String> {
     array_field(proof, "runs")
 }
 
-fn first_manifest_binary_digest(manifest: &Value) -> Result<&str, String> {
-    let binary = array_field(manifest, "binaries")?
-        .first()
-        .ok_or_else(|| "manifest.binaries must not be empty".to_string())?;
-    field_str(binary, "digest_blake3")
+fn require_stage2_binary_linkage(manifest: &Value) -> Result<(), String> {
+    let linkage = object_field(manifest, "proof_linkage")?;
+    let stage2_digest = field_str(linkage, "stage2_binary_digest_blake3")?;
+    require_digest(stage2_digest, "proof_linkage.stage2_binary_digest_blake3")?;
+    if manifest_binary_digest_exists(manifest, stage2_digest)? {
+        Ok(())
+    } else {
+        Err(format!(
+            "proof_linkage.stage2_binary_digest_blake3 {stage2_digest:?} is not present in manifest binaries"
+        ))
+    }
+}
+
+fn manifest_binary_digest_exists(manifest: &Value, expected_digest: &str) -> Result<bool, String> {
+    for binary in array_field(manifest, "binaries")? {
+        if field_str(binary, "digest_blake3")? == expected_digest {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn require_manifest_binary_pair(manifest: &Value, expected_path: &str, expected_digest: &str) -> Result<(), String> {
+    for binary in array_field(manifest, "binaries")? {
+        if field_str(binary, "relative_path")? == expected_path {
+            return require_str(binary, "digest_blake3", expected_digest);
+        }
+    }
+    Err(format!("provider-bound release artifact {expected_path:?} is not present in manifest binaries"))
 }
 
 fn require_sandbox_profile(profile: &str, field: &str) -> Result<(), String> {
