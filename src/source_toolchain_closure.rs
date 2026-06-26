@@ -91,6 +91,10 @@ pub(crate) const NATIVE_TARGET_CRT1_NAME: &str = "x86_64-linux-musl-crt1.o";
 pub(crate) const NATIVE_TARGET_LIBGCC_NAME: &str = "x86_64-linux-musl-libgcc_s.so.1";
 pub(crate) const NATIVE_TARGET_LIBUNWIND_NAME: &str = "x86_64-linux-musl-libunwind.a";
 pub(crate) const NATIVE_TARGET_LIBC_NAME: &str = "x86_64-linux-musl-libc.so";
+pub(crate) const SOURCE_BUILT_C_COMPILER_ROUTE_ENV: &str = "MANTLE_SOURCE_BUILT_C_COMPILER_ROUTE";
+const C_COMPILER_FAMILY_CLANG: &str = "clang";
+const C_COMPILER_FAMILY_GCC: &str = "gcc";
+const C_COMPILER_FAMILY_UNKNOWN: &str = "unknown";
 const REQUIRED_NATIVE_CLOSURE_MEMBERS: &[&str] = &[
     NATIVE_RUSTC_NAME,
     NATIVE_HOST_CC_NAME,
@@ -398,6 +402,17 @@ pub(crate) struct NativeClosureCandidateMember {
     pub(crate) build_receipt: ToolchainBuildReceiptIdentity,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ReceiptBoundCCompilerRoute {
+    pub(crate) role: ToolchainRole,
+    pub(crate) name: String,
+    pub(crate) execution_path: String,
+    pub(crate) content_digest_blake3: String,
+    pub(crate) source: ToolchainSourceIdentity,
+    pub(crate) build_receipt: ToolchainBuildReceiptIdentity,
+    pub(crate) compiler_family: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct NativeClosureMaterialization {
     pub(crate) manifest: ToolchainClosureManifest,
@@ -431,6 +446,7 @@ pub(crate) enum ToolchainClosureErrorKind {
     MissingSource,
     MissingBuildReceipt,
     MissingSeedException,
+    AmbiguousCCompilerRoute,
     PlaceholderSeedException,
     HostToolLeakage,
     InvalidRustProvider,
@@ -540,6 +556,36 @@ pub(crate) fn enforce_observed_toolchain_inputs(
         require_observed_input_declared(&normalized, input)?;
     }
     validation_from_normalized_manifest(&normalized)
+}
+
+pub(crate) fn select_receipt_bound_c_compiler_route(
+    manifest: &ToolchainClosureManifest,
+) -> Result<ReceiptBoundCCompilerRoute, ToolchainClosureError> {
+    let normalized = normalize_manifest(manifest)?;
+    let routes = normalized
+        .members
+        .iter()
+        .filter(|member| member.role == ToolchainRole::CCompiler)
+        .map(receipt_bound_c_compiler_route_from_member)
+        .collect::<Result<Vec<_>, _>>()?;
+    select_c_compiler_route_from_routes(routes)
+}
+
+pub(crate) fn validate_receipt_bound_c_compiler_route(
+    route: &ReceiptBoundCCompilerRoute,
+) -> Result<(), ToolchainClosureError> {
+    if route.role != ToolchainRole::CCompiler {
+        return Err(error(
+            ToolchainClosureErrorKind::MissingRequiredRole,
+            format!("receipt-bound C compiler route role must be CCompiler, got {:?}", route.role),
+        ));
+    }
+    validate_non_empty("C compiler route name", &route.name)?;
+    validate_absolute_path("C compiler route execution_path", &route.execution_path)?;
+    validate_blake3_hex("C compiler route content_digest_blake3", &route.content_digest_blake3)?;
+    validate_source_identity(&route.source)?;
+    validate_receipt_identity(&route.build_receipt)?;
+    validate_non_empty("C compiler route compiler_family", &route.compiler_family)
 }
 
 pub(crate) fn materialize_source_built_native_closure(
@@ -700,6 +746,78 @@ fn missing_native_closure_members(candidates: &[NativeClosureCandidateMember]) -
         .filter(|required| !present.contains(required))
         .map(ToOwned::to_owned)
         .collect()
+}
+
+fn receipt_bound_c_compiler_route_from_member(
+    member: &ToolchainClosureMember,
+) -> Result<ReceiptBoundCCompilerRoute, ToolchainClosureError> {
+    debug_assert_eq!(member.role, ToolchainRole::CCompiler);
+    let source = member.source.clone().ok_or_else(|| {
+        error(
+            ToolchainClosureErrorKind::MissingSource,
+            format!("source-built C compiler member '{}' lacks source", member.name),
+        )
+    })?;
+    let build_receipt = member.build_receipt.clone().ok_or_else(|| {
+        error(
+            ToolchainClosureErrorKind::MissingBuildReceipt,
+            format!("source-built C compiler member '{}' lacks build receipt", member.name),
+        )
+    })?;
+    Ok(ReceiptBoundCCompilerRoute {
+        role: member.role,
+        name: member.name.clone(),
+        execution_path: member.execution_path.clone(),
+        content_digest_blake3: member.content_digest_blake3.clone(),
+        source,
+        build_receipt,
+        compiler_family: c_compiler_family(member).to_string(),
+    })
+}
+
+fn select_c_compiler_route_from_routes(
+    routes: Vec<ReceiptBoundCCompilerRoute>,
+) -> Result<ReceiptBoundCCompilerRoute, ToolchainClosureError> {
+    match routes.as_slice() {
+        [] => Err(error(ToolchainClosureErrorKind::MissingRequiredRole, "missing C compiler route")),
+        [route] => Ok(route.clone()),
+        _many => select_single_clang_c_compiler_route(&routes),
+    }
+}
+
+fn select_single_clang_c_compiler_route(
+    routes: &[ReceiptBoundCCompilerRoute],
+) -> Result<ReceiptBoundCCompilerRoute, ToolchainClosureError> {
+    let clang_routes = routes
+        .iter()
+        .filter(|route| route.compiler_family == C_COMPILER_FAMILY_CLANG)
+        .cloned()
+        .collect::<Vec<_>>();
+    match clang_routes.as_slice() {
+        [route] => Ok(route.clone()),
+        [] => Err(ambiguous_c_compiler_route_error(routes, "no receipt-bound clang route was available")),
+        _many => Err(ambiguous_c_compiler_route_error(routes, "multiple receipt-bound clang routes were available")),
+    }
+}
+
+fn ambiguous_c_compiler_route_error(routes: &[ReceiptBoundCCompilerRoute], reason: &str) -> ToolchainClosureError {
+    let route_names = routes.iter().map(|route| route.name.as_str()).collect::<Vec<_>>().join(", ");
+    error(
+        ToolchainClosureErrorKind::AmbiguousCCompilerRoute,
+        format!("ambiguous C compiler route selection: {reason}; candidates: {route_names}"),
+    )
+}
+
+fn c_compiler_family(member: &ToolchainClosureMember) -> &'static str {
+    let lower_name = member.name.to_ascii_lowercase();
+    let lower_path = member.execution_path.to_ascii_lowercase();
+    if lower_name.contains(C_COMPILER_FAMILY_CLANG) || lower_path.contains(C_COMPILER_FAMILY_CLANG) {
+        return C_COMPILER_FAMILY_CLANG;
+    }
+    if lower_name.contains(C_COMPILER_FAMILY_GCC) || lower_path.contains(C_COMPILER_FAMILY_GCC) {
+        return C_COMPILER_FAMILY_GCC;
+    }
+    C_COMPILER_FAMILY_UNKNOWN
 }
 
 fn native_candidate_to_member(candidate: &NativeClosureCandidateMember) -> ToolchainClosureMember {
@@ -2679,6 +2797,52 @@ mod tests {
         assert_eq!(err.missing_members(), &[NATIVE_TARGET_RANLIB_NAME.to_string()]);
         assert!(err.message().contains("missing native closure members"));
         assert!(err.message().contains(NATIVE_TARGET_RANLIB_NAME));
+    }
+
+    #[test]
+    fn c_compiler_route_selection_records_receipt_bound_identity() {
+        let mut manifest = valid_manifest();
+        manifest.members[2].execution_path = "/toolchain/bin/x86_64-linux-musl-gcc".to_string();
+
+        let route = select_receipt_bound_c_compiler_route(&manifest).unwrap();
+
+        assert_eq!(route.role, ToolchainRole::CCompiler);
+        assert_eq!(route.name, "cc");
+        assert_eq!(route.execution_path, "/toolchain/bin/x86_64-linux-musl-gcc");
+        assert_eq!(route.content_digest_blake3, DIGEST_C);
+        assert_eq!(route.source.name, "cc-source");
+        assert_eq!(route.build_receipt.name, "cc-receipt");
+        assert_eq!(route.compiler_family, C_COMPILER_FAMILY_GCC);
+    }
+
+    #[test]
+    fn c_compiler_route_selection_prefers_single_clang_route() {
+        let mut manifest = valid_manifest();
+        manifest.members[2].execution_path = "/toolchain/bin/x86_64-linux-musl-gcc".to_string();
+        manifest.members.push(member(ToolchainRole::CCompiler, "clang", DIGEST_E, DIGEST_F));
+        let last = manifest.members.last_mut().unwrap();
+        last.execution_path = "/toolchain/bin/clang".to_string();
+
+        let route = select_receipt_bound_c_compiler_route(&manifest).unwrap();
+
+        assert_eq!(route.name, "clang");
+        assert_eq!(route.execution_path, "/toolchain/bin/clang");
+        assert_eq!(route.compiler_family, C_COMPILER_FAMILY_CLANG);
+    }
+
+    #[test]
+    fn c_compiler_route_selection_rejects_ambiguous_non_clang_routes() {
+        let mut manifest = valid_manifest();
+        manifest.members[2].execution_path = "/toolchain/bin/x86_64-linux-musl-gcc".to_string();
+        manifest.members.push(member(ToolchainRole::CCompiler, "alt-gcc", DIGEST_E, DIGEST_F));
+        let last = manifest.members.last_mut().unwrap();
+        last.execution_path = "/toolchain/bin/alt-gcc".to_string();
+
+        let err = select_receipt_bound_c_compiler_route(&manifest).unwrap_err();
+
+        assert_eq!(err.kind(), ToolchainClosureErrorKind::AmbiguousCCompilerRoute);
+        assert!(err.message().contains("no receipt-bound clang route"));
+        assert!(err.message().contains("alt-gcc"));
     }
 
     fn valid_manifest() -> ToolchainClosureManifest {

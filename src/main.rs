@@ -479,6 +479,10 @@ enum Command {
         #[arg(long)]
         no_cargo_oracle: bool,
 
+        /// Receipt-bound source-built C compiler route JSON for provider proof execution
+        #[arg(long = "source-built-c-compiler-route-json", hide = true)]
+        source_built_c_compiler_route_json: Option<String>,
+
         /// Execute the first supported lib/bin unit from the captured explicit derivation graph
         #[arg(long, conflicts_with_all = ["execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_first_supported_unit: bool,
@@ -2364,6 +2368,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         all_features,
         no_default_features,
         no_cargo_oracle,
+        source_built_c_compiler_route_json,
         execute_first_supported_unit,
         execute_first_dependency_chain,
         execute_target_topology,
@@ -2395,6 +2400,9 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         no_cargo_oracle: *no_cargo_oracle,
     };
     let receipt = rust_plan::capture_rust_plan(&options)?;
+    let selected_c_compiler_route =
+        rust_plan::receipt_bound_c_compiler_route_from_cli_json(source_built_c_compiler_route_json.as_deref())?;
+    rust_plan::set_receipt_bound_c_compiler_route_override(selected_c_compiler_route)?;
     let execution_options = |output_root: PathBuf| rust_plan::RustUnitExecutionOptions {
         rustc: rustc.clone(),
         output_root,

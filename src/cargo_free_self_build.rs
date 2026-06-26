@@ -75,6 +75,7 @@ const SOURCE_DIGEST_FIELD: &str = "source_digest";
 const SOURCE_DIGEST_ALGORITHM_FIELD: &str = "algorithm";
 const RUSTC_SYSROOT_PRINT_ARG: &str = "sysroot";
 const TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD: &str = "source_built_toolchain_closure_policy_digest_blake3";
+const SELECTED_C_COMPILER_FIELD: &str = "selected_c_compiler";
 const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source-provider-binding-v1";
 const RUST_SOURCE_PROVIDER_STATUS_ABSENT: &str = "absent";
 const RUST_SOURCE_PROVIDER_STATUS_VALIDATED: &str = "validated";
@@ -143,6 +144,7 @@ struct ExecutionToolchain {
     rustc: PathBuf,
     path_env: OsString,
     status: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 }
 
 #[derive(Debug)]
@@ -256,6 +258,7 @@ struct FixedPointStageRun {
     binary_blake3: Option<String>,
     smoke_status_code: Option<i32>,
     source_built_toolchain_closure_policy_digest_blake3: Option<String>,
+    selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
     blocker: Option<String>,
 }
 
@@ -300,6 +303,7 @@ struct FixedPointStageSummary {
     binary_blake3: Option<String>,
     smoke_status_code: Option<i32>,
     source_built_toolchain_closure_policy_digest_blake3: Option<String>,
+    selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
     blocker: Option<String>,
 }
 
@@ -855,8 +859,13 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         &loaded_rust_provider,
     )?;
 
-    let mut child =
-        run_rust_plan_child(&paths, &execution_toolchain.rustc, options.targets, &execution_toolchain.path_env)?;
+    let mut child = run_rust_plan_child(
+        &paths,
+        &execution_toolchain.rustc,
+        options.targets,
+        &execution_toolchain.path_env,
+        execution_toolchain.c_compiler_route.as_ref(),
+    )?;
     let produced = if child.blocker.is_none() {
         materialize_or_block(&paths, &mut child)?
     } else {
@@ -1323,6 +1332,7 @@ fn run_rust_plan_child(
     rustc: &Path,
     targets: &[String],
     path_env: &OsStr,
+    c_compiler_route: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<ChildRun, RunError> {
     let current_exe = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let mut command = Command::new(&current_exe);
@@ -1337,6 +1347,16 @@ fn run_rust_plan_child(
         .arg(rustc);
     for target in targets {
         command.arg("--target").arg(target);
+    }
+    let route_json = c_compiler_route
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|err| internal(format!("serialize receipt-bound C compiler route: {err}")))?;
+    if let Some(route_json) = route_json {
+        command
+            .arg("--source-built-c-compiler-route-json")
+            .arg(&route_json)
+            .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
     }
     let output = command
         .arg("--no-cargo-oracle")
@@ -1387,22 +1407,46 @@ fn execute_fixed_point_stage(
 ) -> Result<FixedPointStageRun, RunError> {
     prepare_fixed_point_stage(stage)?;
     let path_env = execution_path_env(&stage.guard_path_dir, toolchain_closure)?;
-    let output = Command::new(mantle_bin)
+    let c_compiler_route = fixed_point_c_compiler_route(toolchain_closure)?;
+    let route_json = c_compiler_route
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|err| internal(format!("serialize fixed-point receipt-bound C compiler route: {err}")))?;
+    let mut command = Command::new(mantle_bin);
+    command
         .args(&stage.command.args)
         .current_dir(&stage.command.current_dir)
         .env("CARGO", &stage.command.cargo_env_value)
         .env(RUSTC_BOOTSTRAP_ENV, "1")
-        .env("PATH", path_env)
-        .output();
+        .env("PATH", path_env);
+    if let Some(route_json) = &route_json {
+        command
+            .arg("--source-built-c-compiler-route-json")
+            .arg(route_json)
+            .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
+    }
+    let output = command.output();
     let output = match output {
         Ok(output) => output,
-        Err(err) => return blocked_fixed_point_launch(stage, mantle_bin, err, policy_digest_blake3),
+        Err(err) => {
+            return blocked_fixed_point_launch(stage, mantle_bin, err, policy_digest_blake3, c_compiler_route);
+        }
     };
     let mut blocker = None;
     record_file_write(&stage.receipt_path, &output.stdout, &mut blocker);
     record_file_write(&stage.stderr_path, &output.stderr, &mut blocker);
     record_file_write(&stage.status_path, status_text(output.status.code()).as_bytes(), &mut blocker);
-    fixed_point_stage_from_output(stage, output.status.code(), blocker, policy_digest_blake3)
+    fixed_point_stage_from_output(stage, output.status.code(), blocker, policy_digest_blake3, c_compiler_route)
+}
+
+fn fixed_point_c_compiler_route(
+    toolchain_closure: &LoadedToolchainClosure,
+) -> Result<Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>, RunError> {
+    let Some(manifest) = &toolchain_closure.manifest else {
+        return Ok(None);
+    };
+    Ok(Some(receipt_bound_c_compiler_route(manifest)?))
 }
 
 fn prepare_fixed_point_stage(stage: &FixedPointStagePlan) -> Result<(), RunError> {
@@ -1420,12 +1464,20 @@ fn blocked_fixed_point_launch(
     mantle_bin: &Path,
     err: std::io::Error,
     policy_digest_blake3: Option<&str>,
+    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<FixedPointStageRun, RunError> {
     let blocker = format!("launch {} for {}: {err}", mantle_bin.display(), stage.name);
     write_text(&stage.stderr_path, &format!("{blocker}\n"))?;
     write_text(&stage.status_path, "launch-failed\n")?;
     write_blocked_fixed_point_smoke_outputs(stage, &blocker)?;
-    Ok(blocked_fixed_point_stage_from_plan(stage, "launch-failed", None, blocker, policy_digest_blake3))
+    Ok(blocked_fixed_point_stage_from_plan(
+        stage,
+        "launch-failed",
+        None,
+        blocker,
+        policy_digest_blake3,
+        c_compiler_route,
+    ))
 }
 
 fn fixed_point_stage_from_output(
@@ -1433,9 +1485,15 @@ fn fixed_point_stage_from_output(
     status_code: Option<i32>,
     mut blocker: Option<String>,
     policy_digest_blake3: Option<&str>,
+    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<FixedPointStageRun, RunError> {
     let mut receipt = parse_receipt(&stage.receipt_path, status_code == Some(SUCCESS_EXIT_CODE))?;
-    annotate_fixed_point_stage_receipt(&stage.receipt_path, receipt.as_mut(), policy_digest_blake3)?;
+    annotate_fixed_point_stage_receipt(
+        &stage.receipt_path,
+        receipt.as_mut(),
+        policy_digest_blake3,
+        c_compiler_route.as_ref(),
+    )?;
     let execution_status = receipt_execution_status(receipt.as_ref());
     let cargo_marker_absent = !stage.cargo_marker_path.exists();
     if blocker.is_none() {
@@ -1455,6 +1513,7 @@ fn fixed_point_stage_from_output(
         blocker,
         produced,
         policy_digest_blake3,
+        c_compiler_route,
     )
 }
 
@@ -1467,6 +1526,7 @@ fn fixed_point_stage_with_artifact(
     mut blocker: Option<String>,
     produced: Option<FixedPointStageArtifact>,
     policy_digest_blake3: Option<&str>,
+    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<FixedPointStageRun, RunError> {
     if let Some(produced) = produced.as_ref() {
         if produced.smoke_status_code != SUCCESS_EXIT_CODE {
@@ -1493,6 +1553,7 @@ fn fixed_point_stage_with_artifact(
         binary_blake3: produced.as_ref().map(|value| value.digest.clone()),
         smoke_status_code: produced.as_ref().map(|value| value.smoke_status_code),
         source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
+        selected_c_compiler: c_compiler_route,
         blocker,
     })
 }
@@ -1501,17 +1562,26 @@ fn annotate_fixed_point_stage_receipt(
     receipt_path: &Path,
     receipt: Option<&mut Value>,
     policy_digest_blake3: Option<&str>,
+    c_compiler_route: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<(), RunError> {
-    let Some(policy_digest_blake3) = policy_digest_blake3 else {
+    if policy_digest_blake3.is_none() && c_compiler_route.is_none() {
         return Ok(());
-    };
+    }
     let Some(receipt) = receipt else {
         return Ok(());
     };
     let Some(object) = receipt.as_object_mut() else {
         return Err(internal("fixed-point stage receipt is not a JSON object".to_string()));
     };
-    object.insert(TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD.to_string(), Value::String(policy_digest_blake3.to_string()));
+    if let Some(policy_digest_blake3) = policy_digest_blake3 {
+        object
+            .insert(TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD.to_string(), Value::String(policy_digest_blake3.to_string()));
+    }
+    if let Some(c_compiler_route) = c_compiler_route {
+        let route_value = serde_json::to_value(c_compiler_route)
+            .map_err(|err| internal(format!("serialize selected C compiler route: {err}")))?;
+        object.insert(SELECTED_C_COMPILER_FIELD.to_string(), route_value);
+    }
     let bytes = serde_json::to_vec_pretty(receipt)
         .map_err(|err| internal(format!("serialize annotated fixed-point stage receipt: {err}")))?;
     write_bytes(receipt_path, &bytes)
@@ -1556,6 +1626,7 @@ fn blocked_fixed_point_stage_from_plan(
     status_code: Option<i32>,
     blocker: String,
     policy_digest_blake3: Option<&str>,
+    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> FixedPointStageRun {
     FixedPointStageRun {
         name: stage.name,
@@ -1574,6 +1645,7 @@ fn blocked_fixed_point_stage_from_plan(
         binary_blake3: None,
         smoke_status_code: None,
         source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
+        selected_c_compiler: c_compiler_route,
         blocker: Some(blocker),
     }
 }
@@ -1678,6 +1750,7 @@ fn stage_summary(stage: &FixedPointStageRun) -> FixedPointStageSummary {
         source_built_toolchain_closure_policy_digest_blake3: stage
             .source_built_toolchain_closure_policy_digest_blake3
             .clone(),
+        selected_c_compiler: stage.selected_c_compiler.clone(),
         blocker: stage.blocker.clone(),
     }
 }
@@ -1942,14 +2015,17 @@ fn prepare_execution_toolchain(
             rustc: requested_rustc.to_path_buf(),
             path_env: guarded_path(guard_path_dir)?,
             status: effective_source_built_toolchain_closure(toolchain_closure, rust_source_provider),
+            c_compiler_route: None,
         });
     };
     let rustc = resolve_executable(requested_rustc, "rustc")?;
     let status = enforce_receipt_bound_toolchain(&rustc, toolchain_closure, manifest)?;
+    let c_compiler_route = Some(receipt_bound_c_compiler_route(manifest)?);
     Ok(ExecutionToolchain {
         rustc,
         path_env: execution_path_env(guard_path_dir, toolchain_closure)?,
         status,
+        c_compiler_route,
     })
 }
 
@@ -2173,21 +2249,27 @@ fn toolchain_path_aliases(
         add_toolchain_alias(&mut aliases, safe_toolchain_alias(&member.name)?, &target)?;
         add_role_aliases(&mut aliases, member, &target)?;
     }
+    if let Some(c_compiler) = c_compiler_alias_target(manifest)? {
+        add_toolchain_alias(&mut aliases, C_COMPILER_ALIAS.to_string(), &c_compiler)?;
+    }
     Ok(aliases)
+}
+
+fn receipt_bound_c_compiler_route(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute, RunError> {
+    crate::source_toolchain_closure::select_receipt_bound_c_compiler_route(manifest)
+        .map_err(|err| RunError::Build(format!("source-built toolchain closure blocked: {}", err.message())))
 }
 
 fn c_compiler_alias_target(
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<Option<PathBuf>, RunError> {
-    use crate::source_toolchain_closure::ToolchainRole;
-    let members = manifest.members.iter().filter(|member| member.role == ToolchainRole::CCompiler).collect::<Vec<_>>();
-    match members.as_slice() {
-        [member] => Ok(Some(canonicalize_toolchain_path(Path::new(&member.execution_path), member.role)?)),
-        [] => Ok(None),
-        _many => Err(RunError::Build(
-            "source-built toolchain closure blocked: multiple CCompiler members for PATH alias generation".to_string(),
-        )),
-    }
+    let route = receipt_bound_c_compiler_route(manifest)?;
+    Ok(Some(canonicalize_toolchain_path(
+        Path::new(&route.execution_path),
+        crate::source_toolchain_closure::ToolchainRole::CCompiler,
+    )?))
 }
 
 fn declared_unwind_archive(
@@ -2236,7 +2318,7 @@ fn add_role_aliases(
     use crate::source_toolchain_closure::ToolchainRole;
     match member.role {
         ToolchainRole::Linker => add_toolchain_alias(aliases, LINKER_ALIAS.to_string(), target),
-        ToolchainRole::CCompiler => add_toolchain_alias(aliases, C_COMPILER_ALIAS.to_string(), target),
+        ToolchainRole::CCompiler => Ok(()),
         ToolchainRole::PkgConfig => add_toolchain_alias(aliases, PKG_CONFIG_ALIAS.to_string(), target),
         ToolchainRole::NativeHelper if member.name == ARCHIVER_ALIAS => {
             add_toolchain_alias(aliases, ARCHIVER_ALIAS.to_string(), target)
@@ -3125,6 +3207,7 @@ mod tests {
             binary_blake3: Some(binary_digest.to_string()),
             smoke_status_code: Some(SUCCESS_EXIT_CODE),
             source_built_toolchain_closure_policy_digest_blake3: policy_digest.map(ToOwned::to_owned),
+            selected_c_compiler: None,
             blocker: None,
         }
     }

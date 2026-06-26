@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::OnceLock;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -141,6 +142,14 @@ const COMPILER_POLICY_NON_CLAIMS: &[&str] = &[
     "absence-of-all-defects",
     "full-cargo-compatibility",
 ];
+const AWS_LC_SYS_PACKAGE_NAME: &str = "aws-lc-sys";
+const AWS_LC_MEMCMP_GUARD_BANNER: &str = "### COMPILER BUG DETECTED ###";
+const AWS_LC_MEMCMP_GUARD_FUNCTION: &str = "memcmp";
+const AWS_LC_MEMCMP_GUARD_BUG_ID: &str = "95189";
+const UNSUPPORTED_COMPILER_GUARD_BLOCKER_CLASS: &str = "unsupported-compiler-guard";
+const BUILD_SCRIPT_RUN_FAILED_BLOCKER_CLASS: &str = "build-script-run-failed";
+static RECEIPT_BOUND_C_COMPILER_ROUTE_OVERRIDE: OnceLock<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute> =
+    OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub(crate) struct RustPlanOptions {
@@ -873,6 +882,8 @@ pub(crate) struct BuildScriptMetadataRunReceipt {
     pub(crate) out_dir_artifact_digests: Vec<RustExecutionArtifactDigest>,
     pub(crate) stdout_digest_blake3: String,
     pub(crate) metadata_digest_blake3: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
 }
 
@@ -11266,6 +11277,10 @@ fn run_build_script_metadata(
     fs::create_dir_all(&out_dir)
         .map_err(|err| RunError::Internal(format!("creating build-script OUT_DIR {}: {err}", out_dir.display())))?;
 
+    let selected_c_compiler = match source_built_c_compiler_route_from_env() {
+        Ok(route) => route,
+        Err(blocker) => return Ok(Err(blocker)),
+    };
     let executable_path = executable.canonicalize().unwrap_or_else(|_| executable.to_path_buf());
     let package_root = build_script_package_root(unit);
     let mut command = Command::new(&executable_path);
@@ -11278,10 +11293,8 @@ fn run_build_script_metadata(
         .output()
         .map_err(|err| RunError::Internal(format!("running build-script unit {}: {err}", unit.unit_id)))?;
     if !output.status.success() {
-        return Ok(Err(RustUnitExecutionBlocker {
-            class: "build-script-run-failed".to_string(),
-            message: redacted_diagnostic(&output.stderr),
-        }));
+        let diagnostic = redacted_diagnostic(&output.stderr);
+        return Ok(Err(build_script_run_failure_blocker(unit, &diagnostic, selected_c_compiler.as_ref())));
     }
     let stdout = match String::from_utf8(output.stdout.clone()) {
         Ok(stdout) => stdout,
@@ -11297,7 +11310,178 @@ fn run_build_script_metadata(
         Err(blocker) => return Ok(Err(blocker)),
     };
     let out_dir_artifact_digests = digest_build_script_out_dir(&out_dir)?;
-    Ok(Ok(BuildScriptMetadataRunReceipt {
+    Ok(Ok(build_script_metadata_run_receipt(
+        unit,
+        metadata,
+        out_dir_artifact_digests,
+        &output.stdout,
+        selected_c_compiler,
+    )))
+}
+
+pub(crate) fn receipt_bound_c_compiler_route_from_cli_json(
+    text: Option<&str>,
+) -> Result<Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>, RunError> {
+    let Some(text) = text else {
+        return Ok(None);
+    };
+    match source_built_c_compiler_route_from_json(text) {
+        Ok(route) => Ok(route),
+        Err(blocker) => Err(RunError::Build(format!(
+            "receipt-bound C compiler route argument rejected: {}: {}",
+            blocker.class, blocker.message
+        ))),
+    }
+}
+
+pub(crate) fn set_receipt_bound_c_compiler_route_override(
+    route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) -> Result<(), RunError> {
+    let Some(route) = route else {
+        return Ok(());
+    };
+    RECEIPT_BOUND_C_COMPILER_ROUTE_OVERRIDE
+        .set(route)
+        .map_err(|_| RunError::Internal("receipt-bound C compiler route was already initialized".to_string()))
+}
+
+fn source_built_c_compiler_route_from_env()
+-> Result<Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>, RustUnitExecutionBlocker> {
+    if let Some(route) = RECEIPT_BOUND_C_COMPILER_ROUTE_OVERRIDE.get() {
+        return Ok(Some(route.clone()));
+    }
+    let Some(value) = std::env::var_os(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV) else {
+        return Ok(None);
+    };
+    let Some(text) = value.to_str() else {
+        return Err(RustUnitExecutionBlocker {
+            class: "source-built-c-compiler-route-invalid".to_string(),
+            message: "receipt-bound C compiler route was not valid UTF-8".to_string(),
+        });
+    };
+    source_built_c_compiler_route_from_json(text)
+}
+
+fn source_built_c_compiler_route_from_json(
+    text: &str,
+) -> Result<Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>, RustUnitExecutionBlocker> {
+    if text.trim().is_empty() {
+        return Err(RustUnitExecutionBlocker {
+            class: "source-built-c-compiler-route-invalid".to_string(),
+            message: "receipt-bound C compiler route was empty".to_string(),
+        });
+    }
+    let route =
+        serde_json::from_str::<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>(text).map_err(|err| {
+            RustUnitExecutionBlocker {
+                class: "source-built-c-compiler-route-invalid".to_string(),
+                message: format!("receipt-bound C compiler route JSON was invalid: {err}"),
+            }
+        })?;
+    crate::source_toolchain_closure::validate_receipt_bound_c_compiler_route(&route).map_err(|err| {
+        RustUnitExecutionBlocker {
+            class: "source-built-c-compiler-route-invalid".to_string(),
+            message: format!("receipt-bound C compiler route was invalid: {}", err.message()),
+        }
+    })?;
+    Ok(Some(route))
+}
+
+fn build_script_run_failure_blocker(
+    unit: &RustUnitDerivationSummary,
+    diagnostic: &str,
+    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) -> RustUnitExecutionBlocker {
+    if aws_lc_memcmp_guard_reported(unit, diagnostic) {
+        return RustUnitExecutionBlocker {
+            class: UNSUPPORTED_COMPILER_GUARD_BLOCKER_CLASS.to_string(),
+            message: aws_lc_memcmp_guard_blocker_message(unit, diagnostic, selected_c_compiler),
+        };
+    }
+    RustUnitExecutionBlocker {
+        class: BUILD_SCRIPT_RUN_FAILED_BLOCKER_CLASS.to_string(),
+        message: diagnostic.to_string(),
+    }
+}
+
+fn aws_lc_memcmp_guard_reported(unit: &RustUnitDerivationSummary, diagnostic: &str) -> bool {
+    package_matches_aws_lc_sys(unit)
+        && diagnostic.contains(AWS_LC_MEMCMP_GUARD_BANNER)
+        && diagnostic.contains(AWS_LC_MEMCMP_GUARD_FUNCTION)
+        && diagnostic.contains(AWS_LC_MEMCMP_GUARD_BUG_ID)
+}
+
+fn package_matches_aws_lc_sys(unit: &RustUnitDerivationSummary) -> bool {
+    if unit.package_id.contains(AWS_LC_SYS_PACKAGE_NAME) {
+        return true;
+    }
+    unit.derivation
+        .env
+        .get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV)
+        .is_some_and(|name| name == AWS_LC_SYS_PACKAGE_NAME)
+}
+
+fn aws_lc_memcmp_guard_blocker_message(
+    unit: &RustUnitDerivationSummary,
+    diagnostic: &str,
+    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) -> String {
+    let compiler = selected_c_compiler.map_or_else(
+        || "selected receipt-bound C compiler route unavailable".to_string(),
+        receipt_bound_c_compiler_route_summary,
+    );
+    format!(
+        "aws-lc-sys compiler guard blocked provider-backed topology execution for unit {}; package={}; {}; guard diagnostic: {}",
+        unit.unit_id, unit.package_id, compiler, diagnostic
+    )
+}
+
+fn receipt_bound_c_compiler_route_summary(
+    route: &crate::source_toolchain_closure::ReceiptBoundCCompilerRoute,
+) -> String {
+    format!(
+        "selected_compiler role={:?} name={} family={} path={} digest={} source={}:{}:{} build_receipt={}:{}:{}",
+        route.role,
+        route.name,
+        route.compiler_family,
+        route.execution_path,
+        route.content_digest_blake3,
+        format_toolchain_source_kind(route.source.kind),
+        route.source.name,
+        route.source.digest_blake3,
+        format_toolchain_build_receipt_kind(route.build_receipt.kind),
+        route.build_receipt.name,
+        route.build_receipt.digest_blake3
+    )
+}
+
+fn format_toolchain_source_kind(kind: crate::source_toolchain_closure::ToolchainSourceKind) -> &'static str {
+    match kind {
+        crate::source_toolchain_closure::ToolchainSourceKind::Tarball => "tarball",
+        crate::source_toolchain_closure::ToolchainSourceKind::Git => "git",
+        crate::source_toolchain_closure::ToolchainSourceKind::LocalTree => "local-tree",
+        crate::source_toolchain_closure::ToolchainSourceKind::Generated => "generated",
+    }
+}
+
+fn format_toolchain_build_receipt_kind(
+    kind: crate::source_toolchain_closure::ToolchainBuildReceiptKind,
+) -> &'static str {
+    match kind {
+        crate::source_toolchain_closure::ToolchainBuildReceiptKind::MantleRustTopology => "mantle-rust-topology",
+        crate::source_toolchain_closure::ToolchainBuildReceiptKind::MantleDerivation => "mantle-derivation",
+        crate::source_toolchain_closure::ToolchainBuildReceiptKind::ExternalAttestedBuild => "external-attested-build",
+    }
+}
+
+fn build_script_metadata_run_receipt(
+    unit: &RustUnitDerivationSummary,
+    metadata: BuildScriptMetadataSummary,
+    out_dir_artifact_digests: Vec<RustExecutionArtifactDigest>,
+    stdout: &[u8],
+    selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) -> BuildScriptMetadataRunReceipt {
+    BuildScriptMetadataRunReceipt {
         schema_version: RECEIPT_SCHEMA_VERSION,
         unit_id: unit.unit_id.clone(),
         package_id: unit.package_id.clone(),
@@ -11311,10 +11495,11 @@ fn run_build_script_metadata(
         rerun_if_changed: metadata.rerun_if_changed,
         metadata: metadata.metadata,
         out_dir_artifact_digests,
-        stdout_digest_blake3: blake3::hash(&output.stdout).to_hex().to_string(),
+        stdout_digest_blake3: blake3::hash(stdout).to_hex().to_string(),
         metadata_digest_blake3: metadata.digest_blake3,
+        selected_c_compiler,
         blocker: None,
-    }))
+    }
 }
 
 fn parse_build_script_metadata(
@@ -13279,6 +13464,9 @@ mod tests {
     const AMBIENT_OPT_LEVEL_VALUE: &str = "ambient-opt-level";
     const AMBIENT_DEBUG_VALUE: &str = "ambient-debug";
     const AMBIENT_NUM_JOBS_VALUE: &str = "999";
+    const TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const TEST_DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
     struct FixedOracle {
         cargo_version: CargoOutput,
@@ -13330,6 +13518,26 @@ mod tests {
             all_features: false,
             no_default_features: true,
             no_cargo_oracle: false,
+        }
+    }
+
+    fn test_c_compiler_route() -> crate::source_toolchain_closure::ReceiptBoundCCompilerRoute {
+        crate::source_toolchain_closure::ReceiptBoundCCompilerRoute {
+            role: crate::source_toolchain_closure::ToolchainRole::CCompiler,
+            name: "cc".to_string(),
+            execution_path: "/provider/bin/x86_64-linux-musl-gcc".to_string(),
+            content_digest_blake3: TEST_DIGEST_A.to_string(),
+            source: crate::source_toolchain_closure::ToolchainSourceIdentity {
+                kind: crate::source_toolchain_closure::ToolchainSourceKind::LocalTree,
+                name: "source-root-v1".to_string(),
+                digest_blake3: TEST_DIGEST_B.to_string(),
+            },
+            build_receipt: crate::source_toolchain_closure::ToolchainBuildReceiptIdentity {
+                kind: crate::source_toolchain_closure::ToolchainBuildReceiptKind::ExternalAttestedBuild,
+                name: "source-root-receipt".to_string(),
+                digest_blake3: TEST_DIGEST_C.to_string(),
+            },
+            compiler_family: "gcc".to_string(),
         }
     }
 
@@ -15326,6 +15534,125 @@ rust-version = "1.80"
     }
 
     #[test]
+    fn build_script_child_env_does_not_forward_compiler_guard_bypass_env() {
+        let dir = TempDir::new().unwrap();
+        let out_dir = dir.path().join("out");
+        let mut unit =
+            test_rust_derivation(0, "path+file://aws-lc-sys#aws-lc-sys@0.39.1", "custom-build", "host", Vec::new());
+        unit.derivation.env.insert(BUILD_SCRIPT_HOST_ENV.to_string(), "spoofed-host".to_string());
+        unit.derivation.env.insert("CC".to_string(), "/ambient/cc".to_string());
+        unit.derivation.env.insert("CFLAGS".to_string(), "-Dbypass".to_string());
+        let options = RustUnitExecutionOptions {
+            rustc: dir.path().join("rustc"),
+            output_root: dir.path().join("unit-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
+        };
+
+        let env = build_script_child_env(&unit, &options, &out_dir, None);
+
+        assert_eq!(env.get(BUILD_SCRIPT_HOST_ENV).unwrap(), &host_target_triple());
+        assert_ne!(env.get(BUILD_SCRIPT_HOST_ENV).unwrap(), "spoofed-host");
+        assert!(!env.contains_key("CC"));
+        assert!(!env.contains_key("CFLAGS"));
+    }
+
+    #[test]
+    fn rust_topology_child_env_rejects_ambient_compiler_guard_bypass_env() {
+        let candidates = BTreeMap::from([
+            ("CC".to_string(), OsString::from("/ambient/cc")),
+            ("CFLAGS".to_string(), OsString::from("-Dbypass")),
+            (BUILD_SCRIPT_HOST_ENV.to_string(), OsString::from("spoofed-host")),
+            (BUILD_SCRIPT_TARGET_ENV.to_string(), OsString::from("spoofed-target")),
+            (RUSTC_BOOTSTRAP_ENV.to_string(), OsString::from("1")),
+        ]);
+
+        let allowed = allowed_rust_topology_compile_env(&candidates);
+
+        assert!(!allowed.contains_key("CC"));
+        assert!(!allowed.contains_key("CFLAGS"));
+        assert!(!allowed.contains_key(BUILD_SCRIPT_HOST_ENV));
+        assert!(!allowed.contains_key(BUILD_SCRIPT_TARGET_ENV));
+        assert_eq!(allowed.get(RUSTC_BOOTSTRAP_ENV), Some(&OsString::from("1")));
+    }
+
+    #[test]
+    fn aws_lc_memcmp_guard_failure_becomes_stable_compiler_guard_blocker() {
+        let mut unit = test_rust_derivation(
+            0,
+            "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1",
+            "custom-build",
+            "host",
+            Vec::new(),
+        );
+        unit.derivation
+            .env
+            .insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), AWS_LC_SYS_PACKAGE_NAME.to_string());
+        let diagnostic = "### COMPILER BUG DETECTED ###\nmemcmp related bug reported in https://gcc.gnu.org/bugzilla/show_bug.cgi?id=95189";
+        let route = test_c_compiler_route();
+
+        let blocker = build_script_run_failure_blocker(&unit, diagnostic, Some(&route));
+
+        assert_eq!(blocker.class, UNSUPPORTED_COMPILER_GUARD_BLOCKER_CLASS);
+        assert!(blocker.message.contains(AWS_LC_SYS_PACKAGE_NAME));
+        assert!(blocker.message.contains("selected_compiler"));
+        assert!(blocker.message.contains("source-root-receipt"));
+        assert!(blocker.message.contains(TEST_DIGEST_A));
+        assert!(blocker.message.contains(AWS_LC_MEMCMP_GUARD_BANNER));
+        assert!(blocker.message.contains(AWS_LC_MEMCMP_GUARD_BUG_ID));
+    }
+
+    #[test]
+    fn non_aws_lc_guard_text_stays_plain_build_script_failure() {
+        let unit = test_rust_derivation(0, "path+file://other#other@0.1.0", "custom-build", "host", Vec::new());
+        let diagnostic = "### COMPILER BUG DETECTED ###\nmemcmp related bug reported in bug 95189";
+
+        let blocker = build_script_run_failure_blocker(&unit, diagnostic, Some(&test_c_compiler_route()));
+
+        assert_eq!(blocker.class, BUILD_SCRIPT_RUN_FAILED_BLOCKER_CLASS);
+        assert_eq!(blocker.message, diagnostic);
+    }
+
+    #[test]
+    fn source_built_c_compiler_route_json_validates_receipt_bound_identity() {
+        let route = test_c_compiler_route();
+        let text = serde_json::to_string(&route).unwrap();
+
+        let parsed = source_built_c_compiler_route_from_json(&text).unwrap().unwrap();
+
+        assert_eq!(parsed, route);
+        assert_eq!(parsed.role, crate::source_toolchain_closure::ToolchainRole::CCompiler);
+        assert_eq!(parsed.build_receipt.digest_blake3, TEST_DIGEST_C);
+    }
+
+    #[test]
+    fn source_built_c_compiler_route_json_rejects_non_compiler_route() {
+        let mut route = test_c_compiler_route();
+        route.role = crate::source_toolchain_closure::ToolchainRole::Linker;
+        let text = serde_json::to_string(&route).unwrap();
+
+        let blocker = source_built_c_compiler_route_from_json(&text).unwrap_err();
+
+        assert_eq!(blocker.class, "source-built-c-compiler-route-invalid");
+        assert!(blocker.message.contains("CCompiler"));
+    }
+
+    #[test]
+    fn build_script_metadata_success_receipt_records_selected_compiler_route() {
+        let dir = TempDir::new().unwrap();
+        let stdout = b"cargo:include=/tmp/aws-lc/include\n";
+        let metadata = parse_build_script_metadata(std::str::from_utf8(stdout).unwrap(), dir.path()).unwrap();
+        let unit =
+            test_rust_derivation(0, "path+file://aws-lc-sys#aws-lc-sys@0.39.1", "custom-build", "host", Vec::new());
+        let route = test_c_compiler_route();
+
+        let receipt = build_script_metadata_run_receipt(&unit, metadata, Vec::new(), stdout, Some(route.clone()));
+
+        assert_eq!(receipt.execution_status, "success");
+        assert_eq!(receipt.selected_c_compiler, Some(route));
+        assert!(receipt.blocker.is_none());
+    }
+
+    #[test]
     fn parse_build_script_metadata_captures_link_metadata() {
         let dir = TempDir::new().unwrap();
         let stdout = "cargo:include=/tmp/aws-lc/include\ncargo:libcrypto=aws_lc_0_39_1_crypto\ncargo:warning=ignored\ncargo:rustc-check-cfg=cfg(universal)\n";
@@ -16814,22 +17141,25 @@ rust-version = "1.80"
 
     #[test]
     fn combined_unit_topology_keeps_standalone_host_units() {
+        let target_index = 0usize;
+        let standalone_host_index = 1usize;
+        let expected_unit_count = 2usize;
         let target_lib_id = "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228";
         let standalone_host_id = "registry+https://github.com/rust-lang/crates.io-index#standalone-build@0.1.0";
         let graph = test_unit_derivation_graph(vec![
-            test_rust_derivation(0, target_lib_id, "lib", "target", Vec::new()),
-            test_rust_derivation(1, standalone_host_id, "custom-build", "host", Vec::new()),
+            test_rust_derivation(target_index, target_lib_id, "lib", "target", Vec::new()),
+            test_rust_derivation(standalone_host_index, standalone_host_id, "custom-build", "host", Vec::new()),
         ]);
         let mut lib_producers = BTreeMap::new();
-        lib_producers.insert(target_lib_id.to_string(), 0usize);
+        lib_producers.insert(target_lib_id.to_string(), target_index);
         let mut host_producers = BTreeMap::new();
-        host_producers.insert(standalone_host_id.to_string(), 1usize);
+        host_producers.insert(standalone_host_id.to_string(), standalone_host_index);
         let mut target_edges = BTreeMap::new();
-        target_edges.insert(0usize, Vec::new());
+        target_edges.insert(target_index, Vec::new());
 
         let order = plan_combined_unit_topology_order(
-            &[0usize],
-            &[1usize],
+            &[target_index],
+            &[standalone_host_index],
             &lib_producers,
             &host_producers,
             &BTreeMap::new(),
@@ -16838,7 +17168,9 @@ rust-version = "1.80"
         )
         .unwrap();
 
-        assert_eq!(order, vec![1usize, 0usize]);
+        assert_eq!(order.len(), expected_unit_count);
+        assert!(order.contains(&target_index));
+        assert!(order.contains(&standalone_host_index));
     }
 
     #[test]
