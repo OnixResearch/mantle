@@ -25,7 +25,7 @@ use crate::witness_handoff::WitnessRequestDocument;
 pub(crate) const WITNESS_REBUILD_AUDIT_SCHEMA: &str = "mantle-witness-rebuild-audit-v1";
 pub(crate) const WITNESS_SCRATCH_ENV: &str = "MANTLE_WITNESS_SCRATCH_DIR";
 const MAX_EXPECTED_OUTPUTS: u32 = 16;
-const SUPPORTED_WORKFLOW_OUTPUT_COUNT: u32 = 1;
+const PROOF_BINARY_CANDIDATE_LIMIT: usize = 3;
 const SCRATCH_REPO_DIR_NAME: &str = "source-tree";
 const SCRATCH_REBUILT_OUTPUTS_DIR_NAME: &str = "rebuilt-outputs";
 const SCRATCH_PROOF_BUNDLE_DIR_NAME: &str = "proof-bundle";
@@ -112,6 +112,7 @@ pub(crate) struct WitnessRebuildPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WitnessRebuildExecution {
     pub rebuilt_output_paths: Vec<PathBuf>,
+    pub rebuilt_output_error: Option<String>,
     pub workflow_driver_path: PathBuf,
     pub output: Output,
     pub started_unix_ms: u64,
@@ -171,7 +172,23 @@ struct RequestArtifactPaths {
 
 #[derive(Debug, Deserialize)]
 struct ProofBundleManifest {
+    #[serde(default)]
+    binaries: Option<ProofBundleBinaries>,
     stage2: ProofBundleStage,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProofBundleBinaries {
+    #[serde(default)]
+    stage1: Option<ProofBundleBinary>,
+    #[serde(default)]
+    stage2: Option<ProofBundleBinary>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProofBundleBinary {
+    path: String,
+    digest_blake3: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -182,6 +199,13 @@ struct ProofBundleStage {
 #[derive(Debug, Deserialize)]
 struct ProofStageReport {
     output_binary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RebuiltOutputCandidate {
+    role: &'static str,
+    path: PathBuf,
+    digest_blake3: String,
 }
 
 pub(crate) fn default_witness_scratch_dir(request_dir: &Path) -> Result<PathBuf, RunError> {
@@ -252,13 +276,10 @@ pub(crate) fn run_witness_rebuild_workflow(plan: &WitnessRebuildPlan) -> Result<
     })?;
     let finished_unix_ms = unix_time_ms_now()?;
     write_command_logs(plan, &output)?;
-    let rebuilt_output_paths = if output.status.success() {
-        collect_rebuilt_output_paths(plan)?
-    } else {
-        Vec::new()
-    };
+    let (rebuilt_output_paths, rebuilt_output_error) = collect_workflow_rebuilt_outputs(plan, &output);
     Ok(WitnessRebuildExecution {
         rebuilt_output_paths,
+        rebuilt_output_error,
         workflow_driver_path,
         output,
         started_unix_ms,
@@ -273,7 +294,20 @@ pub(crate) fn validate_successful_rebuild(
     if !execution.output.status.success() {
         return Err(RunError::Build(format_workflow_failure(execution)));
     }
+    if let Some(message) = &execution.rebuilt_output_error {
+        return Err(RunError::Build(message.clone()));
+    }
     validate_rebuilt_output_digests(&plan.expected_outputs, &execution.rebuilt_output_paths)
+}
+
+fn collect_workflow_rebuilt_outputs(plan: &WitnessRebuildPlan, output: &Output) -> (Vec<PathBuf>, Option<String>) {
+    if !output.status.success() {
+        return (Vec::new(), None);
+    }
+    match collect_rebuilt_output_paths(plan) {
+        Ok(paths) => (paths, None),
+        Err(err) => (Vec::new(), Some(err.message().to_string())),
+    }
 }
 
 pub(crate) fn build_success_audit_meta(
@@ -652,55 +686,198 @@ fn write_command_logs(plan: &WitnessRebuildPlan, output: &Output) -> Result<(), 
 }
 
 fn collect_rebuilt_output_paths(plan: &WitnessRebuildPlan) -> Result<Vec<PathBuf>, RunError> {
-    let proof_manifest_path = plan.scratch_layout.proof_bundle_dir.join(PROOF_MANIFEST_FILE_NAME);
-    let manifest_bytes = std::fs::read(&proof_manifest_path)
-        .map_err(|err| RunError::Build(format!("reading {}: {err}", proof_manifest_path.display())))?;
-    let proof_manifest: ProofBundleManifest = serde_json::from_slice(&manifest_bytes)
-        .map_err(|err| RunError::Build(format!("parsing {}: {err}", proof_manifest_path.display())))?;
-    let stage2_binary_path = resolve_proof_bundle_artifact_path(
-        &plan.scratch_layout.proof_bundle_dir,
-        &proof_manifest.stage2.report.output_binary,
-    )?;
-    if !stage2_binary_path.is_file() {
-        return Err(RunError::Build(format!(
-            "witness rebuild workflow did not produce stage2 binary: {}",
-            stage2_binary_path.display()
-        )));
-    }
-    let expected_count_u32 = u32::try_from(plan.expected_outputs.len())
-        .map_err(|_| RunError::Internal("expected rebuilt output count overflowed u32".to_string()))?;
-    if expected_count_u32 != SUPPORTED_WORKFLOW_OUTPUT_COUNT {
-        return Err(RunError::Build(format!(
-            "rebuilt output count mismatch: supported workflow produces {SUPPORTED_WORKFLOW_OUTPUT_COUNT} output, request expects {expected_count_u32}"
-        )));
-    }
-    let expected_output = plan.expected_outputs.first().ok_or_else(|| {
-        RunError::Internal("witness rebuild expected outputs unexpectedly empty after validation".to_string())
-    })?;
-    let staged_output_path = plan
-        .scratch_layout
-        .rebuilt_outputs_dir
-        .join(parse_request_relative_path(&expected_output.published_name, "published output")?);
-    copy_rebuilt_output(&stage2_binary_path, &staged_output_path)?;
-    Ok(vec![staged_output_path])
+    let proof_manifest = load_proof_bundle_manifest(&plan.scratch_layout.proof_bundle_dir)?;
+    let candidates = collect_rebuilt_output_candidates(&plan.scratch_layout.proof_bundle_dir, &proof_manifest)?;
+    copy_matching_rebuilt_outputs(plan, &candidates)
 }
 
-fn resolve_proof_bundle_artifact_path(proof_bundle_dir: &Path, recorded_path: &str) -> Result<PathBuf, RunError> {
-    if recorded_path.trim().is_empty() {
-        return Err(RunError::Build("proof manifest stage2 output_binary is empty".to_string()));
+fn load_proof_bundle_manifest(proof_bundle_dir: &Path) -> Result<ProofBundleManifest, RunError> {
+    let proof_manifest_path = proof_bundle_dir.join(PROOF_MANIFEST_FILE_NAME);
+    let manifest_bytes = std::fs::read(&proof_manifest_path)
+        .map_err(|err| RunError::Build(format!("reading {}: {err}", proof_manifest_path.display())))?;
+    serde_json::from_slice(&manifest_bytes)
+        .map_err(|err| RunError::Build(format!("parsing {}: {err}", proof_manifest_path.display())))
+}
+
+fn collect_rebuilt_output_candidates(
+    proof_bundle_dir: &Path,
+    proof_manifest: &ProofBundleManifest,
+) -> Result<Vec<RebuiltOutputCandidate>, RunError> {
+    let mut candidates = Vec::with_capacity(PROOF_BINARY_CANDIDATE_LIMIT);
+    if let Some(binaries) = &proof_manifest.binaries {
+        push_manifest_binary_candidate(&mut candidates, proof_bundle_dir, binaries.stage2.as_ref(), "binaries.stage2")?;
+        push_manifest_binary_candidate(&mut candidates, proof_bundle_dir, binaries.stage1.as_ref(), "binaries.stage1")?;
     }
+    push_legacy_stage2_candidate(&mut candidates, proof_bundle_dir, &proof_manifest.stage2.report.output_binary)?;
+    if candidates.is_empty() {
+        return Err(RunError::Build("witness rebuild proof bundle contains no rebuilt binary candidates".to_string()));
+    }
+    assert!(candidates.len() <= PROOF_BINARY_CANDIDATE_LIMIT);
+    Ok(candidates)
+}
+
+fn push_manifest_binary_candidate(
+    candidates: &mut Vec<RebuiltOutputCandidate>,
+    proof_bundle_dir: &Path,
+    binary: Option<&ProofBundleBinary>,
+    role: &'static str,
+) -> Result<(), RunError> {
+    if let Some(binary) = binary {
+        let path = resolve_contained_proof_bundle_artifact_path(proof_bundle_dir, &binary.path, role)?;
+        push_verified_candidate(candidates, role, path, Some(&binary.digest_blake3))?;
+    }
+    Ok(())
+}
+
+fn push_legacy_stage2_candidate(
+    candidates: &mut Vec<RebuiltOutputCandidate>,
+    proof_bundle_dir: &Path,
+    output_binary: &str,
+) -> Result<(), RunError> {
+    let role = "stage2.report.output_binary";
+    let path = resolve_labeled_proof_bundle_artifact_path(proof_bundle_dir, output_binary, role)?;
+    push_verified_candidate(candidates, role, path, None)
+}
+
+fn push_verified_candidate(
+    candidates: &mut Vec<RebuiltOutputCandidate>,
+    role: &'static str,
+    path: PathBuf,
+    recorded_digest: Option<&str>,
+) -> Result<(), RunError> {
+    if candidate_path_already_recorded(candidates, &path) {
+        return Ok(());
+    }
+    if !path.is_file() {
+        return Err(RunError::Build(format!("witness rebuild proof candidate {role} is missing: {}", path.display())));
+    }
+    let digest_blake3 = compute_path_blake3_digest(&path)?;
+    if let Some(recorded) = recorded_digest {
+        validate_recorded_candidate_digest(role, &path, recorded, &digest_blake3)?;
+    }
+    candidates.push(RebuiltOutputCandidate {
+        role,
+        path,
+        digest_blake3,
+    });
+    Ok(())
+}
+
+fn candidate_path_already_recorded(candidates: &[RebuiltOutputCandidate], path: &Path) -> bool {
+    candidates.iter().any(|candidate| candidate.path == path)
+}
+
+fn validate_recorded_candidate_digest(
+    role: &str,
+    path: &Path,
+    recorded_digest: &str,
+    actual_digest: &str,
+) -> Result<(), RunError> {
+    if recorded_digest == actual_digest {
+        return Ok(());
+    }
+    Err(RunError::Build(format!(
+        "proof manifest {role} digest mismatch for {}: recorded {}, got {}",
+        path.display(),
+        recorded_digest,
+        actual_digest
+    )))
+}
+
+fn copy_matching_rebuilt_outputs(
+    plan: &WitnessRebuildPlan,
+    candidates: &[RebuiltOutputCandidate],
+) -> Result<Vec<PathBuf>, RunError> {
+    let mut rebuilt_output_paths = Vec::with_capacity(plan.expected_outputs.len());
+    for expected_output in &plan.expected_outputs {
+        let candidate = select_rebuilt_output_candidate(expected_output, candidates)?;
+        let staged_output_path = plan
+            .scratch_layout
+            .rebuilt_outputs_dir
+            .join(parse_request_relative_path(&expected_output.published_name, "published output")?);
+        copy_rebuilt_output(&candidate.path, &staged_output_path)?;
+        rebuilt_output_paths.push(staged_output_path);
+    }
+    assert_eq!(rebuilt_output_paths.len(), plan.expected_outputs.len());
+    Ok(rebuilt_output_paths)
+}
+
+fn select_rebuilt_output_candidate<'a>(
+    expected_output: &ExpectedRebuiltOutput,
+    candidates: &'a [RebuiltOutputCandidate],
+) -> Result<&'a RebuiltOutputCandidate, RunError> {
+    for candidate in candidates {
+        if candidate.digest_blake3 == expected_output.expected_digest_blake3 {
+            return Ok(candidate);
+        }
+    }
+    Err(RunError::Build(format!(
+        "witness rebuild workflow did not produce proof artifact matching {} digest {}; available proof digests: {}",
+        expected_output.published_name,
+        expected_output.expected_digest_blake3,
+        format_candidate_digest_summary(candidates)
+    )))
+}
+
+fn format_candidate_digest_summary(candidates: &[RebuiltOutputCandidate]) -> String {
+    let mut parts = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        parts.push(format!("{}={}", candidate.role, candidate.digest_blake3));
+    }
+    parts.join(", ")
+}
+
+#[cfg(test)]
+fn resolve_proof_bundle_artifact_path(proof_bundle_dir: &Path, recorded_path: &str) -> Result<PathBuf, RunError> {
+    resolve_contained_proof_bundle_artifact_path(proof_bundle_dir, recorded_path, "proof manifest stage2 output_binary")
+}
+
+fn resolve_labeled_proof_bundle_artifact_path(
+    proof_bundle_dir: &Path,
+    recorded_path: &str,
+    label: &str,
+) -> Result<PathBuf, RunError> {
+    validate_non_empty_recorded_path(recorded_path, label)?;
     let path = PathBuf::from(recorded_path);
     if path.is_absolute() {
         return Ok(path);
     }
+    reject_escaping_relative_path(&path, recorded_path, label)?;
+    Ok(proof_bundle_dir.join(path))
+}
+
+fn resolve_contained_proof_bundle_artifact_path(
+    proof_bundle_dir: &Path,
+    recorded_path: &str,
+    label: &str,
+) -> Result<PathBuf, RunError> {
+    validate_non_empty_recorded_path(recorded_path, label)?;
+    let path = PathBuf::from(recorded_path);
+    if path.is_absolute() {
+        return reject_absolute_proof_bundle_path(recorded_path, label);
+    }
+    reject_escaping_relative_path(&path, recorded_path, label)?;
+    Ok(proof_bundle_dir.join(path))
+}
+
+fn validate_non_empty_recorded_path(recorded_path: &str, label: &str) -> Result<(), RunError> {
+    if recorded_path.trim().is_empty() {
+        return Err(RunError::Build(format!("{label} is empty")));
+    }
+    Ok(())
+}
+
+fn reject_absolute_proof_bundle_path(recorded_path: &str, label: &str) -> Result<PathBuf, RunError> {
+    Err(RunError::Build(format!("{label} must stay inside proof bundle: {recorded_path}")))
+}
+
+fn reject_escaping_relative_path(path: &Path, recorded_path: &str, label: &str) -> Result<(), RunError> {
     for component in path.components() {
         if matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_)) {
-            return Err(RunError::Build(format!(
-                "proof manifest stage2 output_binary must stay inside proof bundle: {recorded_path}"
-            )));
+            return Err(RunError::Build(format!("{label} must stay inside proof bundle: {recorded_path}")));
         }
     }
-    Ok(proof_bundle_dir.join(path))
+    Ok(())
 }
 
 fn copy_rebuilt_output(source_path: &Path, dest_path: &Path) -> Result<(), RunError> {
@@ -849,6 +1026,9 @@ fn audit_status_failed() -> &'static str {
 mod tests {
     use super::*;
 
+    const TEST_BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+    const TEST_REQUEST_LAYOUT_VERSION: u32 = 1;
+
     #[test]
     fn default_witness_scratch_dir_appends_work_suffix() {
         let request_dir = PathBuf::from("/tmp/request-dir");
@@ -880,6 +1060,214 @@ mod tests {
         let proof_bundle = PathBuf::from("/tmp/proof-bundle");
         let err = resolve_proof_bundle_artifact_path(&proof_bundle, "../stage2-mantle").unwrap_err();
         assert!(err.message().contains("must stay inside proof bundle"));
+    }
+
+    #[test]
+    fn collect_rebuilt_output_paths_maps_two_expected_outputs_by_digest() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let stage1_digest = write_proof_binary(&proof_bundle_dir, "binaries/stage1-mantle", b"provider-stage");
+        let stage2_digest = write_proof_binary(&proof_bundle_dir, "binaries/stage2-mantle", b"self-host-stage");
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "binaries": {
+                    "stage1": {
+                        "path": "binaries/stage1-mantle",
+                        "digest_blake3": stage1_digest.clone(),
+                    },
+                    "stage2": {
+                        "path": "binaries/stage2-mantle",
+                        "digest_blake3": stage2_digest.clone(),
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let expected_outputs = vec![
+            expected_output("binaries/01-mantle", &stage1_digest),
+            expected_output("binaries/02-stage2-mantle", &stage2_digest),
+        ];
+        let plan = witness_rebuild_test_plan(temp.path(), expected_outputs);
+
+        let rebuilt_output_paths = collect_rebuilt_output_paths(&plan).unwrap();
+
+        let expected_stage1_path = temp.path().join(SCRATCH_REBUILT_OUTPUTS_DIR_NAME).join("binaries/01-mantle");
+        let expected_stage2_path = temp.path().join(SCRATCH_REBUILT_OUTPUTS_DIR_NAME).join("binaries/02-stage2-mantle");
+        assert_eq!(rebuilt_output_paths, vec![expected_stage1_path.clone(), expected_stage2_path.clone()]);
+        assert_eq!(compute_path_blake3_digest(&expected_stage1_path).unwrap(), stage1_digest);
+        assert_eq!(compute_path_blake3_digest(&expected_stage2_path).unwrap(), stage2_digest);
+        validate_rebuilt_output_digests(&plan.expected_outputs, &rebuilt_output_paths).unwrap();
+    }
+
+    #[test]
+    fn collect_rebuilt_output_paths_preserves_one_output_legacy_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let stage2_digest = write_proof_binary(&proof_bundle_dir, "binaries/stage2-mantle", b"legacy-stage");
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let plan =
+            witness_rebuild_test_plan(temp.path(), vec![expected_output("binaries/01-stage2-mantle", &stage2_digest)]);
+
+        let rebuilt_output_paths = collect_rebuilt_output_paths(&plan).unwrap();
+
+        let expected_path = temp.path().join(SCRATCH_REBUILT_OUTPUTS_DIR_NAME).join("binaries/01-stage2-mantle");
+        assert_eq!(rebuilt_output_paths, vec![expected_path.clone()]);
+        assert_eq!(compute_path_blake3_digest(&expected_path).unwrap(), stage2_digest);
+        validate_rebuilt_output_digests(&plan.expected_outputs, &rebuilt_output_paths).unwrap();
+    }
+
+    #[test]
+    fn collect_rebuilt_output_paths_rejects_missing_expected_digest() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let stage2_digest = write_proof_binary(&proof_bundle_dir, "binaries/stage2-mantle", b"other-stage");
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "binaries": {
+                    "stage2": {
+                        "path": "binaries/stage2-mantle",
+                        "digest_blake3": stage2_digest.clone(),
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let missing_digest = "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let plan =
+            witness_rebuild_test_plan(temp.path(), vec![expected_output("binaries/missing-mantle", &missing_digest)]);
+
+        let err = collect_rebuilt_output_paths(&plan).unwrap_err();
+
+        assert!(err.message().contains("did not produce proof artifact matching binaries/missing-mantle"));
+        assert!(err.message().contains(&missing_digest));
+        assert!(err.message().contains(&stage2_digest));
+    }
+
+    #[test]
+    fn collect_rebuilt_output_paths_rejects_escaping_proof_binary_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "binaries": {
+                    "stage1": {
+                        "path": "../escape",
+                        "digest_blake3": "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let plan = witness_rebuild_test_plan(temp.path(), vec![expected_output(
+            "binaries/01-mantle",
+            &"0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
+        )]);
+
+        let err = collect_rebuilt_output_paths(&plan).unwrap_err();
+
+        assert!(err.message().contains("binaries.stage1 must stay inside proof bundle"));
+    }
+
+    #[test]
+    fn collect_rebuilt_output_paths_rejects_absolute_proof_binary_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let absolute_path = temp.path().join("outside-proof-bundle");
+        std::fs::write(&absolute_path, b"outside").unwrap();
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "binaries": {
+                    "stage1": {
+                        "path": absolute_path.display().to_string(),
+                        "digest_blake3": "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let plan = witness_rebuild_test_plan(temp.path(), vec![expected_output(
+            "binaries/01-mantle",
+            &"0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
+        )]);
+
+        let err = collect_rebuilt_output_paths(&plan).unwrap_err();
+
+        assert!(err.message().contains("binaries.stage1 must stay inside proof bundle"));
+        assert!(err.message().contains(&absolute_path.display().to_string()));
+    }
+
+    fn write_proof_binary(proof_bundle_dir: &Path, relative_path: &str, bytes: &[u8]) -> String {
+        let path = proof_bundle_dir.join(relative_path);
+        let parent = path.parent().unwrap();
+        std::fs::create_dir_all(parent).unwrap();
+        std::fs::write(&path, bytes).unwrap();
+        compute_path_blake3_digest(&path).unwrap()
+    }
+
+    fn write_proof_manifest(proof_bundle_dir: &Path, value: serde_json::Value) {
+        std::fs::write(proof_bundle_dir.join(PROOF_MANIFEST_FILE_NAME), serde_json::to_vec(&value).unwrap()).unwrap();
+    }
+
+    fn expected_output(published_name: &str, expected_digest_blake3: &str) -> ExpectedRebuiltOutput {
+        ExpectedRebuiltOutput {
+            published_name: published_name.to_string(),
+            expected_digest_blake3: expected_digest_blake3.to_string(),
+        }
+    }
+
+    fn witness_rebuild_test_plan(
+        scratch_root: &Path,
+        expected_outputs: Vec<ExpectedRebuiltOutput>,
+    ) -> WitnessRebuildPlan {
+        WitnessRebuildPlan {
+            request_dir: scratch_root.join("request"),
+            request_path: scratch_root.join("request/request.json"),
+            release_id: "test-release".to_string(),
+            request_schema: WITNESS_REQUEST_SCHEMA.to_string(),
+            request_layout_version: TEST_REQUEST_LAYOUT_VERSION,
+            request_bundle_dir: scratch_root.join("request/release-evidence/test-release"),
+            request_verification_seed_dir: scratch_root.join("request/release-verification/test-release"),
+            request_source_archive_path: scratch_root.join("request/release-evidence/test-release/source.tar"),
+            workflow_command: DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
+            workflow_version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
+            proof_mode: PROOF_MODE_FIXED_POINT.to_string(),
+            expected_outputs,
+            scratch_layout: derive_witness_rebuild_layout(scratch_root, "test-release").unwrap(),
+        }
     }
 
     #[test]

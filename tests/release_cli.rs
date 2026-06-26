@@ -3489,7 +3489,7 @@ fn witness_rebuild_cli_happy_path_writes_sidecars_and_audit() {
 }
 
 #[test]
-fn witness_rebuild_cli_rejects_rebuilt_output_digest_mismatch() {
+fn witness_rebuild_cli_rejects_unmatched_rebuilt_output_digest() {
     let (temp, bundle_dir, _manifest) = make_valid_bundle();
     let signing_key_path = temp.path().join("release.key");
     write_release_signing_key(&signing_key_path);
@@ -3544,11 +3544,11 @@ fn witness_rebuild_cli_rejects_rebuilt_output_digest_mismatch() {
         .arg("nixos-25.05")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("rebuilt output digest mismatch"));
+        .stderr(predicate::str::contains("did not produce proof artifact matching"));
 
     let audit = read_witness_rebuild_audit(&scratch_dir.join("witness-rebuild-audit/meta.json"));
     assert_eq!(audit.status, "failed");
-    assert!(audit.failure_message.unwrap().contains("rebuilt output digest mismatch"));
+    assert!(audit.failure_message.unwrap().contains("did not produce proof artifact matching"));
     assert!(!scratch_dir.join("release-verification").join("mantle-0.1.0-rc1").join("witnesses").exists());
 }
 
