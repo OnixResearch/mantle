@@ -30,7 +30,11 @@ use crate::buildservice::BuildResult;
 use crate::bwrap::Bwrap;
 use crate::sandbox::SandboxSpec;
 /// Compile-time default for the sandbox shell.
-const SANDBOX_SHELL_DEFAULT: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
+const SANDBOX_SHELL_PLACEHOLDER: &str = "/bin/sh";
+const SANDBOX_SHELL_DEFAULT: &str = match option_env!("SNIX_BUILD_SANDBOX_SHELL") {
+    Some(path) => path,
+    None => SANDBOX_SHELL_PLACEHOLDER,
+};
 const MAX_INPUT_EXPORT_DEPTH: u32 = 128;
 const MAX_INPUT_ROOTS: usize = 65_536;
 const MAX_NIX_STORE_SCAN_ENTRIES: u32 = 200_000;
@@ -43,7 +47,7 @@ enum ProvidedInputs {
 /// Resolve the sandbox shell path at runtime.
 /// Checks the `SNIX_BUILD_SANDBOX_SHELL` environment variable first,
 /// then falls back to the compile-time default. When both are the
-/// placeholder `/bin/sh`, try to discover a static busybox in common
+/// placeholder [`SANDBOX_SHELL_PLACEHOLDER`], try to discover a static busybox in common
 /// NixOS locations so sandboxed builds do not depend on the host glibc.
 fn sandbox_shell() -> String {
     let env_shell = std::env::var("SNIX_BUILD_SANDBOX_SHELL").ok();
@@ -53,11 +57,11 @@ fn sandbox_shell() -> String {
 
 fn choose_sandbox_shell(env_shell: Option<&str>, compile_default: &str, discovered_static: Option<&Path>) -> String {
     if let Some(shell_path) = env_shell {
-        if shell_path != "/bin/sh" {
+        if shell_path != SANDBOX_SHELL_PLACEHOLDER {
             return shell_path.to_string();
         }
     }
-    if compile_default != "/bin/sh" {
+    if compile_default != SANDBOX_SHELL_PLACEHOLDER {
         if compile_default_shell_exists(compile_default) {
             return compile_default.to_string();
         }
@@ -65,7 +69,7 @@ fn choose_sandbox_shell(env_shell: Option<&str>, compile_default: &str, discover
     if let Some(shell_path) = discovered_static {
         return shell_path.display().to_string();
     }
-    "/bin/sh".to_string()
+    SANDBOX_SHELL_PLACEHOLDER.to_string()
 }
 
 fn compile_default_shell_exists(compile_default: &str) -> bool {

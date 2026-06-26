@@ -29,7 +29,11 @@ use crate::oci::make_bundle;
 use crate::oci::make_spec;
 
 /// Compile-time default for the sandbox shell.
-const SANDBOX_SHELL_DEFAULT: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
+const SANDBOX_SHELL_PLACEHOLDER: &str = "/bin/sh";
+const SANDBOX_SHELL_DEFAULT: &str = match option_env!("SNIX_BUILD_SANDBOX_SHELL") {
+    Some(path) => path,
+    None => SANDBOX_SHELL_PLACEHOLDER,
+};
 
 /// Resolve the sandbox shell path at runtime.
 fn sandbox_shell() -> String {

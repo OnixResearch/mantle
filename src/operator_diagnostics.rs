@@ -9,7 +9,11 @@ use std::process::Command;
 use clap::ValueEnum;
 use serde::Serialize;
 
-const SANDBOX_SHELL_DEFAULT: &str = env!("SNIX_BUILD_SANDBOX_SHELL");
+const SANDBOX_SHELL_PLACEHOLDER: &str = "/bin/sh";
+const SANDBOX_SHELL_DEFAULT: &str = match option_env!("SNIX_BUILD_SANDBOX_SHELL") {
+    Some(path) => path,
+    None => SANDBOX_SHELL_PLACEHOLDER,
+};
 const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
 const MAX_NIX_STORE_SCAN_ENTRIES: u32 = 200_000;
 const MAX_PARENT_ASCENT: u32 = 64;
@@ -226,13 +230,13 @@ fn find_bwrap() -> Option<PathBuf> {
 
 fn check_sandbox_shell_availability() -> PreflightCheck {
     if let Some(env_shell) = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL")
-        && env_shell != "/bin/sh"
+        && env_shell != SANDBOX_SHELL_PLACEHOLDER
     {
         let env_path = PathBuf::from(env_shell);
         return check_explicit_shell("sandbox-shell", &env_path, "SNIX_BUILD_SANDBOX_SHELL");
     }
 
-    if SANDBOX_SHELL_DEFAULT != "/bin/sh" {
+    if SANDBOX_SHELL_DEFAULT != SANDBOX_SHELL_PLACEHOLDER {
         let compile_path = PathBuf::from(SANDBOX_SHELL_DEFAULT);
         if is_executable_file(&compile_path) {
             return ok_check(
