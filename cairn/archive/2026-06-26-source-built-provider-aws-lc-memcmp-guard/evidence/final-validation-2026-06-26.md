@@ -92,4 +92,35 @@ After marking V4 complete, pueue task 88 reran:
 nix run path:/home/brittonr/git/cairn#cairn -- validate --root . && nix run path:/home/brittonr/git/cairn#cairn -- gate tasks source-built-provider-aws-lc-memcmp-guard --root .
 ```
 
-Result: validation completed successfully and the tasks gate reported `"stage": "tasks"`, `"valid": true`, `"verdict": "PASS"`.
+Result: validation completed successfully and the active-change tasks gate reported `"stage": "tasks"`, `"valid": true`, `"verdict": "PASS"`.
+
+## Archive and post-archive validation
+
+Pueue task 102 archived the completed change with:
+
+```text
+CAIRN_ARCHIVE_DATE=$(date +%F) nix run path:/home/brittonr/git/cairn#cairn -- archive source-built-provider-aws-lc-memcmp-guard --root . --execute
+```
+
+After archive, the delta requirement was manually synced into `cairn/specs/rust-package-planning/spec.md` because the archive move did not modify the accepted spec.
+
+Pueue task 117 reran post-archive validation:
+
+```text
+nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+```
+
+Result:
+
+```json
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
