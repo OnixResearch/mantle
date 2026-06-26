@@ -158,3 +158,49 @@ Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.30s
   "valid": true
 }
 ```
+
+## Post-archive validation
+
+Command:
+
+```text
+nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+```
+
+Output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
+
+## Post-archive traceability bridge check
+
+Tracey coverage still has broader pre-existing missing groups, so this is not a global Tracey-green claim. The check below verifies the new accepted requirement is no longer present in Tracey's missing output after adding the bridge reference.
+
+Command/output excerpt:
+
+```text
+tracey exit status: 1
+new requirement not present in tracey missing output
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
