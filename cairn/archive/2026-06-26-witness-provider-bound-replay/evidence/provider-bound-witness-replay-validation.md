@@ -165,3 +165,155 @@ Output:
   "valid": true
 }
 ```
+
+## Follow-up: provider target propagation (2026-06-27)
+
+A fresh provider-bound helper replay showed that the generated helper wrapper was invoking `self-build --cargo-free --fixed-point` without the provider proof target. The successful packaged provider proof used `targets: ["x86_64-unknown-linux-musl"]`; the failed replay receipt had `targets: []` and stopped at the stable `unsupported-compiler-guard` blocker for `aws-lc-sys@0.39.1`.
+
+The helper now exports `CRUNCH_WITNESS_PROVIDER_TARGET`, defaults it to `x86_64-unknown-linux-musl`, rejects an explicitly empty value, and passes `--target "$CRUNCH_WITNESS_PROVIDER_TARGET"` to the generated provider-bound driver.
+
+### Validation: helper syntax
+
+Command:
+
+```sh
+bash -n scripts/rebuild-witness-request.sh
+```
+
+Output:
+
+```text
+Task 63: completed successfully
+```
+
+### Validation: focused binary witness-rebuild tests
+
+Command:
+
+```sh
+PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/home/brittonr/.cargo/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH PKG_CONFIG_PATH=/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig SNIX_BUILD_SANDBOX_SHELL=/bin/sh cargo test -p mantle --bin mantle witness_rebuild -- --nocapture
+```
+
+Output excerpt:
+
+```text
+test witness_rebuild::tests::collect_rebuilt_output_paths_uses_provider_fixed_point_candidate_by_digest ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 859 filtered out; finished in 0.02s
+```
+
+### Validation: helper and witness-rebuild CLI tests
+
+Command:
+
+```sh
+PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/home/brittonr/.cargo/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH PKG_CONFIG_PATH=/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig SNIX_BUILD_SANDBOX_SHELL=/bin/sh cargo test -p mantle --test release_cli witness_rebuild -- --nocapture
+```
+
+Output excerpt:
+
+```text
+test witness_rebuild_helper_rejects_empty_provider_target ... ok
+test witness_rebuild_helper_provider_bound_driver_passes_default_target ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 89 filtered out; finished in 0.36s
+```
+
+### Validation: provider fixed-point release fixtures
+
+Command:
+
+```sh
+PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/home/brittonr/.cargo/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH PKG_CONFIG_PATH=/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig SNIX_BUILD_SANDBOX_SHELL=/bin/sh cargo test -p mantle --test release_cli provider_fixed_point -- --nocapture
+```
+
+Output excerpt:
+
+```text
+test release_create_can_package_provider_fixed_point_proof ... ok
+test release_verify_provider_fixed_point_external_override_reports_source ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 98 filtered out; finished in 0.05s
+```
+
+### Validation: binary build
+
+Command:
+
+```sh
+PATH=/home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin:/home/brittonr/.cargo/bin:/nix/store/97vplpbajnr7x03fqh9biz5v6960sv22-clang-wrapper-21.1.8/bin:/nix/store/1sw8whfl5gfblp6r9qdkiw1b4j9fgwar-mold-2.40.4/bin:/nix/store/rvp7qlpf5jqvdckjy1afjb6aha6j8dxg-pkg-config-wrapper-0.29.2/bin:$PATH PKG_CONFIG_PATH=/nix/store/1l5jgzy26hkjz1y3apn1051asvn42sfn-openssl-3.6.1-dev/lib/pkgconfig SNIX_BUILD_SANDBOX_SHELL=/bin/sh cargo build -p mantle --bin mantle
+```
+
+Output excerpt:
+
+```text
+Compiling mantle v0.1.0 (/home/brittonr/git/mantle)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 35.83s
+```
+
+### Validation: whitespace
+
+Command:
+
+```sh
+git diff --check
+```
+
+Output:
+
+```text
+completed successfully
+```
+
+### Fresh retained-request replay after target propagation
+
+Command:
+
+```sh
+REQUEST=target/release-witness-requests/provider-bound-release-evidence-2026-06-26
+SCRATCH=target/release-witness-requests/provider-bound-release-evidence-2026-06-26.provider-bound-target-rerun.work
+CONFIG=target/release-signing/provider-bound-independent-witness-config
+PROVIDER=/home/brittonr/.cargo-target/repo-targets/mantle/rust-source-provider-musl-host-route-patch-plan-rerun38-2026-06-25/provider-out
+CLOSURE=/home/brittonr/git/mantle/target/source-built-rust-provider-fixed-point-2026-06-25/native-toolchain-closure.json
+RUSTC=/home/brittonr/.cargo-target/repo-targets/mantle/rust-source-provider-musl-host-route-patch-plan-rerun38-2026-06-25/provider-out/bin/rustc
+CLI=/home/brittonr/.cargo-target/debug/mantle
+CRUNCH_CONFIG_DIR="$CONFIG" \
+CRUNCH_WITNESS_REBUILD_CLI_BIN="$CLI" \
+CRUNCH_WITNESS_RUST_SOURCE_PROVIDER="$PROVIDER" \
+CRUNCH_WITNESS_TOOLCHAIN_CLOSURE="$CLOSURE" \
+CRUNCH_WITNESS_RUSTC="$RUSTC" \
+./scripts/rebuild-witness-request.sh \
+  --scratch-dir "$SCRATCH" \
+  "$REQUEST" \
+  --identity provider-bound-independent \
+  --system x86_64-linux \
+  --toolchain source-root-rust-provider-musl \
+  --host-class britton-desktop-local
+```
+
+Output/audit excerpts:
+
+```text
+provider-bound witness driver: /home/brittonr/git/mantle/target/release-witness-requests/provider-bound-release-evidence-2026-06-26.provider-bound-target-rerun.work/tmp/provider-bound-witness-driver.sh
+provider-bound replay inputs: enabled
+```
+
+```text
+provider-fixed-point-proof/stage1/status.txt: 0
+provider-fixed-point-proof/stage2/status.txt: 0
+provider-fixed-point-proof/meta.json: "status": "success"
+provider-fixed-point-proof/meta.json: "target_triple": "x86_64-unknown-linux-musl"
+provider-fixed-point-proof/meta.json: "binary_blake3": "465f8fdccaa7594c0f0578ef39b16cb58d21bafab92deb51cb2861aa612bd561"
+```
+
+The target propagation fix therefore gets the witness-produced provider proof past the prior `aws-lc-sys` compiler-guard blocker.
+
+The full helper replay still did **not** produce publishable witness sidecars. It failed later in the self-hosting proof while fetching bootstrap inputs:
+
+```text
+store error: build: HTTP fetch failed for https://ftpmirror.gnu.org/binutils/binutils-2.42.tar.gz: io: Network is unreachable (os error 101)
+FAILED root: bwrap
+  message: dependency binutils.drv failed
+```
+
+This replay also exposed the next provider-candidate reproducibility issue once the network blocker is cleared: the witness-produced provider binary digest from the scratch-root source tree was `465f8fdccaa7594c0f0578ef39b16cb58d21bafab92deb51cb2861aa612bd561`, while the published provider artifact `binaries/01-mantle` in the release manifest is `b4fdeca80db000a4e003513417b665ae2a1014f6752ed9ff65bb3b6b57ce48f3`. Do not claim independent witness verification until a full helper replay both completes the self-hosting proof and produces provider/self-hosting proof artifacts whose digests match the signed release outputs.

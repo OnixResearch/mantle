@@ -10,6 +10,8 @@ readonly WITNESS_DRIVER_ENV="CRUNCH_WITNESS_REBUILD_DRIVER"
 readonly WITNESS_RUST_SOURCE_PROVIDER_ENV="CRUNCH_WITNESS_RUST_SOURCE_PROVIDER"
 readonly WITNESS_TOOLCHAIN_CLOSURE_ENV="CRUNCH_WITNESS_TOOLCHAIN_CLOSURE"
 readonly WITNESS_RUSTC_ENV="CRUNCH_WITNESS_RUSTC"
+readonly WITNESS_PROVIDER_TARGET_ENV="CRUNCH_WITNESS_PROVIDER_TARGET"
+readonly DEFAULT_PROVIDER_TARGET="x86_64-unknown-linux-musl"
 readonly PROVIDER_DRIVER_WRAPPER_NAME="provider-bound-witness-driver.sh"
 readonly TMP_SUBDIR="tmp"
 readonly CARGO_TARGET_SUBDIR="cargo-target"
@@ -41,6 +43,7 @@ before the self-hosting proof by setting:
   CRUNCH_WITNESS_RUST_SOURCE_PROVIDER=/path/to/provider-out
   CRUNCH_WITNESS_TOOLCHAIN_CLOSURE=/path/to/native-toolchain-closure.json
   CRUNCH_WITNESS_RUSTC=/path/to/rustc   # optional; provider rustc is default
+  CRUNCH_WITNESS_PROVIDER_TARGET=x86_64-unknown-linux-musl   # optional
 EOF
 }
 
@@ -312,9 +315,16 @@ configure_provider_inputs() {
   local provider_dir="${!WITNESS_RUST_SOURCE_PROVIDER_ENV:-}"
   local closure_manifest="${!WITNESS_TOOLCHAIN_CLOSURE_ENV:-}"
   local rustc_path="${!WITNESS_RUSTC_ENV:-}"
+  local provider_target=""
 
   if ! provider_env_supplied; then
     return
+  fi
+
+  if [[ -v "$WITNESS_PROVIDER_TARGET_ENV" ]]; then
+    provider_target="${!WITNESS_PROVIDER_TARGET_ENV}"
+  else
+    provider_target="$DEFAULT_PROVIDER_TARGET"
   fi
 
   if [[ -z "$provider_dir" ]]; then
@@ -329,6 +339,9 @@ configure_provider_inputs() {
   if [[ -n "$rustc_path" ]]; then
     rustc_path="$(normalize_path "$rustc_path")"
   fi
+  if [[ -z "$provider_target" ]]; then
+    die "$WITNESS_PROVIDER_TARGET_ENV must not be empty"
+  fi
 
   if [[ ! -d "$provider_dir" ]]; then
     die "$WITNESS_RUST_SOURCE_PROVIDER_ENV is not a directory: $provider_dir"
@@ -342,6 +355,7 @@ configure_provider_inputs() {
 
   export "$WITNESS_RUST_SOURCE_PROVIDER_ENV=$provider_dir"
   export "$WITNESS_TOOLCHAIN_CLOSURE_ENV=$closure_manifest"
+  export "$WITNESS_PROVIDER_TARGET_ENV=$provider_target"
   if [[ -n "$rustc_path" ]]; then
     export "$WITNESS_RUSTC_ENV=$rustc_path"
   fi
@@ -380,6 +394,7 @@ run_mantle_cli() {
 : "${CRUNCH_WITNESS_PROVIDER_FIXED_POINT_PROOF_BUNDLE_DIR:?}"
 : "${CRUNCH_WITNESS_RUST_SOURCE_PROVIDER:?}"
 : "${CRUNCH_WITNESS_TOOLCHAIN_CLOSURE:?}"
+: "${CRUNCH_WITNESS_PROVIDER_TARGET:?}"
 
 if [[ -d "$CRUNCH_WITNESS_RELEASE_BUNDLE_DIR/proof/provider-fixed-point" ]]; then
   rm -rf -- "$CRUNCH_WITNESS_PROVIDER_FIXED_POINT_PROOF_BUNDLE_DIR"
@@ -390,6 +405,7 @@ if [[ -d "$CRUNCH_WITNESS_RELEASE_BUNDLE_DIR/proof/provider-fixed-point" ]]; the
     --out "$CRUNCH_WITNESS_PROVIDER_FIXED_POINT_PROOF_BUNDLE_DIR"
     --rust-source-provider "$CRUNCH_WITNESS_RUST_SOURCE_PROVIDER"
     --toolchain-closure "$CRUNCH_WITNESS_TOOLCHAIN_CLOSURE"
+    --target "$CRUNCH_WITNESS_PROVIDER_TARGET"
   )
   if [[ -n "${CRUNCH_WITNESS_RUSTC:-}" ]]; then
     provider_args+=(--rustc "$CRUNCH_WITNESS_RUSTC")

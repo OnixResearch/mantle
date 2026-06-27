@@ -67,8 +67,8 @@ const FAKE_WITNESS_DRIVER_LAUNCH_SIGNAL_CONTENT: &str = "launched";
 const PROVIDER_FIXED_POINT_SCHEMA: &str = "mantle-cargo-free-fixed-point-proof-v1";
 const RUST_SOURCE_PROVIDER_BINDING_SCHEMA: &str = "mantle-cargo-free-rust-source-provider-binding-v1";
 const PROVIDER_FIXED_POINT_BINARY_BYTES: &[u8] = b"provider-fixed-point-binary";
-const PROVIDER_FIXED_POINT_EXTERNAL_BINARY_BYTES: &[u8] = b"external-provider-fixed-point-binary";
 const PROVIDER_FIXED_POINT_STAGE_UNIT_COUNT: u32 = 2;
+const DEFAULT_PROVIDER_WITNESS_TARGET: &str = "x86_64-unknown-linux-musl";
 const TEST_BUNDLED_DETERMINISTIC_PROOF_PATH: &str = "deterministic-release/deterministic-build-proof.json";
 const TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH: &str =
     "deterministic-release/deterministic-sandbox-isolation-evidence.json";
@@ -356,14 +356,19 @@ fn make_release_bundle(include_provider_fixed_point: bool) -> (TempDir, PathBuf,
     create_minimal_release_repo(temp.path());
 
     let binary_path = temp.path().join("mantle-bin");
-    write_file(&binary_path, b"crunch-binary");
-    let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+    let binary_bytes: &[u8] = if include_provider_fixed_point {
+        PROVIDER_FIXED_POINT_BINARY_BYTES
+    } else {
+        b"crunch-binary"
+    };
+    write_file(&binary_path, binary_bytes);
+    let stage2_digest = blake3::hash(binary_bytes).to_hex().to_string();
     let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
     let proof_dir = temp.path().join("proof-input");
     write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
     let provider_proof_dir = temp.path().join("provider-fixed-point-input");
     if include_provider_fixed_point {
-        write_provider_fixed_point_proof_bundle(&provider_proof_dir, PROVIDER_FIXED_POINT_BINARY_BYTES);
+        write_provider_fixed_point_proof_bundle(&provider_proof_dir, binary_bytes);
     }
 
     let bundle_dir = temp.path().join("bundle");
@@ -656,6 +661,28 @@ fn assert_fake_witness_driver_launch_signal_absent(path: &Path) {
     assert!(!path.exists(), "fake witness driver must not record launch signal: {}", path.display());
 }
 
+fn write_fake_provider_cli_capture_shim(path: &Path) {
+    let script = r#"#!/usr/bin/env bash
+set -euo pipefail
+: "${CRUNCH_TEST_REAL_CLI:?}"
+: "${CRUNCH_TEST_CAPTURE_ARGS:?}"
+if [[ "$#" -ge 2 && "$1" == "release" && "$2" == "witness-rebuild" ]]; then
+  exec "$CRUNCH_TEST_REAL_CLI" "$@"
+fi
+: > "$CRUNCH_TEST_CAPTURE_ARGS"
+for arg in "$@"; do
+  printf '%s\n' "$arg" >> "$CRUNCH_TEST_CAPTURE_ARGS"
+done
+"#;
+    write_file(path, script.as_bytes());
+    #[cfg(unix)]
+    {
+        let mut permissions = std::fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(TEST_SCRIPT_MODE);
+        std::fs::set_permissions(path, permissions).unwrap();
+    }
+}
+
 fn write_fake_witness_rebuild_driver(path: &Path) {
     let script = r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -693,7 +720,7 @@ printf '{"stage2":{"report":{"output_binary":"%s"}}}\n' "$output_path" > "$CRUNC
     #[cfg(unix)]
     {
         let mut permissions = std::fs::metadata(path).unwrap().permissions();
-        permissions.set_mode(0o755);
+        permissions.set_mode(TEST_SCRIPT_MODE);
         std::fs::set_permissions(path, permissions).unwrap();
     }
 }
@@ -2096,7 +2123,7 @@ fn release_verify_required_provider_fixed_point_fails_when_missing() {
 fn release_verify_provider_fixed_point_external_override_reports_source() {
     let (temp, bundle_dir, manifest) = make_valid_bundle_with_provider();
     let external_proof_dir = temp.path().join("external-provider-fixed-point");
-    write_provider_fixed_point_proof_bundle(&external_proof_dir, PROVIDER_FIXED_POINT_EXTERNAL_BINARY_BYTES);
+    write_provider_fixed_point_proof_bundle(&external_proof_dir, PROVIDER_FIXED_POINT_BINARY_BYTES);
 
     let output = crunch()
         .arg("--json")
@@ -3102,6 +3129,82 @@ fn witness_rebuild_helper_check_accepts_provider_bound_inputs() {
 }
 
 #[test]
+fn witness_rebuild_helper_provider_bound_driver_passes_default_target() {
+    let (temp, bundle_dir, _manifest) = make_valid_bundle_with_provider();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    let request_dir = temp.path().join("request");
+    let scratch_dir = temp.path().join("scratch");
+    let witness_config_dir = temp.path().join("witness-config");
+    let provider_dir = temp.path().join("provider-out");
+    let closure_manifest = temp.path().join("native-toolchain-closure.json");
+    let cli_shim_path = temp.path().join("provider-cli-shim.sh");
+    let captured_args_path = temp.path().join("provider-cli-args.txt");
+    std::fs::create_dir_all(&provider_dir).unwrap();
+    write_file(&closure_manifest, br#"{}"#);
+    write_fake_provider_cli_capture_shim(&cli_shim_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("witness-export")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--request-dir")
+        .arg(&request_dir)
+        .assert()
+        .success();
+
+    let output = ProcessCommand::new(witness_rebuild_helper_path())
+        .current_dir(temp.path())
+        .arg("--scratch-dir")
+        .arg(&scratch_dir)
+        .arg(&request_dir)
+        .arg("--identity")
+        .arg("provider-target-test")
+        .arg("--system")
+        .arg("x86_64-linux")
+        .arg("--toolchain")
+        .arg("rust-1.91.1")
+        .arg("--host-class")
+        .arg("nixos-25.05")
+        .env("CRUNCH_CONFIG_DIR", &witness_config_dir)
+        .env("CRUNCH_TEST_REAL_CLI", env!("CARGO_BIN_EXE_crunch"))
+        .env("CRUNCH_TEST_CAPTURE_ARGS", &captured_args_path)
+        .env("CRUNCH_WITNESS_REBUILD_CLI_BIN", &cli_shim_path)
+        .env("CRUNCH_WITNESS_RUST_SOURCE_PROVIDER", &provider_dir)
+        .env("CRUNCH_WITNESS_TOOLCHAIN_CLOSURE", &closure_manifest)
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "helper unexpectedly succeeded");
+    assert!(
+        captured_args_path.exists(),
+        "provider self-build args were not captured; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let captured_args = std::fs::read_to_string(&captured_args_path).unwrap();
+    assert!(captured_args.lines().any(|arg| arg == "self-build"));
+    assert!(captured_args.lines().any(|arg| arg == "--fixed-point"));
+    assert!(captured_args.lines().any(|arg| arg == "--target"));
+    assert!(captured_args.lines().any(|arg| arg == DEFAULT_PROVIDER_WITNESS_TARGET));
+}
+
+#[test]
 fn witness_rebuild_helper_rejects_incomplete_provider_bound_inputs() {
     let temp = tempfile::tempdir().unwrap();
     let provider_dir = temp.path().join("provider-out");
@@ -3119,6 +3222,30 @@ fn witness_rebuild_helper_rejects_incomplete_provider_bound_inputs() {
 
     assert!(!output.status.success(), "helper unexpectedly succeeded");
     assert!(String::from_utf8_lossy(&output.stderr).contains("CRUNCH_WITNESS_TOOLCHAIN_CLOSURE is required"));
+}
+
+#[test]
+fn witness_rebuild_helper_rejects_empty_provider_target() {
+    let temp = tempfile::tempdir().unwrap();
+    let provider_dir = temp.path().join("provider-out");
+    let closure_manifest = temp.path().join("native-toolchain-closure.json");
+    let request_dir = temp.path().join("request");
+    std::fs::create_dir_all(&provider_dir).unwrap();
+    write_file(&closure_manifest, br#"{}"#);
+
+    let output = ProcessCommand::new(witness_rebuild_helper_path())
+        .current_dir(temp.path())
+        .arg("--check")
+        .arg(&request_dir)
+        .env("CRUNCH_WITNESS_REBUILD_CLI_BIN", env!("CARGO_BIN_EXE_crunch"))
+        .env("CRUNCH_WITNESS_RUST_SOURCE_PROVIDER", &provider_dir)
+        .env("CRUNCH_WITNESS_TOOLCHAIN_CLOSURE", &closure_manifest)
+        .env("CRUNCH_WITNESS_PROVIDER_TARGET", "")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "helper unexpectedly succeeded");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("CRUNCH_WITNESS_PROVIDER_TARGET must not be empty"));
 }
 
 #[test]
