@@ -317,3 +317,45 @@ FAILED root: bwrap
 ```
 
 This replay also exposed the next provider-candidate reproducibility issue once the network blocker is cleared: the witness-produced provider binary digest from the scratch-root source tree was `465f8fdccaa7594c0f0578ef39b16cb58d21bafab92deb51cb2861aa612bd561`, while the published provider artifact `binaries/01-mantle` in the release manifest is `b4fdeca80db000a4e003513417b665ae2a1014f6752ed9ff65bb3b6b57ce48f3`. Do not claim independent witness verification until a full helper replay both completes the self-hosting proof and produces provider/self-hosting proof artifacts whose digests match the signed release outputs.
+
+### Follow-up: source material mismatch
+
+After the target fix was pushed, the retained request was inspected to explain the provider digest mismatch. The copied release source archive in the retained request does not contain the provider-candidate witness rebuild implementation, while the current pushed tree does.
+
+Command:
+
+```sh
+SRC=target/release-witness-requests/provider-bound-release-evidence-2026-06-26.provider-bound-target-rerun.work/source-tree
+for file in src/main.rs src/witness_rebuild.rs scripts/rebuild-witness-request.sh; do
+  echo "== $file"
+  if cmp -s "$SRC/$file" "$file"; then echo identical; else echo different; fi
+  wc -c "$SRC/$file" "$file"
+done
+```
+
+Output excerpt:
+
+```text
+== src/main.rs
+identical
+146408 .../source-tree/src/main.rs
+146408 src/main.rs
+== src/witness_rebuild.rs
+different
+ 40481 .../source-tree/src/witness_rebuild.rs
+ 73630 src/witness_rebuild.rs
+== scripts/rebuild-witness-request.sh
+different
+wc: .../source-tree/scripts/rebuild-witness-request.sh: No such file or directory
+14063 scripts/rebuild-witness-request.sh
+```
+
+Additional grep evidence:
+
+```text
+.../source-tree/src/witness_rebuild.rs:674: "rebuilt output count mismatch: supported workflow produces {SUPPORTED_WORKFLOW_OUTPUT_COUNT} output, request expects {expected_count_u32}"
+src/witness_rebuild.rs:700: collect_provider_fixed_point_candidates(&plan.scratch_layout.provider_fixed_point_proof_dir, &mut candidates)?;
+src/witness_rebuild.rs:730: fn collect_provider_fixed_point_candidates(
+```
+
+Conclusion: the retained `provider-bound-release-evidence-2026-06-26` request is no longer a viable independent-witness target for current-code provider-bound verification. A valid independent witness attempt needs a freshly packaged release bundle whose source archive, provider fixed-point proof, provider binary, self-hosting proof, and signed release attestation are all produced from the same pushed source snapshot.
