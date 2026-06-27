@@ -467,3 +467,51 @@ FAILED root: bwrap
 ```
 
 This leaves current-code release repackaging blocked on completing a full self-hosting proof. The next attempt should either run when `ftpmirror.gnu.org` is healthy or add a deliberate cached/bootstrap-source path for the GCC prerequisite tarballs before packaging a fresh current-source release bundle.
+
+### Follow-up: switch legacy self-build GNU source URLs to kernel.org mirror
+
+To remove the observed `ftpmirror.gnu.org` dependency from the legacy self-build bootstrap slice, the first-wave GNU source URLs in `bootstrap/gcc.ncl`, `bootstrap/binutils.ncl`, `bootstrap/dash.ncl`, and `bootstrap/make.ncl` were switched to `https://mirrors.kernel.org/gnu/...` while preserving the existing fixed-output hashes. This mirrors prior checked-in precedent in `bootstrap/make-tcc.ncl` for avoiding `ftpmirror.gnu.org` 502s.
+
+Validation: helper-style symlink-PATH stage0 self-build succeeded after the URL changes.
+
+Command shape:
+
+```sh
+ROOT=/tmp/mantle-stage0-repro-kernel-mirror-58ed7d78
+PATHFARM=/tmp/mantle-proof-path-repro-kernel-mirror-58ed7d78
+# populate PATHFARM with symlinks for the proof helper's tool PATH
+PATH="$PATHFARM" \
+SNIX_BUILD_SANDBOX_SHELL=/nix/store/4mdqc2snfiihr6r61ln1rqs4fis6br9b-busybox-static-x86_64-unknown-linux-musl-1.36.1/bin/busybox \
+/tmp/mantle-self-hosting-current-58ed7d78-rerun1-work/cargo-target/debug/crunch \
+  --verbose --log-level info \
+  --store "$ROOT/store" \
+  --state-dir "$ROOT/state" \
+  --nix-compat \
+  self-build --no-substitute -j 4
+```
+
+Fetch/proof output excerpts:
+
+```text
+fetching tarball url=https://mirrors.kernel.org/gnu/binutils/binutils-2.42.tar.gz
+fetching tarball url=https://mirrors.kernel.org/gnu/mpfr/mpfr-4.1.0.tar.bz2
+fetching tarball url=https://mirrors.kernel.org/gnu/mpc/mpc-1.2.1.tar.gz
+fetching tarball url=https://mirrors.kernel.org/gnu/gmp/gmp-6.2.1.tar.bz2
+fetching tarball url=https://mirrors.kernel.org/gnu/gcc/gcc-13.3.0/gcc-13.3.0.tar.gz
+[4/4] Verifying output...
+  binary OK
+self-build-proof: hermeticity-mode=practical
+self-build-proof: staged-source=/tmp/mantle-stage0-repro-kernel-mirror-58ed7d78/store/zvj2lhkcs2bkhiybkqzzlrrgwkhfyqb3-mantle-src
+self-build-proof: bwrap-source=mantle-built:/tmp/mantle-stage0-repro-kernel-mirror-58ed7d78/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin
+self-build-proof: output-binary=/tmp/mantle-stage0-repro-kernel-mirror-58ed7d78/store/07w0gjlnswwfx09s68x1c9ljxf61wvfr-mantle/bin/mantle
+```
+
+Validation: focused `bootstrap/make.ncl` build exercised the patched `bootstrap/make.ncl` URL.
+
+```text
+fetching tarball url=https://mirrors.kernel.org/gnu/make/make-4.4.1.tar.gz
+build succeeded drv=make-src.drv outputs=["/tmp/mantle-build-make-kernel-mirror/store/sadgqs1ykvs2m6zs35qn8q4qg5s38rr3-make-src"]
+build succeeded drv=gnumake.drv outputs=["/tmp/mantle-build-make-kernel-mirror/store/096b231pbs9cqw67p32sdk011lpm60xl-gnumake"]
+```
+
+This validation only proves stage0 under the helper-style PATH. A full current-source self-hosting proof still needs to be rerun from the pushed URL-change commit before packaging a fresh release bundle or making any independent witness claim.

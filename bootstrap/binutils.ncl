@@ -22,7 +22,9 @@ let gnumake = (import "make.ncl") in
 let dash = (import "dash.ncl") in
 
 let binutils_src = crunch.fetchTarball {
-  url = "https://ftpmirror.gnu.org/binutils/binutils-2.42.tar.gz",
+  # ftpmirror.gnu.org returned network errors during release proof replay;
+  # use the stable kernel.org GNU mirror for the same fixed-output tarball.
+  url = "https://mirrors.kernel.org/gnu/binutils/binutils-2.42.tar.gz",
   hash = "sha256-BS7Dn2vTeeZyfTeKjeGF+U3AcP3RChzTncadOugP1mQ=",
   name = "binutils-src",
 } in

@@ -22,7 +22,9 @@ let seed_name = seed.name in
 let seed_target = seed.target in
 
 let make_src = crunch.fetchTarball {
-  url = "https://ftpmirror.gnu.org/make/make-4.4.1.tar.gz",
+  # ftpmirror.gnu.org returned network errors during release proof replay;
+  # use the stable kernel.org GNU mirror for the same fixed-output tarball.
+  url = "https://mirrors.kernel.org/gnu/make/make-4.4.1.tar.gz",
   hash = "sha256-+Cg7R8wougcWcFf6u5B3lVX6RRgMRYZ1CD+e21URP5A=",
   name = "make-src",
 } in
