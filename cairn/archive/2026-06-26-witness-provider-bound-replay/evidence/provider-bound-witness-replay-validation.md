@@ -359,3 +359,47 @@ src/witness_rebuild.rs:730: fn collect_provider_fixed_point_candidates(
 ```
 
 Conclusion: the retained `provider-bound-release-evidence-2026-06-26` request is no longer a viable independent-witness target for current-code provider-bound verification. A valid independent witness attempt needs a freshly packaged release bundle whose source archive, provider fixed-point proof, provider binary, self-hosting proof, and signed release attestation are all produced from the same pushed source snapshot.
+
+### Follow-up: current pushed-tree provider fixed-point proof
+
+After committing the retained-request source-mismatch evidence at `d40d134b`, a fresh provider fixed-point proof was run from the current pushed tree. This is **not** release verification and does **not** prove independent witness verification; it only establishes a current-source provider candidate for a future freshly packaged release bundle.
+
+Command:
+
+```sh
+OUT=/tmp/mantle-provider-fixed-point-current-d40d134b
+PROVIDER=/home/brittonr/.cargo-target/repo-targets/mantle/rust-source-provider-musl-host-route-patch-plan-rerun38-2026-06-25/provider-out
+CLOSURE=/home/brittonr/git/mantle/target/source-built-rust-provider-fixed-point-2026-06-25/native-toolchain-closure.json
+RUSTC=/home/brittonr/.cargo-target/repo-targets/mantle/rust-source-provider-musl-host-route-patch-plan-rerun38-2026-06-25/provider-out/bin/rustc
+rm -rf "$OUT"
+/home/brittonr/.cargo-target/debug/mantle self-build \
+  --cargo-free \
+  --fixed-point \
+  --out "$OUT" \
+  --rust-source-provider "$PROVIDER" \
+  --toolchain-closure "$CLOSURE" \
+  --rustc "$RUSTC" \
+  --target x86_64-unknown-linux-musl
+```
+
+Output:
+
+```text
+Cargo-free fixed-point: success
+bundle: /tmp/mantle-provider-fixed-point-current-d40d134b
+stage1_binary_blake3: 115a3de848759f6ef8f4bcbd157af65e7f9af77298c26366d35107c7a55c244f
+stage2_binary_blake3: 115a3de848759f6ef8f4bcbd157af65e7f9af77298c26366d35107c7a55c244f
+```
+
+Metadata/status excerpts:
+
+```text
+meta.json: "status": "success"
+meta.json: "fixed_point": true
+meta.json: "root": "/home/brittonr/git/mantle"
+meta.json: "target_triple": "x86_64-unknown-linux-musl"
+stage1/status.txt: 0
+stage2/status.txt: 0
+```
+
+The current-source provider digest is therefore `115a3de848759f6ef8f4bcbd157af65e7f9af77298c26366d35107c7a55c244f`. It intentionally does not repair the retained release request, whose signed provider artifact is still `b4fdeca80db000a4e003513417b665ae2a1014f6752ed9ff65bb3b6b57ce48f3`; a new release evidence bundle must be created from this current source lineage before another independent witness attempt can succeed.
