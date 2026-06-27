@@ -403,3 +403,67 @@ stage2/status.txt: 0
 ```
 
 The current-source provider digest is therefore `115a3de848759f6ef8f4bcbd157af65e7f9af77298c26366d35107c7a55c244f`. It intentionally does not repair the retained release request, whose signed provider artifact is still `b4fdeca80db000a4e003513417b665ae2a1014f6752ed9ff65bb3b6b57ce48f3`; a new release evidence bundle must be created from this current source lineage before another independent witness attempt can succeed.
+
+### Follow-up: current pushed-tree self-hosting proof blocker
+
+The current-tree self-hosting proof preflight passed, but full helper replay failed in stage0 while fetching GCC prerequisites from `ftpmirror.gnu.org`.
+
+Preflight command:
+
+```sh
+CRUNCH_PROOF_SCRATCH_DIR=/tmp/mantle-self-hosting-current-58ed7d78-work \
+  ./scripts/prove-self-hosting.sh --check \
+  --bundle-dir /tmp/mantle-self-hosting-current-58ed7d78
+```
+
+Preflight output excerpt:
+
+```text
+pkg-config: /nix/store/0yz5jd6ywpq414g4k9g3ysbima3g3fa7-pkg-config-wrapper-0.29.2/bin/pkg-config
+bwrap: /nix/store/gr9l6ql3wg70idpqlqhnfdx81hak22c8-bubblewrap-0.11.0/bin/bwrap
+SNIX_BUILD_SANDBOX_SHELL: /nix/store/4mdqc2snfiihr6r61ln1rqs4fis6br9b-busybox-static-x86_64-unknown-linux-musl-1.36.1/bin/busybox
+proof mode: fixed-point
+selected provider kind: legacy-fetch
+proof scratch free: 47488 MiB
+proof command: /home/brittonr/.rustup/toolchains/nightly-2025-11-01-x86_64-unknown-linux-gnu/bin/cargo test -p mantle --test self_hosting -- --ignored --nocapture
+```
+
+Full helper attempts:
+
+```text
+CRUNCH_PROOF_SCRATCH_DIR=/tmp/mantle-self-hosting-current-58ed7d78-rerun1-work ./scripts/prove-self-hosting.sh --bundle-dir /tmp/mantle-self-hosting-current-58ed7d78-rerun1
+# FAILED after 65.32s: message: dependency gcc.drv failed
+
+CRUNCH_PROOF_SCRATCH_DIR=/tmp/mantle-self-hosting-current-58ed7d78-rerun2-work ./scripts/prove-self-hosting.sh --bundle-dir /tmp/mantle-self-hosting-current-58ed7d78-rerun2
+# FAILED after 49.08s: message: dependency gcc.drv failed
+```
+
+A durable direct stage0 repro with the same helper-built `crunch` binary and a normal PATH succeeded, showing the self-build logic is not deterministically broken:
+
+```text
+[4/4] Verifying output...
+verifying /tmp/mantle-stage0-repro-helper-crunch-58ed7d78/store/07w0gjlnswwfx09s68x1c9ljxf61wvfr-mantle/bin/mantle...
+  binary OK
+self-build-proof: hermeticity-mode=practical
+self-build-proof: staged-source=/tmp/mantle-stage0-repro-helper-crunch-58ed7d78/store/5ymisagfa62zzwlxc3v0flhmrx93bhn2-mantle-src
+self-build-proof: bwrap-source=mantle-built:/tmp/mantle-stage0-repro-helper-crunch-58ed7d78/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin
+self-build-proof: output-binary=/tmp/mantle-stage0-repro-helper-crunch-58ed7d78/store/07w0gjlnswwfx09s68x1c9ljxf61wvfr-mantle/bin/mantle
+```
+
+A durable repro using a helper-style symlink PATH failed in the same way as the full helper. Failure excerpts from `/tmp/mantle-stage0-repro-helper-path-58ed7d78/stage0.stderr.txt`:
+
+```text
+transient fetch failed; retrying attempt=1 max_attempts=5 error=HTTP fetch failed for https://ftpmirror.gnu.org/gmp/gmp-6.2.1.tar.bz2: http status: 502
+transient fetch failed; retrying attempt=1 max_attempts=5 error=HTTP fetch failed for https://ftpmirror.gnu.org/mpc/mpc-1.2.1.tar.gz: http status: 502
+transient fetch failed; retrying attempt=1 max_attempts=5 error=HTTP fetch failed for https://ftpmirror.gnu.org/gcc/gcc-13.3.0/gcc-13.3.0.tar.gz: http status: 502
+transient fetch failed; retrying attempt=1 max_attempts=5 error=HTTP fetch failed for https://ftpmirror.gnu.org/mpfr/mpfr-4.1.0.tar.bz2: http status: 502
+...
+sandbox build failed drv=/nix/store/phlhbyjgiwda18006mqyz8dgl2wil2mh-gmp-src.drv err=store error: build: HTTP fetch failed for https://ftpmirror.gnu.org/gmp/gmp-6.2.1.tar.bz2: http status: 502
+FAILED root: bwrap
+  phase: build
+  error_class: builder
+  saved_log_path: /tmp/mantle-stage0-repro-helper-path-58ed7d78/state/logs/lr1nd84b23a9kk0qs97m1m7vglinfmc2-bwrap.drv.log
+  message: dependency gcc.drv failed
+```
+
+This leaves current-code release repackaging blocked on completing a full self-hosting proof. The next attempt should either run when `ftpmirror.gnu.org` is healthy or add a deliberate cached/bootstrap-source path for the GCC prerequisite tarballs before packaging a fresh current-source release bundle.
