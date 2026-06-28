@@ -7167,8 +7167,11 @@ fn remap_normalized_path_string(path: &Path, remaps: &[RustPathRemap]) -> String
     normalized
 }
 
-fn compile_time_manifest_dir(package_root: &str, options: &RustPlanOptions) -> String {
+fn compile_time_manifest_dir(package_root: &str, target_kind: &str, options: &RustPlanOptions) -> String {
     let path = Path::new(package_root);
+    if target_kind == "custom-build" {
+        return normalize_path_string(path);
+    }
     if options.deterministic_release_paths {
         return remap_normalized_path_string(path, &options.path_remaps);
     }
@@ -7274,7 +7277,7 @@ fn native_unit_derivation(
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
     env.insert(
         BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(),
-        compile_time_manifest_dir(&unit.package_root, options),
+        compile_time_manifest_dir(&unit.package_root, &unit.target_kind, options),
     );
     insert_deterministic_release_compile_env(&mut env, options);
     if let Some(links) = &unit.package_links {
@@ -7375,7 +7378,7 @@ fn native_host_unit_derivation(
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
     env.insert(
         BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(),
-        compile_time_manifest_dir(&unit.package_root, options),
+        compile_time_manifest_dir(&unit.package_root, &unit.target_kind, options),
     );
     insert_deterministic_release_compile_env(&mut env, options);
     if let Some(links) = &unit.package_links {
@@ -11290,16 +11293,16 @@ fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<
 
 fn build_script_package_root(unit: &RustUnitDerivationSummary) -> Option<PathBuf> {
     let source_parent = rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf));
-    if unit.target_kind == "custom-build" {
-        return source_parent
-            .or_else(|| unit.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).map(PathBuf::from));
-    }
-    unit.derivation
+    let manifest_dir = unit
+        .derivation
         .env
         .get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV)
         .map(PathBuf::from)
-        .filter(|path| path.exists())
-        .or(source_parent)
+        .filter(|path| path.exists());
+    if unit.target_kind == "custom-build" {
+        return manifest_dir.or(source_parent);
+    }
+    manifest_dir.or(source_parent)
 }
 
 fn absolute_path_from(path: &Path, base: &Path) -> PathBuf {
@@ -14423,23 +14426,35 @@ mod tests {
     }
 
     #[test]
-    fn build_script_package_root_falls_back_to_real_source_when_manifest_dir_is_virtual() {
+    fn custom_build_manifest_dir_stays_real_in_deterministic_mode() {
         let dir = TempDir::new().unwrap();
         let package_root = dir.path().join("build-pkg");
-        std::fs::create_dir_all(&package_root).unwrap();
-        let source_path = package_root.join("build.rs");
+        let builder_dir = package_root.join("builder");
+        std::fs::create_dir_all(&builder_dir).unwrap();
+        let source_path = builder_dir.join("main.rs");
         std::fs::write(&source_path, "fn main() {}\n").unwrap();
         let mut unit =
             test_rust_derivation(0, "path+file://build-pkg#build-pkg@0.1.0", "custom-build", "host", Vec::new());
         unit.derivation.args.push(normalize_path_string(&source_path));
+        let mut plan_options = options(&package_root);
+        plan_options.deterministic_release_paths = true;
+        plan_options.path_remaps =
+            deterministic_release_path_remaps(&package_root, Some(&dir.path().join("execution")));
+
+        let manifest_dir =
+            compile_time_manifest_dir(&normalize_path_string(&package_root), "custom-build", &plan_options);
+        unit.derivation.env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), manifest_dir.clone());
+        let root = build_script_package_root(&unit).expect("real manifest dir should be available");
         unit.derivation
             .env
             .insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), DETERMINISTIC_RELEASE_SOURCE_PREFIX.to_string());
+        let fallback_root = build_script_package_root(&unit).expect("source parent should be available");
 
-        let root = build_script_package_root(&unit).expect("source parent should be available");
-
+        assert_eq!(manifest_dir, normalize_path_string(&package_root));
+        assert_ne!(manifest_dir, DETERMINISTIC_RELEASE_SOURCE_PREFIX);
         assert_eq!(root, package_root);
-        assert_ne!(root, PathBuf::from(DETERMINISTIC_RELEASE_SOURCE_PREFIX));
+        assert_eq!(fallback_root, builder_dir);
+        assert_ne!(fallback_root, PathBuf::from(DETERMINISTIC_RELEASE_SOURCE_PREFIX));
     }
 
     #[test]

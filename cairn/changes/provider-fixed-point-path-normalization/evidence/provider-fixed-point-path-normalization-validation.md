@@ -341,3 +341,110 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks provider-fixed-point
   "verdict": "PASS"
 }
 ```
+
+## Post package-root repair validation
+
+After the provider proof blocker was traced to custom-build scripts running from the build-script source parent instead of the package root, `src/rust_plan.rs` was updated so custom-build execution prefers an existing real `CARGO_MANIFEST_DIR` and falls back to the source parent only when the manifest dir is virtual or missing.
+
+```text
+$ cargo test -p mantle --bin mantle rust_plan -- --test-threads=1 --nocapture
+...
+test result: ok. 174 passed; 0 failed; 0 ignored; 0 measured; 707 filtered out; finished in 0.18s
+```
+
+Captured in pueue task 229. The serial test run is intentional: the existing compiler-policy tests mutate process/global state and can flake when the broad `rust_plan` substring is run in parallel, while the exact flaked tests passed individually.
+
+```text
+$ cargo fmt -p mantle --check
+$ cargo test -p mantle --bin mantle cargo_free -- --nocapture
+...
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 826 filtered out; finished in 0.03s
+```
+
+Captured in pueue task 424.
+
+## Post-proof Cairn validation
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 1,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 7,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal provider-fixed-point-path-normalization --root .
+{
+  "change": "provider-fixed-point-path-normalization",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "86e0f3df3ca88d27023bbf27dc26a17543033ac02c18d7242c35c3a344fe19e3",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "d8f65b0058eff200671ee06d548f76d74b72ebe55d572a7bc557bb3adc240412",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design provider-fixed-point-path-normalization --root .
+{
+  "change": "provider-fixed-point-path-normalization",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "35f41760bbddd6d8376361b8ab9fae5eca93552e186d5f93770cc24bad2a632e",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "ab6a5e4d6a1d1adde85a9ea47f6233e9c743afb1005591efced4aaa4d4cb5ee1",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks provider-fixed-point-path-normalization --root .
+{
+  "change": "provider-fixed-point-path-normalization",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "b7596a9878645c84f8bd698b3189fba1b85a6c9938207e75b59c148dfa783db3",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "aba58eb42b842ba0a1954d05533667d038441baa330a4edc123e4bec29776cbe",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+```
