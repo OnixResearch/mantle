@@ -2388,8 +2388,14 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         return Err(RunError::Internal("run_rust_plan_command called with non-RustPlan command".to_string()));
     };
     let root = root.clone().unwrap_or(current_dir_or_error()?);
+    let selected_c_compiler_route =
+        rust_plan::receipt_bound_c_compiler_route_from_cli_json(source_built_c_compiler_route_json.as_deref())?;
     let path_remaps = if *deterministic_release_paths {
-        rust_plan::deterministic_release_path_remaps(&root, execution_output_root.as_deref())
+        rust_plan::deterministic_release_path_remaps_with_c_compiler(
+            &root,
+            execution_output_root.as_deref(),
+            selected_c_compiler_route.as_ref(),
+        )
     } else {
         Vec::new()
     };
@@ -2412,8 +2418,6 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         path_remaps,
     };
     let receipt = rust_plan::capture_rust_plan(&options)?;
-    let selected_c_compiler_route =
-        rust_plan::receipt_bound_c_compiler_route_from_cli_json(source_built_c_compiler_route_json.as_deref())?;
     rust_plan::set_receipt_bound_c_compiler_route_override(selected_c_compiler_route)?;
     let execution_options = |output_root: PathBuf| rust_plan::RustUnitExecutionOptions {
         rustc: rustc.clone(),

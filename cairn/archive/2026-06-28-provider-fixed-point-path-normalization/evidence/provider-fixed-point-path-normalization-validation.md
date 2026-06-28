@@ -3,6 +3,36 @@
 Task-ID: V1
 Covers: verification_evidence.provider_fixed_point_path_normalization
 
+## Final 2026-06-28 C-toolchain remap validation
+
+```text
+$ cargo fmt -p mantle --check
+cargo fmt -p mantle --check: ok
+
+$ cargo test -p mantle --bin mantle deterministic_release_paths -- --nocapture
+running 1 test
+test rust_plan::tests::deterministic_release_paths_add_remaps_and_provider_placeholder_env ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 883 filtered out
+
+$ cargo test -p mantle --bin mantle c_prefix_map -- --nocapture
+running 2 tests
+test rust_plan::tests::c_prefix_map_flags_reject_unknown_compiler_family_and_empty_remaps ... ok
+test rust_plan::tests::build_script_child_env_adds_c_prefix_map_flags_for_receipt_bound_gnu_compiler ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 882 filtered out
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
+
 ## Focused Rust validation
 
 ```text

@@ -280,7 +280,7 @@ AND exclusion MUST apply even if a private runtime path such as `target/` or `.p
 
 ### Requirement: Provider fixed-point replay normalizes local path identity [r[verification_evidence.provider_fixed_point_path_normalization]]
 
-Provider-bound release witness replay MUST compile provider fixed-point stages with deterministic source, execution-output, and provider helper path identity so binary digest mismatches identify source, toolchain, or build output differences instead of publisher/witness scratch path differences.
+Provider-bound release witness replay MUST compile provider fixed-point stages with deterministic source, execution-output, provider helper, and receipt-bound C compiler toolchain path identity so binary digest mismatches identify source, toolchain, or build output differences instead of publisher/witness scratch path differences.
 
 #### Scenario: deterministic path mode is receipt-visible
 
@@ -295,6 +295,13 @@ GIVEN the publisher and witness use equivalent source-built Rust provider closur
 WHEN provider fixed-point stages compile crates that read compile-time provider helper environment
 THEN the compile-time environment MUST use deterministic placeholder identity for provider helper paths
 AND the released binary MUST NOT depend on the publisher or witness provider scratch path.
+
+#### Scenario: native C compiler paths are remapped deterministically
+
+GIVEN the selected receipt-bound C compiler route points inside a local source-built toolchain root
+WHEN provider fixed-point stages compile native C or assembly inputs through build-script-driven toolchains
+THEN build-script child environments MUST add C prefix-map flags for the source root, execution-output root, and selected C compiler toolchain root
+AND the C compiler toolchain root remap MUST take precedence over broader source-root remaps in emitted debug/source identity.
 
 #### Scenario: build scripts still access real package roots
 

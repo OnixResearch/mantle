@@ -106,7 +106,26 @@ const RUSTC_METADATA_HEX_CHARS: usize = 16;
 const BLAKE3_HEX_CHARS: usize = 64;
 const DETERMINISTIC_RELEASE_SOURCE_PREFIX: &str = "/mantle/release/source";
 const DETERMINISTIC_RELEASE_EXECUTION_PREFIX: &str = "/mantle/release/execution";
+const DETERMINISTIC_RELEASE_PROVIDER_C_TOOLCHAIN_PREFIX: &str = "/mantle/release/provider/c-toolchain";
 const DETERMINISTIC_RELEASE_SANDBOX_SHELL: &str = "/mantle/release/provider/sandbox-shell";
+const DETERMINISTIC_RELEASE_LINKER: &str = "cc";
+const PROVIDER_BIN_DIR_NAME: &str = "bin";
+const CFLAGS_ENV: &str = "CFLAGS";
+const CXXFLAGS_ENV: &str = "CXXFLAGS";
+const CPPFLAGS_ENV: &str = "CPPFLAGS";
+const TARGET_CFLAGS_ENV: &str = "TARGET_CFLAGS";
+const TARGET_CXXFLAGS_ENV: &str = "TARGET_CXXFLAGS";
+const C_PREFIX_MAP_ENV_KEYS: &[&str] = &[
+    CFLAGS_ENV,
+    CXXFLAGS_ENV,
+    CPPFLAGS_ENV,
+    TARGET_CFLAGS_ENV,
+    TARGET_CXXFLAGS_ENV,
+];
+const C_PREFIX_MAP_FLAG_PREFIXES: &[&str] = &["-ffile-prefix-map", "-fmacro-prefix-map", "-fdebug-prefix-map"];
+const C_PREFIX_MAP_COMPILER_FAMILIES: &[&str] = &["clang", "gcc"];
+const ENV_FLAG_SEPARATOR: char = ' ';
+const ENV_FLAG_SEPARATOR_STR: &str = " ";
 const REDACTED_DIAGNOSTIC_MAX_LINES: usize = 12;
 const REDACTED_DIAGNOSTIC_TEMP_PATH: &str = "<redacted-temp-path>";
 const TEMP_PATH_PREFIXES: &[&str] = &["/tmp/", "/var/tmp/"];
@@ -7139,13 +7158,71 @@ pub(crate) fn deterministic_release_path_remaps(
             to: DETERMINISTIC_RELEASE_EXECUTION_PREFIX.to_string(),
         });
     }
-    remaps.sort();
-    remaps.dedup();
+    normalize_path_remaps(&mut remaps);
     remaps
 }
 
+pub(crate) fn deterministic_release_path_remaps_with_c_compiler(
+    root: &Path,
+    execution_output_root: Option<&Path>,
+    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) -> Vec<RustPathRemap> {
+    let mut remaps = deterministic_release_path_remaps(root, execution_output_root);
+    append_receipt_bound_c_compiler_path_remaps(&mut remaps, selected_c_compiler);
+    remaps
+}
+
+fn append_receipt_bound_c_compiler_path_remaps(
+    remaps: &mut Vec<RustPathRemap>,
+    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) {
+    let Some(route) = selected_c_compiler else {
+        return;
+    };
+    let Some(root) = receipt_bound_c_compiler_toolchain_root(route) else {
+        return;
+    };
+    remaps.push(RustPathRemap {
+        from: normalize_path_string(&root),
+        to: DETERMINISTIC_RELEASE_PROVIDER_C_TOOLCHAIN_PREFIX.to_string(),
+    });
+    normalize_path_remaps(remaps);
+}
+
+fn receipt_bound_c_compiler_toolchain_root(
+    route: &crate::source_toolchain_closure::ReceiptBoundCCompilerRoute,
+) -> Option<PathBuf> {
+    let path = Path::new(&route.execution_path);
+    if !path.is_absolute() {
+        return None;
+    }
+    let parent = path.parent()?;
+    if parent.file_name() == Some(OsStr::new(PROVIDER_BIN_DIR_NAME)) {
+        return parent.parent().map(Path::to_path_buf);
+    }
+    Some(parent.to_path_buf())
+}
+
+fn normalize_path_remaps(remaps: &mut Vec<RustPathRemap>) {
+    remaps.sort();
+    remaps.dedup();
+}
+
+fn remaps_by_specificity(remaps: &[RustPathRemap]) -> Vec<&RustPathRemap> {
+    let mut ordered = remaps.iter().collect::<Vec<_>>();
+    ordered.sort_by(|left, right| {
+        right
+            .from
+            .len()
+            .cmp(&left.from.len())
+            .then_with(|| left.from.cmp(&right.from))
+            .then_with(|| left.to.cmp(&right.to))
+    });
+    ordered
+}
+
 fn append_rustc_path_remap_args(args: &mut Vec<String>, remaps: &[RustPathRemap]) {
-    for remap in remaps {
+    for remap in remaps_by_specificity(remaps) {
         debug_assert!(!remap.from.is_empty());
         debug_assert!(!remap.to.is_empty());
         args.push(RUSTC_REMAP_PATH_PREFIX_FLAG.to_string());
@@ -7154,14 +7231,59 @@ fn append_rustc_path_remap_args(args: &mut Vec<String>, remaps: &[RustPathRemap]
 }
 
 fn remap_normalized_path_string(path: &Path, remaps: &[RustPathRemap]) -> String {
-    let normalized = normalize_path_string(path);
-    for remap in remaps {
-        if normalized == remap.from {
+    remap_normalized_text(&normalize_path_string(path), remaps)
+}
+
+fn remap_normalized_text(value: &str, remaps: &[RustPathRemap]) -> String {
+    debug_assert!(!value.is_empty());
+    for remap in remaps_by_specificity(remaps) {
+        debug_assert!(!remap.from.is_empty());
+        debug_assert!(!remap.to.is_empty());
+        if value == remap.from {
             return remap.to.clone();
         }
         let prefix = format!("{}/", remap.from);
-        if let Some(suffix) = normalized.strip_prefix(&prefix) {
+        if let Some(suffix) = value.strip_prefix(&prefix) {
             return format!("{}/{suffix}", remap.to);
+        }
+    }
+    value.to_string()
+}
+
+fn execution_source_closure_digest(source_closure: &SourceClosureSummary, options: &RustPlanOptions) -> String {
+    if !options.deterministic_release_paths {
+        return source_closure.digest_blake3.clone();
+    }
+    let sources = source_closure
+        .sources
+        .iter()
+        .cloned()
+        .map(|mut source| {
+            source.manifest_path = remap_normalized_text(&source.manifest_path, &options.path_remaps);
+            source
+        })
+        .collect::<Vec<_>>();
+    source_closure_digest(&sources, &source_closure.blockers)
+        .expect("serializing deterministic source closure digest from owned summaries should not fail")
+}
+
+fn rustc_linker_arg(linker: &Path, options: &RustPlanOptions) -> String {
+    if options.deterministic_release_paths {
+        return format!("linker={DETERMINISTIC_RELEASE_LINKER}");
+    }
+    format!("linker={}", normalize_path_string(linker))
+}
+
+fn reviewable_rustc_source_path(source_path: &str, options: &RustPlanOptions) -> String {
+    let normalized = normalize_path_string(Path::new(source_path));
+    if !options.deterministic_release_paths {
+        return normalized;
+    }
+    for remap in &options.path_remaps {
+        debug_assert!(!remap.from.is_empty());
+        let prefix = format!("{}/", remap.from);
+        if let Some(relative) = normalized.strip_prefix(&prefix) {
+            return relative.to_string();
         }
     }
     normalized
@@ -7183,6 +7305,80 @@ fn insert_deterministic_release_compile_env(env: &mut BTreeMap<String, String>, 
         return;
     }
     env.insert(SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), DETERMINISTIC_RELEASE_SANDBOX_SHELL.to_string());
+}
+
+fn c_compiler_family_supports_prefix_map(compiler_family: &str) -> bool {
+    C_PREFIX_MAP_COMPILER_FAMILIES.contains(&compiler_family)
+}
+
+fn c_prefix_map_candidate(remap: &RustPathRemap) -> bool {
+    !remap.from.is_empty() && !remap.to.is_empty() && remap.from != remap.to && Path::new(&remap.from).is_absolute()
+}
+
+fn remaps_by_c_prefix_application_order(remaps: &[RustPathRemap]) -> Vec<&RustPathRemap> {
+    let mut ordered = remaps_by_specificity(remaps);
+    ordered.reverse();
+    ordered
+}
+
+fn c_prefix_map_flags(
+    remaps: &[RustPathRemap],
+    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) -> Option<String> {
+    let route = selected_c_compiler?;
+    if !c_compiler_family_supports_prefix_map(&route.compiler_family) {
+        return None;
+    }
+    let mut flags = Vec::new();
+    let mut seen = BTreeSet::new();
+    for remap in remaps_by_c_prefix_application_order(remaps) {
+        if !c_prefix_map_candidate(remap) {
+            continue;
+        }
+        for prefix in C_PREFIX_MAP_FLAG_PREFIXES {
+            let flag = format!("{prefix}={}={}", remap.from, remap.to);
+            if seen.insert(flag.clone()) {
+                flags.push(flag);
+            }
+        }
+    }
+    if flags.is_empty() {
+        return None;
+    }
+    Some(flags.join(ENV_FLAG_SEPARATOR_STR))
+}
+
+fn append_env_flags(env: &mut BTreeMap<String, String>, key: &str, flags: &str) {
+    debug_assert!(!key.is_empty());
+    debug_assert!(!flags.is_empty());
+    match env.get_mut(key) {
+        Some(value) if !value.is_empty() => {
+            value.push(ENV_FLAG_SEPARATOR);
+            value.push_str(flags);
+        }
+        _ => {
+            env.insert(key.to_string(), flags.to_string());
+        }
+    }
+}
+
+fn append_c_prefix_map_env(env: &mut BTreeMap<String, String>, flags: &str) {
+    debug_assert!(!flags.is_empty());
+    for key in C_PREFIX_MAP_ENV_KEYS {
+        append_env_flags(env, key, flags);
+    }
+}
+
+fn append_deterministic_c_prefix_map_env(
+    env: &mut BTreeMap<String, String>,
+    rustc_args: &[String],
+    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) {
+    let remaps = rustc_reviewable_path_remaps(rustc_args);
+    let Some(flags) = c_prefix_map_flags(&remaps, selected_c_compiler) else {
+        return;
+    };
+    append_c_prefix_map_env(env, &flags);
 }
 
 fn rustc_unit_metadata_disambiguator(
@@ -7233,7 +7429,7 @@ fn native_unit_derivation(
         unit.crate_name.clone(),
         "--edition".to_string(),
         unit.edition.clone(),
-        unit.source_path.clone(),
+        reviewable_rustc_source_path(&unit.source_path, options),
         "--emit=link".to_string(),
     ];
     for crate_type in rustc_crate_types(&unit.crate_types, &unit.target_kind) {
@@ -7257,7 +7453,7 @@ fn native_unit_derivation(
     if unit.target_kind == "bin" {
         if let Some(linker) = resolve_tool_path("cc") {
             args.push("-C".to_string());
-            args.push(format!("linker={}", normalize_path_string(&linker)));
+            args.push(rustc_linker_arg(&linker, options));
         }
     }
     for dependency in &unit.dependency_artifacts {
@@ -7272,7 +7468,7 @@ fn native_unit_derivation(
     env.insert("MODE".to_string(), unit.mode.clone());
     env.insert("PACKAGE_ID".to_string(), unit.package_id.clone());
     env.insert("PROFILE".to_string(), options.profile.clone());
-    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
     append_cargo_package_env(&mut env, &unit.cargo_package_env);
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
     env.insert(
@@ -7332,7 +7528,7 @@ fn native_host_unit_derivation(
         unit.crate_name.clone(),
         "--edition".to_string(),
         unit.edition.clone(),
-        unit.source_path.clone(),
+        reviewable_rustc_source_path(&unit.source_path, options),
         "--emit=link".to_string(),
     ];
     for crate_type in rustc_crate_types(&unit.crate_types, &unit.target_kind) {
@@ -7359,7 +7555,7 @@ fn native_host_unit_derivation(
     }
     if let Some(linker) = resolve_tool_path("cc") {
         args.push("-C".to_string());
-        args.push(format!("linker={}", normalize_path_string(&linker)));
+        args.push(rustc_linker_arg(&linker, options));
     }
     for dependency in &unit.dependency_artifacts {
         args.push(RUSTC_EXTERN_FLAG.to_string());
@@ -7373,7 +7569,7 @@ fn native_host_unit_derivation(
     env.insert("MODE".to_string(), unit.mode.clone());
     env.insert("PACKAGE_ID".to_string(), unit.package_id.clone());
     env.insert("PROFILE".to_string(), options.profile.clone());
-    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
     append_cargo_package_env(&mut env, &unit.cargo_package_env);
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
     env.insert(
@@ -7862,7 +8058,7 @@ fn summarize_unit_derivation(
         rust_crate_name(&target_name),
         "--edition".to_string(),
         edition,
-        src_path.clone(),
+        reviewable_rustc_source_path(&src_path, options),
         "--emit=link".to_string(),
     ];
     for crate_type in rustc_crate_types(&crate_types, &target_kind) {
@@ -7872,7 +8068,7 @@ fn summarize_unit_derivation(
     if is_host_target_kind(&target_kind) || target_kind == "bin" {
         if let Some(linker) = resolve_tool_path("cc") {
             args.push("-C".to_string());
-            args.push(format!("linker={}", normalize_path_string(&linker)));
+            args.push(rustc_linker_arg(&linker, options));
         }
     }
     append_rustc_feature_cfg_args(&mut args, &features);
@@ -7889,7 +8085,7 @@ fn summarize_unit_derivation(
     env.insert("MODE".to_string(), mode.clone());
     env.insert("PACKAGE_ID".to_string(), package_id.clone());
     env.insert("PROFILE".to_string(), options.profile.clone());
-    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
     insert_deterministic_release_compile_env(&mut env, options);
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
@@ -11235,6 +11431,37 @@ fn rust_topology_runtime_args(reviewable_args: &[String]) -> Vec<String> {
     runtime_args
 }
 
+fn rustc_reviewable_path_remaps(args: &[String]) -> Vec<RustPathRemap> {
+    args.windows(RUSTC_EXTERN_ARG_PAIR_WIDTH)
+        .filter_map(|window| {
+            if window[0] != "--remap-path-prefix" {
+                return None;
+            }
+            let (from, to) = window[1].split_once('=')?;
+            Some(RustPathRemap {
+                from: from.to_string(),
+                to: to.to_string(),
+            })
+        })
+        .collect()
+}
+
+fn rustc_source_root_from_remaps(args: &[String]) -> Option<PathBuf> {
+    rustc_reviewable_path_remaps(args)
+        .into_iter()
+        .find(|remap| remap.to == DETERMINISTIC_RELEASE_SOURCE_PREFIX)
+        .map(|remap| PathBuf::from(remap.from))
+}
+
+fn rustc_materialized_source_path(args: &[String]) -> Option<PathBuf> {
+    let source_path = rustc_source_path(args)?;
+    if source_path.is_absolute() {
+        return Some(source_path);
+    }
+    rustc_source_root_from_remaps(args)
+        .map_or(Some(source_path.clone()), |source_root| Some(source_root.join(source_path)))
+}
+
 fn rust_topology_child_env(
     explicit_env: &BTreeMap<String, String>,
     inherited_path: Option<OsString>,
@@ -11292,7 +11519,8 @@ fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<
 }
 
 fn build_script_package_root(unit: &RustUnitDerivationSummary) -> Option<PathBuf> {
-    let source_parent = rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf));
+    let source_parent =
+        rustc_materialized_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf));
     let manifest_dir = unit
         .derivation
         .env
@@ -11317,6 +11545,7 @@ fn build_script_child_env(
     options: &RustUnitExecutionOptions,
     out_dir: &Path,
     package_root: Option<&Path>,
+    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> BTreeMap<String, String> {
     let mut env = BTreeMap::new();
     append_build_script_dependency_env(&mut env, &unit.derivation.env);
@@ -11340,6 +11569,7 @@ fn build_script_child_env(
     if let Some(root) = package_root {
         env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), normalize_path_string(root));
     }
+    append_deterministic_c_prefix_map_env(&mut env, &unit.derivation.args, selected_c_compiler);
     env
 }
 
@@ -11403,7 +11633,8 @@ fn run_build_script_metadata(
     let executable_path = executable.canonicalize().unwrap_or_else(|_| executable.to_path_buf());
     let package_root = build_script_package_root(unit);
     let mut command = Command::new(&executable_path);
-    let child_env = build_script_child_env(unit, options, &out_dir, package_root.as_deref());
+    let child_env =
+        build_script_child_env(unit, options, &out_dir, package_root.as_deref(), selected_c_compiler.as_ref());
     apply_rust_topology_child_env(&mut command, &child_env);
     if let Some(root) = &package_root {
         command.current_dir(root);
@@ -12423,6 +12654,9 @@ fn execute_rust_compiler_command(
         }
         command.env(COMPILER_POLICY_ADAPTER_REPORT_ENV, &policy.report_path);
     }
+    if let Some(source_root) = rustc_source_root_from_remaps(&unit.derivation.args) {
+        command.current_dir(source_root);
+    }
     command.output().map_err(|err| {
         let executable = compiler_policy
             .map_or_else(|| options.rustc.display().to_string(), |policy| policy.executable.display().to_string());
@@ -12475,7 +12709,7 @@ fn execute_rust_unit(
         Ok(identity) => identity,
         Err(blocker) => return blocked_execution_receipt(Some(unit), &blocker.class, &blocker.message),
     };
-    let src_path = rustc_source_path(&unit.derivation.args).ok_or_else(|| {
+    let src_path = rustc_materialized_source_path(&unit.derivation.args).ok_or_else(|| {
         RunError::Internal(format!("unit {} lacks a rustc source path in reviewable args", unit.unit_id))
     })?;
     if !src_path.is_file() {
@@ -14388,13 +14622,38 @@ mod tests {
         let mut unit = test_native_rust_unit(package_id, "app", "lib", &root);
         unit.package_root = normalize_path_string(&root);
         unit.source_path = normalize_path_string(&root.join("src/lib.rs"));
-        let source_closure = test_source_closure_with_kind(package_id, "app", SourceKind::Path);
+        let mut source_closure = test_source_closure_with_kind(package_id, "app", SourceKind::Path);
+        source_closure.sources[0].manifest_path = normalize_path_string(&root.join("Cargo.toml"));
         let mut plan_options = options(&root);
         plan_options.deterministic_release_paths = true;
         plan_options.path_remaps = deterministic_release_path_remaps(&root, Some(&execution));
+        let second_root = dir.path().join("second-source");
+        let second_execution = dir.path().join("second-proof").join("execution");
+        let mut second_source_closure = source_closure.clone();
+        second_source_closure.sources[0].manifest_path = normalize_path_string(&second_root.join("Cargo.toml"));
+        let mut second_options = options(&second_root);
+        second_options.deterministic_release_paths = true;
+        second_options.path_remaps = deterministic_release_path_remaps(&second_root, Some(&second_execution));
+        let fake_linker = execution.join("stage").join("cargo-guard-bin").join("cc");
+        let raw_digest = source_closure_digest(&source_closure.sources, &source_closure.blockers).unwrap();
+        let second_raw_digest =
+            source_closure_digest(&second_source_closure.sources, &second_source_closure.blockers).unwrap();
 
         let derivation = native_unit_derivation(&unit, Vec::new(), &source_closure, &plan_options);
 
+        assert_ne!(raw_digest, second_raw_digest);
+        assert_eq!(
+            execution_source_closure_digest(&source_closure, &plan_options),
+            execution_source_closure_digest(&second_source_closure, &second_options)
+        );
+        assert_eq!(rustc_source_path(&derivation.derivation.args).unwrap(), PathBuf::from("src/lib.rs"));
+        assert_eq!(rustc_materialized_source_path(&derivation.derivation.args).unwrap(), root.join("src/lib.rs"));
+        assert_eq!(rustc_source_root_from_remaps(&derivation.derivation.args).unwrap(), root.clone());
+        assert_eq!(rustc_linker_arg(&fake_linker, &plan_options), "linker=cc");
+        assert_eq!(
+            rustc_linker_arg(&fake_linker, &options(&root)),
+            format!("linker={}", normalize_path_string(&fake_linker))
+        );
         assert!(has_ordered_arg_pair(
             &derivation.derivation.args,
             RUSTC_REMAP_PATH_PREFIX_FLAG,
@@ -14422,6 +14681,10 @@ mod tests {
         assert_eq!(
             derivation.derivation.env.get(SNIX_BUILD_SANDBOX_SHELL_ENV).unwrap(),
             DETERMINISTIC_RELEASE_SANDBOX_SHELL
+        );
+        assert_eq!(
+            derivation.derivation.env.get("SOURCE_CLOSURE_DIGEST").unwrap(),
+            &execution_source_closure_digest(&source_closure, &plan_options)
         );
     }
 
@@ -14455,6 +14718,104 @@ mod tests {
         assert_eq!(root, package_root);
         assert_eq!(fallback_root, builder_dir);
         assert_ne!(fallback_root, PathBuf::from(DETERMINISTIC_RELEASE_SOURCE_PREFIX));
+    }
+
+    #[test]
+    fn build_script_child_env_adds_c_prefix_map_flags_for_receipt_bound_gnu_compiler() {
+        let dir = TempDir::new().unwrap();
+        let package_root = dir.path().join("build-pkg");
+        let execution_root = dir.path().join("execution");
+        let out_dir = execution_root.join("out");
+        let mut unit =
+            test_rust_derivation(0, "path+file://build-pkg#build-pkg@0.1.0", "custom-build", "host", Vec::new());
+        unit.derivation.args.extend([
+            RUSTC_REMAP_PATH_PREFIX_FLAG.to_string(),
+            format!(
+                "{}{}{}",
+                normalize_path_string(&package_root),
+                RUSTC_REMAP_SEPARATOR,
+                DETERMINISTIC_RELEASE_SOURCE_PREFIX
+            ),
+            RUSTC_REMAP_PATH_PREFIX_FLAG.to_string(),
+            format!(
+                "{}{}{}",
+                normalize_path_string(&execution_root),
+                RUSTC_REMAP_SEPARATOR,
+                DETERMINISTIC_RELEASE_EXECUTION_PREFIX
+            ),
+        ]);
+        let mut route = test_c_compiler_route();
+        route.compiler_family = "gcc".to_string();
+        let options = RustUnitExecutionOptions {
+            rustc: dir.path().join("rustc"),
+            output_root: execution_root.clone(),
+            compiler_policy: rust_compiler_policy_selection("plain", None, None).unwrap(),
+        };
+
+        let env = build_script_child_env(&unit, &options, &out_dir, Some(&package_root), Some(&route));
+
+        let source_map = format!("-ffile-prefix-map={}={DETERMINISTIC_RELEASE_SOURCE_PREFIX}", package_root.display());
+        let execution_map =
+            format!("-ffile-prefix-map={}={DETERMINISTIC_RELEASE_EXECUTION_PREFIX}", execution_root.display());
+        for key in C_PREFIX_MAP_ENV_KEYS {
+            let value = env.get(*key).expect("prefix map env key should be set");
+            assert!(value.contains(&source_map), "{key} should include source prefix map: {value}");
+            assert!(value.contains(&execution_map), "{key} should include execution prefix map: {value}");
+            assert!(value.contains("-fmacro-prefix-map="), "{key} should include macro prefix map: {value}");
+            assert!(value.contains("-fdebug-prefix-map="), "{key} should include debug prefix map: {value}");
+        }
+    }
+
+    #[test]
+    fn deterministic_release_path_remaps_prefer_provider_toolchain_inside_source_root() {
+        let dir = TempDir::new().unwrap();
+        let source_root = dir.path().join("source");
+        let execution_root = dir.path().join("proof").join("execution");
+        let provider_root = source_root.join(".pi/source-root-provider/store/hash-toolchain");
+        let provider_compiler = provider_root.join("bin/x86_64-linux-musl-gcc");
+        let provider_header = provider_root.join("x86_64-linux-musl/include/bits/alltypes.h");
+        let mut route = test_c_compiler_route();
+        route.execution_path = normalize_path_string(&provider_compiler);
+        route.compiler_family = "gcc".to_string();
+
+        let remaps =
+            deterministic_release_path_remaps_with_c_compiler(&source_root, Some(&execution_root), Some(&route));
+        let remapped_header = remap_normalized_path_string(&provider_header, &remaps);
+        let flags =
+            c_prefix_map_flags(&remaps, Some(&route)).expect("provider-capable compiler should get C prefix maps");
+        let provider_map = format!(
+            "-ffile-prefix-map={}={DETERMINISTIC_RELEASE_PROVIDER_C_TOOLCHAIN_PREFIX}",
+            normalize_path_string(&provider_root)
+        );
+        let source_map =
+            format!("-ffile-prefix-map={}={DETERMINISTIC_RELEASE_SOURCE_PREFIX}", normalize_path_string(&source_root));
+        let provider_position = flags.find(&provider_map).expect("provider prefix map should be present");
+        let source_position = flags.find(&source_map).expect("source prefix map should be present");
+
+        assert_eq!(
+            remapped_header,
+            format!("{DETERMINISTIC_RELEASE_PROVIDER_C_TOOLCHAIN_PREFIX}/x86_64-linux-musl/include/bits/alltypes.h")
+        );
+        assert!(
+            source_position < provider_position,
+            "more-specific provider prefix map should follow source map so GCC applies it last: {flags}"
+        );
+    }
+
+    #[test]
+    fn c_prefix_map_flags_reject_unknown_compiler_family_and_empty_remaps() {
+        let dir = TempDir::new().unwrap();
+        let mut route = test_c_compiler_route();
+        route.compiler_family = "unknown".to_string();
+        let remaps = deterministic_release_path_remaps(dir.path(), Some(&dir.path().join("execution")));
+        let mut env = BTreeMap::from([(CFLAGS_ENV.to_string(), "-O2".to_string())]);
+
+        assert!(c_prefix_map_flags(&remaps, None).is_none());
+        assert!(c_prefix_map_flags(&remaps, Some(&route)).is_none());
+        route.compiler_family = "clang".to_string();
+        assert!(c_prefix_map_flags(&[], Some(&route)).is_none());
+        append_env_flags(&mut env, CFLAGS_ENV, "-ffile-prefix-map=/a=/b");
+        assert_eq!(env.get(CFLAGS_ENV).unwrap(), "-O2 -ffile-prefix-map=/a=/b");
     }
 
     #[test]
@@ -15561,6 +15922,7 @@ rust-version = "1.80"
             },
             &dir.path().join("out"),
             None,
+            None,
         );
         assert_eq!(child_env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
         assert_eq!(child_env.get(CARGO_PKG_VERSION_ENV).unwrap(), "1.2.3-alpha.1+build.5");
@@ -15652,7 +16014,7 @@ rust-version = "1.80"
             compiler_policy: RustCompilerPolicySelection::default(),
         };
 
-        let env = build_script_child_env(&unit, &options, &out_dir, None);
+        let env = build_script_child_env(&unit, &options, &out_dir, None, None);
 
         assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
         assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
@@ -15690,7 +16052,7 @@ rust-version = "1.80"
         };
 
         let root = build_script_package_root(&unit).expect("source path has package root");
-        let env = build_script_child_env(&unit, &options, &out_dir, Some(&root));
+        let env = build_script_child_env(&unit, &options, &out_dir, Some(&root), None);
 
         assert_eq!(root, package_root);
         assert_eq!(env.get(BUILD_SCRIPT_RUSTC_ENV).unwrap(), &normalize_path_string(&rustc_path));
@@ -15723,7 +16085,7 @@ rust-version = "1.80"
             compiler_policy: RustCompilerPolicySelection::default(),
         };
 
-        let env = build_script_child_env(&unit, &options, &out_dir, build_script_package_root(&unit).as_deref());
+        let env = build_script_child_env(&unit, &options, &out_dir, build_script_package_root(&unit).as_deref(), None);
 
         assert!(!env.contains_key(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV));
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &rust_crate_name(&unit.target_name));
@@ -15749,7 +16111,7 @@ rust-version = "1.80"
             compiler_policy: RustCompilerPolicySelection::default(),
         };
 
-        let env = build_script_child_env(&unit, &options, &out_dir, None);
+        let env = build_script_child_env(&unit, &options, &out_dir, None, None);
 
         assert_eq!(env.get(BUILD_SCRIPT_HOST_ENV).unwrap(), &host_target_triple());
         assert_ne!(env.get(BUILD_SCRIPT_HOST_ENV).unwrap(), "spoofed-host");
