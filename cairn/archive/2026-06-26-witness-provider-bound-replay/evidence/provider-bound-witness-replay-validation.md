@@ -515,3 +515,50 @@ build succeeded drv=gnumake.drv outputs=["/tmp/mantle-build-make-kernel-mirror/s
 ```
 
 This validation only proves stage0 under the helper-style PATH. A full current-source self-hosting proof still needs to be rerun from the pushed URL-change commit before packaging a fresh release bundle or making any independent witness claim.
+
+### Follow-up: full current-source self-hosting proof after mirror fix
+
+After pushing the mirror fix as `9f3c4a71`, the full self-hosting proof completed successfully from a fresh scratch/bundle.
+
+Command:
+
+```sh
+CRUNCH_PROOF_SCRATCH_DIR=/tmp/mantle-self-hosting-current-9f3c4a71-work \
+  ./scripts/prove-self-hosting.sh \
+  --bundle-dir /tmp/mantle-self-hosting-current-9f3c4a71
+```
+
+Command output excerpt:
+
+```text
+stage2: /tmp/mantle-self-hosting-current-9f3c4a71-work/tmp/.tmpkcQRaH/store/07w0gjlnswwfx09s68x1c9ljxf61wvfr-mantle/bin/mantle
+bwrap:  mantle-built:/tmp/mantle-self-hosting-current-9f3c4a71-work/tmp/.tmpkcQRaH/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin
+busybox: /tmp/mantle-self-hosting-current-9f3c4a71-work/tmp/.tmpkcQRaH/store/wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox/bin/busybox
+proof bundle: /tmp/mantle-self-hosting-current-9f3c4a71
+proof manifest: /tmp/mantle-self-hosting-current-9f3c4a71/manifest.json
+proof summary: /tmp/mantle-self-hosting-current-9f3c4a71/summary.txt
+test self_hosting_stage0_stage1_stage2 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 49 filtered out; finished in 2244.18s
+```
+
+Summary excerpts from `/tmp/mantle-self-hosting-current-9f3c4a71/summary.txt`:
+
+```text
+schema: mantle-self-hosting-proof-v2
+proof_mode: FixedPoint
+selected_provider_kind: legacy-fetch
+stage1_binary: 5c2f0f0c1f69359d83912d62e39f80c3eb1845b3c2a21ac448f03e156a8d0830 binaries/stage1-mantle
+stage2_binary: 5c2f0f0c1f69359d83912d62e39f80c3eb1845b3c2a21ac448f03e156a8d0830 binaries/stage2-mantle
+stage0_bwrap: 93cacbf9a523c439d160745228073492be1121b62074889345e676858fd1adf2 /tmp/mantle-self-hosting-current-9f3c4a71-work/tmp/.tmpkcQRaH/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin/bwrap
+stage0_busybox: ce321b321d0f06650ebbb24b834f4d2d600f5765d9f5828fb09c41a3ccd31ed5 /tmp/mantle-self-hosting-current-9f3c4a71-work/tmp/.tmpkcQRaH/store/wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox/bin/busybox
+stage2_bwrap: 93cacbf9a523c439d160745228073492be1121b62074889345e676858fd1adf2 /tmp/mantle-self-hosting-current-9f3c4a71-work/tmp/.tmpkcQRaH/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin/bwrap
+stage2_busybox: ce321b321d0f06650ebbb24b834f4d2d600f5765d9f5828fb09c41a3ccd31ed5 /tmp/mantle-self-hosting-current-9f3c4a71-work/tmp/.tmpkcQRaH/store/wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox/bin/busybox
+stage1_equals_stage2: true
+stage0_bwrap_equals_stage2_bwrap: true
+stage0_busybox_equals_stage2_busybox: true
+stage2_hermeticity_mode: strict
+stage2_fallback_events: []
+```
+
+This proves the current pushed source can produce a fixed-point self-hosting proof after the GNU mirror fix. It still does not prove independent witness verification by itself: a fresh release bundle must be packaged from this source lineage, and then a witness request must replay both the provider fixed-point proof and this self-hosting proof against the signed release outputs.
