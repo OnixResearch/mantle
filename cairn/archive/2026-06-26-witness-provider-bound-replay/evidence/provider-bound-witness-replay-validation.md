@@ -562,3 +562,48 @@ stage2_fallback_events: []
 ```
 
 This proves the current pushed source can produce a fixed-point self-hosting proof after the GNU mirror fix. It still does not prove independent witness verification by itself: a fresh release bundle must be packaged from this source lineage, and then a witness request must replay both the provider fixed-point proof and this self-hosting proof against the signed release outputs.
+
+### Follow-up: current-source provider fixed-point proof after mirror/self-hosting evidence
+
+After the self-hosting proof evidence was pushed as `592796b5`, the provider fixed-point proof was rerun from the current pushed tree using the source-built Rust provider inputs.
+
+Command:
+
+```sh
+OUT=/tmp/mantle-provider-fixed-point-current-592796b5
+PROVIDER=/home/brittonr/.cargo-target/repo-targets/mantle/rust-source-provider-musl-host-route-patch-plan-rerun38-2026-06-25/provider-out
+CLOSURE=/home/brittonr/git/mantle/target/source-built-rust-provider-fixed-point-2026-06-25/native-toolchain-closure.json
+RUSTC=/home/brittonr/.cargo-target/repo-targets/mantle/rust-source-provider-musl-host-route-patch-plan-rerun38-2026-06-25/provider-out/bin/rustc
+rm -rf "$OUT"
+/home/brittonr/.cargo-target/debug/mantle self-build \
+  --cargo-free \
+  --fixed-point \
+  --out "$OUT" \
+  --rust-source-provider "$PROVIDER" \
+  --toolchain-closure "$CLOSURE" \
+  --rustc "$RUSTC" \
+  --target x86_64-unknown-linux-musl
+```
+
+Output:
+
+```text
+Cargo-free fixed-point: success
+bundle: /tmp/mantle-provider-fixed-point-current-592796b5
+stage1_binary_blake3: 491040e13bc511a7a990810aef8a8d1ec5a9c56f77ed5c70817e79d3f539b08c
+stage2_binary_blake3: 491040e13bc511a7a990810aef8a8d1ec5a9c56f77ed5c70817e79d3f539b08c
+```
+
+Metadata excerpts:
+
+```text
+meta.json: "status": "success"
+meta.json: "fixed_point": true
+meta.json: "root": "/home/brittonr/git/mantle"
+meta.json: "target_triple": "x86_64-unknown-linux-musl"
+meta.json: "source_built_toolchain_closure.status": "enforced-source-built"
+stage1/status.txt: 0
+stage2/status.txt: 0
+```
+
+The current provider candidate digest is `491040e13bc511a7a990810aef8a8d1ec5a9c56f77ed5c70817e79d3f539b08c`. Together with the self-hosting proof's `5c2f0f0c1f69359d83912d62e39f80c3eb1845b3c2a21ac448f03e156a8d0830` stage2 digest, these are the candidate artifacts for a fresh current-source release bundle. They do not update the old signed release request; the next step is to package and attest a new bundle from these proof outputs.
