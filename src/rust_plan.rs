@@ -100,8 +100,13 @@ const RUSTC_LINK_LIB_MODIFIER_DISABLE: char = '-';
 const RUSTC_LINK_SELF_CONTAINED_OPTION: &str = "link-self-contained";
 const RUSTC_EXTERNAL_LINKER_MODE_ARG: &str = "link-self-contained=no";
 const RUSTC_METADATA_ARG_PREFIX: &str = "metadata=";
+const RUSTC_REMAP_PATH_PREFIX_FLAG: &str = "--remap-path-prefix";
+const RUSTC_REMAP_SEPARATOR: char = '=';
 const RUSTC_METADATA_HEX_CHARS: usize = 16;
 const BLAKE3_HEX_CHARS: usize = 64;
+const DETERMINISTIC_RELEASE_SOURCE_PREFIX: &str = "/mantle/release/source";
+const DETERMINISTIC_RELEASE_EXECUTION_PREFIX: &str = "/mantle/release/execution";
+const DETERMINISTIC_RELEASE_SANDBOX_SHELL: &str = "/mantle/release/provider/sandbox-shell";
 const REDACTED_DIAGNOSTIC_MAX_LINES: usize = 12;
 const REDACTED_DIAGNOSTIC_TEMP_PATH: &str = "<redacted-temp-path>";
 const TEMP_PATH_PREFIXES: &[&str] = &["/tmp/", "/var/tmp/"];
@@ -162,6 +167,14 @@ pub(crate) struct RustPlanOptions {
     pub(crate) all_features: bool,
     pub(crate) no_default_features: bool,
     pub(crate) no_cargo_oracle: bool,
+    pub(crate) deterministic_release_paths: bool,
+    pub(crate) path_remaps: Vec<RustPathRemap>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct RustPathRemap {
+    pub(crate) from: String,
+    pub(crate) to: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -208,6 +221,14 @@ pub(crate) struct RustPlanInvocation {
     pub(crate) features: Vec<String>,
     pub(crate) all_features: bool,
     pub(crate) no_default_features: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) deterministic_release_paths: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) path_remaps: Vec<RustPathRemap>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1403,6 +1424,8 @@ fn capture_rust_plan_with_oracle(
             features: sorted_strings(options.features.clone()),
             all_features: options.all_features,
             no_default_features: options.no_default_features,
+            deterministic_release_paths: options.deterministic_release_paths,
+            path_remaps: options.path_remaps.clone(),
         },
         package_count: metadata.packages.len(),
         packages,
@@ -1512,6 +1535,8 @@ fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlan
             features: sorted_strings(options.features.clone()),
             all_features: options.all_features,
             no_default_features: options.no_default_features,
+            deterministic_release_paths: options.deterministic_release_paths,
+            path_remaps: options.path_remaps.clone(),
         },
         package_count: native_cargo_packages.len(),
         packages,
@@ -7098,6 +7123,65 @@ fn append_rustc_metadata_args(args: &mut Vec<String>, metadata: &str) {
     args.push(format!("{RUSTC_METADATA_ARG_PREFIX}{metadata}"));
 }
 
+pub(crate) fn deterministic_release_path_remaps(
+    root: &Path,
+    execution_output_root: Option<&Path>,
+) -> Vec<RustPathRemap> {
+    debug_assert!(root.is_absolute());
+    let mut remaps = vec![RustPathRemap {
+        from: normalize_path_string(root),
+        to: DETERMINISTIC_RELEASE_SOURCE_PREFIX.to_string(),
+    }];
+    if let Some(output_root) = execution_output_root {
+        let absolute_output_root = absolute_path_from(output_root, root);
+        remaps.push(RustPathRemap {
+            from: normalize_path_string(&absolute_output_root),
+            to: DETERMINISTIC_RELEASE_EXECUTION_PREFIX.to_string(),
+        });
+    }
+    remaps.sort();
+    remaps.dedup();
+    remaps
+}
+
+fn append_rustc_path_remap_args(args: &mut Vec<String>, remaps: &[RustPathRemap]) {
+    for remap in remaps {
+        debug_assert!(!remap.from.is_empty());
+        debug_assert!(!remap.to.is_empty());
+        args.push(RUSTC_REMAP_PATH_PREFIX_FLAG.to_string());
+        args.push(format!("{}{}{}", remap.from, RUSTC_REMAP_SEPARATOR, remap.to));
+    }
+}
+
+fn remap_normalized_path_string(path: &Path, remaps: &[RustPathRemap]) -> String {
+    let normalized = normalize_path_string(path);
+    for remap in remaps {
+        if normalized == remap.from {
+            return remap.to.clone();
+        }
+        let prefix = format!("{}/", remap.from);
+        if let Some(suffix) = normalized.strip_prefix(&prefix) {
+            return format!("{}/{suffix}", remap.to);
+        }
+    }
+    normalized
+}
+
+fn compile_time_manifest_dir(package_root: &str, options: &RustPlanOptions) -> String {
+    let path = Path::new(package_root);
+    if options.deterministic_release_paths {
+        return remap_normalized_path_string(path, &options.path_remaps);
+    }
+    normalize_path_string(path)
+}
+
+fn insert_deterministic_release_compile_env(env: &mut BTreeMap<String, String>, options: &RustPlanOptions) {
+    if !options.deterministic_release_paths {
+        return;
+    }
+    env.insert(SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), DETERMINISTIC_RELEASE_SANDBOX_SHELL.to_string());
+}
+
 fn rustc_unit_metadata_disambiguator(
     package_id: &str,
     target_name: &str,
@@ -7177,6 +7261,7 @@ fn native_unit_derivation(
         args.push("--extern".to_string());
         args.push(format!("{}={}", dependency.name, dependency.artifact));
     }
+    append_rustc_path_remap_args(&mut args, &options.path_remaps);
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
     let mut env = BTreeMap::new();
     env.insert("CRATE_KIND".to_string(), unit.target_kind.clone());
@@ -7187,7 +7272,11 @@ fn native_unit_derivation(
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
     append_cargo_package_env(&mut env, &unit.cargo_package_env);
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
-    env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), unit.package_root.clone());
+    env.insert(
+        BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(),
+        compile_time_manifest_dir(&unit.package_root, options),
+    );
+    insert_deterministic_release_compile_env(&mut env, options);
     if let Some(links) = &unit.package_links {
         env.insert(PACKAGE_LINKS_ENV.to_string(), links.clone());
     }
@@ -7273,6 +7362,7 @@ fn native_host_unit_derivation(
         args.push(RUSTC_EXTERN_FLAG.to_string());
         args.push(format!("{}={}", dependency.name, dependency.artifact));
     }
+    append_rustc_path_remap_args(&mut args, &options.path_remaps);
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
     let mut env = BTreeMap::new();
     env.insert("CRATE_KIND".to_string(), unit.target_kind.clone());
@@ -7283,7 +7373,11 @@ fn native_host_unit_derivation(
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
     append_cargo_package_env(&mut env, &unit.cargo_package_env);
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), unit.package_name.clone());
-    env.insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), unit.package_root.clone());
+    env.insert(
+        BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(),
+        compile_time_manifest_dir(&unit.package_root, options),
+    );
+    insert_deterministic_release_compile_env(&mut env, options);
     if let Some(links) = &unit.package_links {
         env.insert(PACKAGE_LINKS_ENV.to_string(), links.clone());
     }
@@ -7784,6 +7878,7 @@ fn summarize_unit_derivation(
         args.push("--extern".to_string());
         args.push(format!("{}={}", dependency.name, dependency.artifact));
     }
+    append_rustc_path_remap_args(&mut args, &options.path_remaps);
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
     let mut env = BTreeMap::new();
     env.insert("CRATE_KIND".to_string(), target_kind.clone());
@@ -7792,6 +7887,7 @@ fn summarize_unit_derivation(
     env.insert("PACKAGE_ID".to_string(), package_id.clone());
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), source_closure.digest_blake3.clone());
+    insert_deterministic_release_compile_env(&mut env, options);
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
     }
@@ -11193,11 +11289,17 @@ fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<
 }
 
 fn build_script_package_root(unit: &RustUnitDerivationSummary) -> Option<PathBuf> {
+    let source_parent = rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf));
+    if unit.target_kind == "custom-build" {
+        return source_parent
+            .or_else(|| unit.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).map(PathBuf::from));
+    }
     unit.derivation
         .env
         .get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV)
         .map(PathBuf::from)
-        .or_else(|| rustc_source_path(&unit.derivation.args).and_then(|path| path.parent().map(Path::to_path_buf)))
+        .filter(|path| path.exists())
+        .or(source_parent)
 }
 
 fn absolute_path_from(path: &Path, base: &Path) -> PathBuf {
@@ -13532,6 +13634,8 @@ mod tests {
             all_features: false,
             no_default_features: true,
             no_cargo_oracle: false,
+            deterministic_release_paths: false,
+            path_remaps: Vec::new(),
         }
     }
 
@@ -14268,6 +14372,74 @@ mod tests {
 
         assert_eq!(rustc_metadata_arg(&first.derivation.args), rustc_metadata_arg(&second.derivation.args));
         assert_eq!(first.rustc_args_digest_blake3, second.rustc_args_digest_blake3);
+    }
+
+    #[test]
+    fn deterministic_release_paths_add_remaps_and_provider_placeholder_env() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("source");
+        let execution = dir.path().join("proof").join("execution");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(&execution).unwrap();
+        let package_id = "path+file://app#app@0.1.0";
+        let mut unit = test_native_rust_unit(package_id, "app", "lib", &root);
+        unit.package_root = normalize_path_string(&root);
+        unit.source_path = normalize_path_string(&root.join("src/lib.rs"));
+        let source_closure = test_source_closure_with_kind(package_id, "app", SourceKind::Path);
+        let mut plan_options = options(&root);
+        plan_options.deterministic_release_paths = true;
+        plan_options.path_remaps = deterministic_release_path_remaps(&root, Some(&execution));
+
+        let derivation = native_unit_derivation(&unit, Vec::new(), &source_closure, &plan_options);
+
+        assert!(has_ordered_arg_pair(
+            &derivation.derivation.args,
+            RUSTC_REMAP_PATH_PREFIX_FLAG,
+            &format!(
+                "{}{}{}",
+                normalize_path_string(&root),
+                RUSTC_REMAP_SEPARATOR,
+                DETERMINISTIC_RELEASE_SOURCE_PREFIX
+            ),
+        ));
+        assert!(has_ordered_arg_pair(
+            &derivation.derivation.args,
+            RUSTC_REMAP_PATH_PREFIX_FLAG,
+            &format!(
+                "{}{}{}",
+                normalize_path_string(&execution),
+                RUSTC_REMAP_SEPARATOR,
+                DETERMINISTIC_RELEASE_EXECUTION_PREFIX
+            ),
+        ));
+        assert_eq!(
+            derivation.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(),
+            &format!("{DETERMINISTIC_RELEASE_SOURCE_PREFIX}")
+        );
+        assert_eq!(
+            derivation.derivation.env.get(SNIX_BUILD_SANDBOX_SHELL_ENV).unwrap(),
+            DETERMINISTIC_RELEASE_SANDBOX_SHELL
+        );
+    }
+
+    #[test]
+    fn build_script_package_root_falls_back_to_real_source_when_manifest_dir_is_virtual() {
+        let dir = TempDir::new().unwrap();
+        let package_root = dir.path().join("build-pkg");
+        std::fs::create_dir_all(&package_root).unwrap();
+        let source_path = package_root.join("build.rs");
+        std::fs::write(&source_path, "fn main() {}\n").unwrap();
+        let mut unit =
+            test_rust_derivation(0, "path+file://build-pkg#build-pkg@0.1.0", "custom-build", "host", Vec::new());
+        unit.derivation.args.push(normalize_path_string(&source_path));
+        unit.derivation
+            .env
+            .insert(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV.to_string(), DETERMINISTIC_RELEASE_SOURCE_PREFIX.to_string());
+
+        let root = build_script_package_root(&unit).expect("source parent should be available");
+
+        assert_eq!(root, package_root);
+        assert_ne!(root, PathBuf::from(DETERMINISTIC_RELEASE_SOURCE_PREFIX));
     }
 
     #[test]

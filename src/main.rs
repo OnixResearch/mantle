@@ -483,6 +483,10 @@ enum Command {
         #[arg(long = "source-built-c-compiler-route-json", hide = true)]
         source_built_c_compiler_route_json: Option<String>,
 
+        /// Normalize source/execution/provider paths for release replay proofs
+        #[arg(long = "deterministic-release-paths", hide = true)]
+        deterministic_release_paths: bool,
+
         /// Execute the first supported lib/bin unit from the captured explicit derivation graph
         #[arg(long, conflicts_with_all = ["execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
         execute_first_supported_unit: bool,
@@ -2369,6 +2373,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         no_default_features,
         no_cargo_oracle,
         source_built_c_compiler_route_json,
+        deterministic_release_paths,
         execute_first_supported_unit,
         execute_first_dependency_chain,
         execute_target_topology,
@@ -2383,6 +2388,11 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         return Err(RunError::Internal("run_rust_plan_command called with non-RustPlan command".to_string()));
     };
     let root = root.clone().unwrap_or(current_dir_or_error()?);
+    let path_remaps = if *deterministic_release_paths {
+        rust_plan::deterministic_release_path_remaps(&root, execution_output_root.as_deref())
+    } else {
+        Vec::new()
+    };
     let compiler_policy = rust_plan::rust_compiler_policy_selection(
         compiler_policy_mode,
         compiler_policy_provider_manifest.clone(),
@@ -2398,6 +2408,8 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         all_features: *all_features,
         no_default_features: *no_default_features,
         no_cargo_oracle: *no_cargo_oracle,
+        deterministic_release_paths: *deterministic_release_paths,
+        path_remaps,
     };
     let receipt = rust_plan::capture_rust_plan(&options)?;
     let selected_c_compiler_route =

@@ -49,6 +49,7 @@ const ROOT_FLAG: &str = "--root";
 const CARGO_FLAG: &str = "--cargo";
 const RUSTC_FLAG: &str = "--rustc";
 const NO_CARGO_ORACLE_FLAG: &str = "--no-cargo-oracle";
+const DETERMINISTIC_RELEASE_PATHS_FLAG: &str = "--deterministic-release-paths";
 const EXECUTE_TOPOLOGY_FLAG: &str = "--execute-topology";
 const EXECUTION_OUTPUT_ROOT_FLAG: &str = "--execution-output-root";
 const HELP_FLAG: &str = "--help";
@@ -1123,6 +1124,7 @@ fn rust_plan_args(
     }
     args.extend([
         OsString::from(NO_CARGO_ORACLE_FLAG),
+        OsString::from(DETERMINISTIC_RELEASE_PATHS_FLAG),
         OsString::from(EXECUTE_TOPOLOGY_FLAG),
         OsString::from(EXECUTION_OUTPUT_ROOT_FLAG),
         execution_dir.as_os_str().to_os_string(),
@@ -2917,6 +2919,8 @@ mod tests {
             stage1.command.args,
             rust_plan_args(root, &stage1.explicit_cargo_shim, rustc, &[], &plan.shared_execution_dir)
         );
+        assert!(stage1.command.args.contains(&OsString::from(DETERMINISTIC_RELEASE_PATHS_FLAG)));
+        assert!(stage2.command.args.contains(&OsString::from(DETERMINISTIC_RELEASE_PATHS_FLAG)));
     }
 
     #[test]
