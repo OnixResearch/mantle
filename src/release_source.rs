@@ -8,7 +8,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::errors::RunError;
-use crate::self_build::STAGED_SOURCE_TOP_LEVEL_ENTRIES;
 use crate::self_build::require_checked_vendor_inputs;
 
 const MAX_TRACKED_SOURCE_PATHS: u32 = 200_000;
@@ -16,12 +15,8 @@ const MAX_VENDOR_SOURCE_PATHS: u32 = 200_000;
 const MAX_PARENT_DIRS: u32 = 200_000;
 const TAR_MODE_DIR_DEFAULT: u32 = 0o755;
 const TAR_MODE_SYMLINK_DEFAULT: u32 = 0o777;
-const RELEASE_SOURCE_EXTRA_TRACKED_PATHS: &[&str] = &[
-    "docs/bootstrap-stage0-inventory.md",
-    "scripts/prove-self-hosting.sh",
-    "tests/audit_support.rs",
-    "tests/self_hosting.rs",
-];
+const RELEASE_SOURCE_SKIP_ANYWHERE: &[&str] = &[".agent", ".git", ".jj", ".pi", "target"];
+const RELEASE_SOURCE_SKIP_AT_ROOT: &[&str] = &["cairn"];
 
 pub(crate) fn write_tracked_source_archive(repo_root: &Path, archive_path: &Path) -> Result<(), RunError> {
     assert!(repo_root.is_dir(), "repo root must exist: {}", repo_root.display());
@@ -72,7 +67,7 @@ fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
             continue;
         }
         let relative_path = PathBuf::from(os_string_from_git_bytes(raw_path)?);
-        if !is_allowlisted_source_path(&relative_path) {
+        if !is_releasable_tracked_source_path(&relative_path) {
             continue;
         }
         let tracked_count_u32: u32 = tracked
@@ -141,23 +136,33 @@ fn collect_vendor_source_child(repo_root: &Path, child: &Path, paths: &mut Vec<P
     Ok(())
 }
 
-fn is_allowlisted_source_path(relative_path: &Path) -> bool {
+fn is_releasable_tracked_source_path(relative_path: &Path) -> bool {
+    assert!(!relative_path.is_absolute(), "source path must be relative");
     assert!(!relative_path.as_os_str().is_empty(), "source path must not be empty");
-    if is_extra_release_source_path(relative_path) {
-        return true;
+
+    let mut first_component = None;
+    for component in relative_path.components() {
+        let std::path::Component::Normal(component_name) = component else {
+            return false;
+        };
+        if first_component.is_none() {
+            first_component = Some(component_name);
+        }
+        let Some(name) = component_name.to_str() else {
+            return false;
+        };
+        if RELEASE_SOURCE_SKIP_ANYWHERE.contains(&name) {
+            return false;
+        }
     }
-    let Some(first_component) = relative_path.components().next() else {
+
+    let Some(first_component) = first_component else {
         return false;
     };
-    let first_component = first_component.as_os_str();
-    STAGED_SOURCE_TOP_LEVEL_ENTRIES.iter().any(|entry| first_component == std::ffi::OsStr::new(entry))
-}
-
-fn is_extra_release_source_path(relative_path: &Path) -> bool {
-    assert!(!relative_path.is_absolute(), "source path must be relative");
-    RELEASE_SOURCE_EXTRA_TRACKED_PATHS
-        .iter()
-        .any(|allowed_path| relative_path == Path::new(allowed_path))
+    let Some(first_name) = first_component.to_str() else {
+        return false;
+    };
+    !RELEASE_SOURCE_SKIP_AT_ROOT.contains(&first_name)
 }
 
 fn append_source_paths_to_archive(
@@ -429,7 +434,7 @@ mod tests {
     }
 
     fn create_minimal_repo(repo_root: &Path) {
-        write_file(&repo_root.join(".gitignore"), b"vendor-deps/\n");
+        write_file(&repo_root.join(".gitignore"), b"vendor-deps/\ntarget/\n.pi/\n");
         write_file(&repo_root.join(".cargo/vendor-config.toml"), b"directory = \"vendor-deps\"\n");
         write_test_vendor_package(repo_root);
         write_file(&repo_root.join("Cargo.toml"), b"[package]\nname=\"demo\"\nversion=\"0.1.0\"\nedition=\"2024\"\n");
@@ -437,6 +442,7 @@ mod tests {
             &repo_root.join("Cargo.lock"),
             b"[[package]]\nname = \"dep\"\nversion = \"0.1.0\"\nsource = \"git+https://example.invalid/dep.git#0123456789abcdef\"\n",
         );
+        write_file(&repo_root.join("README.md"), b"# demo\n");
         write_file(&repo_root.join("bootstrap/seed.ncl"), b"{}\n");
         write_file(&repo_root.join("builders/default.ncl"), b"{}\n");
         write_file(&repo_root.join("docs/bootstrap-stage0-inventory.md"), b"# inventory\n");
@@ -450,16 +456,25 @@ mod tests {
         write_file(&repo_root.join("rust-toolchain.toml"), b"[toolchain]\nchannel=\"nightly\"\n");
         write_file(&repo_root.join("src/main.rs"), b"fn main() {}\n");
         write_file(&repo_root.join("vendor/README"), b"vendor\n");
+        write_file(&repo_root.join("cairn/specs/demo/spec.md"), b"# skipped evidence\n");
+        write_file(&repo_root.join("target/release-signing/test/signing-key"), b"secret\n");
+        write_file(&repo_root.join(".pi/private-note"), b"private\n");
     }
 
     #[test]
-    fn source_archive_uses_current_worktree_verified_vendor_and_skips_untracked_files() {
+    fn source_archive_uses_current_worktree_verified_vendor_and_tracked_package_files() {
         let repo = tempfile::tempdir().unwrap();
         create_minimal_repo(repo.path());
         assert_git_ok(repo.path(), &["init"]);
         assert_git_ok(repo.path(), &["config", "user.email", "pi@example.com"]);
         assert_git_ok(repo.path(), &["config", "user.name", "Pi"]);
         assert_git_ok(repo.path(), &["add", "."]);
+        assert_git_ok(repo.path(), &[
+            "add",
+            "-f",
+            "target/release-signing/test/signing-key",
+            ".pi/private-note",
+        ]);
         assert_git_ok(repo.path(), &["commit", "-m", "initial"]);
 
         write_file(&repo.path().join("src/main.rs"), b"fn main() { println!(\"worktree\"); }\n");
@@ -473,12 +488,16 @@ mod tests {
         let mut found_main = false;
         let mut found_untracked = false;
         let mut found_ignored_vendor = false;
+        let mut found_readme = false;
         let mut found_proof_driver = false;
         let mut found_inventory_doc = false;
         let mut found_unrelated_script = false;
         let mut found_self_hosting_test = false;
         let mut found_audit_support = false;
         let mut found_unrelated_test = false;
+        let mut found_cairn_spec = false;
+        let mut found_target_secret = false;
+        let mut found_pi_private_note = false;
         for entry_result in tar.entries().unwrap() {
             let mut entry = entry_result.unwrap();
             let path = entry.path().unwrap().into_owned();
@@ -493,6 +512,9 @@ mod tests {
             }
             if path == std::path::Path::new("vendor-deps/dep/Cargo.toml") {
                 found_ignored_vendor = true;
+            }
+            if path == std::path::Path::new("README.md") {
+                found_readme = true;
             }
             if path == std::path::Path::new("scripts/prove-self-hosting.sh") {
                 found_proof_driver = true;
@@ -512,16 +534,29 @@ mod tests {
             if path == std::path::Path::new("tests/unrelated.rs") {
                 found_unrelated_test = true;
             }
+            if path == std::path::Path::new("cairn/specs/demo/spec.md") {
+                found_cairn_spec = true;
+            }
+            if path == std::path::Path::new("target/release-signing/test/signing-key") {
+                found_target_secret = true;
+            }
+            if path == std::path::Path::new(".pi/private-note") {
+                found_pi_private_note = true;
+            }
         }
 
         assert!(found_main, "archive must contain tracked modified file");
         assert!(found_ignored_vendor, "archive must include verified ignored vendor-deps");
+        assert!(found_readme, "archive must include tracked package-root files seen by native source hashing");
         assert!(found_proof_driver, "archive must include witness rebuild workflow driver");
         assert!(found_inventory_doc, "archive must include proof inventory consumed by workflow driver");
+        assert!(found_unrelated_script, "archive must include tracked helper scripts seen by native source hashing");
         assert!(found_self_hosting_test, "archive must include self-hosting test target used by workflow driver");
         assert!(found_audit_support, "archive must include self-hosting test support module");
+        assert!(found_unrelated_test, "archive must include tracked tests seen by native source hashing");
         assert!(!found_untracked, "archive must skip untracked file");
-        assert!(!found_unrelated_script, "archive must not include unrelated scripts by directory prefix");
-        assert!(!found_unrelated_test, "archive must not include unrelated tests by directory prefix");
+        assert!(!found_cairn_spec, "archive must skip root Cairn evidence skipped by native source hashing");
+        assert!(!found_target_secret, "archive must skip target secrets even if force-tracked");
+        assert!(!found_pi_private_note, "archive must skip private .pi files even if force-tracked");
     }
 }
