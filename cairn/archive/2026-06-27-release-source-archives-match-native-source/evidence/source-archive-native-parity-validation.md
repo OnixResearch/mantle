@@ -187,3 +187,22 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks release-source-archi
 }
 exit_status=0
 ```
+
+### Post-archive validation
+
+The Cairn archive command moved the change package but did not automatically merge the ADDED requirement into `cairn/specs/verification-evidence/spec.md`; the requirement was manually synced into the accepted spec before this validation.
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+exit_status=0
+```
