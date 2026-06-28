@@ -448,3 +448,21 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks provider-fixed-point
 }
 
 ```
+
+## Post-archive validation
+
+Archive directory was renamed from `1970-01-01-provider-fixed-point-path-normalization` to `2026-06-28-provider-fixed-point-path-normalization` because `cairn archive --execute` emitted the known bogus epoch date. The ADDED requirement was manually synced into `cairn/specs/verification-evidence/spec.md` before validation.
+
+```text
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 6,
+  "valid": true
+}
+```
