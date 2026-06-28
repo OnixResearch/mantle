@@ -417,6 +417,12 @@ matched release artifact path/digest. This is provider-backed artifact evidence,
 not a deterministic-release, compiler-correctness, full-bootstrap, deploy, or
 full Cargo compatibility claim.
 
+Current bounded provider-bound evidence is summarized in
+[`docs/release-notes/provider-bound-release-evidence-2026-06-28-provider-remap-fixed.md`](release-notes/provider-bound-release-evidence-2026-06-28-provider-remap-fixed.md).
+The durable local artifact copy is recorded there; publish that wording as
+provider-bound/local quorum evidence, not as an external independent rebuild
+unless a separate operator supplies the counted witness sidecar.
+
 `mantle release verify` proves bundle-local integrity and proof-context by
 itself. It checks that required bundled artifacts exist, that the manifest stays
 canonical, that recorded digests still match, and that the nested proof bundle
