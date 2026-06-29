@@ -7,6 +7,8 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+const MAX_STDLIB_SEARCH_ANCESTORS: usize = 12;
+
 /// The embedded stdlib files.
 const STDLIB_FILES: &[(&str, &str)] = &[
     ("lib.ncl", include_str!("../../../lib/lib.ncl")),
@@ -61,14 +63,29 @@ pub fn write_stdlib(dir: Option<&Path>) -> Result<PathBuf, std::io::Error> {
     Ok(target)
 }
 
+fn source_stdlib_candidates(current_dir: Option<&Path>, current_exe: Option<&Path>) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(dir) = current_dir {
+        for ancestor in dir.ancestors().take(MAX_STDLIB_SEARCH_ANCESTORS) {
+            candidates.push(ancestor.join("lib"));
+        }
+    }
+    if let Some(exe) = current_exe
+        && let Some(exe_dir) = exe.parent()
+    {
+        for ancestor in exe_dir.ancestors().take(MAX_STDLIB_SEARCH_ANCESTORS) {
+            candidates.push(ancestor.join("lib"));
+        }
+    }
+    candidates
+}
+
 /// Return the stdlib directory from the source tree, if it exists.
 /// Useful during development — avoids needing to embed/extract.
 pub fn source_stdlib_dir() -> Option<PathBuf> {
-    // Look for lib/ relative to the workspace root
-    let candidates = [
-        PathBuf::from("lib"),
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib"),
-    ];
+    let current_dir = std::env::current_dir().ok();
+    let current_exe = std::env::current_exe().ok();
+    let candidates = source_stdlib_candidates(current_dir.as_deref(), current_exe.as_deref());
     for candidate in &candidates {
         let resolved = candidate.canonicalize().ok().filter(|p| p.join("lib.ncl").exists());
         if let Some(path) = resolved {
@@ -143,6 +160,24 @@ mod tests {
         let mtime_after = std::fs::metadata(dir.path().join("lib.ncl")).unwrap().modified().unwrap();
 
         assert_eq!(mtime_before, mtime_after, "file should not be rewritten");
+    }
+
+    #[test]
+    fn source_stdlib_candidates_include_cwd_and_exe_ancestors() {
+        let cwd = Path::new("/workspace/project");
+        let exe = Path::new("/workspace/project/target/debug/mantle");
+        let candidates = source_stdlib_candidates(Some(cwd), Some(exe));
+
+        assert!(candidates.contains(&PathBuf::from("/workspace/project/lib")));
+        assert!(candidates.contains(&PathBuf::from("/workspace/project/target/debug/lib")));
+        assert!(candidates.contains(&PathBuf::from("/workspace/lib")));
+    }
+
+    #[test]
+    fn source_stdlib_candidates_empty_without_inputs() {
+        let candidates = source_stdlib_candidates(None, None);
+
+        assert!(candidates.is_empty());
     }
 
     #[test]

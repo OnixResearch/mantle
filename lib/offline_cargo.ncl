@@ -84,16 +84,22 @@ in
           m%"
             set -eu
             BB=/bin/busybox
-            $BB mkdir -p /tmp/tools /tmp/home /tmp/build /tmp/cargo-home /tmp/cargo-target
+            TMP_ROOT=/tmp
+            TOOLS_DIR="$TMP_ROOT/tools"
+            HOME_DIR="$TMP_ROOT/home"
+            BUILD_DIR="$TMP_ROOT/build"
+            CARGO_HOME_DIR="$TMP_ROOT/cargo-home"
+            CARGO_TARGET_DIR_REAL="$TMP_ROOT/cargo-target"
+            $BB mkdir -p "$TOOLS_DIR" "$HOME_DIR" "$BUILD_DIR" "$CARGO_HOME_DIR" "$CARGO_TARGET_DIR_REAL"
             for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep awk tr head tail \
                        sort wc expr test basename dirname install find xargs readlink \
                        touch true false tee printf; do
-              $BB ln -sf $BB /tmp/tools/$cmd
+              $BB ln -sf $BB "$TOOLS_DIR/$cmd"
             done
-            export PATH="/tmp/tools"
-            export HOME=/tmp/home
-            export CARGO_HOME=/tmp/cargo-home
-            export CARGO_TARGET_DIR=/tmp/cargo-target
+            export PATH="$TOOLS_DIR"
+            export HOME="$HOME_DIR"
+            export CARGO_HOME="$CARGO_HOME_DIR"
+            export CARGO_TARGET_DIR="$CARGO_TARGET_DIR_REAL"
 
             find_input() {
               suffix="$1"
@@ -125,9 +131,9 @@ in
             export LIBRARY_PATH="$TOOLCHAIN/x86_64-linux-musl/lib"
             export RUSTFLAGS="-C link-arg=-L$TOOLCHAIN/x86_64-linux-musl/lib"
 
-            cp -r "$SRC/." /tmp/build/
-            chmod -R u+w /tmp/build
-            cd /tmp/build
+            cp -r "$SRC/." "$BUILD_DIR/"
+            chmod -R u+w "$BUILD_DIR"
+            cd "$BUILD_DIR"
 
             mkdir -p .cargo
             cat > .cargo/config.toml << CARGOEOF

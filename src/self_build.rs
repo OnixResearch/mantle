@@ -99,6 +99,24 @@ const SELF_BUILD_STEP_COUNT: u32 = 4;
 /// self-build evidence lines.
 const PROOF_PREFIX: &str = "self-build-proof:";
 
+/// Stable in-sandbox root for bootstrap tool aliases used by the self-build.
+const SELF_BUILD_BOOTSTRAP_ALIAS_ROOT: &str = "/tmp/bootstrap";
+
+/// Stable logical prefix rustc sees for bootstrap aliases in deterministic self-builds.
+const SELF_BUILD_LOGICAL_BOOTSTRAP_ROOT: &str = "/mantle/self-build/bootstrap";
+
+/// Stable logical Cargo target prefix rustc sees in deterministic self-builds.
+const SELF_BUILD_LOGICAL_CARGO_TARGET_ROOT: &str = "/mantle/self-build/cargo-target";
+
+/// Stable logical source prefix rustc sees in deterministic self-builds.
+const SELF_BUILD_LOGICAL_SOURCE_ROOT: &str = "/mantle/self-build/source";
+
+/// Stable logical generated-source prefix rustc sees for build-script OUT_DIR paths.
+const SELF_BUILD_LOGICAL_GENERATED_ROOT: &str = "/mantle/self-build/generated";
+
+/// Path to the generated rustc wrapper inside the self-build sandbox.
+const SELF_BUILD_RUSTC_WRAPPER_PATH: &str = "/tmp/tools/self-build-rustc-wrapper";
+
 /// Stable progress key carried inside proof lines.
 const PROGRESS_KEY: &str = "progress=";
 
@@ -627,13 +645,47 @@ let rust = (import "bootstrap/rust.ncl") in
     m%"
       set -e
       BB=/bin/busybox
-      $BB mkdir -p /tmp/tools
+      TMP_ROOT=/tmp
+      TOOLS_DIR="$TMP_ROOT/tools"
+      WORK_PARENT_DIR="$TMP_ROOT/build"
+      WORK_SOURCE_DIR="$WORK_PARENT_DIR/crunch"
+      CARGO_HOME_DIR="$TMP_ROOT/cargo-home"
+      CARGO_TARGET_DIR_REAL="$TMP_ROOT/cargo-target"
+      $BB mkdir -p "$TOOLS_DIR" __SELF_BUILD_BOOTSTRAP_ALIAS_ROOT__
       for cmd in cat mkdir cp chmod ln ls echo rm mv sed grep awk \
                  tr head tail sort wc expr test basename dirname \
                  install find xargs readlink touch true false tee \
                  du cut uname id whoami env printenv; do
-        $BB ln -sf $BB /tmp/tools/$cmd
+        $BB ln -sf $BB "$TOOLS_DIR/$cmd"
       done
+
+      require_bootstrap_target() {
+        label="$1"
+        path="$2"
+        if [ -z "$path" ]; then
+          echo "ERROR: missing required bootstrap tool $label" >&2
+          exit 1
+        fi
+        if [ ! -e "$path" ]; then
+          echo "ERROR: missing required bootstrap tool $label at $path" >&2
+          exit 1
+        fi
+      }
+
+      install_bootstrap_alias() {
+        label="$1"
+        target="$2"
+        alias_path="$3"
+        require_bootstrap_target "$label" "$target"
+        $BB rm -f "$alias_path"
+        $BB ln -s "$target" "$alias_path"
+        if [ ! -e "$alias_path" ]; then
+          echo "ERROR: failed to create stable bootstrap alias $alias_path -> $target" >&2
+          exit 1
+        fi
+        echo "$label=$target"
+        echo "${label}_ALIAS=$alias_path"
+      }
 
       GCC=""
       for d in $NIX_STORE/*-gcc; do
@@ -666,45 +718,62 @@ let rust = (import "bootstrap/rust.ncl") in
         exit 1
       fi
 
-      for tool in GCC BINUTILS MUSL DASH MAKE RUST; do
-        eval val=\$$tool
-        if [ -z "$val" ]; then
-          echo "ERROR: $tool not found" >&2; exit 1
-        fi
-        echo "$tool=$val"
-      done
+      BOOTSTRAP_ALIAS_ROOT="__SELF_BUILD_BOOTSTRAP_ALIAS_ROOT__"
+      GCC_ALIAS="$BOOTSTRAP_ALIAS_ROOT/gcc"
+      BINUTILS_ALIAS="$BOOTSTRAP_ALIAS_ROOT/binutils"
+      MUSL_ALIAS="$BOOTSTRAP_ALIAS_ROOT/musl"
+      DASH_ALIAS="$BOOTSTRAP_ALIAS_ROOT/dash"
+      MAKE_ALIAS="$BOOTSTRAP_ALIAS_ROOT/gnumake"
+      RUST_ALIAS="$BOOTSTRAP_ALIAS_ROOT/rust"
+      BWRAP_ALIAS="$BOOTSTRAP_ALIAS_ROOT/bwrap"
+      BUSYBOX_ALIAS="$BOOTSTRAP_ALIAS_ROOT/busybox"
+      SEED_LIB_ALIAS="$BOOTSTRAP_ALIAS_ROOT/seed-lib"
+
+      install_bootstrap_alias GCC "$GCC" "$GCC_ALIAS"
+      install_bootstrap_alias BINUTILS "$BINUTILS" "$BINUTILS_ALIAS"
+      install_bootstrap_alias MUSL "$MUSL" "$MUSL_ALIAS"
+      install_bootstrap_alias DASH "$DASH" "$DASH_ALIAS"
+      install_bootstrap_alias MAKE "$MAKE" "$MAKE_ALIAS"
+      install_bootstrap_alias RUST "$RUST" "$RUST_ALIAS"
+      install_bootstrap_alias BWRAP "__STORE_PREFIX__/__BWRAP_STORE_PATH__" "$BWRAP_ALIAS"
+      install_bootstrap_alias BUSYBOX "__STORE_PREFIX__/__BUSYBOX_STORE_PATH__" "$BUSYBOX_ALIAS"
+      echo "Using mantle-built bwrap: $BWRAP_ALIAS/bin"
       echo "CRUNCH_SRC=$CRUNCH_SRC"
 
       $BB mkdir -p /lib 2>/dev/null || true
-      $BB ln -sf $MUSL/lib/libc.so /lib/%{seed_dynamic_linker} 2>/dev/null || true
+      $BB ln -sf $MUSL_ALIAS/lib/libc.so /lib/%{seed_dynamic_linker} 2>/dev/null || true
 
       MUSL_GCC=""
       for d in $NIX_STORE/*-%{seed_name}; do
         if [ -f "$d/%{seed_sysroot_lib}/libgcc_s.so.1" ]; then MUSL_GCC="$d/%{seed_sysroot_lib}"; break; fi
       done
+      GCC_LINK_LIB=""
       if [ -n "$MUSL_GCC" ]; then
-        export LD_LIBRARY_PATH="$MUSL_GCC${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-      elif [ -f "$GCC/lib/libgcc_s.so.1" ]; then
-        export LD_LIBRARY_PATH="$GCC/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        install_bootstrap_alias SEED_LIB "$MUSL_GCC" "$SEED_LIB_ALIAS"
+        GCC_LINK_LIB="$SEED_LIB_ALIAS"
+        export LD_LIBRARY_PATH="$SEED_LIB_ALIAS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+      elif [ -f "$GCC_ALIAS/lib/libgcc_s.so.1" ]; then
+        GCC_LINK_LIB="$GCC_ALIAS/lib"
+        export LD_LIBRARY_PATH="$GCC_ALIAS/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
       fi
 
-      $BB ln -sf "$DASH/bin/dash" /tmp/tools/sh
+      $BB ln -sf "$DASH_ALIAS/bin/dash" "$TOOLS_DIR/sh"
 
       for tool in as ld ld.bfd ar nm objcopy objdump ranlib readelf strip; do
-        if [ -x "$BINUTILS/bin/%{seed_target}-$tool" ] && [ ! -e "/tmp/tools/$tool" ]; then
-          $BB ln -sf "$BINUTILS/bin/%{seed_target}-$tool" /tmp/tools/$tool
+        if [ -x "$BINUTILS_ALIAS/bin/%{seed_target}-$tool" ] && [ ! -e "$TOOLS_DIR/$tool" ]; then
+          $BB ln -sf "$BINUTILS_ALIAS/bin/%{seed_target}-$tool" "$TOOLS_DIR/$tool"
+        fi
+      done
+      BINUTILS_AR_ALIAS="$TOOLS_DIR/ar"
+      BINUTILS_RANLIB_ALIAS="$TOOLS_DIR/ranlib"
+      for required_binutils_alias in "$BINUTILS_AR_ALIAS" "$BINUTILS_RANLIB_ALIAS"; do
+        if [ ! -x "$required_binutils_alias" ]; then
+          echo "ERROR: missing required bootstrap binutils alias at $required_binutils_alias" >&2
+          exit 1
         fi
       done
 
-      BWRAP_BIN="__STORE_PREFIX__/__BWRAP_STORE_PATH__/bin"
-      BWRAP_PATH=""
-      if [ -x "$BWRAP_BIN/bwrap" ]; then
-        echo "Using mantle-built bwrap: $BWRAP_BIN"
-        BWRAP_PATH="$BWRAP_BIN:"
-      else
-        echo "WARNING: mantle-built bwrap not found at $BWRAP_BIN/bwrap" >&2
-      fi
-      export PATH="/tmp/tools:${BWRAP_PATH}$RUST/bin:$GCC/bin:$BINUTILS/bin:$MAKE/bin"
+      export PATH="$TOOLS_DIR:$BWRAP_ALIAS/bin:$RUST_ALIAS/bin:$GCC_ALIAS/bin:$BINUTILS_ALIAS/bin:$MAKE_ALIAS/bin"
 
       echo "=== Tool versions ==="
       rustc --version
@@ -712,15 +781,10 @@ let rust = (import "bootstrap/rust.ncl") in
       gcc --version | head -1
       make --version | head -1
 
-      $BB mkdir -p /tmp/build
-      $BB cp -r "$CRUNCH_SRC" /tmp/build/crunch
-      $BB chmod -R u+w /tmp/build/crunch
-      cd /tmp/build/crunch
-
-      GCC_LIB=""
-      if [ -n "$MUSL_GCC" ]; then GCC_LIB="$MUSL_GCC"
-      elif [ -f "$GCC/lib/libgcc_s.so" ]; then GCC_LIB="$GCC/lib"
-      fi
+      $BB mkdir -p "$WORK_PARENT_DIR"
+      $BB cp -r "$CRUNCH_SRC" "$WORK_SOURCE_DIR"
+      $BB chmod -R u+w "$WORK_SOURCE_DIR"
+      cd "$WORK_SOURCE_DIR"
 
       $BB mkdir -p .cargo
       cp "$CRUNCH_SRC/.cargo/vendor-config.toml" .cargo/config.toml
@@ -731,30 +795,59 @@ let rust = (import "bootstrap/rust.ncl") in
 target = "x86_64-unknown-linux-musl"
 
 [target.x86_64-unknown-linux-musl]
-linker = "gcc"
-rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition", "-C", "link-arg=-L${GCC_LIB}"]
+linker = "__SELF_BUILD_BOOTSTRAP_ALIAS_ROOT__/gcc/bin/gcc"
+rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition", "-C", "link-arg=-L${GCC_LINK_LIB}"]
 CARGOEOF
 
-      export CARGO_HOME=/tmp/cargo-home
-      export CARGO_TARGET_DIR=/tmp/cargo-target
-      BUSYBOX_BIN="__STORE_PREFIX__/__BUSYBOX_STORE_PATH__/bin/busybox"
-      if [ -x "$BUSYBOX_BIN" ]; then
-        echo "Using mantle-built busybox: $BUSYBOX_BIN"
-        export SNIX_BUILD_SANDBOX_SHELL="$BUSYBOX_BIN"
-      else
-        echo "WARNING: mantle-built busybox not found at $BUSYBOX_BIN" >&2
-        export SNIX_BUILD_SANDBOX_SHELL=/bin/sh
+      export CARGO_HOME="$CARGO_HOME_DIR"
+      export CARGO_TARGET_DIR="$CARGO_TARGET_DIR_REAL"
+      BUSYBOX_BIN="$BUSYBOX_ALIAS/bin/busybox"
+      if [ ! -x "$BUSYBOX_BIN" ]; then
+        echo "ERROR: mantle-built busybox alias missing executable at $BUSYBOX_BIN" >&2
+        exit 1
       fi
+      echo "Using mantle-built busybox: $BUSYBOX_BIN"
+      export SNIX_BUILD_SANDBOX_SHELL="$BUSYBOX_BIN"
 
-      export CC=gcc
-      export AR=ar
-      export TARGET_CC=gcc
-      export TARGET_AR=ar
-      export HOST_CC=gcc
+      cat > __SELF_BUILD_RUSTC_WRAPPER_PATH__ << WRAPEOF
+#!/bin/sh
+set -e
+REAL_RUSTC="\$1"
+shift
+SELF_BUILD_CARGO_TARGET_DIR="\${CARGO_TARGET_DIR:-$CARGO_TARGET_DIR_REAL}"
+SELF_BUILD_WORK_SOURCE_DIR="$WORK_SOURCE_DIR"
+SELF_BUILD_PKG="\${CARGO_PKG_NAME:-unknown-crate}"
+if [ -n "\${OUT_DIR:-}" ]; then
+  exec "\$REAL_RUSTC" \
+    --remap-path-prefix="\$SELF_BUILD_CARGO_TARGET_DIR=__SELF_BUILD_LOGICAL_CARGO_TARGET_ROOT__" \
+    --remap-path-prefix="\$SELF_BUILD_WORK_SOURCE_DIR=__SELF_BUILD_LOGICAL_SOURCE_ROOT__" \
+    --remap-path-prefix="__SELF_BUILD_BOOTSTRAP_ALIAS_ROOT__=__SELF_BUILD_LOGICAL_BOOTSTRAP_ROOT__" \
+    --remap-path-prefix="\$OUT_DIR=__SELF_BUILD_LOGICAL_GENERATED_ROOT__/\$SELF_BUILD_PKG/out" \
+    "\$@"
+fi
+exec "\$REAL_RUSTC" \
+  --remap-path-prefix="\$SELF_BUILD_CARGO_TARGET_DIR=__SELF_BUILD_LOGICAL_CARGO_TARGET_ROOT__" \
+  --remap-path-prefix="\$SELF_BUILD_WORK_SOURCE_DIR=__SELF_BUILD_LOGICAL_SOURCE_ROOT__" \
+  --remap-path-prefix="__SELF_BUILD_BOOTSTRAP_ALIAS_ROOT__=__SELF_BUILD_LOGICAL_BOOTSTRAP_ROOT__" \
+  "\$@"
+WRAPEOF
+      chmod +x __SELF_BUILD_RUSTC_WRAPPER_PATH__
+      export RUSTC_WRAPPER=__SELF_BUILD_RUSTC_WRAPPER_PATH__
+
+      export CC="$GCC_ALIAS/bin/gcc"
+      export CC_x86_64_unknown_linux_musl="$GCC_ALIAS/bin/gcc"
+      export AR="$BINUTILS_AR_ALIAS"
+      export AR_x86_64_unknown_linux_musl="$BINUTILS_AR_ALIAS"
+      export RANLIB="$BINUTILS_RANLIB_ALIAS"
+      export RANLIB_x86_64_unknown_linux_musl="$BINUTILS_RANLIB_ALIAS"
+      export TARGET_CC="$GCC_ALIAS/bin/gcc"
+      export TARGET_AR="$BINUTILS_AR_ALIAS"
+      export HOST_CC="$GCC_ALIAS/bin/gcc"
+      export HOST_AR="$BINUTILS_AR_ALIAS"
       export RUSTC_BOOTSTRAP=1
 
-      if [ -n "$GCC_LIB" ]; then
-        export LIBRARY_PATH="$GCC_LIB${LIBRARY_PATH:+:$LIBRARY_PATH}"
+      if [ -n "$GCC_LINK_LIB" ]; then
+        export LIBRARY_PATH="$GCC_LINK_LIB${LIBRARY_PATH:+:$LIBRARY_PATH}"
       fi
 
       echo "=== Building mantle ==="
@@ -762,7 +855,22 @@ CARGOEOF
 
       echo "=== Installing ==="
       mkdir -p $out/bin
-      cp /tmp/cargo-target/x86_64-unknown-linux-musl/release/mantle $out/bin/
+      cp "$CARGO_TARGET_DIR"/x86_64-unknown-linux-musl/release/mantle $out/bin/
+
+      scan_path_leak() {
+        label="$1"
+        needle="$2"
+        if [ -n "$needle" ] && grep -a -F -q "$needle" "$out/bin/mantle"; then
+          echo "ERROR: final mantle binary contains $label path leak: $needle" >&2
+          exit 1
+        fi
+      }
+      echo "=== Path leak scan ==="
+      scan_path_leak "cargo target" "$CARGO_TARGET_DIR"
+      scan_path_leak "staged source" "$WORK_SOURCE_DIR"
+      scan_path_leak "gcc store" "$GCC"
+      scan_path_leak "rust store" "$RUST"
+      scan_path_leak "binutils store" "$BINUTILS"
 
       echo "=== Verify ==="
       ls -la $out/bin/mantle
@@ -791,6 +899,12 @@ pub fn generate_self_build_ncl(
     assert!(!busybox_store_path.is_empty(), "busybox store path must not be empty");
     assert!(store_prefix.starts_with('/'), "store prefix must be absolute");
     SELF_BUILD_NCL_TEMPLATE
+        .replace("__SELF_BUILD_BOOTSTRAP_ALIAS_ROOT__", SELF_BUILD_BOOTSTRAP_ALIAS_ROOT)
+        .replace("__SELF_BUILD_LOGICAL_BOOTSTRAP_ROOT__", SELF_BUILD_LOGICAL_BOOTSTRAP_ROOT)
+        .replace("__SELF_BUILD_LOGICAL_CARGO_TARGET_ROOT__", SELF_BUILD_LOGICAL_CARGO_TARGET_ROOT)
+        .replace("__SELF_BUILD_LOGICAL_SOURCE_ROOT__", SELF_BUILD_LOGICAL_SOURCE_ROOT)
+        .replace("__SELF_BUILD_LOGICAL_GENERATED_ROOT__", SELF_BUILD_LOGICAL_GENERATED_ROOT)
+        .replace("__SELF_BUILD_RUSTC_WRAPPER_PATH__", SELF_BUILD_RUSTC_WRAPPER_PATH)
         .replace("__STORE_PREFIX__", store_prefix)
         .replace("__SRC_STORE_PATH__", src_store_path)
         .replace("__BWRAP_STORE_PATH__", bwrap_store_path)
@@ -2772,8 +2886,28 @@ mod tests {
 
     use super::*;
 
+    const GCC_BOOTSTRAP_NCL: &str = include_str!("../bootstrap/gcc.ncl");
+
     fn test_self_build_ncl() -> String {
         generate_self_build_ncl("abc123-mantle-src", "bwrap123-bwrap", "busybox123-busybox", "/nix/store")
+    }
+
+    fn cargo_visible_self_build_lines(ncl: &str) -> Vec<String> {
+        ncl.lines()
+            .map(str::trim)
+            .filter(|line| {
+                line.starts_with("linker =")
+                    || line.starts_with("rustflags =")
+                    || line.starts_with("export CC=")
+                    || line.starts_with("export AR=")
+                    || line.starts_with("export TARGET_CC=")
+                    || line.starts_with("export TARGET_AR=")
+                    || line.starts_with("export HOST_CC=")
+                    || line.starts_with("export RUSTC_WRAPPER=")
+                    || line.contains("--remap-path-prefix")
+            })
+            .map(ToString::to_string)
+            .collect()
     }
 
     fn test_seed_digest(path: &Path) -> crate::protected_exec::DigestSpec {
@@ -2977,6 +3111,99 @@ mod tests {
         assert!(ncl.contains("\"/crunch/store/uvw-bwrap\""));
         assert!(ncl.contains("\"/crunch/store/xyz-busybox\""));
         assert!(!ncl.contains("/nix/store/abc-src"));
+    }
+
+    #[test]
+    fn generate_ncl_uses_stable_bootstrap_aliases_for_cargo_visible_paths() {
+        let ncl = test_self_build_ncl();
+
+        assert!(ncl.contains(&format!("linker = \"{SELF_BUILD_BOOTSTRAP_ALIAS_ROOT}/gcc/bin/gcc\"")));
+        assert!(ncl.contains(&format!("export RUSTC_WRAPPER={SELF_BUILD_RUSTC_WRAPPER_PATH}")));
+        assert!(ncl.contains("CARGO_TARGET_DIR_REAL=\"$TMP_ROOT/cargo-target\""));
+        assert!(ncl.contains("export CARGO_TARGET_DIR=\"$CARGO_TARGET_DIR_REAL\""));
+        assert!(ncl.contains("BINUTILS_AR_ALIAS=\"$TOOLS_DIR/ar\""));
+        assert!(ncl.contains("export AR=\"$BINUTILS_AR_ALIAS\""));
+        assert!(!ncl.contains("export AR=\"$BINUTILS_ALIAS/bin/ar\""));
+        assert!(ncl.contains(&format!(
+            "--remap-path-prefix=\"\\$OUT_DIR={SELF_BUILD_LOGICAL_GENERATED_ROOT}/\\$SELF_BUILD_PKG/out\""
+        )));
+        assert!(ncl.contains(&format!(
+            "--remap-path-prefix=\"\\$SELF_BUILD_WORK_SOURCE_DIR={SELF_BUILD_LOGICAL_SOURCE_ROOT}\""
+        )));
+        assert!(!ncl.contains("/tmp/cargo-target"));
+        assert!(!ncl.contains("/tmp/build/crunch"));
+        assert!(!ncl.contains("linker = \"gcc\""));
+        assert!(!ncl.contains("$RUST/bin:$GCC/bin:$BINUTILS/bin"));
+    }
+
+    #[test]
+    fn generate_ncl_keeps_cargo_visible_values_stable_across_tool_store_paths() {
+        let first = generate_self_build_ncl("src-one", "left-bwrap", "left-busybox", "/nix/store");
+        let second = generate_self_build_ncl("src-two", "right-bwrap", "right-busybox", "/crunch/store");
+
+        let first_cargo_visible = cargo_visible_self_build_lines(&first);
+        let second_cargo_visible = cargo_visible_self_build_lines(&second);
+
+        assert!(!first_cargo_visible.is_empty(), "self-build fixture must expose Cargo-visible lines");
+        assert_eq!(first_cargo_visible, second_cargo_visible);
+        assert!(!first_cargo_visible.iter().any(|line| line.contains("left-bwrap")));
+        assert!(!second_cargo_visible.iter().any(|line| line.contains("right-busybox")));
+    }
+
+    #[test]
+    fn generate_ncl_fails_missing_bootstrap_alias_before_cargo() {
+        let ncl = test_self_build_ncl();
+        let alias_error_offset = ncl
+            .find("ERROR: missing required bootstrap tool")
+            .expect("self-build script should fail closed on missing alias targets");
+        let cargo_offset = ncl.find("cargo build --release").expect("self-build script should invoke cargo");
+        let binutils_error_offset = ncl
+            .find("ERROR: missing required bootstrap binutils alias")
+            .expect("self-build script should fail closed on missing binutils aliases");
+
+        assert!(alias_error_offset < cargo_offset, "alias validation must appear before Cargo starts");
+        assert!(binutils_error_offset < cargo_offset, "binutils alias validation must appear before Cargo starts");
+        assert!(ncl.contains("install_bootstrap_alias BWRAP"));
+        assert!(ncl.contains("install_bootstrap_alias BUSYBOX"));
+    }
+
+    #[test]
+    fn generate_ncl_rustc_wrapper_remaps_paths_without_rewriting_build_script_io() {
+        let ncl = test_self_build_ncl();
+
+        assert!(ncl.contains("REAL_RUSTC=\"\\$1\""));
+        assert!(ncl.contains(&format!(
+            "--remap-path-prefix=\"\\$SELF_BUILD_CARGO_TARGET_DIR={SELF_BUILD_LOGICAL_CARGO_TARGET_ROOT}\""
+        )));
+        assert!(ncl.contains(&format!(
+            "--remap-path-prefix=\"{SELF_BUILD_BOOTSTRAP_ALIAS_ROOT}={SELF_BUILD_LOGICAL_BOOTSTRAP_ROOT}\""
+        )));
+        assert!(ncl.contains(&format!(
+            "--remap-path-prefix=\"\\$OUT_DIR={SELF_BUILD_LOGICAL_GENERATED_ROOT}/\\$SELF_BUILD_PKG/out\""
+        )));
+        assert!(!ncl.contains("export OUT_DIR="), "build scripts must keep Cargo's real OUT_DIR");
+        assert!(!ncl.contains("cd /mantle/self-build/source"), "build scripts must run from the real worktree path");
+    }
+
+    #[test]
+    fn bootstrap_gcc_ncl_records_deterministic_policy() {
+        assert!(GCC_BOOTSTRAP_NCL.contains("export SOURCE_DATE_EPOCH=\"$DETERMINISTIC_EPOCH\""));
+        assert!(GCC_BOOTSTRAP_NCL.contains("export TZ=UTC"));
+        assert!(GCC_BOOTSTRAP_NCL.contains("export LC_ALL=C"));
+        assert!(GCC_BOOTSTRAP_NCL.contains("export ARFLAGS=crD"));
+        assert!(GCC_BOOTSTRAP_NCL.contains("umask \"$DETERMINISTIC_UMASK\""));
+        assert!(GCC_BOOTSTRAP_NCL.contains("normalize_output_metadata \"$out\""));
+        assert!(GCC_BOOTSTRAP_NCL.contains("bootstrap-determinism.json"));
+    }
+
+    #[test]
+    fn bootstrap_gcc_ncl_replaces_host_time_touches_with_deterministic_touches() {
+        assert!(GCC_BOOTSTRAP_NCL.contains("deterministic_touch_tree \"$GSRC\" '*.cc'"));
+        assert!(GCC_BOOTSTRAP_NCL.contains("deterministic_touch_tree \"$GSRC\" '*.c'"));
+        assert!(GCC_BOOTSTRAP_NCL.contains("deterministic_touch_tree \"$GSRC\" '*.h'"));
+        assert!(!GCC_BOOTSTRAP_NCL.contains("find $GSRC -name '*.cc' -exec touch {} +"));
+        assert!(!GCC_BOOTSTRAP_NCL.contains("find $GSRC -name '*.c' -exec touch {} +"));
+        assert!(!GCC_BOOTSTRAP_NCL.contains("find $GSRC -name '*.h' -exec touch {} +"));
     }
 
     #[test]
@@ -3444,8 +3671,9 @@ mod tests {
     #[test]
     fn generate_ncl_has_exact_bwrap_and_busybox_paths() {
         let ncl = test_self_build_ncl();
-        assert!(ncl.contains("BWRAP_BIN=\"/nix/store/bwrap123-bwrap/bin\""));
-        assert!(ncl.contains("BUSYBOX_BIN=\"/nix/store/busybox123-busybox/bin/busybox\""));
+        assert!(ncl.contains("install_bootstrap_alias BWRAP \"/nix/store/bwrap123-bwrap\" \"$BWRAP_ALIAS\""));
+        assert!(ncl.contains("install_bootstrap_alias BUSYBOX \"/nix/store/busybox123-busybox\" \"$BUSYBOX_ALIAS\""));
+        assert!(ncl.contains("BUSYBOX_BIN=\"$BUSYBOX_ALIAS/bin/busybox\""));
         assert!(ncl.contains("Using mantle-built bwrap"));
         assert!(ncl.contains("Using mantle-built busybox"));
     }

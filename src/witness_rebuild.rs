@@ -27,6 +27,35 @@ pub(crate) const WITNESS_REBUILD_AUDIT_SCHEMA: &str = "mantle-witness-rebuild-au
 pub(crate) const WITNESS_SCRATCH_ENV: &str = "MANTLE_WITNESS_SCRATCH_DIR";
 const MAX_EXPECTED_OUTPUTS: u32 = 16;
 const PROOF_BINARY_CANDIDATE_LIMIT: usize = 5;
+const DIAGNOSTIC_EXCERPT_LIMIT: usize = 5;
+const DIAGNOSTIC_MARKERS: &[&str] = &[
+    "path leak",
+    "cargo-target",
+    "OUT_DIR",
+    "grammar.rs",
+    "digest mismatch",
+    "bootstrap",
+];
+const BOOTSTRAP_DIVERGENCE_ABSENT: &str = "absent";
+const BOOTSTRAP_DIVERGENCE_CONVERGED: &str = "converged";
+const BOOTSTRAP_DIVERGENCE_DIVERGED: &str = "diverged";
+const BOOTSTRAP_DIVERGENCE_UNKNOWN_ROOT: &str = "unknown-bootstrap-output";
+const BOOTSTRAP_DIVERGENCE_GCC_ROOT: &str = "gcc.drv";
+const BOOTSTRAP_DIVERGENCE_BWRAP_ROOT: &str = "bwrap.drv";
+const BOOTSTRAP_DIVERGENCE_BUSYBOX_ROOT: &str = "busybox.drv";
+const BOOTSTRAP_DIVERGENCE_STAGE_MANTLE_ROOT: &str = "stage2-mantle";
+const BOOTSTRAP_DIVERGENCE_ROOT_POINTER: &str = "/bootstrap_divergence/root";
+const BOOTSTRAP_DIVERGENCE_STAGE1_DIGEST_POINTER: &str = "/bootstrap_divergence/stage1_digest_blake3";
+const BOOTSTRAP_DIVERGENCE_STAGE2_DIGEST_POINTER: &str = "/bootstrap_divergence/stage2_digest_blake3";
+const BOOTSTRAP_STAGE1_EQUALS_STAGE2_POINTER: &str = "/fixed_point/stage1_equals_stage2";
+const BOOTSTRAP_BWRAP_EQUALS_POINTER: &str = "/fixed_point/stage0_bwrap_equals_stage2_bwrap";
+const BOOTSTRAP_BUSYBOX_EQUALS_POINTER: &str = "/fixed_point/stage0_busybox_equals_stage2_busybox";
+const BOOTSTRAP_STAGE1_DIGEST_POINTER: &str = "/binaries/stage1/digest_blake3";
+const BOOTSTRAP_STAGE2_DIGEST_POINTER: &str = "/binaries/stage2/digest_blake3";
+const BOOTSTRAP_STAGE0_BWRAP_DIGEST_POINTER: &str = "/tools/stage0_bwrap/digest_blake3";
+const BOOTSTRAP_STAGE2_BWRAP_DIGEST_POINTER: &str = "/tools/stage2_bwrap/digest_blake3";
+const BOOTSTRAP_STAGE0_BUSYBOX_DIGEST_POINTER: &str = "/tools/stage0_busybox/digest_blake3";
+const BOOTSTRAP_STAGE2_BUSYBOX_DIGEST_POINTER: &str = "/tools/stage2_busybox/digest_blake3";
 const SCRATCH_REPO_DIR_NAME: &str = "source-tree";
 const SCRATCH_REBUILT_OUTPUTS_DIR_NAME: &str = "rebuilt-outputs";
 const SCRATCH_PROOF_BUNDLE_DIR_NAME: &str = "proof-bundle";
@@ -160,11 +189,44 @@ pub(crate) struct WitnessRebuildAuditMeta {
     pub witness_attestation_path: Option<String>,
     pub witness_signature_path: Option<String>,
     pub failure_message: Option<String>,
+    pub diagnostics: Option<WitnessRebuildDiagnostics>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct WitnessRebuildAuditOutput {
     pub published_name: String,
+    pub path: String,
+    pub digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct WitnessRebuildDiagnostics {
+    pub expected_outputs: Vec<WitnessExpectedOutputDiagnostic>,
+    pub available_proof_digests: Vec<WitnessAvailableProofDigest>,
+    pub provider_proof_status: String,
+    pub self_hosting_fixed_point_status: String,
+    pub bootstrap_divergence: WitnessBootstrapDivergenceDiagnostic,
+    pub path_leak_scan_excerpt: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct WitnessBootstrapDivergenceDiagnostic {
+    pub status: String,
+    pub root: Option<String>,
+    pub stage1_digest_blake3: Option<String>,
+    pub stage2_digest_blake3: Option<String>,
+    pub path_leak_scan_summary: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct WitnessExpectedOutputDiagnostic {
+    pub published_name: String,
+    pub expected_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct WitnessAvailableProofDigest {
+    pub role: String,
     pub path: String,
     pub digest_blake3: String,
 }
@@ -334,6 +396,7 @@ pub(crate) fn build_success_audit_meta(
         Some(attestation_path),
         Some(signature_path),
         None,
+        None,
     )
 }
 
@@ -355,6 +418,7 @@ pub(crate) fn build_failure_audit_meta(
         None,
         None,
         Some(failure_message.to_string()),
+        Some(build_failure_diagnostics(plan, failure_message)),
     )
 }
 
@@ -1071,6 +1135,7 @@ fn build_audit_meta(
     attestation_path: Option<&Path>,
     signature_path: Option<&Path>,
     failure_message: Option<String>,
+    diagnostics: Option<WitnessRebuildDiagnostics>,
 ) -> Result<WitnessRebuildAuditMeta, RunError> {
     let rebuilt_outputs = build_audit_outputs(&plan.expected_outputs, rebuilt_output_paths)?;
     let launched_command = launched_workflow_command(workflow_driver_path, &plan.proof_mode)?;
@@ -1100,6 +1165,7 @@ fn build_audit_meta(
         witness_attestation_path: attestation_path.map(|path| path.display().to_string()),
         witness_signature_path: signature_path.map(|path| path.display().to_string()),
         failure_message,
+        diagnostics,
     })
 }
 
@@ -1129,6 +1195,280 @@ fn build_audit_outputs(
         });
     }
     Ok(audit_outputs)
+}
+
+fn build_failure_diagnostics(plan: &WitnessRebuildPlan, failure_message: &str) -> WitnessRebuildDiagnostics {
+    let path_leak_scan_excerpt = collect_path_leak_scan_excerpt(plan, failure_message);
+    let proof_manifest = load_optional_proof_manifest(&plan.scratch_layout.proof_bundle_dir);
+    let bootstrap_divergence = bootstrap_divergence_diagnostic(proof_manifest.as_ref(), &path_leak_scan_excerpt);
+    WitnessRebuildDiagnostics {
+        expected_outputs: expected_output_diagnostics(&plan.expected_outputs),
+        available_proof_digests: collect_available_proof_digest_diagnostics(plan),
+        provider_proof_status: provider_proof_status_diagnostic(&plan.scratch_layout.provider_fixed_point_proof_dir),
+        self_hosting_fixed_point_status: self_hosting_fixed_point_status_diagnostic(
+            &plan.scratch_layout.proof_bundle_dir,
+        ),
+        bootstrap_divergence,
+        path_leak_scan_excerpt,
+    }
+}
+
+fn expected_output_diagnostics(expected_outputs: &[ExpectedRebuiltOutput]) -> Vec<WitnessExpectedOutputDiagnostic> {
+    let mut diagnostics = Vec::with_capacity(expected_outputs.len());
+    for expected in expected_outputs {
+        diagnostics.push(WitnessExpectedOutputDiagnostic {
+            published_name: expected.published_name.clone(),
+            expected_digest_blake3: expected.expected_digest_blake3.clone(),
+        });
+    }
+    diagnostics
+}
+
+fn collect_available_proof_digest_diagnostics(plan: &WitnessRebuildPlan) -> Vec<WitnessAvailableProofDigest> {
+    let mut candidates = Vec::with_capacity(PROOF_BINARY_CANDIDATE_LIMIT);
+    if let Ok(proof_manifest) = load_proof_bundle_manifest(&plan.scratch_layout.proof_bundle_dir) {
+        if let Ok(mut proof_candidates) =
+            collect_rebuilt_output_candidates(&plan.scratch_layout.proof_bundle_dir, &proof_manifest)
+        {
+            candidates.append(&mut proof_candidates);
+        }
+    }
+    let mut provider_candidates = Vec::with_capacity(PROOF_BINARY_CANDIDATE_LIMIT);
+    if collect_provider_fixed_point_candidates(
+        &plan.scratch_layout.provider_fixed_point_proof_dir,
+        &mut provider_candidates,
+    )
+    .is_ok()
+    {
+        candidates.append(&mut provider_candidates);
+    }
+    candidates.truncate(PROOF_BINARY_CANDIDATE_LIMIT);
+    candidates
+        .into_iter()
+        .map(|candidate| WitnessAvailableProofDigest {
+            role: candidate.role.to_string(),
+            path: candidate.path.display().to_string(),
+            digest_blake3: candidate.digest_blake3,
+        })
+        .collect()
+}
+
+fn provider_proof_status_diagnostic(provider_proof_dir: &Path) -> String {
+    if !provider_proof_dir.exists() {
+        return "absent".to_string();
+    }
+    if !provider_proof_dir.is_dir() {
+        return format!("not-directory:{}", provider_proof_dir.display());
+    }
+    let verification = crate::cargo_free_self_build::verify_provider_fixed_point_proof_bundle(provider_proof_dir);
+    if verification.valid {
+        let digest = verification.stage_binary_digest_blake3.unwrap_or_else(|| "missing-stage-digest".to_string());
+        return format!("valid:{digest}");
+    }
+    format!("invalid:{}", verification.blockers.join("; "))
+}
+
+fn self_hosting_fixed_point_status_diagnostic(proof_bundle_dir: &Path) -> String {
+    let manifest_path = proof_bundle_dir.join(PROOF_MANIFEST_FILE_NAME);
+    let Ok(bytes) = std::fs::read(&manifest_path) else {
+        return format!("manifest-unreadable:{}", manifest_path.display());
+    };
+    let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+        return format!("manifest-invalid-json:{}", manifest_path.display());
+    };
+    if let Some(stage1_equals_stage2) = value.pointer(BOOTSTRAP_STAGE1_EQUALS_STAGE2_POINTER).and_then(Value::as_bool) {
+        return format!("stage1_equals_stage2={stage1_equals_stage2}");
+    }
+    if let Some(stage2_digest) = value.pointer(BOOTSTRAP_STAGE2_DIGEST_POINTER).and_then(Value::as_str) {
+        return format!("fixed-point-status-missing;stage2_digest={stage2_digest}");
+    }
+    "fixed-point-status-missing".to_string()
+}
+
+fn load_optional_proof_manifest(proof_bundle_dir: &Path) -> Option<Value> {
+    let manifest_path = proof_bundle_dir.join(PROOF_MANIFEST_FILE_NAME);
+    let bytes = std::fs::read(&manifest_path).ok()?;
+    serde_json::from_slice::<Value>(&bytes).ok()
+}
+
+fn bootstrap_divergence_diagnostic(
+    proof_manifest: Option<&Value>,
+    path_leak_scan_summary: &[String],
+) -> WitnessBootstrapDivergenceDiagnostic {
+    if let Some(explicit) = explicit_bootstrap_divergence(proof_manifest, path_leak_scan_summary) {
+        return explicit;
+    }
+    if let Some(derived) = derived_bootstrap_divergence(proof_manifest, path_leak_scan_summary) {
+        return derived;
+    }
+    WitnessBootstrapDivergenceDiagnostic {
+        status: BOOTSTRAP_DIVERGENCE_ABSENT.to_string(),
+        root: None,
+        stage1_digest_blake3: None,
+        stage2_digest_blake3: None,
+        path_leak_scan_summary: bounded_path_leak_scan_summary(path_leak_scan_summary),
+    }
+}
+
+fn explicit_bootstrap_divergence(
+    proof_manifest: Option<&Value>,
+    path_leak_scan_summary: &[String],
+) -> Option<WitnessBootstrapDivergenceDiagnostic> {
+    let manifest = proof_manifest?;
+    let root = manifest.pointer(BOOTSTRAP_DIVERGENCE_ROOT_POINTER).and_then(Value::as_str)?;
+    if root.is_empty() {
+        return None;
+    }
+    Some(WitnessBootstrapDivergenceDiagnostic {
+        status: BOOTSTRAP_DIVERGENCE_DIVERGED.to_string(),
+        root: Some(root.to_string()),
+        stage1_digest_blake3: manifest
+            .pointer(BOOTSTRAP_DIVERGENCE_STAGE1_DIGEST_POINTER)
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        stage2_digest_blake3: manifest
+            .pointer(BOOTSTRAP_DIVERGENCE_STAGE2_DIGEST_POINTER)
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        path_leak_scan_summary: bounded_path_leak_scan_summary(path_leak_scan_summary),
+    })
+}
+
+fn derived_bootstrap_divergence(
+    proof_manifest: Option<&Value>,
+    path_leak_scan_summary: &[String],
+) -> Option<WitnessBootstrapDivergenceDiagnostic> {
+    let manifest = proof_manifest?;
+    if manifest.pointer(BOOTSTRAP_BWRAP_EQUALS_POINTER).and_then(Value::as_bool) == Some(false) {
+        return Some(bootstrap_tool_divergence(
+            BOOTSTRAP_DIVERGENCE_BWRAP_ROOT,
+            manifest,
+            BOOTSTRAP_STAGE0_BWRAP_DIGEST_POINTER,
+            BOOTSTRAP_STAGE2_BWRAP_DIGEST_POINTER,
+            path_leak_scan_summary,
+        ));
+    }
+    if manifest.pointer(BOOTSTRAP_BUSYBOX_EQUALS_POINTER).and_then(Value::as_bool) == Some(false) {
+        return Some(bootstrap_tool_divergence(
+            BOOTSTRAP_DIVERGENCE_BUSYBOX_ROOT,
+            manifest,
+            BOOTSTRAP_STAGE0_BUSYBOX_DIGEST_POINTER,
+            BOOTSTRAP_STAGE2_BUSYBOX_DIGEST_POINTER,
+            path_leak_scan_summary,
+        ));
+    }
+    if path_leak_scan_summary.iter().any(|line| line.contains(BOOTSTRAP_DIVERGENCE_GCC_ROOT)) {
+        return Some(bootstrap_stage_divergence(BOOTSTRAP_DIVERGENCE_GCC_ROOT, manifest, path_leak_scan_summary));
+    }
+    if manifest.pointer(BOOTSTRAP_STAGE1_EQUALS_STAGE2_POINTER).and_then(Value::as_bool) == Some(false) {
+        return Some(bootstrap_stage_divergence(
+            BOOTSTRAP_DIVERGENCE_STAGE_MANTLE_ROOT,
+            manifest,
+            path_leak_scan_summary,
+        ));
+    }
+    if proof_manifest_reports_convergence(manifest) {
+        return Some(WitnessBootstrapDivergenceDiagnostic {
+            status: BOOTSTRAP_DIVERGENCE_CONVERGED.to_string(),
+            root: None,
+            stage1_digest_blake3: manifest
+                .pointer(BOOTSTRAP_STAGE1_DIGEST_POINTER)
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+            stage2_digest_blake3: manifest
+                .pointer(BOOTSTRAP_STAGE2_DIGEST_POINTER)
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+            path_leak_scan_summary: bounded_path_leak_scan_summary(path_leak_scan_summary),
+        });
+    }
+    None
+}
+
+fn bootstrap_tool_divergence(
+    root: &str,
+    manifest: &Value,
+    stage1_digest_pointer: &str,
+    stage2_digest_pointer: &str,
+    path_leak_scan_summary: &[String],
+) -> WitnessBootstrapDivergenceDiagnostic {
+    WitnessBootstrapDivergenceDiagnostic {
+        status: BOOTSTRAP_DIVERGENCE_DIVERGED.to_string(),
+        root: Some(root.to_string()),
+        stage1_digest_blake3: manifest.pointer(stage1_digest_pointer).and_then(Value::as_str).map(ToOwned::to_owned),
+        stage2_digest_blake3: manifest.pointer(stage2_digest_pointer).and_then(Value::as_str).map(ToOwned::to_owned),
+        path_leak_scan_summary: bounded_path_leak_scan_summary(path_leak_scan_summary),
+    }
+}
+
+fn bootstrap_stage_divergence(
+    root: &str,
+    manifest: &Value,
+    path_leak_scan_summary: &[String],
+) -> WitnessBootstrapDivergenceDiagnostic {
+    let resolved_root = if root.is_empty() {
+        BOOTSTRAP_DIVERGENCE_UNKNOWN_ROOT
+    } else {
+        root
+    };
+    WitnessBootstrapDivergenceDiagnostic {
+        status: BOOTSTRAP_DIVERGENCE_DIVERGED.to_string(),
+        root: Some(resolved_root.to_string()),
+        stage1_digest_blake3: manifest
+            .pointer(BOOTSTRAP_STAGE1_DIGEST_POINTER)
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        stage2_digest_blake3: manifest
+            .pointer(BOOTSTRAP_STAGE2_DIGEST_POINTER)
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        path_leak_scan_summary: bounded_path_leak_scan_summary(path_leak_scan_summary),
+    }
+}
+
+fn proof_manifest_reports_convergence(manifest: &Value) -> bool {
+    manifest.pointer(BOOTSTRAP_STAGE1_EQUALS_STAGE2_POINTER).and_then(Value::as_bool) == Some(true)
+        && manifest.pointer(BOOTSTRAP_BWRAP_EQUALS_POINTER).and_then(Value::as_bool) == Some(true)
+        && manifest.pointer(BOOTSTRAP_BUSYBOX_EQUALS_POINTER).and_then(Value::as_bool) == Some(true)
+}
+
+fn bounded_path_leak_scan_summary(path_leak_scan_summary: &[String]) -> Vec<String> {
+    let mut summary = path_leak_scan_summary.to_vec();
+    summary.truncate(DIAGNOSTIC_EXCERPT_LIMIT);
+    summary
+}
+
+fn collect_path_leak_scan_excerpt(plan: &WitnessRebuildPlan, failure_message: &str) -> Vec<String> {
+    let mut excerpts = Vec::with_capacity(DIAGNOSTIC_EXCERPT_LIMIT);
+    collect_matching_excerpt_lines(failure_message, &mut excerpts);
+    collect_matching_log_excerpt(&plan.scratch_layout.stderr_log_path, &mut excerpts);
+    collect_matching_log_excerpt(&plan.scratch_layout.stdout_log_path, &mut excerpts);
+    if excerpts.is_empty() {
+        excerpts.push("no path-leak excerpts found in workflow logs".to_string());
+    }
+    excerpts.truncate(DIAGNOSTIC_EXCERPT_LIMIT);
+    excerpts
+}
+
+fn collect_matching_log_excerpt(path: &Path, excerpts: &mut Vec<String>) {
+    if excerpts.len() >= DIAGNOSTIC_EXCERPT_LIMIT {
+        return;
+    }
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return;
+    };
+    collect_matching_excerpt_lines(&text, excerpts);
+}
+
+fn collect_matching_excerpt_lines(text: &str, excerpts: &mut Vec<String>) {
+    for line in text.lines() {
+        if excerpts.len() >= DIAGNOSTIC_EXCERPT_LIMIT {
+            return;
+        }
+        if DIAGNOSTIC_MARKERS.iter().any(|marker| line.contains(marker)) {
+            excerpts.push(line.to_string());
+        }
+    }
 }
 
 fn unix_time_ms_now() -> Result<u64, RunError> {
@@ -1293,6 +1633,158 @@ mod tests {
         assert!(err.message().contains("did not produce proof artifact matching binaries/missing-mantle"));
         assert!(err.message().contains(&missing_digest));
         assert!(err.message().contains(&stage2_digest));
+    }
+
+    #[test]
+    fn failure_audit_reports_digest_mismatch_diagnostics() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let stage2_digest = write_proof_binary(&proof_bundle_dir, "binaries/stage2-mantle", b"other-stage");
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "binaries": {
+                    "stage2": {
+                        "path": "binaries/stage2-mantle",
+                        "digest_blake3": stage2_digest.clone(),
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let missing_digest = "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let plan =
+            witness_rebuild_test_plan(temp.path(), vec![expected_output("binaries/02-stage2-mantle", &missing_digest)]);
+        let failure_message = format!(
+            "rebuilt output digest mismatch for binaries/02-stage2-mantle: expected {missing_digest}, got {stage2_digest}"
+        );
+
+        let meta =
+            build_failure_audit_meta(&plan, Path::new("/tmp/workflow-driver"), &[], 0, 1, &failure_message).unwrap();
+        let diagnostics = meta.diagnostics.expect("failure audit should carry diagnostics");
+
+        assert_eq!(diagnostics.expected_outputs[0].expected_digest_blake3, missing_digest);
+        assert!(
+            diagnostics
+                .available_proof_digests
+                .iter()
+                .any(|candidate| candidate.role == "binaries.stage2" && candidate.digest_blake3 == stage2_digest)
+        );
+        assert_eq!(diagnostics.provider_proof_status, "absent");
+        assert!(diagnostics.self_hosting_fixed_point_status.contains("stage2_digest="));
+        assert_eq!(diagnostics.bootstrap_divergence.status, BOOTSTRAP_DIVERGENCE_ABSENT);
+        assert!(diagnostics.bootstrap_divergence.root.is_none());
+        assert!(diagnostics.path_leak_scan_excerpt.iter().any(|excerpt| excerpt.contains("digest mismatch")));
+    }
+
+    #[test]
+    fn bootstrap_divergence_diagnostic_reports_convergence() {
+        let digest = "a".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let manifest = serde_json::json!({
+            "fixed_point": {
+                "stage1_equals_stage2": true,
+                "stage0_bwrap_equals_stage2_bwrap": true,
+                "stage0_busybox_equals_stage2_busybox": true,
+            },
+            "binaries": {
+                "stage1": { "digest_blake3": digest.clone() },
+                "stage2": { "digest_blake3": digest.clone() },
+            }
+        });
+        let path_leak_summary = vec!["no path-leak excerpts found in workflow logs".to_string()];
+
+        let diagnostic = bootstrap_divergence_diagnostic(Some(&manifest), &path_leak_summary);
+
+        assert_eq!(diagnostic.status, BOOTSTRAP_DIVERGENCE_CONVERGED);
+        assert!(diagnostic.root.is_none());
+        assert_eq!(diagnostic.stage1_digest_blake3.as_deref(), Some(digest.as_str()));
+        assert_eq!(diagnostic.stage2_digest_blake3.as_deref(), Some(digest.as_str()));
+        assert_eq!(diagnostic.path_leak_scan_summary, path_leak_summary);
+    }
+
+    #[test]
+    fn failure_audit_reports_gcc_bootstrap_divergence_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let proof_bundle_dir = temp.path().join(SCRATCH_PROOF_BUNDLE_DIR_NAME);
+        std::fs::create_dir_all(&proof_bundle_dir).unwrap();
+        let stage1_digest = "1".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let stage2_digest = "2".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        write_proof_manifest(
+            &proof_bundle_dir,
+            serde_json::json!({
+                "fixed_point": {
+                    "stage1_equals_stage2": false,
+                    "stage0_bwrap_equals_stage2_bwrap": true,
+                    "stage0_busybox_equals_stage2_busybox": true,
+                },
+                "binaries": {
+                    "stage1": { "digest_blake3": stage1_digest.clone() },
+                    "stage2": {
+                        "path": "binaries/stage2-mantle",
+                        "digest_blake3": stage2_digest.clone(),
+                    }
+                },
+                "stage2": {
+                    "report": {
+                        "output_binary": "binaries/stage2-mantle"
+                    }
+                }
+            }),
+        );
+        let stderr_path = temp.path().join(SCRATCH_AUDIT_DIR_NAME).join(AUDIT_STDERR_FILE_NAME);
+        std::fs::create_dir_all(stderr_path.parent().unwrap()).unwrap();
+        std::fs::write(&stderr_path, "first divergent bootstrap output: gcc.drv output digest mismatch\n").unwrap();
+        let missing_digest = "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let plan =
+            witness_rebuild_test_plan(temp.path(), vec![expected_output("binaries/02-stage2-mantle", &missing_digest)]);
+        let failure_message = format!(
+            "rebuilt output digest mismatch for binaries/02-stage2-mantle: expected {missing_digest}, got {stage2_digest}"
+        );
+
+        let meta =
+            build_failure_audit_meta(&plan, Path::new("/tmp/workflow-driver"), &[], 0, 1, &failure_message).unwrap();
+        let diagnostics = meta.diagnostics.expect("failure audit should carry diagnostics");
+
+        assert_eq!(meta.status, audit_status_failed());
+        assert!(meta.witness_attestation_path.is_none());
+        assert_eq!(diagnostics.bootstrap_divergence.status, BOOTSTRAP_DIVERGENCE_DIVERGED);
+        assert_eq!(diagnostics.bootstrap_divergence.root.as_deref(), Some(BOOTSTRAP_DIVERGENCE_GCC_ROOT));
+        assert_eq!(diagnostics.bootstrap_divergence.stage1_digest_blake3.as_deref(), Some(stage1_digest.as_str()));
+        assert_eq!(diagnostics.bootstrap_divergence.stage2_digest_blake3.as_deref(), Some(stage2_digest.as_str()));
+        assert!(
+            diagnostics
+                .bootstrap_divergence
+                .path_leak_scan_summary
+                .iter()
+                .any(|excerpt| excerpt.contains(BOOTSTRAP_DIVERGENCE_GCC_ROOT))
+        );
+    }
+
+    #[test]
+    fn validate_rebuilt_output_digests_rejects_stripped_equivalent_but_different_binary() {
+        let temp = tempfile::tempdir().unwrap();
+        let exact_bytes = b"mantle-binary";
+        let stripped_equivalent_prefix = b"mantle-binary";
+        let symbol_table_suffix = b"-debug-symbols";
+        let expected_digest = blake3::hash(stripped_equivalent_prefix).to_hex().to_string();
+        let rebuilt_path = temp.path().join("rebuilt-mantle");
+        let mut rebuilt_bytes = stripped_equivalent_prefix.to_vec();
+        rebuilt_bytes.extend_from_slice(symbol_table_suffix);
+        std::fs::write(&rebuilt_path, rebuilt_bytes).unwrap();
+        let expected_outputs = vec![expected_output("binaries/02-stage2-mantle", &expected_digest)];
+        let rebuilt_paths = vec![rebuilt_path];
+
+        let err = validate_rebuilt_output_digests(&expected_outputs, &rebuilt_paths).unwrap_err();
+
+        assert!(err.message().contains("rebuilt output digest mismatch"));
+        assert!(err.message().contains(&expected_digest));
+        assert!(err.message().contains("binaries/02-stage2-mantle"));
+        assert_eq!(exact_bytes, stripped_equivalent_prefix);
     }
 
     #[test]

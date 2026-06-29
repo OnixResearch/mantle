@@ -17,6 +17,8 @@ use serde::Deserialize;
 
 use crate::errors::RunError;
 
+const MAX_SOURCE_TREE_SEARCH_ANCESTORS: usize = 12;
+
 /// Resolve packages to store paths using the given resolver function.
 ///
 /// `resolve` takes a package name and returns its store path or an error.
@@ -188,8 +190,27 @@ fn make_raw_fetch_derivation(raw: &FetchSeedRawArtifact) -> crunch_glue::CrunchD
     }
 }
 
+fn source_tree_file_candidates(current_dir: Option<&Path>, relative_path: &Path) -> Vec<PathBuf> {
+    assert!(relative_path.is_relative(), "source-tree file path must be relative");
+    let mut candidates = Vec::new();
+    if let Some(dir) = current_dir {
+        for ancestor in dir.ancestors().take(MAX_SOURCE_TREE_SEARCH_ANCESTORS) {
+            candidates.push(ancestor.join(relative_path));
+        }
+    }
+    candidates
+}
+
+fn find_source_tree_file(current_dir: Option<&Path>, relative_path: &Path) -> Option<PathBuf> {
+    source_tree_file_candidates(current_dir, relative_path)
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+}
+
 fn fetch_seed_provider_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bootstrap").join("seed.ncl")
+    let relative_path = Path::new("bootstrap").join("seed.ncl");
+    let current_dir = std::env::current_dir().ok();
+    find_source_tree_file(current_dir.as_deref(), &relative_path).unwrap_or(relative_path)
 }
 
 fn nickel_search_entries() -> Result<Vec<OsString>, RunError> {
@@ -878,6 +899,24 @@ mod tests {
 
     fn mock_resolve_empty(_pkg: &str) -> Result<String, RunError> {
         Ok(String::new())
+    }
+
+    #[test]
+    fn source_tree_file_candidates_walk_up_from_current_dir() {
+        let relative = Path::new("bootstrap").join("seed.ncl");
+        let candidates = source_tree_file_candidates(Some(Path::new("/workspace/project/crates/cli")), &relative);
+
+        assert!(candidates.contains(&PathBuf::from("/workspace/project/crates/cli/bootstrap/seed.ncl")));
+        assert!(candidates.contains(&PathBuf::from("/workspace/project/bootstrap/seed.ncl")));
+        assert!(candidates.contains(&PathBuf::from("/workspace/bootstrap/seed.ncl")));
+    }
+
+    #[test]
+    fn source_tree_file_candidates_empty_without_current_dir() {
+        let relative = Path::new("bootstrap").join("seed.ncl");
+        let candidates = source_tree_file_candidates(None, &relative);
+
+        assert!(candidates.is_empty());
     }
 
     #[test]

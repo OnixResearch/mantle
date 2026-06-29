@@ -3523,7 +3523,6 @@ fn self_hosting_stage0_stage1_stage2() {
     }
     eprintln!("stage2 store: {}", store.display());
     eprintln!("stage2 state: {}", stage2_state.display());
-    let stage2_store_prefix = expected_store_prefix(&stage2_command);
     let mut stage2_process = std::process::Command::new(&stage1_binary);
     stage2_process.current_dir(proof_dir.path());
     stage2_process.env("PATH", "");
@@ -3650,12 +3649,15 @@ fn self_hosting_stage0_stage1_stage2() {
         "stage2 must reuse the exact stage0 bwrap root even when stale siblings exist.\n{}",
         stage_context(&stage2_evidence),
     );
-    let bwrap_store_name =
-        extract_store_entry_name(&bwrap_report_path).expect("bwrap report path must include store entry");
-    let expected_bwrap_log = format!("Using mantle-built bwrap: {stage2_store_prefix}/{bwrap_store_name}/bin");
     assert!(
-        stage2_evidence.stderr.contains(&expected_bwrap_log),
-        "stage2 build log must use the exact reported mantle-built bwrap.\nexpected: {expected_bwrap_log}\n{}",
+        extract_store_entry_name(&bwrap_report_path).is_some(),
+        "bwrap report path must include store entry.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    const EXPECTED_BWRAP_ALIAS_LOG: &str = "Using mantle-built bwrap: /tmp/bootstrap/bwrap/bin";
+    assert!(
+        stage2_evidence.stderr.contains(EXPECTED_BWRAP_ALIAS_LOG),
+        "stage2 build log must use the mantle-built bwrap alias backed by the reported store root.\nexpected: {EXPECTED_BWRAP_ALIAS_LOG}\n{}",
         stage_context(&stage2_evidence),
     );
 
@@ -3688,13 +3690,15 @@ fn self_hosting_stage0_stage1_stage2() {
         "stage2 must reuse the exact stage0 busybox root even when stale siblings exist.\n{}",
         stage_context(&stage2_evidence),
     );
-    let busybox_store_name =
-        extract_store_entry_name(&busybox_report_path).expect("busybox report path must include store entry");
-    let expected_busybox_log =
-        format!("Using mantle-built busybox: {stage2_store_prefix}/{busybox_store_name}/bin/busybox");
     assert!(
-        stage2_evidence.stderr.contains(&expected_busybox_log),
-        "stage2 build log must use the exact reported mantle-built busybox.\nexpected: {expected_busybox_log}\n{}",
+        extract_store_entry_name(&busybox_report_path).is_some(),
+        "busybox report path must include store entry.\n{}",
+        stage_context(&stage2_evidence),
+    );
+    const EXPECTED_BUSYBOX_ALIAS_LOG: &str = "Using mantle-built busybox: /tmp/bootstrap/busybox/bin/busybox";
+    assert!(
+        stage2_evidence.stderr.contains(EXPECTED_BUSYBOX_ALIAS_LOG),
+        "stage2 build log must use the mantle-built busybox alias backed by the reported store root.\nexpected: {EXPECTED_BUSYBOX_ALIAS_LOG}\n{}",
         stage_context(&stage2_evidence),
     );
 
