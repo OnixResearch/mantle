@@ -22,6 +22,8 @@ use crunch_release_core::ReleaseReproducibilityReport;
 use crunch_release_core::ReleaseReproducibilityReportLinkage;
 pub(crate) use crunch_release_core::ReleaseWorkflowIdentity;
 use crunch_release_core::RoleBoundedReleaseArtifact;
+pub(crate) use crunch_release_core::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE;
+pub(crate) use crunch_release_core::SourceAcquisition;
 use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
@@ -58,6 +60,7 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub workflow_version: String,
     pub reproducibility_report_path: Option<PathBuf>,
     pub provider_fixed_point_proof_dir: Option<PathBuf>,
+    pub source_acquisition_url: Option<String>,
 }
 
 impl ReleaseBundleCreateRequest {
@@ -79,6 +82,7 @@ impl ReleaseBundleCreateRequest {
             workflow_version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             reproducibility_report_path: None,
             provider_fixed_point_proof_dir: None,
+            source_acquisition_url: None,
         }
     }
 }
@@ -110,6 +114,7 @@ pub(crate) fn create_release_evidence_bundle(
     let reproducibility_report =
         copy_optional_reproducibility_report(request, &source_archive, &binaries, &proof_bundle)?;
     let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
+    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
 
     let manifest = ReleaseEvidenceManifest {
         schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
@@ -120,6 +125,7 @@ pub(crate) fn create_release_evidence_bundle(
             version: request.workflow_version.clone(),
         },
         source_archive,
+        source_acquisition,
         binaries,
         proof_bundle,
         prerequisite_inventory: prerequisite_inventory.clone(),
@@ -186,6 +192,17 @@ pub(crate) fn load_full_self_hosting_proof_identity(
     })
 }
 
+fn build_source_acquisition(
+    request: &ReleaseBundleCreateRequest,
+    source_archive_digest_blake3: &str,
+) -> Option<SourceAcquisition> {
+    request.source_acquisition_url.as_ref().map(|url| SourceAcquisition {
+        kind: SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+        url: url.clone(),
+        digest_blake3: source_archive_digest_blake3.to_string(),
+    })
+}
+
 fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), RunError> {
     if request.release_id.trim().is_empty() {
         return Err(RunError::Internal("release evidence release_id must not be empty".to_string()));
@@ -201,6 +218,11 @@ fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), R
             "release evidence source archive is missing: {}",
             request.source_archive_path.display()
         )));
+    }
+    if let Some(url) = &request.source_acquisition_url {
+        if url.trim().is_empty() {
+            return Err(RunError::Internal("release evidence source acquisition URL must not be empty".to_string()));
+        }
     }
     let binary_count: u32 = request
         .binary_paths
@@ -795,6 +817,7 @@ mod tests {
                 version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             },
             source_archive: sample_artifact(BundledArtifactKind::File, "source/mantle-src.tar", 1),
+            source_acquisition: None,
             binaries: vec![stage2_binary.clone()],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
@@ -1089,6 +1112,67 @@ mod tests {
         assert!(output_bundle_dir.join("proof/self-hosting/manifest.json").exists());
         assert!(output_bundle_dir.join("proof/inventory.md").exists());
         assert!(output_bundle_dir.join("manifest.json").exists());
+    }
+
+    #[test]
+    fn create_and_verify_release_bundle_records_source_acquisition_url() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+        let source_url = "https://example.invalid/releases/mantle-src.tar".to_string();
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.source_acquisition_url = Some(source_url.clone());
+        let created = create_release_evidence_bundle(&request).unwrap();
+        let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
+        let source_acquisition = created.source_acquisition.as_ref().unwrap();
+
+        assert_eq!(created, verified);
+        assert_eq!(source_acquisition.kind, SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE);
+        assert_eq!(source_acquisition.url, source_url);
+        assert_eq!(source_acquisition.digest_blake3, created.source_archive.digest_blake3);
+    }
+
+    #[test]
+    fn create_rejects_empty_source_acquisition_url_before_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.source_acquisition_url = Some("   ".to_string());
+        let err = create_release_evidence_bundle(&request).unwrap_err();
+
+        assert!(err.to_string().contains("source acquisition URL must not be empty"));
+        assert!(!output_bundle_dir.join("manifest.json").exists());
     }
 
     #[test]

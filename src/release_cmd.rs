@@ -32,6 +32,7 @@ use crate::witness_rebuild::WITNESS_SCRATCH_ENV;
 use crate::witness_rebuild::WitnessRebuildSuccess;
 use crate::witness_rebuild::audit_meta_path;
 use crate::witness_rebuild::build_failure_audit_meta;
+use crate::witness_rebuild::build_prelaunch_failure_audit_meta;
 use crate::witness_rebuild::build_success_audit_meta;
 use crate::witness_rebuild::default_witness_scratch_dir;
 use crate::witness_rebuild::plan_witness_rebuild;
@@ -57,6 +58,7 @@ pub(crate) fn cmd_release(
             proof_bundle,
             provider_fixed_point_proof,
             reproducibility_report,
+            source_acquisition_url,
             workflow_command,
             workflow_version,
         } => cmd_release_create(
@@ -68,6 +70,7 @@ pub(crate) fn cmd_release(
             proof_bundle,
             provider_fixed_point_proof,
             reproducibility_report,
+            source_acquisition_url,
             workflow_command,
             workflow_version,
         ),
@@ -158,6 +161,7 @@ pub(crate) fn cmd_release(
             request_dir,
             scratch_dir,
             check,
+            require_independent_source,
             identity,
             system,
             toolchain,
@@ -170,6 +174,7 @@ pub(crate) fn cmd_release(
             request_dir,
             scratch_dir,
             check,
+            require_independent_source,
             identity,
             system,
             toolchain,
@@ -189,6 +194,7 @@ fn cmd_release_create(
     proof_bundle: PathBuf,
     provider_fixed_point_proof: Option<PathBuf>,
     reproducibility_report: Option<PathBuf>,
+    source_acquisition_url: Option<String>,
     workflow_command: String,
     workflow_version: String,
 ) -> Result<(), RunError> {
@@ -208,6 +214,7 @@ fn cmd_release_create(
         workflow_version: normalized_workflow_version,
         reproducibility_report_path: reproducibility_report.map(|path| resolve_input_path(current_dir, path)),
         provider_fixed_point_proof_dir: provider_fixed_point_proof.map(|path| resolve_input_path(current_dir, path)),
+        source_acquisition_url,
     };
     let manifest = create_release_evidence_bundle(&request)?;
     if json {
@@ -225,6 +232,9 @@ fn cmd_release_create(
         }
         if let Some(report) = &manifest.reproducibility_report {
             println!("reproducibility report: {}", report.relative_path);
+        }
+        if let Some(source_acquisition) = &manifest.source_acquisition {
+            println!("source acquisition: {}", source_acquisition.url);
         }
         println!("manifest: manifest.json");
     }
@@ -1049,6 +1059,7 @@ fn cmd_release_witness_rebuild(
     request_dir: PathBuf,
     scratch_dir: Option<PathBuf>,
     check: bool,
+    require_independent_source: bool,
     identity: Option<String>,
     system: Option<String>,
     toolchain: Option<String>,
@@ -1057,13 +1068,17 @@ fn cmd_release_witness_rebuild(
 ) -> Result<(), RunError> {
     let resolved_request_dir = resolve_input_path(current_dir, request_dir);
     let resolved_scratch_dir = resolve_witness_scratch_dir(current_dir, &resolved_request_dir, scratch_dir)?;
-    let plan = plan_witness_rebuild(&resolved_request_dir, &resolved_scratch_dir)?;
+    let plan = plan_witness_rebuild(&resolved_request_dir, &resolved_scratch_dir, require_independent_source)?;
     if check {
         return print_witness_rebuild_check(&plan, json);
     }
 
     let metadata = required_witness_rebuild_metadata(system, toolchain, host_class)?;
-    prepare_witness_rebuild_scratch(&plan)?;
+    if let Err(err) = prepare_witness_rebuild_scratch(&plan) {
+        let failure_meta = build_prelaunch_failure_audit_meta(&plan, err.message())?;
+        write_audit_meta(&audit_meta_path(&plan), &failure_meta)?;
+        return Err(err);
+    }
     let execution = run_witness_rebuild_workflow(&plan)?;
     if let Err(err) = validate_successful_rebuild(&plan, &execution) {
         let failure_meta = build_failure_audit_meta(
@@ -1187,6 +1202,8 @@ fn print_witness_rebuild_check(plan: &crate::witness_rebuild::WitnessRebuildPlan
             "audit_meta_path": audit_path.display().to_string(),
             "workflow_command": plan.workflow_command,
             "workflow_version": plan.workflow_version,
+            "require_independent_source": plan.require_independent_source,
+            "source_acquisition_url": plan.source_acquisition.as_ref().map(|source| source.url.clone()),
         });
         println!(
             "{}",
@@ -1201,6 +1218,10 @@ fn print_witness_rebuild_check(plan: &crate::witness_rebuild::WitnessRebuildPlan
     println!("scratch root: {}", plan.scratch_layout.scratch_root.display());
     println!("verification output: {}", plan.scratch_layout.verification_dir.display());
     println!("proof bundle output: {}", plan.scratch_layout.proof_bundle_dir.display());
+    println!("require independent source: {}", plan.require_independent_source);
+    if let Some(source_acquisition) = &plan.source_acquisition {
+        println!("source acquisition URL: {}", source_acquisition.url);
+    }
     println!("audit metadata: {}", audit_path.display());
     println!("check only: no rebuild executed, no witness sidecars written");
     Ok(())
@@ -1230,6 +1251,8 @@ fn print_witness_rebuild_success(
             "attestation_path": attestation_path.display().to_string(),
             "signature_path": signature_path.display().to_string(),
             "rebuilt_outputs": rebuilt_outputs,
+            "require_independent_source": plan.require_independent_source,
+            "source_acquisition_url": plan.source_acquisition.as_ref().map(|source| source.url.clone()),
             "started_unix_ms": success.started_unix_ms,
             "finished_unix_ms": success.finished_unix_ms,
         });
@@ -1247,6 +1270,10 @@ fn print_witness_rebuild_success(
     println!("verification output: {}", plan.scratch_layout.verification_dir.display());
     println!("witness attestation: {}", attestation_path.display());
     println!("signature: {}", signature_path.display());
+    println!("require independent source: {}", plan.require_independent_source);
+    if let Some(source_acquisition) = &plan.source_acquisition {
+        println!("source acquisition URL: {}", source_acquisition.url);
+    }
     println!("rebuild audit: {}", audit_path.display());
     Ok(())
 }
@@ -1380,6 +1407,7 @@ mod tests {
                 size_bytes: 1,
                 digest_blake3: "a".repeat(64),
             },
+            source_acquisition: None,
             binaries: vec![],
             proof_bundle: crate::release_evidence::BundledArtifact {
                 kind: crate::release_evidence::BundledArtifactKind::Directory,
@@ -1451,6 +1479,7 @@ mod tests {
                 size_bytes: 1,
                 digest_blake3: "a".repeat(64),
             },
+            source_acquisition: None,
             binaries: vec![crate::release_evidence::BundledArtifact {
                 kind: crate::release_evidence::BundledArtifactKind::File,
                 relative_path: "binaries/crunch".to_string(),

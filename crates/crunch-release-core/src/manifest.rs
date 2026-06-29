@@ -17,10 +17,12 @@ pub const DEFAULT_PROOF_WORKFLOW_VERSION: &str = "mantle-self-hosting-proof-v2";
 pub const PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE: &str = "cargo-free-source-built-handoff-evidence";
 pub const DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE: &str = "deterministic-build-proof-receipt";
 pub const DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE: &str = "deterministic-sandbox-isolation-evidence";
+pub const SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE: &str = "external-archive";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 
 const MAX_BINARY_ARTIFACTS_COUNT: u32 = 16;
 const MAX_RELATIVE_PATH_BYTES_COUNT: u32 = 4096;
+const MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT: u32 = 8192;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -85,6 +87,13 @@ pub struct RoleBoundedReleaseArtifact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceAcquisition {
+    pub kind: String,
+    pub url: String,
+    pub digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseProofLinkage {
     pub release_id: String,
     pub source_archive_digest_blake3: String,
@@ -104,6 +113,8 @@ pub struct ReleaseEvidenceManifest {
     pub claim_scope: String,
     pub workflow: ReleaseWorkflowIdentity,
     pub source_archive: BundledArtifact,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_acquisition: Option<SourceAcquisition>,
     pub binaries: Vec<BundledArtifact>,
     pub proof_bundle: BundledArtifact,
     pub prerequisite_inventory: BundledArtifact,
@@ -164,6 +175,7 @@ fn validate_provider_binding_binary_count(binaries: &[BundledArtifact]) -> Resul
 fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
     validate_manifest_header(manifest)?;
     validate_manifest_artifacts(manifest)?;
+    validate_source_acquisition(manifest)?;
     validate_manifest_linkage(manifest)?;
     Ok(())
 }
@@ -425,6 +437,44 @@ fn record_unique_artifact_path(
     Ok(())
 }
 
+fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let Some(source_acquisition) = &manifest.source_acquisition else {
+        return Ok(());
+    };
+    if source_acquisition.kind != SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE {
+        return Err(validation_error(format!(
+            "release evidence source_acquisition.kind must be {SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE}, got {}",
+            source_acquisition.kind
+        )));
+    }
+    validate_source_acquisition_url(&source_acquisition.url)?;
+    validate_blake3_hex(&source_acquisition.digest_blake3, "source_acquisition.digest_blake3")?;
+    if source_acquisition.digest_blake3 != manifest.source_archive.digest_blake3 {
+        return Err(validation_error(
+            "release evidence source_acquisition.digest_blake3 must match source_archive.digest_blake3".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_source_acquisition_url(url: &str) -> Result<(), ReleaseEvidenceError> {
+    if url.trim().is_empty() {
+        return Err(validation_error("release evidence source_acquisition.url must not be empty".to_string()));
+    }
+    let byte_count = u32_count(url.as_bytes().len(), "release evidence source_acquisition.url length overflowed u32")?;
+    if byte_count > MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT {
+        return Err(validation_error(format!(
+            "release evidence source_acquisition.url is {byte_count} bytes, limit is {MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT}"
+        )));
+    }
+    if !(url.starts_with("file://") || url.starts_with("http://") || url.starts_with("https://")) {
+        return Err(validation_error(
+            "release evidence source_acquisition.url must start with file://, http://, or https://".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_manifest_linkage(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
     if manifest.proof_linkage.release_id != manifest.release_id {
         return Err(validation_error("release evidence proof linkage release_id must match release_id".to_string()));
@@ -680,6 +730,7 @@ mod tests {
                 version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             },
             source_archive: sample_artifact(BundledArtifactKind::File, "source/mantle-src.tar", 1),
+            source_acquisition: None,
             binaries: vec![stage2_binary.clone()],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 7),
             prerequisite_inventory: inventory.clone(),
@@ -787,6 +838,50 @@ mod tests {
         manifest.source_archive.relative_path = "/tmp/source.tar".to_string();
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
         assert!(err.to_string().contains("must be relative"));
+    }
+
+    #[test]
+    fn validate_accepts_matching_external_source_acquisition() {
+        let mut manifest = sample_manifest();
+        manifest.source_acquisition = Some(SourceAcquisition {
+            kind: SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url: "https://example.invalid/mantle-src.tar".to_string(),
+            digest_blake3: manifest.source_archive.digest_blake3.clone(),
+        });
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains("source_acquisition"));
+        assert!(text.contains(SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE));
+    }
+
+    #[test]
+    fn validate_rejects_source_acquisition_digest_mismatch() {
+        let mut manifest = sample_manifest();
+        manifest.source_acquisition = Some(SourceAcquisition {
+            kind: SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url: "https://example.invalid/mantle-src.tar".to_string(),
+            digest_blake3: sample_digest(2),
+        });
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("source_acquisition.digest_blake3 must match"));
+    }
+
+    #[test]
+    fn validate_rejects_unsupported_source_acquisition_url() {
+        let mut manifest = sample_manifest();
+        manifest.source_acquisition = Some(SourceAcquisition {
+            kind: SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url: "git@example.invalid:mantle.git".to_string(),
+            digest_blake3: manifest.source_archive.digest_blake3.clone(),
+        });
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("must start with file://, http://, or https://"));
     }
 
     #[test]

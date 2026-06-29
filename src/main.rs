@@ -852,6 +852,10 @@ pub enum ReleaseAction {
         #[arg(long)]
         reproducibility_report: Option<PathBuf>,
 
+        /// External source archive URL witnesses can fetch before rebuilding
+        #[arg(long)]
+        source_acquisition_url: Option<String>,
+
         /// Workflow command identity recorded in the manifest
         #[arg(long, default_value = "./scripts/prove-self-hosting.sh")]
         workflow_command: String,
@@ -1026,6 +1030,11 @@ pub enum ReleaseAction {
         /// sidecars
         #[arg(long)]
         check: bool,
+
+        /// Require source acquisition metadata and fetch the source archive independently
+        /// before rebuilding
+        #[arg(long)]
+        require_independent_source: bool,
 
         /// Stable witness identity recorded in the attestation (default: signer key name)
         #[arg(long)]
@@ -3855,6 +3864,54 @@ let Plan = {
         assert!(matches!(args.command, Command::Release {
             action: ReleaseAction::Create {
                 provider_fixed_point_proof: Some(_),
+                ..
+            }
+        }));
+    }
+
+    #[test]
+    fn release_create_accepts_source_acquisition_url_flag() {
+        let source_url = "https://example.invalid/releases/mantle-src.tar";
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "create",
+            "--release-id",
+            "mantle-0.1.0-rc1",
+            "--binary",
+            "/tmp/mantle",
+            "--proof-bundle",
+            "/tmp/self-hosting-proof",
+            "--source-acquisition-url",
+            source_url,
+        ]);
+        let Command::Release {
+            action:
+                ReleaseAction::Create {
+                    source_acquisition_url: Some(url),
+                    ..
+                },
+        } = args.command
+        else {
+            panic!("expected release create with source acquisition URL");
+        };
+        assert_eq!(url, source_url);
+    }
+
+    #[test]
+    fn release_witness_rebuild_accepts_require_independent_source_flag() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "witness-rebuild",
+            "/tmp/witness-request",
+            "--require-independent-source",
+            "--check",
+        ]);
+        assert!(matches!(args.command, Command::Release {
+            action: ReleaseAction::WitnessRebuild {
+                require_independent_source: true,
+                check: true,
                 ..
             }
         }));

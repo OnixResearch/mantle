@@ -1,3 +1,5 @@
+use std::io::Read;
+use std::io::Write;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -16,6 +18,7 @@ use crate::release_attestation::load_release_attestation_document;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_COMMAND;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
 use crate::release_evidence::ReleaseEvidenceManifest;
+use crate::release_evidence::SourceAcquisition;
 use crate::release_evidence::compute_path_blake3_digest;
 use crate::release_evidence::copy_directory_tree;
 use crate::release_evidence::verify_release_evidence_bundle;
@@ -65,6 +68,7 @@ const SCRATCH_AUDIT_DIR_NAME: &str = "witness-rebuild-audit";
 const SCRATCH_TMP_DIR_NAME: &str = "tmp";
 const SCRATCH_CARGO_TARGET_DIR_NAME: &str = "cargo-target";
 const SCRATCH_VERIFICATION_DIR_NAME: &str = "release-verification";
+const SOURCE_ACQUISITION_ARCHIVE_FILE_NAME: &str = "source-acquisition.tar";
 const AUDIT_STDOUT_FILE_NAME: &str = "stdout.txt";
 const AUDIT_STDERR_FILE_NAME: &str = "stderr.txt";
 const PROOF_MANIFEST_FILE_NAME: &str = "manifest.json";
@@ -103,6 +107,16 @@ const WORKFLOW_ENV_REMOVE: &[&str] = &[
 ];
 const WORKFLOW_ARGS_FIXED_POINT: &[&str] = &[];
 const WORKFLOW_ARGS_NON_NIX_HOST: &[&str] = &[WORKFLOW_NON_NIX_HOST_ARG];
+const SOURCE_ACQUISITION_MODE_INDEPENDENT: &str = "independent-source";
+const SOURCE_ACQUISITION_STATUS_VERIFIED: &str = "verified";
+const BYTES_PER_KIB: u64 = 1024;
+const KIB_PER_MIB: u64 = 1024;
+const MIB_PER_GIB: u64 = 1024;
+const MAX_SOURCE_ARCHIVE_FETCH_GIB: u64 = 4;
+const MAX_SOURCE_ARCHIVE_FETCH_BYTES: u64 = MAX_SOURCE_ARCHIVE_FETCH_GIB * MIB_PER_GIB * KIB_PER_MIB * BYTES_PER_KIB;
+const SOURCE_FETCH_BUFFER_KIB: usize = 64;
+const BYTES_PER_KIB_USIZE: usize = 1024;
+const SOURCE_FETCH_BUFFER_BYTES: usize = SOURCE_FETCH_BUFFER_KIB * BYTES_PER_KIB_USIZE;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExpectedRebuiltOutput {
@@ -121,6 +135,7 @@ pub(crate) struct WitnessRebuildLayout {
     pub audit_dir: PathBuf,
     pub tmp_dir: PathBuf,
     pub cargo_target_dir: PathBuf,
+    pub source_acquisition_archive_path: PathBuf,
     pub verification_dir: PathBuf,
     pub stdout_log_path: PathBuf,
     pub stderr_log_path: PathBuf,
@@ -140,6 +155,8 @@ pub(crate) struct WitnessRebuildPlan {
     pub workflow_version: String,
     pub proof_mode: String,
     pub expected_outputs: Vec<ExpectedRebuiltOutput>,
+    pub require_independent_source: bool,
+    pub source_acquisition: Option<SourceAcquisition>,
     pub scratch_layout: WitnessRebuildLayout,
 }
 
@@ -190,6 +207,18 @@ pub(crate) struct WitnessRebuildAuditMeta {
     pub witness_signature_path: Option<String>,
     pub failure_message: Option<String>,
     pub diagnostics: Option<WitnessRebuildDiagnostics>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_acquisition: Option<WitnessSourceAcquisitionAudit>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct WitnessSourceAcquisitionAudit {
+    pub mode: String,
+    pub url: Option<String>,
+    pub digest_blake3: Option<String>,
+    pub fetched_path: Option<String>,
+    pub status: String,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -286,7 +315,11 @@ pub(crate) fn default_witness_scratch_dir(request_dir: &Path) -> Result<PathBuf,
     Ok(parent.join(format!("{file_name}.work")))
 }
 
-pub(crate) fn plan_witness_rebuild(request_dir: &Path, scratch_root: &Path) -> Result<WitnessRebuildPlan, RunError> {
+pub(crate) fn plan_witness_rebuild(
+    request_dir: &Path,
+    scratch_root: &Path,
+    require_independent_source: bool,
+) -> Result<WitnessRebuildPlan, RunError> {
     let request = load_witness_request_document(request_dir)?;
     validate_request_schema(&request)?;
     let paths = resolve_request_artifact_paths(request_dir, &request)?;
@@ -296,6 +329,7 @@ pub(crate) fn plan_witness_rebuild(request_dir: &Path, scratch_root: &Path) -> R
     validate_supported_workflow_identity(&manifest.workflow.command, &manifest.workflow.version)?;
     let expected_outputs = build_expected_outputs(&manifest, &release_attestation)?;
     let request_source_archive_path = source_archive_path(&paths.bundle_dir, &manifest)?;
+    let source_acquisition = source_acquisition_for_plan(&manifest, require_independent_source)?;
     let scratch_layout = derive_witness_rebuild_layout(scratch_root, &request.release_id)?;
     let request_path = paths.request_path;
     Ok(WitnessRebuildPlan {
@@ -311,6 +345,8 @@ pub(crate) fn plan_witness_rebuild(request_dir: &Path, scratch_root: &Path) -> R
         workflow_version: manifest.workflow.version,
         proof_mode: manifest.proof_linkage.proof_mode,
         expected_outputs,
+        require_independent_source,
+        source_acquisition,
         scratch_layout,
     })
 }
@@ -397,6 +433,7 @@ pub(crate) fn build_success_audit_meta(
         Some(signature_path),
         None,
         None,
+        None,
     )
 }
 
@@ -419,6 +456,27 @@ pub(crate) fn build_failure_audit_meta(
         None,
         Some(failure_message.to_string()),
         Some(build_failure_diagnostics(plan, failure_message)),
+        None,
+    )
+}
+
+pub(crate) fn build_prelaunch_failure_audit_meta(
+    plan: &WitnessRebuildPlan,
+    failure_message: &str,
+) -> Result<WitnessRebuildAuditMeta, RunError> {
+    let timestamp_ms = unix_time_ms_now()?;
+    build_audit_meta(
+        plan,
+        Path::new("<not-launched>"),
+        &[],
+        timestamp_ms,
+        timestamp_ms,
+        audit_status_failed(),
+        None,
+        None,
+        Some(failure_message.to_string()),
+        Some(build_failure_diagnostics(plan, failure_message)),
+        Some(failure_message),
     )
 }
 
@@ -588,6 +646,7 @@ fn derive_witness_rebuild_layout(scratch_root: &Path, release_id: &str) -> Resul
         audit_dir: audit_dir.clone(),
         tmp_dir: scratch_root.join(SCRATCH_TMP_DIR_NAME),
         cargo_target_dir: scratch_root.join(SCRATCH_CARGO_TARGET_DIR_NAME),
+        source_acquisition_archive_path: scratch_root.join(SOURCE_ACQUISITION_ARCHIVE_FILE_NAME),
         verification_dir: scratch_root.join(SCRATCH_VERIFICATION_DIR_NAME).join(release_id),
         stdout_log_path: audit_dir.join(AUDIT_STDOUT_FILE_NAME),
         stderr_log_path: audit_dir.join(AUDIT_STDERR_FILE_NAME),
@@ -608,6 +667,21 @@ fn validate_release_id(release_id: &str) -> Result<(), RunError> {
 fn source_archive_path(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) -> Result<PathBuf, RunError> {
     let relative = parse_request_relative_path(&manifest.source_archive.relative_path, "source archive")?;
     Ok(bundle_dir.join(relative))
+}
+
+fn source_acquisition_for_plan(
+    manifest: &ReleaseEvidenceManifest,
+    require_independent_source: bool,
+) -> Result<Option<SourceAcquisition>, RunError> {
+    if let Some(source_acquisition) = &manifest.source_acquisition {
+        return Ok(Some(source_acquisition.clone()));
+    }
+    if require_independent_source {
+        return Err(RunError::Internal(
+            "independent source acquisition required but release manifest has no source_acquisition entry".to_string(),
+        ));
+    }
+    Ok(None)
 }
 
 fn prepare_witness_rebuild_root(layout: &WitnessRebuildLayout) -> Result<(), RunError> {
@@ -691,18 +765,120 @@ fn copy_request_seed_directory(plan: &WitnessRebuildPlan) -> Result<(), RunError
 }
 
 fn extract_source_archive(plan: &WitnessRebuildPlan) -> Result<(), RunError> {
-    if !plan.request_source_archive_path.is_file() {
+    let source_archive_path = source_archive_for_extraction(plan)?;
+    if !source_archive_path.is_file() {
         return Err(RunError::Internal(format!(
             "witness rebuild source archive missing: {}",
-            plan.request_source_archive_path.display()
+            source_archive_path.display()
         )));
     }
-    let repo_dir_string = plan.scratch_layout.repo_dir.to_str().ok_or_else(|| {
-        RunError::Internal(format!("path is not valid UTF-8: {}", plan.scratch_layout.repo_dir.display()))
+    extract_source_archive_from_path(&source_archive_path, &plan.scratch_layout.repo_dir)
+}
+
+fn source_archive_for_extraction(plan: &WitnessRebuildPlan) -> Result<PathBuf, RunError> {
+    if !plan.require_independent_source {
+        return Ok(plan.request_source_archive_path.clone());
+    }
+    let source_acquisition = plan.source_acquisition.as_ref().ok_or_else(|| {
+        RunError::Internal(
+            "independent source acquisition required but release manifest has no source_acquisition entry".to_string(),
+        )
     })?;
-    let archive_url = format!("file://{}", plan.request_source_archive_path.display());
+    fetch_and_verify_source_acquisition(source_acquisition, &plan.scratch_layout.source_acquisition_archive_path)?;
+    Ok(plan.scratch_layout.source_acquisition_archive_path.clone())
+}
+
+fn extract_source_archive_from_path(source_archive_path: &Path, repo_dir: &Path) -> Result<(), RunError> {
+    let repo_dir_string = repo_dir
+        .to_str()
+        .ok_or_else(|| RunError::Internal(format!("path is not valid UTF-8: {}", repo_dir.display())))?;
+    let archive_url = format!("file://{}", source_archive_path.display());
     crunch_build::fetcher::fetch_and_unpack(&archive_url, repo_dir_string)
         .map_err(|err| RunError::Internal(format!("extracting source archive: {err}")))
+}
+
+fn fetch_and_verify_source_acquisition(
+    source_acquisition: &SourceAcquisition,
+    destination_path: &Path,
+) -> Result<(), RunError> {
+    fetch_source_archive_to_path(&source_acquisition.url, destination_path)?;
+    let fetched_digest = compute_path_blake3_digest(destination_path)?;
+    if fetched_digest == source_acquisition.digest_blake3 {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "independent source acquisition digest mismatch: expected {}, fetched {} from {}",
+        source_acquisition.digest_blake3, fetched_digest, source_acquisition.url
+    )))
+}
+
+fn fetch_source_archive_to_path(url: &str, destination_path: &Path) -> Result<(), RunError> {
+    if let Some(parent) = destination_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
+    }
+    let mut reader = open_source_archive_reader(url)?;
+    let temporary_path = destination_path.with_extension("download");
+    let mut output = std::fs::File::create(&temporary_path)
+        .map_err(|err| RunError::Internal(format!("creating {}: {err}", temporary_path.display())))?;
+    copy_source_archive_with_limit(&mut reader, &mut output, MAX_SOURCE_ARCHIVE_FETCH_BYTES)?;
+    output
+        .flush()
+        .map_err(|err| RunError::Internal(format!("flushing {}: {err}", temporary_path.display())))?;
+    drop(output);
+    std::fs::rename(&temporary_path, destination_path).map_err(|err| {
+        RunError::Internal(format!(
+            "moving independent source archive {} to {}: {err}",
+            temporary_path.display(),
+            destination_path.display()
+        ))
+    })
+}
+
+fn open_source_archive_reader(url: &str) -> Result<Box<dyn Read>, RunError> {
+    if let Some(path) = url.strip_prefix("file://") {
+        let file = std::fs::File::open(path)
+            .map_err(|err| RunError::Internal(format!("opening independent source archive {url}: {err}")))?;
+        return Ok(Box::new(file));
+    }
+    if url.starts_with("http://") || url.starts_with("https://") {
+        let response = ureq::get(url)
+            .call()
+            .map_err(|err| RunError::Internal(format!("fetching independent source archive {url}: {err}")))?;
+        return Ok(Box::new(response.into_body().into_reader()));
+    }
+    Err(RunError::Internal(format!("unsupported independent source acquisition URL scheme: {url}")))
+}
+
+fn copy_source_archive_with_limit(
+    reader: &mut dyn Read,
+    writer: &mut dyn Write,
+    limit_bytes: u64,
+) -> Result<u64, RunError> {
+    let mut total_bytes = 0u64;
+    let mut buffer = [0u8; SOURCE_FETCH_BUFFER_BYTES];
+    loop {
+        let read_bytes = reader
+            .read(&mut buffer)
+            .map_err(|err| RunError::Internal(format!("reading independent source archive: {err}")))?;
+        if read_bytes == 0 {
+            return Ok(total_bytes);
+        }
+        let read_bytes_u64 = u64::try_from(read_bytes)
+            .map_err(|_| RunError::Internal("independent source archive read size overflowed u64".to_string()))?;
+        let next_total = total_bytes
+            .checked_add(read_bytes_u64)
+            .ok_or_else(|| RunError::Internal("independent source archive byte count overflowed u64".to_string()))?;
+        if next_total > limit_bytes {
+            return Err(RunError::Internal(format!(
+                "independent source archive exceeds {limit_bytes} byte download limit"
+            )));
+        }
+        writer
+            .write_all(&buffer[..read_bytes])
+            .map_err(|err| RunError::Internal(format!("writing independent source archive: {err}")))?;
+        total_bytes = next_total;
+    }
 }
 
 fn resolve_workflow_driver_path(plan: &WitnessRebuildPlan) -> Result<PathBuf, RunError> {
@@ -1136,6 +1312,7 @@ fn build_audit_meta(
     signature_path: Option<&Path>,
     failure_message: Option<String>,
     diagnostics: Option<WitnessRebuildDiagnostics>,
+    source_acquisition_error: Option<&str>,
 ) -> Result<WitnessRebuildAuditMeta, RunError> {
     let rebuilt_outputs = build_audit_outputs(&plan.expected_outputs, rebuilt_output_paths)?;
     let launched_command = launched_workflow_command(workflow_driver_path, &plan.proof_mode)?;
@@ -1166,6 +1343,30 @@ fn build_audit_meta(
         witness_signature_path: signature_path.map(|path| path.display().to_string()),
         failure_message,
         diagnostics,
+        source_acquisition: source_acquisition_audit(plan, source_acquisition_error),
+    })
+}
+
+fn source_acquisition_audit(
+    plan: &WitnessRebuildPlan,
+    source_acquisition_error: Option<&str>,
+) -> Option<WitnessSourceAcquisitionAudit> {
+    if !plan.require_independent_source {
+        return None;
+    }
+    let source_acquisition = plan.source_acquisition.as_ref()?;
+    let status = if source_acquisition_error.is_some() {
+        audit_status_failed()
+    } else {
+        SOURCE_ACQUISITION_STATUS_VERIFIED
+    };
+    Some(WitnessSourceAcquisitionAudit {
+        mode: SOURCE_ACQUISITION_MODE_INDEPENDENT.to_string(),
+        url: Some(source_acquisition.url.clone()),
+        digest_blake3: Some(source_acquisition.digest_blake3.clone()),
+        fetched_path: Some(plan.scratch_layout.source_acquisition_archive_path.display().to_string()),
+        status: status.to_string(),
+        error: source_acquisition_error.map(ToOwned::to_owned),
     })
 }
 
@@ -1498,6 +1699,7 @@ mod tests {
     const TEST_PROVIDER_SOURCE_COUNT: u32 = 2;
     const TEST_PROVIDER_RECEIPT_COUNT: u32 = 1;
     const TEST_REQUEST_LAYOUT_VERSION: u32 = 1;
+    const TEST_SOURCE_ARCHIVE_FILE_MODE: u32 = 0o644;
 
     #[test]
     fn default_witness_scratch_dir_appends_work_suffix() {
@@ -2134,6 +2336,73 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    fn empty_success_output() -> Output {
+        use std::os::unix::process::ExitStatusExt;
+
+        Output {
+            status: std::process::ExitStatus::from_raw(0),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        }
+    }
+
+    fn write_source_archive(path: &Path, member_path: &str, member_bytes: &[u8]) -> String {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        let file = std::fs::File::create(path).unwrap();
+        let mut builder = tar::Builder::new(file);
+        let mut header = tar::Header::new_gnu();
+        header.set_path(member_path).unwrap();
+        header.set_size(u64::try_from(member_bytes.len()).unwrap());
+        header.set_mode(TEST_SOURCE_ARCHIVE_FILE_MODE);
+        header.set_cksum();
+        builder.append(&header, member_bytes).unwrap();
+        builder.finish().unwrap();
+        compute_path_blake3_digest(path).unwrap()
+    }
+
+    fn release_manifest_without_source_acquisition() -> ReleaseEvidenceManifest {
+        let digest = "a".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let artifact = crate::release_evidence::BundledArtifact {
+            kind: crate::release_evidence::BundledArtifactKind::File,
+            relative_path: "source.tar".to_string(),
+            size_bytes: 1,
+            digest_blake3: digest.clone(),
+        };
+        ReleaseEvidenceManifest {
+            schema: crate::release_evidence::RELEASE_EVIDENCE_SCHEMA.to_string(),
+            release_id: "test-release".to_string(),
+            claim_scope: crate::release_evidence::CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
+            workflow: crate::release_evidence::ReleaseWorkflowIdentity {
+                command: DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
+                version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
+            },
+            source_archive: artifact.clone(),
+            source_acquisition: None,
+            binaries: vec![artifact.clone()],
+            proof_bundle: artifact.clone(),
+            prerequisite_inventory: artifact,
+            provider_fixed_point_proof: None,
+            reproducibility_report: None,
+            deterministic_build_proof: None,
+            deterministic_sandbox_isolation_evidence: None,
+            independent_agreement_report: None,
+            proof_linkage: crate::release_evidence::ReleaseProofLinkage {
+                release_id: "test-release".to_string(),
+                source_archive_digest_blake3: digest.clone(),
+                proof_bundle_schema: crate::release_evidence::FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
+                proof_mode: PROOF_MODE_FIXED_POINT.to_string(),
+                selected_provider_kind: "self-hosting".to_string(),
+                staged_source: "source.tar".to_string(),
+                stage2_binary_digest_blake3: digest.clone(),
+                prerequisite_inventory_digest_blake3: digest.clone(),
+                proof_manifest_digest_blake3: digest,
+            },
+        }
+    }
+
     fn witness_rebuild_test_plan(
         scratch_root: &Path,
         expected_outputs: Vec<ExpectedRebuiltOutput>,
@@ -2151,6 +2420,8 @@ mod tests {
             workflow_version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             proof_mode: PROOF_MODE_FIXED_POINT.to_string(),
             expected_outputs,
+            require_independent_source: false,
+            source_acquisition: None,
             scratch_layout: derive_witness_rebuild_layout(scratch_root, "test-release").unwrap(),
         }
     }
@@ -2210,6 +2481,140 @@ mod tests {
         let err = validate_existing_scratch_root(temp.path()).unwrap_err();
         assert!(err.message().contains("helper-owned scratch entry must be a directory"));
         assert!(err.message().contains(SCRATCH_CARGO_TARGET_DIR_NAME));
+    }
+
+    #[test]
+    fn source_acquisition_for_plan_accepts_metadata_when_flagged() {
+        let digest = "a".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let source_url = "https://example.invalid/mantle-src.tar";
+        let mut manifest = release_manifest_without_source_acquisition();
+        manifest.source_acquisition = Some(SourceAcquisition {
+            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url: source_url.to_string(),
+            digest_blake3: digest,
+        });
+
+        let planned = source_acquisition_for_plan(&manifest, true).unwrap().unwrap();
+
+        assert_eq!(planned.url, source_url);
+        assert_eq!(planned.kind, crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE);
+    }
+
+    #[test]
+    fn source_acquisition_for_plan_requires_metadata_when_flagged() {
+        let manifest = release_manifest_without_source_acquisition();
+
+        let err = source_acquisition_for_plan(&manifest, true).unwrap_err();
+
+        assert!(err.message().contains("independent source acquisition required"));
+    }
+
+    #[test]
+    fn prepare_scratch_fetches_independent_source_archive_when_required() {
+        let temp = tempfile::tempdir().unwrap();
+        let scratch_root = temp.path().join("scratch");
+        let request_root = temp.path().join("request");
+        let request_seed_dir = request_root.join("release-verification/test-release");
+        let request_archive = request_root.join("release-evidence/test-release/source.tar");
+        let external_archive = temp.path().join("external-source.tar");
+        write_source_archive(&request_archive, "source.txt", b"publisher-bundled-source");
+        let external_digest = write_source_archive(&external_archive, "source.txt", b"independent-source");
+        std::fs::create_dir_all(&request_seed_dir).unwrap();
+        let mut plan = witness_rebuild_test_plan(&scratch_root, Vec::new());
+        plan.request_dir = request_root.clone();
+        plan.request_path = request_root.join("request.json");
+        plan.request_source_archive_path = request_archive;
+        plan.request_verification_seed_dir = request_seed_dir;
+        plan.require_independent_source = true;
+        plan.source_acquisition = Some(SourceAcquisition {
+            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url: format!("file://{}", external_archive.display()),
+            digest_blake3: external_digest.clone(),
+        });
+
+        prepare_witness_rebuild_scratch(&plan).unwrap();
+
+        let extracted_bytes = std::fs::read(plan.scratch_layout.repo_dir.join("source.txt")).unwrap();
+        assert_eq!(extracted_bytes, b"independent-source");
+        assert_eq!(
+            compute_path_blake3_digest(&plan.scratch_layout.source_acquisition_archive_path).unwrap(),
+            external_digest
+        );
+    }
+
+    #[test]
+    fn source_acquisition_rejects_digest_mismatch_before_extraction() {
+        let temp = tempfile::tempdir().unwrap();
+        let scratch_root = temp.path().join("scratch");
+        let external_archive = temp.path().join("external-source.tar");
+        write_source_archive(&external_archive, "source.txt", b"tampered-source");
+        let mut plan = witness_rebuild_test_plan(&scratch_root, Vec::new());
+        plan.require_independent_source = true;
+        plan.source_acquisition = Some(SourceAcquisition {
+            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url: format!("file://{}", external_archive.display()),
+            digest_blake3: "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
+        });
+
+        let err = source_archive_for_extraction(&plan).unwrap_err();
+
+        assert!(err.message().contains("independent source acquisition digest mismatch"));
+        assert!(!plan.scratch_layout.repo_dir.exists(), "repo extraction must not start after digest mismatch");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn source_acquisition_success_audit_records_verified_fetch() {
+        let temp = tempfile::tempdir().unwrap();
+        let digest = "b".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let source_url = "file:///tmp/mantle-src.tar";
+        let mut plan = witness_rebuild_test_plan(temp.path(), Vec::new());
+        plan.require_independent_source = true;
+        plan.source_acquisition = Some(SourceAcquisition {
+            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url: source_url.to_string(),
+            digest_blake3: digest.clone(),
+        });
+        let success = WitnessRebuildSuccess {
+            rebuilt_output_paths: Vec::new(),
+            workflow_driver_path: PathBuf::from("/tmp/prove-self-hosting.sh"),
+            started_unix_ms: 1,
+            finished_unix_ms: 2,
+            output: empty_success_output(),
+        };
+
+        let meta =
+            build_success_audit_meta(&plan, &success, Path::new("/tmp/witness.json"), Path::new("/tmp/witness.sig"))
+                .unwrap();
+        let audit = meta.source_acquisition.expect("independent-source audit should be present");
+
+        assert_eq!(audit.mode, SOURCE_ACQUISITION_MODE_INDEPENDENT);
+        assert_eq!(audit.url.as_deref(), Some(source_url));
+        assert_eq!(audit.digest_blake3.as_deref(), Some(digest.as_str()));
+        assert_eq!(audit.status, SOURCE_ACQUISITION_STATUS_VERIFIED);
+        assert!(audit.error.is_none());
+    }
+
+    #[test]
+    fn source_acquisition_prelaunch_failure_audit_records_error() {
+        let temp = tempfile::tempdir().unwrap();
+        let digest = "c".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let failure = "independent source acquisition digest mismatch: expected c, fetched d";
+        let mut plan = witness_rebuild_test_plan(temp.path(), Vec::new());
+        plan.require_independent_source = true;
+        plan.source_acquisition = Some(SourceAcquisition {
+            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url: "file:///tmp/mantle-src.tar".to_string(),
+            digest_blake3: digest,
+        });
+
+        let meta = build_prelaunch_failure_audit_meta(&plan, failure).unwrap();
+        let audit = meta.source_acquisition.expect("failed independent-source audit should be present");
+
+        assert_eq!(meta.status, audit_status_failed());
+        assert_eq!(audit.status, audit_status_failed());
+        assert_eq!(audit.error.as_deref(), Some(failure));
+        assert_eq!(meta.launched_command[0], "<not-launched>");
     }
 
     #[test]

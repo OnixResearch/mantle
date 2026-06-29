@@ -1243,6 +1243,7 @@ mod tests {
                 version: DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
             },
             source_archive: sample_artifact(BundledArtifactKind::File, "source/mantle-src.tar", 1),
+            source_acquisition: None,
             binaries: vec![sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 2)],
             proof_bundle: sample_artifact(BundledArtifactKind::Directory, "proof/self-hosting", 3),
             prerequisite_inventory: sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 4),
