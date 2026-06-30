@@ -34,8 +34,7 @@
   - Evidence: record exact command output under this change's evidence directory.
 - [x] [serial] Run Cairn validation and proposal/design/tasks gates. r[verification_evidence.git_source_witness_replay]
   - Evidence: record `cairn validate`, `cairn gate proposal`, `cairn gate design`, and `cairn gate tasks` output.
-- [ ] [serial] Run Aspen1 Git-source witness replay and final verification. r[verification_evidence.git_source_witness_replay]
-  - Evidence: record source remote/ref/commit, generated source digest, witness audit, rebuilt output digest, witness key, and final `quorum-satisfied` verification.
-  - Blocked in this environment: `ssh -o BatchMode=yes -o ConnectTimeout=5 aspen1 true` failed with `Could not resolve hostname aspen1`; see `evidence/bounded-claims-and-blockers-2026-06-29.md`.
+- [x] [serial] Run Aspen1 Git-source witness replay and final verification. r[verification_evidence.git_source_witness_replay]
+  - Evidence: recorded source remote/ref/commit, generated source digest, witness audit, rebuilt output digest, witness key, and final `quorum-satisfied` verification in `evidence/aspen1-git-source-replay-2026-06-29.md`.
 - [x] [serial] Record bounded claims and non-claims. r[verification_evidence.git_source_witness_replay]
   - Evidence: state that this proves Git-derived source archive replay for the exact release and policy, not compiler correctness, generic hosting API correctness, or deploy success.

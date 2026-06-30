@@ -3,7 +3,7 @@
 Date: 2026-06-29
 Change: `git-source-witness-replay`
 
-Note: The change remains active because the Aspen1 cross-machine replay task is blocked by missing `aspen1` host resolution in this environment. These gates validate the current active change artifacts, completed local tasks, and recorded blocker note.
+Note: This is the earlier local gate transcript from before Aspen1 access was completed. The current final validation and gate transcript is `final-validation-2026-06-29.md`.
 
 ## nix run path:/home/brittonr/git/cairn#cairn -- validate --root /home/brittonr/git/mantle
 

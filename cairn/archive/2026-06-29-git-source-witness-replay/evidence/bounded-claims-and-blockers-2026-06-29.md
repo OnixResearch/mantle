@@ -14,18 +14,20 @@ The implementation and focused validation prove the bounded Git-source replay be
 - Digest mismatch and ref-policy mismatch fail before source extraction or workflow launch.
 - Witness audit metadata distinguishes `copied-source`, `external-archive-source`, and `git-derived-source` and records Git remote URL, commit, ref/tag, generated archive path/digest, status, and failure reason.
 
-## Not proven
+## Cross-machine proof now recorded
 
-This session does not prove:
+Aspen1 cross-machine Git-source witness replay and final imported verification were completed later in this session; see `aspen1-git-source-replay-2026-06-29.md` for source remote/ref/commit, generated source digest, witness audit, rebuilt output digest, witness key, and final `quorum-satisfied` verification.
 
-- Aspen1 cross-machine Git-source witness replay.
-- A final imported witness reaching `quorum-satisfied` on a separately rebuilt release.
+## Remaining non-claims
+
+This session still does not prove:
+
 - Compiler correctness, full bootstrap correctness, generic Git hosting API correctness, or deploy success.
 - Signed tag trust roots or generic Git hosting API semantics beyond Git protocol/local transports and the implemented ref/tag resolution checks.
 
-## Aspen1 reachability blocker
+## Superseded Aspen1 reachability blocker
 
-A non-mutating reachability check failed because the host alias is not resolvable from this environment:
+An early non-mutating reachability check failed because the short host alias was not resolvable from this environment:
 
 ```text
 $ ssh -o BatchMode=yes -o ConnectTimeout=5 aspen1 true
@@ -34,4 +36,4 @@ ssh: Could not resolve hostname aspen1: Name or service not known
 
 Exit status: 255
 
-Next best step: run the Aspen1 witness replay from an environment that has the Aspen1 host alias/SSH access, then record the source remote/ref/commit, generated source digest, witness audit, rebuilt output digest, witness key, and final `quorum-satisfied` verification before syncing and archiving this change.
+The blocker was superseded by using the reachable `aspen1.local` host.
