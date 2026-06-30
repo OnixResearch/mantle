@@ -6,18 +6,22 @@
 
 use std::path::Path;
 
-use crunch_project::DriftStatus;
 use crunch_project::Lockfile;
 use crunch_project::ProjectManifest;
+use crunch_project::ProjectSoundnessClass;
+use crunch_project::ProjectSoundnessInput;
+use crunch_project::ProjectSoundnessIssue;
+use crunch_project::ProjectSoundnessMode;
+use crunch_project::ProjectSoundnessReport;
+use crunch_project::ProjectSoundnessSubject;
 use crunch_project::RefreshFailure;
 use crunch_project::RefreshOutcome;
 use crunch_project::SchemaVersion;
-use crunch_project::Severity;
 use crunch_project::apply_outcomes;
-use crunch_project::check_drift;
-use crunch_project::check_manifest_lock;
+use crunch_project::check_project_soundness;
 use crunch_project::generate_inputs_ncl;
 use crunch_project::list_stale;
+use crunch_project::project_soundness_parse_error;
 use crunch_project::refresh_inputs;
 use crunch_project::upgrade_lockfile;
 
@@ -33,6 +37,13 @@ const GITIGNORE_ENTRY: &str = ".mantle/";
 const LEGACY_MANIFEST_FILE: &str = "crunch-project.ncl";
 const LEGACY_LOCK_FILE: &str = "crunch.lock";
 const LEGACY_INPUTS_DIR: &str = ".crunch";
+const PROJECT_CHECK_FAILURE_EXIT_CODE: u8 = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectCheckOutput {
+    Human,
+    Json,
+}
 
 /// `crunch init` — scaffold a new project.
 pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
@@ -79,55 +90,88 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
 }
 
 /// `crunch check` — validate project state.
-pub fn cmd_check(dir: &Path) -> Result<(), RunError> {
+pub fn cmd_check(dir: &Path, output: ProjectCheckOutput, probes: bool, trust: bool) -> Result<(), RunError> {
     reject_conflicting_legacy_project_files(dir)?;
-    let manifest = load_manifest(dir)?;
-    let lock = load_lockfile(dir)?;
+    let manifest = match load_manifest(dir) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            return finish_check_report(
+                project_soundness_parse_error(
+                    ProjectSoundnessClass::ManifestParseError,
+                    ProjectSoundnessSubject::file(MANIFEST_FILE),
+                    error.message().to_string(),
+                ),
+                output,
+            );
+        }
+    };
+    let lock = match load_lockfile(dir) {
+        Ok(lock) => lock,
+        Err(error) => {
+            return finish_check_report(
+                project_soundness_parse_error(
+                    ProjectSoundnessClass::LockfileParseError,
+                    ProjectSoundnessSubject::file(LOCK_FILE),
+                    error.message().to_string(),
+                ),
+                output,
+            );
+        }
+    };
 
-    // 1. Validate manifest internally
-    let manifest_problems = manifest.clone().validate();
-    for p in &manifest_problems {
-        eprintln!("manifest: {p}");
-    }
-
-    // 2. Validate lockfile internally
-    let lock_problems = lock.clone().validate();
-    for p in &lock_problems {
-        eprintln!("lockfile: {p}");
-    }
-
-    // 3. Check manifest-lock consistency
-    let report = check_manifest_lock(manifest.clone(), lock.clone());
-    for issue in &report.issues {
-        let prefix = match issue.severity {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
-        };
-        eprintln!("{prefix}: {}", issue.message);
-    }
-
-    // 4. Check drift
     let inputs_path = dir.join(INPUTS_FILE);
-    let actual_content = std::fs::read_to_string(&inputs_path).ok();
-    let drift = check_drift(lock.clone(), actual_content);
-    match &drift {
-        DriftStatus::InSync => {}
-        DriftStatus::Missing => {
-            eprintln!("drift: {INPUTS_FILE} does not exist");
-        }
-        DriftStatus::Drifted { .. } => {
-            eprintln!("drift: {INPUTS_FILE} is out of date");
-        }
+    let generated_inputs = std::fs::read_to_string(&inputs_path).ok();
+    let report = check_project_soundness(ProjectSoundnessInput {
+        manifest,
+        lock,
+        generated_inputs,
+        supplemental_facts: Vec::new(),
+        mode: ProjectSoundnessMode::from_dynamic_requests(probes, trust),
+    });
+    finish_check_report(report, output)
+}
+
+fn finish_check_report(report: ProjectSoundnessReport, output: ProjectCheckOutput) -> Result<(), RunError> {
+    match output {
+        ProjectCheckOutput::Human => render_check_report_human(&report),
+        ProjectCheckOutput::Json => render_check_report_json(&report)?,
     }
-
-    let has_errors =
-        !manifest_problems.is_empty() || !lock_problems.is_empty() || report.has_errors() || !drift.is_ok();
-
-    if has_errors {
-        Err(RunError::Internal("project check failed".into()))
-    } else {
-        eprintln!("project check passed");
+    if report.valid {
         Ok(())
+    } else {
+        Err(RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE))
+    }
+}
+
+fn render_check_report_json(report: &ProjectSoundnessReport) -> Result<(), RunError> {
+    let rendered = serde_json::to_string_pretty(report)
+        .map_err(|err| RunError::Internal(format!("rendering project soundness JSON: {err}")))?;
+    println!("{rendered}");
+    Ok(())
+}
+
+fn render_check_report_human(report: &ProjectSoundnessReport) {
+    for issue in &report.issues {
+        render_check_issue_human(issue);
+    }
+    if report.valid {
+        eprintln!(
+            "project check passed (static project soundness only; build, source freshness, trust, and reproducibility are not proven)"
+        );
+    }
+}
+
+fn render_check_issue_human(issue: &ProjectSoundnessIssue) {
+    eprintln!(
+        "{} [{}] {} {}: {}",
+        issue.severity.as_str(),
+        issue.class.as_str(),
+        issue.subject.kind,
+        issue.subject.name,
+        issue.message
+    );
+    if let Some(fix_guidance) = &issue.fix_guidance {
+        eprintln!("  fix: {fix_guidance}");
     }
 }
 

@@ -23,6 +23,16 @@ mod version;
 
 pub use attestation::ProjectAttestationInput;
 pub use attestation::synthesize_project_attestation;
+pub use crunch_project_core::ProjectSoundnessClass;
+pub use crunch_project_core::ProjectSoundnessFact;
+pub use crunch_project_core::ProjectSoundnessInput;
+pub use crunch_project_core::ProjectSoundnessIssue;
+pub use crunch_project_core::ProjectSoundnessMode;
+pub use crunch_project_core::ProjectSoundnessReport;
+pub use crunch_project_core::ProjectSoundnessSeverity;
+pub use crunch_project_core::ProjectSoundnessSubject;
+pub use crunch_project_core::check_project_soundness;
+pub use crunch_project_core::project_soundness_parse_error;
 pub use drift::DriftStatus;
 pub use drift::check_drift;
 pub use error::Error;

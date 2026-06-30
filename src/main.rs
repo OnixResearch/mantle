@@ -350,7 +350,15 @@ enum Command {
     Init,
 
     /// Validate project manifest, lockfile, and generated inputs
-    Check,
+    Check {
+        /// Label check as allowing freshness probes when probe adapters are available
+        #[arg(long)]
+        probes: bool,
+
+        /// Label check as allowing trust verification when trust adapters are available
+        #[arg(long)]
+        trust: bool,
+    },
 
     /// Show resolved input state from the lockfile
     Show,
@@ -1759,7 +1767,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::Attest { .. } => "attest",
         Command::Release { .. } => "release",
         Command::Init => "init",
-        Command::Check => "check",
+        Command::Check { .. } => "check",
         Command::Show => "show",
         Command::Refresh { .. } => "refresh",
         Command::ListStale => "list-stale",
@@ -2052,11 +2060,11 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Attest { action } => run_attest_command(ctx, action.clone()),
         Command::Import { action } => run_import_command(ctx, action.clone()),
         Command::Init
-        | Command::Check
+        | Command::Check { .. }
         | Command::Show
         | Command::Refresh { .. }
         | Command::ListStale
-        | Command::Upgrade => run_project_command(&args.command),
+        | Command::Upgrade => run_project_command(ctx, &args.command),
         Command::SelfBuild { .. } => run_self_build_from_command(ctx, &args.command),
         Command::RustPlan { .. } => run_rust_plan_command(ctx, &args.command),
         Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
@@ -2925,11 +2933,18 @@ fn cmd_bootstrap_stagex_lineage(output: &Path, manifest_path: &Path) -> Result<(
     )))
 }
 
-fn run_project_command(command: &Command) -> Result<(), RunError> {
+fn run_project_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
     let cwd = current_dir_or_error()?;
     match command {
         Command::Init => project_cmd::cmd_init(&cwd),
-        Command::Check => project_cmd::cmd_check(&cwd),
+        Command::Check { probes, trust } => {
+            let output = if ctx.json {
+                project_cmd::ProjectCheckOutput::Json
+            } else {
+                project_cmd::ProjectCheckOutput::Human
+            };
+            project_cmd::cmd_check(&cwd, output, *probes, *trust)
+        }
         Command::Show => project_cmd::cmd_show(&cwd),
         Command::Refresh { names } => project_cmd::cmd_refresh(&cwd, names),
         Command::ListStale => project_cmd::cmd_list_stale(&cwd),

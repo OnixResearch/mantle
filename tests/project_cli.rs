@@ -2,7 +2,13 @@
 
 use assert_cmd::Command;
 use predicates::prelude::*;
+use serde_json::Value;
 use tempfile::TempDir;
+
+const SOUNDNESS_SCHEMA: &str = "mantle-project-soundness-v1";
+const STATIC_SOUNDNESS_MODE: &str = "static";
+const GENERATED_INPUT_STALE_CLASS: &str = "generated-input-stale";
+const PROBE_TRUST_SOUNDNESS_MODE: &str = "static-with-probes-and-trust-requested";
 
 fn mantle() -> Command {
     Command::cargo_bin("mantle").unwrap()
@@ -56,6 +62,71 @@ fn check_passes_on_fresh_project() {
         .assert()
         .success()
         .stderr(predicate::str::contains("project check passed"));
+}
+
+#[test]
+fn check_json_passes_on_fresh_project_with_bounded_non_claims() {
+    let dir = TempDir::new().unwrap();
+
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+
+    let assert = mantle().arg("--json").arg("check").current_dir(dir.path()).assert().success();
+    let output = assert.get_output();
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert!(output.stderr.is_empty(), "stderr should stay empty in successful JSON mode");
+    assert_eq!(value["schema"], SOUNDNESS_SCHEMA);
+    assert_eq!(value["mode"]["name"], STATIC_SOUNDNESS_MODE);
+    assert_eq!(value["mode"]["network_behavior"], "no-network");
+    assert_eq!(value["valid"], true);
+    assert_eq!(value["issue_count"], 0);
+    assert!(
+        value["non_claims"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|claim| { claim.as_str().unwrap().contains("does not prove build success") })
+    );
+}
+
+#[test]
+fn check_json_explicit_probe_and_trust_mode_labels_behavior() {
+    let dir = TempDir::new().unwrap();
+
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+
+    let assert = mantle()
+        .arg("--json")
+        .arg("check")
+        .arg("--probes")
+        .arg("--trust")
+        .current_dir(dir.path())
+        .assert()
+        .success();
+    let output = assert.get_output();
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert_eq!(value["mode"]["name"], PROBE_TRUST_SOUNDNESS_MODE);
+    assert!(value["mode"]["network_behavior"].as_str().unwrap().contains("may-contact-network"));
+    assert!(value["mode"]["process_behavior"].as_str().unwrap().contains("may-run-commands"));
+    assert_eq!(value["valid"], true);
+}
+
+#[test]
+fn check_json_failure_stdout_is_parseable_report() {
+    let dir = TempDir::new().unwrap();
+
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+    std::fs::write(dir.path().join(".mantle/inputs.ncl"), "stale").unwrap();
+
+    let assert = mantle().arg("--json").arg("check").current_dir(dir.path()).assert().failure();
+    let output = assert.get_output();
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    assert!(output.stderr.is_empty(), "reported JSON failure should not add human stderr");
+    assert_eq!(value["schema"], SOUNDNESS_SCHEMA);
+    assert_eq!(value["valid"], false);
+    assert_eq!(value["issues"][0]["class"], GENERATED_INPUT_STALE_CLASS);
 }
 
 #[test]
