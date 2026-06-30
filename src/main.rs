@@ -1378,6 +1378,56 @@ pub enum StoreAction {
         /// Store paths to import (full or fragment)
         paths: Vec<String>,
     },
+    /// Export, import, or list a Mantle-native single-file store archive
+    Archive {
+        #[command(subcommand)]
+        action: StoreArchiveAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum StoreArchiveAction {
+    /// Export selected store paths and recursive closure to an archive
+    Export {
+        /// Archive output path, or '-' for stdout
+        #[arg(long)]
+        to: std::path::PathBuf,
+
+        /// Export every known signed path as a root
+        #[arg(long)]
+        all: bool,
+
+        /// Include unsigned PathInfo entries
+        #[arg(long)]
+        trust_unsigned: bool,
+
+        /// Store path selectors to export (full or fragment)
+        paths: Vec<String>,
+    },
+    /// Import a Mantle-native store archive
+    Import {
+        /// Archive input path, or '-' for stdin
+        #[arg(long)]
+        from: std::path::PathBuf,
+
+        /// Accept unsigned/unverified archive records
+        #[arg(long)]
+        trust_unsigned: bool,
+
+        /// Trusted public keys for signature verification (name:base64)
+        #[arg(long, value_delimiter = ',')]
+        trusted_public_keys: Vec<String>,
+
+        /// Do not materialize imported outputs into the physical output store
+        #[arg(long)]
+        no_materialize: bool,
+    },
+    /// List archive contents without importing
+    List {
+        /// Archive input path, or '-' for stdin
+        #[arg(long)]
+        from: std::path::PathBuf,
+    },
 }
 
 fn main() -> ExitCode {
@@ -1547,6 +1597,15 @@ fn store_command_label(action: &StoreAction) -> &'static str {
         StoreAction::Sign { .. } => "store.sign",
         StoreAction::Push { .. } => "store.push",
         StoreAction::Pull { .. } => "store.pull",
+        StoreAction::Archive { action } => store_archive_command_label(action),
+    }
+}
+
+fn store_archive_command_label(action: &StoreArchiveAction) -> &'static str {
+    match action {
+        StoreArchiveAction::Export { .. } => "store.archive.export",
+        StoreArchiveAction::Import { .. } => "store.archive.import",
+        StoreArchiveAction::List { .. } => "store.archive.list",
     }
 }
 
@@ -1695,7 +1754,24 @@ fn apply_store_mode_fields(modes: &mut RuntimeFingerprintModeFields, action: &St
                 Some(operator_diagnostics::bounded_runtime_count(trusted_public_keys.len()));
             modes.trust_unsigned = Some(*trust_unsigned);
         }
+        StoreAction::Archive { action } => apply_store_archive_mode_fields(modes, action),
         _ => {}
+    }
+}
+
+fn apply_store_archive_mode_fields(modes: &mut RuntimeFingerprintModeFields, action: &StoreArchiveAction) {
+    match action {
+        StoreArchiveAction::Export { trust_unsigned, .. } => modes.trust_unsigned = Some(*trust_unsigned),
+        StoreArchiveAction::Import {
+            trust_unsigned,
+            trusted_public_keys,
+            ..
+        } => {
+            modes.trusted_public_key_count =
+                Some(operator_diagnostics::bounded_runtime_count(trusted_public_keys.len()));
+            modes.trust_unsigned = Some(*trust_unsigned);
+        }
+        StoreArchiveAction::List { .. } => {}
     }
 }
 
@@ -1716,7 +1792,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Release { action } => run_release_command(ctx, action.clone()),
         Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), *list),
         Command::Store { action } => {
-            store_cmd::cmd_store(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix)
+            store_cmd::cmd_store(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
         Command::Artifact { action } => {
             artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)

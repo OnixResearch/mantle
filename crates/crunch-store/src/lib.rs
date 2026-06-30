@@ -6,6 +6,7 @@
 //! export), CA mapping persistence, and store queries. Consumers receive a
 //! `StoreHandle` — they do not construct or own individual services.
 
+mod archive;
 mod attestation;
 mod audit;
 mod ca_mapping;
@@ -21,6 +22,22 @@ mod push;
 mod query;
 mod roots;
 
+pub use archive::ARCHIVE_COMPATIBILITY;
+pub use archive::ARCHIVE_FORMAT_NAME;
+pub use archive::ARCHIVE_VERSION;
+pub use archive::ArchiveExportOptions;
+pub use archive::ArchiveExportReport;
+pub use archive::ArchiveImportAction;
+pub use archive::ArchiveImportDecision;
+pub use archive::ArchiveImportOptions;
+pub use archive::ArchiveImportReport;
+pub use archive::ArchiveListReport;
+pub use archive::ArchiveListedPath;
+pub use archive::ArchivePathSummary;
+pub use archive::export_store_archive;
+pub use archive::import_store_archive;
+pub use archive::list_store_archive;
+pub use archive::plan_archive_import_action;
 pub use attestation::ArtifactProvenance;
 pub use attestation::StoredArtifactAttestation;
 pub use attestation::StoredClosureAttestation;

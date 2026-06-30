@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use serde::Serialize;
+
 use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::build_cmd::load_or_generate_signing_keypair;
 use crate::errors::RunError;
@@ -9,9 +11,10 @@ pub fn cmd_store(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    json_output: bool,
 ) -> Result<(), RunError> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
-    rt.block_on(async { cmd_store_async(action, output_dir, state_dir, store_dir).await })
+    rt.block_on(async { cmd_store_async(action, output_dir, state_dir, store_dir, json_output).await })
 }
 
 async fn cmd_store_async(
@@ -19,6 +22,7 @@ async fn cmd_store_async(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    json_output: bool,
 ) -> Result<(), RunError> {
     match action {
         crate::StoreAction::List => {
@@ -96,6 +100,9 @@ async fn cmd_store_async(
                 .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
             let store = open_store(output_dir, state_dir, store_dir).await?;
             cmd_store_pull(&store, &from, all, trust_unsigned, &trusted_public_keys, &paths, state_dir).await
+        }
+        crate::StoreAction::Archive { action } => {
+            cmd_store_archive(action, output_dir, state_dir, store_dir, json_output).await
         }
     }
 }
@@ -598,6 +605,204 @@ async fn cmd_store_pull(
         report.total_nar_bytes,
     );
     Ok(())
+}
+
+async fn cmd_store_archive(
+    action: crate::StoreArchiveAction,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    json_output: bool,
+) -> Result<(), RunError> {
+    match action {
+        crate::StoreArchiveAction::Export {
+            to,
+            all,
+            trust_unsigned,
+            paths,
+        } => {
+            let store = open_store(output_dir, state_dir, store_dir).await?;
+            cmd_store_archive_export(&store, &to, all, trust_unsigned, &paths, json_output).await
+        }
+        crate::StoreArchiveAction::Import {
+            from,
+            trust_unsigned,
+            trusted_public_keys,
+            no_materialize,
+        } => {
+            let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
+                .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))?;
+            let store = open_store(output_dir, state_dir, store_dir).await?;
+            cmd_store_archive_import(
+                &store,
+                &from,
+                trust_unsigned,
+                &trusted_public_keys,
+                !no_materialize,
+                state_dir,
+                json_output,
+            )
+            .await
+        }
+        crate::StoreArchiveAction::List { from } => cmd_store_archive_list(&from, json_output).await,
+    }
+}
+
+async fn cmd_store_archive_export(
+    store: &crunch_store::StoreHandle,
+    dest: &Path,
+    is_export_all: bool,
+    trust_unsigned: bool,
+    path_selectors: &[String],
+    json_output: bool,
+) -> Result<(), RunError> {
+    if path_selectors.is_empty() && !is_export_all {
+        return Err(RunError::Internal("provide store paths or use --all".to_string()));
+    }
+    let selected = if is_export_all {
+        collect_all_pathinfos(store).await?
+    } else {
+        collect_matching_pathinfos(store, path_selectors).await?
+    };
+    if selected.is_empty() {
+        return Err(RunError::Internal("no matching paths found".to_string()));
+    }
+    let options = crunch_store::ArchiveExportOptions { trust_unsigned };
+    let writes_archive_to_stdout = is_stdio_path(dest);
+    if writes_archive_to_stdout && json_output {
+        return Err(RunError::Internal("--json cannot be combined with archive export --to -".to_string()));
+    }
+    let report = if writes_archive_to_stdout {
+        let mut stdout = tokio::io::stdout();
+        crunch_store::export_store_archive(store, &selected, &mut stdout, &options)
+            .await
+            .map_err(|e| RunError::Internal(format!("archive export: {e}")))?
+    } else {
+        let file = tokio::fs::File::create(dest)
+            .await
+            .map_err(|e| RunError::Internal(format!("creating archive {}: {e}", dest.display())))?;
+        let mut writer = tokio::io::BufWriter::new(file);
+        crunch_store::export_store_archive(store, &selected, &mut writer, &options)
+            .await
+            .map_err(|e| RunError::Internal(format!("archive export: {e}")))?
+    };
+    if writes_archive_to_stdout {
+        eprintln!("exported={} payload_bytes={}", report.exported_count, report.total_payload_bytes);
+        return Ok(());
+    }
+    print_archive_export_report(&report, json_output)
+}
+
+async fn cmd_store_archive_import(
+    store: &crunch_store::StoreHandle,
+    source: &Path,
+    trust_unsigned: bool,
+    explicit_trusted_public_keys: &[String],
+    materialize: bool,
+    state_dir: &Path,
+    json_output: bool,
+) -> Result<(), RunError> {
+    let trusted_public_keys = resolve_store_verify_keys(None, explicit_trusted_public_keys, state_dir)?;
+    let options = crunch_store::ArchiveImportOptions {
+        trust_unsigned,
+        trusted_public_keys,
+        materialize,
+    };
+    let report = if is_stdio_path(source) {
+        let mut stdin = tokio::io::stdin();
+        crunch_store::import_store_archive(store, &mut stdin, &options)
+            .await
+            .map_err(|e| RunError::Internal(format!("archive import: {e}")))?
+    } else {
+        let file = tokio::fs::File::open(source)
+            .await
+            .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
+        let mut reader = tokio::io::BufReader::new(file);
+        crunch_store::import_store_archive(store, &mut reader, &options)
+            .await
+            .map_err(|e| RunError::Internal(format!("archive import: {e}")))?
+    };
+    print_archive_import_report(&report, json_output)
+}
+
+async fn cmd_store_archive_list(source: &Path, json_output: bool) -> Result<(), RunError> {
+    let report = if is_stdio_path(source) {
+        let mut stdin = tokio::io::stdin();
+        crunch_store::list_store_archive(&mut stdin)
+            .await
+            .map_err(|e| RunError::Internal(format!("archive list: {e}")))?
+    } else {
+        let file = tokio::fs::File::open(source)
+            .await
+            .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
+        let mut reader = tokio::io::BufReader::new(file);
+        crunch_store::list_store_archive(&mut reader)
+            .await
+            .map_err(|e| RunError::Internal(format!("archive list: {e}")))?
+    };
+    print_archive_list_report(&report, json_output)
+}
+
+fn print_archive_export_report(report: &crunch_store::ArchiveExportReport, json_output: bool) -> Result<(), RunError> {
+    if json_output {
+        return print_json_report(report, "serializing archive export report");
+    }
+    for path in &report.paths {
+        println!("ARCHIVE_EXPORT {} nar_size={} nar_sha256={}", path.store_path, path.nar_size, path.nar_sha256_hex);
+    }
+    eprintln!("exported={} payload_bytes={}", report.exported_count, report.total_payload_bytes);
+    Ok(())
+}
+
+fn print_archive_import_report(report: &crunch_store::ArchiveImportReport, json_output: bool) -> Result<(), RunError> {
+    if json_output {
+        return print_json_report(report, "serializing archive import report");
+    }
+    for path in &report.paths {
+        println!("ARCHIVE_IMPORT {} nar_size={} nar_sha256={}", path.store_path, path.nar_size, path.nar_sha256_hex);
+    }
+    eprintln!(
+        "imported={} skipped_present={} payload_bytes={}",
+        report.imported_count, report.skipped_already_present_count, report.total_payload_bytes
+    );
+    Ok(())
+}
+
+fn print_archive_list_report(report: &crunch_store::ArchiveListReport, json_output: bool) -> Result<(), RunError> {
+    if json_output {
+        return print_json_report(report, "serializing archive list report");
+    }
+    println!(
+        "format={} store_prefix={} records={} payload_bytes={} compatibility={}",
+        crunch_store::ARCHIVE_FORMAT_NAME,
+        report.store_prefix,
+        report.record_count,
+        report.total_payload_bytes,
+        report.compatibility
+    );
+    for path in &report.paths {
+        println!(
+            "ARCHIVE_PATH {} nar_size={} refs={} signatures={} ca={} root={} blake3={}",
+            path.store_path,
+            path.nar_size,
+            path.reference_count,
+            path.signature_count,
+            path.ca.as_deref().unwrap_or("-"),
+            path.root,
+            path.payload_blake3
+        );
+    }
+    Ok(())
+}
+
+fn print_json_report(report: &impl Serialize, context: &str) -> Result<(), RunError> {
+    let rendered = serde_json::to_string_pretty(report).map_err(|e| RunError::Internal(format!("{context}: {e}")))?;
+    println!("{rendered}");
+    Ok(())
+}
+
+fn is_stdio_path(path: &Path) -> bool {
+    path == Path::new("-")
 }
 
 async fn collect_all_pathinfos(
