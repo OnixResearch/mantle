@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use data_encoding::HEXLOWER;
 use serde::Deserialize;
 use serde::Serialize;
+use url::Url;
 
 use crate::errors::RunError;
 
@@ -33,6 +34,11 @@ const FETCH_ENV_TYPE_KEY: &str = "type";
 const FETCH_ENV_UNPACK_KEY: &str = "unpack";
 const FETCH_ENV_URL_KEY: &str = "url";
 const FETCH_ENV_TYPE_GIT: &str = "git";
+const DOT_GIT_DIR_NAME: &str = ".git";
+const FILE_URL_SCHEME: &str = "file";
+const RECORD_CONTENT_FILES_MARKER: &[u8] = b"files\0";
+const RECORD_CONTENT_KIND_MARKER: &[u8] = b"kind\0";
+const RECORD_CONTENT_METADATA_MARKER: &[u8] = b"metadata\0";
 const RECORD_METADATA_BUILDER_KEY: &str = "builder";
 const RECORD_METADATA_HASH_ALGO_KEY: &str = "hash_algo";
 const RECORD_METADATA_HASH_KEY: &str = "hash";
@@ -221,6 +227,16 @@ pub fn plan_source_bundle_from_derivations(
     assemble_source_bundle(records, store_prefix)
 }
 
+pub fn export_source_bundle_from_derivations(
+    roots: &[(String, crunch_glue::CrunchDerivation)],
+    specs: &[SourceSpec],
+    store_prefix: &str,
+) -> Result<SourceBundleManifest, RunError> {
+    let mut records = canonicalize_source_specs(specs, store_prefix)?;
+    records.extend(materialize_export_records(&collect_build_source_records(roots, store_prefix)?)?);
+    assemble_source_bundle(records, store_prefix)
+}
+
 pub fn collect_build_source_records(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     store_prefix: &str,
@@ -374,17 +390,9 @@ pub fn list_source_bundle(manifest: &SourceBundleManifest) -> Result<SourceBundl
 }
 
 fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<SourceRecord, RunError> {
-    let root = fs::canonicalize(&spec.path)
-        .map_err(|err| RunError::Internal(format!("canonicalizing source path {}: {err}", spec.path.display())))?;
-    let mut files = Vec::new();
-    let mut total_bytes = 0u64;
-    collect_source_entries(&root, &root, &mut files, &mut total_bytes)?;
-    files.sort_by(|left, right| left.path.cmp(&right.path));
-    if files.len() > MAX_SOURCE_FILES_PER_RECORD {
-        return Err(RunError::Internal(format!("source file count exceeds {MAX_SOURCE_FILES_PER_RECORD}")));
-    }
+    let (files, total_bytes) = canonicalize_payload_entries(&spec.path, false)?;
     validate_adapter_metadata(spec.adapter.as_ref())?;
-    let content_blake3 = digest_source_entries(&files)?;
+    let content_blake3 = digest_source_record_content(&spec.kind, &BTreeMap::new(), &files)?;
     Ok(SourceRecord {
         kind: spec.kind.clone(),
         identity: spec.identity.clone(),
@@ -397,11 +405,34 @@ fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<Sou
     })
 }
 
+fn canonicalize_payload_entries(path: &Path, skip_git_dir: bool) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
+    let root = fs::canonicalize(path)
+        .map_err(|err| RunError::Internal(format!("canonicalizing source path {}: {err}", path.display())))?;
+    let metadata = fs::symlink_metadata(&root)
+        .map_err(|err| RunError::Internal(format!("reading source metadata {}: {err}", root.display())))?;
+    let relative_root = if metadata.is_file() || metadata.file_type().is_symlink() {
+        root.parent()
+            .ok_or_else(|| RunError::Internal(format!("source path {} has no parent", root.display())))?
+            .to_path_buf()
+    } else {
+        root.clone()
+    };
+    let mut files = Vec::new();
+    let mut total_bytes = 0u64;
+    collect_source_entries(&relative_root, &root, &mut files, &mut total_bytes, skip_git_dir)?;
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    if files.len() > MAX_SOURCE_FILES_PER_RECORD {
+        return Err(RunError::Internal(format!("source file count exceeds {MAX_SOURCE_FILES_PER_RECORD}")));
+    }
+    Ok((files, total_bytes))
+}
+
 fn collect_source_entries(
     root: &Path,
     current: &Path,
     files: &mut Vec<SourceFileEntry>,
     total_bytes: &mut u64,
+    skip_git_dir: bool,
 ) -> Result<(), RunError> {
     let metadata = fs::symlink_metadata(current)
         .map_err(|err| RunError::Internal(format!("reading source metadata {}: {err}", current.display())))?;
@@ -412,7 +443,10 @@ fn collect_source_entries(
             .map_err(|err| RunError::Internal(format!("reading source dir entry {}: {err}", current.display())))?;
         entries.sort_by_key(|entry| entry.path());
         for entry in entries {
-            collect_source_entries(root, &entry.path(), files, total_bytes)?;
+            if skip_git_dir && entry.file_name().to_str() == Some(DOT_GIT_DIR_NAME) {
+                continue;
+            }
+            collect_source_entries(root, &entry.path(), files, total_bytes, skip_git_dir)?;
         }
         return Ok(());
     }
@@ -531,13 +565,18 @@ fn record_store_prefix(kind: &SourceRecordKind, store_prefix: &str) -> Option<St
 
 fn digest_source_entries(files: &[SourceFileEntry]) -> Result<String, RunError> {
     let mut hasher = blake3::Hasher::new();
+    hash_source_entries(&mut hasher, files)?;
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+fn hash_source_entries(hasher: &mut blake3::Hasher, files: &[SourceFileEntry]) -> Result<(), RunError> {
     for file in files {
         let encoded =
             serde_json::to_vec(file).map_err(|err| RunError::Internal(format!("serializing source entry: {err}")))?;
         hasher.update(&encoded);
         hasher.update(b"\n");
     }
-    Ok(hasher.finalize().to_hex().to_string())
+    Ok(())
 }
 
 fn digest_manifest_without_digest(manifest: &SourceBundleManifest) -> Result<String, RunError> {
@@ -555,6 +594,33 @@ fn digest_virtual_source_record(
     let encoded = serde_json::to_vec(&(kind, metadata))
         .map_err(|err| RunError::Internal(format!("serializing source record metadata: {err}")))?;
     Ok(blake3::hash(&encoded).to_hex().to_string())
+}
+
+fn digest_source_record_content(
+    kind: &SourceRecordKind,
+    metadata: &BTreeMap<String, String>,
+    files: &[SourceFileEntry],
+) -> Result<String, RunError> {
+    if metadata.is_empty() {
+        return digest_source_entries(files);
+    }
+    if files.is_empty() {
+        return digest_virtual_source_record(kind, metadata);
+    }
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(RECORD_CONTENT_KIND_MARKER);
+    let encoded_kind =
+        serde_json::to_vec(kind).map_err(|err| RunError::Internal(format!("serializing source record kind: {err}")))?;
+    hasher.update(&encoded_kind);
+    hasher.update(b"\n");
+    hasher.update(RECORD_CONTENT_METADATA_MARKER);
+    let encoded_metadata = serde_json::to_vec(metadata)
+        .map_err(|err| RunError::Internal(format!("serializing source record metadata: {err}")))?;
+    hasher.update(&encoded_metadata);
+    hasher.update(b"\n");
+    hasher.update(RECORD_CONTENT_FILES_MARKER);
+    hash_source_entries(&mut hasher, files)?;
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
@@ -616,17 +682,7 @@ fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
             "source record metadata exceeds {MAX_SOURCE_RECORD_METADATA_BYTES} bytes"
         )));
     }
-    if !record.metadata.is_empty() && !record.files.is_empty() {
-        return Err(RunError::Internal(format!(
-            "source record {} cannot mix virtual metadata with file payload entries",
-            record.identity
-        )));
-    }
-    let expected_digest = if record.metadata.is_empty() {
-        digest_source_entries(&record.files)?
-    } else {
-        digest_virtual_source_record(&record.kind, &record.metadata)?
-    };
+    let expected_digest = digest_source_record_content(&record.kind, &record.metadata, &record.files)?;
     if expected_digest != record.content_blake3 {
         return Err(RunError::Internal(format!("source record {} content digest mismatch", record.identity)));
     }
@@ -697,6 +753,47 @@ fn read_record(path: &Path) -> Result<SourceRecord, RunError> {
         fs::read(path).map_err(|err| RunError::Internal(format!("reading source record {}: {err}", path.display())))?;
     serde_json::from_slice(&bytes)
         .map_err(|err| RunError::Internal(format!("parsing source record {}: {err}", path.display())))
+}
+
+fn materialize_export_records(records: &[SourceRecord]) -> Result<Vec<SourceRecord>, RunError> {
+    let mut materialized = Vec::with_capacity(records.len());
+    for record in records {
+        materialized.push(match record.kind {
+            SourceRecordKind::FixedUrl => materialize_file_url_record(record, false)?,
+            SourceRecordKind::VcsSnapshot => materialize_file_url_record(record, true)?,
+            _ => record.clone(),
+        });
+    }
+    Ok(materialized)
+}
+
+fn materialize_file_url_record(record: &SourceRecord, skip_git_dir: bool) -> Result<SourceRecord, RunError> {
+    let url_text = record
+        .metadata
+        .get(RECORD_METADATA_URL_KEY)
+        .ok_or_else(|| RunError::Internal(format!("source record {} is missing url metadata", record.identity)))?;
+    let payload_path = local_file_url_path(url_text).ok_or_else(|| {
+        RunError::Internal(format!(
+            "source bundle export cannot materialize non-local source URL for {}: {url_text}",
+            record.identity
+        ))
+    })?;
+    let (files, payload_bytes) = canonicalize_payload_entries(&payload_path, skip_git_dir)?;
+    let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files)?;
+    Ok(SourceRecord {
+        payload_bytes,
+        content_blake3,
+        files,
+        ..record.clone()
+    })
+}
+
+fn local_file_url_path(raw_url: &str) -> Option<PathBuf> {
+    let parsed = Url::parse(raw_url).ok()?;
+    if parsed.scheme() != FILE_URL_SCHEME {
+        return None;
+    }
+    parsed.to_file_path().ok()
 }
 
 fn collect_derivation_source_records(
@@ -856,7 +953,7 @@ fn cmd_source_bundle(
             import_paths,
             to,
         } => {
-            let manifest = plan_from_cli_inputs(&sources, &build_roots, &import_paths, store_prefix)?;
+            let manifest = export_from_cli_inputs(&sources, &build_roots, &import_paths, store_prefix)?;
             write_source_bundle(&to, &manifest)?;
             print_plan_report(&plan_report(&manifest)?, json_output)
         }
@@ -895,8 +992,25 @@ fn plan_from_cli_inputs(
     store_prefix: &str,
 ) -> Result<SourceBundleManifest, RunError> {
     let specs = sources.iter().map(|source| parse_source_spec(source)).collect::<Result<Vec<_>, _>>()?;
+    if build_roots.is_empty() {
+        return plan_source_bundle(&specs, store_prefix);
+    }
     let roots = evaluate_build_roots(build_roots, import_paths)?;
     plan_source_bundle_from_derivations(&roots, &specs, store_prefix)
+}
+
+fn export_from_cli_inputs(
+    sources: &[String],
+    build_roots: &[PathBuf],
+    import_paths: &[PathBuf],
+    store_prefix: &str,
+) -> Result<SourceBundleManifest, RunError> {
+    let specs = sources.iter().map(|source| parse_source_spec(source)).collect::<Result<Vec<_>, _>>()?;
+    if build_roots.is_empty() {
+        return plan_source_bundle(&specs, store_prefix);
+    }
+    let roots = evaluate_build_roots(build_roots, import_paths)?;
+    export_source_bundle_from_derivations(&roots, &specs, store_prefix)
 }
 
 fn evaluate_build_roots(
@@ -1018,6 +1132,13 @@ mod tests {
         }
     }
 
+    fn file_url(path: &Path) -> String {
+        if path.is_dir() {
+            return Url::from_directory_path(path).unwrap().to_string();
+        }
+        Url::from_file_path(path).unwrap().to_string()
+    }
+
     #[test]
     fn source_bundle_canonicalizes_equivalent_traversal() {
         let temp = tempfile::tempdir().unwrap();
@@ -1032,6 +1153,24 @@ mod tests {
         let second = plan_source_bundle(&[spec], "/mantle/store").unwrap();
         assert_eq!(first.manifest_blake3, second.manifest_blake3);
         assert_eq!(first.records[0].files[0].path, "src/main.txt");
+    }
+
+    #[test]
+    fn source_bundle_accepts_single_file_payload_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_file = temp.path().join("payload.txt");
+        fs::write(&source_file, b"payload").unwrap();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::LocalPath,
+            identity: "fixture-file".to_string(),
+            path: source_file,
+            adapter: None,
+        };
+        let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
+
+        assert_eq!(manifest.records[0].files.len(), 1);
+        assert_eq!(manifest.records[0].files[0].path, "payload.txt");
+        assert_eq!(manifest.records[0].payload_bytes, 7);
     }
 
     #[test]
@@ -1084,6 +1223,63 @@ mod tests {
         assert_eq!(record.kind, SourceRecordKind::VcsSnapshot);
         assert_eq!(record.metadata.get(FETCH_ENV_REV_KEY).map(String::as_str), Some("refs/tags/v1"));
         assert_eq!(record.metadata.get(FETCH_ENV_TYPE_KEY).map(String::as_str), Some(FETCH_ENV_TYPE_GIT));
+    }
+
+    #[test]
+    fn source_bundle_export_materializes_local_file_fetcher_payload() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let fetcher = fixed_fetcher("file-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+
+        let planned =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root.clone())], &[], "/mantle/store")
+                .unwrap();
+        let exported =
+            export_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+
+        assert!(planned.records[0].files.is_empty());
+        assert_eq!(exported.records[0].kind, SourceRecordKind::FixedUrl);
+        assert_eq!(exported.records[0].files.len(), 1);
+        assert_eq!(exported.records[0].files[0].path, "payload.txt");
+        assert_eq!(exported.records[0].payload_bytes, 7);
+        assert_eq!(
+            exported.records[0].metadata.get(RECORD_METADATA_URL_KEY),
+            planned.records[0].metadata.get(RECORD_METADATA_URL_KEY)
+        );
+    }
+
+    #[test]
+    fn source_bundle_export_materializes_local_vcs_snapshot_without_dot_git() {
+        let temp = tempfile::tempdir().unwrap();
+        let checkout = temp.path().join("checkout");
+        fs::create_dir_all(checkout.join("src")).unwrap();
+        fs::create_dir_all(checkout.join(DOT_GIT_DIR_NAME)).unwrap();
+        fs::write(checkout.join("src/main.txt"), b"hello").unwrap();
+        fs::write(checkout.join(DOT_GIT_DIR_NAME).join("config"), b"secret").unwrap();
+        let mut git = fixed_fetcher("repo-src", &file_url(&checkout));
+        git.env.insert(FETCH_ENV_TYPE_KEY.to_string(), FETCH_ENV_TYPE_GIT.to_string());
+        git.env.insert(FETCH_ENV_REV_KEY.to_string(), "refs/heads/main".to_string());
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(git))]);
+
+        let exported =
+            export_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+
+        assert_eq!(exported.records[0].kind, SourceRecordKind::VcsSnapshot);
+        let paths = exported.records[0].files.iter().map(|file| file.path.as_str()).collect::<Vec<_>>();
+        assert_eq!(paths, vec!["src/main.txt"]);
+        assert_eq!(exported.records[0].metadata.get(FETCH_ENV_REV_KEY).map(String::as_str), Some("refs/heads/main"));
+    }
+
+    #[test]
+    fn source_bundle_export_rejects_remote_fetcher_without_local_payload() {
+        let fetcher = fixed_fetcher("remote-src", "https://example.invalid/source.tar.gz");
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+
+        let err =
+            export_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap_err();
+        assert!(err.to_string().contains("cannot materialize non-local source URL"));
     }
 
     #[test]
