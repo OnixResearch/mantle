@@ -62,6 +62,8 @@ use std::process::ExitCode;
 
 const EXPECTED_RUN_OUTCOME_COUNT: usize = 1;
 const CHILD_NO_EXIT_CODE_STATUS: i32 = 1;
+const DEFAULT_SUBSTITUTER_COUNT: u32 = 1;
+const EMPTY_TRUSTED_PUBLIC_KEY_COUNT: usize = 0;
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
@@ -73,6 +75,7 @@ use clap::Parser;
 use clap::Subcommand;
 use errors::RunError;
 use operator_diagnostics::DoctorProfile;
+use operator_diagnostics::RuntimeFingerprintModeFields;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -1440,6 +1443,7 @@ impl RunContext {
 fn run(args: Args) -> Result<(), RunError> {
     apply_state_dir_override(&args);
     let ctx = build_run_context(&args);
+    emit_runtime_fingerprint(&args, &ctx)?;
     dispatch_command(&args, &ctx)
 }
 
@@ -1459,6 +1463,238 @@ fn build_run_context(args: &Args) -> RunContext {
         store_prefix,
         verbose: args.verbose,
         json: args.json,
+    }
+}
+
+fn emit_runtime_fingerprint(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
+    let Some(verbosity_source) = operator_diagnostics::runtime_fingerprint_verbosity_source(
+        operator_diagnostics::RuntimeFingerprintTriggerInput {
+            verbose: args.verbose,
+            log_level: args.log_level.as_deref(),
+            diagnostic_mode: false,
+        },
+    ) else {
+        return Ok(());
+    };
+    let fingerprint = operator_diagnostics::build_runtime_fingerprint(operator_diagnostics::RuntimeFingerprintInput {
+        mantle_version: env!("CARGO_PKG_VERSION").to_string(),
+        command: command_label(&args.command).to_string(),
+        logical_store_prefix: ctx.store_prefix.clone(),
+        physical_store_dir: ctx.store.display().to_string(),
+        state_dir: ctx.resolved_state_dir.display().to_string(),
+        json_mode: ctx.json,
+        verbosity_source,
+        modes: runtime_fingerprint_mode_fields(args),
+    });
+    let rendered = operator_diagnostics::render_runtime_fingerprint(&fingerprint)
+        .map_err(|err| RunError::Internal(format!("rendering runtime fingerprint: {err}")))?;
+    eprintln!("{rendered}");
+    Ok(())
+}
+
+fn command_label(command: &Command) -> &'static str {
+    match command {
+        Command::Build { .. } => "build",
+        Command::Doctor { .. } => "doctor",
+        Command::Import { .. } => "import",
+        Command::Graph { .. } => "graph",
+        Command::Why { .. } => "why",
+        Command::Dependents { .. } => "dependents",
+        Command::Refactor { .. } => "refactor",
+        Command::Transcript { .. } => "transcript",
+        Command::Stage0Inventory { .. } => "stage0-inventory",
+        Command::Eval { .. } => "eval",
+        Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
+        Command::Log { .. } => "log",
+        Command::Store { action } => store_command_label(action),
+        Command::Artifact { .. } => "artifact",
+        Command::Attest { .. } => "attest",
+        Command::Release { .. } => "release",
+        Command::Init => "init",
+        Command::Check => "check",
+        Command::Show => "show",
+        Command::Refresh { .. } => "refresh",
+        Command::ListStale => "list-stale",
+        Command::Upgrade => "upgrade",
+        Command::SelfBuild { .. } => "self-build",
+        Command::RustPlan { .. } => "rust-plan",
+        Command::Shell { .. } => "shell",
+        Command::Develop { .. } => "develop",
+        Command::Run { .. } => "run",
+    }
+}
+
+fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
+    match action {
+        Some(BootstrapAction::ParityReport { .. }) => "bootstrap.parity-report",
+        Some(BootstrapAction::RustSourceProvider { .. }) => "bootstrap.rust-source-provider",
+        Some(BootstrapAction::NativeToolchainClosure { .. }) => "bootstrap.native-toolchain-closure",
+        Some(BootstrapAction::Validate { .. }) => "bootstrap.validate",
+        None => "bootstrap",
+    }
+}
+
+fn store_command_label(action: &StoreAction) -> &'static str {
+    match action {
+        StoreAction::List => "store.list",
+        StoreAction::Info { .. } => "store.info",
+        StoreAction::Roots => "store.roots",
+        StoreAction::Pin { .. } => "store.pin",
+        StoreAction::Unpin { .. } => "store.unpin",
+        StoreAction::Gc { .. } => "store.gc",
+        StoreAction::Verify { .. } => "store.verify",
+        StoreAction::Sign { .. } => "store.sign",
+        StoreAction::Push { .. } => "store.push",
+        StoreAction::Pull { .. } => "store.pull",
+    }
+}
+
+fn runtime_fingerprint_mode_fields(args: &Args) -> RuntimeFingerprintModeFields {
+    let mut modes = RuntimeFingerprintModeFields::default();
+    if args.nix_compat {
+        modes.nix_compat_mode = Some(true);
+    }
+    match &args.command {
+        Command::Build {
+            substituters,
+            no_substitute,
+            signing_key,
+            trusted_public_keys,
+            trust_unsigned,
+            strict_hermetic,
+            impure,
+            ..
+        } => apply_build_mode_fields(
+            &mut modes,
+            selected_hermeticity_mode_label(*strict_hermetic, *impure),
+            *no_substitute,
+            Some(substituters),
+            signing_key.is_some(),
+            trusted_public_keys.len(),
+            *trust_unsigned,
+        ),
+        Command::SelfBuild {
+            no_substitute,
+            signing_key,
+            trusted_public_keys,
+            trust_unsigned,
+            strict_hermetic,
+            impure,
+            ..
+        } => apply_build_mode_fields(
+            &mut modes,
+            selected_hermeticity_mode_label(*strict_hermetic, *impure),
+            *no_substitute,
+            None,
+            signing_key.is_some(),
+            trusted_public_keys.len(),
+            *trust_unsigned,
+        ),
+        Command::Shell {
+            no_substitute,
+            signing_key,
+            trust_unsigned,
+            ..
+        }
+        | Command::Develop {
+            no_substitute,
+            signing_key,
+            trust_unsigned,
+            ..
+        }
+        | Command::Run {
+            no_substitute,
+            signing_key,
+            trust_unsigned,
+            ..
+        } => apply_build_mode_fields(
+            &mut modes,
+            "practical",
+            *no_substitute,
+            None,
+            signing_key.is_some(),
+            EMPTY_TRUSTED_PUBLIC_KEY_COUNT,
+            *trust_unsigned,
+        ),
+        Command::Bootstrap {
+            action:
+                Some(BootstrapAction::Validate {
+                    strict_hermetic,
+                    impure,
+                    ..
+                }),
+            ..
+        } => modes.hermeticity_mode = Some(selected_hermeticity_mode_label(*strict_hermetic, *impure).to_string()),
+        Command::Store { action } => apply_store_mode_fields(&mut modes, action),
+        _ => {}
+    }
+    modes
+}
+
+fn selected_hermeticity_mode_label(strict_hermetic: bool, impure: bool) -> &'static str {
+    match (strict_hermetic, impure) {
+        (true, false) => "strict",
+        (false, true) => "impure",
+        (false, false) => "practical",
+        (true, true) => "conflicting",
+    }
+}
+
+fn apply_build_mode_fields(
+    modes: &mut RuntimeFingerprintModeFields,
+    hermeticity_mode: &str,
+    no_substitute: bool,
+    substituters: Option<&str>,
+    signing_key_selected: bool,
+    trusted_public_key_count: usize,
+    trust_unsigned: bool,
+) {
+    modes.hermeticity_mode = Some(hermeticity_mode.to_string());
+    modes.substitution_mode = Some(substitution_mode_label(no_substitute).to_string());
+    modes.substituter_count = Some(substituter_count_for_mode(no_substitute, substituters));
+    modes.signing_key_selected = Some(signing_key_selected);
+    modes.trusted_public_key_count = Some(operator_diagnostics::bounded_runtime_count(trusted_public_key_count));
+    modes.trust_unsigned = Some(trust_unsigned);
+}
+
+fn substitution_mode_label(no_substitute: bool) -> &'static str {
+    if no_substitute { "disabled" } else { "enabled" }
+}
+
+fn substituter_count_for_mode(no_substitute: bool, substituters: Option<&str>) -> u32 {
+    if no_substitute {
+        return Default::default();
+    }
+    substituters.map(operator_diagnostics::count_substituters).unwrap_or(DEFAULT_SUBSTITUTER_COUNT)
+}
+
+fn apply_store_mode_fields(modes: &mut RuntimeFingerprintModeFields, action: &StoreAction) {
+    match action {
+        StoreAction::Verify {
+            signing_key,
+            trusted_public_keys,
+            trust_unsigned,
+            ..
+        } => {
+            modes.signing_key_selected = Some(signing_key.is_some());
+            modes.trusted_public_key_count =
+                Some(operator_diagnostics::bounded_runtime_count(trusted_public_keys.len()));
+            modes.trust_unsigned = Some(*trust_unsigned);
+        }
+        StoreAction::Sign { signing_key, .. } => modes.signing_key_selected = Some(signing_key.is_some()),
+        StoreAction::Push { trust_unsigned, .. } => {
+            modes.trust_unsigned = Some(*trust_unsigned);
+        }
+        StoreAction::Pull {
+            trust_unsigned,
+            trusted_public_keys,
+            ..
+        } => {
+            modes.trusted_public_key_count =
+                Some(operator_diagnostics::bounded_runtime_count(trusted_public_keys.len()));
+            modes.trust_unsigned = Some(*trust_unsigned);
+        }
+        _ => {}
     }
 }
 

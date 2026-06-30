@@ -32,6 +32,20 @@ fn crunch_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+const RUNTIME_FINGERPRINT_PREFIX: &str = "mantle-runtime-fingerprint";
+const CLAP_USAGE_ERROR_CODE: i32 = 2;
+
+fn runtime_fingerprint_payload(stderr: &str) -> serde_json::Value {
+    let line = stderr
+        .lines()
+        .find(|line| line.starts_with(RUNTIME_FINGERPRINT_PREFIX))
+        .unwrap_or_else(|| panic!("stderr should include runtime fingerprint: {stderr}"));
+    let payload = line
+        .strip_prefix(&format!("{RUNTIME_FINGERPRINT_PREFIX} "))
+        .expect("fingerprint line should include JSON payload");
+    serde_json::from_str(payload).unwrap_or_else(|err| panic!("fingerprint should be JSON: {err}\npayload: {payload}"))
+}
+
 #[derive(Debug, Clone)]
 enum HttpFixtureResponse {
     Fixed {
@@ -998,10 +1012,128 @@ fn build_missing_store_exits_3() {
 }
 
 #[test]
-fn verbose_flag_produces_debug_output() {
-    let output = crunch_cmd().arg("--verbose").arg("eval").arg(fixture("simple.ncl")).output().expect("should run");
+fn verbose_eval_emits_runtime_fingerprint_to_stderr() {
+    let store = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let output = crunch_cmd()
+        .arg("--verbose")
+        .arg("--store")
+        .arg(store.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("eval")
+        .arg(fixture("simple.ncl"))
+        .output()
+        .expect("should run");
 
     assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let parsed_stdout: serde_json::Value = serde_json::from_str(&stdout).expect("eval stdout should stay JSON");
+    let fingerprint = runtime_fingerprint_payload(&stderr);
+
+    assert_eq!(parsed_stdout["name"], "simple-test");
+    assert_eq!(fingerprint["schema"], "mantle-runtime-fingerprint-v1");
+    assert_eq!(fingerprint["command"], "eval");
+    assert_eq!(fingerprint["logical_store_prefix"], "/mantle/store");
+    assert_eq!(fingerprint["physical_store_dir"], store.path().display().to_string());
+    assert_eq!(fingerprint["state_dir"], state_dir.path().display().to_string());
+    assert_eq!(fingerprint["json_mode"], false);
+    assert_eq!(fingerprint["verbosity_source"], "verbose-flag");
+    assert_eq!(fingerprint["diagnostic_scope"], "selected-runtime-context-only");
+    assert!(fingerprint["mantle_version"].as_str().is_some());
+}
+
+#[test]
+fn default_eval_does_not_emit_runtime_fingerprint() {
+    let output = crunch_cmd().arg("eval").arg(fixture("simple.ncl")).output().expect("should run");
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(!stderr.contains(RUNTIME_FINGERPRINT_PREFIX), "default stderr should stay quiet: {stderr}");
+}
+
+#[test]
+fn json_verbose_eval_keeps_stdout_parseable_and_diagnostics_on_stderr() {
+    let store = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let output = crunch_cmd()
+        .arg("--json")
+        .arg("--verbose")
+        .arg("--store")
+        .arg(store.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("eval")
+        .arg(fixture("simple.ncl"))
+        .output()
+        .expect("should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let parsed_stdout: serde_json::Value = serde_json::from_str(&stdout).expect("JSON stdout should remain parseable");
+    let fingerprint = runtime_fingerprint_payload(&stderr);
+
+    assert_eq!(parsed_stdout["name"], "simple-test");
+    assert_eq!(fingerprint["command"], "eval");
+    assert_eq!(fingerprint["json_mode"], true);
+    assert!(!stdout.contains(RUNTIME_FINGERPRINT_PREFIX), "fingerprint must not pollute stdout: {stdout}");
+}
+
+#[test]
+fn verbose_build_plan_emits_build_mode_fingerprint_before_preflight_result() {
+    let store = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let output = crunch_cmd()
+        .arg("--verbose")
+        .arg("--nix-compat")
+        .arg("--store")
+        .arg(store.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("build")
+        .arg("--plan")
+        .arg("--strict-hermetic")
+        .arg("--no-substitute")
+        .arg(fixture("simple.ncl"))
+        .output()
+        .expect("build plan should run");
+
+    assert_ne!(output.status.code(), Some(CLAP_USAGE_ERROR_CODE));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let fingerprint = runtime_fingerprint_payload(&stderr);
+
+    assert_eq!(fingerprint["command"], "build");
+    assert_eq!(fingerprint["logical_store_prefix"], "/nix/store");
+    assert_eq!(fingerprint["hermeticity_mode"], "strict");
+    assert_eq!(fingerprint["substitution_mode"], "disabled");
+    assert_eq!(fingerprint["substituter_count"], 0);
+    assert_eq!(fingerprint["nix_compat_mode"], true);
+}
+
+#[test]
+fn verbose_store_roots_emits_store_fingerprint() {
+    let store = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let output = crunch_cmd()
+        .arg("--verbose")
+        .arg("--store")
+        .arg(store.path())
+        .arg("--state-dir")
+        .arg(state_dir.path())
+        .arg("store")
+        .arg("roots")
+        .output()
+        .expect("store roots should run");
+
+    assert!(output.status.success(), "store roots should succeed: {}", String::from_utf8_lossy(&output.stderr));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let fingerprint = runtime_fingerprint_payload(&stderr);
+
+    assert_eq!(fingerprint["command"], "store.roots");
+    assert_eq!(fingerprint["physical_store_dir"], store.path().display().to_string());
+    assert_eq!(fingerprint["state_dir"], state_dir.path().display().to_string());
 }
 
 // ── Build log tests ────────────────────────────────────────
