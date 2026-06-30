@@ -152,6 +152,10 @@ enum Command {
         #[arg(long)]
         plan: bool,
 
+        /// Require imported source state for selected roots before planning or building
+        #[arg(long)]
+        offline_source_preflight: bool,
+
         /// Maximum number of concurrent builds (default: CPU count, max 16)
         #[arg(short, long)]
         jobs: Option<u32>,
@@ -1585,6 +1589,17 @@ pub enum SourceBundleAction {
         #[arg(long)]
         imported: bool,
     },
+    /// Compare build-root source requirements with imported source state before building
+    Preflight {
+        /// Evaluate a .ncl build root and derive source records from fixed fetcher and store-path
+        /// inputs
+        #[arg(long = "build-root")]
+        build_roots: Vec<std::path::PathBuf>,
+
+        /// Additional Nickel import paths for --build-root evaluation
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<std::path::PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -1835,6 +1850,7 @@ fn source_bundle_command_label(action: &SourceBundleAction) -> &'static str {
         SourceBundleAction::List { .. } => "source.bundle.list",
         SourceBundleAction::Import { .. } => "source.bundle.import",
         SourceBundleAction::Verify { .. } => "source.bundle.verify",
+        SourceBundleAction::Preflight { .. } => "source.bundle.preflight",
     }
 }
 
@@ -2432,6 +2448,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             import_paths,
             fix,
             plan,
+            offline_source_preflight,
             jobs,
             substituters,
             no_substitute,
@@ -2446,6 +2463,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             import_paths,
             *fix,
             *plan,
+            *offline_source_preflight,
             *jobs,
             substituters,
             *no_substitute,
@@ -2475,6 +2493,7 @@ fn run_build_command(
     import_paths: &[PathBuf],
     fix: bool,
     plan: bool,
+    offline_source_preflight: bool,
     jobs: Option<u32>,
     substituters: &str,
     no_substitute: bool,
@@ -2492,6 +2511,14 @@ fn run_build_command(
     match target {
         project_build::BuildTarget::File(path) => {
             let import_paths = build_import_paths(import_paths)?;
+            run_offline_source_preflight_if_requested(
+                offline_source_preflight,
+                &path,
+                &import_paths,
+                &ctx.resolved_state_dir,
+                &ctx.store_prefix,
+                ctx.output_mode(),
+            )?;
             if plan {
                 return build_plan::cmd_build_plan(build_plan::BuildPlanConfig {
                     file: &path,
@@ -2529,6 +2556,14 @@ fn run_build_command(
             let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
             let mut full_import_paths = build_import_paths(&[])?;
             full_import_paths.extend(resolved.import_paths);
+            run_offline_source_preflight_for_expr_if_requested(
+                offline_source_preflight,
+                &expr,
+                &full_import_paths,
+                &ctx.resolved_state_dir,
+                &ctx.store_prefix,
+                ctx.output_mode(),
+            )?;
             if plan {
                 return build_plan_from_expr(
                     &expr,
@@ -2561,6 +2596,42 @@ fn run_build_command(
             )
         }
     }
+}
+
+fn run_offline_source_preflight_if_requested(
+    enabled: bool,
+    file: &Path,
+    import_paths: &[std::ffi::OsString],
+    state_dir: &Path,
+    store_prefix: &str,
+    output_mode: BuildOutputMode,
+) -> Result<(), RunError> {
+    if !enabled {
+        return Ok(());
+    }
+    let report = source_bundle::offline_preflight_for_file(file, import_paths, state_dir, store_prefix)?;
+    if source_bundle::source_offline_preflight_is_ready(&report) {
+        return Ok(());
+    }
+    source_bundle::print_offline_preflight_report(&report, output_mode == BuildOutputMode::Json)?;
+    Err(RunError::Reported(1))
+}
+
+fn run_offline_source_preflight_for_expr_if_requested(
+    enabled: bool,
+    expr: &str,
+    import_paths: &[std::ffi::OsString],
+    state_dir: &Path,
+    store_prefix: &str,
+    output_mode: BuildOutputMode,
+) -> Result<(), RunError> {
+    if !enabled {
+        return Ok(());
+    }
+    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
+        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
+    std::fs::write(tmp.path(), expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+    run_offline_source_preflight_if_requested(true, tmp.path(), import_paths, state_dir, store_prefix, output_mode)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

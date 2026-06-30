@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -12,6 +14,7 @@ use url::Url;
 use crate::errors::RunError;
 
 pub const SOURCE_BUNDLE_FORMAT: &str = "mantle-source-bundle-v1";
+pub const SOURCE_OFFLINE_PREFLIGHT_FORMAT: &str = "mantle-source-offline-preflight-v1";
 pub const SOURCE_BUNDLE_VERSION: u32 = 1;
 pub const SOURCE_BUNDLE_NON_CLAIM: &str =
     "source bundle evidence proves declared source/input availability and identity only";
@@ -39,6 +42,8 @@ const FILE_URL_SCHEME: &str = "file";
 const RECORD_CONTENT_FILES_MARKER: &[u8] = b"files\0";
 const RECORD_CONTENT_KIND_MARKER: &[u8] = b"kind\0";
 const RECORD_CONTENT_METADATA_MARKER: &[u8] = b"metadata\0";
+const SOURCE_OFFLINE_PREFLIGHT_EMPTY_MARKER: &[u8] = b"mantle-source-offline-preflight-empty\0";
+const SOURCE_OFFLINE_PREFLIGHT_STATE_MARKER: &[u8] = b"mantle-source-offline-preflight-state\0";
 const RECORD_METADATA_BUILDER_KEY: &str = "builder";
 const RECORD_METADATA_HASH_ALGO_KEY: &str = "hash_algo";
 const RECORD_METADATA_HASH_KEY: &str = "hash";
@@ -154,6 +159,23 @@ pub struct SourceBundleVerifyReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceOfflinePreflightReport {
+    pub format: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_blake3: Option<String>,
+    pub source_state_blake3: String,
+    pub ready_class: SourceReadiness,
+    pub record_count: u32,
+    pub missing_records: Vec<String>,
+    pub stale_records: Vec<String>,
+    pub unsupported_records: Vec<String>,
+    pub network_required_records: Vec<String>,
+    pub unpinned_records: Vec<String>,
+    pub records: Vec<SourceRecordSummary>,
+    pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceRecordSummary {
     pub kind: SourceRecordKind,
     pub identity: String,
@@ -169,6 +191,8 @@ pub enum SourceReadiness {
     Missing,
     Stale,
     Unsupported,
+    NetworkRequired,
+    Unpinned,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -387,6 +411,53 @@ pub fn verify_source_bundle_state(
 
 pub fn list_source_bundle(manifest: &SourceBundleManifest) -> Result<SourceBundlePlanReport, RunError> {
     plan_report(manifest)
+}
+
+pub fn offline_preflight_for_derivations(
+    roots: &[(String, crunch_glue::CrunchDerivation)],
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<SourceOfflinePreflightReport, RunError> {
+    let records = collect_build_source_records(roots, store_prefix)?;
+    if records.is_empty() {
+        return empty_offline_preflight_report();
+    }
+    let manifest = assemble_source_bundle(records, store_prefix)?;
+    offline_preflight_for_manifest(&manifest, state_dir)
+}
+
+pub fn offline_preflight_for_file(
+    file: &Path,
+    import_paths: &[OsString],
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<SourceOfflinePreflightReport, RunError> {
+    let roots = evaluate_build_root_with_import_paths(file, import_paths)?;
+    offline_preflight_for_derivations(&roots, state_dir, store_prefix)
+}
+
+pub fn offline_preflight_for_build_roots(
+    build_roots: &[PathBuf],
+    import_paths: &[PathBuf],
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<SourceOfflinePreflightReport, RunError> {
+    let roots = evaluate_build_roots(build_roots, import_paths)?;
+    offline_preflight_for_derivations(&roots, state_dir, store_prefix)
+}
+
+pub fn offline_preflight_for_manifest(
+    manifest: &SourceBundleManifest,
+    state_dir: &Path,
+) -> Result<SourceOfflinePreflightReport, RunError> {
+    validate_manifest(manifest)?;
+    let imported_records = read_imported_source_records(state_dir)?;
+    let pinned_records = read_pinned_source_records(state_dir)?;
+    classify_offline_preflight(manifest, &imported_records, &pinned_records)
+}
+
+pub fn source_offline_preflight_is_ready(report: &SourceOfflinePreflightReport) -> bool {
+    report.ready_class == SourceReadiness::Ready
 }
 
 fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<SourceRecord, RunError> {
@@ -716,6 +787,171 @@ fn classify_source_state(missing: &[String], stale: &[String], unsupported: &[St
     SourceReadiness::Ready
 }
 
+fn classify_offline_preflight(
+    manifest: &SourceBundleManifest,
+    imported_records: &[SourceRecord],
+    pinned_records: &[SourceRecord],
+) -> Result<SourceOfflinePreflightReport, RunError> {
+    validate_manifest(manifest)?;
+    let mut matching_records = Vec::new();
+    let mut missing_records = Vec::new();
+    let mut stale_records = Vec::new();
+    let unsupported_records = Vec::new();
+    let mut network_required_records = Vec::new();
+    let mut unpinned_records = Vec::new();
+    let mut summaries = Vec::with_capacity(manifest.records.len());
+
+    for expected in &manifest.records {
+        summaries.push(summary_for_record(expected)?);
+        let imported = find_matching_source_record(expected, imported_records);
+        if source_record_requires_network(expected, imported) {
+            network_required_records.push(expected.identity.clone());
+            continue;
+        }
+        let Some(imported) = imported else {
+            missing_records.push(expected.identity.clone());
+            continue;
+        };
+        if source_record_is_stale_for_preflight(expected, imported) {
+            stale_records.push(expected.identity.clone());
+            continue;
+        }
+        if !source_record_is_pinned(expected, imported, pinned_records) {
+            unpinned_records.push(expected.identity.clone());
+        }
+        matching_records.push(imported.clone());
+    }
+
+    let ready_class = classify_offline_preflight_state(
+        &missing_records,
+        &stale_records,
+        &unsupported_records,
+        &network_required_records,
+        &unpinned_records,
+    );
+    Ok(SourceOfflinePreflightReport {
+        format: SOURCE_OFFLINE_PREFLIGHT_FORMAT,
+        manifest_blake3: Some(manifest.manifest_blake3.clone()),
+        source_state_blake3: digest_offline_preflight_state(Some(&manifest.manifest_blake3), &matching_records)?,
+        ready_class,
+        record_count: checked_u32(manifest.records.len(), "source preflight record count")?,
+        missing_records,
+        stale_records,
+        unsupported_records,
+        network_required_records,
+        unpinned_records,
+        records: summaries,
+        non_claim: SOURCE_BUNDLE_NON_CLAIM,
+    })
+}
+
+fn empty_offline_preflight_report() -> Result<SourceOfflinePreflightReport, RunError> {
+    Ok(SourceOfflinePreflightReport {
+        format: SOURCE_OFFLINE_PREFLIGHT_FORMAT,
+        manifest_blake3: None,
+        source_state_blake3: blake3::hash(SOURCE_OFFLINE_PREFLIGHT_EMPTY_MARKER).to_hex().to_string(),
+        ready_class: SourceReadiness::Ready,
+        record_count: 0,
+        missing_records: Vec::new(),
+        stale_records: Vec::new(),
+        unsupported_records: Vec::new(),
+        network_required_records: Vec::new(),
+        unpinned_records: Vec::new(),
+        records: Vec::new(),
+        non_claim: SOURCE_BUNDLE_NON_CLAIM,
+    })
+}
+
+fn classify_offline_preflight_state(
+    missing: &[String],
+    stale: &[String],
+    unsupported: &[String],
+    network_required: &[String],
+    unpinned: &[String],
+) -> SourceReadiness {
+    if !unsupported.is_empty() {
+        return SourceReadiness::Unsupported;
+    }
+    if !stale.is_empty() {
+        return SourceReadiness::Stale;
+    }
+    if !network_required.is_empty() {
+        return SourceReadiness::NetworkRequired;
+    }
+    if !missing.is_empty() {
+        return SourceReadiness::Missing;
+    }
+    if !unpinned.is_empty() {
+        return SourceReadiness::Unpinned;
+    }
+    SourceReadiness::Ready
+}
+
+fn source_record_requires_network(expected: &SourceRecord, imported: Option<&SourceRecord>) -> bool {
+    if let Some(imported) = imported
+        && !imported.files.is_empty()
+    {
+        return false;
+    }
+    if !matches!(expected.kind, SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot) {
+        return false;
+    }
+    let Some(url) = expected.metadata.get(RECORD_METADATA_URL_KEY) else {
+        return false;
+    };
+    local_file_url_path(url).is_none()
+}
+
+fn source_record_is_stale_for_preflight(expected: &SourceRecord, imported: &SourceRecord) -> bool {
+    if !source_record_metadata_matches_preflight(expected, imported) {
+        return true;
+    }
+    if expected.files.is_empty() {
+        return false;
+    }
+    expected.content_blake3 != imported.content_blake3 || expected.files != imported.files
+}
+
+fn source_record_metadata_matches_preflight(expected: &SourceRecord, imported: &SourceRecord) -> bool {
+    expected.kind == imported.kind
+        && expected.identity == imported.identity
+        && expected.store_prefix == imported.store_prefix
+        && expected.metadata == imported.metadata
+}
+
+fn source_record_is_pinned(expected: &SourceRecord, imported: &SourceRecord, pinned_records: &[SourceRecord]) -> bool {
+    pinned_records.iter().any(|pinned| {
+        source_record_metadata_matches_preflight(expected, pinned) && pinned.content_blake3 == imported.content_blake3
+    })
+}
+
+fn find_matching_source_record<'a>(expected: &SourceRecord, records: &'a [SourceRecord]) -> Option<&'a SourceRecord> {
+    records
+        .iter()
+        .find(|stored| source_record_metadata_matches_preflight(expected, stored) && !stored.files.is_empty())
+        .or_else(|| records.iter().find(|stored| source_record_metadata_matches_preflight(expected, stored)))
+        .or_else(|| records.iter().find(|stored| stored.identity == expected.identity))
+}
+
+fn digest_offline_preflight_state(
+    manifest_blake3: Option<&str>,
+    matching_records: &[SourceRecord],
+) -> Result<String, RunError> {
+    let mut records = matching_records.to_vec();
+    records.sort_by(|left, right| record_sort_key(left).cmp(&record_sort_key(right)));
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(SOURCE_OFFLINE_PREFLIGHT_STATE_MARKER);
+    hasher.update(manifest_blake3.unwrap_or("none").as_bytes());
+    hasher.update(b"\n");
+    for record in &records {
+        let encoded = serde_json::to_vec(record)
+            .map_err(|err| RunError::Internal(format!("serializing source preflight state: {err}")))?;
+        hasher.update(&encoded);
+        hasher.update(b"\n");
+    }
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
 fn source_records_dir(state_dir: &Path) -> PathBuf {
     state_dir.join(SOURCE_STATE_DIR).join(SOURCE_RECORDS_DIR)
 }
@@ -751,8 +987,64 @@ fn write_pin_atomically(state_dir: &Path, manifest: &SourceBundleManifest) -> Re
 fn read_record(path: &Path) -> Result<SourceRecord, RunError> {
     let bytes =
         fs::read(path).map_err(|err| RunError::Internal(format!("reading source record {}: {err}", path.display())))?;
-    serde_json::from_slice(&bytes)
-        .map_err(|err| RunError::Internal(format!("parsing source record {}: {err}", path.display())))
+    let record = serde_json::from_slice(&bytes)
+        .map_err(|err| RunError::Internal(format!("parsing source record {}: {err}", path.display())))?;
+    validate_source_record(&record)?;
+    Ok(record)
+}
+
+fn read_imported_source_records(state_dir: &Path) -> Result<Vec<SourceRecord>, RunError> {
+    read_source_records_from_dir(&source_records_dir(state_dir), "source record")
+}
+
+fn read_pinned_source_records(state_dir: &Path) -> Result<Vec<SourceRecord>, RunError> {
+    let pins_dir = source_pins_dir(state_dir);
+    let paths = sorted_json_paths(&pins_dir, "source pin")?;
+    let mut records = Vec::new();
+    for path in &paths {
+        let bytes = fs::read(path)
+            .map_err(|err| RunError::Internal(format!("reading source pin {}: {err}", path.display())))?;
+        let manifest = serde_json::from_slice::<SourceBundleManifest>(&bytes)
+            .map_err(|err| RunError::Internal(format!("parsing source pin {}: {err}", path.display())))?;
+        validate_manifest(&manifest)?;
+        records.extend(manifest.records);
+        if records.len() > MAX_SOURCE_RECORDS {
+            return Err(RunError::Internal(format!("source pin records exceed {MAX_SOURCE_RECORDS}")));
+        }
+    }
+    Ok(records)
+}
+
+fn read_source_records_from_dir(dir: &Path, label: &str) -> Result<Vec<SourceRecord>, RunError> {
+    let paths = sorted_json_paths(dir, label)?;
+    let mut records = Vec::with_capacity(paths.len());
+    for path in &paths {
+        records.push(read_record(path)?);
+    }
+    Ok(records)
+}
+
+fn sorted_json_paths(dir: &Path, label: &str) -> Result<Vec<PathBuf>, RunError> {
+    match fs::read_dir(dir) {
+        Ok(entries) => {
+            let mut paths = Vec::new();
+            for entry in entries {
+                let entry =
+                    entry.map_err(|err| RunError::Internal(format!("reading {label} dir {}: {err}", dir.display())))?;
+                let path = entry.path();
+                if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
+                    paths.push(path);
+                }
+            }
+            paths.sort();
+            if paths.len() > MAX_SOURCE_RECORDS {
+                return Err(RunError::Internal(format!("{label} count exceeds {MAX_SOURCE_RECORDS}")));
+            }
+            Ok(paths)
+        }
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(Vec::new()),
+        Err(err) => Err(RunError::Internal(format!("reading {label} dir {}: {err}", dir.display()))),
+    }
 }
 
 fn materialize_export_records(records: &[SourceRecord]) -> Result<Vec<SourceRecord>, RunError> {
@@ -982,6 +1274,17 @@ fn cmd_source_bundle(
             };
             print_verify_report(&report, json_output)
         }
+        crate::SourceBundleAction::Preflight {
+            build_roots,
+            import_paths,
+        } => {
+            let report = offline_preflight_for_build_roots(&build_roots, &import_paths, state_dir, store_prefix)?;
+            print_offline_preflight_report(&report, json_output)?;
+            if source_offline_preflight_is_ready(&report) {
+                return Ok(());
+            }
+            Err(RunError::Reported(1))
+        }
     }
 }
 
@@ -1023,14 +1326,20 @@ fn evaluate_build_roots(
     let full_import_paths = crate::build_cmd::build_import_paths(import_paths)?;
     let mut derivations = Vec::new();
     for build_root in build_roots {
-        let mut session = crunch_eval::session::EvaluationSession::open_file(build_root, &full_import_paths)
-            .map_err(|err| RunError::Eval(format!("opening build root {}: {err}", build_root.display())))?;
-        let roots = session.force_all_roots::<crunch_glue::CrunchDerivation>().map_err(|err| {
-            RunError::Eval(format!("evaluating source bundle build root {}: {err}", build_root.display()))
-        })?;
-        derivations.extend(roots);
+        derivations.extend(evaluate_build_root_with_import_paths(build_root, &full_import_paths)?);
     }
     Ok(derivations)
+}
+
+fn evaluate_build_root_with_import_paths(
+    build_root: &Path,
+    full_import_paths: &[OsString],
+) -> Result<Vec<(String, crunch_glue::CrunchDerivation)>, RunError> {
+    let mut session = crunch_eval::session::EvaluationSession::open_file(build_root, full_import_paths)
+        .map_err(|err| RunError::Eval(format!("opening build root {}: {err}", build_root.display())))?;
+    session
+        .force_all_roots::<crunch_glue::CrunchDerivation>()
+        .map_err(|err| RunError::Eval(format!("evaluating source bundle build root {}: {err}", build_root.display())))
 }
 
 fn print_plan_report(report: &SourceBundlePlanReport, json_output: bool) -> Result<(), RunError> {
@@ -1081,6 +1390,39 @@ fn print_verify_report(report: &SourceBundleVerifyReport, json_output: bool) -> 
         report.stale_records.len(),
         report.unsupported_records.len()
     );
+    eprintln!("non_claim={}", report.non_claim);
+    Ok(())
+}
+
+pub fn print_offline_preflight_report(
+    report: &SourceOfflinePreflightReport,
+    json_output: bool,
+) -> Result<(), RunError> {
+    if json_output {
+        println!("{}", render_json(report)?);
+        return Ok(());
+    }
+    println!(
+        "format={} readiness={:?} records={} source_state_blake3={}",
+        report.format, report.ready_class, report.record_count, report.source_state_blake3
+    );
+    if let Some(manifest_blake3) = &report.manifest_blake3 {
+        println!("manifest_blake3={manifest_blake3}");
+    }
+    println!(
+        "missing={} stale={} unsupported={} network_required={} unpinned={}",
+        report.missing_records.len(),
+        report.stale_records.len(),
+        report.unsupported_records.len(),
+        report.network_required_records.len(),
+        report.unpinned_records.len()
+    );
+    for record in &report.records {
+        println!(
+            "SOURCE_PREFLIGHT_RECORD kind={:?} identity={} files={} payload_bytes={} blake3={}",
+            record.kind, record.identity, record.file_count, record.payload_bytes, record.content_blake3
+        );
+    }
     eprintln!("non_claim={}", report.non_claim);
     Ok(())
 }
@@ -1330,6 +1672,101 @@ mod tests {
         let verify = verify_source_bundle_state(&manifest, &temp.path().join("missing-state")).unwrap();
         assert_eq!(verify.ready_class, SourceReadiness::Missing);
         assert_eq!(verify.missing_records, vec!["fixture".to_string()]);
+    }
+
+    #[test]
+    fn source_offline_preflight_accepts_pinned_imported_file_payload() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let fetcher = fixed_fetcher("file-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root.clone())];
+        let exported = export_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&exported, &state_dir, true).unwrap();
+
+        let report = offline_preflight_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+
+        assert_eq!(report.ready_class, SourceReadiness::Ready);
+        assert_eq!(report.record_count, 1);
+        assert!(report.manifest_blake3.is_some());
+        assert!(report.missing_records.is_empty());
+        assert!(report.network_required_records.is_empty());
+        assert!(report.unpinned_records.is_empty());
+    }
+
+    #[test]
+    fn source_offline_preflight_reports_missing_local_source_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let fetcher = fixed_fetcher("file-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+
+        let report = offline_preflight_for_derivations(
+            &[("default".to_string(), root)],
+            &temp.path().join("missing-state"),
+            "/mantle/store",
+        )
+        .unwrap();
+
+        assert_eq!(report.ready_class, SourceReadiness::Missing);
+        assert_eq!(report.missing_records.len(), 1);
+        assert!(report.network_required_records.is_empty());
+    }
+
+    #[test]
+    fn source_offline_preflight_reports_remote_network_requirement() {
+        let temp = tempfile::tempdir().unwrap();
+        let fetcher = fixed_fetcher("remote-src", "https://example.invalid/source.tar.gz");
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+
+        let report = offline_preflight_for_derivations(
+            &[("default".to_string(), root)],
+            &temp.path().join("state"),
+            "/mantle/store",
+        )
+        .unwrap();
+
+        assert_eq!(report.ready_class, SourceReadiness::NetworkRequired);
+        assert_eq!(report.network_required_records.len(), 1);
+        assert!(report.missing_records.is_empty());
+    }
+
+    #[test]
+    fn source_offline_preflight_rejects_unpinned_imported_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let fetcher = fixed_fetcher("file-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root.clone())];
+        let exported = export_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&exported, &state_dir, false).unwrap();
+
+        let report = offline_preflight_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+
+        assert_eq!(report.ready_class, SourceReadiness::Unpinned);
+        assert_eq!(report.unpinned_records.len(), 1);
+    }
+
+    #[test]
+    fn source_offline_preflight_allows_roots_without_source_requirements() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = root_derivation(Vec::new());
+
+        let report = offline_preflight_for_derivations(
+            &[("default".to_string(), root)],
+            &temp.path().join("state"),
+            "/mantle/store",
+        )
+        .unwrap();
+
+        assert_eq!(report.ready_class, SourceReadiness::Ready);
+        assert_eq!(report.record_count, 0);
+        assert!(report.manifest_blake3.is_none());
     }
 
     #[test]
