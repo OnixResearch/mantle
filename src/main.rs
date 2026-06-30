@@ -25,6 +25,7 @@ mod native_toolchain_closure;
 #[allow(dead_code)]
 mod offline_cargo;
 mod operator_diagnostics;
+mod portable_receipt;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
@@ -39,6 +40,8 @@ mod release_evidence;
 mod release_nix_witness;
 mod release_reproducibility;
 mod release_source;
+#[allow(dead_code)]
+mod remote_build;
 mod rust_bootstrap_patch_plan;
 mod rust_plan;
 #[allow(dead_code)]
@@ -47,6 +50,7 @@ mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
 mod shell_cmd;
+mod source_bundle;
 mod source_root_provider;
 mod source_toolchain_closure;
 mod store_cmd;
@@ -304,6 +308,24 @@ enum Command {
     Store {
         #[command(subcommand)]
         action: StoreAction,
+    },
+
+    /// Plan, export, import, list, and verify source/input bundles
+    Source {
+        #[command(subcommand)]
+        action: SourceAction,
+    },
+
+    /// Export, list, verify, and import portable receipt bundles
+    Receipt {
+        #[command(subcommand)]
+        action: ReceiptAction,
+    },
+
+    /// Remote builder access, ticket, and server commands
+    Remote {
+        #[command(subcommand)]
+        action: RemoteAction,
     },
 
     /// Frontend-neutral admitted artifact commands
@@ -1284,6 +1306,105 @@ pub enum AttestVerifyAction {
 }
 
 #[derive(Subcommand, Debug, Clone)]
+pub enum RemoteAction {
+    /// Ticket management
+    Ticket {
+        #[command(subcommand)]
+        action: RemoteTicketAction,
+    },
+    /// Print remote server protocol metadata; concrete transport binding is explicit future work
+    Serve {
+        /// Builder endpoint id expected by clients
+        #[arg(long, default_value = "local-builder")]
+        endpoint_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RemoteTicketAction {
+    /// Create a redacted bearer ticket record
+    Create {
+        #[arg(long, default_value = "ticket")]
+        display_name: String,
+
+        #[arg(long, default_value_t = 1)]
+        now_unix_s: u64,
+
+        #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_TTL_SECS)]
+        ttl_secs: u64,
+
+        #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_USES)]
+        uses: u32,
+
+        #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_BUILD_TIME_SECS)]
+        max_build_time_secs: u64,
+
+        #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_UPLOAD_BYTES)]
+        max_upload_bytes: u64,
+
+        #[arg(long)]
+        bound_client_endpoint: Option<String>,
+    },
+    /// List tickets with bearer secrets redacted
+    List,
+    /// Inspect one ticket with bearer secret redacted
+    Inspect { id: String },
+    /// Reveal one ticket bearer secret explicitly
+    Reveal { id: String },
+    /// Revoke one ticket
+    Revoke { id: String },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ReceiptAction {
+    /// Receipt bundle operations
+    Bundle {
+        #[command(subcommand)]
+        action: ReceiptBundleAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ReceiptBundleAction {
+    /// Export a portable receipt bundle from explicit evidence records
+    Export {
+        /// Record specs as kind:identity:digest
+        #[arg(long = "record")]
+        records: Vec<String>,
+
+        /// Bundle output path
+        #[arg(long)]
+        to: std::path::PathBuf,
+
+        /// Policy hash or policy identifier bound to the bundle
+        #[arg(long, default_value = "policy-unspecified")]
+        policy_hash: String,
+
+        /// Require complete strong action-correctness evidence
+        #[arg(long)]
+        strong: bool,
+    },
+    /// List receipt bundle metadata
+    List {
+        /// Bundle input path
+        #[arg(long)]
+        from: std::path::PathBuf,
+    },
+    /// Verify receipt bundle structure, trust snapshot, and completeness
+    Verify {
+        /// Bundle input path
+        #[arg(long)]
+        from: std::path::PathBuf,
+    },
+    /// Import a verified receipt bundle into Mantle evidence state
+    Import {
+        /// Bundle input path
+        #[arg(long)]
+        from: std::path::PathBuf,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
 pub enum StoreAction {
     /// List all known store paths
     List,
@@ -1382,6 +1503,61 @@ pub enum StoreAction {
     Archive {
         #[command(subcommand)]
         action: StoreArchiveAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum SourceAction {
+    /// Source bundle operations
+    Bundle {
+        #[command(subcommand)]
+        action: SourceBundleAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum SourceBundleAction {
+    /// Plan source records without mutating source state
+    Plan {
+        /// Source specs as kind:identity:path
+        #[arg(long = "source")]
+        sources: Vec<String>,
+    },
+    /// Export a source bundle JSON file
+    Export {
+        /// Source specs as kind:identity:path
+        #[arg(long = "source")]
+        sources: Vec<String>,
+
+        /// Bundle output path
+        #[arg(long)]
+        to: std::path::PathBuf,
+    },
+    /// List a source bundle without mutating state
+    List {
+        /// Bundle input path
+        #[arg(long)]
+        from: std::path::PathBuf,
+    },
+    /// Import a source bundle into Mantle source state
+    Import {
+        /// Bundle input path
+        #[arg(long)]
+        from: std::path::PathBuf,
+
+        /// Pin imported records for planned use
+        #[arg(long)]
+        pin: bool,
+    },
+    /// Verify a bundle and optionally imported source state
+    Verify {
+        /// Bundle input path
+        #[arg(long)]
+        from: std::path::PathBuf,
+
+        /// Require matching imported source state
+        #[arg(long)]
+        imported: bool,
     },
 }
 
@@ -1558,6 +1734,9 @@ fn command_label(command: &Command) -> &'static str {
         Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
         Command::Log { .. } => "log",
         Command::Store { action } => store_command_label(action),
+        Command::Source { action } => source_command_label(action),
+        Command::Receipt { action } => receipt_command_label(action),
+        Command::Remote { action } => remote_command_label(action),
         Command::Artifact { .. } => "artifact",
         Command::Attest { .. } => "attest",
         Command::Release { .. } => "release",
@@ -1582,6 +1761,54 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
         Some(BootstrapAction::NativeToolchainClosure { .. }) => "bootstrap.native-toolchain-closure",
         Some(BootstrapAction::Validate { .. }) => "bootstrap.validate",
         None => "bootstrap",
+    }
+}
+
+fn remote_command_label(action: &RemoteAction) -> &'static str {
+    match action {
+        RemoteAction::Ticket { action } => remote_ticket_command_label(action),
+        RemoteAction::Serve { .. } => "remote.serve",
+    }
+}
+
+fn remote_ticket_command_label(action: &RemoteTicketAction) -> &'static str {
+    match action {
+        RemoteTicketAction::Create { .. } => "remote.ticket.create",
+        RemoteTicketAction::List => "remote.ticket.list",
+        RemoteTicketAction::Inspect { .. } => "remote.ticket.inspect",
+        RemoteTicketAction::Reveal { .. } => "remote.ticket.reveal",
+        RemoteTicketAction::Revoke { .. } => "remote.ticket.revoke",
+    }
+}
+
+fn receipt_command_label(action: &ReceiptAction) -> &'static str {
+    match action {
+        ReceiptAction::Bundle { action } => receipt_bundle_command_label(action),
+    }
+}
+
+fn receipt_bundle_command_label(action: &ReceiptBundleAction) -> &'static str {
+    match action {
+        ReceiptBundleAction::Export { .. } => "receipt.bundle.export",
+        ReceiptBundleAction::List { .. } => "receipt.bundle.list",
+        ReceiptBundleAction::Verify { .. } => "receipt.bundle.verify",
+        ReceiptBundleAction::Import { .. } => "receipt.bundle.import",
+    }
+}
+
+fn source_command_label(action: &SourceAction) -> &'static str {
+    match action {
+        SourceAction::Bundle { action } => source_bundle_command_label(action),
+    }
+}
+
+fn source_bundle_command_label(action: &SourceBundleAction) -> &'static str {
+    match action {
+        SourceBundleAction::Plan { .. } => "source.bundle.plan",
+        SourceBundleAction::Export { .. } => "source.bundle.export",
+        SourceBundleAction::List { .. } => "source.bundle.list",
+        SourceBundleAction::Import { .. } => "source.bundle.import",
+        SourceBundleAction::Verify { .. } => "source.bundle.verify",
     }
 }
 
@@ -1794,6 +2021,13 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Store { action } => {
             store_cmd::cmd_store(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
+        Command::Source { action } => {
+            source_bundle::cmd_source(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
+        }
+        Command::Receipt { action } => {
+            portable_receipt::cmd_receipt(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
+        }
+        Command::Remote { action } => remote_build::cmd_remote(action.clone(), &ctx.resolved_state_dir, ctx.json),
         Command::Artifact { action } => {
             artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)
         }
