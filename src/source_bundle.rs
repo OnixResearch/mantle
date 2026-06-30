@@ -20,6 +20,27 @@ pub const MAX_SOURCE_FILE_BYTES: u64 = 16_777_216;
 pub const MAX_SOURCE_TOTAL_BYTES: u64 = 1_099_511_627_776;
 pub const MAX_SOURCE_ID_BYTES: usize = 512;
 pub const MAX_ADAPTER_METADATA_BYTES: usize = 8_192;
+pub const MAX_SOURCE_RECORD_METADATA_BYTES: usize = 16_384;
+pub const MAX_DERIVED_SOURCE_WALK_NODES: usize = 65_536;
+
+const BUILTIN_FETCHURL_BUILDER: &str = "builtin:fetchurl";
+const DERIVED_FIXED_URL_ID_PREFIX: &str = "fixed-url";
+const DERIVED_STORE_PATH_ID_PREFIX: &str = "store-path";
+const DERIVED_VCS_ID_PREFIX: &str = "vcs-snapshot";
+const FETCH_ENV_EXECUTABLE_KEY: &str = "executable";
+const FETCH_ENV_REV_KEY: &str = "rev";
+const FETCH_ENV_TYPE_KEY: &str = "type";
+const FETCH_ENV_UNPACK_KEY: &str = "unpack";
+const FETCH_ENV_URL_KEY: &str = "url";
+const FETCH_ENV_TYPE_GIT: &str = "git";
+const RECORD_METADATA_BUILDER_KEY: &str = "builder";
+const RECORD_METADATA_HASH_ALGO_KEY: &str = "hash_algo";
+const RECORD_METADATA_HASH_KEY: &str = "hash";
+const RECORD_METADATA_HASH_MODE_KEY: &str = "hash_mode";
+const RECORD_METADATA_NAME_KEY: &str = "name";
+const RECORD_METADATA_SOURCE_KIND_KEY: &str = "source_kind";
+const RECORD_METADATA_STORE_PATH_KEY: &str = "store_path";
+const RECORD_METADATA_URL_KEY: &str = "url";
 
 const RECORD_SPEC_SEPARATOR: char = ':';
 const SOURCE_STATE_DIR: &str = "source-bundles";
@@ -77,6 +98,8 @@ pub struct SourceRecord {
     pub store_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub adapter: Option<SourceAdapterMetadata>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub metadata: BTreeMap<String, String>,
     pub payload_bytes: u64,
     pub content_blake3: String,
     pub files: Vec<SourceFileEntry>,
@@ -184,22 +207,58 @@ pub fn parse_source_spec(raw: &str) -> Result<SourceSpec, RunError> {
 }
 
 pub fn plan_source_bundle(specs: &[SourceSpec], store_prefix: &str) -> Result<SourceBundleManifest, RunError> {
-    if specs.is_empty() {
-        return Err(RunError::Internal("source bundle requires at least one --source".to_string()));
+    let records = canonicalize_source_specs(specs, store_prefix)?;
+    assemble_source_bundle(records, store_prefix)
+}
+
+pub fn plan_source_bundle_from_derivations(
+    roots: &[(String, crunch_glue::CrunchDerivation)],
+    specs: &[SourceSpec],
+    store_prefix: &str,
+) -> Result<SourceBundleManifest, RunError> {
+    let mut records = canonicalize_source_specs(specs, store_prefix)?;
+    records.extend(collect_build_source_records(roots, store_prefix)?);
+    assemble_source_bundle(records, store_prefix)
+}
+
+pub fn collect_build_source_records(
+    roots: &[(String, crunch_glue::CrunchDerivation)],
+    store_prefix: &str,
+) -> Result<Vec<SourceRecord>, RunError> {
+    if !store_prefix.starts_with('/') {
+        return Err(RunError::Internal(format!("store prefix must be absolute: {store_prefix}")));
     }
+    let mut records = Vec::new();
+    let mut visited_count = 0usize;
+    for (_, root) in roots {
+        collect_derivation_source_records(root, store_prefix, &mut records, &mut visited_count)?;
+    }
+    Ok(records)
+}
+
+fn canonicalize_source_specs(specs: &[SourceSpec], store_prefix: &str) -> Result<Vec<SourceRecord>, RunError> {
     if specs.len() > MAX_SOURCE_RECORDS {
+        return Err(RunError::Internal(format!("source record count exceeds {MAX_SOURCE_RECORDS}")));
+    }
+    let mut records = Vec::with_capacity(specs.len());
+    for spec in specs {
+        records.push(canonicalize_source_spec(spec, store_prefix)?);
+    }
+    Ok(records)
+}
+
+fn assemble_source_bundle(records: Vec<SourceRecord>, store_prefix: &str) -> Result<SourceBundleManifest, RunError> {
+    if records.is_empty() {
+        return Err(RunError::Internal("source bundle requires at least one --source or --build-root".to_string()));
+    }
+    if records.len() > MAX_SOURCE_RECORDS {
         return Err(RunError::Internal(format!("source record count exceeds {MAX_SOURCE_RECORDS}")));
     }
     if !store_prefix.starts_with('/') {
         return Err(RunError::Internal(format!("store prefix must be absolute: {store_prefix}")));
     }
 
-    let mut records = Vec::with_capacity(specs.len());
-    for spec in specs {
-        records.push(canonicalize_source_spec(spec, store_prefix)?);
-    }
-    records.sort_by(|left, right| record_sort_key(left).cmp(&record_sort_key(right)));
-    reject_duplicate_records(&records)?;
+    let records = normalize_source_records(records)?;
     let roots = records.iter().map(|record| record.identity.clone()).collect::<Vec<_>>();
     let mut manifest = SourceBundleManifest {
         format: SOURCE_BUNDLE_FORMAT.to_string(),
@@ -331,6 +390,7 @@ fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<Sou
         identity: spec.identity.clone(),
         store_prefix: record_store_prefix(&spec.kind, store_prefix),
         adapter: spec.adapter.clone(),
+        metadata: BTreeMap::new(),
         payload_bytes: total_bytes,
         content_blake3,
         files,
@@ -488,6 +548,15 @@ fn digest_manifest_without_digest(manifest: &SourceBundleManifest) -> Result<Str
     Ok(blake3::hash(&encoded).to_hex().to_string())
 }
 
+fn digest_virtual_source_record(
+    kind: &SourceRecordKind,
+    metadata: &BTreeMap<String, String>,
+) -> Result<String, RunError> {
+    let encoded = serde_json::to_vec(&(kind, metadata))
+        .map_err(|err| RunError::Internal(format!("serializing source record metadata: {err}")))?;
+    Ok(blake3::hash(&encoded).to_hex().to_string())
+}
+
 fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
     if manifest.format != SOURCE_BUNDLE_FORMAT {
         return Err(RunError::Internal(format!("unsupported source bundle format {}", manifest.format)));
@@ -506,14 +575,60 @@ fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
     Ok(())
 }
 
+fn normalize_source_records(mut records: Vec<SourceRecord>) -> Result<Vec<SourceRecord>, RunError> {
+    records.sort_by(|left, right| record_sort_key(left).cmp(&record_sort_key(right)));
+    let mut normalized = Vec::<SourceRecord>::with_capacity(records.len());
+    for record in records {
+        validate_source_record(&record)?;
+        let key = record_sort_key(&record);
+        if let Some(previous) = normalized.last()
+            && record_sort_key(previous) == key
+        {
+            if previous == &record {
+                continue;
+            }
+            return Err(RunError::Internal(format!("conflicting duplicate source record {key}")));
+        }
+        normalized.push(record);
+    }
+    Ok(normalized)
+}
+
 fn reject_duplicate_records(records: &[SourceRecord]) -> Result<(), RunError> {
     let mut seen = BTreeSet::new();
     for record in records {
-        validate_identity(&record.identity)?;
+        validate_source_record(record)?;
         let key = record_sort_key(record);
         if !seen.insert(key.clone()) {
             return Err(RunError::Internal(format!("duplicate source record {key}")));
         }
+    }
+    Ok(())
+}
+
+fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
+    validate_identity(&record.identity)?;
+    validate_adapter_metadata(record.adapter.as_ref())?;
+    let rendered_metadata = serde_json::to_vec(&record.metadata)
+        .map_err(|err| RunError::Internal(format!("serializing source metadata: {err}")))?;
+    if rendered_metadata.len() > MAX_SOURCE_RECORD_METADATA_BYTES {
+        return Err(RunError::Internal(format!(
+            "source record metadata exceeds {MAX_SOURCE_RECORD_METADATA_BYTES} bytes"
+        )));
+    }
+    if !record.metadata.is_empty() && !record.files.is_empty() {
+        return Err(RunError::Internal(format!(
+            "source record {} cannot mix virtual metadata with file payload entries",
+            record.identity
+        )));
+    }
+    let expected_digest = if record.metadata.is_empty() {
+        digest_source_entries(&record.files)?
+    } else {
+        digest_virtual_source_record(&record.kind, &record.metadata)?
+    };
+    if expected_digest != record.content_blake3 {
+        return Err(RunError::Internal(format!("source record {} content digest mismatch", record.identity)));
     }
     Ok(())
 }
@@ -584,6 +699,122 @@ fn read_record(path: &Path) -> Result<SourceRecord, RunError> {
         .map_err(|err| RunError::Internal(format!("parsing source record {}: {err}", path.display())))
 }
 
+fn collect_derivation_source_records(
+    derivation: &crunch_glue::CrunchDerivation,
+    store_prefix: &str,
+    records: &mut Vec<SourceRecord>,
+    visited_count: &mut usize,
+) -> Result<(), RunError> {
+    *visited_count = visited_count
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal("derived source walk count overflow".to_string()))?;
+    if *visited_count > MAX_DERIVED_SOURCE_WALK_NODES {
+        return Err(RunError::Internal(format!(
+            "derived source walk exceeds {MAX_DERIVED_SOURCE_WALK_NODES} derivation nodes"
+        )));
+    }
+    if let Some(record) = fixed_fetcher_source_record(derivation)? {
+        records.push(record);
+    }
+    for input in &derivation.inputs {
+        match input {
+            crunch_glue::Input::Source(source_path) => {
+                records.push(store_path_source_record(source_path, store_prefix)?)
+            }
+            crunch_glue::Input::OutputSelection(output) => {
+                collect_derivation_source_records(&output.drv, store_prefix, records, visited_count)?;
+            }
+            crunch_glue::Input::Derivation(input_derivation) => {
+                collect_derivation_source_records(input_derivation, store_prefix, records, visited_count)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Result<Option<SourceRecord>, RunError> {
+    if derivation.builder != BUILTIN_FETCHURL_BUILDER {
+        return Ok(None);
+    }
+    let fixed_output = derivation.fixed_output.as_ref().ok_or_else(|| {
+        RunError::Internal(format!("builtin fetcher {} cannot be source-bundled without fixed_output", derivation.name))
+    })?;
+    let url = derivation
+        .env
+        .get(FETCH_ENV_URL_KEY)
+        .ok_or_else(|| RunError::Internal(format!("builtin fetcher {} is missing env.url", derivation.name)))?;
+    let mut metadata = BTreeMap::new();
+    metadata.insert(RECORD_METADATA_BUILDER_KEY.to_string(), derivation.builder.clone());
+    metadata.insert(RECORD_METADATA_HASH_ALGO_KEY.to_string(), fixed_output.algo.clone());
+    metadata.insert(RECORD_METADATA_HASH_KEY.to_string(), fixed_output.hash.clone());
+    metadata.insert(RECORD_METADATA_HASH_MODE_KEY.to_string(), fixed_output.mode.clone());
+    metadata.insert(RECORD_METADATA_NAME_KEY.to_string(), derivation.name.clone());
+    metadata.insert(RECORD_METADATA_URL_KEY.to_string(), url.clone());
+    copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_EXECUTABLE_KEY);
+    copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_REV_KEY);
+    copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_TYPE_KEY);
+    copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_UNPACK_KEY);
+    let kind = if derivation.env.get(FETCH_ENV_TYPE_KEY).map(String::as_str) == Some(FETCH_ENV_TYPE_GIT) {
+        SourceRecordKind::VcsSnapshot
+    } else {
+        SourceRecordKind::FixedUrl
+    };
+    let id_prefix = if kind == SourceRecordKind::VcsSnapshot {
+        DERIVED_VCS_ID_PREFIX
+    } else {
+        DERIVED_FIXED_URL_ID_PREFIX
+    };
+    Ok(Some(virtual_source_record(kind, id_prefix, None, metadata)?))
+}
+
+fn store_path_source_record(source_path: &str, store_prefix: &str) -> Result<SourceRecord, RunError> {
+    if !source_path.starts_with('/') {
+        return Err(RunError::Internal(format!(
+            "source input path must be absolute for source bundle planning: {source_path}"
+        )));
+    }
+    let mut metadata = BTreeMap::new();
+    metadata.insert(RECORD_METADATA_SOURCE_KIND_KEY.to_string(), "pre-existing-store-path".to_string());
+    metadata.insert(RECORD_METADATA_STORE_PATH_KEY.to_string(), source_path.to_string());
+    virtual_source_record(
+        SourceRecordKind::ToolchainSourceRoot,
+        DERIVED_STORE_PATH_ID_PREFIX,
+        Some(store_prefix.to_string()),
+        metadata,
+    )
+}
+
+fn copy_optional_env_metadata(
+    env: &std::collections::HashMap<String, String>,
+    metadata: &mut BTreeMap<String, String>,
+    key: &str,
+) {
+    if let Some(value) = env.get(key) {
+        metadata.insert(key.to_string(), value.clone());
+    }
+}
+
+fn virtual_source_record(
+    kind: SourceRecordKind,
+    id_prefix: &str,
+    store_prefix: Option<String>,
+    metadata: BTreeMap<String, String>,
+) -> Result<SourceRecord, RunError> {
+    let digest = digest_virtual_source_record(&kind, &metadata)?;
+    let identity = format!("{id_prefix}-{digest}");
+    validate_identity(&identity)?;
+    Ok(SourceRecord {
+        kind,
+        identity,
+        store_prefix,
+        adapter: None,
+        metadata,
+        payload_bytes: 0,
+        content_blake3: digest,
+        files: Vec::new(),
+    })
+}
+
 fn checked_u32(count: usize, label: &str) -> Result<u32, RunError> {
     u32::try_from(count).map_err(|_| RunError::Internal(format!("{label} does not fit in u32: {count}")))
 }
@@ -611,12 +842,21 @@ fn cmd_source_bundle(
     json_output: bool,
 ) -> Result<(), RunError> {
     match action {
-        crate::SourceBundleAction::Plan { sources } => {
-            let manifest = plan_from_cli_sources(&sources, store_prefix)?;
+        crate::SourceBundleAction::Plan {
+            sources,
+            build_roots,
+            import_paths,
+        } => {
+            let manifest = plan_from_cli_inputs(&sources, &build_roots, &import_paths, store_prefix)?;
             print_plan_report(&plan_report(&manifest)?, json_output)
         }
-        crate::SourceBundleAction::Export { sources, to } => {
-            let manifest = plan_from_cli_sources(&sources, store_prefix)?;
+        crate::SourceBundleAction::Export {
+            sources,
+            build_roots,
+            import_paths,
+            to,
+        } => {
+            let manifest = plan_from_cli_inputs(&sources, &build_roots, &import_paths, store_prefix)?;
             write_source_bundle(&to, &manifest)?;
             print_plan_report(&plan_report(&manifest)?, json_output)
         }
@@ -648,9 +888,35 @@ fn cmd_source_bundle(
     }
 }
 
-fn plan_from_cli_sources(sources: &[String], store_prefix: &str) -> Result<SourceBundleManifest, RunError> {
+fn plan_from_cli_inputs(
+    sources: &[String],
+    build_roots: &[PathBuf],
+    import_paths: &[PathBuf],
+    store_prefix: &str,
+) -> Result<SourceBundleManifest, RunError> {
     let specs = sources.iter().map(|source| parse_source_spec(source)).collect::<Result<Vec<_>, _>>()?;
-    plan_source_bundle(&specs, store_prefix)
+    let roots = evaluate_build_roots(build_roots, import_paths)?;
+    plan_source_bundle_from_derivations(&roots, &specs, store_prefix)
+}
+
+fn evaluate_build_roots(
+    build_roots: &[PathBuf],
+    import_paths: &[PathBuf],
+) -> Result<Vec<(String, crunch_glue::CrunchDerivation)>, RunError> {
+    if build_roots.is_empty() {
+        return Ok(Vec::new());
+    }
+    let full_import_paths = crate::build_cmd::build_import_paths(import_paths)?;
+    let mut derivations = Vec::new();
+    for build_root in build_roots {
+        let mut session = crunch_eval::session::EvaluationSession::open_file(build_root, &full_import_paths)
+            .map_err(|err| RunError::Eval(format!("opening build root {}: {err}", build_root.display())))?;
+        let roots = session.force_all_roots::<crunch_glue::CrunchDerivation>().map_err(|err| {
+            RunError::Eval(format!("evaluating source bundle build root {}: {err}", build_root.display()))
+        })?;
+        derivations.extend(roots);
+    }
+    Ok(derivations)
 }
 
 fn print_plan_report(report: &SourceBundlePlanReport, json_output: bool) -> Result<(), RunError> {
@@ -714,6 +980,44 @@ mod tests {
         fs::write(root.join("src/main.txt"), b"hello").unwrap();
     }
 
+    fn fixed_fetcher(name: &str, url: &str) -> crunch_glue::CrunchDerivation {
+        let mut env = std::collections::HashMap::new();
+        env.insert(FETCH_ENV_URL_KEY.to_string(), url.to_string());
+        crunch_glue::CrunchDerivation {
+            name: name.to_string(),
+            builder: BUILTIN_FETCHURL_BUILDER.to_string(),
+            system: "x86_64-linux".to_string(),
+            args: Vec::new(),
+            outputs: vec!["out".to_string()],
+            dynamic_plan_outputs: Vec::new(),
+            env,
+            inputs: Vec::new(),
+            fixed_output: Some(crunch_glue::FixedOutput {
+                hash: "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string(),
+                algo: "sha256".to_string(),
+                mode: "flat".to_string(),
+            }),
+            addressing_mode: "input-addressed".to_string(),
+            provenance: None,
+        }
+    }
+
+    fn root_derivation(inputs: Vec<crunch_glue::Input>) -> crunch_glue::CrunchDerivation {
+        crunch_glue::CrunchDerivation {
+            name: "root".to_string(),
+            builder: "/bin/sh".to_string(),
+            system: "x86_64-linux".to_string(),
+            args: vec!["-c".to_string(), "true".to_string()],
+            outputs: vec!["out".to_string()],
+            dynamic_plan_outputs: Vec::new(),
+            env: std::collections::HashMap::new(),
+            inputs,
+            fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
+            provenance: None,
+        }
+    }
+
     #[test]
     fn source_bundle_canonicalizes_equivalent_traversal() {
         let temp = tempfile::tempdir().unwrap();
@@ -734,6 +1038,63 @@ mod tests {
     fn source_bundle_rejects_unsafe_identity() {
         let err = parse_source_spec("local-path:../bad:/tmp").unwrap_err();
         assert!(err.to_string().contains("unsafe source identity"));
+    }
+
+    #[test]
+    fn source_bundle_derives_fetcher_and_store_path_inputs_from_build_root() {
+        let fetcher = fixed_fetcher("crate-src", "https://static.example.invalid/crate.tar.gz");
+        let store_path = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bash".to_string();
+        let root = root_derivation(vec![
+            crunch_glue::Input::Derivation(Box::new(fetcher.clone())),
+            crunch_glue::Input::Derivation(Box::new(fetcher)),
+            crunch_glue::Input::Source(store_path.clone()),
+            crunch_glue::Input::Source(store_path.clone()),
+        ]);
+        let manifest =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+
+        assert_eq!(manifest.records.len(), 2);
+        let fixed = manifest.records.iter().find(|record| record.kind == SourceRecordKind::FixedUrl).unwrap();
+        assert_eq!(fixed.payload_bytes, 0);
+        assert!(fixed.files.is_empty());
+        assert_eq!(
+            fixed.metadata.get(RECORD_METADATA_URL_KEY).map(String::as_str),
+            Some("https://static.example.invalid/crate.tar.gz")
+        );
+        assert_eq!(fixed.metadata.get(RECORD_METADATA_HASH_ALGO_KEY).map(String::as_str), Some("sha256"));
+
+        let store =
+            manifest.records.iter().find(|record| record.kind == SourceRecordKind::ToolchainSourceRoot).unwrap();
+        assert_eq!(store.store_prefix.as_deref(), Some("/mantle/store"));
+        assert_eq!(store.metadata.get(RECORD_METADATA_STORE_PATH_KEY), Some(&store_path));
+        assert!(store.files.is_empty());
+    }
+
+    #[test]
+    fn source_bundle_derives_vcs_snapshot_from_git_fetcher() {
+        let mut git = fixed_fetcher("repo-src", "https://example.invalid/repo.git");
+        git.env.insert(FETCH_ENV_TYPE_KEY.to_string(), FETCH_ENV_TYPE_GIT.to_string());
+        git.env.insert(FETCH_ENV_REV_KEY.to_string(), "refs/tags/v1".to_string());
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(git))]);
+        let manifest =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+
+        assert_eq!(manifest.records.len(), 1);
+        let record = &manifest.records[0];
+        assert_eq!(record.kind, SourceRecordKind::VcsSnapshot);
+        assert_eq!(record.metadata.get(FETCH_ENV_REV_KEY).map(String::as_str), Some("refs/tags/v1"));
+        assert_eq!(record.metadata.get(FETCH_ENV_TYPE_KEY).map(String::as_str), Some(FETCH_ENV_TYPE_GIT));
+    }
+
+    #[test]
+    fn source_bundle_rejects_unfixed_builtin_fetcher_in_build_root() {
+        let mut fetcher = fixed_fetcher("bad-src", "https://example.invalid/bad.tar.gz");
+        fetcher.fixed_output = None;
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+
+        let err =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap_err();
+        assert!(err.to_string().contains("cannot be source-bundled without fixed_output"));
     }
 
     #[test]

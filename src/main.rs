@@ -1522,12 +1522,30 @@ pub enum SourceBundleAction {
         /// Source specs as kind:identity:path
         #[arg(long = "source")]
         sources: Vec<String>,
+
+        /// Evaluate a .ncl build root and derive source records from fixed fetcher and store-path
+        /// inputs
+        #[arg(long = "build-root")]
+        build_roots: Vec<std::path::PathBuf>,
+
+        /// Additional Nickel import paths for --build-root evaluation
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<std::path::PathBuf>,
     },
     /// Export a source bundle JSON file
     Export {
         /// Source specs as kind:identity:path
         #[arg(long = "source")]
         sources: Vec<String>,
+
+        /// Evaluate a .ncl build root and derive source records from fixed fetcher and store-path
+        /// inputs
+        #[arg(long = "build-root")]
+        build_roots: Vec<std::path::PathBuf>,
+
+        /// Additional Nickel import paths for --build-root evaluation
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<std::path::PathBuf>,
 
         /// Bundle output path
         #[arg(long)]
