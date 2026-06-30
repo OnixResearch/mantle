@@ -32,6 +32,7 @@ mod project_resolve;
 mod protected_exec;
 #[allow(dead_code)]
 mod protected_exec_seccomp;
+mod realization_routing;
 mod release_attestation;
 mod release_cmd;
 mod release_evidence;

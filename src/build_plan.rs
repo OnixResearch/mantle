@@ -62,6 +62,7 @@ pub struct BuildPlanEntry {
     pub drv_key: String,
     pub label: String,
     pub action: PlanAction,
+    pub route_plan: crate::realization_routing::RoutePlanReport,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }
@@ -82,6 +83,21 @@ impl BuildPlanReport {
         out.push_str(&format!("build plan: {}\n", self.file));
         for entry in &self.entries {
             out.push_str(&format!("- {}: {}\n", entry.label, entry.action.as_str()));
+            out.push_str(&format!(
+                "  route: selected={} reason={}\n",
+                entry.route_plan.selected_route.as_str(),
+                entry.route_plan.selected_reason_code
+            ));
+            if !entry.route_plan.rejected_routes.is_empty() {
+                let rejected = entry
+                    .route_plan
+                    .rejected_routes
+                    .iter()
+                    .map(|route| format!("{}:{}", route.route.as_str(), route.reason_code))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                out.push_str(&format!("  rejected: {rejected}\n"));
+            }
             if let Some(detail) = &entry.detail {
                 out.push_str(&format!("  {}\n", detail));
             }
@@ -248,10 +264,13 @@ struct PlannedRoot {
 
 impl PlannedRoot {
     fn plan_entry(&self, store_dir: &str, action: PlanAction, detail: Option<String>) -> BuildPlanEntry {
+        let route_plan =
+            crate::realization_routing::route_plan_for_existing_build_action(action.as_str(), detail.as_deref());
         BuildPlanEntry {
             drv_key: self.drv_path.to_absolute_path_with_prefix(store_dir),
             label: self.label.clone(),
             action,
+            route_plan,
             detail,
         }
     }

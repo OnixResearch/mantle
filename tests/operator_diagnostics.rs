@@ -276,7 +276,8 @@ fn build_plan_reports_build_for_uncached_root() {
         .assert()
         .success()
         .stdout(predicate::str::contains("build plan:"))
-        .stdout(predicate::str::contains("build"));
+        .stdout(predicate::str::contains("route: selected=local-build"))
+        .stdout(predicate::str::contains("trusted-substitute:trusted-substitute-missing"));
 
     assert_eq!(count_entries(&store_dir), 0, "plan must not mutate empty store dir");
     assert_eq!(count_entries(&state_dir), 0, "plan must not mutate empty state dir");
@@ -491,7 +492,7 @@ fn build_plan_json_reports_action_schema() {
     write_executable(&tool_dir, "busybox", fake_ok_script());
     write_shell_derivation_ncl(&ncl_file);
 
-    crunch()
+    let output = crunch()
         .arg("--json")
         .arg("--state-dir")
         .arg(&state_dir)
@@ -505,8 +506,15 @@ fn build_plan_json_reports_action_schema() {
         .current_dir(root.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"schema\": \"crunch-build-plan-v1\""))
-        .stdout(predicate::str::contains("\"action\": \"build\""));
+        .get_output()
+        .stdout
+        .clone();
+    let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(json["schema"], "crunch-build-plan-v1");
+    assert_eq!(json["entries"][0]["action"], "build");
+    assert_eq!(json["entries"][0]["route_plan"]["schema"], "mantle-realization-route-plan-v1");
+    assert_eq!(json["entries"][0]["route_plan"]["selected_route"], "local-build");
+    assert_eq!(json["entries"][0]["route_plan"]["rejected_routes"][1]["route"], "trusted-substitute");
 }
 
 #[test]
@@ -574,6 +582,8 @@ fn build_plan_reports_preflight_error_for_missing_store_dir() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("preflight-error"))
+        .stderr(predicate::str::contains("route: selected=preflight-error"))
+        .stderr(predicate::str::contains("local-build:local-preflight-failed"))
         .stderr(predicate::str::contains("output store directory"));
 
     assert!(!missing_store_dir.exists(), "plan preflight must not create missing store dir");
