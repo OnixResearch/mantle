@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
+use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -11,6 +14,8 @@ pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
 pub const REMOTE_PROTOCOL_VERSION: u32 = 1;
 pub const MAX_REMOTE_CAPABILITIES: usize = 32;
 pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
+pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
+pub const MAX_REMOTE_STATUS_ITEMS: usize = 4_096;
 pub const MAX_REMOTE_UPLOAD_BYTES: u64 = 1_099_511_627_776;
 pub const MAX_REMOTE_BUILD_TIME_SECS: u64 = 86_400;
 pub const DEFAULT_TICKET_TTL_SECS: u64 = 3_600;
@@ -22,6 +27,11 @@ const TICKET_STATE_DIR: &str = "remote-builders";
 const TICKET_STATE_FILE: &str = "tickets.json";
 const SECRET_REDACTION: &str = "<redacted>";
 const TEMP_FILE_EXTENSION: &str = "tmp";
+const REMOTE_FRAME_HEADER_BYTES: usize = std::mem::size_of::<u32>();
+const REMOTE_LOOPBACK_OUTPUT_BYTES: u64 = 64;
+const DELTA_REUSE_PERCENT: u64 = 75;
+const PERCENT_DENOMINATOR: u64 = 100;
+const REMOTE_SESSION_NON_CLAIM: &str = "loopback remote-build session evidence proves protocol control flow only; it does not prove production P2P transport, sandbox execution, or artifact correctness";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -70,7 +80,7 @@ pub struct RemoteTicketState {
     pub tickets: BTreeMap<String, RemoteTicket>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TicketAuthRequest {
     pub ticket_id: String,
     pub secret: String,
@@ -78,7 +88,7 @@ pub struct TicketAuthRequest {
     pub now_unix_s: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConcreteBuildRequest {
     pub request_id: String,
     pub store_prefix: String,
@@ -86,6 +96,316 @@ pub struct ConcreteBuildRequest {
     pub upload_bytes: u64,
     pub build_time_limit_secs: u64,
     pub contains_raw_frontend_eval: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteTransportBinding {
+    Loopback,
+    Stdio,
+    SshStdio,
+    P2p,
+}
+
+impl RemoteTransportBinding {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Loopback => "loopback",
+            Self::Stdio => "stdio",
+            Self::SshStdio => "ssh-stdio",
+            Self::P2p => "p2p",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteFrameDirection {
+    ClientToBuilder,
+    BuilderToClient,
+}
+
+impl RemoteFrameDirection {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ClientToBuilder => "client-to-builder",
+            Self::BuilderToClient => "builder-to-client",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteProtocolPhase {
+    Open,
+    AwaitAuth,
+    AwaitAuthOk,
+    AwaitBuildRequest,
+    AwaitInputManifest,
+    AwaitMissingInputs,
+    AwaitInputUpload,
+    AwaitQueueAdmission,
+    Queued,
+    Building,
+    AwaitOutputTransfer,
+    Done,
+    Failed,
+}
+
+impl RemoteProtocolPhase {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::AwaitAuth => "await-auth",
+            Self::AwaitAuthOk => "await-auth-ok",
+            Self::AwaitBuildRequest => "await-build-request",
+            Self::AwaitInputManifest => "await-input-manifest",
+            Self::AwaitMissingInputs => "await-missing-inputs",
+            Self::AwaitInputUpload => "await-input-upload",
+            Self::AwaitQueueAdmission => "await-queue-admission",
+            Self::Queued => "queued",
+            Self::Building => "building",
+            Self::AwaitOutputTransfer => "await-output-transfer",
+            Self::Done => "done",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteFrameKind {
+    Hello,
+    AuthTicket,
+    AuthOk,
+    BuildRequest,
+    InputManifest,
+    MissingInputs,
+    InputUpload,
+    BuildQueued,
+    BuildStarted,
+    BuildFinished,
+    OutputTransferDone,
+    Done,
+    Error,
+}
+
+impl RemoteFrameKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Hello => "hello",
+            Self::AuthTicket => "auth-ticket",
+            Self::AuthOk => "auth-ok",
+            Self::BuildRequest => "build-request",
+            Self::InputManifest => "input-manifest",
+            Self::MissingInputs => "missing-inputs",
+            Self::InputUpload => "input-upload",
+            Self::BuildQueued => "build-queued",
+            Self::BuildStarted => "build-started",
+            Self::BuildFinished => "build-finished",
+            Self::OutputTransferDone => "output-transfer-done",
+            Self::Done => "done",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteAuthOk {
+    pub builder_signing_keys: Vec<String>,
+    pub accepted_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteInputManifest {
+    pub request_id: String,
+    pub store_prefix: String,
+    pub input_refs: Vec<String>,
+    pub closure_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteInputUpload {
+    pub request_id: String,
+    pub refs: Vec<String>,
+    pub byte_count: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteBuildFinished {
+    pub request_id: String,
+    pub output_digest_blake3: String,
+    pub builder_signing_key_id: String,
+    pub store_prefix: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteProtocolErrorFrame {
+    pub phase: RemoteFailurePhase,
+    pub retry_class: RemoteRetryClass,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum RemoteFrame {
+    Hello { hello: RemoteHello },
+    AuthTicket { auth: TicketAuthRequest },
+    AuthOk { auth: RemoteAuthOk },
+    BuildRequest { request: ConcreteBuildRequest },
+    InputManifest { manifest: RemoteInputManifest },
+    MissingInputs { request_id: String, refs: Vec<String> },
+    InputUpload { upload: RemoteInputUpload },
+    BuildQueued { request_id: String, session_id: String },
+    BuildStarted { request_id: String },
+    BuildFinished { result: RemoteBuildFinished },
+    OutputTransferDone { report: RemoteTransferReport },
+    Done { request_id: String },
+    Error { error: RemoteProtocolErrorFrame },
+}
+
+impl RemoteFrame {
+    pub fn kind(&self) -> RemoteFrameKind {
+        match self {
+            Self::Hello { .. } => RemoteFrameKind::Hello,
+            Self::AuthTicket { .. } => RemoteFrameKind::AuthTicket,
+            Self::AuthOk { .. } => RemoteFrameKind::AuthOk,
+            Self::BuildRequest { .. } => RemoteFrameKind::BuildRequest,
+            Self::InputManifest { .. } => RemoteFrameKind::InputManifest,
+            Self::MissingInputs { .. } => RemoteFrameKind::MissingInputs,
+            Self::InputUpload { .. } => RemoteFrameKind::InputUpload,
+            Self::BuildQueued { .. } => RemoteFrameKind::BuildQueued,
+            Self::BuildStarted { .. } => RemoteFrameKind::BuildStarted,
+            Self::BuildFinished { .. } => RemoteFrameKind::BuildFinished,
+            Self::OutputTransferDone { .. } => RemoteFrameKind::OutputTransferDone,
+            Self::Done { .. } => RemoteFrameKind::Done,
+            Self::Error { .. } => RemoteFrameKind::Error,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteTransferMode {
+    Delta,
+    Full,
+}
+
+impl RemoteTransferMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Delta => "delta",
+            Self::Full => "full",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteTransferCapabilities {
+    pub delta: bool,
+    pub full: bool,
+    pub simulate_delta_failure: bool,
+}
+
+impl RemoteTransferCapabilities {
+    pub fn delta_and_full() -> Self {
+        Self {
+            delta: true,
+            full: true,
+            simulate_delta_failure: false,
+        }
+    }
+
+    pub fn full_only() -> Self {
+        Self {
+            delta: false,
+            full: true,
+            simulate_delta_failure: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteTransferReport {
+    pub mode: RemoteTransferMode,
+    pub mode_label: String,
+    pub transferred_bytes: u64,
+    pub reused_bytes: u64,
+    pub fallback_reason: Option<String>,
+    pub verified_builder_key: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteFailurePhase {
+    TransportSetup,
+    Authentication,
+    RequestValidation,
+    InputSync,
+    Queue,
+    BuildExecution,
+    OutputImport,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteRetryClass {
+    Retryable,
+    Terminal,
+    BuildOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteFailureClassification {
+    pub phase: RemoteFailurePhase,
+    pub retry_class: RemoteRetryClass,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteLoopbackBuilder {
+    pub endpoint_id: String,
+    pub store_prefix: String,
+    pub supported_capabilities: Vec<String>,
+    pub present_input_refs: Vec<String>,
+    pub signing_key_id: String,
+    pub transfer_capabilities: RemoteTransferCapabilities,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteLoopbackClient {
+    pub session_id: String,
+    pub hello: RemoteHello,
+    pub auth: TicketAuthRequest,
+    pub request: ConcreteBuildRequest,
+    pub input_manifest: RemoteInputManifest,
+    pub uploaded_input_refs: Vec<String>,
+    pub trusted_output_keys: Vec<String>,
+    pub transfer_capabilities: RemoteTransferCapabilities,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteSessionLeasePlan {
+    pub session_id: String,
+    pub leased_refs: Vec<String>,
+    pub release_when_done: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteLoopbackSessionReport {
+    pub schema: String,
+    pub binding: RemoteTransportBinding,
+    pub session_id: String,
+    pub endpoint_id: String,
+    pub accepted_capabilities: Vec<String>,
+    pub missing_input_refs: Vec<String>,
+    pub uploaded_input_refs: Vec<String>,
+    pub output_digest_blake3: String,
+    pub transfer: RemoteTransferReport,
+    pub lease_plan: RemoteSessionLeasePlan,
+    pub ticket_uses_remaining: u32,
+    pub phases: Vec<RemoteProtocolPhase>,
+    pub non_claims: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -212,6 +532,357 @@ pub fn decide_output_trust(
     OutputTrustDecision::Reject("untrusted-output-key".to_string())
 }
 
+pub fn encode_remote_frame(frame: &RemoteFrame) -> Result<Vec<u8>, String> {
+    let payload = serde_json::to_vec(frame).map_err(|err| format!("serializing remote frame: {err}"))?;
+    if payload.len() > MAX_REMOTE_FRAME_BYTES {
+        return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
+    }
+    let payload_len = u32::try_from(payload.len()).map_err(|_| "remote-frame-length-overflow".to_string())?;
+    let mut encoded = Vec::with_capacity(REMOTE_FRAME_HEADER_BYTES.saturating_add(payload.len()));
+    encoded.extend_from_slice(&payload_len.to_be_bytes());
+    encoded.extend_from_slice(&payload);
+    Ok(encoded)
+}
+
+pub fn decode_remote_frame(encoded: &[u8]) -> Result<RemoteFrame, String> {
+    if encoded.len() < REMOTE_FRAME_HEADER_BYTES {
+        return Err("remote-frame-header-incomplete".to_string());
+    }
+    let payload_len = frame_payload_len(encoded)?;
+    if payload_len > MAX_REMOTE_FRAME_BYTES {
+        return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
+    }
+    let expected_len = REMOTE_FRAME_HEADER_BYTES.saturating_add(payload_len);
+    if encoded.len() != expected_len {
+        return Err("remote-frame-length-mismatch-or-unframed-stdout".to_string());
+    }
+    let payload = &encoded[REMOTE_FRAME_HEADER_BYTES..expected_len];
+    serde_json::from_slice(payload).map_err(|err| format!("remote-frame-json-invalid: {err}"))
+}
+
+pub fn write_remote_frame(mut writer: impl Write, frame: &RemoteFrame) -> Result<(), String> {
+    let encoded = encode_remote_frame(frame)?;
+    writer.write_all(&encoded).map_err(|err| format!("writing remote frame: {err}"))
+}
+
+pub fn read_remote_frame(mut reader: impl Read) -> Result<RemoteFrame, String> {
+    let mut header = [0_u8; REMOTE_FRAME_HEADER_BYTES];
+    reader.read_exact(&mut header).map_err(|err| format!("reading remote frame header: {err}"))?;
+    let payload_len = frame_payload_len(&header)?;
+    if payload_len > MAX_REMOTE_FRAME_BYTES {
+        return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
+    }
+    let mut payload = vec![0_u8; payload_len];
+    reader.read_exact(&mut payload).map_err(|err| format!("reading remote frame payload: {err}"))?;
+    let mut encoded = Vec::with_capacity(REMOTE_FRAME_HEADER_BYTES.saturating_add(payload_len));
+    encoded.extend_from_slice(&header);
+    encoded.extend_from_slice(&payload);
+    decode_remote_frame(&encoded)
+}
+
+pub fn validate_remote_transition(
+    phase: RemoteProtocolPhase,
+    direction: RemoteFrameDirection,
+    frame: &RemoteFrame,
+) -> Result<RemoteProtocolPhase, String> {
+    let kind = frame.kind();
+    if kind == RemoteFrameKind::Error {
+        return Ok(RemoteProtocolPhase::Failed);
+    }
+    match (phase, direction, kind) {
+        (RemoteProtocolPhase::Open, RemoteFrameDirection::ClientToBuilder, RemoteFrameKind::Hello) => {
+            Ok(RemoteProtocolPhase::AwaitAuth)
+        }
+        (RemoteProtocolPhase::AwaitAuth, RemoteFrameDirection::ClientToBuilder, RemoteFrameKind::AuthTicket) => {
+            Ok(RemoteProtocolPhase::AwaitAuthOk)
+        }
+        (RemoteProtocolPhase::AwaitAuthOk, RemoteFrameDirection::BuilderToClient, RemoteFrameKind::AuthOk) => {
+            Ok(RemoteProtocolPhase::AwaitBuildRequest)
+        }
+        (
+            RemoteProtocolPhase::AwaitBuildRequest,
+            RemoteFrameDirection::ClientToBuilder,
+            RemoteFrameKind::BuildRequest,
+        ) => Ok(RemoteProtocolPhase::AwaitInputManifest),
+        (
+            RemoteProtocolPhase::AwaitInputManifest,
+            RemoteFrameDirection::ClientToBuilder,
+            RemoteFrameKind::InputManifest,
+        ) => Ok(RemoteProtocolPhase::AwaitMissingInputs),
+        (
+            RemoteProtocolPhase::AwaitMissingInputs,
+            RemoteFrameDirection::BuilderToClient,
+            RemoteFrameKind::MissingInputs,
+        ) => Ok(RemoteProtocolPhase::AwaitInputUpload),
+        (
+            RemoteProtocolPhase::AwaitInputUpload,
+            RemoteFrameDirection::ClientToBuilder,
+            RemoteFrameKind::InputUpload,
+        ) => Ok(RemoteProtocolPhase::AwaitQueueAdmission),
+        (
+            RemoteProtocolPhase::AwaitQueueAdmission,
+            RemoteFrameDirection::BuilderToClient,
+            RemoteFrameKind::BuildQueued,
+        ) => Ok(RemoteProtocolPhase::Queued),
+        (RemoteProtocolPhase::Queued, RemoteFrameDirection::BuilderToClient, RemoteFrameKind::BuildStarted) => {
+            Ok(RemoteProtocolPhase::Building)
+        }
+        (RemoteProtocolPhase::Building, RemoteFrameDirection::BuilderToClient, RemoteFrameKind::BuildFinished) => {
+            Ok(RemoteProtocolPhase::AwaitOutputTransfer)
+        }
+        (
+            RemoteProtocolPhase::AwaitOutputTransfer,
+            RemoteFrameDirection::BuilderToClient,
+            RemoteFrameKind::OutputTransferDone,
+        ) => Ok(RemoteProtocolPhase::Done),
+        (RemoteProtocolPhase::Done, RemoteFrameDirection::BuilderToClient, RemoteFrameKind::Done) => {
+            Ok(RemoteProtocolPhase::Done)
+        }
+        _ => Err(format!(
+            "unexpected-remote-frame phase={} direction={} frame={}",
+            phase.as_str(),
+            direction.as_str(),
+            kind.as_str()
+        )),
+    }
+}
+
+pub fn validate_input_manifest(manifest: &RemoteInputManifest, request: &ConcreteBuildRequest) -> Result<(), String> {
+    if manifest.request_id != request.request_id {
+        return Err("input-manifest-request-id-mismatch".to_string());
+    }
+    if manifest.store_prefix != request.store_prefix {
+        return Err("input-manifest-store-prefix-mismatch".to_string());
+    }
+    if manifest.input_refs.len() > MAX_REMOTE_INPUT_REFS || manifest.closure_refs.len() > MAX_REMOTE_INPUT_REFS {
+        return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
+    }
+    if manifest.input_refs != request.input_refs {
+        return Err("input-manifest-does-not-match-build-request".to_string());
+    }
+    Ok(())
+}
+
+pub fn validate_missing_uploads(
+    missing_refs: &[String],
+    uploaded_refs: &[String],
+    uploaded_bytes: u64,
+    max_upload_bytes: u64,
+) -> Result<(), String> {
+    if uploaded_bytes > max_upload_bytes || uploaded_bytes > MAX_REMOTE_UPLOAD_BYTES {
+        return Err("upload-byte-limit-exceeded".to_string());
+    }
+    let missing = missing_refs.iter().collect::<BTreeSet<_>>();
+    let uploaded = uploaded_refs.iter().collect::<BTreeSet<_>>();
+    if missing != uploaded {
+        return Err("uploaded-input-set-does-not-match-missing-set".to_string());
+    }
+    Ok(())
+}
+
+pub fn plan_output_transfer(
+    client: RemoteTransferCapabilities,
+    builder: RemoteTransferCapabilities,
+    output_size_bytes: u64,
+    verified_builder_key: &str,
+) -> Result<RemoteTransferReport, String> {
+    if client.delta && builder.delta && !client.simulate_delta_failure && !builder.simulate_delta_failure {
+        return Ok(delta_transfer_report(output_size_bytes, verified_builder_key));
+    }
+    if client.delta && builder.delta && (client.simulate_delta_failure || builder.simulate_delta_failure) {
+        if client.full && builder.full {
+            return Ok(full_transfer_report(
+                output_size_bytes,
+                verified_builder_key,
+                Some("delta-transfer-failed".to_string()),
+            ));
+        }
+        return Err("delta-transfer-failed-and-full-unavailable".to_string());
+    }
+    if client.full && builder.full {
+        return Ok(full_transfer_report(output_size_bytes, verified_builder_key, None));
+    }
+    Err("no-compatible-output-transfer-mode".to_string())
+}
+
+pub fn classify_remote_failure(phase: RemoteFailurePhase, reason: String) -> RemoteFailureClassification {
+    let retry_class = match phase {
+        RemoteFailurePhase::TransportSetup => RemoteRetryClass::Retryable,
+        RemoteFailurePhase::BuildExecution => RemoteRetryClass::BuildOutcome,
+        RemoteFailurePhase::Authentication
+        | RemoteFailurePhase::RequestValidation
+        | RemoteFailurePhase::InputSync
+        | RemoteFailurePhase::Queue
+        | RemoteFailurePhase::OutputImport => RemoteRetryClass::Terminal,
+    };
+    RemoteFailureClassification {
+        phase,
+        retry_class,
+        reason,
+    }
+}
+
+pub fn plan_session_lease(
+    session_id: &str,
+    uploaded_refs: &[String],
+    output_refs: &[String],
+) -> Result<RemoteSessionLeasePlan, String> {
+    if uploaded_refs.len().saturating_add(output_refs.len()) > MAX_REMOTE_STATUS_ITEMS {
+        return Err(format!("session-lease-ref-count-exceeds-{MAX_REMOTE_STATUS_ITEMS}"));
+    }
+    let mut leased_refs = uploaded_refs.to_vec();
+    leased_refs.extend_from_slice(output_refs);
+    leased_refs.sort();
+    leased_refs.dedup();
+    Ok(RemoteSessionLeasePlan {
+        session_id: session_id.to_string(),
+        leased_refs,
+        release_when_done: true,
+    })
+}
+
+pub fn run_loopback_remote_session(
+    builder: &RemoteLoopbackBuilder,
+    ticket: &mut RemoteTicket,
+    client: &RemoteLoopbackClient,
+) -> Result<RemoteLoopbackSessionReport, String> {
+    validate_loopback_participants(builder, client)?;
+    let accepted = expect_accepted_hello(&client.hello, builder)?;
+    expect_authorized_ticket(ticket, &client.auth)?;
+    validate_concrete_request(&client.request, ticket)?;
+    validate_input_manifest(&client.input_manifest, &client.request)?;
+    let missing = derive_missing_inputs(&client.input_manifest.input_refs, &builder.present_input_refs)?;
+    validate_missing_uploads(
+        &missing,
+        &client.uploaded_input_refs,
+        client.request.upload_bytes,
+        ticket.max_upload_bytes,
+    )?;
+    let output_digest = remote_loopback_output_digest(&client.request, &client.input_manifest.input_refs);
+    let trusted_key = expect_output_trust(builder, client)?;
+    redeem_after_queue(ticket, true)?;
+    let transfer = plan_output_transfer(
+        client.transfer_capabilities,
+        builder.transfer_capabilities,
+        REMOTE_LOOPBACK_OUTPUT_BYTES,
+        &trusted_key,
+    )?;
+    let lease_plan =
+        plan_session_lease(&client.session_id, &client.uploaded_input_refs, std::slice::from_ref(&output_digest))?;
+    Ok(RemoteLoopbackSessionReport {
+        schema: "mantle-remote-loopback-session-v1".to_string(),
+        binding: RemoteTransportBinding::Loopback,
+        session_id: client.session_id.clone(),
+        endpoint_id: builder.endpoint_id.clone(),
+        accepted_capabilities: accepted.accepted_capabilities,
+        missing_input_refs: missing,
+        uploaded_input_refs: client.uploaded_input_refs.clone(),
+        output_digest_blake3: output_digest,
+        transfer,
+        lease_plan,
+        ticket_uses_remaining: ticket.uses_remaining,
+        phases: vec![
+            RemoteProtocolPhase::AwaitAuth,
+            RemoteProtocolPhase::AwaitAuthOk,
+            RemoteProtocolPhase::AwaitBuildRequest,
+            RemoteProtocolPhase::AwaitInputManifest,
+            RemoteProtocolPhase::AwaitMissingInputs,
+            RemoteProtocolPhase::AwaitInputUpload,
+            RemoteProtocolPhase::AwaitQueueAdmission,
+            RemoteProtocolPhase::Queued,
+            RemoteProtocolPhase::Building,
+            RemoteProtocolPhase::AwaitOutputTransfer,
+            RemoteProtocolPhase::Done,
+        ],
+        non_claims: vec![REMOTE_SESSION_NON_CLAIM.to_string()],
+    })
+}
+
+fn frame_payload_len(encoded: &[u8]) -> Result<usize, String> {
+    if encoded.len() < REMOTE_FRAME_HEADER_BYTES {
+        return Err("remote-frame-header-incomplete".to_string());
+    }
+    let mut header = [0_u8; REMOTE_FRAME_HEADER_BYTES];
+    header.copy_from_slice(&encoded[..REMOTE_FRAME_HEADER_BYTES]);
+    usize::try_from(u32::from_be_bytes(header)).map_err(|_| "remote-frame-length-conversion-failed".to_string())
+}
+
+fn delta_transfer_report(output_size_bytes: u64, verified_builder_key: &str) -> RemoteTransferReport {
+    let reused_bytes = output_size_bytes.saturating_mul(DELTA_REUSE_PERCENT) / PERCENT_DENOMINATOR;
+    let transferred_bytes = output_size_bytes.saturating_sub(reused_bytes);
+    RemoteTransferReport {
+        mode: RemoteTransferMode::Delta,
+        mode_label: RemoteTransferMode::Delta.as_str().to_string(),
+        transferred_bytes,
+        reused_bytes,
+        fallback_reason: None,
+        verified_builder_key: verified_builder_key.to_string(),
+    }
+}
+
+fn full_transfer_report(
+    output_size_bytes: u64,
+    verified_builder_key: &str,
+    fallback_reason: Option<String>,
+) -> RemoteTransferReport {
+    RemoteTransferReport {
+        mode: RemoteTransferMode::Full,
+        mode_label: RemoteTransferMode::Full.as_str().to_string(),
+        transferred_bytes: output_size_bytes,
+        reused_bytes: 0,
+        fallback_reason,
+        verified_builder_key: verified_builder_key.to_string(),
+    }
+}
+
+fn validate_loopback_participants(
+    builder: &RemoteLoopbackBuilder,
+    client: &RemoteLoopbackClient,
+) -> Result<(), String> {
+    if builder.endpoint_id.is_empty() || client.session_id.is_empty() {
+        return Err("remote-loopback-identity-empty".to_string());
+    }
+    if builder.store_prefix != client.request.store_prefix {
+        return Err("remote-loopback-store-prefix-mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn expect_accepted_hello(hello: &RemoteHello, builder: &RemoteLoopbackBuilder) -> Result<AcceptedHello, String> {
+    match validate_hello(hello, &builder.endpoint_id, &builder.supported_capabilities) {
+        ProtocolDecision::Proceed(accepted) => Ok(accepted),
+        ProtocolDecision::Reject(reason) => Err(reason),
+    }
+}
+
+fn expect_authorized_ticket(ticket: &RemoteTicket, auth: &TicketAuthRequest) -> Result<(), String> {
+    match authorize_ticket(ticket, auth) {
+        TicketDecision::Authorized => Ok(()),
+        TicketDecision::Reject(reason) => Err(reason),
+    }
+}
+
+fn expect_output_trust(builder: &RemoteLoopbackBuilder, client: &RemoteLoopbackClient) -> Result<String, String> {
+    match decide_output_trust(
+        &builder.signing_key_id,
+        &client.trusted_output_keys,
+        builder.store_prefix == client.request.store_prefix,
+    ) {
+        OutputTrustDecision::Accept { key_id } => Ok(key_id),
+        OutputTrustDecision::Reject(reason) => Err(reason),
+    }
+}
+
+fn remote_loopback_output_digest(request: &ConcreteBuildRequest, input_refs: &[String]) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(request.request_id.as_bytes());
+    hasher.update(request.store_prefix.as_bytes());
+    for input_ref in input_refs {
+        hasher.update(input_ref.as_bytes());
+    }
+    hasher.finalize().to_hex().to_string()
+}
+
 pub fn redacted_ticket_view(ticket: &RemoteTicket) -> RemoteTicketView {
     RemoteTicketView {
         id: ticket.id.clone(),
@@ -328,8 +999,15 @@ pub fn cmd_remote(action: crate::RemoteAction, state_dir: &Path, json_output: bo
             let rendered = serde_json::json!({
                 "protocol": REMOTE_PROTOCOL_ALPN,
                 "endpoint_id": endpoint_id,
-                "status": "transport-not-started",
-                "diagnostic": "remote serve requires a concrete P2P transport binding before accepting builds"
+                "frame_encoding": "u32be-length-prefixed-json",
+                "supported_bindings": [
+                    RemoteTransportBinding::Loopback.as_str(),
+                    RemoteTransportBinding::Stdio.as_str(),
+                    RemoteTransportBinding::SshStdio.as_str(),
+                    RemoteTransportBinding::P2p.as_str(),
+                ],
+                "status": "metadata-only",
+                "diagnostic": "remote serve exposes protocol metadata; production P2P listener and build executor dispatch remain gated"
             });
             print_json_or_human(&rendered, json_output)
         }
@@ -491,6 +1169,158 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn length_prefixed_frame_roundtrip_and_stdio_pollution_rejected() {
+        let frame = RemoteFrame::Hello { hello: fixture_hello() };
+        let encoded = encode_remote_frame(&frame).expect("frame encodes");
+        let decoded = decode_remote_frame(&encoded).expect("frame decodes");
+        assert_eq!(decoded, frame);
+
+        let polluted_stdout = b"human log on stdout\n";
+        let err = decode_remote_frame(polluted_stdout).expect_err("unframed stdout is rejected");
+        assert!(err.contains("remote-frame"));
+    }
+
+    #[test]
+    fn oversized_frame_length_is_rejected_before_payload_read() {
+        let oversized_len = u32::try_from(MAX_REMOTE_FRAME_BYTES.saturating_add(1)).expect("test max fits u32");
+        let mut encoded = Vec::new();
+        encoded.extend_from_slice(&oversized_len.to_be_bytes());
+        let err = decode_remote_frame(&encoded).expect_err("oversized frame is rejected");
+        assert!(err.contains("remote-frame-payload-exceeds"));
+    }
+
+    #[test]
+    fn protocol_state_machine_rejects_out_of_order_build_request() {
+        let request = fixture_request();
+        let frame = RemoteFrame::BuildRequest { request };
+        let err = validate_remote_transition(RemoteProtocolPhase::Open, RemoteFrameDirection::ClientToBuilder, &frame)
+            .expect_err("build request before hello is invalid");
+        assert!(err.contains("unexpected-remote-frame"));
+    }
+
+    #[test]
+    fn protocol_state_machine_accepts_loopback_order() {
+        let sequence = [
+            (RemoteFrameDirection::ClientToBuilder, RemoteFrame::Hello { hello: fixture_hello() }),
+            (RemoteFrameDirection::ClientToBuilder, RemoteFrame::AuthTicket {
+                auth: fixture_auth_request(),
+            }),
+            (RemoteFrameDirection::BuilderToClient, RemoteFrame::AuthOk {
+                auth: RemoteAuthOk {
+                    builder_signing_keys: vec!["builder-key".to_string()],
+                    accepted_capabilities: vec!["full".to_string()],
+                },
+            }),
+            (RemoteFrameDirection::ClientToBuilder, RemoteFrame::BuildRequest {
+                request: fixture_request(),
+            }),
+            (RemoteFrameDirection::ClientToBuilder, RemoteFrame::InputManifest {
+                manifest: fixture_manifest(),
+            }),
+            (RemoteFrameDirection::BuilderToClient, RemoteFrame::MissingInputs {
+                request_id: "r1".to_string(),
+                refs: vec!["input-a".to_string()],
+            }),
+            (RemoteFrameDirection::ClientToBuilder, RemoteFrame::InputUpload {
+                upload: RemoteInputUpload {
+                    request_id: "r1".to_string(),
+                    refs: vec!["input-a".to_string()],
+                    byte_count: 1,
+                },
+            }),
+            (RemoteFrameDirection::BuilderToClient, RemoteFrame::BuildQueued {
+                request_id: "r1".to_string(),
+                session_id: "session-1".to_string(),
+            }),
+            (RemoteFrameDirection::BuilderToClient, RemoteFrame::BuildStarted {
+                request_id: "r1".to_string(),
+            }),
+            (RemoteFrameDirection::BuilderToClient, RemoteFrame::BuildFinished {
+                result: RemoteBuildFinished {
+                    request_id: "r1".to_string(),
+                    output_digest_blake3: "digest".to_string(),
+                    builder_signing_key_id: "builder-key".to_string(),
+                    store_prefix: "/mantle/store".to_string(),
+                },
+            }),
+            (RemoteFrameDirection::BuilderToClient, RemoteFrame::OutputTransferDone {
+                report: full_transfer_report(REMOTE_LOOPBACK_OUTPUT_BYTES, "builder-key", None),
+            }),
+        ];
+        let mut phase = RemoteProtocolPhase::Open;
+        for (direction, frame) in sequence {
+            phase = validate_remote_transition(phase, direction, &frame).expect("transition succeeds");
+        }
+        assert_eq!(phase, RemoteProtocolPhase::Done);
+    }
+
+    #[test]
+    fn loopback_session_uploads_missing_input_and_imports_trusted_output() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let report = run_loopback_remote_session(&builder, &mut ticket, &client).expect("loopback session succeeds");
+
+        assert_eq!(report.binding, RemoteTransportBinding::Loopback);
+        assert_eq!(report.missing_input_refs, vec!["input-a".to_string()]);
+        assert_eq!(report.uploaded_input_refs, vec!["input-a".to_string()]);
+        assert_eq!(report.transfer.mode, RemoteTransferMode::Delta);
+        assert_eq!(report.ticket_uses_remaining, 0);
+        assert_eq!(ticket.uses_remaining, 0);
+        assert!(report.non_claims.iter().any(|claim| claim.contains("does not prove production P2P transport")));
+    }
+
+    #[test]
+    fn untrusted_loopback_output_key_fails_before_ticket_redemption() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["other-key".to_string()]);
+        let err = run_loopback_remote_session(&builder, &mut ticket, &client).expect_err("untrusted output key fails");
+
+        assert_eq!(err, "untrusted-output-key");
+        assert_eq!(ticket.uses_remaining, 1);
+    }
+
+    #[test]
+    fn upload_set_mismatch_fails_before_queue_admission() {
+        let missing = vec!["input-a".to_string()];
+        let uploaded = vec!["input-b".to_string()];
+        let err = validate_missing_uploads(&missing, &uploaded, 1, DEFAULT_TICKET_UPLOAD_BYTES)
+            .expect_err("wrong upload set fails");
+        assert_eq!(err, "uploaded-input-set-does-not-match-missing-set");
+    }
+
+    #[test]
+    fn delta_failure_falls_back_to_full_without_claiming_delta_hit() {
+        let mut client = RemoteTransferCapabilities::delta_and_full();
+        client.simulate_delta_failure = true;
+        let report = plan_output_transfer(
+            client,
+            RemoteTransferCapabilities::delta_and_full(),
+            REMOTE_LOOPBACK_OUTPUT_BYTES,
+            "builder-key",
+        )
+        .expect("full fallback succeeds");
+
+        assert_eq!(report.mode, RemoteTransferMode::Full);
+        assert_eq!(report.fallback_reason.as_deref(), Some("delta-transfer-failed"));
+        assert_eq!(report.reused_bytes, 0);
+    }
+
+    #[test]
+    fn failure_classification_and_session_lease_are_bounded() {
+        let transport = classify_remote_failure(RemoteFailurePhase::TransportSetup, "connection-reset".to_string());
+        let output = classify_remote_failure(RemoteFailurePhase::OutputImport, "untrusted-output-key".to_string());
+        let lease = plan_session_lease("session-1", &["input-a".to_string()], &["output-a".to_string()])
+            .expect("lease plan succeeds");
+
+        assert_eq!(transport.retry_class, RemoteRetryClass::Retryable);
+        assert_eq!(output.retry_class, RemoteRetryClass::Terminal);
+        assert_eq!(lease.leased_refs, vec!["input-a".to_string(), "output-a".to_string()]);
+        assert!(lease.release_when_done);
+    }
+
     fn fixture_ticket() -> RemoteTicket {
         RemoteTicket {
             id: "ticket-1".to_string(),
@@ -503,6 +1333,71 @@ mod tests {
             max_upload_bytes: 10,
             bound_client_endpoint: Some("client-a".to_string()),
             revoked: false,
+        }
+    }
+
+    fn fixture_hello() -> RemoteHello {
+        RemoteHello {
+            alpn: REMOTE_PROTOCOL_ALPN.to_string(),
+            version: REMOTE_PROTOCOL_VERSION,
+            endpoint_id: "builder-1".to_string(),
+            capabilities: vec!["delta".to_string(), "full".to_string()],
+        }
+    }
+
+    fn fixture_auth_request() -> TicketAuthRequest {
+        TicketAuthRequest {
+            ticket_id: "ticket-1".to_string(),
+            secret: "secret".to_string(),
+            client_endpoint: Some("client-a".to_string()),
+            now_unix_s: 2,
+        }
+    }
+
+    fn fixture_request() -> ConcreteBuildRequest {
+        ConcreteBuildRequest {
+            request_id: "r1".to_string(),
+            store_prefix: "/mantle/store".to_string(),
+            input_refs: vec!["input-a".to_string()],
+            upload_bytes: 1,
+            build_time_limit_secs: 1,
+            contains_raw_frontend_eval: false,
+        }
+    }
+
+    fn fixture_manifest() -> RemoteInputManifest {
+        RemoteInputManifest {
+            request_id: "r1".to_string(),
+            store_prefix: "/mantle/store".to_string(),
+            input_refs: vec!["input-a".to_string()],
+            closure_refs: vec!["input-a".to_string()],
+        }
+    }
+
+    fn fixture_loopback_builder() -> RemoteLoopbackBuilder {
+        RemoteLoopbackBuilder {
+            endpoint_id: "builder-1".to_string(),
+            store_prefix: "/mantle/store".to_string(),
+            supported_capabilities: vec!["delta".to_string(), "full".to_string()],
+            present_input_refs: Vec::new(),
+            signing_key_id: "builder-key".to_string(),
+            transfer_capabilities: RemoteTransferCapabilities::delta_and_full(),
+        }
+    }
+
+    fn fixture_loopback_client(
+        uploaded_input_refs: Vec<String>,
+        trusted_output_keys: Vec<String>,
+    ) -> RemoteLoopbackClient {
+        RemoteLoopbackClient {
+            session_id: "session-1".to_string(),
+            hello: fixture_hello(),
+            auth: fixture_auth_request(),
+            request: fixture_request(),
+            input_manifest: fixture_manifest(),
+            uploaded_input_refs,
+            trusted_output_keys,
+            transfer_capabilities: RemoteTransferCapabilities::delta_and_full(),
         }
     }
 }

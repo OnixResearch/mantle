@@ -24,6 +24,12 @@ Use a versioned ALPN such as `mantle-remote-build/1`. The control stream should 
 
 Every variable-length list must have explicit chunk, item, and byte limits. Version mismatch, endpoint identity mismatch, unexpected message order, unsupported capabilities, and oversized messages fail closed.
 
+## Frame and first-binding decision
+
+The first concrete frame format is `u32be-length-prefixed-json`: a four-byte big-endian payload length followed by one JSON `RemoteFrame` payload. The decoder rejects incomplete headers, payload lengths above `MAX_REMOTE_FRAME_BYTES`, JSON errors, and trailing or missing bytes. This makes stdio pollution deterministic: ordinary human stdout starts with bytes that cannot satisfy the frame contract and fails before queue admission.
+
+The first implementation binding is in-process loopback over the same `RemoteFrame` state machine. Stdio and SSH-stdio use the same length-prefixed frame contract when the shell grows process spawning. Production P2P remains a later binding and must not add a second protocol core.
+
 ## Transport bindings and stdio discipline
 
 The remote-build state machine is independent of its byte transport. A `RemoteLink` binding can be in-process loopback, child stdio, SSH-stdio, or a NAT-friendly P2P stream such as Iroh. Each binding presents authenticated ordered frames to the same protocol core; transport-specific setup, keepalive, process spawning, and endpoint discovery stay in the imperative shell.
