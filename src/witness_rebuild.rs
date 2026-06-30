@@ -18,10 +18,13 @@ use crate::release_attestation::load_release_attestation_document;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_COMMAND;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
 use crate::release_evidence::ReleaseEvidenceManifest;
+use crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE;
+use crate::release_evidence::SOURCE_ACQUISITION_KIND_GIT;
 use crate::release_evidence::SourceAcquisition;
 use crate::release_evidence::compute_path_blake3_digest;
 use crate::release_evidence::copy_directory_tree;
 use crate::release_evidence::verify_release_evidence_bundle;
+use crate::release_source::write_git_source_archive;
 use crate::witness_handoff::WITNESS_REQUEST_FILE_NAME;
 use crate::witness_handoff::WITNESS_REQUEST_SCHEMA;
 use crate::witness_handoff::WitnessRequestDocument;
@@ -69,6 +72,7 @@ const SCRATCH_TMP_DIR_NAME: &str = "tmp";
 const SCRATCH_CARGO_TARGET_DIR_NAME: &str = "cargo-target";
 const SCRATCH_VERIFICATION_DIR_NAME: &str = "release-verification";
 const SOURCE_ACQUISITION_ARCHIVE_FILE_NAME: &str = "source-acquisition.tar";
+const SOURCE_ACQUISITION_GIT_WORK_DIR_NAME: &str = "git-source";
 const AUDIT_STDOUT_FILE_NAME: &str = "stdout.txt";
 const AUDIT_STDERR_FILE_NAME: &str = "stderr.txt";
 const PROOF_MANIFEST_FILE_NAME: &str = "manifest.json";
@@ -107,7 +111,9 @@ const WORKFLOW_ENV_REMOVE: &[&str] = &[
 ];
 const WORKFLOW_ARGS_FIXED_POINT: &[&str] = &[];
 const WORKFLOW_ARGS_NON_NIX_HOST: &[&str] = &[WORKFLOW_NON_NIX_HOST_ARG];
-const SOURCE_ACQUISITION_MODE_INDEPENDENT: &str = "independent-source";
+const SOURCE_ACQUISITION_MODE_COPIED: &str = "copied-source";
+const SOURCE_ACQUISITION_MODE_EXTERNAL_ARCHIVE: &str = "external-archive-source";
+const SOURCE_ACQUISITION_MODE_GIT: &str = "git-derived-source";
 const SOURCE_ACQUISITION_STATUS_VERIFIED: &str = "verified";
 const BYTES_PER_KIB: u64 = 1024;
 const KIB_PER_MIB: u64 = 1024;
@@ -136,6 +142,7 @@ pub(crate) struct WitnessRebuildLayout {
     pub tmp_dir: PathBuf,
     pub cargo_target_dir: PathBuf,
     pub source_acquisition_archive_path: PathBuf,
+    pub source_acquisition_git_work_dir: PathBuf,
     pub verification_dir: PathBuf,
     pub stdout_log_path: PathBuf,
     pub stderr_log_path: PathBuf,
@@ -156,6 +163,7 @@ pub(crate) struct WitnessRebuildPlan {
     pub proof_mode: String,
     pub expected_outputs: Vec<ExpectedRebuiltOutput>,
     pub require_independent_source: bool,
+    pub require_git_source: bool,
     pub source_acquisition: Option<SourceAcquisition>,
     pub scratch_layout: WitnessRebuildLayout,
 }
@@ -217,6 +225,11 @@ pub(crate) struct WitnessSourceAcquisitionAudit {
     pub url: Option<String>,
     pub digest_blake3: Option<String>,
     pub fetched_path: Option<String>,
+    pub commit: Option<String>,
+    pub reference: Option<String>,
+    pub tag: Option<String>,
+    pub archive_profile: Option<String>,
+    pub archive_version: Option<String>,
     pub status: String,
     pub error: Option<String>,
 }
@@ -319,7 +332,9 @@ pub(crate) fn plan_witness_rebuild(
     request_dir: &Path,
     scratch_root: &Path,
     require_independent_source: bool,
+    require_git_source: bool,
 ) -> Result<WitnessRebuildPlan, RunError> {
+    validate_source_replay_flags(require_independent_source, require_git_source)?;
     let request = load_witness_request_document(request_dir)?;
     validate_request_schema(&request)?;
     let paths = resolve_request_artifact_paths(request_dir, &request)?;
@@ -329,7 +344,7 @@ pub(crate) fn plan_witness_rebuild(
     validate_supported_workflow_identity(&manifest.workflow.command, &manifest.workflow.version)?;
     let expected_outputs = build_expected_outputs(&manifest, &release_attestation)?;
     let request_source_archive_path = source_archive_path(&paths.bundle_dir, &manifest)?;
-    let source_acquisition = source_acquisition_for_plan(&manifest, require_independent_source)?;
+    let source_acquisition = source_acquisition_for_plan(&manifest, require_independent_source, require_git_source)?;
     let scratch_layout = derive_witness_rebuild_layout(scratch_root, &request.release_id)?;
     let request_path = paths.request_path;
     Ok(WitnessRebuildPlan {
@@ -346,6 +361,7 @@ pub(crate) fn plan_witness_rebuild(
         proof_mode: manifest.proof_linkage.proof_mode,
         expected_outputs,
         require_independent_source,
+        require_git_source,
         source_acquisition,
         scratch_layout,
     })
@@ -647,6 +663,7 @@ fn derive_witness_rebuild_layout(scratch_root: &Path, release_id: &str) -> Resul
         tmp_dir: scratch_root.join(SCRATCH_TMP_DIR_NAME),
         cargo_target_dir: scratch_root.join(SCRATCH_CARGO_TARGET_DIR_NAME),
         source_acquisition_archive_path: scratch_root.join(SOURCE_ACQUISITION_ARCHIVE_FILE_NAME),
+        source_acquisition_git_work_dir: scratch_root.join(SOURCE_ACQUISITION_GIT_WORK_DIR_NAME),
         verification_dir: scratch_root.join(SCRATCH_VERIFICATION_DIR_NAME).join(release_id),
         stdout_log_path: audit_dir.join(AUDIT_STDOUT_FILE_NAME),
         stderr_log_path: audit_dir.join(AUDIT_STDERR_FILE_NAME),
@@ -669,19 +686,49 @@ fn source_archive_path(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) ->
     Ok(bundle_dir.join(relative))
 }
 
+fn validate_source_replay_flags(require_independent_source: bool, require_git_source: bool) -> Result<(), RunError> {
+    if require_independent_source && require_git_source {
+        return Err(RunError::Internal(
+            "--require-independent-source and --require-git-source are mutually exclusive".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn source_acquisition_for_plan(
     manifest: &ReleaseEvidenceManifest,
     require_independent_source: bool,
+    require_git_source: bool,
 ) -> Result<Option<SourceAcquisition>, RunError> {
-    if let Some(source_acquisition) = &manifest.source_acquisition {
-        return Ok(Some(source_acquisition.clone()));
+    if require_git_source {
+        return required_source_acquisition_kind(manifest, SOURCE_ACQUISITION_KIND_GIT, "Git source").map(Some);
     }
     if require_independent_source {
-        return Err(RunError::Internal(
-            "independent source acquisition required but release manifest has no source_acquisition entry".to_string(),
-        ));
+        return required_source_acquisition_kind(
+            manifest,
+            SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE,
+            "independent source acquisition",
+        )
+        .map(Some);
     }
-    Ok(None)
+    Ok(manifest.source_acquisition.clone())
+}
+
+fn required_source_acquisition_kind(
+    manifest: &ReleaseEvidenceManifest,
+    expected_kind: &str,
+    requirement_label: &str,
+) -> Result<SourceAcquisition, RunError> {
+    let source_acquisition = manifest.source_acquisition.as_ref().ok_or_else(|| {
+        RunError::Internal(format!("{requirement_label} required but release manifest has no source_acquisition entry"))
+    })?;
+    if source_acquisition.kind == expected_kind {
+        return Ok(source_acquisition.clone());
+    }
+    Err(RunError::Internal(format!(
+        "{requirement_label} required but release manifest source_acquisition.kind is {}",
+        source_acquisition.kind
+    )))
 }
 
 fn prepare_witness_rebuild_root(layout: &WitnessRebuildLayout) -> Result<(), RunError> {
@@ -776,16 +823,46 @@ fn extract_source_archive(plan: &WitnessRebuildPlan) -> Result<(), RunError> {
 }
 
 fn source_archive_for_extraction(plan: &WitnessRebuildPlan) -> Result<PathBuf, RunError> {
-    if !plan.require_independent_source {
-        return Ok(plan.request_source_archive_path.clone());
+    if plan.require_git_source {
+        let source_acquisition = plan.source_acquisition.as_ref().ok_or_else(|| {
+            RunError::Internal("Git source required but release manifest has no source_acquisition entry".to_string())
+        })?;
+        regenerate_and_verify_git_source_acquisition(source_acquisition, &plan.scratch_layout)?;
+        return Ok(plan.scratch_layout.source_acquisition_archive_path.clone());
     }
-    let source_acquisition = plan.source_acquisition.as_ref().ok_or_else(|| {
-        RunError::Internal(
-            "independent source acquisition required but release manifest has no source_acquisition entry".to_string(),
-        )
-    })?;
-    fetch_and_verify_source_acquisition(source_acquisition, &plan.scratch_layout.source_acquisition_archive_path)?;
-    Ok(plan.scratch_layout.source_acquisition_archive_path.clone())
+    if plan.require_independent_source {
+        let source_acquisition = plan.source_acquisition.as_ref().ok_or_else(|| {
+            RunError::Internal(
+                "independent source acquisition required but release manifest has no source_acquisition entry"
+                    .to_string(),
+            )
+        })?;
+        fetch_and_verify_source_acquisition(source_acquisition, &plan.scratch_layout.source_acquisition_archive_path)?;
+        return Ok(plan.scratch_layout.source_acquisition_archive_path.clone());
+    }
+    Ok(plan.request_source_archive_path.clone())
+}
+
+fn regenerate_and_verify_git_source_acquisition(
+    source_acquisition: &SourceAcquisition,
+    layout: &WitnessRebuildLayout,
+) -> Result<(), RunError> {
+    write_git_source_archive(
+        source_acquisition,
+        &layout.source_acquisition_git_work_dir,
+        &layout.source_acquisition_archive_path,
+    )?;
+    let generated_digest = compute_path_blake3_digest(&layout.source_acquisition_archive_path)?;
+    if generated_digest == source_acquisition.digest_blake3 {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "Git source archive digest mismatch: expected {}, generated {} from {} at commit {}",
+        source_acquisition.digest_blake3,
+        generated_digest,
+        source_acquisition.url,
+        source_acquisition.commit.as_deref().unwrap_or("<missing>")
+    )))
 }
 
 fn extract_source_archive_from_path(source_archive_path: &Path, repo_dir: &Path) -> Result<(), RunError> {
@@ -1351,20 +1428,48 @@ fn source_acquisition_audit(
     plan: &WitnessRebuildPlan,
     source_acquisition_error: Option<&str>,
 ) -> Option<WitnessSourceAcquisitionAudit> {
-    if !plan.require_independent_source {
-        return None;
-    }
-    let source_acquisition = plan.source_acquisition.as_ref()?;
     let status = if source_acquisition_error.is_some() {
         audit_status_failed()
     } else {
         SOURCE_ACQUISITION_STATUS_VERIFIED
     };
+    let Some(source_acquisition) = plan.source_acquisition.as_ref() else {
+        return Some(WitnessSourceAcquisitionAudit {
+            mode: SOURCE_ACQUISITION_MODE_COPIED.to_string(),
+            url: None,
+            digest_blake3: None,
+            fetched_path: Some(plan.request_source_archive_path.display().to_string()),
+            commit: None,
+            reference: None,
+            tag: None,
+            archive_profile: None,
+            archive_version: None,
+            status: status.to_string(),
+            error: source_acquisition_error.map(ToOwned::to_owned),
+        });
+    };
+    let mode = if plan.require_git_source {
+        SOURCE_ACQUISITION_MODE_GIT
+    } else if plan.require_independent_source {
+        SOURCE_ACQUISITION_MODE_EXTERNAL_ARCHIVE
+    } else {
+        SOURCE_ACQUISITION_MODE_COPIED
+    };
+    let fetched_path = if plan.require_git_source || plan.require_independent_source {
+        plan.scratch_layout.source_acquisition_archive_path.display().to_string()
+    } else {
+        plan.request_source_archive_path.display().to_string()
+    };
     Some(WitnessSourceAcquisitionAudit {
-        mode: SOURCE_ACQUISITION_MODE_INDEPENDENT.to_string(),
+        mode: mode.to_string(),
         url: Some(source_acquisition.url.clone()),
         digest_blake3: Some(source_acquisition.digest_blake3.clone()),
-        fetched_path: Some(plan.scratch_layout.source_acquisition_archive_path.display().to_string()),
+        fetched_path: Some(fetched_path),
+        commit: source_acquisition.commit.clone(),
+        reference: source_acquisition.reference.clone(),
+        tag: source_acquisition.tag.clone(),
+        archive_profile: source_acquisition.archive_profile.clone(),
+        archive_version: source_acquisition.archive_version.clone(),
         status: status.to_string(),
         error: source_acquisition_error.map(ToOwned::to_owned),
     })
@@ -1700,6 +1805,7 @@ mod tests {
     const TEST_PROVIDER_RECEIPT_COUNT: u32 = 1;
     const TEST_REQUEST_LAYOUT_VERSION: u32 = 1;
     const TEST_SOURCE_ARCHIVE_FILE_MODE: u32 = 0o644;
+    const TEST_SHA256_HEX_LENGTH_CHARS: usize = 64;
 
     #[test]
     fn default_witness_scratch_dir_appends_work_suffix() {
@@ -2363,6 +2469,124 @@ mod tests {
         compute_path_blake3_digest(path).unwrap()
     }
 
+    fn write_fixture_file(path: &Path, content: &[u8]) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, content).unwrap();
+    }
+
+    fn find_git_binary() -> PathBuf {
+        if let Ok(git) = std::env::var("GIT") {
+            let path = PathBuf::from(git);
+            if path.exists() {
+                return path;
+            }
+        }
+        for candidate in [
+            "/usr/bin/git",
+            "/bin/git",
+            "/usr/local/bin/git",
+            "/run/current-system/sw/bin/git",
+        ] {
+            let path = Path::new(candidate);
+            if path.exists() {
+                return path.to_path_buf();
+            }
+        }
+        if let Ok(path_var) = std::env::var("PATH") {
+            for dir in path_var.split(':') {
+                let candidate = Path::new(dir).join("git");
+                if candidate.exists() {
+                    return candidate;
+                }
+            }
+        }
+        panic!("git not found for witness_rebuild tests");
+    }
+
+    fn run_git(repo_root: &Path, args: &[&str]) -> Output {
+        Command::new(find_git_binary()).args(args).current_dir(repo_root).output().unwrap()
+    }
+
+    fn assert_git_ok(repo_root: &Path, args: &[&str]) {
+        let output = run_git(repo_root, args);
+        assert!(
+            output.status.success(),
+            "git {:?} failed: stdout={} stderr={}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+    }
+
+    fn git_stdout(repo_root: &Path, args: &[&str]) -> String {
+        let output = run_git(repo_root, args);
+        assert!(
+            output.status.success(),
+            "git {:?} failed: stdout={} stderr={}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn cargo_sha256_hex(bytes: &[u8]) -> String {
+        let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
+        <sha2::Sha256 as sha2::Digest>::update(&mut hasher, bytes);
+        let digest = <sha2::Sha256 as sha2::Digest>::finalize(hasher);
+        let encoded = data_encoding::HEXLOWER.encode(&digest);
+        assert_eq!(encoded.len(), TEST_SHA256_HEX_LENGTH_CHARS);
+        encoded
+    }
+
+    fn write_test_vendor_package(repo_root: &Path) {
+        let manifest = b"[package]\nname=\"dep\"\nversion=\"0.1.0\"\n";
+        let lib = b"pub fn dep() {}\n";
+        write_fixture_file(&repo_root.join("vendor-deps/dep/Cargo.toml"), manifest);
+        write_fixture_file(&repo_root.join("vendor-deps/dep/lib.rs"), lib);
+        let manifest_digest = cargo_sha256_hex(manifest);
+        let lib_digest = cargo_sha256_hex(lib);
+        let checksum_manifest = format!(
+            "{{\"files\":{{\"Cargo.toml\":\"{manifest_digest}\",\"lib.rs\":\"{lib_digest}\"}},\"package\":null}}",
+        );
+        write_fixture_file(&repo_root.join("vendor-deps/dep/.cargo-checksum.json"), checksum_manifest.as_bytes());
+    }
+
+    fn create_minimal_release_source_repo(repo_root: &Path) {
+        write_fixture_file(&repo_root.join(".gitignore"), b"vendor-deps/\ntarget/\n.pi/\n");
+        write_fixture_file(&repo_root.join(".cargo/vendor-config.toml"), b"directory = \"vendor-deps\"\n");
+        write_test_vendor_package(repo_root);
+        write_fixture_file(
+            &repo_root.join("Cargo.lock"),
+            b"[[package]]\nname = \"dep\"\nversion = \"0.1.0\"\nsource = \"git+https://example.invalid/dep.git#0123456789abcdef\"\n",
+        );
+        write_fixture_file(
+            &repo_root.join("Cargo.toml"),
+            b"[package]\nname=\"demo\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
+        );
+        write_fixture_file(&repo_root.join("README.md"), b"# demo\n");
+        write_fixture_file(&repo_root.join("docs/bootstrap-stage0-inventory.md"), b"# inventory\n");
+        write_fixture_file(&repo_root.join("scripts/prove-self-hosting.sh"), b"#!/usr/bin/env bash\n");
+        write_fixture_file(&repo_root.join("tests/audit_support.rs"), b"pub fn audit() {}\n");
+        write_fixture_file(&repo_root.join("tests/self_hosting.rs"), b"#[test]\nfn proof() {}\n");
+        write_fixture_file(&repo_root.join("lib/lib.ncl"), b"{}\n");
+        write_fixture_file(&repo_root.join("rust-toolchain.toml"), b"[toolchain]\nchannel=\"nightly\"\n");
+        write_fixture_file(&repo_root.join("src/main.rs"), b"fn main() { println!(\"git-source\"); }\n");
+    }
+
+    fn create_minimal_git_release_source_repo(repo_root: &Path) -> String {
+        create_minimal_release_source_repo(repo_root);
+        assert_git_ok(repo_root, &["init"]);
+        assert_git_ok(repo_root, &["config", "user.email", "pi@example.com"]);
+        assert_git_ok(repo_root, &["config", "user.name", "Pi"]);
+        assert_git_ok(repo_root, &["add", "."]);
+        assert_git_ok(repo_root, &["add", "-f", "vendor-deps"]);
+        assert_git_ok(repo_root, &["commit", "-m", "initial"]);
+        git_stdout(repo_root, &["rev-parse", "HEAD"])
+    }
+
     fn release_manifest_without_source_acquisition() -> ReleaseEvidenceManifest {
         let digest = "a".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
         let artifact = crate::release_evidence::BundledArtifact {
@@ -2421,6 +2645,7 @@ mod tests {
             proof_mode: PROOF_MODE_FIXED_POINT.to_string(),
             expected_outputs,
             require_independent_source: false,
+            require_git_source: false,
             source_acquisition: None,
             scratch_layout: derive_witness_rebuild_layout(scratch_root, "test-release").unwrap(),
         }
@@ -2488,13 +2713,9 @@ mod tests {
         let digest = "a".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
         let source_url = "https://example.invalid/mantle-src.tar";
         let mut manifest = release_manifest_without_source_acquisition();
-        manifest.source_acquisition = Some(SourceAcquisition {
-            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
-            url: source_url.to_string(),
-            digest_blake3: digest,
-        });
+        manifest.source_acquisition = Some(SourceAcquisition::external_archive(source_url.to_string(), digest));
 
-        let planned = source_acquisition_for_plan(&manifest, true).unwrap().unwrap();
+        let planned = source_acquisition_for_plan(&manifest, true, false).unwrap().unwrap();
 
         assert_eq!(planned.url, source_url);
         assert_eq!(planned.kind, crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE);
@@ -2504,9 +2725,67 @@ mod tests {
     fn source_acquisition_for_plan_requires_metadata_when_flagged() {
         let manifest = release_manifest_without_source_acquisition();
 
-        let err = source_acquisition_for_plan(&manifest, true).unwrap_err();
+        let err = source_acquisition_for_plan(&manifest, true, false).unwrap_err();
 
         assert!(err.message().contains("independent source acquisition required"));
+    }
+
+    #[test]
+    fn source_acquisition_for_plan_requires_git_kind_when_flagged() {
+        let digest = "a".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let mut manifest = release_manifest_without_source_acquisition();
+        manifest.source_acquisition =
+            Some(SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), digest));
+
+        let err = source_acquisition_for_plan(&manifest, false, true).unwrap_err();
+
+        assert!(err.message().contains("Git source required"));
+        assert!(err.message().contains(SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE));
+    }
+
+    #[test]
+    fn validate_source_replay_flags_rejects_conflicting_strict_modes() {
+        let err = validate_source_replay_flags(true, true).unwrap_err();
+
+        assert!(err.message().contains("mutually exclusive"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn git_source_success_audit_records_derivation_details() {
+        let temp = tempfile::tempdir().unwrap();
+        let digest = "d".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let commit = "a".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS);
+        let mut plan = witness_rebuild_test_plan(temp.path(), Vec::new());
+        plan.require_git_source = true;
+        plan.source_acquisition = Some(SourceAcquisition::git(
+            "file:///tmp/mantle-origin.git".to_string(),
+            commit.clone(),
+            Some("refs/heads/main".to_string()),
+            Some("v0.1.0".to_string()),
+            digest.clone(),
+        ));
+        let success = WitnessRebuildSuccess {
+            rebuilt_output_paths: Vec::new(),
+            workflow_driver_path: PathBuf::from("/tmp/prove-self-hosting.sh"),
+            started_unix_ms: 1,
+            finished_unix_ms: 2,
+            output: empty_success_output(),
+        };
+
+        let meta =
+            build_success_audit_meta(&plan, &success, Path::new("/tmp/witness.json"), Path::new("/tmp/witness.sig"))
+                .unwrap();
+        let audit = meta.source_acquisition.expect("Git-source audit should be present");
+
+        assert_eq!(audit.mode, SOURCE_ACQUISITION_MODE_GIT);
+        assert_eq!(audit.url.as_deref(), Some("file:///tmp/mantle-origin.git"));
+        assert_eq!(audit.digest_blake3.as_deref(), Some(digest.as_str()));
+        assert_eq!(audit.commit.as_deref(), Some(commit.as_str()));
+        assert_eq!(audit.reference.as_deref(), Some("refs/heads/main"));
+        assert_eq!(audit.tag.as_deref(), Some("v0.1.0"));
+        assert_eq!(audit.status, SOURCE_ACQUISITION_STATUS_VERIFIED);
+        assert!(audit.error.is_none());
     }
 
     #[test]
@@ -2526,11 +2805,10 @@ mod tests {
         plan.request_source_archive_path = request_archive;
         plan.request_verification_seed_dir = request_seed_dir;
         plan.require_independent_source = true;
-        plan.source_acquisition = Some(SourceAcquisition {
-            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
-            url: format!("file://{}", external_archive.display()),
-            digest_blake3: external_digest.clone(),
-        });
+        plan.source_acquisition = Some(SourceAcquisition::external_archive(
+            format!("file://{}", external_archive.display()),
+            external_digest.clone(),
+        ));
 
         prepare_witness_rebuild_scratch(&plan).unwrap();
 
@@ -2550,15 +2828,79 @@ mod tests {
         write_source_archive(&external_archive, "source.txt", b"tampered-source");
         let mut plan = witness_rebuild_test_plan(&scratch_root, Vec::new());
         plan.require_independent_source = true;
-        plan.source_acquisition = Some(SourceAcquisition {
-            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
-            url: format!("file://{}", external_archive.display()),
-            digest_blake3: "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
-        });
+        plan.source_acquisition = Some(SourceAcquisition::external_archive(
+            format!("file://{}", external_archive.display()),
+            "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
+        ));
 
         let err = source_archive_for_extraction(&plan).unwrap_err();
 
         assert!(err.message().contains("independent source acquisition digest mismatch"));
+        assert!(!plan.scratch_layout.repo_dir.exists(), "repo extraction must not start after digest mismatch");
+    }
+
+    #[test]
+    fn prepare_scratch_fetches_git_source_archive_when_required() {
+        let temp = tempfile::tempdir().unwrap();
+        let origin = temp.path().join("origin");
+        std::fs::create_dir_all(&origin).unwrap();
+        let commit = create_minimal_git_release_source_repo(&origin);
+        let branch_ref = format!("refs/heads/{}", git_stdout(&origin, &["branch", "--show-current"]));
+        let expected_archive = temp.path().join("expected-source.tar");
+        crate::release_source::write_tracked_source_archive(&origin, &expected_archive).unwrap();
+        let expected_digest = compute_path_blake3_digest(&expected_archive).unwrap();
+        let scratch_root = temp.path().join("scratch");
+        let request_root = temp.path().join("request");
+        let request_seed_dir = request_root.join("release-verification/test-release");
+        let request_archive = request_root.join("release-evidence/test-release/source.tar");
+        write_source_archive(&request_archive, "source.txt", b"publisher-bundled-source");
+        std::fs::create_dir_all(&request_seed_dir).unwrap();
+        let mut plan = witness_rebuild_test_plan(&scratch_root, Vec::new());
+        plan.request_dir = request_root.clone();
+        plan.request_path = request_root.join("request.json");
+        plan.request_source_archive_path = request_archive;
+        plan.request_verification_seed_dir = request_seed_dir;
+        plan.require_git_source = true;
+        plan.source_acquisition = Some(SourceAcquisition::git(
+            format!("file://{}", origin.display()),
+            commit,
+            Some(branch_ref),
+            None,
+            expected_digest.clone(),
+        ));
+
+        prepare_witness_rebuild_scratch(&plan).unwrap();
+
+        let extracted_main = std::fs::read_to_string(plan.scratch_layout.repo_dir.join("src/main.rs")).unwrap();
+        assert!(extracted_main.contains("git-source"));
+        assert!(!plan.scratch_layout.repo_dir.join("source.txt").exists());
+        assert_eq!(
+            compute_path_blake3_digest(&plan.scratch_layout.source_acquisition_archive_path).unwrap(),
+            expected_digest
+        );
+    }
+
+    #[test]
+    fn git_source_acquisition_rejects_digest_mismatch_before_extraction() {
+        let temp = tempfile::tempdir().unwrap();
+        let origin = temp.path().join("origin");
+        std::fs::create_dir_all(&origin).unwrap();
+        let commit = create_minimal_git_release_source_repo(&origin);
+        let branch_ref = format!("refs/heads/{}", git_stdout(&origin, &["branch", "--show-current"]));
+        let mut plan = witness_rebuild_test_plan(&temp.path().join("scratch"), Vec::new());
+        plan.require_git_source = true;
+        plan.source_acquisition = Some(SourceAcquisition::git(
+            format!("file://{}", origin.display()),
+            commit,
+            Some(branch_ref),
+            None,
+            "0".repeat(TEST_BLAKE3_HEX_LENGTH_CHARS),
+        ));
+
+        let err = source_archive_for_extraction(&plan).unwrap_err();
+
+        assert!(err.message().contains("Git source archive digest mismatch"));
+        assert!(err.message().contains("generated"));
         assert!(!plan.scratch_layout.repo_dir.exists(), "repo extraction must not start after digest mismatch");
     }
 
@@ -2570,11 +2912,7 @@ mod tests {
         let source_url = "file:///tmp/mantle-src.tar";
         let mut plan = witness_rebuild_test_plan(temp.path(), Vec::new());
         plan.require_independent_source = true;
-        plan.source_acquisition = Some(SourceAcquisition {
-            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
-            url: source_url.to_string(),
-            digest_blake3: digest.clone(),
-        });
+        plan.source_acquisition = Some(SourceAcquisition::external_archive(source_url.to_string(), digest.clone()));
         let success = WitnessRebuildSuccess {
             rebuilt_output_paths: Vec::new(),
             workflow_driver_path: PathBuf::from("/tmp/prove-self-hosting.sh"),
@@ -2588,7 +2926,7 @@ mod tests {
                 .unwrap();
         let audit = meta.source_acquisition.expect("independent-source audit should be present");
 
-        assert_eq!(audit.mode, SOURCE_ACQUISITION_MODE_INDEPENDENT);
+        assert_eq!(audit.mode, SOURCE_ACQUISITION_MODE_EXTERNAL_ARCHIVE);
         assert_eq!(audit.url.as_deref(), Some(source_url));
         assert_eq!(audit.digest_blake3.as_deref(), Some(digest.as_str()));
         assert_eq!(audit.status, SOURCE_ACQUISITION_STATUS_VERIFIED);
@@ -2602,11 +2940,8 @@ mod tests {
         let failure = "independent source acquisition digest mismatch: expected c, fetched d";
         let mut plan = witness_rebuild_test_plan(temp.path(), Vec::new());
         plan.require_independent_source = true;
-        plan.source_acquisition = Some(SourceAcquisition {
-            kind: crate::release_evidence::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
-            url: "file:///tmp/mantle-src.tar".to_string(),
-            digest_blake3: digest,
-        });
+        plan.source_acquisition =
+            Some(SourceAcquisition::external_archive("file:///tmp/mantle-src.tar".to_string(), digest));
 
         let meta = build_prelaunch_failure_audit_meta(&plan, failure).unwrap();
         let audit = meta.source_acquisition.expect("failed independent-source audit should be present");

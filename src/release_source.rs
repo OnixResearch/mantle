@@ -7,7 +7,16 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crunch_release_core::ReleaseEvidenceError;
+use crunch_release_core::ReleaseSourceCandidate;
+use crunch_release_core::ReleaseSourceEntryKind;
+use crunch_release_core::plan_release_source_archive_members;
+use crunch_release_core::release_source_path_is_releasable;
+use crunch_release_core::validate_release_source_symlink_target;
+
 use crate::errors::RunError;
+use crate::release_evidence::SOURCE_ACQUISITION_KIND_GIT;
+use crate::release_evidence::SourceAcquisition;
 use crate::self_build::require_checked_vendor_inputs;
 
 const MAX_TRACKED_SOURCE_PATHS: u32 = 200_000;
@@ -15,8 +24,10 @@ const MAX_VENDOR_SOURCE_PATHS: u32 = 200_000;
 const MAX_PARENT_DIRS: u32 = 200_000;
 const TAR_MODE_DIR_DEFAULT: u32 = 0o755;
 const TAR_MODE_SYMLINK_DEFAULT: u32 = 0o777;
-const RELEASE_SOURCE_SKIP_ANYWHERE: &[&str] = &[".agent", ".git", ".jj", ".pi", "target"];
-const RELEASE_SOURCE_SKIP_AT_ROOT: &[&str] = &["cairn"];
+const GIT_SOURCE_CHECKOUT_DIR_NAME: &str = "checkout";
+const GIT_SUBMODULE_FILEMODE: &str = "160000";
+const GIT_HEAD_REF_PREFIX: &str = "refs/heads/";
+const GIT_REMOTE_ORIGIN_REF_PREFIX: &str = "refs/remotes/origin/";
 
 pub(crate) fn write_tracked_source_archive(repo_root: &Path, archive_path: &Path) -> Result<(), RunError> {
     assert!(repo_root.is_dir(), "repo root must exist: {}", repo_root.display());
@@ -41,17 +52,193 @@ pub(crate) fn write_tracked_source_archive(repo_root: &Path, archive_path: &Path
     Ok(())
 }
 
-fn source_archive_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
-    let mut paths: BTreeSet<PathBuf> = tracked_source_paths(repo_root)?.into_iter().collect();
-    for vendor_path in vendored_source_paths(repo_root)? {
-        paths.insert(vendor_path);
+pub(crate) fn write_git_source_archive(
+    source_acquisition: &SourceAcquisition,
+    work_dir: &Path,
+    archive_path: &Path,
+) -> Result<(), RunError> {
+    if source_acquisition.kind != SOURCE_ACQUISITION_KIND_GIT {
+        return Err(RunError::Internal(format!(
+            "Git source archive reconstruction requires source_acquisition.kind={SOURCE_ACQUISITION_KIND_GIT}, got {}",
+            source_acquisition.kind
+        )));
     }
-    Ok(paths.into_iter().collect())
+    let commit = source_acquisition.commit.as_deref().ok_or_else(|| {
+        RunError::Internal("Git source archive reconstruction requires source_acquisition.commit".to_string())
+    })?;
+    std::fs::create_dir_all(work_dir)
+        .map_err(|err| RunError::Internal(format!("creating {}: {err}", work_dir.display())))?;
+    let checkout_dir = work_dir.join(GIT_SOURCE_CHECKOUT_DIR_NAME);
+    if checkout_dir.exists() {
+        std::fs::remove_dir_all(&checkout_dir)
+            .map_err(|err| RunError::Internal(format!("removing {}: {err}", checkout_dir.display())))?;
+    }
+    clone_git_source(&source_acquisition.url, &checkout_dir)?;
+    checkout_git_commit(&checkout_dir, commit)?;
+    verify_git_head_commit(&checkout_dir, commit)?;
+    if let Some(reference) = &source_acquisition.reference {
+        verify_git_ref_commit(&checkout_dir, reference, commit, "ref")?;
+    }
+    if let Some(tag) = &source_acquisition.tag {
+        verify_git_ref_commit(&checkout_dir, tag, commit, "tag")?;
+    }
+    write_tracked_source_archive(&checkout_dir, archive_path)
+}
+
+fn clone_git_source(url: &str, checkout_dir: &Path) -> Result<(), RunError> {
+    let mut command = Command::new("git");
+    command.arg("clone").arg("--no-checkout").arg(url).arg(checkout_dir);
+    run_git_command(&mut command, &format!("cloning Git source {url}"))?;
+    Ok(())
+}
+
+fn checkout_git_commit(checkout_dir: &Path, commit: &str) -> Result<(), RunError> {
+    let mut command = Command::new("git");
+    command
+        .arg("-c")
+        .arg("advice.detachedHead=false")
+        .arg("checkout")
+        .arg("--detach")
+        .arg(commit)
+        .current_dir(checkout_dir);
+    run_git_command(&mut command, &format!("checking out Git source commit {commit}"))?;
+    Ok(())
+}
+
+fn verify_git_head_commit(checkout_dir: &Path, expected_commit: &str) -> Result<(), RunError> {
+    let actual_commit = git_rev_parse_commit(checkout_dir, "HEAD")?;
+    if actual_commit == expected_commit {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "Git source checkout resolved HEAD to {actual_commit}, expected {expected_commit}"
+    )))
+}
+
+fn verify_git_ref_commit(
+    checkout_dir: &Path,
+    git_ref: &str,
+    expected_commit: &str,
+    policy_label: &str,
+) -> Result<(), RunError> {
+    let candidates = git_ref_resolution_candidates(git_ref, policy_label);
+    let mut resolution_errors = Vec::new();
+    for candidate in &candidates {
+        match git_rev_parse_commit(checkout_dir, candidate) {
+            Ok(actual_commit) if actual_commit == expected_commit => return Ok(()),
+            Ok(actual_commit) => {
+                return Err(RunError::Internal(format!(
+                    "Git source {policy_label} policy failed: {candidate} resolved to {actual_commit}, expected {expected_commit}"
+                )));
+            }
+            Err(err) => resolution_errors.push(err.to_string()),
+        }
+    }
+    Err(RunError::Internal(format!(
+        "Git source {policy_label} policy failed: {git_ref} did not resolve to expected commit {expected_commit}; attempts: {}",
+        resolution_errors.join("; ")
+    )))
+}
+
+fn git_ref_resolution_candidates(git_ref: &str, policy_label: &str) -> Vec<String> {
+    let mut candidates = vec![git_ref.to_string()];
+    if policy_label == "ref" {
+        if let Some(branch_name) = git_ref.strip_prefix(GIT_HEAD_REF_PREFIX) {
+            candidates.push(format!("{GIT_REMOTE_ORIGIN_REF_PREFIX}{branch_name}"));
+        }
+    }
+    candidates
+}
+
+fn git_rev_parse_commit(checkout_dir: &Path, rev: &str) -> Result<String, RunError> {
+    let rev_spec = format!("{rev}^{{commit}}");
+    let mut command = Command::new("git");
+    command.arg("rev-parse").arg("--verify").arg(&rev_spec).current_dir(checkout_dir);
+    let stdout = run_git_command(&mut command, &format!("resolving Git revision {rev}"))?;
+    let commit = stdout.trim().to_ascii_lowercase();
+    if commit.is_empty() {
+        return Err(RunError::Internal(format!("Git revision {rev} resolved to an empty commit")));
+    }
+    Ok(commit)
+}
+
+fn run_git_command(command: &mut Command, context: &str) -> Result<String, RunError> {
+    let output = command.output().map_err(|err| RunError::Internal(format!("{context}: {err}")))?;
+    if output.status.success() {
+        return String::from_utf8(output.stdout)
+            .map_err(|err| RunError::Internal(format!("{context}: git stdout was not UTF-8: {err}")));
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(RunError::Internal(format!("{context}: {}", stderr.trim())))
+}
+
+fn core_error_to_run_error(err: ReleaseEvidenceError) -> RunError {
+    RunError::Internal(err.to_string())
+}
+
+fn source_archive_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
+    let mut unique_paths: BTreeSet<PathBuf> = tracked_source_paths(repo_root)?.into_iter().collect();
+    for vendor_path in vendored_source_paths(repo_root)? {
+        unique_paths.insert(vendor_path);
+    }
+    planned_release_source_paths(repo_root, unique_paths.into_iter().collect())
+}
+
+fn planned_release_source_paths(repo_root: &Path, paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, RunError> {
+    let mut candidates = Vec::with_capacity(paths.len());
+    for relative_path in paths {
+        candidates.push(release_source_candidate(repo_root, &relative_path)?);
+    }
+    let members = plan_release_source_archive_members(candidates).map_err(core_error_to_run_error)?;
+    Ok(members.into_iter().map(|member| PathBuf::from(member.relative_path)).collect())
+}
+
+fn release_source_candidate(repo_root: &Path, relative_path: &Path) -> Result<ReleaseSourceCandidate, RunError> {
+    let source_path = repo_root.join(relative_path);
+    let metadata = std::fs::symlink_metadata(&source_path)
+        .map_err(|err| RunError::Internal(format!("symlink_metadata {}: {err}", source_path.display())))?;
+    let relative_path_text = tar_path_string(relative_path)?;
+    let kind = release_source_entry_kind(&metadata, &source_path)?;
+    let symlink_target = if kind == ReleaseSourceEntryKind::Symlink {
+        Some(release_source_symlink_target(&source_path)?)
+    } else {
+        None
+    };
+    Ok(ReleaseSourceCandidate {
+        relative_path: relative_path_text,
+        kind,
+        symlink_target,
+    })
+}
+
+fn release_source_entry_kind(
+    metadata: &std::fs::Metadata,
+    source_path: &Path,
+) -> Result<ReleaseSourceEntryKind, RunError> {
+    if metadata.file_type().is_symlink() {
+        return Ok(ReleaseSourceEntryKind::Symlink);
+    }
+    if metadata.is_file() {
+        return Ok(ReleaseSourceEntryKind::File);
+    }
+    if metadata.is_dir() {
+        return Ok(ReleaseSourceEntryKind::Directory);
+    }
+    Err(RunError::Internal(format!("unsupported source archive entry type: {}", source_path.display())))
+}
+
+fn release_source_symlink_target(source_path: &Path) -> Result<String, RunError> {
+    let target = std::fs::read_link(source_path)
+        .map_err(|err| RunError::Internal(format!("read_link {}: {err}", source_path.display())))?;
+    target.to_str().map(|value| value.replace('\\', "/")).ok_or_else(|| {
+        RunError::Internal(format!("source archive symlink target is not valid utf-8: {}", source_path.display()))
+    })
 }
 
 fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
     let output = Command::new("git")
         .arg("ls-files")
+        .arg("-s")
         .arg("-z")
         .current_dir(repo_root)
         .output()
@@ -62,11 +249,18 @@ fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
     }
 
     let mut tracked = Vec::new();
-    for raw_path in output.stdout.split(|byte| *byte == 0) {
-        if raw_path.is_empty() {
+    for raw_record in output.stdout.split(|byte| *byte == 0) {
+        if raw_record.is_empty() {
             continue;
         }
-        let relative_path = PathBuf::from(os_string_from_git_bytes(raw_path)?);
+        let record = parse_git_index_record(raw_record)?;
+        let relative_path = PathBuf::from(os_string_from_git_bytes(record.path)?);
+        if record.file_mode == GIT_SUBMODULE_FILEMODE {
+            return Err(RunError::Internal(format!(
+                "source archive does not support Git submodule entry {}",
+                relative_path.display()
+            )));
+        }
         if !is_releasable_tracked_source_path(&relative_path) {
             continue;
         }
@@ -81,6 +275,33 @@ fn tracked_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
     }
     tracked.sort();
     Ok(tracked)
+}
+
+struct GitIndexRecord<'a> {
+    file_mode: &'a str,
+    path: &'a [u8],
+}
+
+fn parse_git_index_record(record: &[u8]) -> Result<GitIndexRecord<'_>, RunError> {
+    let tab_index = record
+        .iter()
+        .position(|byte| *byte == b'\t')
+        .ok_or_else(|| RunError::Internal("git ls-files --stage record missing path separator".to_string()))?;
+    let header = &record[..tab_index];
+    let path = &record[tab_index + 1..];
+    if path.is_empty() {
+        return Err(RunError::Internal("git ls-files --stage record has empty path".to_string()));
+    }
+    let file_mode_bytes = header
+        .split(|byte| *byte == b' ')
+        .next()
+        .ok_or_else(|| RunError::Internal("git ls-files --stage record missing file mode".to_string()))?;
+    let file_mode = std::str::from_utf8(file_mode_bytes)
+        .map_err(|err| RunError::Internal(format!("git ls-files --stage file mode was not UTF-8: {err}")))?;
+    if file_mode.is_empty() {
+        return Err(RunError::Internal("git ls-files --stage record has empty file mode".to_string()));
+    }
+    Ok(GitIndexRecord { file_mode, path })
 }
 
 fn vendored_source_paths(repo_root: &Path) -> Result<Vec<PathBuf>, RunError> {
@@ -139,30 +360,10 @@ fn collect_vendor_source_child(repo_root: &Path, child: &Path, paths: &mut Vec<P
 fn is_releasable_tracked_source_path(relative_path: &Path) -> bool {
     assert!(!relative_path.is_absolute(), "source path must be relative");
     assert!(!relative_path.as_os_str().is_empty(), "source path must not be empty");
-
-    let mut first_component = None;
-    for component in relative_path.components() {
-        let std::path::Component::Normal(component_name) = component else {
-            return false;
-        };
-        if first_component.is_none() {
-            first_component = Some(component_name);
-        }
-        let Some(name) = component_name.to_str() else {
-            return false;
-        };
-        if RELEASE_SOURCE_SKIP_ANYWHERE.contains(&name) {
-            return false;
-        }
-    }
-
-    let Some(first_component) = first_component else {
+    let Ok(path_text) = tar_path_string(relative_path) else {
         return false;
     };
-    let Some(first_name) = first_component.to_str() else {
-        return false;
-    };
-    !RELEASE_SOURCE_SKIP_AT_ROOT.contains(&first_name)
+    release_source_path_is_releasable(&path_text).unwrap_or(false)
 }
 
 fn append_source_paths_to_archive(
@@ -285,6 +486,10 @@ fn append_symlink_entry(
 ) -> Result<(), RunError> {
     let link_target = std::fs::read_link(source_path)
         .map_err(|err| RunError::Internal(format!("read_link {}: {err}", source_path.display())))?;
+    let link_target_text = link_target.to_str().ok_or_else(|| {
+        RunError::Internal(format!("source archive symlink target is not valid utf-8: {}", source_path.display()))
+    })?;
+    validate_release_source_symlink_target(link_target_text).map_err(core_error_to_run_error)?;
     let mut header = tar::Header::new_gnu();
     header.set_entry_type(tar::EntryType::Symlink);
     header.set_size(0);
@@ -353,6 +558,8 @@ mod tests {
     use super::*;
 
     const TEST_SHA256_HEX_LEN: usize = 64;
+    const TEST_BLAKE3_HEX_LEN: usize = 64;
+    const TEST_GIT_SHA1_HEX_LEN: usize = 40;
 
     fn write_file(path: &Path, content: &[u8]) {
         if let Some(parent) = path.parent() {
@@ -461,6 +668,29 @@ mod tests {
         write_file(&repo_root.join(".pi/private-note"), b"private\n");
     }
 
+    fn create_minimal_git_source_repo(repo_root: &Path) -> String {
+        create_minimal_repo(repo_root);
+        assert_git_ok(repo_root, &["init"]);
+        assert_git_ok(repo_root, &["config", "user.email", "pi@example.com"]);
+        assert_git_ok(repo_root, &["config", "user.name", "Pi"]);
+        assert_git_ok(repo_root, &["add", "."]);
+        assert_git_ok(repo_root, &["add", "-f", "vendor-deps"]);
+        assert_git_ok(repo_root, &["commit", "-m", "initial"]);
+        git_stdout(repo_root, &["rev-parse", "HEAD"])
+    }
+
+    fn git_stdout(repo_root: &Path, args: &[&str]) -> String {
+        let output = run_git(repo_root, args);
+        assert!(
+            output.status.success(),
+            "git {:?} failed: stdout={} stderr={}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
     #[test]
     fn source_archive_uses_current_worktree_verified_vendor_and_tracked_package_files() {
         let repo = tempfile::tempdir().unwrap();
@@ -558,5 +788,141 @@ mod tests {
         assert!(!found_cairn_spec, "archive must skip root Cairn evidence skipped by native source hashing");
         assert!(!found_target_secret, "archive must skip target secrets even if force-tracked");
         assert!(!found_pi_private_note, "archive must skip private .pi files even if force-tracked");
+    }
+
+    #[test]
+    fn git_source_archive_reconstruction_matches_release_source_archive() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("origin");
+        std::fs::create_dir_all(&repo).unwrap();
+        let commit = create_minimal_git_source_repo(&repo);
+        let branch_ref = format!("refs/heads/{}", git_stdout(&repo, &["branch", "--show-current"]));
+        let expected_archive = temp.path().join("expected.tar");
+        let actual_archive = temp.path().join("actual.tar");
+        let work_dir = temp.path().join("git-work");
+        write_tracked_source_archive(&repo, &expected_archive).unwrap();
+        let expected_digest = blake3::hash(&std::fs::read(&expected_archive).unwrap()).to_hex().to_string();
+        let source = SourceAcquisition::git(
+            format!("file://{}", repo.display()),
+            commit.clone(),
+            Some(branch_ref),
+            None,
+            expected_digest.clone(),
+        );
+
+        write_git_source_archive(&source, &work_dir, &actual_archive).unwrap();
+
+        let actual_digest = blake3::hash(&std::fs::read(&actual_archive).unwrap()).to_hex().to_string();
+        assert_eq!(actual_digest, expected_digest);
+        assert!(work_dir.join(GIT_SOURCE_CHECKOUT_DIR_NAME).join("src/main.rs").exists());
+    }
+
+    #[test]
+    fn git_source_archive_rejects_ref_policy_mismatch() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("origin");
+        std::fs::create_dir_all(&repo).unwrap();
+        let first_commit = create_minimal_git_source_repo(&repo);
+        let branch_ref = format!("refs/remotes/origin/{}", git_stdout(&repo, &["branch", "--show-current"]));
+        write_file(&repo.join("src/main.rs"), b"fn main() { println!(\"second\"); }\n");
+        assert_git_ok(&repo, &["add", "src/main.rs"]);
+        assert_git_ok(&repo, &["commit", "-m", "second"]);
+        let archive = temp.path().join("actual.tar");
+        let work_dir = temp.path().join("git-work");
+        let source = SourceAcquisition::git(
+            format!("file://{}", repo.display()),
+            first_commit,
+            Some(branch_ref),
+            None,
+            "0".repeat(TEST_BLAKE3_HEX_LEN),
+        );
+
+        let err = write_git_source_archive(&source, &work_dir, &archive).unwrap_err();
+
+        assert!(err.to_string().contains("Git source ref policy failed"));
+        assert!(!archive.exists());
+    }
+
+    #[test]
+    fn git_source_archive_rejects_missing_ref_policy() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("origin");
+        std::fs::create_dir_all(&repo).unwrap();
+        let commit = create_minimal_git_source_repo(&repo);
+        let archive = temp.path().join("actual.tar");
+        let work_dir = temp.path().join("git-work");
+        let source = SourceAcquisition::git(
+            format!("file://{}", repo.display()),
+            commit.clone(),
+            Some("refs/heads/missing".to_string()),
+            None,
+            "0".repeat(TEST_BLAKE3_HEX_LEN),
+        );
+
+        let err = write_git_source_archive(&source, &work_dir, &archive).unwrap_err();
+
+        assert!(err.to_string().contains("did not resolve to expected commit"));
+        assert!(err.to_string().contains(&commit));
+        assert!(!archive.exists());
+    }
+
+    #[test]
+    fn git_source_archive_rejects_wrong_commit_before_archiving() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("origin");
+        std::fs::create_dir_all(&repo).unwrap();
+        create_minimal_git_source_repo(&repo);
+        let archive = temp.path().join("actual.tar");
+        let work_dir = temp.path().join("git-work");
+        let source = SourceAcquisition::git(
+            format!("file://{}", repo.display()),
+            "0".repeat(TEST_GIT_SHA1_HEX_LEN),
+            None,
+            None,
+            "0".repeat(TEST_BLAKE3_HEX_LEN),
+        );
+
+        let err = write_git_source_archive(&source, &work_dir, &archive).unwrap_err();
+
+        assert!(err.to_string().contains("checking out Git source commit"));
+        assert!(!archive.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn source_archive_rejects_symlink_targets_outside_tree() {
+        let repo = tempfile::tempdir().unwrap();
+        create_minimal_repo(repo.path());
+        assert_git_ok(repo.path(), &["init"]);
+        assert_git_ok(repo.path(), &["config", "user.email", "pi@example.com"]);
+        assert_git_ok(repo.path(), &["config", "user.name", "Pi"]);
+        std::os::unix::fs::symlink("/etc/passwd", repo.path().join("bad-link")).unwrap();
+        assert_git_ok(repo.path(), &["add", "."]);
+        assert_git_ok(repo.path(), &["add", "bad-link"]);
+        assert_git_ok(repo.path(), &["commit", "-m", "bad symlink"]);
+        let archive = tempfile::NamedTempFile::new().unwrap();
+
+        let err = write_tracked_source_archive(repo.path(), archive.path()).unwrap_err();
+
+        assert!(err.to_string().contains("symlink target must be relative"));
+    }
+
+    #[test]
+    fn source_archive_rejects_git_submodule_entries() {
+        let repo = tempfile::tempdir().unwrap();
+        create_minimal_repo(repo.path());
+        assert_git_ok(repo.path(), &["init"]);
+        assert_git_ok(repo.path(), &["config", "user.email", "pi@example.com"]);
+        assert_git_ok(repo.path(), &["config", "user.name", "Pi"]);
+        assert_git_ok(repo.path(), &["add", "."]);
+        assert_git_ok(repo.path(), &["commit", "-m", "initial"]);
+        let commit = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+        let cacheinfo = format!("{GIT_SUBMODULE_FILEMODE},{commit},vendor/submodule");
+        assert_git_ok(repo.path(), &["update-index", "--add", "--cacheinfo", &cacheinfo]);
+        let archive = tempfile::NamedTempFile::new().unwrap();
+
+        let err = write_tracked_source_archive(repo.path(), archive.path()).unwrap_err();
+
+        assert!(err.to_string().contains("Git submodule entry vendor/submodule"));
     }
 }

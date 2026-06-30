@@ -101,6 +101,18 @@ fn assert_git_ok(repo_root: &Path, args: &[&str]) {
     );
 }
 
+fn git_stdout(repo_root: &Path, args: &[&str]) -> String {
+    let output = run_git(repo_root, args);
+    assert!(
+        output.status.success(),
+        "git {:?} failed: stdout={} stderr={}",
+        args,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
 fn cargo_sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = <Sha256 as sha2::Digest>::new();
     <Sha256 as sha2::Digest>::update(&mut hasher, bytes);
@@ -393,6 +405,114 @@ fn make_release_bundle(include_provider_fixed_point: bool) -> (TempDir, PathBuf,
     let manifest: ReleaseEvidenceManifest =
         serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
     (temp, bundle_dir, manifest)
+}
+
+#[test]
+fn release_create_records_git_source_metadata() {
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    write_file(&binary_path, b"crunch-binary");
+    let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+    let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+    let proof_dir = temp.path().join("proof-input");
+    write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    let bundle_dir = temp.path().join("bundle-git-source");
+    let commit = git_stdout(temp.path(), &["rev-parse", "HEAD"]);
+    let branch_ref = format!("refs/heads/{}", git_stdout(temp.path(), &["branch", "--show-current"]));
+    let remote_url = format!("file://{}", temp.path().display());
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-0.1.0-rc1")
+        .arg("--bundle-dir")
+        .arg(&bundle_dir)
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .arg("--git-source-url")
+        .arg(&remote_url)
+        .arg("--git-source-commit")
+        .arg(&commit)
+        .arg("--git-source-ref")
+        .arg(&branch_ref)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("source acquisition commit"));
+
+    let manifest: ReleaseEvidenceManifest =
+        serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
+    let source = manifest.source_acquisition.expect("Git source acquisition should be recorded");
+    assert_eq!(source.kind, "git");
+    assert_eq!(source.url, remote_url);
+    assert_eq!(source.commit.as_deref(), Some(commit.as_str()));
+    assert_eq!(source.reference.as_deref(), Some(branch_ref.as_str()));
+    assert_eq!(source.digest_blake3, manifest.source_archive.digest_blake3);
+}
+
+#[test]
+fn release_create_rejects_git_source_url_without_commit() {
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    write_file(&binary_path, b"crunch-binary");
+    let proof_dir = temp.path().join("proof-input");
+    write_full_proof_bundle(&proof_dir, &blake3::hash(b"crunch-binary").to_hex().to_string(), &sample_digest(9));
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-0.1.0-rc1")
+        .arg("--bundle-dir")
+        .arg(temp.path().join("bundle-missing-commit"))
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .arg("--git-source-url")
+        .arg(format!("file://{}", temp.path().display()))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("git-source-commit"));
+}
+
+#[test]
+fn release_create_rejects_conflicting_source_acquisition_flags() {
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    write_file(&binary_path, b"crunch-binary");
+    let proof_dir = temp.path().join("proof-input");
+    write_full_proof_bundle(&proof_dir, &blake3::hash(b"crunch-binary").to_hex().to_string(), &sample_digest(9));
+    let commit = git_stdout(temp.path(), &["rev-parse", "HEAD"]);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-0.1.0-rc1")
+        .arg("--bundle-dir")
+        .arg(temp.path().join("bundle-conflict"))
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .arg("--source-acquisition-url")
+        .arg("https://example.invalid/source.tar")
+        .arg("--git-source-url")
+        .arg(format!("file://{}", temp.path().display()))
+        .arg("--git-source-commit")
+        .arg(commit)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
 }
 
 fn release_keypair() -> KeyPair {
@@ -5204,12 +5324,31 @@ struct ReleaseProofLinkage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct SourceAcquisition {
+    kind: String,
+    url: String,
+    digest_blake3: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    commit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reference: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tag: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    archive_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    archive_version: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct ReleaseEvidenceManifest {
     schema: String,
     release_id: String,
     claim_scope: String,
     workflow: ReleaseWorkflowIdentity,
     source_archive: BundledArtifact,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_acquisition: Option<SourceAcquisition>,
     binaries: Vec<BundledArtifact>,
     proof_bundle: BundledArtifact,
     prerequisite_inventory: BundledArtifact,

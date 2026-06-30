@@ -14,6 +14,7 @@ use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::default_verification_dir;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_COMMAND;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
+use crate::release_evidence::GitSourceCreateRequest;
 use crate::release_evidence::ReleaseBundleCreateRequest;
 use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
@@ -59,6 +60,10 @@ pub(crate) fn cmd_release(
             provider_fixed_point_proof,
             reproducibility_report,
             source_acquisition_url,
+            git_source_url,
+            git_source_commit,
+            git_source_ref,
+            git_source_tag,
             workflow_command,
             workflow_version,
         } => cmd_release_create(
@@ -71,6 +76,10 @@ pub(crate) fn cmd_release(
             provider_fixed_point_proof,
             reproducibility_report,
             source_acquisition_url,
+            git_source_url,
+            git_source_commit,
+            git_source_ref,
+            git_source_tag,
             workflow_command,
             workflow_version,
         ),
@@ -162,6 +171,7 @@ pub(crate) fn cmd_release(
             scratch_dir,
             check,
             require_independent_source,
+            require_git_source,
             identity,
             system,
             toolchain,
@@ -175,6 +185,7 @@ pub(crate) fn cmd_release(
             scratch_dir,
             check,
             require_independent_source,
+            require_git_source,
             identity,
             system,
             toolchain,
@@ -195,12 +206,22 @@ fn cmd_release_create(
     provider_fixed_point_proof: Option<PathBuf>,
     reproducibility_report: Option<PathBuf>,
     source_acquisition_url: Option<String>,
+    git_source_url: Option<String>,
+    git_source_commit: Option<String>,
+    git_source_ref: Option<String>,
+    git_source_tag: Option<String>,
     workflow_command: String,
     workflow_version: String,
 ) -> Result<(), RunError> {
     let resolved_bundle_dir = resolve_bundle_dir(current_dir, &release_id, bundle_dir);
     let normalized_workflow_command = normalize_workflow_value(&workflow_command, DEFAULT_PROOF_WORKFLOW_COMMAND);
     let normalized_workflow_version = normalize_workflow_value(&workflow_version, DEFAULT_PROOF_WORKFLOW_VERSION);
+    let git_source = release_create_git_source(git_source_url, git_source_commit, git_source_ref, git_source_tag)?;
+    if source_acquisition_url.is_some() && git_source.is_some() {
+        return Err(RunError::Internal(
+            "release create Git source flags conflict with --source-acquisition-url".to_string(),
+        ));
+    }
     let source_archive_file = tempfile::NamedTempFile::new()
         .map_err(|err| RunError::Internal(format!("creating temp source archive file: {err}")))?;
     write_tracked_source_archive(current_dir, source_archive_file.path())?;
@@ -215,6 +236,7 @@ fn cmd_release_create(
         reproducibility_report_path: reproducibility_report.map(|path| resolve_input_path(current_dir, path)),
         provider_fixed_point_proof_dir: provider_fixed_point_proof.map(|path| resolve_input_path(current_dir, path)),
         source_acquisition_url,
+        git_source,
     };
     let manifest = create_release_evidence_bundle(&request)?;
     if json {
@@ -234,11 +256,39 @@ fn cmd_release_create(
             println!("reproducibility report: {}", report.relative_path);
         }
         if let Some(source_acquisition) = &manifest.source_acquisition {
-            println!("source acquisition: {}", source_acquisition.url);
+            println!("source acquisition: {} ({})", source_acquisition.url, source_acquisition.kind);
+            if let Some(commit) = &source_acquisition.commit {
+                println!("source acquisition commit: {commit}");
+            }
         }
         println!("manifest: manifest.json");
     }
     Ok(())
+}
+
+fn release_create_git_source(
+    git_source_url: Option<String>,
+    git_source_commit: Option<String>,
+    git_source_ref: Option<String>,
+    git_source_tag: Option<String>,
+) -> Result<Option<GitSourceCreateRequest>, RunError> {
+    let Some(remote_url) = git_source_url else {
+        if git_source_commit.is_some() || git_source_ref.is_some() || git_source_tag.is_some() {
+            return Err(RunError::Internal(
+                "release create Git source commit/ref/tag flags require --git-source-url".to_string(),
+            ));
+        }
+        return Ok(None);
+    };
+    let Some(commit) = git_source_commit else {
+        return Err(RunError::Internal("release create --git-source-url requires --git-source-commit".to_string()));
+    };
+    Ok(Some(GitSourceCreateRequest {
+        remote_url,
+        commit,
+        reference: git_source_ref,
+        tag: git_source_tag,
+    }))
 }
 
 fn cmd_release_verify(
@@ -1060,6 +1110,7 @@ fn cmd_release_witness_rebuild(
     scratch_dir: Option<PathBuf>,
     check: bool,
     require_independent_source: bool,
+    require_git_source: bool,
     identity: Option<String>,
     system: Option<String>,
     toolchain: Option<String>,
@@ -1068,7 +1119,12 @@ fn cmd_release_witness_rebuild(
 ) -> Result<(), RunError> {
     let resolved_request_dir = resolve_input_path(current_dir, request_dir);
     let resolved_scratch_dir = resolve_witness_scratch_dir(current_dir, &resolved_request_dir, scratch_dir)?;
-    let plan = plan_witness_rebuild(&resolved_request_dir, &resolved_scratch_dir, require_independent_source)?;
+    let plan = plan_witness_rebuild(
+        &resolved_request_dir,
+        &resolved_scratch_dir,
+        require_independent_source,
+        require_git_source,
+    )?;
     if check {
         return print_witness_rebuild_check(&plan, json);
     }
@@ -1203,7 +1259,10 @@ fn print_witness_rebuild_check(plan: &crate::witness_rebuild::WitnessRebuildPlan
             "workflow_command": plan.workflow_command,
             "workflow_version": plan.workflow_version,
             "require_independent_source": plan.require_independent_source,
+            "require_git_source": plan.require_git_source,
+            "source_acquisition_kind": plan.source_acquisition.as_ref().map(|source| source.kind.clone()),
             "source_acquisition_url": plan.source_acquisition.as_ref().map(|source| source.url.clone()),
+            "source_acquisition_commit": plan.source_acquisition.as_ref().and_then(|source| source.commit.clone()),
         });
         println!(
             "{}",
@@ -1219,8 +1278,13 @@ fn print_witness_rebuild_check(plan: &crate::witness_rebuild::WitnessRebuildPlan
     println!("verification output: {}", plan.scratch_layout.verification_dir.display());
     println!("proof bundle output: {}", plan.scratch_layout.proof_bundle_dir.display());
     println!("require independent source: {}", plan.require_independent_source);
+    println!("require Git source: {}", plan.require_git_source);
     if let Some(source_acquisition) = &plan.source_acquisition {
+        println!("source acquisition kind: {}", source_acquisition.kind);
         println!("source acquisition URL: {}", source_acquisition.url);
+        if let Some(commit) = &source_acquisition.commit {
+            println!("source acquisition commit: {commit}");
+        }
     }
     println!("audit metadata: {}", audit_path.display());
     println!("check only: no rebuild executed, no witness sidecars written");
@@ -1252,7 +1316,10 @@ fn print_witness_rebuild_success(
             "signature_path": signature_path.display().to_string(),
             "rebuilt_outputs": rebuilt_outputs,
             "require_independent_source": plan.require_independent_source,
+            "require_git_source": plan.require_git_source,
+            "source_acquisition_kind": plan.source_acquisition.as_ref().map(|source| source.kind.clone()),
             "source_acquisition_url": plan.source_acquisition.as_ref().map(|source| source.url.clone()),
+            "source_acquisition_commit": plan.source_acquisition.as_ref().and_then(|source| source.commit.clone()),
             "started_unix_ms": success.started_unix_ms,
             "finished_unix_ms": success.finished_unix_ms,
         });
@@ -1271,8 +1338,13 @@ fn print_witness_rebuild_success(
     println!("witness attestation: {}", attestation_path.display());
     println!("signature: {}", signature_path.display());
     println!("require independent source: {}", plan.require_independent_source);
+    println!("require Git source: {}", plan.require_git_source);
     if let Some(source_acquisition) = &plan.source_acquisition {
+        println!("source acquisition kind: {}", source_acquisition.kind);
         println!("source acquisition URL: {}", source_acquisition.url);
+        if let Some(commit) = &source_acquisition.commit {
+            println!("source acquisition commit: {commit}");
+        }
     }
     println!("rebuild audit: {}", audit_path.display());
     Ok(())

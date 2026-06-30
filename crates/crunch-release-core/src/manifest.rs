@@ -8,6 +8,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::ReleaseEvidenceError;
+use crate::source_archive::RELEASE_SOURCE_ARCHIVE_PROFILE;
+use crate::source_archive::RELEASE_SOURCE_ARCHIVE_VERSION;
 
 pub const RELEASE_EVIDENCE_SCHEMA: &str = "mantle-release-evidence-v1";
 pub const FULL_SELF_HOSTING_PROOF_SCHEMA: &str = "mantle-self-hosting-proof-v2";
@@ -18,11 +20,15 @@ pub const PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE: &str = "cargo-free-source-bu
 pub const DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE: &str = "deterministic-build-proof-receipt";
 pub const DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE: &str = "deterministic-sandbox-isolation-evidence";
 pub const SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE: &str = "external-archive";
+pub const SOURCE_ACQUISITION_KIND_GIT: &str = "git";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 
 const MAX_BINARY_ARTIFACTS_COUNT: u32 = 16;
 const MAX_RELATIVE_PATH_BYTES_COUNT: u32 = 4096;
 const MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT: u32 = 8192;
+const MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT: u32 = 512;
+const GIT_SHA1_HEX_LENGTH_CHARS: usize = 40;
+const GIT_SHA256_HEX_LENGTH_CHARS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -91,6 +97,50 @@ pub struct SourceAcquisition {
     pub kind: String,
     pub url: String,
     pub digest_blake3: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive_version: Option<String>,
+}
+
+impl SourceAcquisition {
+    pub fn external_archive(url: String, digest_blake3: String) -> Self {
+        Self {
+            kind: SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
+            url,
+            digest_blake3,
+            commit: None,
+            reference: None,
+            tag: None,
+            archive_profile: None,
+            archive_version: None,
+        }
+    }
+
+    pub fn git(
+        url: String,
+        commit: String,
+        reference: Option<String>,
+        tag: Option<String>,
+        digest_blake3: String,
+    ) -> Self {
+        Self {
+            kind: SOURCE_ACQUISITION_KIND_GIT.to_string(),
+            url,
+            digest_blake3,
+            commit: Some(commit),
+            reference,
+            tag,
+            archive_profile: Some(RELEASE_SOURCE_ARCHIVE_PROFILE.to_string()),
+            archive_version: Some(RELEASE_SOURCE_ARCHIVE_VERSION.to_string()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -441,13 +491,20 @@ fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(),
     let Some(source_acquisition) = &manifest.source_acquisition else {
         return Ok(());
     };
-    if source_acquisition.kind != SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE {
-        return Err(validation_error(format!(
-            "release evidence source_acquisition.kind must be {SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE}, got {}",
-            source_acquisition.kind
-        )));
+    validate_source_acquisition_digest(source_acquisition, manifest)?;
+    match source_acquisition.kind.as_str() {
+        SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE => validate_external_source_acquisition(source_acquisition),
+        SOURCE_ACQUISITION_KIND_GIT => validate_git_source_acquisition(source_acquisition),
+        other => Err(validation_error(format!(
+            "release evidence source_acquisition.kind must be {SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE} or {SOURCE_ACQUISITION_KIND_GIT}, got {other}"
+        ))),
     }
-    validate_source_acquisition_url(&source_acquisition.url)?;
+}
+
+fn validate_source_acquisition_digest(
+    source_acquisition: &SourceAcquisition,
+    manifest: &ReleaseEvidenceManifest,
+) -> Result<(), ReleaseEvidenceError> {
     validate_blake3_hex(&source_acquisition.digest_blake3, "source_acquisition.digest_blake3")?;
     if source_acquisition.digest_blake3 != manifest.source_archive.digest_blake3 {
         return Err(validation_error(
@@ -457,7 +514,111 @@ fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(),
     Ok(())
 }
 
-fn validate_source_acquisition_url(url: &str) -> Result<(), ReleaseEvidenceError> {
+fn validate_external_source_acquisition(source_acquisition: &SourceAcquisition) -> Result<(), ReleaseEvidenceError> {
+    validate_source_acquisition_url(
+        &source_acquisition.url,
+        &["file", "http", "https"],
+        "file://, http://, or https://",
+    )?;
+    if source_acquisition.commit.is_some()
+        || source_acquisition.reference.is_some()
+        || source_acquisition.tag.is_some()
+        || source_acquisition.archive_profile.is_some()
+        || source_acquisition.archive_version.is_some()
+    {
+        return Err(validation_error(
+            "release evidence external-archive source_acquisition must not carry Git metadata".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_git_source_acquisition(source_acquisition: &SourceAcquisition) -> Result<(), ReleaseEvidenceError> {
+    validate_source_acquisition_url(
+        &source_acquisition.url,
+        &["file", "http", "https", "git"],
+        "file://, http://, https://, or git://",
+    )?;
+    let commit = required_source_acquisition_field(&source_acquisition.commit, "source_acquisition.commit")?;
+    validate_git_commit_hex(commit)?;
+    if let Some(reference) = &source_acquisition.reference {
+        validate_git_ref_text(reference, "source_acquisition.reference")?;
+    }
+    if let Some(tag) = &source_acquisition.tag {
+        validate_git_ref_text(tag, "source_acquisition.tag")?;
+    }
+    validate_required_literal_field(
+        &source_acquisition.archive_profile,
+        RELEASE_SOURCE_ARCHIVE_PROFILE,
+        "source_acquisition.archive_profile",
+    )?;
+    validate_required_literal_field(
+        &source_acquisition.archive_version,
+        RELEASE_SOURCE_ARCHIVE_VERSION,
+        "source_acquisition.archive_version",
+    )?;
+    Ok(())
+}
+
+fn required_source_acquisition_field<'a>(
+    value: &'a Option<String>,
+    field_name: &str,
+) -> Result<&'a str, ReleaseEvidenceError> {
+    let Some(value) = value.as_deref() else {
+        return Err(validation_error(format!("release evidence {field_name} is required")));
+    };
+    if value.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {field_name} must not be empty")));
+    }
+    Ok(value)
+}
+
+fn validate_required_literal_field(
+    value: &Option<String>,
+    expected: &str,
+    field_name: &str,
+) -> Result<(), ReleaseEvidenceError> {
+    let actual = required_source_acquisition_field(value, field_name)?;
+    if actual != expected {
+        return Err(validation_error(format!("release evidence {field_name} must be {expected}, got {actual}")));
+    }
+    Ok(())
+}
+
+fn validate_git_commit_hex(commit: &str) -> Result<(), ReleaseEvidenceError> {
+    let len = commit.len();
+    if len != GIT_SHA1_HEX_LENGTH_CHARS && len != GIT_SHA256_HEX_LENGTH_CHARS {
+        return Err(validation_error(format!(
+            "source_acquisition.commit must be {GIT_SHA1_HEX_LENGTH_CHARS} or {GIT_SHA256_HEX_LENGTH_CHARS} lowercase hex chars, got {len}"
+        )));
+    }
+    if !commit.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
+        return Err(validation_error("source_acquisition.commit must contain lowercase hex only".to_string()));
+    }
+    Ok(())
+}
+
+fn validate_git_ref_text(reference: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    if reference.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {field_name} must not be empty")));
+    }
+    let byte_count = u32_count(reference.len(), &format!("release evidence {field_name} length overflowed u32"))?;
+    if byte_count > MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT {
+        return Err(validation_error(format!(
+            "release evidence {field_name} is {byte_count} bytes, limit is {MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT}"
+        )));
+    }
+    if reference.bytes().any(|byte| byte.is_ascii_control()) {
+        return Err(validation_error(format!("release evidence {field_name} must not contain control characters")));
+    }
+    Ok(())
+}
+
+fn validate_source_acquisition_url(
+    url: &str,
+    allowed_schemes: &[&str],
+    allowed_description: &str,
+) -> Result<(), ReleaseEvidenceError> {
     if url.trim().is_empty() {
         return Err(validation_error("release evidence source_acquisition.url must not be empty".to_string()));
     }
@@ -467,9 +628,25 @@ fn validate_source_acquisition_url(url: &str) -> Result<(), ReleaseEvidenceError
             "release evidence source_acquisition.url is {byte_count} bytes, limit is {MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT}"
         )));
     }
-    if !(url.starts_with("file://") || url.starts_with("http://") || url.starts_with("https://")) {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return Err(validation_error(format!(
+            "release evidence source_acquisition.url must start with {allowed_description}"
+        )));
+    };
+    if !allowed_schemes.contains(&scheme) {
+        return Err(validation_error(format!(
+            "release evidence source_acquisition.url must start with {allowed_description}"
+        )));
+    }
+    reject_credential_bearing_url(rest)?;
+    Ok(())
+}
+
+fn reject_credential_bearing_url(rest_after_scheme: &str) -> Result<(), ReleaseEvidenceError> {
+    let authority = rest_after_scheme.split('/').next().unwrap_or("");
+    if authority.contains('@') {
         return Err(validation_error(
-            "release evidence source_acquisition.url must start with file://, http://, or https://".to_string(),
+            "release evidence source_acquisition.url must not contain credentials or URL userinfo".to_string(),
         ));
     }
     Ok(())
@@ -843,11 +1020,10 @@ mod tests {
     #[test]
     fn validate_accepts_matching_external_source_acquisition() {
         let mut manifest = sample_manifest();
-        manifest.source_acquisition = Some(SourceAcquisition {
-            kind: SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
-            url: "https://example.invalid/mantle-src.tar".to_string(),
-            digest_blake3: manifest.source_archive.digest_blake3.clone(),
-        });
+        manifest.source_acquisition = Some(SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            manifest.source_archive.digest_blake3.clone(),
+        ));
 
         let bytes = canonical_release_evidence_manifest(manifest).unwrap();
         let text = String::from_utf8(bytes).unwrap();
@@ -859,11 +1035,10 @@ mod tests {
     #[test]
     fn validate_rejects_source_acquisition_digest_mismatch() {
         let mut manifest = sample_manifest();
-        manifest.source_acquisition = Some(SourceAcquisition {
-            kind: SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
-            url: "https://example.invalid/mantle-src.tar".to_string(),
-            digest_blake3: sample_digest(2),
-        });
+        manifest.source_acquisition = Some(SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            sample_digest(2),
+        ));
 
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
 
@@ -873,15 +1048,81 @@ mod tests {
     #[test]
     fn validate_rejects_unsupported_source_acquisition_url() {
         let mut manifest = sample_manifest();
-        manifest.source_acquisition = Some(SourceAcquisition {
-            kind: SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE.to_string(),
-            url: "git@example.invalid:mantle.git".to_string(),
-            digest_blake3: manifest.source_archive.digest_blake3.clone(),
-        });
+        manifest.source_acquisition = Some(SourceAcquisition::external_archive(
+            "git@example.invalid:mantle.git".to_string(),
+            manifest.source_archive.digest_blake3.clone(),
+        ));
 
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
 
         assert!(err.to_string().contains("must start with file://, http://, or https://"));
+    }
+
+    #[test]
+    fn validate_accepts_git_source_acquisition() {
+        let mut manifest = sample_manifest();
+        manifest.source_acquisition = Some(SourceAcquisition::git(
+            "file:///tmp/mantle-origin.git".to_string(),
+            "a".repeat(GIT_SHA1_HEX_LENGTH_CHARS),
+            Some("refs/heads/main".to_string()),
+            Some("v0.1.0".to_string()),
+            manifest.source_archive.digest_blake3.clone(),
+        ));
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains(SOURCE_ACQUISITION_KIND_GIT));
+        assert!(text.contains(RELEASE_SOURCE_ARCHIVE_PROFILE));
+        assert!(text.contains(RELEASE_SOURCE_ARCHIVE_VERSION));
+    }
+
+    #[test]
+    fn validate_rejects_git_source_with_malformed_commit() {
+        let mut manifest = sample_manifest();
+        manifest.source_acquisition = Some(SourceAcquisition::git(
+            "file:///tmp/mantle-origin.git".to_string(),
+            "not-a-commit".to_string(),
+            None,
+            None,
+            manifest.source_archive.digest_blake3.clone(),
+        ));
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("source_acquisition.commit"));
+    }
+
+    #[test]
+    fn validate_rejects_credential_bearing_git_source_url() {
+        let mut manifest = sample_manifest();
+        manifest.source_acquisition = Some(SourceAcquisition::git(
+            "https://token@example.invalid/mantle.git".to_string(),
+            "a".repeat(GIT_SHA1_HEX_LENGTH_CHARS),
+            None,
+            None,
+            manifest.source_archive.digest_blake3.clone(),
+        ));
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("must not contain credentials"));
+    }
+
+    #[test]
+    fn validate_rejects_git_source_archive_digest_mismatch() {
+        let mut manifest = sample_manifest();
+        manifest.source_acquisition = Some(SourceAcquisition::git(
+            "file:///tmp/mantle-origin.git".to_string(),
+            "a".repeat(GIT_SHA1_HEX_LENGTH_CHARS),
+            None,
+            None,
+            sample_digest(2),
+        ));
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("source_acquisition.digest_blake3 must match"));
     }
 
     #[test]

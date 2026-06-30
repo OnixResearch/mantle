@@ -853,8 +853,24 @@ pub enum ReleaseAction {
         reproducibility_report: Option<PathBuf>,
 
         /// External source archive URL witnesses can fetch before rebuilding
-        #[arg(long)]
+        #[arg(long, conflicts_with = "git_source_url")]
         source_acquisition_url: Option<String>,
+
+        /// Git remote URL witnesses can fetch to derive the release source archive
+        #[arg(long, requires = "git_source_commit")]
+        git_source_url: Option<String>,
+
+        /// Pinned Git commit for --git-source-url
+        #[arg(long, requires = "git_source_url")]
+        git_source_commit: Option<String>,
+
+        /// Optional Git ref that must resolve to --git-source-commit during witness replay
+        #[arg(long, requires = "git_source_url")]
+        git_source_ref: Option<String>,
+
+        /// Optional Git tag that must resolve to --git-source-commit during witness replay
+        #[arg(long, requires = "git_source_url")]
+        git_source_tag: Option<String>,
 
         /// Workflow command identity recorded in the manifest
         #[arg(long, default_value = "./scripts/prove-self-hosting.sh")]
@@ -1033,8 +1049,13 @@ pub enum ReleaseAction {
 
         /// Require source acquisition metadata and fetch the source archive independently
         /// before rebuilding
-        #[arg(long)]
+        #[arg(long, conflicts_with = "require_git_source")]
         require_independent_source: bool,
+
+        /// Require Git source metadata and derive the source archive from the declared Git origin
+        /// before rebuilding
+        #[arg(long)]
+        require_git_source: bool,
 
         /// Stable witness identity recorded in the attestation (default: signer key name)
         #[arg(long)]
@@ -3899,6 +3920,46 @@ let Plan = {
     }
 
     #[test]
+    fn release_create_accepts_git_source_flags() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "create",
+            "--release-id",
+            "mantle-0.1.0-rc1",
+            "--binary",
+            "/tmp/mantle",
+            "--proof-bundle",
+            "/tmp/self-hosting-proof",
+            "--git-source-url",
+            "file:///tmp/mantle-origin.git",
+            "--git-source-commit",
+            "0123456789abcdef0123456789abcdef01234567",
+            "--git-source-ref",
+            "refs/heads/main",
+            "--git-source-tag",
+            "v0.1.0",
+        ]);
+        let Command::Release {
+            action:
+                ReleaseAction::Create {
+                    git_source_url: Some(url),
+                    git_source_commit: Some(commit),
+                    git_source_ref: Some(reference),
+                    git_source_tag: Some(tag),
+                    ..
+                },
+        } = args.command
+        else {
+            panic!("expected release create with Git source flags");
+        };
+        assert_eq!(url, "file:///tmp/mantle-origin.git");
+        assert_eq!(commit, "0123456789abcdef0123456789abcdef01234567");
+        assert_eq!(reference, "refs/heads/main");
+        assert_eq!(tag, "v0.1.0");
+    }
+
+    #[test]
     fn release_witness_rebuild_accepts_require_independent_source_flag() {
         let args = Args::parse_from([
             "mantle",
@@ -3915,6 +3976,38 @@ let Plan = {
                 ..
             }
         }));
+    }
+
+    #[test]
+    fn release_witness_rebuild_accepts_require_git_source_flag() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "witness-rebuild",
+            "/tmp/witness-request",
+            "--require-git-source",
+            "--check",
+        ]);
+        assert!(matches!(args.command, Command::Release {
+            action: ReleaseAction::WitnessRebuild {
+                require_git_source: true,
+                check: true,
+                ..
+            }
+        }));
+    }
+
+    #[test]
+    fn release_witness_rebuild_rejects_conflicting_source_replay_modes() {
+        let result = Args::try_parse_from([
+            "mantle",
+            "release",
+            "witness-rebuild",
+            "/tmp/witness-request",
+            "--require-independent-source",
+            "--require-git-source",
+        ]);
+        assert!(result.is_err());
     }
 
     #[test]
