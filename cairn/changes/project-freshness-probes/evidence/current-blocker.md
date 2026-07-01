@@ -1,6 +1,6 @@
 # Current Blocker — Project freshness probes
 
-Date: 2026-06-30
+Date: 2026-07-01
 
 ## Question
 
@@ -8,22 +8,22 @@ Can `project-freshness-probes` be honestly drained from the current tree?
 
 ## Inspected evidence
 
-- `cairn/changes/project-freshness-probes/tasks.md` still has 9 unchecked tasks covering probe schema, observation records, pure classification/template planning, Git/HTTP/local/command shell adapters, refresh/list-stale lock integration, and positive/negative/CLI fixture tests.
-- The proposal and design require a bounded command probe contract, HTTP text/JSON probes, Git reference probes, local file/directory probes, no-network behavior, and template substitution that can feed refresh plans.
-- Current project code supports refresh/list-stale through `RefreshResolver`, but code search did not find implemented freshness probe types, observation records, command probe bounds, HTTP/local probe shells, or lockfile observation persistence.
-- Several sibling project-input changes depend on freshness semantics (`project-lock-importers`, `forge-agnostic-vcs-inputs`, and `input-fetch-policy`), so a partial hidden implementation would create cross-change overclaims.
+- `crates/crunch-project-core/src/freshness.rs` now provides the pure freshness schema slice: versioned probe definitions, normalized observations, BLAKE3 value digests, bounded diagnostics, stale/unchanged/failed/skipped/network-required classification, no-network rejection for observed network probes, and bounded template rendering.
+- `cairn/changes/project-freshness-probes/tasks.md` now marks the contract, pure-core implementation, pure positive tests, pure negative tests, and gate-validation tasks complete.
+- Focused validation passed with `cargo test -p crunch-project-core`, `cargo check -p crunch-project-core --target wasm32-unknown-unknown`, `cairn validate --root .`, and the `project-freshness-probes` proposal/design/tasks gates.
+- The remaining unchecked tasks require shell adapters for Git, HTTP text/JSON, local file/directory, and bounded command probes, plus threading observations through `mantle list-stale`, `mantle refresh`, lock updates, generated input updates, and shell/CLI fixture tests.
 
 ## Decision
 
-Blocked as a complete drain. The change needs a new project-input observation model plus multiple shell adapters and fixture tests; none of that support is present yet.
+Blocked as a complete drain, but no longer blocked on the pure observation/classification/template core. The active blocker is now the imperative shell and project-command integration layer; claiming complete support would still overclaim because no probe execution adapters or refresh/list-stale wiring exist yet.
 
 ## Owner
 
-Mantle project workflow owner for the freshness-observation model and adapter shell.
+Mantle project workflow owner for the freshness adapter shell and refresh/list-stale integration.
 
 ## Next action
 
-1. implement the pure observation/classification/template core with positive and negative tests;
-2. add shell adapters incrementally, starting with local file/directory and Git fixtures before HTTP/command probes;
-3. thread observations into list-stale and refresh reports without mutating on list-stale;
-4. keep network/no-network behavior explicit before enabling dependent importer/fetch-policy claims.
+1. add shell adapters incrementally, starting with local file/directory probes and deterministic fixture tests;
+2. add a local Git reference probe fixture before HTTP or command probes;
+3. thread normalized observations into `mantle list-stale` and `mantle refresh` without mutating on list-stale;
+4. preserve explicit no-network behavior before enabling dependent VCS/input workflow claims.

@@ -18,6 +18,7 @@ fn lock_with_entries() -> Lockfile {
         },
         patches: vec![],
         mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".to_string()],
+        fetch_policy: InputFetchPolicy::GenerationMaterial,
     });
     inputs.insert("hello-src".to_string(), LockEntry {
         kind: LockedKind::Tarball {
@@ -29,6 +30,7 @@ fn lock_with_entries() -> Lockfile {
         },
         patches: vec![],
         mirrors: vec![],
+        fetch_policy: InputFetchPolicy::GenerationMaterial,
     });
     Lockfile {
         version: SchemaVersion::CURRENT,
@@ -139,6 +141,23 @@ fn drift_detection_matches_generation() {
 
     // Stale content
     assert!(matches!(check_drift(lock, Some("old content".to_string())), DriftStatus::Drifted { .. }));
+}
+
+#[test]
+fn malformed_manifest_loading_via_nickel_eval_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest_ncl = r#"
+        {
+            inputs = [],
+            patches = [],
+        }
+    "#;
+    let file = dir.path().join("manifest.ncl");
+    std::fs::write(&file, manifest_ncl).unwrap();
+
+    let result = crunch_eval::evaluate_and_deserialize::<ProjectManifest>(&file, &[]);
+
+    assert!(result.is_err());
 }
 
 #[test]
