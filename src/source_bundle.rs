@@ -254,13 +254,33 @@ pub fn plan_source_bundle_from_derivations(
     assemble_source_bundle(records, store_prefix)
 }
 
-pub fn export_source_bundle_from_derivations(
+#[cfg(test)]
+fn export_source_bundle_from_derivations(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     specs: &[SourceSpec],
     store_prefix: &str,
 ) -> Result<SourceBundleManifest, RunError> {
+    export_source_bundle_from_derivations_with_imported(roots, specs, store_prefix, &[])
+}
+
+pub fn export_source_bundle_from_derivations_with_state(
+    roots: &[(String, crunch_glue::CrunchDerivation)],
+    specs: &[SourceSpec],
+    store_prefix: &str,
+    state_dir: &Path,
+) -> Result<SourceBundleManifest, RunError> {
+    let imported_records = read_imported_source_records(state_dir)?;
+    export_source_bundle_from_derivations_with_imported(roots, specs, store_prefix, &imported_records)
+}
+
+fn export_source_bundle_from_derivations_with_imported(
+    roots: &[(String, crunch_glue::CrunchDerivation)],
+    specs: &[SourceSpec],
+    store_prefix: &str,
+    imported_records: &[SourceRecord],
+) -> Result<SourceBundleManifest, RunError> {
     let mut records = canonicalize_source_specs(specs, store_prefix)?;
-    records.extend(materialize_export_records(&collect_build_source_records(roots, store_prefix)?)?);
+    records.extend(materialize_export_records(&collect_build_source_records(roots, store_prefix)?, imported_records)?);
     assemble_source_bundle(records, store_prefix)
 }
 
@@ -1060,6 +1080,7 @@ fn source_record_metadata_matches_preflight(expected: &SourceRecord, imported: &
     expected.kind == imported.kind
         && expected.identity == imported.identity
         && expected.store_prefix == imported.store_prefix
+        && expected.adapter == imported.adapter
         && expected.metadata == imported.metadata
 }
 
@@ -1191,16 +1212,39 @@ fn sorted_json_paths(dir: &Path, label: &str) -> Result<Vec<PathBuf>, RunError> 
     }
 }
 
-fn materialize_export_records(records: &[SourceRecord]) -> Result<Vec<SourceRecord>, RunError> {
+fn materialize_export_records(
+    records: &[SourceRecord],
+    imported_records: &[SourceRecord],
+) -> Result<Vec<SourceRecord>, RunError> {
     let mut materialized = Vec::with_capacity(records.len());
     for record in records {
         materialized.push(match record.kind {
-            SourceRecordKind::FixedUrl => materialize_file_url_record(record, false)?,
-            SourceRecordKind::VcsSnapshot => materialize_file_url_record(record, true)?,
+            SourceRecordKind::FixedUrl => materialize_fetcher_record(record, imported_records, false)?,
+            SourceRecordKind::VcsSnapshot => materialize_fetcher_record(record, imported_records, true)?,
             _ => record.clone(),
         });
     }
     Ok(materialized)
+}
+
+fn materialize_fetcher_record(
+    record: &SourceRecord,
+    imported_records: &[SourceRecord],
+    skip_git_dir: bool,
+) -> Result<SourceRecord, RunError> {
+    if let Some(imported) = find_matching_materialized_source_record(record, imported_records) {
+        return Ok(imported.clone());
+    }
+    materialize_file_url_record(record, skip_git_dir)
+}
+
+fn find_matching_materialized_source_record<'a>(
+    expected: &SourceRecord,
+    records: &'a [SourceRecord],
+) -> Option<&'a SourceRecord> {
+    records
+        .iter()
+        .find(|stored| source_record_metadata_matches_preflight(expected, stored) && !stored.files.is_empty())
 }
 
 fn materialize_file_url_record(record: &SourceRecord, skip_git_dir: bool) -> Result<SourceRecord, RunError> {
@@ -1389,7 +1433,7 @@ fn cmd_source_bundle(
             import_paths,
             to,
         } => {
-            let manifest = export_from_cli_inputs(&sources, &build_roots, &import_paths, store_prefix)?;
+            let manifest = export_from_cli_inputs(&sources, &build_roots, &import_paths, store_prefix, state_dir)?;
             write_source_bundle(&to, &manifest)?;
             print_plan_report(&plan_report(&manifest)?, json_output)
         }
@@ -1451,13 +1495,14 @@ fn export_from_cli_inputs(
     build_roots: &[PathBuf],
     import_paths: &[PathBuf],
     store_prefix: &str,
+    state_dir: &Path,
 ) -> Result<SourceBundleManifest, RunError> {
     let specs = sources.iter().map(|source| parse_source_spec(source)).collect::<Result<Vec<_>, _>>()?;
     if build_roots.is_empty() {
         return plan_source_bundle(&specs, store_prefix);
     }
     let roots = evaluate_build_roots(build_roots, import_paths)?;
-    export_source_bundle_from_derivations(&roots, &specs, store_prefix)
+    export_source_bundle_from_derivations_with_state(&roots, &specs, store_prefix, state_dir)
 }
 
 fn evaluate_build_roots(
@@ -1623,6 +1668,21 @@ mod tests {
             return Url::from_directory_path(path).unwrap().to_string();
         }
         Url::from_file_path(path).unwrap().to_string()
+    }
+
+    fn materialized_record_from_payload(
+        record: &SourceRecord,
+        payload_path: &Path,
+        skip_git_dir: bool,
+    ) -> SourceRecord {
+        let (files, payload_bytes) = canonicalize_payload_entries(payload_path, skip_git_dir).unwrap();
+        let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files).unwrap();
+        SourceRecord {
+            payload_bytes,
+            content_blake3,
+            files,
+            ..record.clone()
+        }
     }
 
     fn package_adapter(
@@ -1936,6 +1996,53 @@ mod tests {
             exported.records[0].metadata.get(RECORD_METADATA_URL_KEY),
             planned.records[0].metadata.get(RECORD_METADATA_URL_KEY)
         );
+    }
+
+    #[test]
+    fn source_bundle_export_uses_imported_state_for_remote_fetcher_payload() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let fetcher = fixed_fetcher("remote-src", "https://example.invalid/source.tar.gz");
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root.clone())];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let materialized = materialized_record_from_payload(&planned.records[0], &payload, false);
+        let source_state_manifest = assemble_source_bundle(vec![materialized.clone()], "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&source_state_manifest, &state_dir, true).unwrap();
+
+        let exported =
+            export_source_bundle_from_derivations_with_state(&roots, &[], "/mantle/store", &state_dir).unwrap();
+
+        assert_eq!(exported.records[0].files.len(), 1);
+        assert_eq!(exported.records[0].files[0].path, "payload.txt");
+        assert_eq!(exported.records[0].content_blake3, materialized.content_blake3);
+        assert_eq!(exported.records[0].metadata, planned.records[0].metadata);
+    }
+
+    #[test]
+    fn source_bundle_export_rejects_imported_remote_payload_with_wrong_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let fetcher = fixed_fetcher("remote-src", "https://example.invalid/source.tar.gz");
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root.clone())];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let mut wrong = materialized_record_from_payload(&planned.records[0], &payload, false);
+        wrong
+            .metadata
+            .insert(RECORD_METADATA_URL_KEY.to_string(), "https://example.invalid/other.tar.gz".to_string());
+        wrong.content_blake3 = digest_source_record_content(&wrong.kind, &wrong.metadata, &wrong.files).unwrap();
+        let source_state_manifest = assemble_source_bundle(vec![wrong], "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&source_state_manifest, &state_dir, true).unwrap();
+
+        let err =
+            export_source_bundle_from_derivations_with_state(&roots, &[], "/mantle/store", &state_dir).unwrap_err();
+
+        assert!(err.to_string().contains("cannot materialize non-local source URL"));
     }
 
     #[test]
