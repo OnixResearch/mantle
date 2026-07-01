@@ -20,6 +20,7 @@ pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
 pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
 pub const MAX_REMOTE_STDIO_STDERR_BYTES: usize = 65_536;
 pub const MAX_REMOTE_STDIO_FRAME_COUNT: usize = 4_096;
+pub const MAX_REMOTE_STDIO_INPUT_BYTES: usize = 4_194_304;
 pub const MAX_REMOTE_STATUS_ITEMS: usize = 4_096;
 pub const MAX_REMOTE_UPLOAD_BYTES: u64 = 1_099_511_627_776;
 pub const MAX_REMOTE_BUILD_TIME_SECS: u64 = 86_400;
@@ -428,6 +429,14 @@ pub struct RemoteStdioTranscript {
     pub stderr_summary: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteBuilderFrameResponse {
+    pub response_frames: Vec<RemoteFrame>,
+    pub missing_input_refs: Vec<String>,
+    pub output_digest_blake3: String,
+    pub ticket_uses_remaining: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteStdioCommand {
     pub program: PathBuf,
@@ -684,6 +693,87 @@ pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdi
             failure.phase, failure.retry_class, failure.reason
         ))
     })
+}
+
+pub fn remote_client_request_frames(client: &RemoteLoopbackClient) -> Vec<RemoteFrame> {
+    vec![
+        RemoteFrame::Hello {
+            hello: client.hello.clone(),
+        },
+        RemoteFrame::AuthTicket {
+            auth: client.auth.clone(),
+        },
+        RemoteFrame::BuildRequest {
+            request: client.request.clone(),
+        },
+        RemoteFrame::InputManifest {
+            manifest: client.input_manifest.clone(),
+        },
+        RemoteFrame::InputUpload {
+            upload: RemoteInputUpload {
+                request_id: client.request.request_id.clone(),
+                refs: client.uploaded_input_refs.clone(),
+                byte_count: client.request.upload_bytes,
+            },
+        },
+    ]
+}
+
+pub fn plan_remote_builder_frames(
+    builder: &RemoteLoopbackBuilder,
+    ticket: &mut RemoteTicket,
+    client_frames: &[RemoteFrame],
+    client_transfer: RemoteTransferCapabilities,
+) -> Result<RemoteBuilderFrameResponse, String> {
+    let mut phase = RemoteProtocolPhase::Open;
+    let mut frames = client_frames.iter();
+    let hello = take_hello(&mut frames, &mut phase)?;
+    let accepted = expect_accepted_hello(hello, builder)?;
+    take_auth(&mut frames, &mut phase, ticket)?;
+    let auth_ok = RemoteFrame::AuthOk {
+        auth: RemoteAuthOk {
+            builder_signing_keys: vec![builder.signing_key_id.clone()],
+            accepted_capabilities: accepted.accepted_capabilities,
+        },
+    };
+    phase = validate_remote_transition(phase, RemoteFrameDirection::BuilderToClient, &auth_ok)?;
+    let request = take_build_request(&mut frames, &mut phase, ticket)?;
+    let manifest = take_input_manifest(&mut frames, &mut phase, request)?;
+    let missing = derive_missing_inputs(&manifest.input_refs, &builder.present_input_refs)?;
+    let missing_frame = RemoteFrame::MissingInputs {
+        request_id: request.request_id.clone(),
+        refs: missing.clone(),
+    };
+    phase = validate_remote_transition(phase, RemoteFrameDirection::BuilderToClient, &missing_frame)?;
+    take_input_upload(&mut frames, &mut phase, &request.request_id, &missing, ticket)?;
+    reject_extra_client_frames(frames.next())?;
+    redeem_after_queue(ticket, true)?;
+    build_response_frames(
+        builder,
+        request,
+        &manifest.input_refs,
+        client_transfer,
+        phase,
+        vec![auth_ok, missing_frame],
+        missing,
+        ticket.uses_remaining,
+    )
+}
+
+pub fn serve_stdio_remote_once(
+    reader: impl Read,
+    mut writer: impl Write,
+    builder: &RemoteLoopbackBuilder,
+    ticket: &mut RemoteTicket,
+    client_transfer: RemoteTransferCapabilities,
+) -> Result<RemoteBuilderFrameResponse, String> {
+    let input = read_bounded_stdio_input(reader)?;
+    let client_frames = decode_remote_frame_stream(&input)?;
+    let response = plan_remote_builder_frames(builder, ticket, &client_frames, client_transfer)?;
+    for frame in &response.response_frames {
+        write_remote_frame(&mut writer, frame)?;
+    }
+    Ok(response)
 }
 
 pub fn validate_remote_transition(
@@ -1004,6 +1094,154 @@ fn remote_loopback_output_digest(request: &ConcreteBuildRequest, input_refs: &[S
         hasher.update(input_ref.as_bytes());
     }
     hasher.finalize().to_hex().to_string()
+}
+
+fn take_hello<'a>(
+    frames: &mut std::slice::Iter<'a, RemoteFrame>,
+    phase: &mut RemoteProtocolPhase,
+) -> Result<&'a RemoteHello, String> {
+    let frame = frames.next().ok_or_else(|| "missing-hello-frame".to_string())?;
+    *phase = validate_remote_transition(*phase, RemoteFrameDirection::ClientToBuilder, frame)?;
+    match frame {
+        RemoteFrame::Hello { hello } => Ok(hello),
+        _ => Err("expected-hello-frame".to_string()),
+    }
+}
+
+fn take_auth(
+    frames: &mut std::slice::Iter<'_, RemoteFrame>,
+    phase: &mut RemoteProtocolPhase,
+    ticket: &RemoteTicket,
+) -> Result<(), String> {
+    let frame = frames.next().ok_or_else(|| "missing-auth-ticket-frame".to_string())?;
+    *phase = validate_remote_transition(*phase, RemoteFrameDirection::ClientToBuilder, frame)?;
+    let RemoteFrame::AuthTicket { auth } = frame else {
+        return Err("expected-auth-ticket-frame".to_string());
+    };
+    expect_authorized_ticket(ticket, auth)
+}
+
+fn take_build_request<'a>(
+    frames: &mut std::slice::Iter<'a, RemoteFrame>,
+    phase: &mut RemoteProtocolPhase,
+    ticket: &RemoteTicket,
+) -> Result<&'a ConcreteBuildRequest, String> {
+    let frame = frames.next().ok_or_else(|| "missing-build-request-frame".to_string())?;
+    *phase = validate_remote_transition(*phase, RemoteFrameDirection::ClientToBuilder, frame)?;
+    let RemoteFrame::BuildRequest { request } = frame else {
+        return Err("expected-build-request-frame".to_string());
+    };
+    validate_concrete_request(request, ticket)?;
+    Ok(request)
+}
+
+fn take_input_manifest<'a>(
+    frames: &mut std::slice::Iter<'a, RemoteFrame>,
+    phase: &mut RemoteProtocolPhase,
+    request: &ConcreteBuildRequest,
+) -> Result<&'a RemoteInputManifest, String> {
+    let frame = frames.next().ok_or_else(|| "missing-input-manifest-frame".to_string())?;
+    *phase = validate_remote_transition(*phase, RemoteFrameDirection::ClientToBuilder, frame)?;
+    let RemoteFrame::InputManifest { manifest } = frame else {
+        return Err("expected-input-manifest-frame".to_string());
+    };
+    validate_input_manifest(manifest, request)?;
+    Ok(manifest)
+}
+
+fn take_input_upload(
+    frames: &mut std::slice::Iter<'_, RemoteFrame>,
+    phase: &mut RemoteProtocolPhase,
+    expected_request_id: &str,
+    missing: &[String],
+    ticket: &RemoteTicket,
+) -> Result<(), String> {
+    let frame = frames.next().ok_or_else(|| "missing-input-upload-frame".to_string())?;
+    *phase = validate_remote_transition(*phase, RemoteFrameDirection::ClientToBuilder, frame)?;
+    let RemoteFrame::InputUpload { upload } = frame else {
+        return Err("expected-input-upload-frame".to_string());
+    };
+    if upload.request_id != expected_request_id {
+        return Err("input-upload-request-id-mismatch".to_string());
+    }
+    validate_missing_uploads(missing, &upload.refs, upload.byte_count, ticket.max_upload_bytes)
+}
+
+fn reject_extra_client_frames(extra: Option<&RemoteFrame>) -> Result<(), String> {
+    if extra.is_some() {
+        return Err("unexpected-extra-client-frame".to_string());
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_response_frames(
+    builder: &RemoteLoopbackBuilder,
+    request: &ConcreteBuildRequest,
+    input_refs: &[String],
+    client_transfer: RemoteTransferCapabilities,
+    mut phase: RemoteProtocolPhase,
+    mut response_frames: Vec<RemoteFrame>,
+    missing: Vec<String>,
+    ticket_uses_remaining: u32,
+) -> Result<RemoteBuilderFrameResponse, String> {
+    let output_digest = remote_loopback_output_digest(request, input_refs);
+    push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildQueued {
+        request_id: request.request_id.clone(),
+        session_id: request.request_id.clone(),
+    })?;
+    push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildStarted {
+        request_id: request.request_id.clone(),
+    })?;
+    push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildFinished {
+        result: RemoteBuildFinished {
+            request_id: request.request_id.clone(),
+            output_digest_blake3: output_digest.clone(),
+            builder_signing_key_id: builder.signing_key_id.clone(),
+            store_prefix: request.store_prefix.clone(),
+        },
+    })?;
+    let transfer = plan_output_transfer(
+        client_transfer,
+        builder.transfer_capabilities,
+        REMOTE_LOOPBACK_OUTPUT_BYTES,
+        &builder.signing_key_id,
+    )?;
+    push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::OutputTransferDone { report: transfer })?;
+    push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::Done {
+        request_id: request.request_id.clone(),
+    })?;
+    Ok(RemoteBuilderFrameResponse {
+        response_frames,
+        missing_input_refs: missing,
+        output_digest_blake3: output_digest,
+        ticket_uses_remaining,
+    })
+}
+
+fn push_builder_frame(
+    response_frames: &mut Vec<RemoteFrame>,
+    phase: &mut RemoteProtocolPhase,
+    frame: RemoteFrame,
+) -> Result<(), String> {
+    *phase = validate_remote_transition(*phase, RemoteFrameDirection::BuilderToClient, &frame)?;
+    response_frames.push(frame);
+    Ok(())
+}
+
+fn read_bounded_stdio_input(mut reader: impl Read) -> Result<Vec<u8>, String> {
+    let mut input = Vec::new();
+    let limit =
+        u64::try_from(MAX_REMOTE_STDIO_INPUT_BYTES).map_err(|_| "stdio-input-limit-conversion-failed".to_string())?;
+    reader
+        .by_ref()
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut input)
+        .map_err(|err| format!("reading stdio remote input: {err}"))?;
+    if input.len() > MAX_REMOTE_STDIO_INPUT_BYTES {
+        return Err(format!("remote-stdio-input-exceeds-{MAX_REMOTE_STDIO_INPUT_BYTES}"));
+    }
+    Ok(input)
 }
 
 pub fn redacted_ticket_view(ticket: &RemoteTicket) -> RemoteTicketView {
@@ -1376,6 +1614,54 @@ mod tests {
     }
 
     #[test]
+    fn stdio_server_once_exchanges_framed_request_and_response() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let input = encode_frame_stream(&remote_client_request_frames(&client));
+        let mut stdout = Vec::new();
+        let response = serve_stdio_remote_once(
+            std::io::Cursor::new(input),
+            &mut stdout,
+            &builder,
+            &mut ticket,
+            client.transfer_capabilities,
+        )
+        .expect("stdio server exchange succeeds");
+        let server_frames = decode_remote_frame_stream(&stdout).expect("server stdout decodes");
+
+        assert_eq!(server_frames, response.response_frames);
+        assert!(matches!(server_frames.first(), Some(RemoteFrame::AuthOk { .. })));
+        assert!(matches!(server_frames.last(), Some(RemoteFrame::Done { .. })));
+        assert_eq!(response.missing_input_refs, vec!["input-a".to_string()]);
+        assert_eq!(response.ticket_uses_remaining, 0);
+        assert_eq!(ticket.uses_remaining, 0);
+    }
+
+    #[test]
+    fn stdio_server_rejects_incomplete_client_sequence_without_redeeming_ticket() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let mut frames = remote_client_request_frames(&client);
+        frames.pop();
+        let input = encode_frame_stream(&frames);
+        let mut stdout = Vec::new();
+        let err = serve_stdio_remote_once(
+            std::io::Cursor::new(input),
+            &mut stdout,
+            &builder,
+            &mut ticket,
+            client.transfer_capabilities,
+        )
+        .expect_err("missing upload frame fails");
+
+        assert_eq!(err, "missing-input-upload-frame");
+        assert!(stdout.is_empty());
+        assert_eq!(ticket.uses_remaining, 1);
+    }
+
+    #[test]
     fn protocol_state_machine_rejects_out_of_order_build_request() {
         let request = fixture_request();
         let frame = RemoteFrame::BuildRequest { request };
@@ -1504,6 +1790,14 @@ mod tests {
         assert_eq!(output.retry_class, RemoteRetryClass::Terminal);
         assert_eq!(lease.leased_refs, vec!["input-a".to_string(), "output-a".to_string()]);
         assert!(lease.release_when_done);
+    }
+
+    fn encode_frame_stream(frames: &[RemoteFrame]) -> Vec<u8> {
+        let mut encoded = Vec::new();
+        for frame in frames {
+            encoded.extend(encode_remote_frame(frame).expect("test frame encodes"));
+        }
+        encoded
     }
 
     fn fixture_ticket() -> RemoteTicket {
