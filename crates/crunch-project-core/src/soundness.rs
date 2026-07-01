@@ -9,16 +9,13 @@ use serde::Serialize;
 
 use crate::drift::DriftStatus;
 use crate::drift::check_drift;
-use crate::generate::generate_inputs_ncl;
 use crate::lock::LockEntry;
 use crate::lock::LockedKind;
-use crate::lock::LockedPatch;
 use crate::lock::LockedPatchSource;
 use crate::lock::Lockfile;
 use crate::manifest::GitReference;
 use crate::manifest::InputKind;
 use crate::manifest::ManifestInput;
-use crate::manifest::PatchDef;
 use crate::manifest::PatchSource;
 use crate::manifest::ProjectManifest;
 use crate::version::SchemaVersion;
@@ -834,7 +831,7 @@ mod tests {
                 mirrors: vec!["https://mirror.example.com/pkg.txt".into()],
                 patches: vec!["fix".into()],
             }],
-            patches: vec![PatchDef {
+            patches: vec![crate::manifest::PatchDef {
                 name: "fix".into(),
                 source: PatchSource::Local {
                     path: "patches/fix.patch".into(),
@@ -857,7 +854,7 @@ mod tests {
             mirrors: vec!["https://mirror.example.com/pkg.txt".into()],
         });
         let mut patches = BTreeMap::new();
-        patches.insert("fix".into(), LockedPatch {
+        patches.insert("fix".into(), crate::lock::LockedPatch {
             source: LockedPatchSource::Local {
                 path: "patches/fix.patch".into(),
             },
@@ -888,7 +885,7 @@ mod tests {
     }
 
     fn report_for(manifest: ProjectManifest, lock: Lockfile) -> ProjectSoundnessReport {
-        let generated_inputs = generate_inputs_ncl(lock.clone());
+        let generated_inputs = crate::generate::generate_inputs_ncl(lock.clone());
         check_project_soundness(soundness_input(manifest, lock, Some(generated_inputs)))
     }
 
@@ -920,7 +917,7 @@ mod tests {
             patches: vec![],
             mirrors: vec![],
         });
-        let generated_inputs = generate_inputs_ncl(lock.clone());
+        let generated_inputs = crate::generate::generate_inputs_ncl(lock.clone());
 
         let report = check_project_soundness(soundness_input(manifest, lock, Some(generated_inputs)));
 
@@ -953,7 +950,7 @@ mod tests {
     fn detects_missing_lock_entry() {
         let manifest = clean_manifest();
         let lock = Lockfile::new();
-        let generated_inputs = generate_inputs_ncl(lock.clone());
+        let generated_inputs = crate::generate::generate_inputs_ncl(lock.clone());
 
         let report = check_project_soundness(soundness_input(manifest, lock, Some(generated_inputs)));
 
@@ -1039,7 +1036,7 @@ mod tests {
     fn supplemental_policy_trust_retention_and_freshness_facts_are_classified() {
         let manifest = clean_manifest();
         let lock = clean_lock();
-        let generated_inputs = generate_inputs_ncl(lock.clone());
+        let generated_inputs = crate::generate::generate_inputs_ncl(lock.clone());
         let mut input = soundness_input(manifest, lock, Some(generated_inputs));
         input.supplemental_facts = vec![
             ProjectSoundnessFact::error(

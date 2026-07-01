@@ -25,6 +25,7 @@ mod native_toolchain_closure;
 #[allow(dead_code)]
 mod offline_cargo;
 mod operator_diagnostics;
+mod pin_import;
 mod portable_receipt;
 mod project_build;
 mod project_cmd;
@@ -703,6 +704,12 @@ enum Command {
 
 #[derive(Subcommand, Debug, Clone)]
 enum ImportAction {
+    /// Plan or apply external pin files into Mantle project files
+    Pins {
+        #[command(subcommand)]
+        action: PinImportAction,
+    },
+
     /// Plan or apply a Cargo workspace scaffold for the offline Cargo build lane
     Cargo {
         /// Render the no-mutate plan (default when --apply is absent)
@@ -737,6 +744,74 @@ enum ImportAction {
         #[arg(long, default_value = "release")]
         profile: String,
     },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum PinImportAction {
+    /// Render a no-mutate pin import plan
+    Plan {
+        /// External pin importer to use
+        #[arg(long, value_enum, default_value_t = PinImporter::Nixtamal)]
+        importer: PinImporter,
+
+        /// External pin facts file to import
+        #[arg(long, default_value = pin_import::PinImportShellOptions::default_pins_file())]
+        pins_file: PathBuf,
+
+        /// Planned Mantle project manifest path
+        #[arg(long, default_value = crunch_project::PIN_IMPORT_DEFAULT_PROJECT_FILE)]
+        project_file: String,
+
+        /// Planned Mantle lockfile path
+        #[arg(long, default_value = crunch_project::PIN_IMPORT_DEFAULT_LOCK_FILE)]
+        lock_file: String,
+
+        /// Planned generated inputs path
+        #[arg(long, default_value = crunch_project::PIN_IMPORT_DEFAULT_INPUTS_FILE)]
+        inputs_file: String,
+    },
+
+    /// Apply a blocker-free pin import plan immediately after recomputing it
+    Apply {
+        /// External pin importer to use
+        #[arg(long, value_enum, default_value_t = PinImporter::Nixtamal)]
+        importer: PinImporter,
+
+        /// External pin facts file to import
+        #[arg(long, default_value = pin_import::PinImportShellOptions::default_pins_file())]
+        pins_file: PathBuf,
+
+        /// Planned Mantle project manifest path
+        #[arg(long, default_value = crunch_project::PIN_IMPORT_DEFAULT_PROJECT_FILE)]
+        project_file: String,
+
+        /// Planned Mantle lockfile path
+        #[arg(long, default_value = crunch_project::PIN_IMPORT_DEFAULT_LOCK_FILE)]
+        lock_file: String,
+
+        /// Planned generated inputs path
+        #[arg(long, default_value = crunch_project::PIN_IMPORT_DEFAULT_INPUTS_FILE)]
+        inputs_file: String,
+    },
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+enum PinImporter {
+    Nixtamal,
+    Flake,
+    Npins,
+    Niv,
+}
+
+impl PinImporter {
+    fn as_str(self) -> &'static str {
+        match self {
+            PinImporter::Nixtamal => pin_import::PIN_IMPORTER_NIXTAMAL,
+            PinImporter::Flake => pin_import::PIN_IMPORTER_FLAKE,
+            PinImporter::Npins => pin_import::PIN_IMPORTER_NPINS,
+            PinImporter::Niv => pin_import::PIN_IMPORTER_NIV,
+        }
+    }
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -2171,6 +2246,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
 
 fn run_import_command(ctx: &RunContext, action: ImportAction) -> Result<(), RunError> {
     match action {
+        ImportAction::Pins { action } => run_pin_import_command(ctx, action),
         ImportAction::Cargo {
             plan,
             apply,
@@ -2197,6 +2273,44 @@ fn run_import_command(ctx: &RunContext, action: ImportAction) -> Result<(), RunE
                 json: ctx.json,
             })
         }
+    }
+}
+
+fn run_pin_import_command(ctx: &RunContext, action: PinImportAction) -> Result<(), RunError> {
+    let root = current_dir_or_error()?;
+    match action {
+        PinImportAction::Plan {
+            importer,
+            pins_file,
+            project_file,
+            lock_file,
+            inputs_file,
+        } => pin_import::run_pin_import(pin_import::PinImportShellOptions {
+            root: &root,
+            importer: importer.as_str(),
+            pins_file: &pins_file,
+            project_file: &project_file,
+            lock_file: &lock_file,
+            inputs_file: &inputs_file,
+            apply: false,
+            json: ctx.json,
+        }),
+        PinImportAction::Apply {
+            importer,
+            pins_file,
+            project_file,
+            lock_file,
+            inputs_file,
+        } => pin_import::run_pin_import(pin_import::PinImportShellOptions {
+            root: &root,
+            importer: importer.as_str(),
+            pins_file: &pins_file,
+            project_file: &project_file,
+            lock_file: &lock_file,
+            inputs_file: &inputs_file,
+            apply: true,
+            json: ctx.json,
+        }),
     }
 }
 
