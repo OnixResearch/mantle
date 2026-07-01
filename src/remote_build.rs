@@ -157,6 +157,47 @@ pub enum RemoteExecutablePlanSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteExecutionOutcome {
+    pub request_id: String,
+    pub plan_digest_blake3: String,
+    pub output_digest_blake3: String,
+    pub output_size_bytes: u64,
+    pub outputs: Vec<RemoteExecutionOutput>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteExecutionOutput {
+    pub name: String,
+    pub logical_path: String,
+    pub content_digest_blake3: String,
+    pub size_bytes: u64,
+    pub artifact_attestation_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteProducedOutput {
+    pub name: String,
+    pub logical_path: String,
+    pub content_digest_blake3: String,
+    pub size_bytes: u64,
+    pub path_info_signing_key_id: String,
+    pub artifact_attestation_digest_blake3: String,
+}
+
+pub trait RemoteBuildExecutor {
+    fn execute(&self, plan: &RemoteExecutablePlan, input_refs: &[String]) -> Result<RemoteExecutionOutcome, String>;
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RemoteFixtureExecutor;
+
+impl RemoteBuildExecutor for RemoteFixtureExecutor {
+    fn execute(&self, plan: &RemoteExecutablePlan, input_refs: &[String]) -> Result<RemoteExecutionOutcome, String> {
+        execute_remote_fixture_plan(plan, input_refs)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct RemoteActionSpec {
     pub schema: String,
     pub action_id: String,
@@ -309,6 +350,7 @@ pub struct RemoteBuildFinished {
     pub output_digest_blake3: String,
     pub builder_signing_key_id: String,
     pub store_prefix: String,
+    pub outputs: Vec<RemoteProducedOutput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -498,7 +540,9 @@ pub struct RemoteStdioTranscript {
 pub struct RemoteBuilderFrameResponse {
     pub response_frames: Vec<RemoteFrame>,
     pub missing_input_refs: Vec<String>,
+    pub execution_plan_digest_blake3: String,
     pub output_digest_blake3: String,
+    pub outputs: Vec<RemoteProducedOutput>,
     pub transfer: RemoteTransferReport,
     pub ticket_uses_remaining: u32,
 }
@@ -509,6 +553,7 @@ pub struct RemoteOutputAdmissionReport {
     pub output_digest_blake3: String,
     pub builder_signing_key_id: String,
     pub store_prefix: String,
+    pub outputs: Vec<RemoteProducedOutput>,
     pub transfer: RemoteTransferReport,
 }
 
@@ -952,6 +997,183 @@ fn default_remote_action_system() -> String {
     DEFAULT_REMOTE_ACTION_SYSTEM.to_string()
 }
 
+fn execute_remote_fixture_plan(
+    plan: &RemoteExecutablePlan,
+    input_refs: &[String],
+) -> Result<RemoteExecutionOutcome, String> {
+    validate_remote_execution_plan(plan)?;
+    let mut outputs = Vec::with_capacity(plan.expected_outputs.len());
+    for expected in &plan.expected_outputs {
+        outputs.push(fixture_execution_output(plan, input_refs, expected));
+    }
+    let output_size_bytes = sum_remote_execution_output_sizes(&outputs)?;
+    let output_digest_blake3 = remote_execution_outputs_digest(&outputs);
+    Ok(RemoteExecutionOutcome {
+        request_id: plan.request_id.clone(),
+        plan_digest_blake3: plan.plan_digest_blake3.clone(),
+        output_digest_blake3,
+        output_size_bytes,
+        outputs,
+    })
+}
+
+fn validate_remote_execution_plan(plan: &RemoteExecutablePlan) -> Result<(), String> {
+    if plan.request_id.is_empty() || plan.plan_digest_blake3.is_empty() {
+        return Err("remote-executor-plan-identity-empty".to_string());
+    }
+    if !is_blake3_hex_digest(&plan.plan_digest_blake3) {
+        return Err("remote-executor-plan-digest-invalid".to_string());
+    }
+    validate_command_args(&plan.command_args)?;
+    validate_command_env(&plan.command_env)?;
+    validate_expected_outputs(&plan.expected_outputs, &plan.store_prefix)
+}
+
+fn fixture_execution_output(
+    plan: &RemoteExecutablePlan,
+    input_refs: &[String],
+    expected: &RemoteExpectedOutput,
+) -> RemoteExecutionOutput {
+    let content_digest_blake3 = remote_fixture_output_content_digest(plan, input_refs, expected);
+    let artifact_attestation_digest_blake3 =
+        remote_fixture_artifact_attestation_digest(plan, expected, &content_digest_blake3);
+    RemoteExecutionOutput {
+        name: expected.name.clone(),
+        logical_path: expected.logical_path.clone(),
+        content_digest_blake3,
+        size_bytes: REMOTE_LOOPBACK_OUTPUT_BYTES,
+        artifact_attestation_digest_blake3,
+    }
+}
+
+fn remote_fixture_output_content_digest(
+    plan: &RemoteExecutablePlan,
+    input_refs: &[String],
+    expected: &RemoteExpectedOutput,
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "fixture-plan", &plan.plan_digest_blake3);
+    hash_labeled_str(&mut hasher, "output-name", &expected.name);
+    hash_labeled_str(&mut hasher, "output-path", &expected.logical_path);
+    for input_ref in input_refs {
+        hash_labeled_str(&mut hasher, "input-ref", input_ref);
+    }
+    hasher.finalize().to_hex().to_string()
+}
+
+fn remote_fixture_artifact_attestation_digest(
+    plan: &RemoteExecutablePlan,
+    expected: &RemoteExpectedOutput,
+    content_digest_blake3: &str,
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "fixture-artifact-plan", &plan.plan_digest_blake3);
+    hash_labeled_str(&mut hasher, "output-name", &expected.name);
+    hash_labeled_str(&mut hasher, "content-digest", content_digest_blake3);
+    hasher.finalize().to_hex().to_string()
+}
+
+fn sum_remote_execution_output_sizes(outputs: &[RemoteExecutionOutput]) -> Result<u64, String> {
+    let mut total = 0_u64;
+    for output in outputs {
+        total = total
+            .checked_add(output.size_bytes)
+            .ok_or_else(|| "remote-execution-output-size-overflow".to_string())?;
+    }
+    Ok(total)
+}
+
+fn remote_execution_outputs_digest(outputs: &[RemoteExecutionOutput]) -> String {
+    let mut hasher = blake3::Hasher::new();
+    for output in outputs {
+        hash_labeled_str(&mut hasher, "output-name", &output.name);
+        hash_labeled_str(&mut hasher, "output-path", &output.logical_path);
+        hash_labeled_str(&mut hasher, "content-digest", &output.content_digest_blake3);
+        hash_labeled_str(&mut hasher, "artifact-digest", &output.artifact_attestation_digest_blake3);
+        hash_labeled_str(&mut hasher, "size-bytes", &output.size_bytes.to_string());
+    }
+    hasher.finalize().to_hex().to_string()
+}
+
+fn sign_remote_execution_outputs(outputs: &[RemoteExecutionOutput], signing_key_id: &str) -> Vec<RemoteProducedOutput> {
+    outputs
+        .iter()
+        .map(|output| RemoteProducedOutput {
+            name: output.name.clone(),
+            logical_path: output.logical_path.clone(),
+            content_digest_blake3: output.content_digest_blake3.clone(),
+            size_bytes: output.size_bytes,
+            path_info_signing_key_id: signing_key_id.to_string(),
+            artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
+        })
+        .collect()
+}
+
+fn remote_produced_outputs_content_digest(outputs: &[RemoteProducedOutput]) -> String {
+    let execution_outputs = outputs
+        .iter()
+        .map(|output| RemoteExecutionOutput {
+            name: output.name.clone(),
+            logical_path: output.logical_path.clone(),
+            content_digest_blake3: output.content_digest_blake3.clone(),
+            size_bytes: output.size_bytes,
+            artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
+        })
+        .collect::<Vec<_>>();
+    remote_execution_outputs_digest(&execution_outputs)
+}
+
+fn validate_remote_execution_outcome(
+    outcome: &RemoteExecutionOutcome,
+    request: &ConcreteBuildRequest,
+    plan: &RemoteExecutablePlan,
+) -> Result<(), String> {
+    if outcome.request_id != request.request_id {
+        return Err("remote-execution-request-id-mismatch".to_string());
+    }
+    if outcome.plan_digest_blake3 != plan.plan_digest_blake3 {
+        return Err("remote-execution-plan-digest-mismatch".to_string());
+    }
+    if !is_blake3_hex_digest(&outcome.output_digest_blake3) {
+        return Err("remote-execution-output-digest-invalid".to_string());
+    }
+    if remote_execution_outputs_digest(&outcome.outputs) != outcome.output_digest_blake3 {
+        return Err("remote-execution-output-digest-mismatch".to_string());
+    }
+    if sum_remote_execution_output_sizes(&outcome.outputs)? != outcome.output_size_bytes {
+        return Err("remote-execution-output-size-mismatch".to_string());
+    }
+    validate_execution_outputs_match_expected(&outcome.outputs, &request.expected_outputs)
+}
+
+fn validate_execution_outputs_match_expected(
+    outputs: &[RemoteExecutionOutput],
+    expected_outputs: &[RemoteExpectedOutput],
+) -> Result<(), String> {
+    if outputs.len() != expected_outputs.len() {
+        return Err("remote-execution-output-count-mismatch".to_string());
+    }
+    let expected = expected_outputs
+        .iter()
+        .map(|output| (output.name.as_str(), output.logical_path.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let mut seen = BTreeSet::new();
+    for output in outputs {
+        if !seen.insert(output.name.as_str()) {
+            return Err("remote-execution-output-name-duplicate".to_string());
+        }
+        if expected.get(output.name.as_str()) != Some(&output.logical_path.as_str()) {
+            return Err("remote-execution-output-identity-mismatch".to_string());
+        }
+        if !is_blake3_hex_digest(&output.content_digest_blake3)
+            || !is_blake3_hex_digest(&output.artifact_attestation_digest_blake3)
+        {
+            return Err("remote-execution-output-metadata-digest-invalid".to_string());
+        }
+    }
+    Ok(())
+}
+
 pub fn redeem_after_queue(ticket: &mut RemoteTicket, request_validated: bool) -> Result<(), String> {
     if !request_validated {
         return Ok(());
@@ -1160,6 +1382,17 @@ pub fn plan_remote_builder_frames(
     client_frames: &[RemoteFrame],
     client_transfer: RemoteTransferCapabilities,
 ) -> Result<RemoteBuilderFrameResponse, String> {
+    let executor = RemoteFixtureExecutor;
+    plan_remote_builder_frames_with_executor(builder, ticket, client_frames, client_transfer, &executor)
+}
+
+pub fn plan_remote_builder_frames_with_executor(
+    builder: &RemoteLoopbackBuilder,
+    ticket: &mut RemoteTicket,
+    client_frames: &[RemoteFrame],
+    client_transfer: RemoteTransferCapabilities,
+    executor: &dyn RemoteBuildExecutor,
+) -> Result<RemoteBuilderFrameResponse, String> {
     let mut phase = RemoteProtocolPhase::Open;
     let mut frames = client_frames.iter();
     let hello = take_hello(&mut frames, &mut phase)?;
@@ -1192,6 +1425,7 @@ pub fn plan_remote_builder_frames(
         vec![auth_ok, missing_frame],
         missing,
         ticket.uses_remaining,
+        executor,
     )
 }
 
@@ -1220,15 +1454,38 @@ pub fn plan_stdio_remote_once_from_state(
     plan_remote_builder_frames_from_state(builder, state, &client_frames, client_transfer)
 }
 
+pub fn plan_stdio_remote_once_from_state_with_executor(
+    reader: impl Read,
+    builder: &RemoteLoopbackBuilder,
+    state: &mut RemoteTicketState,
+    client_transfer: RemoteTransferCapabilities,
+    executor: &dyn RemoteBuildExecutor,
+) -> Result<RemoteBuilderFrameResponse, String> {
+    let input = read_bounded_stdio_input(reader)?;
+    let client_frames = decode_remote_frame_stream(&input)?;
+    plan_remote_builder_frames_from_state_with_executor(builder, state, &client_frames, client_transfer, executor)
+}
+
 pub fn plan_remote_builder_frames_from_state(
     builder: &RemoteLoopbackBuilder,
     state: &mut RemoteTicketState,
     client_frames: &[RemoteFrame],
     client_transfer: RemoteTransferCapabilities,
 ) -> Result<RemoteBuilderFrameResponse, String> {
+    let executor = RemoteFixtureExecutor;
+    plan_remote_builder_frames_from_state_with_executor(builder, state, client_frames, client_transfer, &executor)
+}
+
+pub fn plan_remote_builder_frames_from_state_with_executor(
+    builder: &RemoteLoopbackBuilder,
+    state: &mut RemoteTicketState,
+    client_frames: &[RemoteFrame],
+    client_transfer: RemoteTransferCapabilities,
+    executor: &dyn RemoteBuildExecutor,
+) -> Result<RemoteBuilderFrameResponse, String> {
     let ticket_id = request_ticket_id_from_frames(client_frames)?;
     let ticket = state.tickets.get_mut(ticket_id).ok_or_else(|| format!("unknown-remote-ticket-{ticket_id}"))?;
-    plan_remote_builder_frames(builder, ticket, client_frames, client_transfer)
+    plan_remote_builder_frames_with_executor(builder, ticket, client_frames, client_transfer, executor)
 }
 
 pub fn write_remote_response_frames(
@@ -1381,6 +1638,7 @@ pub fn validate_remote_output_admission(
     if !is_blake3_hex_digest(&result.output_digest_blake3) {
         return Err("remote-output-digest-invalid".to_string());
     }
+    validate_remote_produced_outputs(request, result)?;
     validate_transfer_report(transfer)?;
     if transfer.verified_builder_key != result.builder_signing_key_id {
         return Err("remote-transfer-builder-key-mismatch".to_string());
@@ -1391,6 +1649,7 @@ pub fn validate_remote_output_admission(
             output_digest_blake3: result.output_digest_blake3.clone(),
             builder_signing_key_id: key_id,
             store_prefix: result.store_prefix.clone(),
+            outputs: result.outputs.clone(),
             transfer: transfer.clone(),
         }),
         OutputTrustDecision::Reject(reason) => Err(reason),
@@ -1405,6 +1664,9 @@ pub fn validate_remote_builder_response_output_import(
     let (result, transfer) = extract_output_import_frames(&response.response_frames, &request.request_id)?;
     if transfer != &response.transfer {
         return Err("remote-output-transfer-report-mismatch".to_string());
+    }
+    if result.outputs != response.outputs {
+        return Err("remote-output-metadata-report-mismatch".to_string());
     }
     validate_remote_output_admission(request, trusted_output_keys, result, transfer)
 }
@@ -1605,14 +1867,10 @@ fn expect_output_trust(builder: &RemoteLoopbackBuilder, client: &RemoteLoopbackC
 
 fn remote_loopback_output_digest(request: &ConcreteBuildRequest, input_refs: &[String]) -> Result<String, String> {
     let plan = plan_remote_executable_request(request)?;
-    let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "request-id", &request.request_id);
-    hash_labeled_str(&mut hasher, "store-prefix", &request.store_prefix);
-    hash_labeled_str(&mut hasher, "executor-plan", &plan.plan_digest_blake3);
-    for input_ref in input_refs {
-        hash_labeled_str(&mut hasher, "input-ref", input_ref);
-    }
-    Ok(hasher.finalize().to_hex().to_string())
+    let executor = RemoteFixtureExecutor;
+    let execution = executor.execute(&plan, input_refs)?;
+    validate_remote_execution_outcome(&execution, request, &plan)?;
+    Ok(execution.output_digest_blake3)
 }
 
 fn take_hello<'a>(
@@ -1712,8 +1970,9 @@ fn build_response_frames(
     mut response_frames: Vec<RemoteFrame>,
     missing: Vec<String>,
     ticket_uses_remaining: u32,
+    executor: &dyn RemoteBuildExecutor,
 ) -> Result<RemoteBuilderFrameResponse, String> {
-    let output_digest = remote_loopback_output_digest(request, input_refs)?;
+    let plan = plan_remote_executable_request(request)?;
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildQueued {
         request_id: request.request_id.clone(),
         session_id: request.request_id.clone(),
@@ -1721,18 +1980,22 @@ fn build_response_frames(
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildStarted {
         request_id: request.request_id.clone(),
     })?;
+    let execution = executor.execute(&plan, input_refs)?;
+    validate_remote_execution_outcome(&execution, request, &plan)?;
+    let outputs = sign_remote_execution_outputs(&execution.outputs, &builder.signing_key_id);
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildFinished {
         result: RemoteBuildFinished {
             request_id: request.request_id.clone(),
-            output_digest_blake3: output_digest.clone(),
+            output_digest_blake3: execution.output_digest_blake3.clone(),
             builder_signing_key_id: builder.signing_key_id.clone(),
             store_prefix: request.store_prefix.clone(),
+            outputs: outputs.clone(),
         },
     })?;
     let transfer = plan_output_transfer(
         client_transfer,
         builder.transfer_capabilities,
-        REMOTE_LOOPBACK_OUTPUT_BYTES,
+        execution.output_size_bytes,
         &builder.signing_key_id,
     )?;
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::OutputTransferDone {
@@ -1744,7 +2007,9 @@ fn build_response_frames(
     Ok(RemoteBuilderFrameResponse {
         response_frames,
         missing_input_refs: missing,
-        output_digest_blake3: output_digest,
+        execution_plan_digest_blake3: execution.plan_digest_blake3,
+        output_digest_blake3: execution.output_digest_blake3,
+        outputs,
         transfer,
         ticket_uses_remaining,
     })
@@ -1794,6 +2059,41 @@ fn extract_output_import_frames<'a>(
     let result = result.ok_or_else(|| "missing-build-finished-frame".to_string())?;
     let transfer = transfer.ok_or_else(|| "missing-output-transfer-frame".to_string())?;
     Ok((result, transfer))
+}
+
+fn validate_remote_produced_outputs(
+    request: &ConcreteBuildRequest,
+    result: &RemoteBuildFinished,
+) -> Result<(), String> {
+    if result.outputs.len() != request.expected_outputs.len() {
+        return Err("remote-output-metadata-count-mismatch".to_string());
+    }
+    if remote_produced_outputs_content_digest(&result.outputs) != result.output_digest_blake3 {
+        return Err("remote-output-metadata-digest-mismatch".to_string());
+    }
+    let expected = request
+        .expected_outputs
+        .iter()
+        .map(|output| (output.name.as_str(), output.logical_path.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let mut seen = BTreeSet::new();
+    for output in &result.outputs {
+        if !seen.insert(output.name.as_str()) {
+            return Err("remote-output-metadata-name-duplicate".to_string());
+        }
+        if expected.get(output.name.as_str()) != Some(&output.logical_path.as_str()) {
+            return Err("remote-output-metadata-identity-mismatch".to_string());
+        }
+        if output.path_info_signing_key_id != result.builder_signing_key_id {
+            return Err("remote-output-pathinfo-key-mismatch".to_string());
+        }
+        if !is_blake3_hex_digest(&output.content_digest_blake3)
+            || !is_blake3_hex_digest(&output.artifact_attestation_digest_blake3)
+        {
+            return Err("remote-output-metadata-digest-invalid".to_string());
+        }
+    }
+    Ok(())
 }
 
 fn validate_transfer_report(report: &RemoteTransferReport) -> Result<(), String> {
@@ -2098,6 +2398,8 @@ fn print_json_or_human(value: &impl Serialize, json_output: bool) -> Result<(), 
 mod tests {
     use super::*;
 
+    const CUSTOM_REMOTE_OUTPUT_BYTES: u64 = 777;
+
     #[test]
     fn compatible_hello_reaches_authorization() {
         let hello = RemoteHello {
@@ -2384,6 +2686,64 @@ mod tests {
         assert_eq!(admission.output_digest_blake3, response.output_digest_blake3);
         assert_eq!(admission.builder_signing_key_id, "builder-key");
         assert_eq!(admission.transfer, response.transfer);
+        assert_eq!(admission.outputs, response.outputs);
+        assert_eq!(response.outputs.len(), fixture_expected_outputs().len());
+        assert_eq!(response.outputs[0].path_info_signing_key_id, "builder-key");
+        assert_eq!(response.outputs[0].logical_path, fixture_expected_outputs()[0].logical_path);
+        assert_eq!(response.outputs[0].artifact_attestation_digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+    }
+
+    #[test]
+    fn stdio_server_uses_executor_outcome_for_build_finished_metadata() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let executor = FixedRemoteExecutor {
+            output_size_bytes: CUSTOM_REMOTE_OUTPUT_BYTES,
+            logical_path_override: None,
+        };
+        let response = plan_remote_builder_frames_with_executor(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(&client),
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect("custom executor response plans");
+        let admission =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect("custom executor output admits");
+
+        assert_eq!(ticket.uses_remaining, 0);
+        assert_eq!(
+            response.execution_plan_digest_blake3,
+            plan_remote_executable_request(&client.request).unwrap().plan_digest_blake3
+        );
+        assert_eq!(response.outputs[0].size_bytes, CUSTOM_REMOTE_OUTPUT_BYTES);
+        assert_eq!(response.outputs[0].path_info_signing_key_id, "builder-key");
+        assert_eq!(admission.output_digest_blake3, response.output_digest_blake3);
+    }
+
+    #[test]
+    fn executor_output_identity_mismatch_fails_after_queue_admission() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let executor = FixedRemoteExecutor {
+            output_size_bytes: CUSTOM_REMOTE_OUTPUT_BYTES,
+            logical_path_override: Some("/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-stale".to_string()),
+        };
+        let err = plan_remote_builder_frames_with_executor(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(&client),
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect_err("executor output identity mismatch fails");
+
+        assert_eq!(err, "remote-execution-output-identity-mismatch");
+        assert_eq!(ticket.uses_remaining, 0);
     }
 
     #[test]
@@ -2570,6 +2930,7 @@ mod tests {
                     output_digest_blake3: "digest".to_string(),
                     builder_signing_key_id: "builder-key".to_string(),
                     store_prefix: "/mantle/store".to_string(),
+                    outputs: Vec::new(),
                 },
             }),
             (RemoteFrameDirection::BuilderToClient, RemoteFrame::OutputTransferDone {
@@ -2647,6 +3008,57 @@ mod tests {
         assert_eq!(output.retry_class, RemoteRetryClass::Terminal);
         assert_eq!(lease.leased_refs, vec!["input-a".to_string(), "output-a".to_string()]);
         assert!(lease.release_when_done);
+    }
+
+    struct FixedRemoteExecutor {
+        output_size_bytes: u64,
+        logical_path_override: Option<String>,
+    }
+
+    impl RemoteBuildExecutor for FixedRemoteExecutor {
+        fn execute(
+            &self,
+            plan: &RemoteExecutablePlan,
+            _input_refs: &[String],
+        ) -> Result<RemoteExecutionOutcome, String> {
+            let outputs = plan
+                .expected_outputs
+                .iter()
+                .map(|expected| fixed_executor_output(plan, expected, self))
+                .collect::<Vec<_>>();
+            let output_digest_blake3 = remote_execution_outputs_digest(&outputs);
+            let output_size_bytes = sum_remote_execution_output_sizes(&outputs)?;
+            Ok(RemoteExecutionOutcome {
+                request_id: plan.request_id.clone(),
+                plan_digest_blake3: plan.plan_digest_blake3.clone(),
+                output_digest_blake3,
+                output_size_bytes,
+                outputs,
+            })
+        }
+    }
+
+    fn fixed_executor_output(
+        plan: &RemoteExecutablePlan,
+        expected: &RemoteExpectedOutput,
+        executor: &FixedRemoteExecutor,
+    ) -> RemoteExecutionOutput {
+        let logical_path = executor.logical_path_override.clone().unwrap_or_else(|| expected.logical_path.clone());
+        let content_digest_blake3 =
+            blake3::hash(format!("fixed:{}:{}", plan.plan_digest_blake3, expected.name).as_bytes())
+                .to_hex()
+                .to_string();
+        let artifact_attestation_digest_blake3 =
+            blake3::hash(format!("fixed-artifact:{}:{}", content_digest_blake3, expected.logical_path).as_bytes())
+                .to_hex()
+                .to_string();
+        RemoteExecutionOutput {
+            name: expected.name.clone(),
+            logical_path,
+            content_digest_blake3,
+            size_bytes: executor.output_size_bytes,
+            artifact_attestation_digest_blake3,
+        }
     }
 
     fn encode_frame_stream(frames: &[RemoteFrame]) -> Vec<u8> {

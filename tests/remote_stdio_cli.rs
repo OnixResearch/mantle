@@ -12,6 +12,7 @@ const TEST_BUILD_TIME_LIMIT_SECS: u64 = 60;
 const TEST_TICKET_MAX_BUILD_TIME_SECS: u64 = 600;
 const TEST_UPLOAD_BYTES: u64 = 10;
 const TEST_MAX_UPLOAD_BYTES: u64 = 1_000;
+const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 
 #[test]
 fn remote_serve_stdio_once_exchanges_frames_and_redeems_ticket() {
@@ -47,8 +48,20 @@ fn remote_serve_stdio_once_exchanges_frames_and_redeems_ticket() {
     assert_eq!(frame_kind(&frames[0]), "auth-ok");
     assert_eq!(frame_kind(&frames[1]), "missing-inputs");
     assert_eq!(frame_kind(&frames[frames.len() - 1]), "done");
-    assert!(frames.iter().any(|frame| frame_kind(frame) == "build-finished"));
+    let build_finished = frames
+        .iter()
+        .find(|frame| frame_kind(frame) == "build-finished")
+        .expect("build-finished frame present");
     assert!(frames.iter().any(|frame| frame_kind(frame) == "output-transfer-done"));
+    assert_eq!(build_finished["result"]["outputs"][0]["name"], "out");
+    assert_eq!(build_finished["result"]["outputs"][0]["path_info_signing_key_id"], "builder-key");
+    assert_eq!(
+        build_finished["result"]["outputs"][0]["artifact_attestation_digest_blake3"]
+            .as_str()
+            .expect("artifact digest string")
+            .len(),
+        BLAKE3_HEX_LENGTH_CHARS
+    );
     assert_eq!(ticket_state["tickets"]["ticket-1"]["uses_remaining"], 0);
 }
 
