@@ -49,6 +49,7 @@ const PERCENT_DENOMINATOR: u64 = 100;
 const REMOTE_SESSION_NON_CLAIM: &str = "loopback remote-build session evidence proves protocol control flow only; it does not prove production P2P transport, sandbox execution, or artifact correctness";
 const STDERR_TRUNCATION_MARKER: &str = "\n<stderr-truncated>";
 const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+const STORE_PATH_HASH_CHARS: usize = 32;
 const REMOTE_ACTION_SPEC_SCHEMA: &str = "mantle-remote-action-v1";
 const DEFAULT_REMOTE_ACTION_SYSTEM: &str = "x86_64-linux";
 const REMOTE_LOCAL_BUILD_WORKDIR_NAME: &str = "mantle-remote-builds";
@@ -132,7 +133,8 @@ pub enum RemoteConcreteBuildPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteExpectedOutput {
     pub name: String,
-    pub logical_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logical_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -932,8 +934,10 @@ fn validate_expected_outputs(outputs: &[RemoteExpectedOutput], store_prefix: &st
         if !names.insert(output.name.as_str()) {
             return Err("remote-expected-output-name-duplicate".to_string());
         }
-        if output.logical_path.is_empty() || !output.logical_path.starts_with(store_prefix) {
-            return Err("remote-expected-output-store-prefix-mismatch".to_string());
+        if let Some(logical_path) = &output.logical_path {
+            if logical_path.is_empty() || !logical_path.starts_with(store_prefix) {
+                return Err("remote-expected-output-store-prefix-mismatch".to_string());
+            }
         }
     }
     Ok(())
@@ -1002,11 +1006,16 @@ fn validate_derivation_expected_outputs(
             .outputs
             .get(&expected.name)
             .ok_or_else(|| "remote-derivation-expected-output-unknown".to_string())?;
-        if let Some(path) = &output.path {
-            let logical_path = path.to_absolute_path_with_prefix(store_prefix);
-            if logical_path != expected.logical_path {
-                return Err("remote-derivation-output-path-mismatch".to_string());
+        match (&output.path, &expected.logical_path) {
+            (Some(path), Some(expected_logical_path)) => {
+                let logical_path = path.to_absolute_path_with_prefix(store_prefix);
+                if &logical_path != expected_logical_path {
+                    return Err("remote-derivation-output-path-mismatch".to_string());
+                }
             }
+            (Some(_), None) => return Err("remote-derivation-output-path-missing".to_string()),
+            (None, Some(_)) => return Err("remote-derivation-output-path-unexpected".to_string()),
+            (None, None) => {}
         }
     }
     Ok(())
@@ -1127,7 +1136,10 @@ fn remote_executable_plan_digest(
     }
     for output in expected_outputs {
         hash_labeled_str(&mut hasher, "output-name", &output.name);
-        hash_labeled_str(&mut hasher, "output-path", &output.logical_path);
+        match &output.logical_path {
+            Some(logical_path) => hash_labeled_str(&mut hasher, "output-path", logical_path),
+            None => hash_labeled_str(&mut hasher, "output-path-state", "content-addressed-unknown"),
+        }
     }
     hasher.finalize().to_hex().to_string()
 }
@@ -1197,9 +1209,7 @@ fn execute_remote_local_build(
     plan: &RemoteExecutablePlan,
     input_refs: &[String],
 ) -> Result<RemoteExecutionOutcome, String> {
-    if !input_refs.is_empty() {
-        return Err("remote-local-executor-input-refs-unsupported".to_string());
-    }
+    validate_local_executor_input_refs(request, input_refs)?;
     if executor.store_prefix != request.store_prefix {
         return Err("remote-local-executor-store-prefix-mismatch".to_string());
     }
@@ -1337,8 +1347,10 @@ fn remote_execution_output_from_pathinfo(
     path_info: &PathInfo,
 ) -> Result<RemoteExecutionOutput, String> {
     let logical_path = path_info.store_path.to_absolute_path_with_prefix(store_prefix);
-    if logical_path != expected.logical_path {
-        return Err("remote-local-executor-output-path-mismatch".to_string());
+    if let Some(expected_logical_path) = &expected.logical_path {
+        if &logical_path != expected_logical_path {
+            return Err("remote-local-executor-output-path-mismatch".to_string());
+        }
     }
     let content_digest_blake3 = remote_pathinfo_node_digest_blake3(path_info)?;
     let artifact_attestation_digest_blake3 =
@@ -1359,6 +1371,21 @@ fn remote_pathinfo_node_digest_blake3(path_info: &PathInfo) -> Result<String, St
     let node_bytes =
         serde_json::to_vec(&path_info.node).map_err(|err| format!("remote-local-executor-node-digest-json: {err}"))?;
     Ok(blake3::hash(&node_bytes).to_hex().to_string())
+}
+
+fn validate_local_executor_input_refs(request: &ConcreteBuildRequest, input_refs: &[String]) -> Result<(), String> {
+    if input_refs.len() > MAX_REMOTE_INPUT_REFS || request.input_refs.len() > MAX_REMOTE_INPUT_REFS {
+        return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
+    }
+    let requested = request.input_refs.iter().collect::<BTreeSet<_>>();
+    let uploaded = input_refs.iter().collect::<BTreeSet<_>>();
+    if requested.len() != request.input_refs.len() || uploaded.len() != input_refs.len() {
+        return Err("remote-local-executor-input-refs-duplicate".to_string());
+    }
+    if requested != uploaded {
+        return Err("remote-local-executor-input-refs-mismatch".to_string());
+    }
+    Ok(())
 }
 
 fn validate_remote_execution_plan(plan: &RemoteExecutablePlan) -> Result<(), String> {
@@ -1383,7 +1410,7 @@ fn fixture_execution_output(
         remote_fixture_artifact_attestation_digest(plan, expected, &content_digest_blake3);
     RemoteExecutionOutput {
         name: expected.name.clone(),
-        logical_path: expected.logical_path.clone(),
+        logical_path: remote_fixture_output_logical_path(plan, input_refs, expected, &content_digest_blake3),
         content_digest_blake3,
         size_bytes: REMOTE_LOOPBACK_OUTPUT_BYTES,
         artifact_attestation_digest_blake3,
@@ -1399,11 +1426,29 @@ fn remote_fixture_output_content_digest(
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "fixture-plan", &plan.plan_digest_blake3);
     hash_labeled_str(&mut hasher, "output-name", &expected.name);
-    hash_labeled_str(&mut hasher, "output-path", &expected.logical_path);
+    match &expected.logical_path {
+        Some(logical_path) => hash_labeled_str(&mut hasher, "output-path", logical_path),
+        None => hash_labeled_str(&mut hasher, "output-path-state", "content-addressed-unknown"),
+    }
     for input_ref in input_refs {
         hash_labeled_str(&mut hasher, "input-ref", input_ref);
     }
     hasher.finalize().to_hex().to_string()
+}
+
+fn remote_fixture_output_logical_path(
+    plan: &RemoteExecutablePlan,
+    _input_refs: &[String],
+    expected: &RemoteExpectedOutput,
+    content_digest_blake3: &str,
+) -> String {
+    match &expected.logical_path {
+        Some(logical_path) => logical_path.clone(),
+        None => {
+            let store_hash = content_digest_blake3.get(..STORE_PATH_HASH_CHARS).unwrap_or(content_digest_blake3);
+            format!("{}/{}-{}", plan.store_prefix, store_hash, expected.name)
+        }
+    }
 }
 
 fn remote_fixture_artifact_attestation_digest(
@@ -1652,7 +1697,7 @@ fn validate_remote_execution_outcome(
     if sum_remote_execution_output_sizes(&outcome.outputs)? != outcome.output_size_bytes {
         return Err("remote-execution-output-size-mismatch".to_string());
     }
-    validate_execution_outputs_match_expected(&outcome.outputs, &request.expected_outputs)
+    validate_execution_outputs_match_expected(&outcome.outputs, &request.expected_outputs, &request.store_prefix)
 }
 
 fn validate_remote_execution_output_pathinfos(
@@ -1699,25 +1744,57 @@ fn validate_remote_execution_output_pathinfo(
     )
 }
 
+fn expected_output_path_map(expected_outputs: &[RemoteExpectedOutput]) -> BTreeMap<&str, Option<&str>> {
+    expected_outputs
+        .iter()
+        .map(|output| (output.name.as_str(), output.logical_path.as_deref()))
+        .collect()
+}
+
+fn validate_output_path_against_expected(
+    output_name: &str,
+    logical_path: &str,
+    expected: &BTreeMap<&str, Option<&str>>,
+    store_prefix: &str,
+    mismatch_label: &str,
+) -> Result<(), String> {
+    match expected.get(output_name) {
+        Some(Some(expected_logical_path)) => {
+            if *expected_logical_path != logical_path {
+                return Err(mismatch_label.to_string());
+            }
+        }
+        Some(None) => {
+            if logical_path.is_empty() || !logical_path.starts_with(store_prefix) {
+                return Err(mismatch_label.to_string());
+            }
+        }
+        None => return Err(mismatch_label.to_string()),
+    }
+    Ok(())
+}
+
 fn validate_execution_outputs_match_expected(
     outputs: &[RemoteExecutionOutput],
     expected_outputs: &[RemoteExpectedOutput],
+    store_prefix: &str,
 ) -> Result<(), String> {
     if outputs.len() != expected_outputs.len() {
         return Err("remote-execution-output-count-mismatch".to_string());
     }
-    let expected = expected_outputs
-        .iter()
-        .map(|output| (output.name.as_str(), output.logical_path.as_str()))
-        .collect::<BTreeMap<_, _>>();
+    let expected = expected_output_path_map(expected_outputs);
     let mut seen = BTreeSet::new();
     for output in outputs {
         if !seen.insert(output.name.as_str()) {
             return Err("remote-execution-output-name-duplicate".to_string());
         }
-        if expected.get(output.name.as_str()) != Some(&output.logical_path.as_str()) {
-            return Err("remote-execution-output-identity-mismatch".to_string());
-        }
+        validate_output_path_against_expected(
+            output.name.as_str(),
+            output.logical_path.as_str(),
+            &expected,
+            store_prefix,
+            "remote-execution-output-identity-mismatch",
+        )?;
         if !is_blake3_hex_digest(&output.content_digest_blake3)
             || !is_blake3_hex_digest(&output.artifact_attestation_digest_blake3)
         {
@@ -1974,11 +2051,12 @@ pub fn concrete_remote_derivation_request(
         .map_err(|err| format!("remote-client-derivation-json-invalid: {err}"))?;
     let expected_outputs = remote_expected_outputs_from_derivation(&input.nix_derivation, &options.store_prefix)?;
     let input_refs = remote_input_refs_from_derivation(&input.nix_derivation, &options.store_prefix);
+    let upload_bytes = remote_input_ref_upload_bytes(&input_refs)?;
     Ok(ConcreteBuildRequest {
         request_id: remote_client_request_id(&input.label, &input.drv_path, &options.store_prefix),
         store_prefix: options.store_prefix.clone(),
         input_refs,
-        upload_bytes: 0,
+        upload_bytes,
         build_time_limit_secs: options.build_time_limit_secs,
         contains_raw_frontend_eval: false,
         payload: RemoteConcreteBuildPayload::Derivation {
@@ -2004,12 +2082,9 @@ pub fn remote_expected_outputs_from_derivation(
     }
     let mut outputs = Vec::with_capacity(derivation.outputs.len());
     for (name, output) in &derivation.outputs {
-        let Some(path) = &output.path else {
-            return Err("remote-client-output-path-missing".to_string());
-        };
         outputs.push(RemoteExpectedOutput {
             name: name.clone(),
-            logical_path: path.to_absolute_path_with_prefix(store_prefix),
+            logical_path: output.path.as_ref().map(|path| path.to_absolute_path_with_prefix(store_prefix)),
         });
     }
     Ok(outputs)
@@ -2026,6 +2101,18 @@ pub fn remote_input_refs_from_derivation(
     refs.sort();
     refs.dedup();
     refs
+}
+
+pub fn remote_input_ref_upload_bytes(input_refs: &[String]) -> Result<u64, String> {
+    let mut total = 0_u64;
+    for input_ref in input_refs {
+        let len = u64::try_from(input_ref.len()).map_err(|_| "remote-client-input-ref-size-overflow".to_string())?;
+        total = total.checked_add(len).ok_or_else(|| "remote-client-input-upload-bytes-overflow".to_string())?;
+    }
+    if total > MAX_REMOTE_UPLOAD_BYTES {
+        return Err("remote-client-input-upload-bytes-exceeded".to_string());
+    }
+    Ok(total)
 }
 
 fn validate_remote_client_options(options: &RemoteClientBuildOptions) -> Result<(), String> {
@@ -3040,19 +3127,19 @@ fn validate_remote_produced_outputs(
     if remote_produced_outputs_content_digest(&result.outputs) != result.output_digest_blake3 {
         return Err("remote-output-metadata-digest-mismatch".to_string());
     }
-    let expected = request
-        .expected_outputs
-        .iter()
-        .map(|output| (output.name.as_str(), output.logical_path.as_str()))
-        .collect::<BTreeMap<_, _>>();
+    let expected = expected_output_path_map(&request.expected_outputs);
     let mut seen = BTreeSet::new();
     for output in &result.outputs {
         if !seen.insert(output.name.as_str()) {
             return Err("remote-output-metadata-name-duplicate".to_string());
         }
-        if expected.get(output.name.as_str()) != Some(&output.logical_path.as_str()) {
-            return Err("remote-output-metadata-identity-mismatch".to_string());
-        }
+        validate_output_path_against_expected(
+            output.name.as_str(),
+            output.logical_path.as_str(),
+            &expected,
+            &request.store_prefix,
+            "remote-output-metadata-identity-mismatch",
+        )?;
         if output.path_info_signing_key_id != result.builder_signing_key_id {
             return Err("remote-output-pathinfo-key-mismatch".to_string());
         }
@@ -3557,9 +3644,31 @@ mod tests {
     #[test]
     fn derivation_payload_rejects_stale_declared_output_path() {
         let mut request = fixture_derivation_request();
-        request.expected_outputs[0].logical_path = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-stale".to_string();
+        request.expected_outputs[0].logical_path =
+            Some("/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-stale".to_string());
         let err = plan_remote_executable_request(&request).expect_err("stale output path fails");
         assert_eq!(err, "remote-derivation-output-path-mismatch");
+    }
+
+    #[test]
+    fn ca_derivation_payload_plans_without_predeclared_output_path() {
+        let request = fixture_ca_derivation_request();
+        let plan = plan_remote_executable_request(&request).expect("CA derivation request plans");
+
+        assert!(matches!(plan.source, RemoteExecutablePlanSource::Derivation { .. }));
+        assert_eq!(plan.expected_outputs[0].name, "out");
+        assert!(plan.expected_outputs[0].logical_path.is_none());
+        assert!(plan.command_env.get("out").is_some_and(|path| path.starts_with("/mantle/store/")));
+    }
+
+    #[test]
+    fn ca_derivation_payload_rejects_predeclared_final_output_path() {
+        let mut request = fixture_ca_derivation_request();
+        request.expected_outputs[0].logical_path =
+            Some("/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-ca-stale".to_string());
+        let err = plan_remote_executable_request(&request).expect_err("CA final output path is unknown pre-build");
+
+        assert_eq!(err, "remote-derivation-output-path-unexpected");
     }
 
     #[test]
@@ -3586,16 +3695,20 @@ mod tests {
     }
 
     #[test]
-    fn local_executor_rejects_missing_input_materialization_boundary() {
+    fn local_executor_accepts_declared_input_refs_after_upload_boundary() {
         let mut request = fixture_derivation_request();
-        request.input_refs = vec!["cas:missing".to_string()];
-        let plan = plan_remote_executable_request(&request).expect("derivation request plans");
-        let executor = fixture_local_build_executor();
-        let err = executor
-            .execute(&request, &plan, &request.input_refs)
-            .expect_err("input refs need materialization before local execution");
+        request.input_refs = vec!["/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-input.drv".to_string()];
 
-        assert_eq!(err, "remote-local-executor-input-refs-unsupported");
+        validate_local_executor_input_refs(&request, &request.input_refs).expect("declared uploaded refs are accepted");
+    }
+
+    #[test]
+    fn local_executor_rejects_input_refs_missing_from_upload_manifest() {
+        let mut request = fixture_derivation_request();
+        request.input_refs = vec!["/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-input.drv".to_string()];
+        let err = validate_local_executor_input_refs(&request, &[]).expect_err("missing uploaded ref is rejected");
+
+        assert_eq!(err, "remote-local-executor-input-refs-mismatch");
     }
 
     #[test]
@@ -3604,7 +3717,8 @@ mod tests {
         let plan = plan_remote_executable_request(&request).expect("derivation request plans");
         let expected = plan.expected_outputs[0].clone();
         let mut outputs = BTreeMap::new();
-        outputs.insert(expected.name.clone(), pathinfo_for_logical_path(&expected.logical_path));
+        let expected_path = expected.logical_path.as_deref().expect("fixture expected output path is known");
+        outputs.insert(expected.name.clone(), pathinfo_for_logical_path(expected_path));
         let outcome = fixture_build_outcome(&request, outputs);
         let remote = remote_execution_outcome_from_build_outcome(&request, &plan, &outcome)
             .expect("build outcome maps to remote outcome");
@@ -3612,8 +3726,27 @@ mod tests {
         assert_eq!(remote.request_id, request.request_id);
         assert_eq!(remote.plan_digest_blake3, plan.plan_digest_blake3);
         assert_eq!(remote.outputs.len(), 1);
-        assert_eq!(remote.outputs[0].path_info, Some(pathinfo_for_logical_path(&expected.logical_path)));
+        assert_eq!(remote.outputs[0].path_info, Some(pathinfo_for_logical_path(expected_path)));
         assert_eq!(remote.outputs[0].artifact_attestation_digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+    }
+
+    #[test]
+    fn ca_build_outcome_binds_final_path_after_execution() {
+        let request = fixture_ca_derivation_request();
+        let plan = plan_remote_executable_request(&request).expect("CA derivation request plans");
+        let expected = plan.expected_outputs[0].clone();
+        let final_path_info = importable_pathinfo();
+        let final_logical_path = final_path_info.store_path.to_absolute_path_with_prefix(&request.store_prefix);
+        let mut outputs = BTreeMap::new();
+        outputs.insert(expected.name.clone(), final_path_info.clone());
+        let outcome = fixture_build_outcome(&request, outputs);
+        let remote = remote_execution_outcome_from_build_outcome(&request, &plan, &outcome)
+            .expect("CA build outcome maps to final path");
+
+        assert!(expected.logical_path.is_none());
+        assert_eq!(remote.outputs.len(), 1);
+        assert_eq!(remote.outputs[0].logical_path, final_logical_path);
+        assert_eq!(remote.outputs[0].path_info, Some(final_path_info));
     }
 
     #[test]
@@ -3659,6 +3792,25 @@ mod tests {
         assert!(matches!(plan.client.request.payload, RemoteConcreteBuildPayload::Derivation { .. }));
         assert!(plan.client.request.input_refs.is_empty());
         assert_eq!(plan.client.input_manifest.request_id, plan.client.request.request_id);
+    }
+
+    #[test]
+    fn remote_stdio_client_dispatch_frames_non_empty_input_refs_for_upload() {
+        let input = fixture_remote_client_derivation_input_with_dep();
+        let options = fixture_remote_client_options();
+        let plan = plan_remote_stdio_client_dispatch(input, &options).expect("client dispatch plans input refs");
+        let expected_upload_bytes =
+            remote_input_ref_upload_bytes(&plan.client.request.input_refs).expect("fixture input upload bytes fit");
+
+        assert!(!plan.client.request.input_refs.is_empty());
+        assert_eq!(plan.client.request.upload_bytes, expected_upload_bytes);
+        assert_eq!(plan.client.uploaded_input_refs, plan.client.request.input_refs);
+        assert_eq!(plan.client.input_manifest.input_refs, plan.client.request.input_refs);
+        assert!(matches!(
+            plan.command.input_frames.last(),
+            Some(RemoteFrame::InputUpload { upload })
+                if upload.refs == plan.client.request.input_refs && upload.byte_count == expected_upload_bytes
+        ));
     }
 
     #[test]
@@ -3817,7 +3969,10 @@ mod tests {
         assert_eq!(admission.outputs, response.outputs);
         assert_eq!(response.outputs.len(), fixture_expected_outputs().len());
         assert_eq!(response.outputs[0].path_info_signing_key_id, "builder-key");
-        assert_eq!(response.outputs[0].logical_path, fixture_expected_outputs()[0].logical_path);
+        assert_eq!(
+            Some(response.outputs[0].logical_path.as_str()),
+            fixture_expected_outputs()[0].logical_path.as_deref()
+        );
         assert_eq!(response.outputs[0].artifact_attestation_digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
     }
 
@@ -4402,7 +4557,10 @@ mod tests {
         };
         Ok(RemoteExecutionOutput {
             name: expected.name.clone(),
-            logical_path: expected.logical_path.clone(),
+            logical_path: expected
+                .logical_path
+                .clone()
+                .unwrap_or_else(|| executor.path_info.store_path.to_absolute_path_with_prefix(&plan.store_prefix)),
             content_digest_blake3: blake3::hash(format!("pathinfo:{}", plan.plan_digest_blake3).as_bytes())
                 .to_hex()
                 .to_string(),
@@ -4446,13 +4604,17 @@ mod tests {
         expected: &RemoteExpectedOutput,
         executor: &FixedRemoteExecutor,
     ) -> RemoteExecutionOutput {
-        let logical_path = executor.logical_path_override.clone().unwrap_or_else(|| expected.logical_path.clone());
         let content_digest_blake3 =
             blake3::hash(format!("fixed:{}:{}", plan.plan_digest_blake3, expected.name).as_bytes())
                 .to_hex()
                 .to_string();
+        let logical_path =
+            executor.logical_path_override.clone().or_else(|| expected.logical_path.clone()).unwrap_or_else(|| {
+                let store_hash = content_digest_blake3.get(..STORE_PATH_HASH_CHARS).unwrap_or(&content_digest_blake3);
+                format!("{}/{}-{}", plan.store_prefix, store_hash, expected.name)
+            });
         let artifact_attestation_digest_blake3 =
-            blake3::hash(format!("fixed-artifact:{}:{}", content_digest_blake3, expected.logical_path).as_bytes())
+            blake3::hash(format!("fixed-artifact:{}:{}", content_digest_blake3, logical_path).as_bytes())
                 .to_hex()
                 .to_string();
         RemoteExecutionOutput {
@@ -4565,7 +4727,10 @@ mod tests {
                 .to_hex();
         RemoteProducedOutput {
             name: "out".to_string(),
-            logical_path: fixture_expected_outputs()[0].logical_path.clone(),
+            logical_path: fixture_expected_outputs()[0]
+                .logical_path
+                .clone()
+                .expect("fixture expected output path is known"),
             content_digest_blake3: blake3::hash(b"remote-output-content").to_hex().to_string(),
             size_bytes: path_info.nar_size,
             path_info_signing_key_id: "builder-key".to_string(),
@@ -4600,11 +4765,10 @@ mod tests {
     }
 
     fn importable_store_path() -> StorePath<String> {
-        StorePath::from_absolute_path_with_prefix(
-            fixture_expected_outputs()[0].logical_path.as_bytes(),
-            "/mantle/store",
-        )
-        .expect("fixture output path parses")
+        let logical_path =
+            fixture_expected_outputs()[0].logical_path.clone().expect("fixture expected output path is known");
+        StorePath::from_absolute_path_with_prefix(logical_path.as_bytes(), "/mantle/store")
+            .expect("fixture output path parses")
     }
 
     fn mismatched_store_path() -> StorePath<String> {
@@ -4693,7 +4857,23 @@ mod tests {
             },
             expected_outputs: vec![RemoteExpectedOutput {
                 name: "out".to_string(),
-                logical_path: out_path,
+                logical_path: Some(out_path),
+            }],
+            ..fixture_request()
+        }
+    }
+
+    fn fixture_ca_derivation_request() -> ConcreteBuildRequest {
+        let (drv_json, drv_path, nix_drv) = fixture_ca_derivation_parts();
+        assert!(nix_drv.outputs["out"].path.is_none());
+        ConcreteBuildRequest {
+            payload: RemoteConcreteBuildPayload::Derivation {
+                drv_path: drv_path.to_absolute_path_with_prefix("/mantle/store"),
+                drv_json,
+            },
+            expected_outputs: vec![RemoteExpectedOutput {
+                name: "out".to_string(),
+                logical_path: None,
             }],
             ..fixture_request()
         }
@@ -4702,13 +4882,42 @@ mod tests {
     fn fixture_remote_client_derivation_input() -> RemoteClientDerivationInput {
         let drv_json = fixture_derivation_json();
         let drv: crunch_glue::CrunchDerivation = serde_json::from_str(&drv_json).expect("fixture drv parses");
+        remote_client_input_from_derivation("root", drv)
+    }
+
+    fn fixture_remote_client_derivation_input_with_dep() -> RemoteClientDerivationInput {
+        let dep = fixture_crunch_derivation("remote-dep", Vec::new());
+        let root = fixture_crunch_derivation("remote-root", vec![crunch_glue::Input::Derivation(Box::new(dep))]);
+        remote_client_input_from_derivation("root", root)
+    }
+
+    fn remote_client_input_from_derivation(
+        label: &str,
+        drv: crunch_glue::CrunchDerivation,
+    ) -> RemoteClientDerivationInput {
         let mut known_paths = crunch_glue::ConversionCache::new("/mantle/store");
         let (drv_path, nix_derivation) = crunch_glue::convert(&drv, &mut known_paths).expect("fixture drv converts");
         RemoteClientDerivationInput {
-            label: "root".to_string(),
+            label: label.to_string(),
             drv_path,
             crunch_derivation: drv,
             nix_derivation,
+        }
+    }
+
+    fn fixture_crunch_derivation(name: &str, inputs: Vec<crunch_glue::Input>) -> crunch_glue::CrunchDerivation {
+        crunch_glue::CrunchDerivation {
+            name: name.to_string(),
+            builder: "/bin/sh".to_string(),
+            system: "x86_64-linux".to_string(),
+            args: vec!["-c".to_string(), "echo hi".to_string()],
+            outputs: vec!["out".to_string()],
+            dynamic_plan_outputs: Vec::new(),
+            env: std::collections::HashMap::new(),
+            inputs,
+            fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
+            provenance: None,
         }
     }
 
@@ -4737,6 +4946,14 @@ mod tests {
         let drv: crunch_glue::CrunchDerivation = serde_json::from_str(&drv_json).expect("fixture drv parses");
         let mut known_paths = crunch_glue::ConversionCache::new("/mantle/store");
         let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut known_paths).expect("fixture drv converts");
+        (drv_json, drv_path, nix_drv)
+    }
+
+    fn fixture_ca_derivation_parts() -> (String, StorePath<String>, nix_compat::derivation::Derivation) {
+        let drv_json = fixture_ca_derivation_json();
+        let drv: crunch_glue::CrunchDerivation = serde_json::from_str(&drv_json).expect("fixture CA drv parses");
+        let mut known_paths = crunch_glue::ConversionCache::new("/mantle/store");
+        let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut known_paths).expect("fixture CA drv converts");
         (drv_json, drv_path, nix_drv)
     }
 
@@ -4776,6 +4993,17 @@ mod tests {
         .to_string()
     }
 
+    fn fixture_ca_derivation_json() -> String {
+        serde_json::json!({
+            "name": "remote-ca-fixture",
+            "builder": "/bin/sh",
+            "args": ["-c", "echo hi > $out"],
+            "outputs": ["out"],
+            "addressing_mode": "content-addressed"
+        })
+        .to_string()
+    }
+
     fn fixture_local_build_executor() -> RemoteLocalBuildExecutor {
         RemoteLocalBuildExecutor {
             state_dir: PathBuf::from("/tmp/mantle-remote-build-test-state"),
@@ -4798,7 +5026,7 @@ mod tests {
     fn fixture_expected_outputs() -> Vec<RemoteExpectedOutput> {
         vec![RemoteExpectedOutput {
             name: "out".to_string(),
-            logical_path: "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture".to_string(),
+            logical_path: Some("/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture".to_string()),
         }]
     }
 

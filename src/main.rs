@@ -2895,11 +2895,6 @@ async fn run_remote_build_dispatches_async(
     for input in inputs {
         let plan =
             remote_build::plan_remote_stdio_client_dispatch(input, &selection.options).map_err(RunError::Internal)?;
-        if !plan.client.request.input_refs.is_empty() {
-            return Err(RunError::Internal(
-                "remote build input upload is not implemented yet for derivations with input refs".to_string(),
-            ));
-        }
         let transcript = remote_build::run_stdio_remote_child(&plan.command)?;
         let admission = remote_build::validate_remote_builder_frames_output_import(
             &plan.client.request,
