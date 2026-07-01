@@ -448,6 +448,14 @@ pub struct RemoteOutputAdmissionReport {
     pub transfer: RemoteTransferReport,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteStdioExchangeReport {
+    pub binding: RemoteTransportBinding,
+    pub frames: Vec<RemoteFrame>,
+    pub stderr_summary: String,
+    pub admission: RemoteOutputAdmissionReport,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteStdioCommand {
     pub program: PathBuf,
@@ -672,6 +680,22 @@ pub fn validate_stdio_child_output(
         binding: RemoteTransportBinding::Stdio,
         frames,
         stderr_summary: bounded_stderr_summary(&output.stderr),
+    })
+}
+
+pub fn validate_stdio_child_exchange_output(
+    request: &ConcreteBuildRequest,
+    trusted_output_keys: &[String],
+    output: &RemoteStdioChildOutput,
+) -> Result<RemoteStdioExchangeReport, RemoteFailureClassification> {
+    let transcript = validate_stdio_child_output(output)?;
+    let admission = validate_remote_builder_frames_output_import(request, trusted_output_keys, &transcript.frames)
+        .map_err(|reason| remote_failure(RemoteFailurePhase::OutputImport, RemoteRetryClass::Terminal, reason))?;
+    Ok(RemoteStdioExchangeReport {
+        binding: transcript.binding,
+        frames: transcript.frames,
+        stderr_summary: transcript.stderr_summary,
+        admission,
     })
 }
 
@@ -982,6 +1006,15 @@ pub fn validate_remote_builder_response_output_import(
     if transfer != &response.transfer {
         return Err("remote-output-transfer-report-mismatch".to_string());
     }
+    validate_remote_output_admission(request, trusted_output_keys, result, transfer)
+}
+
+pub fn validate_remote_builder_frames_output_import(
+    request: &ConcreteBuildRequest,
+    trusted_output_keys: &[String],
+    frames: &[RemoteFrame],
+) -> Result<RemoteOutputAdmissionReport, String> {
+    let (result, transfer) = extract_output_import_frames(frames, &request.request_id)?;
     validate_remote_output_admission(request, trusted_output_keys, result, transfer)
 }
 
@@ -1869,6 +1902,41 @@ mod tests {
         assert_eq!(admission.output_digest_blake3, response.output_digest_blake3);
         assert_eq!(admission.builder_signing_key_id, "builder-key");
         assert_eq!(admission.transfer, response.transfer);
+    }
+
+    #[test]
+    fn stdio_child_exchange_output_validates_import_admission() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let response = fixture_builder_response(&client);
+        let output = RemoteStdioChildOutput {
+            stdout: encode_frame_stream(&response.response_frames),
+            stderr: b"diagnostic\n".to_vec(),
+            status_success: true,
+        };
+        let report = validate_stdio_child_exchange_output(&client.request, &client.trusted_output_keys, &output)
+            .expect("stdio child exchange imports");
+
+        assert_eq!(report.binding, RemoteTransportBinding::Stdio);
+        assert_eq!(report.frames, response.response_frames);
+        assert_eq!(report.stderr_summary, "diagnostic\n");
+        assert_eq!(report.admission.output_digest_blake3, response.output_digest_blake3);
+    }
+
+    #[test]
+    fn stdio_child_exchange_output_classifies_untrusted_builder_key_as_output_import() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let response = fixture_builder_response(&client);
+        let output = RemoteStdioChildOutput {
+            stdout: encode_frame_stream(&response.response_frames),
+            stderr: Vec::new(),
+            status_success: true,
+        };
+        let err = validate_stdio_child_exchange_output(&client.request, &["other-key".to_string()], &output)
+            .expect_err("untrusted remote output must not import");
+
+        assert_eq!(err.phase, RemoteFailurePhase::OutputImport);
+        assert_eq!(err.retry_class, RemoteRetryClass::Terminal);
+        assert_eq!(err.reason, "untrusted-output-key");
     }
 
     #[test]
