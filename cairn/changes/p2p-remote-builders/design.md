@@ -59,6 +59,8 @@ Builder access and output import trust are separate. A ticket only authorizes CP
 
 Remote output import should reuse Mantle's existing signed PathInfo, artifact attestation, and substitution report surfaces. The builder signs output PathInfo and attaches artifact/closure attestations. The client verifies signatures, store prefix, expected output identity, and action/derivation match before accepting the result.
 
+The current bounded admission core validates framed builder results before any import side effect: request id and store prefix must match the original concrete request, the output digest must be canonical lowercase BLAKE3 hex, the transfer report must be self-consistent, the transfer key must match the build result key, and that key must be trusted by the client. This is still pre-persistence validation; durable signed PathInfo/artifact import remains separate work.
+
 ## Input synchronization
 
 The client sends an input manifest containing concrete derivations/action specs, PathInfo refs, source-input refs, CAS object refs, and declared closure metadata. The builder computes the missing set against its local state, replies with only missing refs, and accepts bounded upload streams for those refs. Uploads must verify content digests and PathInfo signatures before the build sandbox starts.

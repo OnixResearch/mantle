@@ -39,6 +39,7 @@ const DELTA_REUSE_PERCENT: u64 = 75;
 const PERCENT_DENOMINATOR: u64 = 100;
 const REMOTE_SESSION_NON_CLAIM: &str = "loopback remote-build session evidence proves protocol control flow only; it does not prove production P2P transport, sandbox execution, or artifact correctness";
 const STDERR_TRUNCATION_MARKER: &str = "\n<stderr-truncated>";
+const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -434,7 +435,17 @@ pub struct RemoteBuilderFrameResponse {
     pub response_frames: Vec<RemoteFrame>,
     pub missing_input_refs: Vec<String>,
     pub output_digest_blake3: String,
+    pub transfer: RemoteTransferReport,
     pub ticket_uses_remaining: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteOutputAdmissionReport {
+    pub request_id: String,
+    pub output_digest_blake3: String,
+    pub builder_signing_key_id: String,
+    pub store_prefix: String,
+    pub transfer: RemoteTransferReport,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -901,6 +912,49 @@ pub fn plan_output_transfer(
     Err("no-compatible-output-transfer-mode".to_string())
 }
 
+pub fn validate_remote_output_admission(
+    request: &ConcreteBuildRequest,
+    trusted_output_keys: &[String],
+    result: &RemoteBuildFinished,
+    transfer: &RemoteTransferReport,
+) -> Result<RemoteOutputAdmissionReport, String> {
+    if result.request_id != request.request_id {
+        return Err("remote-output-request-id-mismatch".to_string());
+    }
+    if result.store_prefix != request.store_prefix {
+        return Err("remote-output-store-prefix-mismatch".to_string());
+    }
+    if !is_blake3_hex_digest(&result.output_digest_blake3) {
+        return Err("remote-output-digest-invalid".to_string());
+    }
+    validate_transfer_report(transfer)?;
+    if transfer.verified_builder_key != result.builder_signing_key_id {
+        return Err("remote-transfer-builder-key-mismatch".to_string());
+    }
+    match decide_output_trust(&result.builder_signing_key_id, trusted_output_keys, true) {
+        OutputTrustDecision::Accept { key_id } => Ok(RemoteOutputAdmissionReport {
+            request_id: request.request_id.clone(),
+            output_digest_blake3: result.output_digest_blake3.clone(),
+            builder_signing_key_id: key_id,
+            store_prefix: result.store_prefix.clone(),
+            transfer: transfer.clone(),
+        }),
+        OutputTrustDecision::Reject(reason) => Err(reason),
+    }
+}
+
+pub fn validate_remote_builder_response_output_import(
+    request: &ConcreteBuildRequest,
+    trusted_output_keys: &[String],
+    response: &RemoteBuilderFrameResponse,
+) -> Result<RemoteOutputAdmissionReport, String> {
+    let (result, transfer) = extract_output_import_frames(&response.response_frames, &request.request_id)?;
+    if transfer != &response.transfer {
+        return Err("remote-output-transfer-report-mismatch".to_string());
+    }
+    validate_remote_output_admission(request, trusted_output_keys, result, transfer)
+}
+
 pub fn classify_remote_failure(phase: RemoteFailurePhase, reason: String) -> RemoteFailureClassification {
     let retry_class = match phase {
         RemoteFailurePhase::TransportSetup => RemoteRetryClass::Retryable,
@@ -1207,7 +1261,9 @@ fn build_response_frames(
         REMOTE_LOOPBACK_OUTPUT_BYTES,
         &builder.signing_key_id,
     )?;
-    push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::OutputTransferDone { report: transfer })?;
+    push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::OutputTransferDone {
+        report: transfer.clone(),
+    })?;
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::Done {
         request_id: request.request_id.clone(),
     })?;
@@ -1215,8 +1271,82 @@ fn build_response_frames(
         response_frames,
         missing_input_refs: missing,
         output_digest_blake3: output_digest,
+        transfer,
         ticket_uses_remaining,
     })
+}
+
+fn extract_output_import_frames<'a>(
+    frames: &'a [RemoteFrame],
+    expected_request_id: &str,
+) -> Result<(&'a RemoteBuildFinished, &'a RemoteTransferReport), String> {
+    let mut result = None;
+    let mut transfer = None;
+    let mut done_seen = false;
+    for frame in frames {
+        match frame {
+            RemoteFrame::BuildFinished { result: finished } => {
+                if result.replace(finished).is_some() {
+                    return Err("duplicate-build-finished-frame".to_string());
+                }
+            }
+            RemoteFrame::OutputTransferDone { report } => {
+                if result.is_none() {
+                    return Err("remote-output-transfer-before-build-result".to_string());
+                }
+                if transfer.replace(report).is_some() {
+                    return Err("duplicate-output-transfer-frame".to_string());
+                }
+            }
+            RemoteFrame::Done { request_id } => {
+                if request_id != expected_request_id {
+                    return Err("remote-done-request-id-mismatch".to_string());
+                }
+                if transfer.is_none() {
+                    return Err("remote-done-before-output-transfer".to_string());
+                }
+                if done_seen {
+                    return Err("duplicate-done-frame".to_string());
+                }
+                done_seen = true;
+            }
+            RemoteFrame::Error { .. } => return Err("remote-builder-error-frame".to_string()),
+            _ => {}
+        }
+    }
+    if !done_seen {
+        return Err("missing-done-frame".to_string());
+    }
+    let result = result.ok_or_else(|| "missing-build-finished-frame".to_string())?;
+    let transfer = transfer.ok_or_else(|| "missing-output-transfer-frame".to_string())?;
+    Ok((result, transfer))
+}
+
+fn validate_transfer_report(report: &RemoteTransferReport) -> Result<(), String> {
+    if report.verified_builder_key.is_empty() {
+        return Err("remote-transfer-builder-key-empty".to_string());
+    }
+    if report.mode_label != report.mode.as_str() {
+        return Err("remote-transfer-mode-label-mismatch".to_string());
+    }
+    match report.mode {
+        RemoteTransferMode::Delta => {
+            if report.fallback_reason.is_some() {
+                return Err("remote-transfer-delta-has-fallback-reason".to_string());
+            }
+        }
+        RemoteTransferMode::Full => {
+            if report.reused_bytes != 0 {
+                return Err("remote-transfer-full-reused-bytes-nonzero".to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_blake3_hex_digest(value: &str) -> bool {
+    value.len() == BLAKE3_HEX_LENGTH_CHARS
+        && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn push_builder_frame(
@@ -1633,9 +1763,51 @@ mod tests {
         assert_eq!(server_frames, response.response_frames);
         assert!(matches!(server_frames.first(), Some(RemoteFrame::AuthOk { .. })));
         assert!(matches!(server_frames.last(), Some(RemoteFrame::Done { .. })));
+        let admission =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect("response is import-admissible");
+
         assert_eq!(response.missing_input_refs, vec!["input-a".to_string()]);
         assert_eq!(response.ticket_uses_remaining, 0);
         assert_eq!(ticket.uses_remaining, 0);
+        assert_eq!(admission.output_digest_blake3, response.output_digest_blake3);
+        assert_eq!(admission.builder_signing_key_id, "builder-key");
+        assert_eq!(admission.transfer, response.transfer);
+    }
+
+    #[test]
+    fn remote_output_admission_rejects_untrusted_builder_key() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let response = fixture_builder_response(&client);
+        let err =
+            validate_remote_builder_response_output_import(&client.request, &["other-key".to_string()], &response)
+                .expect_err("untrusted remote output must not import");
+
+        assert_eq!(err, "untrusted-output-key");
+    }
+
+    #[test]
+    fn remote_output_admission_rejects_transfer_key_mismatch() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let mut response = fixture_builder_response(&client);
+        rewrite_response_transfer_key(&mut response, "other-key");
+        let err =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect_err("mismatched transfer key must not import");
+
+        assert_eq!(err, "remote-transfer-builder-key-mismatch");
+    }
+
+    #[test]
+    fn remote_output_admission_rejects_malformed_digest() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let mut response = fixture_builder_response(&client);
+        rewrite_response_digest(&mut response, "not-a-blake3-digest");
+        let err =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect_err("malformed output digest must not import");
+
+        assert_eq!(err, "remote-output-digest-invalid");
     }
 
     #[test]
@@ -1798,6 +1970,36 @@ mod tests {
             encoded.extend(encode_remote_frame(frame).expect("test frame encodes"));
         }
         encoded
+    }
+
+    fn fixture_builder_response(client: &RemoteLoopbackClient) -> RemoteBuilderFrameResponse {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        plan_remote_builder_frames(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(client),
+            client.transfer_capabilities,
+        )
+        .expect("fixture builder response plans")
+    }
+
+    fn rewrite_response_transfer_key(response: &mut RemoteBuilderFrameResponse, key: &str) {
+        response.transfer.verified_builder_key = key.to_string();
+        for frame in &mut response.response_frames {
+            if let RemoteFrame::OutputTransferDone { report } = frame {
+                report.verified_builder_key = key.to_string();
+            }
+        }
+    }
+
+    fn rewrite_response_digest(response: &mut RemoteBuilderFrameResponse, digest: &str) {
+        response.output_digest_blake3 = digest.to_string();
+        for frame in &mut response.response_frames {
+            if let RemoteFrame::BuildFinished { result } = frame {
+                result.output_digest_blake3 = digest.to_string();
+            }
+        }
     }
 
     fn fixture_ticket() -> RemoteTicket {
