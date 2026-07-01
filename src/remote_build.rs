@@ -174,6 +174,8 @@ pub struct RemoteExecutionOutput {
     pub content_digest_blake3: String,
     pub size_bytes: u64,
     pub artifact_attestation_digest_blake3: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_info: Option<PathInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1075,6 +1077,7 @@ fn fixture_execution_output(
         content_digest_blake3,
         size_bytes: REMOTE_LOOPBACK_OUTPUT_BYTES,
         artifact_attestation_digest_blake3,
+        path_info: None,
     }
 }
 
@@ -1137,7 +1140,7 @@ fn sign_remote_execution_outputs(outputs: &[RemoteExecutionOutput], signing_key_
             size_bytes: output.size_bytes,
             path_info_signing_key_id: signing_key_id.to_string(),
             artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
-            path_info: None,
+            path_info: output.path_info.clone(),
         })
         .collect()
 }
@@ -1151,6 +1154,7 @@ fn remote_produced_outputs_content_digest(outputs: &[RemoteProducedOutput]) -> S
             content_digest_blake3: output.content_digest_blake3.clone(),
             size_bytes: output.size_bytes,
             artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
+            path_info: output.path_info.clone(),
         })
         .collect::<Vec<_>>();
     remote_execution_outputs_digest(&execution_outputs)
@@ -1177,6 +1181,50 @@ fn validate_remote_execution_outcome(
         return Err("remote-execution-output-size-mismatch".to_string());
     }
     validate_execution_outputs_match_expected(&outcome.outputs, &request.expected_outputs)
+}
+
+fn validate_remote_execution_output_pathinfos(
+    outputs: &[RemoteExecutionOutput],
+    signing_key_id: &str,
+    store_prefix: &str,
+) -> Result<(), String> {
+    if signing_key_id.is_empty() {
+        return Err("remote-execution-builder-signing-key-empty".to_string());
+    }
+    if !store_prefix.starts_with('/') {
+        return Err("remote-execution-store-prefix-not-absolute".to_string());
+    }
+
+    for output in outputs {
+        if let Some(path_info) = &output.path_info {
+            validate_remote_execution_output_pathinfo(output, path_info, signing_key_id, store_prefix)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_remote_execution_output_pathinfo(
+    output: &RemoteExecutionOutput,
+    path_info: &PathInfo,
+    signing_key_id: &str,
+    store_prefix: &str,
+) -> Result<(), String> {
+    let store_path = parse_remote_output_store_path(&output.logical_path, store_prefix)?;
+    validate_remote_pathinfo_binding(
+        &output.name,
+        &output.artifact_attestation_digest_blake3,
+        path_info,
+        &store_path,
+        store_prefix,
+        signing_key_id,
+        RemotePathInfoErrorLabels {
+            store_path_mismatch: "remote-execution-output-pathinfo-store-path-mismatch",
+            unsigned: "remote-execution-output-pathinfo-unsigned",
+            signing_key_mismatch: "remote-execution-output-pathinfo-signing-key-mismatch",
+            artifact_digest_failed: "remote-execution-output-artifact-attestation-digest-failed",
+            artifact_digest_mismatch: "remote-execution-output-artifact-attestation-digest-mismatch",
+        },
+    )
 }
 
 fn validate_execution_outputs_match_expected(
@@ -1817,28 +1865,71 @@ fn validate_remote_output_pathinfo(
     store_path: &StorePath<String>,
     store_prefix: &str,
 ) -> Result<(), String> {
-    if path_info.store_path != *store_path {
-        return Err("remote-output-pathinfo-store-path-mismatch".to_string());
-    }
-    if path_info.signatures.is_empty() {
-        return Err("remote-output-pathinfo-unsigned".to_string());
-    }
-    if !pathinfo_has_signature_name(path_info, &output.path_info_signing_key_id) {
-        return Err("remote-output-pathinfo-signing-key-mismatch".to_string());
-    }
-    validate_remote_output_attestation_digest(output, path_info, store_prefix)
+    validate_remote_pathinfo_binding(
+        &output.name,
+        &output.artifact_attestation_digest_blake3,
+        path_info,
+        store_path,
+        store_prefix,
+        &output.path_info_signing_key_id,
+        RemotePathInfoErrorLabels {
+            store_path_mismatch: "remote-output-pathinfo-store-path-mismatch",
+            unsigned: "remote-output-pathinfo-unsigned",
+            signing_key_mismatch: "remote-output-pathinfo-signing-key-mismatch",
+            artifact_digest_failed: "remote-output-artifact-attestation-digest-failed",
+            artifact_digest_mismatch: "remote-output-artifact-attestation-digest-mismatch",
+        },
+    )
 }
 
-fn validate_remote_output_attestation_digest(
-    output: &RemoteProducedOutput,
+#[derive(Clone, Copy)]
+struct RemotePathInfoErrorLabels {
+    store_path_mismatch: &'static str,
+    unsigned: &'static str,
+    signing_key_mismatch: &'static str,
+    artifact_digest_failed: &'static str,
+    artifact_digest_mismatch: &'static str,
+}
+
+fn validate_remote_pathinfo_binding(
+    output_name: &str,
+    artifact_attestation_digest_blake3: &str,
+    path_info: &PathInfo,
+    store_path: &StorePath<String>,
+    store_prefix: &str,
+    signing_key_id: &str,
+    error_labels: RemotePathInfoErrorLabels,
+) -> Result<(), String> {
+    if path_info.store_path != *store_path {
+        return Err(error_labels.store_path_mismatch.to_string());
+    }
+    if path_info.signatures.is_empty() {
+        return Err(error_labels.unsigned.to_string());
+    }
+    if !pathinfo_has_signature_name(path_info, signing_key_id) {
+        return Err(error_labels.signing_key_mismatch.to_string());
+    }
+    validate_remote_pathinfo_artifact_digest(
+        output_name,
+        artifact_attestation_digest_blake3,
+        path_info,
+        store_prefix,
+        error_labels,
+    )
+}
+
+fn validate_remote_pathinfo_artifact_digest(
+    output_name: &str,
+    artifact_attestation_digest_blake3: &str,
     path_info: &PathInfo,
     store_prefix: &str,
+    error_labels: RemotePathInfoErrorLabels,
 ) -> Result<(), String> {
-    let digest = crunch_store::artifact_attestation_digest_for_pathinfo(store_prefix, path_info, &output.name, None)
-        .map_err(|err| format!("remote-output-artifact-attestation-digest-failed: {err}"))?
+    let digest = crunch_store::artifact_attestation_digest_for_pathinfo(store_prefix, path_info, output_name, None)
+        .map_err(|err| format!("{}: {err}", error_labels.artifact_digest_failed))?
         .to_hex();
-    if digest != output.artifact_attestation_digest_blake3 {
-        return Err("remote-output-artifact-attestation-digest-mismatch".to_string());
+    if digest != artifact_attestation_digest_blake3 {
+        return Err(error_labels.artifact_digest_mismatch.to_string());
     }
     Ok(())
 }
@@ -2177,6 +2268,7 @@ fn build_response_frames(
     })?;
     let execution = executor.execute(&plan, input_refs)?;
     validate_remote_execution_outcome(&execution, request, &plan)?;
+    validate_remote_execution_output_pathinfos(&execution.outputs, &builder.signing_key_id, &request.store_prefix)?;
     let outputs = sign_remote_execution_outputs(&execution.outputs, &builder.signing_key_id);
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildFinished {
         result: RemoteBuildFinished {
@@ -3018,6 +3110,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stdio_executor_pathinfo_frames_import_durably() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = remote_import_store(temp.path()).await;
+        let builder = fixture_loopback_builder();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let executor = PathInfoRemoteExecutor {
+            path_info: importable_pathinfo(),
+            artifact_attestation_digest_blake3: None,
+        };
+        let mut state = RemoteTicketState::default();
+        state.tickets.insert("ticket-1".to_string(), fixture_ticket());
+        let input = encode_frame_stream(&remote_client_request_frames(&client));
+
+        let response = plan_stdio_remote_once_from_state_with_executor(
+            std::io::Cursor::new(input),
+            &builder,
+            &mut state,
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect("executor pathinfo crosses stdio frame boundary");
+        let admission =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect("framed pathinfo output admits");
+        let report = import_admitted_remote_outputs(
+            &mut store,
+            &client.request,
+            &admission,
+            true,
+            Some(crunch_store::GcRootSource::Build),
+        )
+        .await
+        .expect("framed pathinfo output imports");
+
+        assert!(response.outputs[0].path_info.is_some());
+        assert!(admission.outputs[0].path_info.is_some());
+        assert_eq!(report.outputs.len(), 1);
+        assert_eq!(report.outputs[0].path_info_signing_key_id, "builder-key");
+        assert!(store.take_output_substitution_report(&importable_store_path()).is_some());
+    }
+
+    #[test]
+    fn builder_rejects_executor_pathinfo_store_path_mismatch() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let mut path_info = importable_pathinfo();
+        path_info.store_path = mismatched_store_path();
+        let executor = PathInfoRemoteExecutor {
+            path_info,
+            artifact_attestation_digest_blake3: None,
+        };
+
+        let err = plan_remote_builder_frames_with_executor(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(&client),
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect_err("executor pathinfo store-path mismatch fails before build-finished frame");
+
+        assert_eq!(err, "remote-execution-output-pathinfo-store-path-mismatch");
+    }
+
+    #[test]
+    fn builder_rejects_executor_pathinfo_without_signature() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let mut path_info = importable_pathinfo();
+        path_info.signatures.clear();
+        let executor = PathInfoRemoteExecutor {
+            path_info,
+            artifact_attestation_digest_blake3: None,
+        };
+
+        let err = plan_remote_builder_frames_with_executor(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(&client),
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect_err("executor unsigned pathinfo fails before build-finished frame");
+
+        assert_eq!(err, "remote-execution-output-pathinfo-unsigned");
+    }
+
+    #[tokio::test]
     async fn durable_remote_output_import_persists_signed_pathinfo_attestation_and_report() {
         let temp = tempfile::tempdir().unwrap();
         let mut store = remote_import_store(temp.path()).await;
@@ -3283,6 +3465,62 @@ mod tests {
         assert!(lease.release_when_done);
     }
 
+    struct PathInfoRemoteExecutor {
+        path_info: PathInfo,
+        artifact_attestation_digest_blake3: Option<String>,
+    }
+
+    impl RemoteBuildExecutor for PathInfoRemoteExecutor {
+        fn execute(
+            &self,
+            plan: &RemoteExecutablePlan,
+            _input_refs: &[String],
+        ) -> Result<RemoteExecutionOutcome, String> {
+            let outputs = plan
+                .expected_outputs
+                .iter()
+                .map(|expected| pathinfo_executor_output(plan, expected, self))
+                .collect::<Result<Vec<_>, _>>()?;
+            let output_digest_blake3 = remote_execution_outputs_digest(&outputs);
+            let output_size_bytes = sum_remote_execution_output_sizes(&outputs)?;
+            Ok(RemoteExecutionOutcome {
+                request_id: plan.request_id.clone(),
+                plan_digest_blake3: plan.plan_digest_blake3.clone(),
+                output_digest_blake3,
+                output_size_bytes,
+                outputs,
+            })
+        }
+    }
+
+    fn pathinfo_executor_output(
+        plan: &RemoteExecutablePlan,
+        expected: &RemoteExpectedOutput,
+        executor: &PathInfoRemoteExecutor,
+    ) -> Result<RemoteExecutionOutput, String> {
+        let artifact_attestation_digest_blake3 = match &executor.artifact_attestation_digest_blake3 {
+            Some(digest) => digest.clone(),
+            None => crunch_store::artifact_attestation_digest_for_pathinfo(
+                &plan.store_prefix,
+                &executor.path_info,
+                &expected.name,
+                None,
+            )
+            .map_err(|err| format!("test-artifact-attestation-digest-failed: {err}"))?
+            .to_hex(),
+        };
+        Ok(RemoteExecutionOutput {
+            name: expected.name.clone(),
+            logical_path: expected.logical_path.clone(),
+            content_digest_blake3: blake3::hash(format!("pathinfo:{}", plan.plan_digest_blake3).as_bytes())
+                .to_hex()
+                .to_string(),
+            size_bytes: executor.path_info.nar_size,
+            artifact_attestation_digest_blake3,
+            path_info: Some(executor.path_info.clone()),
+        })
+    }
+
     struct FixedRemoteExecutor {
         output_size_bytes: u64,
         logical_path_override: Option<String>,
@@ -3331,6 +3569,7 @@ mod tests {
             content_digest_blake3,
             size_bytes: executor.output_size_bytes,
             artifact_attestation_digest_blake3,
+            path_info: None,
         }
     }
 
@@ -3438,6 +3677,14 @@ mod tests {
             "/mantle/store",
         )
         .expect("fixture output path parses")
+    }
+
+    fn mismatched_store_path() -> StorePath<String> {
+        StorePath::from_absolute_path_with_prefix(
+            b"/mantle/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-other",
+            "/mantle/store",
+        )
+        .expect("mismatched fixture output path parses")
     }
 
     fn fixture_ticket() -> RemoteTicket {
