@@ -17,27 +17,30 @@ The package now captures multiple pure/protocol slices in `src/remote_build.rs` 
 - a `RemoteBuildExecutor` seam that turns admitted `RemoteExecutablePlan`s into execution-derived output metadata;
 - deterministic fixture executor output metadata carrying output name, logical path, content BLAKE3, size, PathInfo signer id, and artifact-attestation BLAKE3;
 - a durable client-side remote-output import seam that accepts only admitted outputs carrying signed PathInfo bundles, validates store-prefix/path/signing-key/artifact-attestation digest binding, persists PathInfo and artifact sidecars through `StoreHandle`, exports root outputs, and records substitution reports for build-report consumers;
-- signed PathInfo wire propagation from executor-produced output metadata into `BuildFinished` frames, with builder-side rejection of mismatched or unsigned executor PathInfo before emitting finished output frames.
+- signed PathInfo wire propagation from executor-produced output metadata into `BuildFinished` frames, with builder-side rejection of mismatched or unsigned executor PathInfo before emitting finished output frames;
+- bounded `OutputTransferArtifact` frames for serialized PathInfo payloads, including BLAKE3 digest/size checks and fail-closed rejection when a framed PathInfo output is missing or carries a tampered transfer artifact.
 
 ## Blocker
 
-Still not drainable as a complete remote-builder product surface. The active tasks still require a real Mantle sandbox executor adapter for derivation-backed plans, client-side `mantle build --builder/--ticket` dispatch, CAS/source input upload beyond fixture refs, transfer payload framing beyond same-frame PathInfo bundles, delta/full fallback integration with top-level JSON build reports, redacted queue/status snapshots beyond ticket views, lifecycle negative tests, and a concrete authenticated production P2P binding.
+Still not drainable as a complete remote-builder product surface. The active tasks still require a real Mantle sandbox executor adapter for derivation-backed plans, client-side `mantle build --builder/--ticket` dispatch, CAS/source input upload beyond fixture refs, full output/CAS byte transfer beyond serialized PathInfo artifact frames, delta/full fallback integration with top-level JSON build reports, redacted queue/status snapshots beyond ticket views, lifecycle negative tests, and a concrete authenticated production P2P binding.
 
-The frame schema, first deterministic binding, executor seam, signed PathInfo frame propagation, and durable client-side import seam now exist for fixture proofs, but completing the change honestly still requires product and compatibility decisions for the production P2P transport plus implementation work that runs real Mantle builds remotely.
+The frame schema, first deterministic binding, executor seam, signed PathInfo frame propagation, serialized PathInfo transfer-artifact frames, and durable client-side import seam now exist for fixture proofs, but completing the change honestly still requires product and compatibility decisions for the production P2P transport plus implementation work that runs real Mantle builds remotely.
 
 ## Evidence
 
 - Baseline before the signed PathInfo frame-propagation slice: `cargo test -p mantle --bin mantle remote_build::` passed with 42 tests, and `cargo test -p mantle --test remote_stdio_cli` passed with 2 tests.
 - `cargo test -p mantle --bin mantle remote_build::` passed after the signed PathInfo frame-propagation slice landed: 45 passed.
-- `cargo test -p mantle --test remote_stdio_cli` passed after the signed PathInfo frame-propagation slice landed: 2 passed.
+- Baseline before the serialized transfer-artifact frame slice: `cargo test -p mantle --bin mantle remote_build::` passed with 45 tests.
+- `cargo test -p mantle --bin mantle remote_build::` passed after the serialized transfer-artifact frame slice landed: 47 passed.
+- `cargo test -p mantle --test remote_stdio_cli` passed after the serialized transfer-artifact frame slice landed: 2 passed.
 - `cargo test -p crunch-store artifact_attestation` passed after exporting the artifact-attestation digest helper: 4 passed.
 - `rustfmt --edition 2024 --check src/remote_build.rs crates/crunch-store/src/attestation.rs crates/crunch-store/src/lib.rs crates/crunch-store/src/handle.rs` passed for the import seam.
-- `rustfmt --edition 2024 --check src/remote_build.rs` passed after the signed PathInfo frame-propagation slice.
-- `nix run path:/home/brittonr/git/cairn#cairn -- validate --root .` passed with `valid: true`, 9 changes, and 19 specs validated after the signed PathInfo frame-propagation slice.
+- `rustfmt --edition 2024 --check src/remote_build.rs` passed after the serialized transfer-artifact frame slice.
+- `nix run path:/home/brittonr/git/cairn#cairn -- validate --root .` passed with `valid: true`, 9 changes, and 19 specs validated after the serialized transfer-artifact frame slice.
 - `nix run path:/home/brittonr/git/cairn#cairn -- gate proposal p2p-remote-builders --root .` passed.
 - `nix run path:/home/brittonr/git/cairn#cairn -- gate design p2p-remote-builders --root .` passed.
 - `nix run path:/home/brittonr/git/cairn#cairn -- gate tasks p2p-remote-builders --root .` passed.
 
 ## Next best step
 
-Implement the real executor slice: derivation-backed `RemoteExecutablePlan` → normal Mantle build execution in the remote shell → transfer-payload framing for signed output artifacts/CAS bytes beyond in-frame PathInfo metadata → `mantle build --builder/--ticket` dispatch and top-level JSON build-report evidence. Keep the existing fixture executor as the deterministic protocol test seam while that real executor lands.
+Implement the real executor slice: derivation-backed `RemoteExecutablePlan` → normal Mantle build execution in the remote shell → full output/CAS byte transfer beyond serialized PathInfo metadata → `mantle build --builder/--ticket` dispatch and top-level JSON build-report evidence. Keep the existing fixture executor as the deterministic protocol test seam while that real executor lands.

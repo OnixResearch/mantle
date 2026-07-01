@@ -30,6 +30,8 @@ pub const MAX_REMOTE_EXECUTOR_ARGS: usize = 512;
 pub const MAX_REMOTE_EXECUTOR_ENV_VARS: usize = 512;
 pub const MAX_REMOTE_EXECUTOR_ENV_VALUE_BYTES: usize = 65_536;
 pub const MAX_REMOTE_UPLOAD_BYTES: u64 = 1_099_511_627_776;
+pub const MAX_REMOTE_TRANSFER_TOTAL_BYTES: u64 = MAX_REMOTE_UPLOAD_BYTES;
+pub const MAX_REMOTE_TRANSFER_ARTIFACTS: usize = MAX_REMOTE_STATUS_ITEMS;
 pub const MAX_REMOTE_BUILD_TIME_SECS: u64 = 86_400;
 pub const DEFAULT_TICKET_TTL_SECS: u64 = 3_600;
 pub const DEFAULT_TICKET_USES: u32 = 1;
@@ -304,6 +306,7 @@ pub enum RemoteFrameKind {
     BuildQueued,
     BuildStarted,
     BuildFinished,
+    OutputTransferArtifact,
     OutputTransferDone,
     Done,
     Error,
@@ -322,6 +325,7 @@ impl RemoteFrameKind {
             Self::BuildQueued => "build-queued",
             Self::BuildStarted => "build-started",
             Self::BuildFinished => "build-finished",
+            Self::OutputTransferArtifact => "output-transfer-artifact",
             Self::OutputTransferDone => "output-transfer-done",
             Self::Done => "done",
             Self::Error => "error",
@@ -359,6 +363,32 @@ pub struct RemoteBuildFinished {
     pub outputs: Vec<RemoteProducedOutput>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteOutputTransferArtifactKind {
+    PathInfoJson,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteOutputTransferArtifact {
+    pub request_id: String,
+    pub output_name: String,
+    pub logical_path: String,
+    pub artifact_kind: RemoteOutputTransferArtifactKind,
+    pub digest_blake3: String,
+    pub size_bytes: u64,
+    pub payload: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExpectedRemoteOutputTransferArtifact {
+    output_name: String,
+    logical_path: String,
+    artifact_kind: RemoteOutputTransferArtifactKind,
+    digest_blake3: String,
+    size_bytes: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteProtocolErrorFrame {
     pub phase: RemoteFailurePhase,
@@ -379,6 +409,7 @@ pub enum RemoteFrame {
     BuildQueued { request_id: String, session_id: String },
     BuildStarted { request_id: String },
     BuildFinished { result: RemoteBuildFinished },
+    OutputTransferArtifact { artifact: RemoteOutputTransferArtifact },
     OutputTransferDone { report: RemoteTransferReport },
     Done { request_id: String },
     Error { error: RemoteProtocolErrorFrame },
@@ -397,6 +428,7 @@ impl RemoteFrame {
             Self::BuildQueued { .. } => RemoteFrameKind::BuildQueued,
             Self::BuildStarted { .. } => RemoteFrameKind::BuildStarted,
             Self::BuildFinished { .. } => RemoteFrameKind::BuildFinished,
+            Self::OutputTransferArtifact { .. } => RemoteFrameKind::OutputTransferArtifact,
             Self::OutputTransferDone { .. } => RemoteFrameKind::OutputTransferDone,
             Self::Done { .. } => RemoteFrameKind::Done,
             Self::Error { .. } => RemoteFrameKind::Error,
@@ -549,6 +581,7 @@ pub struct RemoteBuilderFrameResponse {
     pub execution_plan_digest_blake3: String,
     pub output_digest_blake3: String,
     pub outputs: Vec<RemoteProducedOutput>,
+    pub transfer_artifacts: Vec<RemoteOutputTransferArtifact>,
     pub transfer: RemoteTransferReport,
     pub ticket_uses_remaining: u32,
 }
@@ -1145,6 +1178,168 @@ fn sign_remote_execution_outputs(outputs: &[RemoteExecutionOutput], signing_key_
         .collect()
 }
 
+fn plan_output_transfer_artifacts(
+    request_id: &str,
+    outputs: &[RemoteProducedOutput],
+) -> Result<Vec<RemoteOutputTransferArtifact>, String> {
+    if request_id.is_empty() {
+        return Err("remote-output-transfer-request-id-empty".to_string());
+    }
+    if outputs.len() > MAX_REMOTE_TRANSFER_ARTIFACTS {
+        return Err(format!("remote-output-transfer-artifact-count-exceeds-{MAX_REMOTE_TRANSFER_ARTIFACTS}"));
+    }
+    let mut artifacts = Vec::with_capacity(outputs.len());
+    for output in outputs {
+        if let Some(path_info) = &output.path_info {
+            artifacts.push(pathinfo_json_transfer_artifact(request_id, output, path_info)?);
+        }
+    }
+    validate_remote_output_transfer_artifacts(request_id, outputs, &artifacts)?;
+    Ok(artifacts)
+}
+
+fn pathinfo_json_transfer_artifact(
+    request_id: &str,
+    output: &RemoteProducedOutput,
+    path_info: &PathInfo,
+) -> Result<RemoteOutputTransferArtifact, String> {
+    let payload = serialize_remote_pathinfo_payload(path_info)?;
+    let size_bytes = remote_payload_size_bytes(payload.len())?;
+    if size_bytes > MAX_REMOTE_TRANSFER_TOTAL_BYTES {
+        return Err("remote-output-transfer-artifact-too-large".to_string());
+    }
+    Ok(RemoteOutputTransferArtifact {
+        request_id: request_id.to_string(),
+        output_name: output.name.clone(),
+        logical_path: output.logical_path.clone(),
+        artifact_kind: RemoteOutputTransferArtifactKind::PathInfoJson,
+        digest_blake3: blake3::hash(&payload).to_hex().to_string(),
+        size_bytes,
+        payload,
+    })
+}
+
+fn serialize_remote_pathinfo_payload(path_info: &PathInfo) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(path_info).map_err(|err| format!("remote-output-pathinfo-json-serialize-failed: {err}"))
+}
+
+fn remote_payload_size_bytes(payload_len: usize) -> Result<u64, String> {
+    u64::try_from(payload_len).map_err(|_| "remote-output-transfer-payload-size-overflow".to_string())
+}
+
+pub fn validate_remote_output_transfer_artifacts(
+    request_id: &str,
+    outputs: &[RemoteProducedOutput],
+    artifacts: &[RemoteOutputTransferArtifact],
+) -> Result<(), String> {
+    let expected = expected_remote_output_transfer_artifacts(outputs)?;
+    validate_remote_output_transfer_artifact_list_shape(request_id, artifacts)?;
+    let mut seen = BTreeSet::new();
+    let mut total_bytes = 0_u64;
+    for artifact in artifacts {
+        let key = validate_remote_output_transfer_artifact(request_id, artifact, &expected)?;
+        if !seen.insert(key) {
+            return Err("remote-output-transfer-artifact-duplicate".to_string());
+        }
+        total_bytes = total_bytes
+            .checked_add(artifact.size_bytes)
+            .ok_or_else(|| "remote-output-transfer-total-bytes-overflow".to_string())?;
+        if total_bytes > MAX_REMOTE_TRANSFER_TOTAL_BYTES {
+            return Err("remote-output-transfer-total-bytes-exceeded".to_string());
+        }
+    }
+    for expected_key in expected.keys() {
+        if !seen.contains(expected_key) {
+            return Err("remote-output-transfer-artifact-missing".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn validate_remote_output_transfer_artifact_list_shape(
+    request_id: &str,
+    artifacts: &[RemoteOutputTransferArtifact],
+) -> Result<(), String> {
+    if request_id.is_empty() {
+        return Err("remote-output-transfer-request-id-empty".to_string());
+    }
+    if artifacts.len() > MAX_REMOTE_TRANSFER_ARTIFACTS {
+        return Err(format!("remote-output-transfer-artifact-count-exceeds-{MAX_REMOTE_TRANSFER_ARTIFACTS}"));
+    }
+    Ok(())
+}
+
+fn validate_remote_output_transfer_artifact(
+    request_id: &str,
+    artifact: &RemoteOutputTransferArtifact,
+    expected: &BTreeMap<(String, RemoteOutputTransferArtifactKind), ExpectedRemoteOutputTransferArtifact>,
+) -> Result<(String, RemoteOutputTransferArtifactKind), String> {
+    if artifact.request_id != request_id {
+        return Err("remote-output-transfer-artifact-request-id-mismatch".to_string());
+    }
+    if artifact.output_name.is_empty() || artifact.logical_path.is_empty() {
+        return Err("remote-output-transfer-artifact-identity-empty".to_string());
+    }
+    if !is_blake3_hex_digest(&artifact.digest_blake3) {
+        return Err("remote-output-transfer-artifact-digest-invalid".to_string());
+    }
+    let payload_size_bytes = remote_payload_size_bytes(artifact.payload.len())?;
+    if payload_size_bytes != artifact.size_bytes {
+        return Err("remote-output-transfer-artifact-size-mismatch".to_string());
+    }
+    if blake3::hash(&artifact.payload).to_hex().to_string() != artifact.digest_blake3 {
+        return Err("remote-output-transfer-artifact-digest-mismatch".to_string());
+    }
+    let key = (artifact.output_name.clone(), artifact.artifact_kind);
+    let expected_artifact =
+        expected.get(&key).ok_or_else(|| "remote-output-transfer-artifact-unexpected".to_string())?;
+    if expected_artifact.output_name != artifact.output_name || expected_artifact.logical_path != artifact.logical_path
+    {
+        return Err("remote-output-transfer-artifact-output-mismatch".to_string());
+    }
+    if expected_artifact.artifact_kind != artifact.artifact_kind {
+        return Err("remote-output-transfer-artifact-kind-mismatch".to_string());
+    }
+    if expected_artifact.digest_blake3 != artifact.digest_blake3 {
+        return Err("remote-output-transfer-artifact-expected-digest-mismatch".to_string());
+    }
+    if expected_artifact.size_bytes != artifact.size_bytes {
+        return Err("remote-output-transfer-artifact-expected-size-mismatch".to_string());
+    }
+    Ok(key)
+}
+
+fn expected_remote_output_transfer_artifacts(
+    outputs: &[RemoteProducedOutput],
+) -> Result<BTreeMap<(String, RemoteOutputTransferArtifactKind), ExpectedRemoteOutputTransferArtifact>, String> {
+    let mut expected = BTreeMap::new();
+    for output in outputs {
+        if let Some(path_info) = &output.path_info {
+            let artifact = expected_pathinfo_transfer_artifact(output, path_info)?;
+            let key = (artifact.output_name.clone(), artifact.artifact_kind);
+            if expected.insert(key, artifact).is_some() {
+                return Err("remote-output-transfer-expected-artifact-duplicate".to_string());
+            }
+        }
+    }
+    Ok(expected)
+}
+
+fn expected_pathinfo_transfer_artifact(
+    output: &RemoteProducedOutput,
+    path_info: &PathInfo,
+) -> Result<ExpectedRemoteOutputTransferArtifact, String> {
+    let payload = serialize_remote_pathinfo_payload(path_info)?;
+    let size_bytes = remote_payload_size_bytes(payload.len())?;
+    Ok(ExpectedRemoteOutputTransferArtifact {
+        output_name: output.name.clone(),
+        logical_path: output.logical_path.clone(),
+        artifact_kind: RemoteOutputTransferArtifactKind::PathInfoJson,
+        digest_blake3: blake3::hash(&payload).to_hex().to_string(),
+        size_bytes,
+    })
+}
+
 fn remote_produced_outputs_content_digest(outputs: &[RemoteProducedOutput]) -> String {
     let execution_outputs = outputs
         .iter()
@@ -1632,6 +1827,11 @@ pub fn validate_remote_transition(
         (
             RemoteProtocolPhase::AwaitOutputTransfer,
             RemoteFrameDirection::BuilderToClient,
+            RemoteFrameKind::OutputTransferArtifact,
+        ) => Ok(RemoteProtocolPhase::AwaitOutputTransfer),
+        (
+            RemoteProtocolPhase::AwaitOutputTransfer,
+            RemoteFrameDirection::BuilderToClient,
             RemoteFrameKind::OutputTransferDone,
         ) => Ok(RemoteProtocolPhase::Done),
         (RemoteProtocolPhase::Done, RemoteFrameDirection::BuilderToClient, RemoteFrameKind::Done) => {
@@ -1742,14 +1942,17 @@ pub fn validate_remote_builder_response_output_import(
     trusted_output_keys: &[String],
     response: &RemoteBuilderFrameResponse,
 ) -> Result<RemoteOutputAdmissionReport, String> {
-    let (result, transfer) = extract_output_import_frames(&response.response_frames, &request.request_id)?;
-    if transfer != &response.transfer {
+    let import_frames = extract_output_import_frames(&response.response_frames, &request.request_id)?;
+    if import_frames.transfer != &response.transfer {
         return Err("remote-output-transfer-report-mismatch".to_string());
     }
-    if result.outputs != response.outputs {
+    if import_frames.result.outputs != response.outputs {
         return Err("remote-output-metadata-report-mismatch".to_string());
     }
-    validate_remote_output_admission(request, trusted_output_keys, result, transfer)
+    if import_frames.artifacts != response.transfer_artifacts {
+        return Err("remote-output-transfer-artifact-report-mismatch".to_string());
+    }
+    validate_remote_output_admission(request, trusted_output_keys, import_frames.result, import_frames.transfer)
 }
 
 pub fn validate_remote_builder_frames_output_import(
@@ -1757,8 +1960,8 @@ pub fn validate_remote_builder_frames_output_import(
     trusted_output_keys: &[String],
     frames: &[RemoteFrame],
 ) -> Result<RemoteOutputAdmissionReport, String> {
-    let (result, transfer) = extract_output_import_frames(frames, &request.request_id)?;
-    validate_remote_output_admission(request, trusted_output_keys, result, transfer)
+    let import_frames = extract_output_import_frames(frames, &request.request_id)?;
+    validate_remote_output_admission(request, trusted_output_keys, import_frames.result, import_frames.transfer)
 }
 
 pub fn plan_remote_output_import_actions(
@@ -2279,6 +2482,12 @@ fn build_response_frames(
             outputs: outputs.clone(),
         },
     })?;
+    let transfer_artifacts = plan_output_transfer_artifacts(&request.request_id, &outputs)?;
+    for artifact in &transfer_artifacts {
+        push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::OutputTransferArtifact {
+            artifact: artifact.clone(),
+        })?;
+    }
     let transfer = plan_output_transfer(
         client_transfer,
         builder.transfer_capabilities,
@@ -2297,17 +2506,25 @@ fn build_response_frames(
         execution_plan_digest_blake3: execution.plan_digest_blake3,
         output_digest_blake3: execution.output_digest_blake3,
         outputs,
+        transfer_artifacts,
         transfer,
         ticket_uses_remaining,
     })
 }
 
+struct RemoteOutputImportFrames<'a> {
+    result: &'a RemoteBuildFinished,
+    transfer: &'a RemoteTransferReport,
+    artifacts: Vec<RemoteOutputTransferArtifact>,
+}
+
 fn extract_output_import_frames<'a>(
     frames: &'a [RemoteFrame],
     expected_request_id: &str,
-) -> Result<(&'a RemoteBuildFinished, &'a RemoteTransferReport), String> {
+) -> Result<RemoteOutputImportFrames<'a>, String> {
     let mut result = None;
     let mut transfer = None;
+    let mut artifacts = Vec::new();
     let mut done_seen = false;
     for frame in frames {
         match frame {
@@ -2315,6 +2532,23 @@ fn extract_output_import_frames<'a>(
                 if result.replace(finished).is_some() {
                     return Err("duplicate-build-finished-frame".to_string());
                 }
+            }
+            RemoteFrame::OutputTransferArtifact { artifact } => {
+                if result.is_none() {
+                    return Err("remote-output-transfer-artifact-before-build-result".to_string());
+                }
+                if transfer.is_some() || done_seen {
+                    return Err("remote-output-transfer-artifact-after-transfer-done".to_string());
+                }
+                if artifact.request_id != expected_request_id {
+                    return Err("remote-output-transfer-artifact-request-id-mismatch".to_string());
+                }
+                if artifacts.len() >= MAX_REMOTE_TRANSFER_ARTIFACTS {
+                    return Err(format!(
+                        "remote-output-transfer-artifact-count-exceeds-{MAX_REMOTE_TRANSFER_ARTIFACTS}"
+                    ));
+                }
+                artifacts.push(artifact.clone());
             }
             RemoteFrame::OutputTransferDone { report } => {
                 if result.is_none() {
@@ -2345,7 +2579,12 @@ fn extract_output_import_frames<'a>(
     }
     let result = result.ok_or_else(|| "missing-build-finished-frame".to_string())?;
     let transfer = transfer.ok_or_else(|| "missing-output-transfer-frame".to_string())?;
-    Ok((result, transfer))
+    validate_remote_output_transfer_artifacts(expected_request_id, &result.outputs, &artifacts)?;
+    Ok(RemoteOutputImportFrames {
+        result,
+        transfer,
+        artifacts,
+    })
 }
 
 fn validate_remote_produced_outputs(
@@ -2692,6 +2931,7 @@ mod tests {
     const OTHER_SIGNATURE_FILL_BYTE: u8 = 4;
     const IMPORT_NAR_SHA256_FILL_BYTE: u8 = 7;
     const IMPORT_NAR_SIZE_BYTES: u64 = 1;
+    const CORRUPTED_TRANSFER_PAYLOAD_BYTE: u8 = b'X';
 
     #[test]
     fn compatible_hello_reaches_authorization() {
@@ -3146,9 +3386,64 @@ mod tests {
 
         assert!(response.outputs[0].path_info.is_some());
         assert!(admission.outputs[0].path_info.is_some());
+        assert_eq!(response.transfer_artifacts.len(), 1);
+        assert_eq!(response.transfer_artifacts[0].artifact_kind, RemoteOutputTransferArtifactKind::PathInfoJson);
+        assert_eq!(response.transfer_artifacts[0].output_name, "out");
         assert_eq!(report.outputs.len(), 1);
         assert_eq!(report.outputs[0].path_info_signing_key_id, "builder-key");
         assert!(store.take_output_substitution_report(&importable_store_path()).is_some());
+    }
+
+    #[test]
+    fn remote_output_import_rejects_tampered_transfer_artifact_payload() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let executor = PathInfoRemoteExecutor {
+            path_info: importable_pathinfo(),
+            artifact_attestation_digest_blake3: None,
+        };
+        let mut response = plan_remote_builder_frames_with_executor(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(&client),
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect("pathinfo response plans");
+        corrupt_first_transfer_artifact_payload(&mut response);
+
+        let err =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect_err("tampered transfer artifact payload fails import validation");
+
+        assert_eq!(err, "remote-output-transfer-artifact-digest-mismatch");
+    }
+
+    #[test]
+    fn remote_output_import_requires_transfer_artifact_for_framed_pathinfo() {
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let executor = PathInfoRemoteExecutor {
+            path_info: importable_pathinfo(),
+            artifact_attestation_digest_blake3: None,
+        };
+        let mut response = plan_remote_builder_frames_with_executor(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(&client),
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect("pathinfo response plans");
+        drop_first_transfer_artifact_frame(&mut response);
+
+        let err =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect_err("missing transfer artifact fails import validation");
+
+        assert_eq!(err, "remote-output-transfer-artifact-missing");
     }
 
     #[test]
@@ -3608,6 +3903,35 @@ mod tests {
             if let RemoteFrame::BuildFinished { result } = frame {
                 result.output_digest_blake3 = digest.to_string();
             }
+        }
+    }
+
+    fn corrupt_first_transfer_artifact_payload(response: &mut RemoteBuilderFrameResponse) {
+        if let Some(artifact) = response.transfer_artifacts.first_mut() {
+            if let Some(byte) = artifact.payload.first_mut() {
+                *byte = CORRUPTED_TRANSFER_PAYLOAD_BYTE;
+            }
+        }
+        for frame in &mut response.response_frames {
+            if let RemoteFrame::OutputTransferArtifact { artifact } = frame {
+                if let Some(byte) = artifact.payload.first_mut() {
+                    *byte = CORRUPTED_TRANSFER_PAYLOAD_BYTE;
+                }
+                return;
+            }
+        }
+    }
+
+    fn drop_first_transfer_artifact_frame(response: &mut RemoteBuilderFrameResponse) {
+        if !response.transfer_artifacts.is_empty() {
+            response.transfer_artifacts.remove(0);
+        }
+        if let Some(index) = response
+            .response_frames
+            .iter()
+            .position(|frame| matches!(frame, RemoteFrame::OutputTransferArtifact { .. }))
+        {
+            response.response_frames.remove(index);
         }
     }
 
