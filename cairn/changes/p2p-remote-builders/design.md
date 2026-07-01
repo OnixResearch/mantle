@@ -4,7 +4,11 @@
 
 Remote building is a build-tool feature, not a frontend feature. The client evaluates Nickel or accepts already-lowered build inputs locally, then sends a concrete remote-build request that the builder can validate without understanding frontend module semantics. The builder runs Mantle's normal build executor against admitted inputs and returns output metadata and transfer capability data.
 
-Keep the functional core pure: request validation, ticket policy checks, protocol state transitions, input-missing set calculation, output trust decisions, failure classification, session-lease planning, and status redaction should be deterministic functions over in-memory data. The imperative shell owns transport endpoints, filesystem/state reads, clocks, store locks, actual blob transfer, process execution, and stdout/stderr.
+Tribuchet's hub/worker shape should become an optional Mantle coordinator mode, not a Nix compatibility layer. In direct P2P mode the client can speak to one builder. In coordinator mode, clients submit concrete requests to a local or shared coordinator while workers initiate long-lived sessions, making NATed builders usable without inbound SSH. The coordinator is a scheduler and log fanout point, not an output-trust root: workers still sign outputs, and clients still verify PathInfo, artifact attestations, store prefix, and requested build identity before import.
+
+Worker registration carries endpoint identity, protocol version, systems, feature labels, sandbox/network modes, concurrency, output signing-key identities, and resumable job summaries. The coordinator derives a normalized build key from concrete build identity, requested outputs, hermeticity mode, input manifest digests, capability requirements, and store prefix; per-attempt temp paths, log cursors, and transport session ids stay out of that key. Identical keys attach to one in-flight job and receive the same bounded log replay and final result. A different request that claims the same live output lease or transfer id is rejected rather than coalesced.
+
+Keep the functional core pure: request validation, ticket policy checks, protocol state transitions, worker-registration admission, capability matching, normalized request-key derivation, dedupe decisions, input-missing set calculation, output trust decisions, failure classification, session-lease planning, log retention planning, and status redaction should be deterministic functions over in-memory data. The imperative shell owns transport endpoints, filesystem/state reads, clocks, store locks, actual blob transfer, process execution, and stdout/stderr.
 
 Client-facing code should cross one remote boundary. Store-input negotiation, build execution, logs, output transfer, and status are messages on the same `RemoteBuilderSession`; they should not grow separate remote providers per domain.
 
@@ -23,6 +27,8 @@ Use a versioned ALPN such as `mantle-remote-build/1`. The control stream should 
 9. `OutputClosure`, `OutputTransferReady`, `OutputTransferDone`, `Done` or `Error`
 
 Every variable-length list must have explicit chunk, item, and byte limits. Version mismatch, endpoint identity mismatch, unexpected message order, unsupported capabilities, and oversized messages fail closed.
+
+Coordinator mode uses the same framed protocol core with additional worker-side messages such as `WorkerRegister`, `WorkerHeartbeat`, `WorkerResumeSummary`, `JobOffer`, `JobAccepted`, `JobLogCursor`, and `JobResultAvailable`. These messages must not bypass ordinary `BuildRequest`, input-sync, executor, output-trust, or status-redaction checks. Capability matching is data-driven over Mantle capability labels, not kernel-name shortcuts or Nix daemon state.
 
 `ConcreteBuildRequest` now carries bounded executable payload identity: either an action spec (`action_id`, serialized concrete action JSON) or a derivation spec (`drv_path`, serialized derivation JSON), plus explicit expected output names and optional logical paths. Input-addressed outputs carry known logical paths; content-addressed outputs leave the path absent until execution returns a signed final PathInfo. Raw frontend/Nickel evaluation remains rejected at the remote boundary. The current executor-boundary core parses action payloads as `mantle-remote-action-v1`, converts derivation payloads through `crunch_glue::convert`, checks declared output identities, and emits an internal command/env executable plan. Builder response planning now crosses a `RemoteBuildExecutor` seam, validates the returned execution outcome against that plan, frames per-output PathInfo-signing-key/artifact-digest metadata for client admission, frames bounded NAR payload artifacts for local-build outputs, and can run derivation-backed plans through a local Mantle `StoreHandle` executor on Linux. The implemented input path admits non-empty derivation input refs when the upload manifest matches the request, serializes nested derivation payloads for graph reconstruction, and carries bounded source-input NAR artifacts that the local-build executor ingests and exports before dispatch; chunked arbitrary CAS/source upload remains later work.
 
@@ -75,15 +81,21 @@ This is a Mantle-native replacement for drv-thru's `nix-store --export` path. It
 
 After a successful build, the builder computes the requested output closure and advertises transfer capabilities. The client should prefer delta transfer when both sides support compatible protocol versions and candidate manifests. It falls back to full object/NAR/castore transfer when delta is unavailable or fails. The build report records mode, transferred bytes, reused bytes, fallback reason when present, builder identity, and verified signing key identity.
 
+Do not copy Tribuchet's identical-scratch-path contract into Mantle. Remote workers may use different physical scratch paths, logical store prefixes, or content-addressed provisional paths while executing. Output admission is based on signed PathInfo, artifact attestations, CAS object digests, requested output identity, and configured logical store prefix; a raw path populated on a remote host is never sufficient.
+
 ## Status and limits
 
 The server persists a redacted status snapshot with endpoint id, configured concurrency, queued jobs, active jobs, recent jobs, phases, durations, and short errors. Status must redact bearer ticket secrets, uploaded path contents, environment values, and any untrusted log payload that could be interpreted as structured control data.
+
+Live logs are data-plane messages with bounded replay. The coordinator or direct builder records log chunks behind explicit per-job byte limits, silent-time limits, and cursor semantics. Reconnected clients can request replay from a cursor, but slow subscribers are dropped or truncated according to policy instead of causing unbounded buffering.
 
 Concurrency, maximum build time, maximum upload bytes, path/object list limits, and parallel transfer limits are enforced by the server. The client receives deterministic diagnostics when a limit is exceeded.
 
 ## Session lifecycle and failure taxonomy
 
 Each remote spawn or connection attempt has a stable session identity that survives client proxy/object recreation. Reconnect logic compares this stable identity, not a freshly materialized client object, so a dead transport cannot trigger an event-loop-speed reconnect spin.
+
+Coordinator and worker reloads should be restart-adoptable when the transport binding supports it. Workers re-register resumable running or finished job keys, retained log cursors, and result availability; clients reconnect and resubmit the same normalized build key; the coordinator either reattaches to the worker-owned job/result or reports a phase-classified loss instead of launching an accidental duplicate.
 
 Failures are classified by phase before reporting or retry. Transport and network failures are retryable according to client policy. Authentication, ticket, builder configuration, capability, and output-trust failures are terminal until operator action changes the inputs. Build failures remain build outcomes, not transport failures. Every user-requested reconnect or build dispatch must surface the real error instead of resolving success from stale state.
 

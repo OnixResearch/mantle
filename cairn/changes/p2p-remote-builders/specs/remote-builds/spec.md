@@ -50,6 +50,45 @@ Mantle MUST keep remote-build protocol semantics independent of the underlying b
 - THEN Mantle MUST complete Hello, authorization, and capability reporting before starting those expensive operations
 - AND remote platform or capability facts MUST come from Mantle capability data rather than a kernel-name shortcut.
 
+### Requirement: Mantle supports coordinator-driven worker scheduling [r[remote_builds.coordinator_scheduling]]
+
+Mantle MUST support an optional coordinator scheduling role for remote builders without making that coordinator an output-trust root. Workers MUST register endpoint identity, systems, feature and capability labels, sandbox and network modes, concurrency, output signing-key identities, and resumable job summaries before receiving work. The coordinator MUST match requests by concrete build identity, required system, required capabilities, trust preflight, upload limits, resource limits, and logical store prefix.
+
+#### Scenario: Worker-initiated registration advertises capabilities [r[remote_builds.coordinator_scheduling.scenario.worker-registration]]
+
+- GIVEN a worker starts behind a network boundary where inbound client connections may be unavailable
+- WHEN it initiates a session with the coordinator and sends a valid worker registration
+- THEN the coordinator MUST record the worker endpoint identity, supported systems, feature labels, sandbox and network modes, concurrency, and output signing-key identities
+- AND it MUST NOT assign jobs requiring capabilities the worker did not advertise.
+
+#### Scenario: Capability mismatch is not dispatched [r[remote_builds.coordinator_scheduling.scenario.capability-mismatch]]
+
+- GIVEN a concrete build request requires a system, feature label, sandbox mode, network mode, or resource limit that no registered worker satisfies
+- WHEN the coordinator evaluates the request for dispatch
+- THEN Mantle MUST reject the dispatch or keep it pending only under an explicit wait policy
+- AND diagnostics MUST identify the missing capability without falling back to an incompatible worker.
+
+#### Scenario: Identical concrete requests attach to one in-flight job [r[remote_builds.coordinator_scheduling.scenario.dedupe-identical]]
+
+- GIVEN two clients submit the same normalized concrete build key, excluding per-attempt transport ids, temp paths, and log cursors
+- WHEN a matching job is already queued, running, or finished-but-undelivered
+- THEN Mantle MUST attach the later client to the existing job log and result
+- AND it MUST NOT start a duplicate build for that same normalized key.
+
+#### Scenario: Conflicting live output claims are rejected [r[remote_builds.coordinator_scheduling.scenario.reject-conflict]]
+
+- GIVEN an in-flight job owns a live output lease or transfer id
+- WHEN a different normalized build request claims the same live output lease or transfer id
+- THEN Mantle MUST reject the conflicting request before dispatch
+- AND diagnostics MUST distinguish a conflict from ordinary identical-request dedupe.
+
+#### Scenario: Re-registered workers can redeliver resumable results [r[remote_builds.coordinator_scheduling.scenario.resume-redelivery]]
+
+- GIVEN a coordinator restarts or a worker reloads while a remote build is running or finished but not fully delivered
+- WHEN the worker re-registers with resumable job keys and the client resubmits the same normalized build key
+- THEN Mantle SHOULD reattach the client to the retained job or redeliver the verified result when the worker still owns it
+- AND it MUST report a phase-classified loss instead of silently launching a conflicting duplicate when the job cannot be resumed.
+
 ### Requirement: Mantle supports bounded tickets and trusted clients for builder access [r[remote_builds.access_tickets]]
 
 Mantle MUST support both configured trusted clients and copy-paste bearer tickets for remote builder resource access. Ticket records MUST include a secret-derived identifier, optional display name, creation time, expiration time, optional uses remaining, maximum build time, maximum upload bytes, optional bound client endpoint id, and revoked state. Ticket possession MUST authorize only builder resource access and MUST NOT authorize output import trust.
@@ -207,6 +246,13 @@ Mantle remote builders MUST expose redacted status snapshots and enforce configu
 - THEN Mantle MUST keep excess requests queued until a slot is available or the request fails
 - AND it MUST NOT start more builds than the configured concurrency limit.
 
+#### Scenario: Live logs are bounded and replayable [r[remote_builds.queue_status_limits.scenario.log-replay]]
+
+- GIVEN a remote build streams logs while clients may disconnect and reconnect
+- WHEN Mantle records and replays log chunks for that job
+- THEN Mantle MUST enforce configured log-byte, silent-time, and replay-cursor limits
+- AND it MUST drop, truncate, or fail slow subscribers according to policy instead of buffering unbounded logs.
+
 ### Requirement: Mantle manages remote session lifecycle with phase-classified failures [r[remote_builds.session_lifecycle]]
 
 Mantle MUST assign each remote-build connection attempt a stable session identity, classify failures by phase, and protect live remote-build artifacts with session-scoped leases or roots. Transport failures SHOULD be retried according to client policy, while authentication, builder configuration, capability, and output-trust failures MUST surface as terminal diagnostics until operator inputs change.
@@ -231,3 +277,10 @@ Mantle MUST assign each remote-build connection attempt a stable session identit
 - WHEN local or remote garbage collection runs
 - THEN Mantle MUST keep those artifacts reachable through a session-scoped lease or root
 - AND it SHOULD release or replace that lease when the session or queued job no longer needs the artifacts.
+
+#### Scenario: Restart adoption preserves phase truth [r[remote_builds.session_lifecycle.scenario.restart-adoption]]
+
+- GIVEN a coordinator, direct builder, or worker process restarts while a client is waiting for remote build logs or outputs
+- WHEN the client reconnects and the remote side advertises retained session, job, log, or result state
+- THEN Mantle SHOULD resume from the retained state when the normalized build key and trust policy still match
+- AND it MUST report the exact lost phase when retained state is unavailable rather than reporting stale success.
