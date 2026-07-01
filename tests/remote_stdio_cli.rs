@@ -137,7 +137,7 @@ fn client_request_frames() -> Vec<Value> {
                 "payload": {
                     "kind": "action",
                     "action_id": "action-1",
-                    "spec_json": "{\"builder\":\"builtin:fixture\"}"
+                    "spec_json": action_spec_json()
                 },
                 "expected_outputs": [{
                     "name": "out",
@@ -163,6 +163,17 @@ fn client_request_frames() -> Vec<Value> {
             }
         }),
     ]
+}
+
+fn action_spec_json() -> String {
+    serde_json::json!({
+        "schema": "mantle-remote-action-v1",
+        "action_id": "action-1",
+        "builder": "builtin:fixture",
+        "args": ["--emit"],
+        "outputs": ["out"]
+    })
+    .to_string()
 }
 
 fn encode_frames(frames: &[Value]) -> Vec<u8> {

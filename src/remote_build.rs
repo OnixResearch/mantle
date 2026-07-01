@@ -24,6 +24,9 @@ pub const MAX_REMOTE_STDIO_STDERR_BYTES: usize = 65_536;
 pub const MAX_REMOTE_STDIO_FRAME_COUNT: usize = 4_096;
 pub const MAX_REMOTE_STDIO_INPUT_BYTES: usize = 4_194_304;
 pub const MAX_REMOTE_STATUS_ITEMS: usize = 4_096;
+pub const MAX_REMOTE_EXECUTOR_ARGS: usize = 512;
+pub const MAX_REMOTE_EXECUTOR_ENV_VARS: usize = 512;
+pub const MAX_REMOTE_EXECUTOR_ENV_VALUE_BYTES: usize = 65_536;
 pub const MAX_REMOTE_UPLOAD_BYTES: u64 = 1_099_511_627_776;
 pub const MAX_REMOTE_BUILD_TIME_SECS: u64 = 86_400;
 pub const DEFAULT_TICKET_TTL_SECS: u64 = 3_600;
@@ -42,6 +45,8 @@ const PERCENT_DENOMINATOR: u64 = 100;
 const REMOTE_SESSION_NON_CLAIM: &str = "loopback remote-build session evidence proves protocol control flow only; it does not prove production P2P transport, sandbox execution, or artifact correctness";
 const STDERR_TRUNCATION_MARKER: &str = "\n<stderr-truncated>";
 const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+const REMOTE_ACTION_SPEC_SCHEMA: &str = "mantle-remote-action-v1";
+const DEFAULT_REMOTE_ACTION_SYSTEM: &str = "x86_64-linux";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -121,6 +126,48 @@ pub enum RemoteConcreteBuildPayload {
 pub struct RemoteExpectedOutput {
     pub name: String,
     pub logical_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteExecutablePlan {
+    pub request_id: String,
+    pub store_prefix: String,
+    pub source: RemoteExecutablePlanSource,
+    pub command_args: Vec<String>,
+    pub command_env: BTreeMap<String, String>,
+    pub system: String,
+    pub expected_outputs: Vec<RemoteExpectedOutput>,
+    pub plan_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum RemoteExecutablePlanSource {
+    Derivation {
+        declared_drv_path: String,
+        computed_drv_path: String,
+        drv_name: String,
+        drv_digest_blake3: String,
+    },
+    Action {
+        action_id: String,
+        schema: String,
+        spec_digest_blake3: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct RemoteActionSpec {
+    pub schema: String,
+    pub action_id: String,
+    pub builder: String,
+    #[serde(default = "default_remote_action_system")]
+    pub system: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    pub outputs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -549,14 +596,7 @@ pub fn authorize_ticket(ticket: &RemoteTicket, request: &TicketAuthRequest) -> T
 }
 
 pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &RemoteTicket) -> Result<(), String> {
-    if request.contains_raw_frontend_eval {
-        return Err("raw-frontend-evaluation-rejected".to_string());
-    }
-    if !request.store_prefix.starts_with('/') {
-        return Err("store-prefix-not-absolute".to_string());
-    }
-    validate_remote_build_payload(&request.payload, &request.store_prefix)?;
-    validate_expected_outputs(&request.expected_outputs, &request.store_prefix)?;
+    plan_remote_executable_request(request)?;
     if request.input_refs.len() > MAX_REMOTE_INPUT_REFS {
         return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
     }
@@ -571,30 +611,89 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
     Ok(())
 }
 
-fn validate_remote_build_payload(payload: &RemoteConcreteBuildPayload, store_prefix: &str) -> Result<(), String> {
-    match payload {
-        RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } => {
-            if drv_path.is_empty() || !drv_path.starts_with(store_prefix) {
-                return Err("remote-derivation-path-store-prefix-mismatch".to_string());
-            }
-            if drv_json.is_empty() {
-                return Err("remote-build-payload-empty".to_string());
-            }
-            if drv_json.len() > MAX_REMOTE_BUILD_PAYLOAD_BYTES {
-                return Err(format!("remote-build-payload-exceeds-{MAX_REMOTE_BUILD_PAYLOAD_BYTES}"));
-            }
-        }
+pub fn plan_remote_executable_request(request: &ConcreteBuildRequest) -> Result<RemoteExecutablePlan, String> {
+    if request.contains_raw_frontend_eval {
+        return Err("raw-frontend-evaluation-rejected".to_string());
+    }
+    if !request.store_prefix.starts_with('/') {
+        return Err("store-prefix-not-absolute".to_string());
+    }
+    validate_expected_outputs(&request.expected_outputs, &request.store_prefix)?;
+    match &request.payload {
         RemoteConcreteBuildPayload::Action { action_id, spec_json } => {
-            if action_id.is_empty() {
-                return Err("remote-action-id-empty".to_string());
-            }
-            if spec_json.is_empty() {
-                return Err("remote-build-payload-empty".to_string());
-            }
-            if spec_json.len() > MAX_REMOTE_BUILD_PAYLOAD_BYTES {
-                return Err(format!("remote-build-payload-exceeds-{MAX_REMOTE_BUILD_PAYLOAD_BYTES}"));
-            }
+            plan_remote_action_payload(action_id, spec_json, request)
         }
+        RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } => {
+            plan_remote_derivation_payload(drv_path, drv_json, request)
+        }
+    }
+}
+
+fn plan_remote_action_payload(
+    action_id: &str,
+    spec_json: &str,
+    request: &ConcreteBuildRequest,
+) -> Result<RemoteExecutablePlan, String> {
+    if action_id.is_empty() {
+        return Err("remote-action-id-empty".to_string());
+    }
+    validate_remote_payload_json_size(spec_json)?;
+    let spec: RemoteActionSpec =
+        serde_json::from_str(spec_json).map_err(|err| format!("remote-action-spec-json-invalid: {err}"))?;
+    validate_action_spec(action_id, &spec, &request.expected_outputs)?;
+    let command_args = remote_action_command_args(&spec)?;
+    validate_command_env(&spec.env)?;
+    let source = RemoteExecutablePlanSource::Action {
+        action_id: action_id.to_string(),
+        schema: spec.schema.clone(),
+        spec_digest_blake3: remote_action_spec_digest(&spec)?,
+    };
+    finish_remote_executable_plan(request, source, command_args, spec.env, spec.system)
+}
+
+fn plan_remote_derivation_payload(
+    drv_path: &str,
+    drv_json: &str,
+    request: &ConcreteBuildRequest,
+) -> Result<RemoteExecutablePlan, String> {
+    if drv_path.is_empty() || !drv_path.starts_with(&request.store_prefix) {
+        return Err("remote-derivation-path-store-prefix-mismatch".to_string());
+    }
+    validate_remote_payload_json_size(drv_json)?;
+    let drv: crunch_glue::CrunchDerivation =
+        serde_json::from_str(drv_json).map_err(|err| format!("remote-derivation-json-invalid: {err}"))?;
+    let mut known_paths = crunch_glue::ConversionCache::new(&request.store_prefix);
+    let (computed_path, nix_drv) = crunch_glue::convert(&drv, &mut known_paths)
+        .map_err(|err| format!("remote-derivation-convert-invalid: {err}"))?;
+    let computed_drv_path = computed_path.to_absolute_path_with_prefix(&request.store_prefix);
+    validate_derivation_plan_identity(
+        drv_path,
+        &computed_drv_path,
+        &nix_drv,
+        &request.expected_outputs,
+        &request.store_prefix,
+    )?;
+    let source = RemoteExecutablePlanSource::Derivation {
+        declared_drv_path: drv_path.to_string(),
+        computed_drv_path,
+        drv_name: drv.name,
+        drv_digest_blake3: remote_derivation_digest(&nix_drv, &request.store_prefix),
+    };
+    finish_remote_executable_plan(
+        request,
+        source,
+        remote_derivation_command_args(&nix_drv)?,
+        remote_derivation_env_utf8(&nix_drv)?,
+        nix_drv.system,
+    )
+}
+
+fn validate_remote_payload_json_size(payload_json: &str) -> Result<(), String> {
+    if payload_json.is_empty() {
+        return Err("remote-build-payload-empty".to_string());
+    }
+    if payload_json.len() > MAX_REMOTE_BUILD_PAYLOAD_BYTES {
+        return Err(format!("remote-build-payload-exceeds-{MAX_REMOTE_BUILD_PAYLOAD_BYTES}"));
     }
     Ok(())
 }
@@ -619,6 +718,238 @@ fn validate_expected_outputs(outputs: &[RemoteExpectedOutput], store_prefix: &st
         }
     }
     Ok(())
+}
+
+fn validate_action_spec(
+    action_id: &str,
+    spec: &RemoteActionSpec,
+    expected_outputs: &[RemoteExpectedOutput],
+) -> Result<(), String> {
+    if spec.schema != REMOTE_ACTION_SPEC_SCHEMA {
+        return Err("remote-action-schema-unsupported".to_string());
+    }
+    if spec.action_id != action_id {
+        return Err("remote-action-id-mismatch".to_string());
+    }
+    if spec.builder.is_empty() || spec.system.is_empty() {
+        return Err("remote-action-executor-field-empty".to_string());
+    }
+    validate_action_outputs(&spec.outputs, expected_outputs)
+}
+
+fn validate_action_outputs(outputs: &[String], expected_outputs: &[RemoteExpectedOutput]) -> Result<(), String> {
+    if outputs.is_empty() {
+        return Err("remote-action-outputs-empty".to_string());
+    }
+    if outputs.len() > MAX_REMOTE_EXPECTED_OUTPUTS {
+        return Err(format!("remote-action-output-count-exceeds-{MAX_REMOTE_EXPECTED_OUTPUTS}"));
+    }
+    let mut action_names = BTreeSet::new();
+    for output in outputs {
+        if output.is_empty() {
+            return Err("remote-action-output-name-empty".to_string());
+        }
+        if !action_names.insert(output.clone()) {
+            return Err("remote-action-output-name-duplicate".to_string());
+        }
+    }
+    let expected_names = expected_outputs.iter().map(|output| output.name.clone()).collect::<BTreeSet<_>>();
+    if action_names != expected_names {
+        return Err("remote-action-expected-output-mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn validate_derivation_plan_identity(
+    declared_drv_path: &str,
+    computed_drv_path: &str,
+    derivation: &nix_compat::derivation::Derivation,
+    expected_outputs: &[RemoteExpectedOutput],
+    store_prefix: &str,
+) -> Result<(), String> {
+    if declared_drv_path != computed_drv_path {
+        return Err("remote-derivation-path-mismatch".to_string());
+    }
+    validate_derivation_expected_outputs(derivation, expected_outputs, store_prefix)
+}
+
+fn validate_derivation_expected_outputs(
+    derivation: &nix_compat::derivation::Derivation,
+    expected_outputs: &[RemoteExpectedOutput],
+    store_prefix: &str,
+) -> Result<(), String> {
+    for expected in expected_outputs {
+        let output = derivation
+            .outputs
+            .get(&expected.name)
+            .ok_or_else(|| "remote-derivation-expected-output-unknown".to_string())?;
+        if let Some(path) = &output.path {
+            let logical_path = path.to_absolute_path_with_prefix(store_prefix);
+            if logical_path != expected.logical_path {
+                return Err("remote-derivation-output-path-mismatch".to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn remote_action_command_args(spec: &RemoteActionSpec) -> Result<Vec<String>, String> {
+    let mut command_args = Vec::with_capacity(spec.args.len().saturating_add(1));
+    command_args.push(spec.builder.clone());
+    command_args.extend(spec.args.clone());
+    validate_command_args(&command_args)?;
+    Ok(command_args)
+}
+
+fn remote_derivation_command_args(derivation: &nix_compat::derivation::Derivation) -> Result<Vec<String>, String> {
+    let mut command_args = Vec::with_capacity(derivation.arguments.len().saturating_add(1));
+    command_args.push(derivation.builder.clone());
+    command_args.extend(derivation.arguments.clone());
+    validate_command_args(&command_args)?;
+    Ok(command_args)
+}
+
+fn validate_command_args(command_args: &[String]) -> Result<(), String> {
+    if command_args.len() > MAX_REMOTE_EXECUTOR_ARGS {
+        return Err(format!("remote-executor-arg-count-exceeds-{MAX_REMOTE_EXECUTOR_ARGS}"));
+    }
+    if command_args.first().map(String::is_empty).unwrap_or(true) {
+        return Err("remote-executor-builder-empty".to_string());
+    }
+    Ok(())
+}
+
+fn validate_command_env(env: &BTreeMap<String, String>) -> Result<(), String> {
+    if env.len() > MAX_REMOTE_EXECUTOR_ENV_VARS {
+        return Err(format!("remote-executor-env-count-exceeds-{MAX_REMOTE_EXECUTOR_ENV_VARS}"));
+    }
+    for (name, value) in env {
+        if name.is_empty() {
+            return Err("remote-executor-env-name-empty".to_string());
+        }
+        if value.len() > MAX_REMOTE_EXECUTOR_ENV_VALUE_BYTES {
+            return Err(format!("remote-executor-env-value-exceeds-{MAX_REMOTE_EXECUTOR_ENV_VALUE_BYTES}"));
+        }
+    }
+    Ok(())
+}
+
+fn remote_derivation_env_utf8(
+    derivation: &nix_compat::derivation::Derivation,
+) -> Result<BTreeMap<String, String>, String> {
+    let mut env = BTreeMap::new();
+    for (name, value) in &derivation.environment {
+        let value = String::from_utf8(value.to_vec()).map_err(|_| "remote-derivation-env-non-utf8".to_string())?;
+        env.insert(name.clone(), value);
+    }
+    validate_command_env(&env)?;
+    Ok(env)
+}
+
+fn remote_action_spec_digest(spec: &RemoteActionSpec) -> Result<String, String> {
+    let bytes = serde_json::to_vec(spec).map_err(|err| format!("remote-action-spec-digest-json-invalid: {err}"))?;
+    Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
+fn remote_derivation_digest(derivation: &nix_compat::derivation::Derivation, store_prefix: &str) -> String {
+    blake3::hash(&derivation.to_aterm_bytes_with_store_dir(store_prefix)).to_hex().to_string()
+}
+
+fn finish_remote_executable_plan(
+    request: &ConcreteBuildRequest,
+    source: RemoteExecutablePlanSource,
+    command_args: Vec<String>,
+    command_env: BTreeMap<String, String>,
+    system: String,
+) -> Result<RemoteExecutablePlan, String> {
+    validate_command_args(&command_args)?;
+    validate_command_env(&command_env)?;
+    let plan_digest_blake3 = remote_executable_plan_digest(
+        &request.request_id,
+        &request.store_prefix,
+        &source,
+        &command_args,
+        &command_env,
+        &system,
+        &request.expected_outputs,
+    );
+    Ok(RemoteExecutablePlan {
+        request_id: request.request_id.clone(),
+        store_prefix: request.store_prefix.clone(),
+        source,
+        command_args,
+        command_env,
+        system,
+        expected_outputs: request.expected_outputs.clone(),
+        plan_digest_blake3,
+    })
+}
+
+fn remote_executable_plan_digest(
+    request_id: &str,
+    store_prefix: &str,
+    source: &RemoteExecutablePlanSource,
+    command_args: &[String],
+    command_env: &BTreeMap<String, String>,
+    system: &str,
+    expected_outputs: &[RemoteExpectedOutput],
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "request-id", request_id);
+    hash_labeled_str(&mut hasher, "store-prefix", store_prefix);
+    hash_executable_plan_source(&mut hasher, source);
+    hash_labeled_str(&mut hasher, "system", system);
+    for arg in command_args {
+        hash_labeled_str(&mut hasher, "command-arg", arg);
+    }
+    for (name, value) in command_env {
+        hash_labeled_str(&mut hasher, "env-name", name);
+        hash_labeled_str(&mut hasher, "env-value", value);
+    }
+    for output in expected_outputs {
+        hash_labeled_str(&mut hasher, "output-name", &output.name);
+        hash_labeled_str(&mut hasher, "output-path", &output.logical_path);
+    }
+    hasher.finalize().to_hex().to_string()
+}
+
+fn hash_executable_plan_source(hasher: &mut blake3::Hasher, source: &RemoteExecutablePlanSource) {
+    match source {
+        RemoteExecutablePlanSource::Action {
+            action_id,
+            schema,
+            spec_digest_blake3,
+        } => {
+            hash_labeled_str(hasher, "source-kind", "action");
+            hash_labeled_str(hasher, "action-id", action_id);
+            hash_labeled_str(hasher, "schema", schema);
+            hash_labeled_str(hasher, "spec-digest", spec_digest_blake3);
+        }
+        RemoteExecutablePlanSource::Derivation {
+            declared_drv_path,
+            computed_drv_path,
+            drv_name,
+            drv_digest_blake3,
+        } => {
+            hash_labeled_str(hasher, "source-kind", "derivation");
+            hash_labeled_str(hasher, "declared-drv-path", declared_drv_path);
+            hash_labeled_str(hasher, "computed-drv-path", computed_drv_path);
+            hash_labeled_str(hasher, "drv-name", drv_name);
+            hash_labeled_str(hasher, "drv-digest", drv_digest_blake3);
+        }
+    }
+}
+
+fn hash_labeled_str(hasher: &mut blake3::Hasher, label: &str, value: &str) {
+    hasher.update(label.as_bytes());
+    hasher.update(b":");
+    hasher.update(value.len().to_string().as_bytes());
+    hasher.update(b":");
+    hasher.update(value.as_bytes());
+}
+
+fn default_remote_action_system() -> String {
+    DEFAULT_REMOTE_ACTION_SYSTEM.to_string()
 }
 
 pub fn redeem_after_queue(ticket: &mut RemoteTicket, request_validated: bool) -> Result<(), String> {
@@ -1157,7 +1488,7 @@ pub fn run_loopback_remote_session(
         client.request.upload_bytes,
         ticket.max_upload_bytes,
     )?;
-    let output_digest = remote_loopback_output_digest(&client.request, &client.input_manifest.input_refs);
+    let output_digest = remote_loopback_output_digest(&client.request, &client.input_manifest.input_refs)?;
     let trusted_key = expect_output_trust(builder, client)?;
     redeem_after_queue(ticket, true)?;
     let transfer = plan_output_transfer(
@@ -1272,34 +1603,16 @@ fn expect_output_trust(builder: &RemoteLoopbackBuilder, client: &RemoteLoopbackC
     }
 }
 
-fn remote_loopback_output_digest(request: &ConcreteBuildRequest, input_refs: &[String]) -> String {
+fn remote_loopback_output_digest(request: &ConcreteBuildRequest, input_refs: &[String]) -> Result<String, String> {
+    let plan = plan_remote_executable_request(request)?;
     let mut hasher = blake3::Hasher::new();
-    hasher.update(request.request_id.as_bytes());
-    hasher.update(request.store_prefix.as_bytes());
-    hash_remote_build_payload(&mut hasher, &request.payload);
-    for expected_output in &request.expected_outputs {
-        hasher.update(expected_output.name.as_bytes());
-        hasher.update(expected_output.logical_path.as_bytes());
-    }
+    hash_labeled_str(&mut hasher, "request-id", &request.request_id);
+    hash_labeled_str(&mut hasher, "store-prefix", &request.store_prefix);
+    hash_labeled_str(&mut hasher, "executor-plan", &plan.plan_digest_blake3);
     for input_ref in input_refs {
-        hasher.update(input_ref.as_bytes());
+        hash_labeled_str(&mut hasher, "input-ref", input_ref);
     }
-    hasher.finalize().to_hex().to_string()
-}
-
-fn hash_remote_build_payload(hasher: &mut blake3::Hasher, payload: &RemoteConcreteBuildPayload) {
-    match payload {
-        RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } => {
-            hasher.update(b"derivation");
-            hasher.update(drv_path.as_bytes());
-            hasher.update(drv_json.as_bytes());
-        }
-        RemoteConcreteBuildPayload::Action { action_id, spec_json } => {
-            hasher.update(b"action");
-            hasher.update(action_id.as_bytes());
-            hasher.update(spec_json.as_bytes());
-        }
-    }
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn take_hello<'a>(
@@ -1400,7 +1713,7 @@ fn build_response_frames(
     missing: Vec<String>,
     ticket_uses_remaining: u32,
 ) -> Result<RemoteBuilderFrameResponse, String> {
-    let output_digest = remote_loopback_output_digest(request, input_refs);
+    let output_digest = remote_loopback_output_digest(request, input_refs)?;
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildQueued {
         request_id: request.request_id.clone(),
         session_id: request.request_id.clone(),
@@ -1878,13 +2191,54 @@ mod tests {
         let mut changed = fixture_request();
         changed.payload = RemoteConcreteBuildPayload::Action {
             action_id: "action-2".to_string(),
-            spec_json: "{\"builder\":\"builtin:fixture\"}".to_string(),
+            spec_json: fixture_action_spec_json("action-2"),
         };
-        let original_digest = remote_loopback_output_digest(&fixture_request(), &["input-a".to_string()]);
-        let changed_digest = remote_loopback_output_digest(&changed, &["input-a".to_string()]);
+        let original_digest =
+            remote_loopback_output_digest(&fixture_request(), &["input-a".to_string()]).expect("original digest plans");
+        let changed_digest =
+            remote_loopback_output_digest(&changed, &["input-a".to_string()]).expect("changed digest plans");
 
         assert_ne!(original_digest, changed_digest);
         assert_eq!(original_digest.len(), BLAKE3_HEX_LENGTH_CHARS);
+    }
+
+    #[test]
+    fn action_payload_plans_typed_executor_boundary() {
+        let plan = plan_remote_executable_request(&fixture_request()).expect("action request plans");
+        assert!(matches!(plan.source, RemoteExecutablePlanSource::Action { .. }));
+        assert_eq!(plan.command_args, vec!["builtin:fixture".to_string(), "--emit".to_string()]);
+        assert_eq!(plan.system, DEFAULT_REMOTE_ACTION_SYSTEM);
+        assert_eq!(plan.expected_outputs, fixture_expected_outputs());
+        assert_eq!(plan.plan_digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+    }
+
+    #[test]
+    fn action_payload_rejects_untyped_json_before_queue_admission() {
+        let mut request = fixture_request();
+        request.payload = RemoteConcreteBuildPayload::Action {
+            action_id: "action-1".to_string(),
+            spec_json: "{\"builder\":\"builtin:fixture\"}".to_string(),
+        };
+        let err = plan_remote_executable_request(&request).expect_err("raw action JSON is not typed enough");
+        assert!(err.contains("remote-action-spec-json-invalid"));
+    }
+
+    #[test]
+    fn derivation_payload_plans_executor_command_and_declared_output() {
+        let request = fixture_derivation_request();
+        let plan = plan_remote_executable_request(&request).expect("derivation request plans");
+        assert!(matches!(plan.source, RemoteExecutablePlanSource::Derivation { .. }));
+        assert_eq!(plan.command_args, vec!["/bin/sh".to_string(), "-c".to_string(), "echo hi".to_string()]);
+        assert_eq!(plan.command_env.get("outputs"), Some(&"out".to_string()));
+        assert_eq!(plan.expected_outputs, request.expected_outputs);
+    }
+
+    #[test]
+    fn derivation_payload_rejects_stale_declared_output_path() {
+        let mut request = fixture_derivation_request();
+        request.expected_outputs[0].logical_path = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-stale".to_string();
+        let err = plan_remote_executable_request(&request).expect_err("stale output path fails");
+        assert_eq!(err, "remote-derivation-output-path-mismatch");
     }
 
     #[test]
@@ -2382,8 +2736,53 @@ mod tests {
     fn fixture_payload() -> RemoteConcreteBuildPayload {
         RemoteConcreteBuildPayload::Action {
             action_id: "action-1".to_string(),
-            spec_json: "{\"builder\":\"builtin:fixture\"}".to_string(),
+            spec_json: fixture_action_spec_json("action-1"),
         }
+    }
+
+    fn fixture_action_spec_json(action_id: &str) -> String {
+        serde_json::json!({
+            "schema": REMOTE_ACTION_SPEC_SCHEMA,
+            "action_id": action_id,
+            "builder": "builtin:fixture",
+            "args": ["--emit"],
+            "outputs": ["out"]
+        })
+        .to_string()
+    }
+
+    fn fixture_derivation_request() -> ConcreteBuildRequest {
+        let drv_json = fixture_derivation_json();
+        let drv: crunch_glue::CrunchDerivation = serde_json::from_str(&drv_json).expect("fixture drv parses");
+        let mut known_paths = crunch_glue::ConversionCache::new("/mantle/store");
+        let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut known_paths).expect("fixture drv converts");
+        let out_path = nix_drv.outputs["out"]
+            .path
+            .as_ref()
+            .expect("input-addressed output path")
+            .to_absolute_path_with_prefix("/mantle/store");
+        ConcreteBuildRequest {
+            payload: RemoteConcreteBuildPayload::Derivation {
+                drv_path: drv_path.to_absolute_path_with_prefix("/mantle/store"),
+                drv_json,
+            },
+            expected_outputs: vec![RemoteExpectedOutput {
+                name: "out".to_string(),
+                logical_path: out_path,
+            }],
+            ..fixture_request()
+        }
+    }
+
+    fn fixture_derivation_json() -> String {
+        serde_json::json!({
+            "name": "remote-fixture",
+            "builder": "/bin/sh",
+            "args": ["-c", "echo hi"],
+            "outputs": ["out"],
+            "addressing_mode": "input-addressed"
+        })
+        .to_string()
     }
 
     fn fixture_expected_outputs() -> Vec<RemoteExpectedOutput> {
