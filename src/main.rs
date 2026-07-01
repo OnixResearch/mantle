@@ -78,6 +78,7 @@ use build_cmd::cmd_build;
 use build_cmd::state_dir;
 use clap::Parser;
 use clap::Subcommand;
+use clap::ValueEnum;
 use errors::RunError;
 use operator_diagnostics::DoctorProfile;
 use operator_diagnostics::RuntimeFingerprintModeFields;
@@ -1324,12 +1325,30 @@ pub enum RemoteAction {
         #[command(subcommand)]
         action: RemoteTicketAction,
     },
-    /// Print remote server protocol metadata; concrete transport binding is explicit future work
+    /// Print remote server protocol metadata or serve one framed stdio session
     Serve {
         /// Builder endpoint id expected by clients
         #[arg(long, default_value = "local-builder")]
         endpoint_id: String,
+
+        /// Transport binding to expose
+        #[arg(long, value_enum, default_value = "metadata")]
+        binding: RemoteServeBinding,
+
+        /// Builder signing key id advertised in framed responses
+        #[arg(long, default_value = "builder-key")]
+        signing_key_id: String,
+
+        /// Input ref already present on this builder; repeat for multiple refs
+        #[arg(long = "present-input-ref")]
+        present_input_refs: Vec<String>,
     },
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteServeBinding {
+    Metadata,
+    StdioOnce,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -2069,7 +2088,9 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Receipt { action } => {
             portable_receipt::cmd_receipt(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
-        Command::Remote { action } => remote_build::cmd_remote(action.clone(), &ctx.resolved_state_dir, ctx.json),
+        Command::Remote { action } => {
+            remote_build::cmd_remote(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
+        }
         Command::Artifact { action } => {
             artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)
         }

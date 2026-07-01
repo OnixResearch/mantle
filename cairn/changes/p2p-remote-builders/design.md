@@ -32,7 +32,7 @@ The first implementation binding is in-process loopback over the same `RemoteFra
 
 The stdio binding shell validates child output with the same frame decoder: stdout is decoded only as a sequence of length-prefixed frames, stderr is retained as bounded diagnostics, and child exit failure or unframed stdout is classified before queue admission. This keeps human logs from becoming control data while preserving stderr for operator debugging.
 
-A deterministic `serve_stdio_remote_once` seam now exercises the same exchange over generic `Read`/`Write`: read bounded client frame stream, validate Hello/auth/build/input/upload order, plan missing inputs, redeem the ticket only after valid upload, and write framed builder responses. This remains a fixture/server seam; a production daemon loop and real build executor are still separate work.
+A deterministic `serve_stdio_remote_once` seam now exercises the same exchange over generic `Read`/`Write`: read bounded client frame stream, validate Hello/auth/build/input/upload order, plan missing inputs, redeem the ticket only after valid upload, and write framed builder responses. `mantle remote serve --binding stdio-once` exposes this as an explicit operator/test fixture that reads one framed stdin exchange, persists ticket redemption, and writes only framed responses to stdout. The default `remote serve` remains metadata-only; a production daemon loop and real build executor are still separate work.
 
 ## Transport bindings and stdio discipline
 

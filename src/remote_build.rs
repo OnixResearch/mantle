@@ -781,10 +781,40 @@ pub fn serve_stdio_remote_once(
     let input = read_bounded_stdio_input(reader)?;
     let client_frames = decode_remote_frame_stream(&input)?;
     let response = plan_remote_builder_frames(builder, ticket, &client_frames, client_transfer)?;
+    write_remote_response_frames(&mut writer, &response)?;
+    Ok(response)
+}
+
+pub fn plan_stdio_remote_once_from_state(
+    reader: impl Read,
+    builder: &RemoteLoopbackBuilder,
+    state: &mut RemoteTicketState,
+    client_transfer: RemoteTransferCapabilities,
+) -> Result<RemoteBuilderFrameResponse, String> {
+    let input = read_bounded_stdio_input(reader)?;
+    let client_frames = decode_remote_frame_stream(&input)?;
+    plan_remote_builder_frames_from_state(builder, state, &client_frames, client_transfer)
+}
+
+pub fn plan_remote_builder_frames_from_state(
+    builder: &RemoteLoopbackBuilder,
+    state: &mut RemoteTicketState,
+    client_frames: &[RemoteFrame],
+    client_transfer: RemoteTransferCapabilities,
+) -> Result<RemoteBuilderFrameResponse, String> {
+    let ticket_id = request_ticket_id_from_frames(client_frames)?;
+    let ticket = state.tickets.get_mut(ticket_id).ok_or_else(|| format!("unknown-remote-ticket-{ticket_id}"))?;
+    plan_remote_builder_frames(builder, ticket, client_frames, client_transfer)
+}
+
+pub fn write_remote_response_frames(
+    mut writer: impl Write,
+    response: &RemoteBuilderFrameResponse,
+) -> Result<(), String> {
     for frame in &response.response_frames {
         write_remote_frame(&mut writer, frame)?;
     }
-    Ok(response)
+    Ok(())
 }
 
 pub fn validate_remote_transition(
@@ -1228,6 +1258,15 @@ fn reject_extra_client_frames(extra: Option<&RemoteFrame>) -> Result<(), String>
     Ok(())
 }
 
+fn request_ticket_id_from_frames(frames: &[RemoteFrame]) -> Result<&str, String> {
+    for frame in frames {
+        if let RemoteFrame::AuthTicket { auth } = frame {
+            return Ok(&auth.ticket_id);
+        }
+    }
+    Err("missing-auth-ticket-frame".to_string())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_response_frames(
     builder: &RemoteLoopbackBuilder,
@@ -1483,26 +1522,83 @@ fn ticket_state_path(state_dir: &Path) -> std::path::PathBuf {
     state_dir.join(TICKET_STATE_DIR).join(TICKET_STATE_FILE)
 }
 
-pub fn cmd_remote(action: crate::RemoteAction, state_dir: &Path, json_output: bool) -> Result<(), RunError> {
+pub fn cmd_remote(
+    action: crate::RemoteAction,
+    state_dir: &Path,
+    store_prefix: &str,
+    json_output: bool,
+) -> Result<(), RunError> {
     match action {
         crate::RemoteAction::Ticket { action } => cmd_remote_ticket(action, state_dir, json_output),
-        crate::RemoteAction::Serve { endpoint_id } => {
-            let rendered = serde_json::json!({
-                "protocol": REMOTE_PROTOCOL_ALPN,
-                "endpoint_id": endpoint_id,
-                "frame_encoding": "u32be-length-prefixed-json",
-                "supported_bindings": [
-                    RemoteTransportBinding::Loopback.as_str(),
-                    RemoteTransportBinding::Stdio.as_str(),
-                    RemoteTransportBinding::SshStdio.as_str(),
-                    RemoteTransportBinding::P2p.as_str(),
-                ],
-                "status": "metadata-only",
-                "diagnostic": "remote serve exposes protocol metadata; production P2P listener and build executor dispatch remain gated"
-            });
-            print_json_or_human(&rendered, json_output)
+        crate::RemoteAction::Serve {
+            endpoint_id,
+            binding,
+            signing_key_id,
+            present_input_refs,
+        } => cmd_remote_serve(
+            endpoint_id,
+            binding,
+            signing_key_id,
+            present_input_refs,
+            state_dir,
+            store_prefix,
+            json_output,
+        ),
+    }
+}
+
+fn cmd_remote_serve(
+    endpoint_id: String,
+    binding: crate::RemoteServeBinding,
+    signing_key_id: String,
+    present_input_refs: Vec<String>,
+    state_dir: &Path,
+    store_prefix: &str,
+    json_output: bool,
+) -> Result<(), RunError> {
+    match binding {
+        crate::RemoteServeBinding::Metadata => {
+            print_json_or_human(&remote_serve_metadata_json(&endpoint_id, "metadata-only"), json_output)
+        }
+        crate::RemoteServeBinding::StdioOnce => {
+            let mut state = load_ticket_state(state_dir)?;
+            let builder = RemoteLoopbackBuilder {
+                endpoint_id,
+                store_prefix: store_prefix.to_string(),
+                supported_capabilities: vec!["delta".to_string(), "full".to_string()],
+                present_input_refs,
+                signing_key_id,
+                transfer_capabilities: RemoteTransferCapabilities::delta_and_full(),
+            };
+            let response = plan_stdio_remote_once_from_state(
+                std::io::stdin().lock(),
+                &builder,
+                &mut state,
+                RemoteTransferCapabilities::delta_and_full(),
+            )
+            .map_err(|err| RunError::Internal(format!("remote stdio serve once: {err}")))?;
+            save_ticket_state(state_dir, &state)?;
+            write_remote_response_frames(std::io::stdout().lock(), &response)
+                .map_err(|err| RunError::Internal(format!("remote stdio serve once response: {err}")))?;
+            Ok(())
         }
     }
+}
+
+fn remote_serve_metadata_json(endpoint_id: &str, status: &str) -> serde_json::Value {
+    serde_json::json!({
+        "protocol": REMOTE_PROTOCOL_ALPN,
+        "endpoint_id": endpoint_id,
+        "frame_encoding": "u32be-length-prefixed-json",
+        "supported_bindings": [
+            RemoteTransportBinding::Loopback.as_str(),
+            RemoteTransportBinding::Stdio.as_str(),
+            RemoteTransportBinding::SshStdio.as_str(),
+            RemoteTransportBinding::P2p.as_str(),
+        ],
+        "status": status,
+        "diagnostic": "remote serve metadata is stable; stdio-once is a framed fixture seam and production P2P listener/build executor dispatch remain gated"
+    })
 }
 
 fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_output: bool) -> Result<(), RunError> {
@@ -1831,6 +1927,45 @@ mod tests {
         assert_eq!(err, "missing-input-upload-frame");
         assert!(stdout.is_empty());
         assert_eq!(ticket.uses_remaining, 1);
+    }
+
+    #[test]
+    fn stdio_server_state_lookup_redeems_matching_ticket() {
+        let builder = fixture_loopback_builder();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let mut state = RemoteTicketState::default();
+        state.tickets.insert("ticket-1".to_string(), fixture_ticket());
+        let input = encode_frame_stream(&remote_client_request_frames(&client));
+        let response = plan_stdio_remote_once_from_state(
+            std::io::Cursor::new(input),
+            &builder,
+            &mut state,
+            client.transfer_capabilities,
+        )
+        .expect("state-backed stdio planning succeeds");
+        let ticket = state.tickets.get("ticket-1").expect("ticket remains present");
+
+        assert_eq!(response.ticket_uses_remaining, 0);
+        assert_eq!(ticket.uses_remaining, 0);
+        assert_eq!(response.missing_input_refs, vec!["input-a".to_string()]);
+    }
+
+    #[test]
+    fn stdio_server_state_lookup_rejects_unknown_ticket() {
+        let builder = fixture_loopback_builder();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let mut state = RemoteTicketState::default();
+        let input = encode_frame_stream(&remote_client_request_frames(&client));
+        let err = plan_stdio_remote_once_from_state(
+            std::io::Cursor::new(input),
+            &builder,
+            &mut state,
+            client.transfer_capabilities,
+        )
+        .expect_err("unknown ticket fails");
+
+        assert_eq!(err, "unknown-remote-ticket-ticket-1");
+        assert!(state.tickets.is_empty());
     }
 
     #[test]
