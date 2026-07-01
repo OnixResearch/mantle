@@ -2891,10 +2891,26 @@ async fn run_remote_build_dispatches_async(
     state_dir: &Path,
     store_prefix: &str,
 ) -> Result<remote_build::RemoteClientBuildReport, RunError> {
+    let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        state_dir: state_dir.to_path_buf(),
+        output_dir: output_dir.to_path_buf(),
+        remote_cache_url: None,
+        fallback_mode: crunch_store::StoreFallbackMode::Practical,
+        store_dir: store_prefix.to_string(),
+    })
+    .await
+    .map_err(|err| RunError::Internal(format!("opening local store for remote build dispatch: {err}")))?;
     let mut imported = Vec::with_capacity(inputs.len());
     for input in inputs {
-        let plan =
+        let mut plan =
             remote_build::plan_remote_stdio_client_dispatch(input, &selection.options).map_err(RunError::Internal)?;
+        remote_build::populate_remote_input_upload_artifacts_from_store(
+            &store,
+            &mut plan.command,
+            &plan.client.request,
+        )
+        .await
+        .map_err(|err| RunError::Internal(format!("remote input upload preparation failed: {err}")))?;
         let transcript = remote_build::run_stdio_remote_child(&plan.command)?;
         let admission = remote_build::validate_remote_builder_frames_output_import(
             &plan.client.request,
@@ -2902,9 +2918,15 @@ async fn run_remote_build_dispatches_async(
             &transcript.frames,
         )
         .map_err(|err| RunError::Internal(format!("remote output import admission failed: {err}")))?;
-        let import_report =
-            import_remote_client_admission(output_dir, state_dir, store_prefix, &plan.client.request, &admission)
-                .await?;
+        let import_report = remote_build::import_admitted_remote_outputs(
+            &mut store,
+            &plan.client.request,
+            &admission,
+            true,
+            Some(crunch_store::GcRootSource::Build),
+        )
+        .await
+        .map_err(|err| RunError::Internal(format!("remote output import failed: {err}")))?;
         imported.push(remote_build::RemoteClientImportedBuild {
             label: plan.label,
             request_id: plan.client.request.request_id,
@@ -2917,33 +2939,6 @@ async fn run_remote_build_dispatches_async(
         store_prefix: store_prefix.to_string(),
         imported,
     })
-}
-
-async fn import_remote_client_admission(
-    output_dir: &Path,
-    state_dir: &Path,
-    store_prefix: &str,
-    request: &remote_build::ConcreteBuildRequest,
-    admission: &remote_build::RemoteOutputAdmissionReport,
-) -> Result<remote_build::RemoteOutputImportReport, RunError> {
-    let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
-        state_dir: state_dir.to_path_buf(),
-        output_dir: output_dir.to_path_buf(),
-        remote_cache_url: None,
-        fallback_mode: crunch_store::StoreFallbackMode::Practical,
-        store_dir: store_prefix.to_string(),
-    })
-    .await
-    .map_err(|err| RunError::Internal(format!("opening local store for remote output import: {err}")))?;
-    remote_build::import_admitted_remote_outputs(
-        &mut store,
-        request,
-        admission,
-        true,
-        Some(crunch_store::GcRootSource::Build),
-    )
-    .await
-    .map_err(|err| RunError::Internal(format!("remote output import failed: {err}")))
 }
 
 fn print_remote_client_build_report(

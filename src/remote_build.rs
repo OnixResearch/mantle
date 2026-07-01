@@ -41,6 +41,7 @@ pub const MAX_REMOTE_EXECUTOR_ENV_VALUE_BYTES: usize = 65_536;
 pub const MAX_REMOTE_UPLOAD_BYTES: u64 = 1_099_511_627_776;
 pub const MAX_REMOTE_TRANSFER_TOTAL_BYTES: u64 = MAX_REMOTE_UPLOAD_BYTES;
 pub const MAX_REMOTE_TRANSFER_ARTIFACTS: usize = MAX_REMOTE_STATUS_ITEMS;
+pub const MAX_REMOTE_INPUT_UPLOAD_ARTIFACTS: usize = MAX_REMOTE_STATUS_ITEMS;
 pub const MAX_REMOTE_BUILD_TIME_SECS: u64 = 86_400;
 pub const DEFAULT_TICKET_TTL_SECS: u64 = 3_600;
 pub const DEFAULT_TICKET_USES: u32 = 1;
@@ -126,6 +127,8 @@ pub struct ConcreteBuildRequest {
     pub request_id: String,
     pub store_prefix: String,
     pub input_refs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_input_refs: Vec<String>,
     pub upload_bytes: u64,
     pub build_time_limit_secs: u64,
     pub contains_raw_frontend_eval: bool,
@@ -218,7 +221,7 @@ pub trait RemoteBuildExecutor {
         &self,
         request: &ConcreteBuildRequest,
         plan: &RemoteExecutablePlan,
-        input_refs: &[String],
+        input_upload: &RemoteInputUpload,
     ) -> Result<RemoteExecutionOutcome, String>;
 }
 
@@ -230,9 +233,9 @@ impl RemoteBuildExecutor for RemoteFixtureExecutor {
         &self,
         _request: &ConcreteBuildRequest,
         plan: &RemoteExecutablePlan,
-        input_refs: &[String],
+        input_upload: &RemoteInputUpload,
     ) -> Result<RemoteExecutionOutcome, String> {
-        execute_remote_fixture_plan(plan, input_refs)
+        execute_remote_fixture_plan(plan, &input_upload.refs)
     }
 }
 
@@ -258,9 +261,9 @@ impl RemoteBuildExecutor for RemoteLocalBuildExecutor {
         &self,
         request: &ConcreteBuildRequest,
         plan: &RemoteExecutablePlan,
-        input_refs: &[String],
+        input_upload: &RemoteInputUpload,
     ) -> Result<RemoteExecutionOutcome, String> {
-        execute_remote_local_build(self, request, plan, input_refs)
+        execute_remote_local_build(self, request, plan, input_upload)
     }
 }
 
@@ -411,6 +414,24 @@ pub struct RemoteInputUpload {
     pub request_id: String,
     pub refs: Vec<String>,
     pub byte_count: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<RemoteInputUploadArtifact>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteInputUploadArtifactKind {
+    Nar,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteInputUploadArtifact {
+    pub request_id: String,
+    pub input_ref: String,
+    pub artifact_kind: RemoteInputUploadArtifactKind,
+    pub digest_blake3: String,
+    pub size_bytes: u64,
+    pub payload: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -840,6 +861,7 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
     if request.input_refs.len() > MAX_REMOTE_INPUT_REFS {
         return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
     }
+    validate_source_input_refs(request)?;
     if request.upload_bytes > ticket.max_upload_bytes || request.upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
         return Err("upload-byte-limit-exceeded".to_string());
     }
@@ -847,6 +869,26 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
         || request.build_time_limit_secs > MAX_REMOTE_BUILD_TIME_SECS
     {
         return Err("build-time-limit-exceeded".to_string());
+    }
+    Ok(())
+}
+
+fn validate_source_input_refs(request: &ConcreteBuildRequest) -> Result<(), String> {
+    if request.source_input_refs.len() > MAX_REMOTE_INPUT_REFS {
+        return Err(format!("source-input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
+    }
+    let input_refs = request.input_refs.iter().collect::<BTreeSet<_>>();
+    let mut seen = BTreeSet::new();
+    for input_ref in &request.source_input_refs {
+        if input_ref.is_empty() {
+            return Err("source-input-ref-empty".to_string());
+        }
+        if !seen.insert(input_ref) {
+            return Err("source-input-ref-duplicate".to_string());
+        }
+        if !input_refs.contains(input_ref) {
+            return Err("source-input-ref-not-declared".to_string());
+        }
     }
     Ok(())
 }
@@ -1226,9 +1268,9 @@ fn execute_remote_local_build(
     executor: &RemoteLocalBuildExecutor,
     request: &ConcreteBuildRequest,
     plan: &RemoteExecutablePlan,
-    input_refs: &[String],
+    input_upload: &RemoteInputUpload,
 ) -> Result<RemoteExecutionOutcome, String> {
-    validate_local_executor_input_refs(request, input_refs)?;
+    validate_local_executor_input_refs(request, &input_upload.refs)?;
     if executor.store_prefix != request.store_prefix {
         return Err("remote-local-executor-store-prefix-mismatch".to_string());
     }
@@ -1240,7 +1282,7 @@ fn execute_remote_local_build(
             .enable_all()
             .build()
             .map_err(|err| format!("remote-local-executor-runtime: {err}"))?;
-        return rt.block_on(execute_remote_local_build_linux(executor, request, plan));
+        return rt.block_on(execute_remote_local_build_linux(executor, request, plan, input_upload));
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -1257,6 +1299,7 @@ async fn execute_remote_local_build_linux(
     executor: &RemoteLocalBuildExecutor,
     request: &ConcreteBuildRequest,
     plan: &RemoteExecutablePlan,
+    input_upload: &RemoteInputUpload,
 ) -> Result<RemoteExecutionOutcome, String> {
     use snix_build::buildservice::BubblewrapBuildService;
 
@@ -1272,6 +1315,7 @@ async fn execute_remote_local_build_linux(
     })
     .await
     .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
+    materialize_remote_input_upload(&store, request, input_upload).await?;
 
     let blob_service = store.blob_service();
     let directory_service = store.directory_service();
@@ -1445,6 +1489,140 @@ async fn render_remote_output_nar_payload(
         return Err("remote-output-nar-size-mismatch".to_string());
     }
     Ok(payload)
+}
+
+pub async fn populate_remote_input_upload_artifacts_from_store(
+    store: &crunch_store::StoreHandle,
+    command: &mut RemoteStdioCommand,
+    request: &ConcreteBuildRequest,
+) -> Result<(), String> {
+    let artifacts = plan_remote_input_upload_artifacts_from_store(store, request).await?;
+    for frame in &mut command.input_frames {
+        if let RemoteFrame::InputUpload { upload } = frame {
+            upload.artifacts = artifacts;
+            upload.byte_count = remote_input_upload_byte_count(&upload.refs, &upload.artifacts)?;
+            validate_remote_input_upload_artifacts(
+                &request.request_id,
+                &upload.refs,
+                &request.source_input_refs,
+                &upload.artifacts,
+            )?;
+            return Ok(());
+        }
+    }
+    Err("remote-input-upload-frame-missing".to_string())
+}
+
+pub async fn plan_remote_input_upload_artifacts_from_store(
+    store: &crunch_store::StoreHandle,
+    request: &ConcreteBuildRequest,
+) -> Result<Vec<RemoteInputUploadArtifact>, String> {
+    validate_source_input_refs(request)?;
+    let mut artifacts = Vec::with_capacity(request.source_input_refs.len());
+    for input_ref in &request.source_input_refs {
+        let host_path = remote_input_ref_host_path(store, &request.store_prefix, input_ref)?;
+        let payload = render_remote_input_nar_payload(store, &host_path).await?;
+        let size_bytes = remote_payload_size_bytes(payload.len())?;
+        artifacts.push(RemoteInputUploadArtifact {
+            request_id: request.request_id.clone(),
+            input_ref: input_ref.clone(),
+            artifact_kind: RemoteInputUploadArtifactKind::Nar,
+            digest_blake3: blake3::hash(&payload).to_hex().to_string(),
+            size_bytes,
+            payload,
+        });
+    }
+    Ok(artifacts)
+}
+
+fn remote_input_upload_byte_count(
+    uploaded_refs: &[String],
+    artifacts: &[RemoteInputUploadArtifact],
+) -> Result<u64, String> {
+    let mut total = remote_input_ref_upload_bytes(uploaded_refs)?;
+    for artifact in artifacts {
+        total = total
+            .checked_add(artifact.size_bytes)
+            .ok_or_else(|| "remote-input-upload-byte-count-overflow".to_string())?;
+    }
+    Ok(total)
+}
+
+fn remote_input_ref_host_path(
+    store: &crunch_store::StoreHandle,
+    store_prefix: &str,
+    input_ref: &str,
+) -> Result<PathBuf, String> {
+    let logical_path = PathBuf::from(input_ref);
+    if logical_path.exists() {
+        return Ok(logical_path);
+    }
+    let store_path = parse_remote_output_store_path(input_ref, store_prefix)?;
+    let store_host_path = PathBuf::from(store_path.to_absolute_path_with_prefix(store.output_dir_str()));
+    if store_host_path.exists() {
+        return Ok(store_host_path);
+    }
+    Err("remote-input-source-path-missing".to_string())
+}
+
+async fn render_remote_input_nar_payload(
+    store: &crunch_store::StoreHandle,
+    host_path: &Path,
+) -> Result<Vec<u8>, String> {
+    let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
+        store.blob_service(),
+        store.directory_service(),
+        host_path,
+        None,
+    )
+    .await
+    .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
+    let mut writer = BoundedAsyncVecWriter::new(MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES);
+    store
+        .render_nar(&node, &mut writer)
+        .await
+        .map_err(|err| format!("remote-input-nar-render-failed: {err}"))?;
+    Ok(writer.into_inner())
+}
+
+async fn materialize_remote_input_upload(
+    store: &crunch_store::StoreHandle,
+    request: &ConcreteBuildRequest,
+    upload: &RemoteInputUpload,
+) -> Result<(), String> {
+    validate_remote_input_upload_artifacts(
+        &request.request_id,
+        &upload.refs,
+        &request.source_input_refs,
+        &upload.artifacts,
+    )?;
+    for artifact in &upload.artifacts {
+        materialize_remote_input_artifact(store, &request.store_prefix, artifact).await?;
+    }
+    Ok(())
+}
+
+async fn materialize_remote_input_artifact(
+    store: &crunch_store::StoreHandle,
+    store_prefix: &str,
+    artifact: &RemoteInputUploadArtifact,
+) -> Result<(), String> {
+    let store_path = parse_remote_output_store_path(&artifact.input_ref, store_prefix)?;
+    let mut reader = std::io::Cursor::new(artifact.payload.as_slice());
+    let (node, _nar_sha256, nar_size) =
+        snix_store::nar::ingest_nar_and_hash(store.blob_service(), store.directory_service(), &mut reader, &None)
+            .await
+            .map_err(|err| format!("remote-input-nar-ingest-failed: {err}"))?;
+    if nar_size != artifact.size_bytes {
+        return Err("remote-input-nar-size-mismatch".to_string());
+    }
+    let host_path = store_path.to_absolute_path_with_prefix(store.output_dir_str());
+    if !Path::new(&host_path).exists() {
+        crunch_store::export_castore_to_disk(&node, &host_path, &store.blob_service(), &store.directory_service())
+            .await
+            .map_err(|err| format!("remote-input-export-failed: {err}"))?;
+    }
+    Ok(())
 }
 
 struct BoundedAsyncVecWriter {
@@ -2265,6 +2443,7 @@ pub fn remote_client_request_frames(client: &RemoteLoopbackClient) -> Vec<Remote
                 request_id: client.request.request_id.clone(),
                 refs: client.uploaded_input_refs.clone(),
                 byte_count: client.request.upload_bytes,
+                artifacts: Vec::new(),
             },
         },
     ]
@@ -2312,11 +2491,13 @@ pub fn concrete_remote_derivation_request(
         .map_err(|err| format!("remote-client-derivation-json-invalid: {err}"))?;
     let expected_outputs = remote_expected_outputs_from_derivation(&input.nix_derivation, &options.store_prefix)?;
     let input_refs = remote_input_refs_from_derivation(&input.nix_derivation, &options.store_prefix);
+    let source_input_refs = remote_source_input_refs_from_derivation(&input.nix_derivation, &options.store_prefix);
     let upload_bytes = remote_input_ref_upload_bytes(&input_refs)?;
     Ok(ConcreteBuildRequest {
         request_id: remote_client_request_id(&input.label, &input.drv_path, &options.store_prefix),
         store_prefix: options.store_prefix.clone(),
         input_refs,
+        source_input_refs,
         upload_bytes,
         build_time_limit_secs: options.build_time_limit_secs,
         contains_raw_frontend_eval: false,
@@ -2359,6 +2540,20 @@ pub fn remote_input_refs_from_derivation(
         Vec::with_capacity(derivation.input_derivations.len().saturating_add(derivation.input_sources.len()));
     refs.extend(derivation.input_derivations.keys().map(|path| path.to_absolute_path_with_prefix(store_prefix)));
     refs.extend(derivation.input_sources.iter().map(|path| path.to_absolute_path_with_prefix(store_prefix)));
+    refs.sort();
+    refs.dedup();
+    refs
+}
+
+pub fn remote_source_input_refs_from_derivation(
+    derivation: &nix_compat::derivation::Derivation,
+    store_prefix: &str,
+) -> Vec<String> {
+    let mut refs = derivation
+        .input_sources
+        .iter()
+        .map(|path| path.to_absolute_path_with_prefix(store_prefix))
+        .collect::<Vec<_>>();
     refs.sort();
     refs.dedup();
     refs
@@ -2480,13 +2675,13 @@ pub fn plan_remote_builder_frames_with_executor(
         refs: missing.clone(),
     };
     phase = validate_remote_transition(phase, RemoteFrameDirection::BuilderToClient, &missing_frame)?;
-    take_input_upload(&mut frames, &mut phase, &request.request_id, &missing, ticket)?;
+    let input_upload = take_input_upload(&mut frames, &mut phase, request, &missing, ticket)?;
     reject_extra_client_frames(frames.next())?;
     redeem_after_queue(ticket, true)?;
     build_response_frames(
         builder,
         request,
-        &manifest.input_refs,
+        &input_upload,
         client_transfer,
         phase,
         vec![auth_ok, missing_frame],
@@ -2666,6 +2861,69 @@ pub fn validate_missing_uploads(
     let uploaded = uploaded_refs.iter().collect::<BTreeSet<_>>();
     if missing != uploaded {
         return Err("uploaded-input-set-does-not-match-missing-set".to_string());
+    }
+    Ok(())
+}
+
+pub fn validate_remote_input_upload_artifacts(
+    request_id: &str,
+    uploaded_refs: &[String],
+    source_input_refs: &[String],
+    artifacts: &[RemoteInputUploadArtifact],
+) -> Result<(), String> {
+    if artifacts.len() > MAX_REMOTE_INPUT_UPLOAD_ARTIFACTS {
+        return Err(format!("input-upload-artifact-count-exceeds-{MAX_REMOTE_INPUT_UPLOAD_ARTIFACTS}"));
+    }
+    let expected = expected_input_upload_artifact_refs(uploaded_refs, source_input_refs);
+    let mut seen = BTreeSet::new();
+    let mut total_bytes = 0_u64;
+    for artifact in artifacts {
+        validate_remote_input_upload_artifact(request_id, artifact)?;
+        if !expected.contains(artifact.input_ref.as_str()) {
+            return Err("input-upload-artifact-unexpected".to_string());
+        }
+        if !seen.insert(artifact.input_ref.as_str()) {
+            return Err("input-upload-artifact-duplicate".to_string());
+        }
+        total_bytes = total_bytes
+            .checked_add(artifact.size_bytes)
+            .ok_or_else(|| "input-upload-artifact-total-bytes-overflow".to_string())?;
+        if total_bytes > MAX_REMOTE_UPLOAD_BYTES {
+            return Err("input-upload-artifact-total-bytes-exceeded".to_string());
+        }
+    }
+    for expected_ref in expected {
+        if !seen.contains(expected_ref) {
+            return Err("input-upload-artifact-missing".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn expected_input_upload_artifact_refs<'a>(
+    uploaded_refs: &'a [String],
+    source_input_refs: &'a [String],
+) -> BTreeSet<&'a str> {
+    let sources = source_input_refs.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    uploaded_refs.iter().map(String::as_str).filter(|input_ref| sources.contains(input_ref)).collect()
+}
+
+fn validate_remote_input_upload_artifact(request_id: &str, artifact: &RemoteInputUploadArtifact) -> Result<(), String> {
+    if artifact.request_id != request_id {
+        return Err("input-upload-artifact-request-id-mismatch".to_string());
+    }
+    if artifact.input_ref.is_empty() {
+        return Err("input-upload-artifact-ref-empty".to_string());
+    }
+    if !is_blake3_hex_digest(&artifact.digest_blake3) {
+        return Err("input-upload-artifact-digest-invalid".to_string());
+    }
+    let payload_size_bytes = remote_payload_size_bytes(artifact.payload.len())?;
+    if payload_size_bytes != artifact.size_bytes {
+        return Err("input-upload-artifact-size-mismatch".to_string());
+    }
+    if blake3::hash(&artifact.payload).to_hex().to_string() != artifact.digest_blake3 {
+        return Err("input-upload-artifact-digest-mismatch".to_string());
     }
     Ok(())
 }
@@ -3218,7 +3476,13 @@ fn expect_output_trust(builder: &RemoteLoopbackBuilder, client: &RemoteLoopbackC
 fn remote_loopback_output_digest(request: &ConcreteBuildRequest, input_refs: &[String]) -> Result<String, String> {
     let plan = plan_remote_executable_request(request)?;
     let executor = RemoteFixtureExecutor;
-    let execution = executor.execute(request, &plan, input_refs)?;
+    let input_upload = RemoteInputUpload {
+        request_id: request.request_id.clone(),
+        refs: input_refs.to_vec(),
+        byte_count: request.upload_bytes,
+        artifacts: Vec::new(),
+    };
+    let execution = executor.execute(request, &plan, &input_upload)?;
     validate_remote_execution_outcome(&execution, request, &plan)?;
     Ok(execution.output_digest_blake3)
 }
@@ -3279,19 +3543,26 @@ fn take_input_manifest<'a>(
 fn take_input_upload(
     frames: &mut std::slice::Iter<'_, RemoteFrame>,
     phase: &mut RemoteProtocolPhase,
-    expected_request_id: &str,
+    request: &ConcreteBuildRequest,
     missing: &[String],
     ticket: &RemoteTicket,
-) -> Result<(), String> {
+) -> Result<RemoteInputUpload, String> {
     let frame = frames.next().ok_or_else(|| "missing-input-upload-frame".to_string())?;
     *phase = validate_remote_transition(*phase, RemoteFrameDirection::ClientToBuilder, frame)?;
     let RemoteFrame::InputUpload { upload } = frame else {
         return Err("expected-input-upload-frame".to_string());
     };
-    if upload.request_id != expected_request_id {
+    if upload.request_id != request.request_id {
         return Err("input-upload-request-id-mismatch".to_string());
     }
-    validate_missing_uploads(missing, &upload.refs, upload.byte_count, ticket.max_upload_bytes)
+    validate_missing_uploads(missing, &upload.refs, upload.byte_count, ticket.max_upload_bytes)?;
+    validate_remote_input_upload_artifacts(
+        &request.request_id,
+        &upload.refs,
+        &request.source_input_refs,
+        &upload.artifacts,
+    )?;
+    Ok(upload.clone())
 }
 
 fn reject_extra_client_frames(extra: Option<&RemoteFrame>) -> Result<(), String> {
@@ -3314,7 +3585,7 @@ fn request_ticket_id_from_frames(frames: &[RemoteFrame]) -> Result<&str, String>
 fn build_response_frames(
     builder: &RemoteLoopbackBuilder,
     request: &ConcreteBuildRequest,
-    input_refs: &[String],
+    input_upload: &RemoteInputUpload,
     client_transfer: RemoteTransferCapabilities,
     mut phase: RemoteProtocolPhase,
     mut response_frames: Vec<RemoteFrame>,
@@ -3330,7 +3601,7 @@ fn build_response_frames(
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildStarted {
         request_id: request.request_id.clone(),
     })?;
-    let execution = executor.execute(request, &plan, input_refs)?;
+    let execution = executor.execute(request, &plan, input_upload)?;
     validate_remote_execution_outcome(&execution, request, &plan)?;
     validate_remote_execution_output_pathinfos(&execution.outputs, &builder.signing_key_id, &request.store_prefix)?;
     let outputs = sign_remote_execution_outputs(&execution.outputs, &builder.signing_key_id)?;
@@ -3885,6 +4156,7 @@ mod tests {
             request_id: "r1".to_string(),
             store_prefix: "/mantle/store".to_string(),
             input_refs: Vec::new(),
+            source_input_refs: Vec::new(),
             upload_bytes: 0,
             build_time_limit_secs: 1,
             contains_raw_frontend_eval: true,
@@ -3910,6 +4182,7 @@ mod tests {
             request_id: "r1".to_string(),
             store_prefix: "/mantle/store".to_string(),
             input_refs: vec!["input-a".to_string()],
+            source_input_refs: Vec::new(),
             upload_bytes: 1,
             build_time_limit_secs: 1,
             contains_raw_frontend_eval: false,
@@ -4494,6 +4767,88 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn source_input_upload_artifact_materializes_remote_input_bytes() {
+        let client_temp = tempfile::tempdir().unwrap();
+        let remote_temp = tempfile::tempdir().unwrap();
+        let client_store = remote_import_store(client_temp.path()).await;
+        let remote_store = remote_import_store(remote_temp.path()).await;
+        let source_store_path = importable_store_path();
+        let source_ref = source_store_path.to_absolute_path_with_prefix("/mantle/store");
+        let client_source_path = source_store_path.to_absolute_path_with_prefix(client_store.output_dir_str());
+        std::fs::create_dir_all(std::path::Path::new(&client_source_path).parent().unwrap()).unwrap();
+        std::fs::write(&client_source_path, b"remote-source-bytes").unwrap();
+        let mut client = fixture_loopback_client(vec![source_ref.clone()], vec!["builder-key".to_string()]);
+        client.request.input_refs = vec![source_ref.clone()];
+        client.request.source_input_refs = vec![source_ref.clone()];
+        client.input_manifest.input_refs = vec![source_ref.clone()];
+        client.input_manifest.closure_refs = vec![source_ref.clone()];
+        let mut command = RemoteStdioCommand {
+            program: PathBuf::from("unused"),
+            args: Vec::new(),
+            input_frames: remote_client_request_frames(&client),
+        };
+
+        populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
+            .await
+            .expect("source input artifact is attached");
+        let upload = command
+            .input_frames
+            .iter()
+            .find_map(|frame| match frame {
+                RemoteFrame::InputUpload { upload } => Some(upload.clone()),
+                _ => None,
+            })
+            .expect("input upload frame present");
+        materialize_remote_input_upload(&remote_store, &client.request, &upload)
+            .await
+            .expect("source input artifact materializes");
+        let remote_source_path = source_store_path.to_absolute_path_with_prefix(remote_store.output_dir_str());
+
+        assert_eq!(upload.artifacts.len(), 1);
+        assert_eq!(upload.artifacts[0].artifact_kind, RemoteInputUploadArtifactKind::Nar);
+        assert_eq!(upload.artifacts[0].input_ref, source_ref);
+        assert_eq!(std::fs::read(remote_source_path).unwrap(), b"remote-source-bytes");
+    }
+
+    #[tokio::test]
+    async fn source_input_upload_rejects_tampered_artifact_payload() {
+        let client_temp = tempfile::tempdir().unwrap();
+        let remote_temp = tempfile::tempdir().unwrap();
+        let client_store = remote_import_store(client_temp.path()).await;
+        let remote_store = remote_import_store(remote_temp.path()).await;
+        let source_store_path = importable_store_path();
+        let source_ref = source_store_path.to_absolute_path_with_prefix("/mantle/store");
+        let client_source_path = source_store_path.to_absolute_path_with_prefix(client_store.output_dir_str());
+        std::fs::create_dir_all(std::path::Path::new(&client_source_path).parent().unwrap()).unwrap();
+        std::fs::write(&client_source_path, b"remote-source-bytes").unwrap();
+        let mut client = fixture_loopback_client(vec![source_ref.clone()], vec!["builder-key".to_string()]);
+        client.request.input_refs = vec![source_ref.clone()];
+        client.request.source_input_refs = vec![source_ref.clone()];
+        let mut command = RemoteStdioCommand {
+            program: PathBuf::from("unused"),
+            args: Vec::new(),
+            input_frames: remote_client_request_frames(&client),
+        };
+        populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
+            .await
+            .expect("source input artifact is attached");
+        let mut upload = command
+            .input_frames
+            .iter()
+            .find_map(|frame| match frame {
+                RemoteFrame::InputUpload { upload } => Some(upload.clone()),
+                _ => None,
+            })
+            .expect("input upload frame present");
+        upload.artifacts[0].payload[0] = CORRUPTED_TRANSFER_PAYLOAD_BYTE;
+
+        let err = materialize_remote_input_upload(&remote_store, &client.request, &upload)
+            .await
+            .expect_err("tampered source input artifact fails");
+        assert_eq!(err, "input-upload-artifact-digest-mismatch");
+    }
+
+    #[tokio::test]
     async fn full_nar_transfer_artifact_materializes_remote_output_bytes() {
         let temp = tempfile::tempdir().unwrap();
         let mut store = remote_import_store(temp.path()).await;
@@ -4826,6 +5181,7 @@ mod tests {
                     request_id: "r1".to_string(),
                     refs: vec!["input-a".to_string()],
                     byte_count: 1,
+                    artifacts: Vec::new(),
                 },
             }),
             (RemoteFrameDirection::BuilderToClient, RemoteFrame::BuildQueued {
@@ -4932,7 +5288,7 @@ mod tests {
             &self,
             _request: &ConcreteBuildRequest,
             plan: &RemoteExecutablePlan,
-            _input_refs: &[String],
+            _input_upload: &RemoteInputUpload,
         ) -> Result<RemoteExecutionOutcome, String> {
             let outputs = plan
                 .expected_outputs
@@ -4993,7 +5349,7 @@ mod tests {
             &self,
             _request: &ConcreteBuildRequest,
             plan: &RemoteExecutablePlan,
-            _input_refs: &[String],
+            _input_upload: &RemoteInputUpload,
         ) -> Result<RemoteExecutionOutcome, String> {
             let outputs = plan
                 .expected_outputs
@@ -5249,6 +5605,7 @@ mod tests {
             request_id: "r1".to_string(),
             store_prefix: "/mantle/store".to_string(),
             input_refs: vec!["input-a".to_string()],
+            source_input_refs: Vec::new(),
             upload_bytes: 1,
             build_time_limit_secs: 1,
             contains_raw_frontend_eval: false,
