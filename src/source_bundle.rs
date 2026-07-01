@@ -35,6 +35,9 @@ const UNIX_EXECUTABLE_FILE_MODE: u32 = 0o755;
 #[cfg(unix)]
 const UNIX_REGULAR_FILE_MODE: u32 = 0o644;
 
+const ADAPTER_EXTRA_TRUSTED_PROVENANCE_KEY: &str = "trusted-provenance";
+const ADAPTER_EXTRA_UNSUPPORTED_KEY: &str = "unsupported";
+const ADAPTER_EXTRA_TRUE_VALUE: &str = "true";
 const BUILTIN_FETCHURL_BUILDER: &str = "builtin:fetchurl";
 const DERIVED_FIXED_URL_ID_PREFIX: &str = "fixed-url";
 const DERIVED_STORE_PATH_ID_PREFIX: &str = "store-path";
@@ -170,6 +173,7 @@ pub struct SourceBundleVerifyReport {
     pub missing_records: Vec<String>,
     pub stale_records: Vec<String>,
     pub unsupported_records: Vec<String>,
+    pub untrusted_records: Vec<String>,
     pub non_claim: &'static str,
 }
 
@@ -184,6 +188,7 @@ pub struct SourceOfflinePreflightReport {
     pub missing_records: Vec<String>,
     pub stale_records: Vec<String>,
     pub unsupported_records: Vec<String>,
+    pub untrusted_records: Vec<String>,
     pub network_required_records: Vec<String>,
     pub unpinned_records: Vec<String>,
     pub records: Vec<SourceRecordSummary>,
@@ -206,6 +211,7 @@ pub enum SourceReadiness {
     Missing,
     Stale,
     Unsupported,
+    Untrusted,
     NetworkRequired,
     Unpinned,
 }
@@ -421,8 +427,10 @@ pub fn verify_source_bundle_state(
     validate_manifest(manifest)?;
     let mut missing_records = Vec::new();
     let mut stale_records = Vec::new();
-    let unsupported_records = Vec::new();
+    let mut unsupported_records = Vec::new();
+    let mut untrusted_records = Vec::new();
     for record in &manifest.records {
+        classify_adapter_readiness(record, &mut unsupported_records, &mut untrusted_records);
         let record_path = source_records_dir(state_dir).join(format!("{}.json", record.content_blake3));
         if !record_path.exists() {
             missing_records.push(record.identity.clone());
@@ -433,13 +441,14 @@ pub fn verify_source_bundle_state(
             stale_records.push(record.identity.clone());
         }
     }
-    let ready_class = classify_source_state(&missing_records, &stale_records, &unsupported_records);
+    let ready_class = classify_source_state(&missing_records, &stale_records, &unsupported_records, &untrusted_records);
     Ok(SourceBundleVerifyReport {
         manifest_blake3: manifest.manifest_blake3.clone(),
         ready_class,
         missing_records,
         stale_records,
         unsupported_records,
+        untrusted_records,
         non_claim: SOURCE_BUNDLE_NON_CLAIM,
     })
 }
@@ -977,12 +986,20 @@ fn summary_for_record(record: &SourceRecord) -> Result<SourceRecordSummary, RunE
     })
 }
 
-fn classify_source_state(missing: &[String], stale: &[String], unsupported: &[String]) -> SourceReadiness {
+fn classify_source_state(
+    missing: &[String],
+    stale: &[String],
+    unsupported: &[String],
+    untrusted: &[String],
+) -> SourceReadiness {
     if !unsupported.is_empty() {
         return SourceReadiness::Unsupported;
     }
     if !stale.is_empty() {
         return SourceReadiness::Stale;
+    }
+    if !untrusted.is_empty() {
+        return SourceReadiness::Untrusted;
     }
     if !missing.is_empty() {
         return SourceReadiness::Missing;
@@ -999,13 +1016,15 @@ fn classify_offline_preflight(
     let mut matching_records = Vec::new();
     let mut missing_records = Vec::new();
     let mut stale_records = Vec::new();
-    let unsupported_records = Vec::new();
+    let mut unsupported_records = Vec::new();
+    let mut untrusted_records = Vec::new();
     let mut network_required_records = Vec::new();
     let mut unpinned_records = Vec::new();
     let mut summaries = Vec::with_capacity(manifest.records.len());
 
     for expected in &manifest.records {
         summaries.push(summary_for_record(expected)?);
+        classify_adapter_readiness(expected, &mut unsupported_records, &mut untrusted_records);
         let imported = find_matching_source_record(expected, imported_records);
         if source_record_requires_network(expected, imported) {
             network_required_records.push(expected.identity.clone());
@@ -1029,6 +1048,7 @@ fn classify_offline_preflight(
         &missing_records,
         &stale_records,
         &unsupported_records,
+        &untrusted_records,
         &network_required_records,
         &unpinned_records,
     );
@@ -1041,6 +1061,7 @@ fn classify_offline_preflight(
         missing_records,
         stale_records,
         unsupported_records,
+        untrusted_records,
         network_required_records,
         unpinned_records,
         records: summaries,
@@ -1058,6 +1079,7 @@ fn empty_offline_preflight_report() -> Result<SourceOfflinePreflightReport, RunE
         missing_records: Vec::new(),
         stale_records: Vec::new(),
         unsupported_records: Vec::new(),
+        untrusted_records: Vec::new(),
         network_required_records: Vec::new(),
         unpinned_records: Vec::new(),
         records: Vec::new(),
@@ -1069,6 +1091,7 @@ fn classify_offline_preflight_state(
     missing: &[String],
     stale: &[String],
     unsupported: &[String],
+    untrusted: &[String],
     network_required: &[String],
     unpinned: &[String],
 ) -> SourceReadiness {
@@ -1077,6 +1100,9 @@ fn classify_offline_preflight_state(
     }
     if !stale.is_empty() {
         return SourceReadiness::Stale;
+    }
+    if !untrusted.is_empty() {
+        return SourceReadiness::Untrusted;
     }
     if !network_required.is_empty() {
         return SourceReadiness::NetworkRequired;
@@ -1103,6 +1129,36 @@ fn source_record_requires_network(expected: &SourceRecord, imported: Option<&Sou
         return false;
     };
     local_file_url_path(url).is_none()
+}
+
+fn classify_adapter_readiness(
+    record: &SourceRecord,
+    unsupported_records: &mut Vec<String>,
+    untrusted_records: &mut Vec<String>,
+) {
+    if adapter_declares_unsupported(record) {
+        unsupported_records.push(record.identity.clone());
+    }
+    if adapter_declares_untrusted(record) {
+        untrusted_records.push(record.identity.clone());
+    }
+}
+
+fn adapter_declares_unsupported(record: &SourceRecord) -> bool {
+    record
+        .adapter
+        .as_ref()
+        .and_then(|adapter| adapter.extra.get(ADAPTER_EXTRA_UNSUPPORTED_KEY))
+        .map(String::as_str)
+        == Some(ADAPTER_EXTRA_TRUE_VALUE)
+}
+
+fn adapter_declares_untrusted(record: &SourceRecord) -> bool {
+    record
+        .adapter
+        .as_ref()
+        .and_then(|adapter| adapter.extra.get(ADAPTER_EXTRA_TRUSTED_PROVENANCE_KEY))
+        .is_some_and(|value| value != ADAPTER_EXTRA_TRUE_VALUE)
 }
 
 fn source_record_is_stale_for_preflight(expected: &SourceRecord, imported: &SourceRecord) -> bool {
@@ -1732,6 +1788,7 @@ fn cmd_source_bundle(
                     missing_records: Vec::new(),
                     stale_records: Vec::new(),
                     unsupported_records: Vec::new(),
+                    untrusted_records: Vec::new(),
                     non_claim: SOURCE_BUNDLE_NON_CLAIM,
                 }
             };
@@ -1847,12 +1904,13 @@ fn print_verify_report(report: &SourceBundleVerifyReport, json_output: bool) -> 
         return Ok(());
     }
     println!(
-        "manifest_blake3={} readiness={:?} missing={} stale={} unsupported={}",
+        "manifest_blake3={} readiness={:?} missing={} stale={} unsupported={} untrusted={}",
         report.manifest_blake3,
         report.ready_class,
         report.missing_records.len(),
         report.stale_records.len(),
-        report.unsupported_records.len()
+        report.unsupported_records.len(),
+        report.untrusted_records.len()
     );
     eprintln!("non_claim={}", report.non_claim);
     Ok(())
@@ -1874,10 +1932,11 @@ pub fn print_offline_preflight_report(
         println!("manifest_blake3={manifest_blake3}");
     }
     println!(
-        "missing={} stale={} unsupported={} network_required={} unpinned={}",
+        "missing={} stale={} unsupported={} untrusted={} network_required={} unpinned={}",
         report.missing_records.len(),
         report.stale_records.len(),
         report.unsupported_records.len(),
+        report.untrusted_records.len(),
         report.network_required_records.len(),
         report.unpinned_records.len()
     );
@@ -1983,6 +2042,12 @@ mod tests {
 
     fn cargo_adapter() -> SourceAdapterMetadata {
         package_adapter("cargo", "Cargo.lock:demo", "cargo-net-offline", "vendor-deps-only")
+    }
+
+    fn adapter_with_extra(key: &str, value: &str) -> SourceAdapterMetadata {
+        let mut adapter = cargo_adapter();
+        adapter.extra.insert(key.to_string(), value.to_string());
+        adapter
     }
 
     #[test]
@@ -2519,6 +2584,41 @@ mod tests {
 
         assert_eq!(report.ready_class, SourceReadiness::Unpinned);
         assert_eq!(report.unpinned_records.len(), 1);
+    }
+
+    #[test]
+    fn source_offline_preflight_reports_unsupported_adapter() {
+        let temp = tempfile::tempdir().unwrap();
+        write_fixture(temp.path());
+        let spec = SourceSpec {
+            kind: SourceRecordKind::PackageMirror,
+            identity: "unsupported-adapter".to_string(),
+            path: temp.path().to_path_buf(),
+            adapter: Some(adapter_with_extra(ADAPTER_EXTRA_UNSUPPORTED_KEY, ADAPTER_EXTRA_TRUE_VALUE)),
+        };
+        let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
+        let report = offline_preflight_for_manifest(&manifest, &temp.path().join("state")).unwrap();
+
+        assert_eq!(report.ready_class, SourceReadiness::Unsupported);
+        assert_eq!(report.unsupported_records, vec!["unsupported-adapter".to_string()]);
+    }
+
+    #[test]
+    fn source_offline_preflight_reports_untrusted_adapter() {
+        let temp = tempfile::tempdir().unwrap();
+        write_fixture(temp.path());
+        let spec = SourceSpec {
+            kind: SourceRecordKind::PackageMirror,
+            identity: "untrusted-adapter".to_string(),
+            path: temp.path().to_path_buf(),
+            adapter: Some(adapter_with_extra(ADAPTER_EXTRA_TRUSTED_PROVENANCE_KEY, "false")),
+        };
+        let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
+        import_source_bundle(&manifest, &temp.path().join("state"), true).unwrap();
+        let report = offline_preflight_for_manifest(&manifest, &temp.path().join("state")).unwrap();
+
+        assert_eq!(report.ready_class, SourceReadiness::Untrusted);
+        assert_eq!(report.untrusted_records, vec!["untrusted-adapter".to_string()]);
     }
 
     #[test]
