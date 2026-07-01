@@ -28,6 +28,44 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- validate --root . && \
 }
 ```
 
+## Post-archive validation transcript
+
+```text
+$ CAIRN_ARCHIVE_DATE=2026-07-01 nix run path:/home/brittonr/git/cairn#cairn -- archive offline-source-bundle-manifest --root . --execute
+{
+  "plan_hash": "ebb143768e51a85d686029c6a8d958ad5520ebe2aeda04dcd1ab6533d98dfff9",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "reasons": [],
+  "receipt_hash": "80898579668820b2ac70895afa0602d81737d8c9eeb6cf5a195b8f61b7f9e35f"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 6,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 17,
+  "valid": true
+}
+
+$ cp archived source-transports delta into cairn/specs/source-transports/spec.md with accepted-spec wrapper
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 6,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 18,
+  "valid": true
+}
+```
+
 ## Decision
 
-The checked task set is ready to archive, pending `cairn archive --execute` and post-archive validation evidence.
+The checked task set was archived under `cairn/archive/2026-07-01-offline-source-bundle-manifest/`, the source-transports requirements were promoted into accepted specs, and post-archive validation passed.
