@@ -1625,16 +1625,29 @@ mod tests {
         Url::from_file_path(path).unwrap().to_string()
     }
 
-    fn non_cargo_adapter() -> SourceAdapterMetadata {
+    fn package_adapter(
+        adapter: &str,
+        lock_identity: &str,
+        offline_control: &str,
+        boundary: &str,
+    ) -> SourceAdapterMetadata {
         let mut extra = BTreeMap::new();
-        extra.insert("mirror-kind".to_string(), "npm-tarballs".to_string());
+        extra.insert("mirror-kind".to_string(), format!("{adapter}-mirror"));
         SourceAdapterMetadata {
-            adapter: "npm".to_string(),
-            lock_identity: "package-lock:demo".to_string(),
-            offline_control: "npm-cache-offline".to_string(),
-            generated_source_boundary: "no-generated-node-modules".to_string(),
+            adapter: adapter.to_string(),
+            lock_identity: lock_identity.to_string(),
+            offline_control: offline_control.to_string(),
+            generated_source_boundary: boundary.to_string(),
             extra,
         }
+    }
+
+    fn non_cargo_adapter() -> SourceAdapterMetadata {
+        package_adapter("npm", "package-lock:demo", "npm-cache-offline", "no-generated-node-modules")
+    }
+
+    fn cargo_adapter() -> SourceAdapterMetadata {
+        package_adapter("cargo", "Cargo.lock:demo", "cargo-net-offline", "vendor-deps-only")
     }
 
     #[test]
@@ -1672,20 +1685,36 @@ mod tests {
     }
 
     #[test]
-    fn source_bundle_accepts_language_neutral_package_adapter() {
+    fn source_bundle_accepts_language_neutral_package_adapters() {
         let temp = tempfile::tempdir().unwrap();
-        write_fixture(temp.path());
-        let spec = SourceSpec {
-            kind: SourceRecordKind::PackageMirror,
-            identity: "npm-mirror".to_string(),
-            path: temp.path().to_path_buf(),
-            adapter: Some(non_cargo_adapter()),
-        };
-        let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
+        let cargo_root = temp.path().join("cargo");
+        let npm_root = temp.path().join("npm");
+        write_fixture(&cargo_root);
+        write_fixture(&npm_root);
+        let specs = [
+            SourceSpec {
+                kind: SourceRecordKind::PackageMirror,
+                identity: "cargo-mirror".to_string(),
+                path: cargo_root,
+                adapter: Some(cargo_adapter()),
+            },
+            SourceSpec {
+                kind: SourceRecordKind::PackageMirror,
+                identity: "npm-mirror".to_string(),
+                path: npm_root,
+                adapter: Some(non_cargo_adapter()),
+            },
+        ];
+        let manifest = plan_source_bundle(&specs, "/mantle/store").unwrap();
+        let adapters = manifest
+            .records
+            .iter()
+            .map(|record| record.adapter.as_ref().unwrap().adapter.as_str())
+            .collect::<Vec<_>>();
 
-        assert_eq!(manifest.records[0].kind, SourceRecordKind::PackageMirror);
-        assert_eq!(manifest.records[0].adapter.as_ref().unwrap().adapter, "npm");
-        assert_eq!(manifest.records[0].adapter.as_ref().unwrap().extra.len(), 1);
+        assert_eq!(manifest.records.len(), specs.len());
+        assert_eq!(adapters, vec!["cargo", "npm"]);
+        assert!(manifest.records.iter().all(|record| record.kind == SourceRecordKind::PackageMirror));
     }
 
     #[test]
@@ -1790,6 +1819,52 @@ mod tests {
         bad_prefix.manifest_blake3 = digest_manifest_without_digest(&bad_prefix).unwrap();
         let prefix_err = validate_manifest(&bad_prefix).unwrap_err();
         assert!(prefix_err.to_string().contains("store prefix mismatch"));
+    }
+
+    #[test]
+    fn source_bundle_covers_bootstrap_provider_toolchain_and_proof_records() {
+        let temp = tempfile::tempdir().unwrap();
+        let bootstrap_root = temp.path().join("bootstrap");
+        let proof_root = temp.path().join("proof");
+        let provider_root = temp.path().join("provider");
+        let toolchain_root = temp.path().join("toolchain");
+        write_fixture(&bootstrap_root);
+        write_fixture(&proof_root);
+        write_fixture(&provider_root);
+        write_fixture(&toolchain_root);
+        let specs = [
+            SourceSpec {
+                kind: SourceRecordKind::BootstrapArchive,
+                identity: "bootstrap".to_string(),
+                path: bootstrap_root,
+                adapter: None,
+            },
+            SourceSpec {
+                kind: SourceRecordKind::ProofInput,
+                identity: "proof".to_string(),
+                path: proof_root,
+                adapter: None,
+            },
+            SourceSpec {
+                kind: SourceRecordKind::ProviderManifest,
+                identity: "provider".to_string(),
+                path: provider_root,
+                adapter: None,
+            },
+            SourceSpec {
+                kind: SourceRecordKind::ToolchainSourceRoot,
+                identity: "toolchain".to_string(),
+                path: toolchain_root,
+                adapter: None,
+            },
+        ];
+        let manifest = plan_source_bundle(&specs, "/mantle/store").unwrap();
+
+        assert_eq!(manifest.records.len(), specs.len());
+        assert_eq!(manifest.records[0].kind, SourceRecordKind::BootstrapArchive);
+        assert_eq!(manifest.records[1].kind, SourceRecordKind::ProofInput);
+        assert_eq!(manifest.records[2].store_prefix.as_deref(), Some("/mantle/store"));
+        assert_eq!(manifest.records[3].store_prefix.as_deref(), Some("/mantle/store"));
     }
 
     #[test]
