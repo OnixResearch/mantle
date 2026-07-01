@@ -30,6 +30,8 @@ The first concrete frame format is `u32be-length-prefixed-json`: a four-byte big
 
 The first implementation binding is in-process loopback over the same `RemoteFrame` state machine. Stdio and SSH-stdio use the same length-prefixed frame contract when the shell grows process spawning. Production P2P remains a later binding and must not add a second protocol core.
 
+The stdio binding shell validates child output with the same frame decoder: stdout is decoded only as a sequence of length-prefixed frames, stderr is retained as bounded diagnostics, and child exit failure or unframed stdout is classified before queue admission. This keeps human logs from becoming control data while preserving stderr for operator debugging.
+
 ## Transport bindings and stdio discipline
 
 The remote-build state machine is independent of its byte transport. A `RemoteLink` binding can be in-process loopback, child stdio, SSH-stdio, or a NAT-friendly P2P stream such as Iroh. Each binding presents authenticated ordered frames to the same protocol core; transport-specific setup, keepalive, process spawning, and endpoint discovery stay in the imperative shell.

@@ -4,6 +4,9 @@ use std::fs;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -15,6 +18,8 @@ pub const REMOTE_PROTOCOL_VERSION: u32 = 1;
 pub const MAX_REMOTE_CAPABILITIES: usize = 32;
 pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
 pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
+pub const MAX_REMOTE_STDIO_STDERR_BYTES: usize = 65_536;
+pub const MAX_REMOTE_STDIO_FRAME_COUNT: usize = 4_096;
 pub const MAX_REMOTE_STATUS_ITEMS: usize = 4_096;
 pub const MAX_REMOTE_UPLOAD_BYTES: u64 = 1_099_511_627_776;
 pub const MAX_REMOTE_BUILD_TIME_SECS: u64 = 86_400;
@@ -32,6 +37,7 @@ const REMOTE_LOOPBACK_OUTPUT_BYTES: u64 = 64;
 const DELTA_REUSE_PERCENT: u64 = 75;
 const PERCENT_DENOMINATOR: u64 = 100;
 const REMOTE_SESSION_NON_CLAIM: &str = "loopback remote-build session evidence proves protocol control flow only; it does not prove production P2P transport, sandbox execution, or artifact correctness";
+const STDERR_TRUNCATION_MARKER: &str = "\n<stderr-truncated>";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -408,6 +414,27 @@ pub struct RemoteLoopbackSessionReport {
     pub non_claims: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteStdioChildOutput {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub status_success: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteStdioTranscript {
+    pub binding: RemoteTransportBinding,
+    pub frames: Vec<RemoteFrame>,
+    pub stderr_summary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteStdioCommand {
+    pub program: PathBuf,
+    pub args: Vec<String>,
+    pub input_frames: Vec<RemoteFrame>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TicketDecision {
     Authorized,
@@ -580,6 +607,85 @@ pub fn read_remote_frame(mut reader: impl Read) -> Result<RemoteFrame, String> {
     decode_remote_frame(&encoded)
 }
 
+pub fn decode_remote_frame_stream(encoded: &[u8]) -> Result<Vec<RemoteFrame>, String> {
+    let mut frames = Vec::new();
+    let mut offset = 0_usize;
+    while offset < encoded.len() {
+        if frames.len() >= MAX_REMOTE_STDIO_FRAME_COUNT {
+            return Err(format!("remote-stdio-frame-count-exceeds-{MAX_REMOTE_STDIO_FRAME_COUNT}"));
+        }
+        let remaining = encoded.len().saturating_sub(offset);
+        if remaining < REMOTE_FRAME_HEADER_BYTES {
+            return Err("remote-frame-header-incomplete-or-unframed-stdout".to_string());
+        }
+        let payload_len = frame_payload_len(&encoded[offset..])?;
+        if payload_len > MAX_REMOTE_FRAME_BYTES {
+            return Err(format!("remote-frame-payload-exceeds-{MAX_REMOTE_FRAME_BYTES}"));
+        }
+        let frame_len = REMOTE_FRAME_HEADER_BYTES
+            .checked_add(payload_len)
+            .ok_or_else(|| "remote-frame-length-overflow".to_string())?;
+        let end = offset.checked_add(frame_len).ok_or_else(|| "remote-frame-stream-offset-overflow".to_string())?;
+        if end > encoded.len() {
+            return Err("remote-frame-stream-truncated-or-unframed-stdout".to_string());
+        }
+        let frame = decode_remote_frame(&encoded[offset..end])?;
+        frames.push(frame);
+        offset = end;
+    }
+    Ok(frames)
+}
+
+pub fn validate_stdio_child_output(
+    output: &RemoteStdioChildOutput,
+) -> Result<RemoteStdioTranscript, RemoteFailureClassification> {
+    if !output.status_success {
+        return Err(remote_failure(
+            RemoteFailurePhase::TransportSetup,
+            RemoteRetryClass::Terminal,
+            "stdio-child-exit-failed".to_string(),
+        ));
+    }
+    let frames = decode_remote_frame_stream(&output.stdout)
+        .map_err(|reason| remote_failure(RemoteFailurePhase::RequestValidation, RemoteRetryClass::Terminal, reason))?;
+    Ok(RemoteStdioTranscript {
+        binding: RemoteTransportBinding::Stdio,
+        frames,
+        stderr_summary: bounded_stderr_summary(&output.stderr),
+    })
+}
+
+pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdioTranscript, RunError> {
+    let mut child = Command::new(&command.program)
+        .args(&command.args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|err| {
+            RunError::Internal(format!("spawning stdio remote child {}: {err}", command.program.display()))
+        })?;
+    if let Some(mut stdin) = child.stdin.take() {
+        for frame in &command.input_frames {
+            write_remote_frame(&mut stdin, frame).map_err(RunError::Internal)?;
+        }
+    }
+    let output = child.wait_with_output().map_err(|err| {
+        RunError::Internal(format!("waiting for stdio remote child {}: {err}", command.program.display()))
+    })?;
+    validate_stdio_child_output(&RemoteStdioChildOutput {
+        stdout: output.stdout,
+        stderr: output.stderr,
+        status_success: output.status.success(),
+    })
+    .map_err(|failure| {
+        RunError::Internal(format!(
+            "stdio remote child failed phase={:?} retry={:?}: {}",
+            failure.phase, failure.retry_class, failure.reason
+        ))
+    })
+}
+
 pub fn validate_remote_transition(
     phase: RemoteProtocolPhase,
     direction: RemoteFrameDirection,
@@ -715,11 +821,28 @@ pub fn classify_remote_failure(phase: RemoteFailurePhase, reason: String) -> Rem
         | RemoteFailurePhase::Queue
         | RemoteFailurePhase::OutputImport => RemoteRetryClass::Terminal,
     };
+    remote_failure(phase, retry_class, reason)
+}
+
+fn remote_failure(
+    phase: RemoteFailurePhase,
+    retry_class: RemoteRetryClass,
+    reason: String,
+) -> RemoteFailureClassification {
     RemoteFailureClassification {
         phase,
         retry_class,
         reason,
     }
+}
+
+fn bounded_stderr_summary(stderr: &[u8]) -> String {
+    let take_len = stderr.len().min(MAX_REMOTE_STDIO_STDERR_BYTES);
+    let mut summary = String::from_utf8_lossy(&stderr[..take_len]).to_string();
+    if stderr.len() > MAX_REMOTE_STDIO_STDERR_BYTES {
+        summary.push_str(STDERR_TRUNCATION_MARKER);
+    }
+    summary
 }
 
 pub fn plan_session_lease(
@@ -1188,6 +1311,68 @@ mod tests {
         encoded.extend_from_slice(&oversized_len.to_be_bytes());
         let err = decode_remote_frame(&encoded).expect_err("oversized frame is rejected");
         assert!(err.contains("remote-frame-payload-exceeds"));
+    }
+
+    #[test]
+    fn remote_frame_read_write_helpers_roundtrip_one_frame() {
+        let frame = RemoteFrame::Hello { hello: fixture_hello() };
+        let mut encoded = Vec::new();
+        write_remote_frame(&mut encoded, &frame).expect("frame writes");
+        let decoded = read_remote_frame(std::io::Cursor::new(encoded)).expect("frame reads");
+        assert_eq!(decoded, frame);
+    }
+
+    #[test]
+    fn stdio_child_output_decodes_frame_stream_and_keeps_stderr_diagnostic() {
+        let hello = RemoteFrame::Hello { hello: fixture_hello() };
+        let done = RemoteFrame::Done {
+            request_id: "r1".to_string(),
+        };
+        let mut stdout = encode_remote_frame(&hello).expect("hello encodes");
+        stdout.extend(encode_remote_frame(&done).expect("done encodes"));
+        let output = RemoteStdioChildOutput {
+            stdout,
+            stderr: b"diagnostic on stderr\n".to_vec(),
+            status_success: true,
+        };
+        let transcript = validate_stdio_child_output(&output).expect("stdio output validates");
+        assert_eq!(transcript.binding, RemoteTransportBinding::Stdio);
+        assert_eq!(transcript.frames, vec![hello, done]);
+        assert!(transcript.stderr_summary.contains("diagnostic on stderr"));
+    }
+
+    #[test]
+    fn stdio_child_human_stdout_is_terminal_protocol_corruption() {
+        let output = RemoteStdioChildOutput {
+            stdout: b"human log on stdout\n".to_vec(),
+            stderr: b"human log belongs here\n".to_vec(),
+            status_success: true,
+        };
+        let failure = validate_stdio_child_output(&output).expect_err("human stdout corrupts protocol");
+        assert_eq!(failure.phase, RemoteFailurePhase::RequestValidation);
+        assert_eq!(failure.retry_class, RemoteRetryClass::Terminal);
+        assert!(failure.reason.contains("remote-frame"));
+    }
+
+    #[test]
+    fn stdio_child_exit_failure_is_terminal_transport_setup() {
+        let output = RemoteStdioChildOutput {
+            stdout: Vec::new(),
+            stderr: b"failed before handshake\n".to_vec(),
+            status_success: false,
+        };
+        let failure = validate_stdio_child_output(&output).expect_err("failed child is rejected");
+        assert_eq!(failure.phase, RemoteFailurePhase::TransportSetup);
+        assert_eq!(failure.retry_class, RemoteRetryClass::Terminal);
+        assert_eq!(failure.reason, "stdio-child-exit-failed");
+    }
+
+    #[test]
+    fn stdio_stderr_summary_is_bounded() {
+        let oversized = vec![b'x'; MAX_REMOTE_STDIO_STDERR_BYTES.saturating_add(1)];
+        let summary = bounded_stderr_summary(&oversized);
+        assert!(summary.ends_with(STDERR_TRUNCATION_MARKER));
+        assert!(summary.len() > MAX_REMOTE_STDIO_STDERR_BYTES);
     }
 
     #[test]
