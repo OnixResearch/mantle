@@ -51,6 +51,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec![],
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             }],
             patches: vec![],
         };
@@ -67,6 +68,7 @@ mod tests {
                 patches: vec![],
                 mirrors: vec![],
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             })]),
             patches: BTreeMap::new(),
         };

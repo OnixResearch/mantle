@@ -9,6 +9,7 @@ use serde::Serialize;
 
 use crate::error::Error;
 use crate::fetch_policy::InputFetchPolicy;
+use crate::freshness::LockedFreshnessValue;
 use crate::manifest::HashAlgo;
 use crate::version::SchemaVersion;
 
@@ -81,6 +82,14 @@ impl Lockfile {
             if entry.hash.value.is_empty() {
                 problems.push(format!("lock entry '{name}': hash value is empty"));
             }
+            if let Some(freshness) = &entry.freshness {
+                if freshness.input_name != *name {
+                    problems.push(format!("lock entry '{name}': freshness input name mismatch"));
+                }
+                if freshness.value_digest.is_empty() {
+                    problems.push(format!("lock entry '{name}': freshness value digest is empty"));
+                }
+            }
             for patch_name in &entry.patches {
                 if !patches.contains_key(patch_name) {
                     problems.push(format!("lock entry '{name}' references unlocked patch '{patch_name}'"));
@@ -105,6 +114,7 @@ pub struct LockEntry {
     pub patches: Vec<String>,
     pub mirrors: Vec<String>,
     pub fetch_policy: InputFetchPolicy,
+    pub freshness: Option<LockedFreshnessValue>,
 }
 
 #[derive(Deserialize)]
@@ -114,6 +124,7 @@ struct RawLockEntry {
     patches: Option<Vec<String>>,
     mirrors: Option<Vec<String>>,
     fetch_policy: Option<InputFetchPolicy>,
+    freshness: Option<LockedFreshnessValue>,
 }
 
 impl<'de> Deserialize<'de> for LockEntry {
@@ -126,6 +137,7 @@ impl<'de> Deserialize<'de> for LockEntry {
             patches: raw.patches.unwrap_or_else(Vec::new),
             mirrors: raw.mirrors.unwrap_or_else(Vec::new),
             fetch_policy: raw.fetch_policy.unwrap_or_default(),
+            freshness: raw.freshness,
         })
     }
 }
@@ -222,6 +234,7 @@ mod tests {
             patches: vec![],
             mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into()],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
         inputs.insert("hello-src".into(), LockEntry {
             kind: LockedKind::Tarball {
@@ -234,6 +247,7 @@ mod tests {
             patches: vec!["hello-fix".into()],
             mirrors: vec![],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
 
         let mut patches = BTreeMap::new();
@@ -321,6 +335,7 @@ mod tests {
             patches: vec!["p1".into(), "p2".into()],
             mirrors: vec!["https://mirror1.example.com/file.txt".into()],
             fetch_policy: InputFetchPolicy::BuildFetchAction,
+            freshness: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let parsed: LockEntry = serde_json::from_str(&json).unwrap();

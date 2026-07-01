@@ -4,6 +4,8 @@ use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
+use crate::FreshnessDecision;
+use crate::FreshnessDecisionKind;
 use crate::InputFetchPolicy;
 use crate::InputSourceStateFact;
 use crate::LockEntry;
@@ -42,6 +44,9 @@ pub struct RefreshFailure {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StaleReport {
     pub stale: Vec<String>,
+    pub unchanged: Vec<String>,
+    pub skipped: Vec<RefreshFailure>,
+    pub network_required: Vec<RefreshFailure>,
     pub failed: Vec<RefreshFailure>,
 }
 
@@ -50,6 +55,8 @@ pub enum RefreshOutcome {
     Updated(ResolvedInput),
     Unchanged { name: String },
     Frozen { name: String },
+    Skipped { name: String, reason: String },
+    NetworkRequired { name: String, reason: String },
     Failed { name: String, reason: String },
 }
 
@@ -72,6 +79,7 @@ pub struct RefreshInputsRequest {
     pub selected: Vec<String>,
     pub resolutions: Vec<ResolvedInputState>,
     pub source_state: Vec<InputSourceStateFact>,
+    pub freshness_decisions: Vec<FreshnessDecision>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -121,10 +129,11 @@ pub fn refresh_inputs(request: RefreshInputsRequest) -> Vec<RefreshOutcome> {
     );
     let resolution_map = input_resolution_map(request.resolutions);
     let source_state_map = source_state_map(&request.source_state);
+    let freshness_decision_map = freshness_decision_map(request.freshness_decisions);
 
     inputs_to_refresh
         .into_iter()
-        .map(|input| refresh_one(input, &request.lock, &resolution_map, &source_state_map))
+        .map(|input| refresh_one(input, &request.lock, &resolution_map, &source_state_map, &freshness_decision_map))
         .collect()
 }
 
@@ -137,8 +146,23 @@ pub fn list_stale(request: RefreshInputsRequest) -> StaleReport {
             _ => None,
         })
         .collect();
+    let unchanged = outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            RefreshOutcome::Unchanged { name } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    let skipped = skipped_from_outcomes(&outcomes);
+    let network_required = network_required_from_outcomes(&outcomes);
     let failed = refresh_failures_from_outcomes(&outcomes);
-    StaleReport { stale, failed }
+    StaleReport {
+        stale,
+        unchanged,
+        skipped,
+        network_required,
+        failed,
+    }
 }
 
 pub fn plan_patch_resolutions(request: PatchResolutionPlanRequest) -> Vec<PatchDef> {
@@ -209,11 +233,20 @@ fn input_resolution_map(resolutions: Vec<ResolvedInputState>) -> BTreeMap<String
     map
 }
 
+fn freshness_decision_map(decisions: Vec<FreshnessDecision>) -> BTreeMap<String, FreshnessDecision> {
+    let mut map = BTreeMap::new();
+    for decision in decisions {
+        map.insert(decision.input_name.clone(), decision);
+    }
+    map
+}
+
 fn refresh_one(
     input: &ManifestInput,
     lock: &Lockfile,
     resolutions: &BTreeMap<String, ResolvedInputState>,
     source_state: &BTreeMap<&str, Vec<&InputSourceStateFact>>,
+    freshness_decisions: &BTreeMap<String, FreshnessDecision>,
 ) -> RefreshOutcome {
     assert!(!input.name.is_empty(), "input name must not be empty");
     assert!(
@@ -224,6 +257,9 @@ fn refresh_one(
         return RefreshOutcome::Frozen {
             name: input.name.clone(),
         };
+    }
+    if let Some(outcome) = freshness_gate(input, freshness_decisions) {
+        return outcome;
     }
     let compatibility = fetch_policy_compatibility_problems(input);
     if let Some(problem) = compatibility.first() {
@@ -237,6 +273,31 @@ fn refresh_one(
         InputFetchPolicy::GenerationMaterial => refresh_generation_material(input, lock, resolutions),
         InputFetchPolicy::BuildFetchAction => refresh_without_generation_fetch(input, lock),
         InputFetchPolicy::ImportedSourceRequired => refresh_imported_source(input, lock, source_state),
+    }
+}
+
+fn freshness_gate(
+    input: &ManifestInput,
+    freshness_decisions: &BTreeMap<String, FreshnessDecision>,
+) -> Option<RefreshOutcome> {
+    let decision = freshness_decisions.get(input.name.as_str())?;
+    match decision.kind {
+        FreshnessDecisionKind::Stale => None,
+        FreshnessDecisionKind::Unchanged => Some(RefreshOutcome::Unchanged {
+            name: input.name.clone(),
+        }),
+        FreshnessDecisionKind::Skipped => Some(RefreshOutcome::Skipped {
+            name: input.name.clone(),
+            reason: decision.reason.clone(),
+        }),
+        FreshnessDecisionKind::NetworkRequired => Some(RefreshOutcome::NetworkRequired {
+            name: input.name.clone(),
+            reason: decision.reason.clone(),
+        }),
+        FreshnessDecisionKind::Failed | FreshnessDecisionKind::MissingObservation => Some(RefreshOutcome::Failed {
+            name: input.name.clone(),
+            reason: decision.reason.clone(),
+        }),
     }
 }
 
@@ -448,6 +509,32 @@ fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
     }
 }
 
+fn skipped_from_outcomes(outcomes: &[RefreshOutcome]) -> Vec<RefreshFailure> {
+    outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            RefreshOutcome::Skipped { name, reason } => Some(RefreshFailure {
+                name: name.clone(),
+                reason: reason.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+fn network_required_from_outcomes(outcomes: &[RefreshOutcome]) -> Vec<RefreshFailure> {
+    outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            RefreshOutcome::NetworkRequired { name, reason } => Some(RefreshFailure {
+                name: name.clone(),
+                reason: reason.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
 fn refresh_failures_from_outcomes(outcomes: &[RefreshOutcome]) -> Vec<RefreshFailure> {
     outcomes
         .iter()
@@ -468,6 +555,8 @@ mod tests {
     use alloc::vec;
 
     use super::*;
+    use crate::FreshnessDecision;
+    use crate::FreshnessDecisionKind;
     use crate::HashAlgo;
     use crate::HashSpec;
     use crate::InputKind;
@@ -487,6 +576,7 @@ mod tests {
             mirrors: vec![],
             patches: vec![],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         }
     }
 
@@ -518,8 +608,19 @@ mod tests {
                 patches: vec![],
                 mirrors: vec![],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             },
         })
+    }
+
+    fn freshness_decision(name: &str, kind: FreshnessDecisionKind, reason: &str) -> FreshnessDecision {
+        FreshnessDecision {
+            input_name: name.to_string(),
+            kind,
+            observed_value_digest: None,
+            locked_value_digest: None,
+            reason: reason.to_string(),
+        }
     }
 
     fn source_fact(name: &str, hash: &str) -> InputSourceStateFact {
@@ -541,6 +642,7 @@ mod tests {
             selected: Vec::new(),
             resolutions: vec![resolved_file("data", "https://example.com/data.bin", "sha256-abc=")],
             source_state: Vec::new(),
+            freshness_decisions: Vec::new(),
         });
 
         assert_eq!(outcomes.len(), 1);
@@ -568,6 +670,7 @@ mod tests {
             patches: vec![],
             mirrors: vec![],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
 
         let outcomes = refresh_inputs(RefreshInputsRequest {
@@ -576,6 +679,7 @@ mod tests {
             selected: Vec::new(),
             resolutions: vec![resolved_file("data", "https://example.com/data.bin", "sha256-same=")],
             source_state: Vec::new(),
+            freshness_decisions: Vec::new(),
         });
         assert!(matches!(&outcomes[0], RefreshOutcome::Unchanged { .. }));
     }
@@ -590,8 +694,57 @@ mod tests {
             selected: Vec::new(),
             resolutions: Vec::new(),
             source_state: Vec::new(),
+            freshness_decisions: Vec::new(),
         });
         assert!(matches!(&outcomes[0], RefreshOutcome::Frozen { name } if name == "frozen"));
+    }
+
+    #[test]
+    fn freshness_unchanged_decision_skips_resolution_work() {
+        let mut input = file_input("pkg", "https://example.com/pkg");
+        input.freshness = Some(crate::FreshnessProbe::LocalFile {
+            path: "VERSION".to_string(),
+        });
+        let outcomes = refresh_inputs(RefreshInputsRequest {
+            manifest: manifest_with(vec![input]),
+            lock: empty_lock(),
+            selected: Vec::new(),
+            resolutions: Vec::new(),
+            source_state: Vec::new(),
+            freshness_decisions: vec![freshness_decision(
+                "pkg",
+                FreshnessDecisionKind::Unchanged,
+                "freshness value matches lock",
+            )],
+        });
+
+        assert_eq!(outcomes.len(), 1);
+        assert!(matches!(&outcomes[0], RefreshOutcome::Unchanged { name } if name == "pkg"));
+    }
+
+    #[test]
+    fn freshness_network_required_decision_fails_closed_for_refresh() {
+        let mut input = file_input("pkg", "https://example.com/pkg");
+        input.freshness = Some(crate::FreshnessProbe::HttpText {
+            url: "https://example.com/version".to_string(),
+        });
+        let outcomes = refresh_inputs(RefreshInputsRequest {
+            manifest: manifest_with(vec![input]),
+            lock: empty_lock(),
+            selected: Vec::new(),
+            resolutions: Vec::new(),
+            source_state: Vec::new(),
+            freshness_decisions: vec![freshness_decision(
+                "pkg",
+                FreshnessDecisionKind::NetworkRequired,
+                "network disabled",
+            )],
+        });
+
+        assert_eq!(outcomes.len(), 1);
+        assert!(
+            matches!(&outcomes[0], RefreshOutcome::NetworkRequired { name, reason } if name == "pkg" && reason.contains("network"))
+        );
     }
 
     #[test]
@@ -635,6 +788,7 @@ mod tests {
             selected: Vec::new(),
             resolutions: Vec::new(),
             source_state: Vec::new(),
+            freshness_decisions: Vec::new(),
         });
 
         match &outcomes[0] {
@@ -657,6 +811,7 @@ mod tests {
             selected: Vec::new(),
             resolutions: Vec::new(),
             source_state: vec![source_fact("pkg", "sha256-expected=")],
+            freshness_decisions: Vec::new(),
         });
 
         assert!(
@@ -675,6 +830,7 @@ mod tests {
             selected: Vec::new(),
             resolutions: Vec::new(),
             source_state: Vec::new(),
+            freshness_decisions: Vec::new(),
         });
 
         assert!(
@@ -696,6 +852,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec!["fix1".into()],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             }],
             patches: vec![PatchDef {
                 name: "fix1".into(),
@@ -717,6 +874,7 @@ mod tests {
                 patches: vec!["fix1".into()],
                 mirrors: vec![],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             },
         })];
         let patch_plan = plan_patch_resolutions(PatchResolutionPlanRequest {
@@ -763,6 +921,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec!["bad".into()],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             }],
             patches: vec![PatchDef {
                 name: "bad".into(),
@@ -784,6 +943,7 @@ mod tests {
                 patches: vec!["bad".into()],
                 mirrors: vec![],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             },
         })];
 
@@ -832,6 +992,7 @@ mod tests {
                     patches: vec![],
                     mirrors: vec![],
                     fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    freshness: None,
                 },
             })],
             patch_resolutions: Vec::new(),
@@ -860,6 +1021,7 @@ mod tests {
             patches: vec![],
             mirrors: vec![],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
         let stale = list_stale(RefreshInputsRequest {
             manifest,
@@ -874,6 +1036,7 @@ mod tests {
                 }),
             ],
             source_state: Vec::new(),
+            freshness_decisions: Vec::new(),
         });
         assert_eq!(stale.stale, vec!["stale"]);
         assert_eq!(stale.failed.len(), 1);

@@ -1,4 +1,10 @@
 use crunch_project_core::ApplyOutcomesRequest;
+use crunch_project_core::FreshnessDecision;
+use crunch_project_core::FreshnessObservation;
+use crunch_project_core::FreshnessRefreshPlanRequest;
+use crunch_project_core::FreshnessTemplateDestination;
+use crunch_project_core::FreshnessTemplateRequest;
+use crunch_project_core::LockedFreshnessValue;
 use crunch_project_core::PatchResolution;
 use crunch_project_core::PatchResolutionPlanRequest;
 use crunch_project_core::RefreshFailure;
@@ -40,6 +46,15 @@ pub trait RefreshResolver {
         let _ = (path, algo);
         Ok(None)
     }
+
+    fn observe_freshness(
+        &self,
+        input: &ManifestInput,
+        no_network: bool,
+    ) -> Result<Option<FreshnessObservation>, Error> {
+        let _ = (input, no_network);
+        Ok(None)
+    }
 }
 
 pub fn refresh_inputs(
@@ -48,7 +63,17 @@ pub fn refresh_inputs(
     selected: &[String],
     resolver: &dyn RefreshResolver,
 ) -> Vec<RefreshOutcome> {
-    let request = build_refresh_request(manifest, lock, selected, resolver);
+    refresh_inputs_with_options(manifest, lock, selected, resolver, false)
+}
+
+pub fn refresh_inputs_with_options(
+    manifest: &ProjectManifest,
+    lock: &Lockfile,
+    selected: &[String],
+    resolver: &dyn RefreshResolver,
+    no_network: bool,
+) -> Vec<RefreshOutcome> {
+    let request = build_refresh_request(manifest, lock, selected, resolver, no_network);
     crunch_project_core::refresh_inputs(request)
 }
 
@@ -68,7 +93,16 @@ pub fn apply_outcomes(
 }
 
 pub fn list_stale(manifest: &ProjectManifest, lock: &Lockfile, resolver: &dyn RefreshResolver) -> StaleReport {
-    let request = build_refresh_request(manifest, lock, &[], resolver);
+    list_stale_with_options(manifest, lock, resolver, false)
+}
+
+pub fn list_stale_with_options(
+    manifest: &ProjectManifest,
+    lock: &Lockfile,
+    resolver: &dyn RefreshResolver,
+    no_network: bool,
+) -> StaleReport {
+    let request = build_refresh_request(manifest, lock, &[], resolver, no_network);
     crunch_project_core::list_stale(request)
 }
 
@@ -77,15 +111,19 @@ fn build_refresh_request(
     lock: &Lockfile,
     selected: &[String],
     resolver: &dyn RefreshResolver,
+    no_network: bool,
 ) -> RefreshInputsRequest {
     let plan = crunch_project_core::plan_refresh_inputs(RefreshInputsPlanRequest {
         manifest: manifest.clone(),
         selected: selected.to_vec(),
     });
+    let observations = collect_freshness_observations(&plan, resolver, no_network);
+    let decisions = plan_freshness_decisions(&plan, lock, selected, &observations, no_network);
     let resolutions = plan
         .into_iter()
         .filter(|input| !input.frozen)
-        .map(|input| resolve_manifest_input(&input, resolver))
+        .filter(|input| should_resolve_input(input, &decisions))
+        .map(|input| resolve_manifest_input(&input, resolver, freshness_observation_for(&input.name, &observations)))
         .collect();
     RefreshInputsRequest {
         manifest: manifest.clone(),
@@ -93,11 +131,135 @@ fn build_refresh_request(
         selected: selected.to_vec(),
         resolutions,
         source_state: Vec::new(),
+        freshness_decisions: decisions,
     }
 }
 
-fn resolve_manifest_input(input: &ManifestInput, resolver: &dyn RefreshResolver) -> ResolvedInputState {
-    match resolve_input(input, resolver) {
+fn collect_freshness_observations(
+    plan: &[ManifestInput],
+    resolver: &dyn RefreshResolver,
+    no_network: bool,
+) -> Vec<FreshnessObservation> {
+    plan.iter()
+        .filter(|input| input.freshness.is_some())
+        .filter_map(|input| match resolver.observe_freshness(input, no_network) {
+            Ok(Some(observation)) => Some(observation),
+            Ok(None) => None,
+            Err(err) => Some(failed_freshness_observation(input, err.to_string())),
+        })
+        .collect()
+}
+
+fn plan_freshness_decisions(
+    plan: &[ManifestInput],
+    lock: &Lockfile,
+    selected: &[String],
+    observations: &[FreshnessObservation],
+    no_network: bool,
+) -> Vec<FreshnessDecision> {
+    let declared_inputs = plan
+        .iter()
+        .filter(|input| input.freshness.is_some())
+        .map(|input| input.name.clone())
+        .collect::<Vec<_>>();
+    if declared_inputs.is_empty() {
+        return Vec::new();
+    }
+    let locked_values = declared_inputs
+        .iter()
+        .filter_map(|name| lock.inputs.get(name).and_then(|entry| entry.freshness.clone()))
+        .collect::<Vec<_>>();
+    let selected = selected
+        .iter()
+        .filter(|name| declared_inputs.iter().any(|declared| declared == *name))
+        .cloned()
+        .collect::<Vec<_>>();
+    let requested_inputs = if selected.is_empty() {
+        declared_inputs.clone()
+    } else {
+        selected.clone()
+    };
+    crunch_project_core::plan_freshness_refresh(FreshnessRefreshPlanRequest {
+        declared_inputs,
+        selected,
+        locked_values,
+        observations: observations.to_vec(),
+        no_network,
+    })
+    .unwrap_or_else(|err| freshness_plan_failures(requested_inputs, err.to_string()))
+}
+
+fn freshness_plan_failures(input_names: Vec<String>, reason: String) -> Vec<FreshnessDecision> {
+    input_names
+        .into_iter()
+        .map(|input_name| FreshnessDecision {
+            input_name,
+            kind: crunch_project_core::FreshnessDecisionKind::Failed,
+            observed_value_digest: None,
+            locked_value_digest: None,
+            reason: reason.clone(),
+        })
+        .collect()
+}
+
+fn should_resolve_input(input: &ManifestInput, decisions: &[FreshnessDecision]) -> bool {
+    match decisions.iter().find(|decision| decision.input_name == input.name) {
+        None => true,
+        Some(decision) => matches!(decision.kind, crunch_project_core::FreshnessDecisionKind::Stale),
+    }
+}
+
+fn freshness_observation_for<'a>(
+    input_name: &str,
+    observations: &'a [FreshnessObservation],
+) -> Option<&'a FreshnessObservation> {
+    observations.iter().find(|observation| observation.input_name == input_name)
+}
+
+fn failed_freshness_observation(input: &ManifestInput, reason: String) -> FreshnessObservation {
+    crunch_project_core::normalize_freshness_observation(crunch_project_core::FreshnessObservationRequest {
+        version: crunch_project_core::FRESHNESS_PROBE_VERSION,
+        input_name: input.name.clone(),
+        probe_kind: input
+            .freshness
+            .as_ref()
+            .map(freshness_kind)
+            .unwrap_or(crunch_project_core::FreshnessProbeKind::Command),
+        requires_network: input.freshness.as_ref().is_some_and(freshness_requires_network),
+        status: crunch_project_core::FreshnessObservationStatus::Failed,
+        value: None,
+        diagnostic: reason,
+        probe_identity_digest: None,
+    })
+    .expect("failed freshness observations from valid manifest inputs must normalize")
+}
+
+fn freshness_kind(probe: &crunch_project_core::FreshnessProbe) -> crunch_project_core::FreshnessProbeKind {
+    match probe {
+        crunch_project_core::FreshnessProbe::GitRef { .. } => crunch_project_core::FreshnessProbeKind::GitRef,
+        crunch_project_core::FreshnessProbe::HttpText { .. } => crunch_project_core::FreshnessProbeKind::HttpText,
+        crunch_project_core::FreshnessProbe::HttpJson { .. } => crunch_project_core::FreshnessProbeKind::HttpJson,
+        crunch_project_core::FreshnessProbe::LocalFile { .. } => crunch_project_core::FreshnessProbeKind::LocalFile,
+        crunch_project_core::FreshnessProbe::LocalDirectory { .. } => {
+            crunch_project_core::FreshnessProbeKind::LocalDirectory
+        }
+        crunch_project_core::FreshnessProbe::Command { .. } => crunch_project_core::FreshnessProbeKind::Command,
+    }
+}
+
+fn freshness_requires_network(probe: &crunch_project_core::FreshnessProbe) -> bool {
+    match probe {
+        crunch_project_core::FreshnessProbe::Command { requires_network, .. } => *requires_network,
+        _ => freshness_kind(probe).requires_network(),
+    }
+}
+
+fn resolve_manifest_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    freshness_observation: Option<&FreshnessObservation>,
+) -> ResolvedInputState {
+    match resolve_input(input, resolver, freshness_observation) {
         Ok(entry) => ResolvedInputState::Resolved(ResolvedInput {
             name: input.name.clone(),
             entry,
@@ -117,13 +279,92 @@ fn require_resolution(value: Option<String>, what: &str) -> Result<String, Error
     Ok(resolved)
 }
 
-fn resolve_input(input: &ManifestInput, resolver: &dyn RefreshResolver) -> Result<LockEntry, Error> {
+fn render_input_kind(
+    input: &ManifestInput,
+    freshness_observation: Option<&FreshnessObservation>,
+) -> Result<InputKind, Error> {
+    match &input.kind {
+        InputKind::File { url } => Ok(InputKind::File {
+            url: render_template_if_needed(input, freshness_observation, url, FreshnessTemplateDestination::Url)?,
+        }),
+        InputKind::Tarball { url } => Ok(InputKind::Tarball {
+            url: render_template_if_needed(input, freshness_observation, url, FreshnessTemplateDestination::Url)?,
+        }),
+        InputKind::Git { repository, reference } => Ok(InputKind::Git {
+            repository: repository.clone(),
+            reference: render_git_reference(input, freshness_observation, reference)?,
+        }),
+    }
+}
+
+fn render_git_reference(
+    input: &ManifestInput,
+    freshness_observation: Option<&FreshnessObservation>,
+    reference: &GitReference,
+) -> Result<GitReference, Error> {
+    match reference {
+        GitReference::Branch(branch) => Ok(GitReference::Branch(render_template_if_needed(
+            input,
+            freshness_observation,
+            branch,
+            FreshnessTemplateDestination::Reference,
+        )?)),
+        GitReference::Tag(tag) => Ok(GitReference::Tag(render_template_if_needed(
+            input,
+            freshness_observation,
+            tag,
+            FreshnessTemplateDestination::Reference,
+        )?)),
+        GitReference::Rev(rev) => Ok(GitReference::Rev(render_template_if_needed(
+            input,
+            freshness_observation,
+            rev,
+            FreshnessTemplateDestination::Reference,
+        )?)),
+    }
+}
+
+fn render_template_if_needed(
+    input: &ManifestInput,
+    freshness_observation: Option<&FreshnessObservation>,
+    template: &str,
+    destination: FreshnessTemplateDestination,
+) -> Result<String, Error> {
+    if !template.contains("{{") {
+        return Ok(template.to_string());
+    }
+    let observation = freshness_observation.ok_or_else(|| {
+        Error::Manifest(format!("input '{}' uses a freshness template but has no observed freshness value", input.name))
+    })?;
+    crunch_project_core::render_freshness_template(FreshnessTemplateRequest {
+        input_name: input.name.clone(),
+        template: template.to_string(),
+        observation: observation.clone(),
+        destination,
+        max_output_bytes: crunch_project_core::MAX_FRESHNESS_RENDERED_TEMPLATE_BYTES,
+    })
+    .map_err(|err| Error::Manifest(format!("rendering freshness template for {}: {err}", input.name)))
+}
+
+fn locked_freshness_from_observation(observation: &FreshnessObservation) -> Option<LockedFreshnessValue> {
+    observation.value_digest.as_ref().map(|value_digest| LockedFreshnessValue {
+        input_name: observation.input_name.clone(),
+        value_digest: value_digest.clone(),
+    })
+}
+
+fn resolve_input(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    freshness_observation: Option<&FreshnessObservation>,
+) -> Result<LockEntry, Error> {
     assert!(!input.name.is_empty(), "input name must not be empty");
     assert!(
         input.patches.len() as u64 <= crate::manifest::MAX_PATCHES_PER_INPUT as u64,
         "patch count must stay within manifest limit"
     );
-    let (kind, hash) = match &input.kind {
+    let effective_kind = render_input_kind(input, freshness_observation)?;
+    let (kind, hash) = match &effective_kind {
         InputKind::File { url } => {
             let hash_value = require_resolution(
                 resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Flat)?,
@@ -178,6 +419,7 @@ fn resolve_input(input: &ManifestInput, resolver: &dyn RefreshResolver) -> Resul
         patches: input.patches.clone(),
         mirrors: input.mirrors.clone(),
         fetch_policy: input.fetch_policy,
+        freshness: freshness_observation.and_then(locked_freshness_from_observation),
     })
 }
 
@@ -291,6 +533,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec!["fix1".into()],
                 fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             }],
             patches: vec![PatchDef {
                 name: "fix1".into(),
@@ -333,6 +576,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec![],
                 fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             }],
             patches: vec![],
         };

@@ -605,6 +605,7 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
             mirrors: pin.mirrors.clone(),
             patches: pin.patches.clone(),
             fetch_policy,
+            freshness: None,
         },
         lock_entry: LockEntry {
             kind: lock_kind,
@@ -612,6 +613,7 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
             patches: pin.patches.clone(),
             mirrors: pin.mirrors.clone(),
             fetch_policy,
+            freshness: None,
         },
         report: PinImportMappedInput {
             name: pin.name.clone(),

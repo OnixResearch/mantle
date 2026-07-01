@@ -63,6 +63,7 @@ mod tests {
             patches: alloc::vec![],
             mirrors: alloc::vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
         Lockfile {
             version: SchemaVersion::CURRENT,

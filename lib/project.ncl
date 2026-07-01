@@ -38,6 +38,20 @@ let InputFetchPolicy = std.contract.from_validator (fun value =>
     'Error { message = "fetch_policy must be one of generation-material, build-fetch-action, imported-source-required" }
 ) in
 
+let FreshnessProbe = std.contract.from_validator (fun value =>
+  if std.is_record value then
+    if std.record.has_field "type" value then
+      let t = value.type in
+      if t == "git-ref" || t == "http-text" || t == "http-json" || t == "local-file" || t == "local-directory" || t == "command" then
+        'Ok
+      else
+        'Error { message = "freshness probe type must be git-ref, http-text, http-json, local-file, local-directory, or command" }
+    else
+      'Error { message = "freshness probe must have a 'type' field" }
+  else
+    'Error { message = "freshness probe must be a record" }
+) in
+
 let InputKind = std.contract.from_validator (fun value =>
   if std.is_record value then
     if std.record.has_field "type" value then
@@ -60,6 +74,7 @@ let ManifestInput = {
   mirrors | Array String | default = [],
   patches | Array String | default = [],
   fetch_policy | InputFetchPolicy | default = "generation-material",
+  freshness | FreshnessProbe | optional,
 } in
 
 let PatchSource = std.contract.from_validator (fun value =>
@@ -99,5 +114,6 @@ let PatchDef = {
   GitReference = GitReference,
   ManifestInput = ManifestInput,
   InputFetchPolicy = InputFetchPolicy,
+  FreshnessProbe = FreshnessProbe,
   PatchDef = PatchDef,
 }

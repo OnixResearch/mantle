@@ -104,6 +104,7 @@ mod tests {
             patches: alloc::vec![],
             mirrors: alloc::vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
 
         let lock = Lockfile {
@@ -134,6 +135,7 @@ mod tests {
             patches: alloc::vec!["fix1".into()],
             mirrors: alloc::vec!["https://mirror.example.com/repo.git".into()],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
 
         let mut patches = BTreeMap::new();

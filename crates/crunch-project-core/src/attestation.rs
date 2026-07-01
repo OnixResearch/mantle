@@ -458,6 +458,7 @@ mod tests {
                     ],
                     patches: vec!["hello-fix".to_string(), "hello-remote".to_string()],
                     fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                    freshness: None,
                 },
                 ManifestInput {
                     name: "nixpkgs".to_string(),
@@ -470,6 +471,7 @@ mod tests {
                     mirrors: Vec::new(),
                     patches: Vec::new(),
                     fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                    freshness: None,
                 },
             ],
             patches: vec![
@@ -506,6 +508,7 @@ mod tests {
                 "https://mirror-a.invalid/hello.tar.gz".to_string(),
             ],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
         inputs.insert("nixpkgs".to_string(), LockEntry {
             kind: LockedKind::Git {
@@ -520,6 +523,7 @@ mod tests {
             patches: Vec::new(),
             mirrors: Vec::new(),
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
 
         let mut patches = BTreeMap::new();

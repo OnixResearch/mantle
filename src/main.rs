@@ -400,12 +400,20 @@ enum Command {
 
     /// Refresh selected or all project inputs
     Refresh {
+        /// Do not execute network-backed freshness probes
+        #[arg(long)]
+        no_network: bool,
+
         /// Input names to refresh (default: all non-frozen)
         names: Vec<String>,
     },
 
     /// List inputs that would change on refresh (read-only)
-    ListStale,
+    ListStale {
+        /// Do not execute network-backed freshness probes
+        #[arg(long)]
+        no_network: bool,
+    },
 
     /// Migrate project files to the current schema version
     Upgrade,
@@ -1929,7 +1937,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::Check { .. } => "check",
         Command::Show => "show",
         Command::Refresh { .. } => "refresh",
-        Command::ListStale => "list-stale",
+        Command::ListStale { .. } => "list-stale",
         Command::Upgrade => "upgrade",
         Command::SelfBuild { .. } => "self-build",
         Command::RustPlan { .. } => "rust-plan",
@@ -2234,7 +2242,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         | Command::Check { .. }
         | Command::Show
         | Command::Refresh { .. }
-        | Command::ListStale
+        | Command::ListStale { .. }
         | Command::Upgrade => run_project_command(ctx, &args.command),
         Command::SelfBuild { .. } => run_self_build_from_command(ctx, &args.command),
         Command::RustPlan { .. } => run_rust_plan_command(ctx, &args.command),
@@ -3609,8 +3617,8 @@ fn run_project_command(ctx: &RunContext, command: &Command) -> Result<(), RunErr
             project_cmd::cmd_check(&cwd, output, *probes, *trust)
         }
         Command::Show => project_cmd::cmd_show(&cwd),
-        Command::Refresh { names } => project_cmd::cmd_refresh(&cwd, names),
-        Command::ListStale => project_cmd::cmd_list_stale(&cwd),
+        Command::Refresh { no_network, names } => project_cmd::cmd_refresh(&cwd, names, *no_network),
+        Command::ListStale { no_network } => project_cmd::cmd_list_stale(&cwd, *no_network),
         Command::Upgrade => project_cmd::cmd_upgrade(&cwd),
         _ => unreachable!("project command helper called with non-project command"),
     }

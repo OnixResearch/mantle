@@ -19,6 +19,7 @@ fn lock_with_entries() -> Lockfile {
         patches: vec![],
         mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".to_string()],
         fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
     });
     inputs.insert("hello-src".to_string(), LockEntry {
         kind: LockedKind::Tarball {
@@ -31,6 +32,7 @@ fn lock_with_entries() -> Lockfile {
         patches: vec![],
         mirrors: vec![],
         fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
     });
     Lockfile {
         version: SchemaVersion::CURRENT,

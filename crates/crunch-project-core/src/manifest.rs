@@ -10,6 +10,8 @@ use serde::Serialize;
 
 use crate::fetch_policy::InputFetchPolicy;
 use crate::fetch_policy::fetch_policy_compatibility_problems;
+use crate::freshness::FreshnessProbe;
+use crate::freshness::validate_freshness_probe;
 use crate::version::SchemaVersion;
 use crate::version::parse_version;
 
@@ -104,6 +106,7 @@ pub struct ManifestInput {
     pub mirrors: Vec<String>,
     pub patches: Vec<String>,
     pub fetch_policy: InputFetchPolicy,
+    pub freshness: Option<FreshnessProbe>,
 }
 
 #[derive(Deserialize)]
@@ -115,6 +118,7 @@ struct RawManifestInput {
     mirrors: Option<Vec<String>>,
     patches: Option<Vec<String>>,
     fetch_policy: Option<InputFetchPolicy>,
+    freshness: Option<FreshnessProbe>,
 }
 
 impl<'de> Deserialize<'de> for ManifestInput {
@@ -129,6 +133,7 @@ impl<'de> Deserialize<'de> for ManifestInput {
             mirrors: raw.mirrors.unwrap_or_else(Vec::new),
             patches: raw.patches.unwrap_or_else(Vec::new),
             fetch_policy: raw.fetch_policy.unwrap_or_default(),
+            freshness: raw.freshness,
         })
     }
 }
@@ -155,6 +160,12 @@ impl ManifestInput {
                 self.name,
                 self.patches.len()
             ));
+        }
+
+        if let Some(probe) = self.freshness.clone() {
+            if let Err(err) = validate_freshness_probe(probe) {
+                problems.push(format!("input '{}': invalid freshness probe: {err}", self.name));
+            }
         }
 
         problems.extend(fetch_policy_compatibility_problems(self));
@@ -304,6 +315,7 @@ mod tests {
                     mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into()],
                     patches: vec![],
                     fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    freshness: None,
                 },
                 ManifestInput {
                     name: "hello-src".into(),
@@ -318,6 +330,7 @@ mod tests {
                     mirrors: vec![],
                     patches: vec!["hello-fix".into()],
                     fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    freshness: None,
                 },
             ],
             patches: vec![PatchDef {
@@ -376,6 +389,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec![],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             }],
             patches: vec![],
         };

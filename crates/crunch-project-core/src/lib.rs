@@ -65,6 +65,8 @@ pub use freshness::FreshnessRefreshPlanRequest;
 pub use freshness::FreshnessTemplateDestination;
 pub use freshness::FreshnessTemplateRequest;
 pub use freshness::LockedFreshnessValue;
+pub use freshness::MAX_FRESHNESS_RENDERED_TEMPLATE_BYTES;
+pub use freshness::MAX_FRESHNESS_VALUE_BYTES;
 pub use freshness::normalize_freshness_observation;
 pub use freshness::plan_freshness_refresh;
 pub use freshness::render_freshness_template;

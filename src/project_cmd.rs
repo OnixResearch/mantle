@@ -20,9 +20,9 @@ use crunch_project::SchemaVersion;
 use crunch_project::apply_outcomes;
 use crunch_project::check_project_soundness;
 use crunch_project::generate_inputs_ncl;
-use crunch_project::list_stale;
+use crunch_project::list_stale_with_options;
 use crunch_project::project_soundness_parse_error;
-use crunch_project::refresh_inputs;
+use crunch_project::refresh_inputs_with_options;
 use crunch_project::upgrade_lockfile;
 
 use crate::errors::RunError;
@@ -224,12 +224,12 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
 }
 
 /// `crunch refresh [names...]` — update inputs.
-pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
+pub fn cmd_refresh(dir: &Path, selected: &[String], no_network: bool) -> Result<(), RunError> {
     reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
     let resolver = LiveResolver::new(dir);
-    let outcomes = refresh_inputs(&manifest, &lock, selected, &resolver);
+    let outcomes = refresh_inputs_with_options(&manifest, &lock, selected, &resolver, no_network);
     print_refresh_outcomes(&outcomes);
 
     let result = apply_outcomes(&manifest, &lock, &outcomes, &resolver);
@@ -264,24 +264,38 @@ pub fn cmd_refresh(dir: &Path, selected: &[String]) -> Result<(), RunError> {
 }
 
 /// `crunch list-stale` — show which inputs would change.
-pub fn cmd_list_stale(dir: &Path) -> Result<(), RunError> {
+pub fn cmd_list_stale(dir: &Path, no_network: bool) -> Result<(), RunError> {
     reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
     let resolver = LiveResolver::new(dir);
-    let report = list_stale(&manifest, &lock, &resolver);
+    let report = list_stale_with_options(&manifest, &lock, &resolver, no_network);
 
     for name in &report.stale {
         println!("{name}");
     }
+    for name in &report.unchanged {
+        eprintln!("unchanged: {name}");
+    }
+    for skipped in &report.skipped {
+        eprintln!("skipped: {}: {}", skipped.name, skipped.reason);
+    }
+    for blocked in &report.network_required {
+        eprintln!("network-required: {}: {}", blocked.name, blocked.reason);
+    }
     for failure in &report.failed {
         eprintln!("failed: {}: {}", failure.name, failure.reason);
     }
-    if report.stale.is_empty() && report.failed.is_empty() {
+    if report.stale.is_empty()
+        && report.failed.is_empty()
+        && report.skipped.is_empty()
+        && report.network_required.is_empty()
+    {
         println!("all inputs up to date");
     }
-    if !report.failed.is_empty() {
-        return Err(RunError::Internal(format!("stale check failed for {} item(s)", report.failed.len())));
+    let blocker_count = report.failed.len() + report.network_required.len();
+    if blocker_count > 0 {
+        return Err(RunError::Internal(format!("stale check failed for {blocker_count} item(s)")));
     }
 
     Ok(())
@@ -400,6 +414,8 @@ fn print_refresh_outcomes(outcomes: &[RefreshOutcome]) {
             RefreshOutcome::Updated(resolved) => eprintln!("updated: {}", resolved.name),
             RefreshOutcome::Unchanged { name } => eprintln!("unchanged: {name}"),
             RefreshOutcome::Frozen { name } => eprintln!("frozen (skipped): {name}"),
+            RefreshOutcome::Skipped { name, reason } => eprintln!("skipped: {name}: {reason}"),
+            RefreshOutcome::NetworkRequired { name, reason } => eprintln!("network-required: {name}: {reason}"),
             RefreshOutcome::Failed { name, reason } => eprintln!("failed: {name}: {reason}"),
         }
     }
@@ -409,7 +425,9 @@ fn collect_outcome_failures(outcomes: &[RefreshOutcome]) -> Vec<RefreshFailure> 
     outcomes
         .iter()
         .filter_map(|outcome| match outcome {
-            RefreshOutcome::Failed { name, reason } => Some(RefreshFailure {
+            RefreshOutcome::Failed { name, reason }
+            | RefreshOutcome::NetworkRequired { name, reason }
+            | RefreshOutcome::Skipped { name, reason } => Some(RefreshFailure {
                 name: name.clone(),
                 reason: reason.clone(),
             }),

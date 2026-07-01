@@ -1,6 +1,16 @@
+use std::io::Read;
+use std::io::Write;
+use std::net::TcpListener;
+use std::net::TcpStream;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::time::Duration;
 
 use assert_cmd::Command;
 use crunch_project::HashAlgo;
@@ -23,8 +33,25 @@ use snix_store::utils::AsyncIoBridge;
 use tempfile::TempDir;
 use tempfile::tempdir;
 
+const HTTP_POLL_SLEEP_MS: u64 = 10;
+const HTTP_READ_BUFFER_BYTES: usize = 4096;
+const COMMAND_TIMEOUT_MS: u32 = 100;
+const COMMAND_OUTPUT_LIMIT_BYTES: u32 = 8;
+const COMMAND_SUCCESS_STATUS: i32 = 0;
+
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
+}
+
+fn freshness_digest(value: &str) -> String {
+    format!("blake3:{}", blake3::hash(value.as_bytes()).to_hex())
+}
+
+fn locked_freshness(name: &str, value: &str) -> crunch_project::LockedFreshnessValue {
+    crunch_project::LockedFreshnessValue {
+        input_name: name.to_string(),
+        value_digest: freshness_digest(value),
+    }
 }
 
 fn quoted(value: &str) -> String {
@@ -51,6 +78,62 @@ fn run_git(dir: &Path, args: &[&str]) -> String {
     let output = ProcessCommand::new("git").args(args).current_dir(dir).output().unwrap();
     assert!(output.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
     String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+struct HttpProbeServer {
+    url: String,
+    requests: Arc<AtomicU32>,
+    stop: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl Drop for HttpProbeServer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        let _ = TcpStream::connect(self.url.trim_start_matches("http://"));
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+fn spawn_http_probe_server(body: &'static str) -> HttpProbeServer {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let requests = Arc::new(AtomicU32::new(0));
+    let stop = Arc::new(AtomicBool::new(false));
+    let requests_ref = requests.clone();
+    let stop_ref = stop.clone();
+    let handle = thread::spawn(move || {
+        while !stop_ref.load(Ordering::SeqCst) {
+            match listener.accept() {
+                Ok((mut stream, _peer)) => handle_http_probe_connection(&mut stream, body, &requests_ref),
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(HTTP_POLL_SLEEP_MS));
+                }
+                Err(_err) => break,
+            }
+        }
+    });
+    HttpProbeServer {
+        url: format!("http://{addr}"),
+        requests,
+        stop,
+        handle: Some(handle),
+    }
+}
+
+fn handle_http_probe_connection(stream: &mut TcpStream, body: &str, requests: &Arc<AtomicU32>) {
+    let mut buffer = [0u8; HTTP_READ_BUFFER_BYTES];
+    let _ = stream.read(&mut buffer);
+    requests.fetch_add(1, Ordering::SeqCst);
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let _ = stream.write_all(response.as_bytes());
 }
 
 fn create_git_repo(parent: &Path) -> (PathBuf, String) {
@@ -334,6 +417,7 @@ fn list_stale_reports_stale_and_failed_without_mutating_files() {
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
+        freshness: None,
     });
     write_project_files(dir.path(), &manifest, &lock);
 
@@ -352,4 +436,267 @@ fn list_stale_reports_stale_and_failed_without_mutating_files() {
     let inputs_after = std::fs::read_to_string(dir.path().join(".mantle/inputs.ncl")).unwrap();
     assert_eq!(lock_after, lock_before);
     assert_eq!(inputs_after, inputs_before);
+}
+
+#[test]
+fn freshness_http_json_template_refreshes_selected_stale_input() {
+    let dir = TempDir::new().unwrap();
+    init_project(dir.path());
+    let server = spawn_http_probe_server(r#"{"version":"v2"}"#);
+
+    let old_source = dir.path().join("pkg-v1.txt");
+    let new_source = dir.path().join("pkg-v2.txt");
+    std::fs::write(&old_source, "old\n").unwrap();
+    std::fs::write(&new_source, "new\n").unwrap();
+    let source_template = format!("file://{}/pkg-{{{{ freshness.value }}}}.txt", dir.path().display());
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "pkg",
+      kind = {{ type = "file", url = {} }},
+      freshness = {{ type = "http-json", url = {}, pointer = "/version" }},
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        quoted(&source_template),
+        quoted(&server.url),
+    );
+    let mut lock = Lockfile::new();
+    lock.inputs.insert("pkg".into(), LockEntry {
+        kind: LockedKind::File {
+            url: format!("file://{}", old_source.display()),
+        },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: flat_sha256_sri(b"old\n"),
+        },
+        patches: vec![],
+        mirrors: vec![],
+        fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
+        freshness: Some(locked_freshness("pkg", "v1")),
+    });
+    write_project_files(dir.path(), &manifest, &lock);
+
+    crunch().arg("refresh").arg("pkg").current_dir(dir.path()).assert().success();
+
+    let refreshed = read_lock(dir.path());
+    assert_eq!(refreshed.inputs["pkg"].hash.value, flat_sha256_sri(b"new\n"));
+    assert_eq!(refreshed.inputs["pkg"].freshness.as_ref().unwrap().value_digest, freshness_digest("v2"));
+    assert!(server.requests.load(Ordering::SeqCst) > 0);
+    let generated = std::fs::read_to_string(dir.path().join(".mantle/inputs.ncl")).unwrap();
+    assert!(generated.contains("freshness_value_digest"));
+}
+
+#[test]
+fn freshness_git_ref_probe_reports_stale_without_mutating_lock() {
+    let dir = TempDir::new().unwrap();
+    init_project(dir.path());
+    let (repo, old_rev) = create_git_repo(dir.path());
+    std::fs::write(repo.join("hello.txt"), "hello from git v2\n").unwrap();
+    run_git(&repo, &["add", "."]);
+    run_git(&repo, &["commit", "-m", "second"]);
+    let new_rev = run_git(&repo, &["rev-parse", "HEAD"]);
+    assert_ne!(old_rev, new_rev);
+
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "repo",
+      kind = {{ type = "git", repository = {}, reference = {{ ref_type = "branch", ref_value = "main" }} }},
+      freshness = {{ type = "git-ref", repository = {}, reference = "refs/heads/main" }},
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        quoted(&repo.display().to_string()),
+        quoted(&repo.display().to_string()),
+    );
+    let mut lock = Lockfile::new();
+    lock.inputs.insert("repo".into(), LockEntry {
+        kind: LockedKind::Git {
+            repository: repo.display().to_string(),
+            rev: old_rev.clone(),
+            ref_name: Some("main".to_string()),
+        },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-old=".to_string(),
+        },
+        patches: vec![],
+        mirrors: vec![],
+        fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
+        freshness: Some(locked_freshness("repo", &old_rev)),
+    });
+    write_project_files(dir.path(), &manifest, &lock);
+    let lock_before = std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap();
+
+    let assert = crunch().arg("list-stale").current_dir(dir.path()).assert().success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    assert!(stdout.contains("repo"), "stdout was: {stdout}");
+    let lock_after = std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap();
+    assert_eq!(lock_before, lock_after);
+}
+
+#[test]
+fn freshness_local_directory_probe_updates_lock_digest() {
+    let dir = TempDir::new().unwrap();
+    init_project(dir.path());
+    let source = dir.path().join("pkg.txt");
+    let watched = dir.path().join("watched");
+    std::fs::create_dir_all(&watched).unwrap();
+    std::fs::write(&source, "payload\n").unwrap();
+    std::fs::write(watched.join("state.txt"), "state-v2\n").unwrap();
+    let source_url = format!("file://{}", source.display());
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "pkg",
+      kind = {{ type = "file", url = {} }},
+      freshness = {{ type = "local-directory", path = "watched" }},
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        quoted(&source_url),
+    );
+    let mut lock = Lockfile::new();
+    lock.inputs.insert("pkg".into(), LockEntry {
+        kind: LockedKind::File { url: source_url },
+        hash: LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-old=".into(),
+        },
+        patches: vec![],
+        mirrors: vec![],
+        fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
+        freshness: Some(locked_freshness("pkg", "state-v1")),
+    });
+    write_project_files(dir.path(), &manifest, &lock);
+
+    crunch().arg("refresh").current_dir(dir.path()).assert().success();
+
+    let refreshed = read_lock(dir.path());
+    assert_ne!(refreshed.inputs["pkg"].freshness.as_ref().unwrap().value_digest, freshness_digest("state-v1"));
+    assert_eq!(refreshed.inputs["pkg"].hash.value, flat_sha256_sri(b"payload\n"));
+}
+
+#[test]
+fn freshness_command_missing_timeout_and_output_limit_fail_deterministically() {
+    let dir = TempDir::new().unwrap();
+    init_project(dir.path());
+    let source = dir.path().join("pkg.txt");
+    std::fs::write(&source, "payload\n").unwrap();
+    let source_url = format!("file://{}", source.display());
+    let sleep_script = dir.path().join("sleep-probe.sh");
+    let loud_script = dir.path().join("loud-probe.sh");
+    std::fs::write(&sleep_script, "#!/bin/sh\nwhile :; do :; done\n").unwrap();
+    std::fs::write(&loud_script, "#!/bin/sh\nprintf 123456789\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&sleep_script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&loud_script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "missing",
+      kind = {{ type = "file", url = {} }},
+      freshness = {{
+        type = "command",
+        requires_network = false,
+        command = {{ argv = ["definitely-missing-mantle-freshness-probe"], cwd = ".", env = [], timeout_ms = {}, output_limit_bytes = {}, success_statuses = [{}], utf8_required = true }},
+      }},
+    }},
+    {{
+      name = "timeout",
+      kind = {{ type = "file", url = {} }},
+      freshness = {{
+        type = "command",
+        requires_network = false,
+        command = {{ argv = [{}], cwd = ".", env = [], timeout_ms = {}, output_limit_bytes = {}, success_statuses = [{}], utf8_required = true }},
+      }},
+    }},
+    {{
+      name = "too-loud",
+      kind = {{ type = "file", url = {} }},
+      freshness = {{
+        type = "command",
+        requires_network = false,
+        command = {{ argv = [{}], cwd = ".", env = [], timeout_ms = {}, output_limit_bytes = {}, success_statuses = [{}], utf8_required = true }},
+      }},
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        quoted(&source_url),
+        COMMAND_TIMEOUT_MS,
+        COMMAND_OUTPUT_LIMIT_BYTES,
+        COMMAND_SUCCESS_STATUS,
+        quoted(&source_url),
+        quoted(&sleep_script.display().to_string()),
+        COMMAND_TIMEOUT_MS,
+        COMMAND_OUTPUT_LIMIT_BYTES,
+        COMMAND_SUCCESS_STATUS,
+        quoted(&source_url),
+        quoted(&loud_script.display().to_string()),
+        COMMAND_TIMEOUT_MS,
+        COMMAND_OUTPUT_LIMIT_BYTES,
+        COMMAND_SUCCESS_STATUS,
+    );
+    write_project_files(dir.path(), &manifest, &Lockfile::new());
+
+    let assert = crunch().arg("list-stale").current_dir(dir.path()).assert().failure();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(stderr.contains("failed: missing:"), "stderr was: {stderr}");
+    assert!(stderr.contains("failed: timeout:"), "stderr was: {stderr}");
+    assert!(stderr.contains("failed: too-loud:"), "stderr was: {stderr}");
+    assert!(stderr.contains("not found"), "stderr was: {stderr}");
+    assert!(stderr.contains("timed out"), "stderr was: {stderr}");
+    assert!(stderr.contains("exceeds limit"), "stderr was: {stderr}");
+}
+
+#[test]
+fn freshness_no_network_mode_does_not_contact_http_probe() {
+    let dir = TempDir::new().unwrap();
+    init_project(dir.path());
+    let server = spawn_http_probe_server("v2\n");
+    let source = dir.path().join("pkg.txt");
+    std::fs::write(&source, "payload\n").unwrap();
+    let source_url = format!("file://{}", source.display());
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "pkg",
+      kind = {{ type = "file", url = {} }},
+      freshness = {{ type = "http-text", url = {} }},
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        quoted(&source_url),
+        quoted(&server.url),
+    );
+    write_project_files(dir.path(), &manifest, &Lockfile::new());
+
+    let assert = crunch().arg("list-stale").arg("--no-network").current_dir(dir.path()).assert().failure();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(stderr.contains("network-required: pkg"), "stderr was: {stderr}");
+    assert_eq!(server.requests.load(Ordering::SeqCst), 0);
 }

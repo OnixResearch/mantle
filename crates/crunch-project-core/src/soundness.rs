@@ -831,6 +831,7 @@ mod tests {
                 mirrors: vec!["https://mirror.example.com/pkg.txt".into()],
                 patches: vec!["fix".into()],
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                freshness: None,
             }],
             patches: vec![crate::manifest::PatchDef {
                 name: "fix".into(),
@@ -854,6 +855,7 @@ mod tests {
             patches: vec!["fix".into()],
             mirrors: vec!["https://mirror.example.com/pkg.txt".into()],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
         let mut patches = BTreeMap::new();
         patches.insert("fix".into(), crate::lock::LockedPatch {
@@ -919,6 +921,7 @@ mod tests {
             patches: vec![],
             mirrors: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
         let generated_inputs = crate::generate::generate_inputs_ncl(lock.clone());
 
@@ -942,6 +945,7 @@ mod tests {
             mirrors: vec![],
             patches: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
         });
         let report = report_for(manifest, clean_lock());
 

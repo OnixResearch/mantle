@@ -8,4 +8,6 @@ pub use crunch_project_core::StaleReport;
 pub use crate::refresh_adapter::RefreshResolver;
 pub use crate::refresh_adapter::apply_outcomes;
 pub use crate::refresh_adapter::list_stale;
+pub use crate::refresh_adapter::list_stale_with_options;
 pub use crate::refresh_adapter::refresh_inputs;
+pub use crate::refresh_adapter::refresh_inputs_with_options;
