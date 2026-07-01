@@ -1479,3 +1479,4 @@ mantle run [target] [-- args...] Build and execute a package binary (`.#name`, b
 - [fosslinux/live-bootstrap](https://github.com/fosslinux/live-bootstrap) — reference stage order and source provenance for the hex0 → mes → tinycc → GCC bootstrap ladder.
 - [stagex/stagex](https://codeberg.org/stagex/stagex) — mrustc-to-current-Rust source bootstrap route used as the reference shape for `bootstrap/rust-source-plan.ncl`.
 - [adeci/drv-thru](https://github.com/adeci/drv-thru) — P2P Nix build tickets and signed-output import model used as remote-builder prior art; Mantle adaptations should replace Nix-specific plumbing with Mantle CAS, PathInfo, attestation, and substitution semantics.
+- [Nixtamal](https://nixtamal.toast.al/) — Nix input pinning tool used as project-input workflow prior art for custom freshness checks, mirrors, declarative patches, per-input hash algorithms, non-Git VCS sources, and future lockfile import/trust ideas.
