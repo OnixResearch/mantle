@@ -9,9 +9,39 @@ const SOUNDNESS_SCHEMA: &str = "mantle-project-soundness-v1";
 const STATIC_SOUNDNESS_MODE: &str = "static";
 const GENERATED_INPUT_STALE_CLASS: &str = "generated-input-stale";
 const PROBE_TRUST_SOUNDNESS_MODE: &str = "static-with-probes-and-trust-requested";
+const RETENTION_STATE_FILE: &str = ".mantle/retention.json";
+const RETENTION_STATE_TMP_FILE: &str = ".mantle/retention.json.tmp";
+const RETENTION_ROOTS_DIR: &str = ".mantle/retention-roots";
 
 fn mantle() -> Command {
     Command::cargo_bin("mantle").unwrap()
+}
+
+fn write_file_input_manifest(dir: &TempDir, retention: Option<&str>) {
+    let source = dir.path().join("pkg.txt");
+    std::fs::write(&source, "payload\n").unwrap();
+    let url = format!("file://{}", source.display());
+    let retention_field = retention.map(|value| format!("  retention = {value},\n")).unwrap_or_default();
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+{retention_field}  inputs = [
+    {{
+      name = "pkg",
+      kind = {{ type = "file", url = {} }},
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        serde_json::to_string(&url).unwrap()
+    );
+    std::fs::write(dir.path().join("mantle-project.ncl"), manifest).unwrap();
+}
+
+fn read_retention_state(dir: &TempDir) -> crunch_project::ProjectRetentionState {
+    let text = std::fs::read_to_string(dir.path().join(RETENTION_STATE_FILE)).unwrap();
+    serde_json::from_str(&text).unwrap()
 }
 
 #[test]
@@ -28,6 +58,7 @@ fn init_creates_project_files() {
     assert!(dir.path().join("mantle-project.ncl").exists());
     assert!(dir.path().join("mantle.lock").exists());
     assert!(dir.path().join(".mantle/inputs.ncl").exists());
+    assert!(dir.path().join(RETENTION_STATE_FILE).exists());
 
     // .gitignore should have .mantle/
     let gitignore = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
@@ -265,6 +296,74 @@ fn refresh_on_empty_project() {
         .assert()
         .success()
         .stderr(predicate::str::contains("all inputs up to date"));
+}
+
+#[test]
+fn refresh_current_retention_writes_root_and_show_reports_pinned() {
+    let dir = TempDir::new().unwrap();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+    write_file_input_manifest(&dir, Some(r#"{ mode = "current" }"#));
+
+    mantle().arg("refresh").current_dir(dir.path()).assert().success();
+
+    let state = read_retention_state(&dir);
+    assert_eq!(state.records.len(), 1);
+    let root_path = dir.path().join(RETENTION_ROOTS_DIR).join(format!("{}.json", state.records[0].root_id));
+    assert!(root_path.is_file());
+    mantle()
+        .arg("show")
+        .current_dir(dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("retention: pinned"));
+    mantle()
+        .arg("check")
+        .current_dir(dir.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("project check passed"));
+}
+
+#[test]
+fn interrupted_retention_state_is_not_reported_as_pinned() {
+    let dir = TempDir::new().unwrap();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+    write_file_input_manifest(&dir, Some(r#"{ mode = "current" }"#));
+    mantle().arg("refresh").current_dir(dir.path()).assert().success();
+    std::fs::rename(dir.path().join(RETENTION_STATE_FILE), dir.path().join(RETENTION_STATE_TMP_FILE)).unwrap();
+
+    mantle()
+        .arg("check")
+        .current_dir(dir.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("interrupted retention root"))
+        .stderr(predicate::str::contains("project check passed"));
+    mantle()
+        .arg("show")
+        .current_dir(dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("retention: missing-root"));
+}
+
+#[test]
+fn untracked_input_refresh_remains_gc_eligible_without_roots() {
+    let dir = TempDir::new().unwrap();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+    write_file_input_manifest(&dir, None);
+
+    mantle().arg("refresh").current_dir(dir.path()).assert().success();
+
+    let state = read_retention_state(&dir);
+    assert!(state.records.is_empty());
+    assert!(!dir.path().join(RETENTION_ROOTS_DIR).exists());
+    mantle()
+        .arg("show")
+        .current_dir(dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("retention: gc-eligible"));
 }
 
 #[test]

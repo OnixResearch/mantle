@@ -12,6 +12,7 @@ use crate::fetch_policy::InputFetchPolicy;
 use crate::fetch_policy::fetch_policy_compatibility_problems;
 use crate::freshness::FreshnessProbe;
 use crate::freshness::validate_freshness_probe;
+use crate::retention::InputRetentionPolicy;
 use crate::version::SchemaVersion;
 use crate::version::parse_version;
 
@@ -24,6 +25,7 @@ pub struct ProjectManifest {
     pub version: String,
     pub inputs: Vec<ManifestInput>,
     pub patches: Vec<PatchDef>,
+    pub retention: InputRetentionPolicy,
 }
 
 #[derive(Deserialize)]
@@ -31,6 +33,7 @@ struct RawProjectManifest {
     version: String,
     inputs: Vec<ManifestInput>,
     patches: Option<Vec<PatchDef>>,
+    retention: Option<InputRetentionPolicy>,
 }
 
 impl<'de> Deserialize<'de> for ProjectManifest {
@@ -41,6 +44,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             version: raw.version,
             inputs: raw.inputs,
             patches: raw.patches.unwrap_or_else(Vec::new),
+            retention: raw.retention.unwrap_or_default(),
         })
     }
 }
@@ -55,6 +59,7 @@ impl ProjectManifest {
             version,
             inputs,
             patches,
+            retention,
         } = self;
         let mut problems = Vec::with_capacity(inputs.len().saturating_mul(2).saturating_add(patches.len()));
 
@@ -75,6 +80,8 @@ impl ProjectManifest {
         if inputs.len() as u64 > MAX_INPUTS as u64 {
             problems.push(format!("too many inputs: {} (max {MAX_INPUTS})", inputs.len()));
         }
+
+        problems.extend(retention.validate("project"));
 
         let mut seen_names = BTreeSet::new();
         for input in &inputs {
@@ -106,6 +113,7 @@ pub struct ManifestInput {
     pub mirrors: Vec<String>,
     pub patches: Vec<String>,
     pub fetch_policy: InputFetchPolicy,
+    pub retention: Option<InputRetentionPolicy>,
     pub freshness: Option<FreshnessProbe>,
 }
 
@@ -118,6 +126,7 @@ struct RawManifestInput {
     mirrors: Option<Vec<String>>,
     patches: Option<Vec<String>>,
     fetch_policy: Option<InputFetchPolicy>,
+    retention: Option<InputRetentionPolicy>,
     freshness: Option<FreshnessProbe>,
 }
 
@@ -133,6 +142,7 @@ impl<'de> Deserialize<'de> for ManifestInput {
             mirrors: raw.mirrors.unwrap_or_else(Vec::new),
             patches: raw.patches.unwrap_or_else(Vec::new),
             fetch_policy: raw.fetch_policy.unwrap_or_default(),
+            retention: raw.retention,
             freshness: raw.freshness,
         })
     }
@@ -166,6 +176,10 @@ impl ManifestInput {
             if let Err(err) = validate_freshness_probe(probe) {
                 problems.push(format!("input '{}': invalid freshness probe: {err}", self.name));
             }
+        }
+
+        if let Some(retention) = self.retention {
+            problems.extend(retention.validate(&format!("input '{}'", self.name)));
         }
 
         problems.extend(fetch_policy_compatibility_problems(self));
@@ -315,6 +329,7 @@ mod tests {
                     mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into()],
                     patches: vec![],
                     fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    retention: None,
                     freshness: None,
                 },
                 ManifestInput {
@@ -330,6 +345,7 @@ mod tests {
                     mirrors: vec![],
                     patches: vec!["hello-fix".into()],
                     fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    retention: None,
                     freshness: None,
                 },
             ],
@@ -339,6 +355,7 @@ mod tests {
                     path: "patches/hello-fix.patch".into(),
                 },
             }],
+            retention: InputRetentionPolicy::Untracked,
         }
     }
 
@@ -389,9 +406,11 @@ mod tests {
                 mirrors: vec![],
                 patches: vec![],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                retention: None,
                 freshness: None,
             }],
             patches: vec![],
+            retention: InputRetentionPolicy::Untracked,
         };
         let problems = m.validate();
         assert!(!problems.is_empty());
@@ -412,6 +431,26 @@ mod tests {
         }"#;
         let input: ManifestInput = serde_json::from_str(json).unwrap();
         assert_eq!(input.fetch_policy, InputFetchPolicy::GenerationMaterial);
+        assert_eq!(input.retention, None);
+    }
+
+    #[test]
+    fn retention_defaults_to_untracked() {
+        let json = r#"{
+            "version":"1.0.0",
+            "inputs":[],
+            "patches":[]
+        }"#;
+        let manifest: ProjectManifest = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.retention, InputRetentionPolicy::Untracked);
+    }
+
+    #[test]
+    fn invalid_retention_generation_limit_is_rejected() {
+        let mut m = sample_manifest();
+        m.inputs[0].retention = Some(InputRetentionPolicy::RecentGenerations { generations: 0 });
+        let problems = m.validate();
+        assert!(problems.iter().any(|problem| problem.contains("retention recent-generations")));
     }
 
     #[test]
@@ -440,6 +479,7 @@ mod tests {
             version: "garbage".into(),
             inputs: vec![],
             patches: vec![],
+            retention: InputRetentionPolicy::Untracked,
         };
         let problems = m.validate();
         assert!(!problems.is_empty());
@@ -452,6 +492,7 @@ mod tests {
             version: "99.0.0".into(),
             inputs: vec![],
             patches: vec![],
+            retention: InputRetentionPolicy::Untracked,
         };
         let problems = m.validate();
         assert!(!problems.is_empty());
@@ -464,6 +505,7 @@ mod tests {
             version: "1.1.0".into(),
             inputs: vec![],
             patches: vec![],
+            retention: InputRetentionPolicy::Untracked,
         };
         let problems = m.validate();
         assert!(problems.is_empty());

@@ -246,6 +246,7 @@ mod tests {
             version: "1.0.0".into(),
             inputs,
             patches: vec![],
+            retention: crate::InputRetentionPolicy::Untracked,
         }
     }
 
@@ -272,6 +273,7 @@ mod tests {
             mirrors: vec![],
             patches: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            retention: None,
             freshness: None,
         }
     }

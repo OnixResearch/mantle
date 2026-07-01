@@ -533,6 +533,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec!["fix1".into()],
                 fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+                retention: None,
                 freshness: None,
             }],
             patches: vec![PatchDef {
@@ -541,6 +542,7 @@ mod tests {
                     path: "patches/fix1.patch".into(),
                 },
             }],
+            retention: crunch_project_core::InputRetentionPolicy::Untracked,
         };
         let resolver = MockResolver {
             git_rev: None,
@@ -576,9 +578,11 @@ mod tests {
                 mirrors: vec![],
                 patches: vec![],
                 fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+                retention: None,
                 freshness: None,
             }],
             patches: vec![],
+            retention: crunch_project_core::InputRetentionPolicy::Untracked,
         };
         struct FailingResolver;
         impl RefreshResolver for FailingResolver {

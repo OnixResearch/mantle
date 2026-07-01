@@ -538,6 +538,7 @@ mod tests {
             mirrors: Vec::new(),
             patches: Vec::new(),
             fetch_policy: policy,
+            retention: None,
             freshness: None,
         }
     }
@@ -547,6 +548,7 @@ mod tests {
             version: "1.0.0".to_string(),
             inputs,
             patches: Vec::new(),
+            retention: crate::InputRetentionPolicy::Untracked,
         }
     }
 

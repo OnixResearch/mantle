@@ -576,6 +576,7 @@ mod tests {
             mirrors: vec![],
             patches: vec![],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
+            retention: None,
             freshness: None,
         }
     }
@@ -585,6 +586,7 @@ mod tests {
             version: "1.0.0".into(),
             inputs,
             patches: vec![],
+            retention: crate::InputRetentionPolicy::Untracked,
         }
     }
 
@@ -852,6 +854,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec!["fix1".into()],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                retention: None,
                 freshness: None,
             }],
             patches: vec![PatchDef {
@@ -860,6 +863,7 @@ mod tests {
                     path: "patches/fix1.patch".into(),
                 },
             }],
+            retention: crate::InputRetentionPolicy::Untracked,
         };
         let outcomes = vec![RefreshOutcome::Updated(ResolvedInput {
             name: "pkg".into(),
@@ -921,6 +925,7 @@ mod tests {
                 mirrors: vec![],
                 patches: vec!["bad".into()],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
+                retention: None,
                 freshness: None,
             }],
             patches: vec![PatchDef {
@@ -929,6 +934,7 @@ mod tests {
                     path: "patches/bad.patch".into(),
                 },
             }],
+            retention: crate::InputRetentionPolicy::Untracked,
         };
         let outcomes = vec![RefreshOutcome::Updated(ResolvedInput {
             name: "pkg".into(),

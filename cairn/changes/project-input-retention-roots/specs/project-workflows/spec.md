@@ -2,7 +2,7 @@
 
 ### Requirement: Project inputs may declare retention roots [r[project_workflows.input_retention_roots]]
 
-Mantle MUST support project-level default retention policy and per-input overrides for source/input material. Retention policy MUST distinguish untracked inputs, tracked current inputs, and tracked recent lock generations with an explicit generation limit, and diagnostics MUST distinguish pinned, unpinned, stale-root, missing-root, and garbage-collection-eligible records.
+Mantle MUST support a project-level default `retention` policy and per-input `retention` overrides for source/input material. Retention policy MUST distinguish `{ mode = "untracked" }`, `{ mode = "current" }`, and `{ mode = "recent-generations", generations = <positive bounded integer> }`; generation limits MUST be named, bounded, and validated before roots are treated as durable. Diagnostics MUST distinguish pinned, unpinned, stale-root, missing-root, and garbage-collection-eligible records.
 
 #### Scenario: Current input is pinned [r[project_workflows.input_retention_roots.scenario.current]]
 
@@ -27,7 +27,7 @@ Mantle MUST support project-level default retention policy and per-input overrid
 
 ### Requirement: Retention updates are atomic with project state [r[project_workflows.input_retention_atomicity]]
 
-Mantle MUST update project retention roots atomically with the lock/source-state transitions they protect. Interrupted or partial retention updates MUST NOT be reported as durable roots for project readiness.
+Mantle MUST update project retention roots atomically with the lock/source-state transitions they protect by committing same-directory temporary files into `.mantle/retention.json` and root marker records under `.mantle/retention-roots/`. Interrupted or partial retention updates, including `.mantle/retention.json.tmp`, MUST NOT be reported as durable roots for project readiness.
 
 #### Scenario: Interrupted root update is not durable [r[project_workflows.input_retention_atomicity.scenario.interrupted]]
 

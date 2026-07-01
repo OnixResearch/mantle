@@ -7,7 +7,7 @@ Retention policy is decided in pure project logic and committed by a store/sourc
 - Pure core: retention schema validation, generation selection, root action planning, stale-root detection, GC-eligible classification, lock-generation binding, and diagnostics.
 - Imperative shell: creating/removing roots, persisting project retention state, querying store/source state, and performing atomic filesystem updates.
 
-Retention records should bind project identity, input name, lock generation or lock digest, source/content digest, root kind, and creation metadata. BLAKE3 should be used for new retention state fingerprints.
+Retention records bind input name, BLAKE3 lock-entry digest, source identity, content digest, root kind, deterministic root id, generation, and committed/uncommitted state. The shell persists committed records in `.mantle/retention.json` and materializes root marker files under `.mantle/retention-roots/`; temporary `.mantle/retention.json.tmp` records are loaded as uncommitted facts so diagnostics can report interruption without treating them as durable.
 
 ## Retention policy
 

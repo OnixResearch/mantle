@@ -458,6 +458,7 @@ mod tests {
                     ],
                     patches: vec!["hello-fix".to_string(), "hello-remote".to_string()],
                     fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                    retention: None,
                     freshness: None,
                 },
                 ManifestInput {
@@ -471,6 +472,7 @@ mod tests {
                     mirrors: Vec::new(),
                     patches: Vec::new(),
                     fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                    retention: None,
                     freshness: None,
                 },
             ],
@@ -489,6 +491,7 @@ mod tests {
                     },
                 },
             ],
+            retention: crate::InputRetentionPolicy::Untracked,
         }
     }
 

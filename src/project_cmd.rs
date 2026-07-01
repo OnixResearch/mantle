@@ -4,10 +4,13 @@
 //! for the real logic. This module owns argument parsing, file I/O,
 //! and output formatting — nothing else.
 
+use std::io::ErrorKind;
 use std::path::Path;
+use std::path::PathBuf;
 
 use crunch_project::Lockfile;
 use crunch_project::ProjectManifest;
+use crunch_project::ProjectRetentionState;
 use crunch_project::ProjectSoundnessClass;
 use crunch_project::ProjectSoundnessInput;
 use crunch_project::ProjectSoundnessIssue;
@@ -16,11 +19,21 @@ use crunch_project::ProjectSoundnessReport;
 use crunch_project::ProjectSoundnessSubject;
 use crunch_project::RefreshFailure;
 use crunch_project::RefreshOutcome;
+use crunch_project::RetentionDiagnostic;
+use crunch_project::RetentionDiagnosticKind;
+use crunch_project::RetentionInputState;
+use crunch_project::RetentionInputStatus;
+use crunch_project::RetentionPlan;
+use crunch_project::RetentionPlanRequest;
+use crunch_project::RetentionRootActionKind;
+use crunch_project::RetentionRootFact;
+use crunch_project::RetentionRootRecord;
 use crunch_project::SchemaVersion;
 use crunch_project::apply_outcomes;
 use crunch_project::check_project_soundness;
 use crunch_project::generate_inputs_ncl;
 use crunch_project::list_stale_with_options;
+use crunch_project::plan_retention_roots;
 use crunch_project::project_soundness_parse_error;
 use crunch_project::refresh_inputs_with_options;
 use crunch_project::upgrade_lockfile;
@@ -33,6 +46,10 @@ const MANIFEST_FILE: &str = "mantle-project.ncl";
 const LOCK_FILE: &str = "mantle.lock";
 const INPUTS_DIR: &str = ".mantle";
 const INPUTS_FILE: &str = ".mantle/inputs.ncl";
+const RETENTION_STATE_FILE: &str = ".mantle/retention.json";
+const RETENTION_STATE_TMP_FILE: &str = ".mantle/retention.json.tmp";
+const RETENTION_ROOTS_DIR: &str = ".mantle/retention-roots";
+const ATOMIC_TMP_SUFFIX: &str = "tmp";
 const GITIGNORE_ENTRY: &str = ".mantle/";
 const LEGACY_MANIFEST_FILE: &str = "crunch-project.ncl";
 const LEGACY_LOCK_FILE: &str = "crunch.lock";
@@ -78,6 +95,7 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
     std::fs::create_dir_all(&inputs_dir).map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
     let inputs_ncl = generate_inputs_ncl(lock);
     std::fs::write(&inputs_path, &inputs_ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
+    write_retention_state_records(dir, Vec::new())?;
 
     // Add .mantle/ to .gitignore if not already there
     add_gitignore_entry(dir);
@@ -121,11 +139,19 @@ pub fn cmd_check(dir: &Path, output: ProjectCheckOutput, probes: bool, trust: bo
 
     let inputs_path = dir.join(INPUTS_FILE);
     let generated_inputs = std::fs::read_to_string(&inputs_path).ok();
+    let retention_state = load_retention_shell_state(dir);
+    let retention_plan = plan_retention_roots(RetentionPlanRequest {
+        manifest: manifest.clone(),
+        lock: lock.clone(),
+        existing_roots: retention_state.facts,
+    });
+    let mut supplemental_facts = retention_state.supplemental_facts;
+    supplemental_facts.extend(retention_soundness_facts(&retention_plan));
     let report = check_project_soundness(ProjectSoundnessInput {
         manifest,
         lock,
         generated_inputs,
-        supplemental_facts: Vec::new(),
+        supplemental_facts,
         mode: ProjectSoundnessMode::from_dynamic_requests(probes, trust),
     });
     finish_check_report(report, output)
@@ -180,6 +206,12 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
     reject_conflicting_legacy_project_files(dir)?;
     let manifest = load_manifest(dir)?;
     let lock = load_lockfile(dir)?;
+    let retention_state = load_retention_shell_state(dir);
+    let retention_plan = plan_retention_roots(RetentionPlanRequest {
+        manifest: manifest.clone(),
+        lock: lock.clone(),
+        existing_roots: retention_state.facts,
+    });
 
     println!("Project: {} (schema {})", MANIFEST_FILE, manifest.version);
     println!();
@@ -217,6 +249,7 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
         if !entry.patches.is_empty() {
             println!("  patches: {}", entry.patches.join(", "));
         }
+        println!("  retention: {}", retention_status_text(name, &retention_plan));
         println!();
     }
 
@@ -245,6 +278,7 @@ pub fn cmd_refresh(dir: &Path, selected: &[String], no_network: bool) -> Result<
         }
         write_lockfile(dir, &result.lock)?;
         write_inputs_ncl(dir, &result.lock)?;
+        write_retention_plan(dir, &manifest, &result.lock)?;
         if result.inputs_changed > 0 {
             eprintln!("{} input(s) updated", result.inputs_changed);
         }
@@ -314,8 +348,10 @@ pub fn cmd_upgrade(dir: &Path) -> Result<(), RunError> {
     eprintln!("upgrading lockfile from {} to {}", lock.version, SchemaVersion::CURRENT);
     let upgraded = upgrade_lockfile(lock).map_err(|e| RunError::Internal(format!("upgrade: {e}")))?;
 
+    let manifest = load_manifest(dir)?;
     write_lockfile(dir, &upgraded)?;
     write_inputs_ncl(dir, &upgraded)?;
+    write_retention_plan(dir, &manifest, &upgraded)?;
     eprintln!("upgrade complete");
     Ok(())
 }
@@ -353,8 +389,7 @@ fn load_lockfile(dir: &Path) -> Result<Lockfile, RunError> {
 fn write_lockfile(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
     let path = dir.join(LOCK_FILE);
     let json = lock.clone().to_json().map_err(|e| RunError::Internal(format!("serializing lock: {e}")))?;
-    std::fs::write(&path, &json).map_err(|e| RunError::Internal(format!("writing {LOCK_FILE}: {e}")))?;
-    Ok(())
+    write_file_atomic(&path, json.as_bytes(), LOCK_FILE)
 }
 
 fn write_inputs_ncl(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
@@ -362,8 +397,190 @@ fn write_inputs_ncl(dir: &Path, lock: &Lockfile) -> Result<(), RunError> {
     std::fs::create_dir_all(&inputs_dir).map_err(|e| RunError::Internal(format!("creating {INPUTS_DIR}/: {e}")))?;
     let ncl = generate_inputs_ncl(lock.clone());
     let path = dir.join(INPUTS_FILE);
-    std::fs::write(&path, &ncl).map_err(|e| RunError::Internal(format!("writing {INPUTS_FILE}: {e}")))?;
+    write_file_atomic(&path, ncl.as_bytes(), INPUTS_FILE)
+}
+
+#[derive(Debug)]
+struct RetentionShellState {
+    facts: Vec<RetentionRootFact>,
+    supplemental_facts: Vec<crunch_project::ProjectSoundnessFact>,
+}
+
+fn load_retention_shell_state(dir: &Path) -> RetentionShellState {
+    let mut supplemental_facts = Vec::new();
+    let mut facts = load_retention_facts_from_file(dir, &dir.join(RETENTION_STATE_FILE), true, &mut supplemental_facts);
+    facts.extend(load_retention_facts_from_file(
+        dir,
+        &dir.join(RETENTION_STATE_TMP_FILE),
+        false,
+        &mut supplemental_facts,
+    ));
+    RetentionShellState {
+        facts,
+        supplemental_facts,
+    }
+}
+
+fn load_retention_facts_from_file(
+    dir: &Path,
+    path: &Path,
+    committed: bool,
+    supplemental_facts: &mut Vec<crunch_project::ProjectSoundnessFact>,
+) -> Vec<RetentionRootFact> {
+    if !path.exists() {
+        return Vec::new();
+    }
+    let state = match read_retention_state(path) {
+        Ok(state) => state,
+        Err(message) => {
+            supplemental_facts.push(retention_shell_fact(path, message));
+            return Vec::new();
+        }
+    };
+    retention_state_facts(dir, state, committed)
+}
+
+fn read_retention_state(path: &Path) -> Result<ProjectRetentionState, String> {
+    let text = std::fs::read_to_string(path).map_err(|err| format!("reading {}: {err}", path.display()))?;
+    let state = serde_json::from_str::<ProjectRetentionState>(&text)
+        .map_err(|err| format!("parsing {}: {err}", path.display()))?;
+    let problems = state.validate();
+    if problems.is_empty() {
+        Ok(state)
+    } else {
+        Err(format!("invalid retention state {}: {}", path.display(), problems.join(", ")))
+    }
+}
+
+fn retention_state_facts(dir: &Path, state: ProjectRetentionState, committed: bool) -> Vec<RetentionRootFact> {
+    state
+        .records
+        .into_iter()
+        .map(|mut record| {
+            record.committed = committed && record.committed;
+            let root_exists = retention_root_path(dir, &record).is_file();
+            RetentionRootFact { record, root_exists }
+        })
+        .collect()
+}
+
+fn retention_shell_fact(path: &Path, message: String) -> crunch_project::ProjectSoundnessFact {
+    crunch_project::ProjectSoundnessFact::warning(
+        ProjectSoundnessClass::RetentionRootMismatch,
+        ProjectSoundnessSubject::file(path.display().to_string()),
+        message,
+    )
+}
+
+fn retention_soundness_facts(plan: &RetentionPlan) -> Vec<crunch_project::ProjectSoundnessFact> {
+    plan.diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.kind != RetentionDiagnosticKind::GcEligible)
+        .map(retention_diagnostic_fact)
+        .collect()
+}
+
+fn retention_diagnostic_fact(diagnostic: &RetentionDiagnostic) -> crunch_project::ProjectSoundnessFact {
+    let subject = ProjectSoundnessSubject::input(diagnostic.input_name.clone());
+    match diagnostic.kind {
+        RetentionDiagnosticKind::InvalidPolicy => crunch_project::ProjectSoundnessFact::error(
+            ProjectSoundnessClass::RetentionRootMismatch,
+            subject,
+            diagnostic.message.clone(),
+        ),
+        _ => crunch_project::ProjectSoundnessFact::warning(
+            ProjectSoundnessClass::RetentionRootMismatch,
+            subject,
+            diagnostic.message.clone(),
+        ),
+    }
+}
+
+fn write_retention_plan(dir: &Path, manifest: &ProjectManifest, lock: &Lockfile) -> Result<(), RunError> {
+    let shell_state = load_retention_shell_state(dir);
+    let plan = plan_retention_roots(RetentionPlanRequest {
+        manifest: manifest.clone(),
+        lock: lock.clone(),
+        existing_roots: shell_state.facts,
+    });
+    for action in plan.actions.iter().filter(|action| action.kind == RetentionRootActionKind::CreateRoot) {
+        write_retention_root_marker(dir, &action.record)?;
+    }
+    write_retention_state_records(dir, plan.retained_records.clone())?;
+    remove_retention_roots(dir, &plan)
+}
+
+fn write_retention_state_records(dir: &Path, records: Vec<RetentionRootRecord>) -> Result<(), RunError> {
+    let inputs_dir = dir.join(INPUTS_DIR);
+    std::fs::create_dir_all(&inputs_dir).map_err(|err| RunError::Internal(format!("creating {INPUTS_DIR}/: {err}")))?;
+    let state = ProjectRetentionState {
+        schema: crunch_project::RETENTION_STATE_SCHEMA.into(),
+        records,
+    };
+    let json = serde_json::to_string_pretty(&state)
+        .map_err(|err| RunError::Internal(format!("serializing retention state: {err}")))?;
+    write_file_atomic(&dir.join(RETENTION_STATE_FILE), json.as_bytes(), RETENTION_STATE_FILE)
+}
+
+fn write_retention_root_marker(dir: &Path, record: &RetentionRootRecord) -> Result<(), RunError> {
+    let roots_dir = dir.join(RETENTION_ROOTS_DIR);
+    std::fs::create_dir_all(&roots_dir)
+        .map_err(|err| RunError::Internal(format!("creating {RETENTION_ROOTS_DIR}/: {err}")))?;
+    let json = serde_json::to_string_pretty(record)
+        .map_err(|err| RunError::Internal(format!("serializing retention root marker: {err}")))?;
+    write_file_atomic(&retention_root_path(dir, record), json.as_bytes(), RETENTION_ROOTS_DIR)
+}
+
+fn remove_retention_roots(dir: &Path, plan: &RetentionPlan) -> Result<(), RunError> {
+    for action in plan.actions.iter().filter(|action| action.kind != RetentionRootActionKind::CreateRoot) {
+        let path = retention_root_path(dir, &action.record);
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == ErrorKind::NotFound => {}
+            Err(err) => {
+                return Err(RunError::Internal(format!("removing stale retention root {}: {err}", path.display())));
+            }
+        }
+    }
     Ok(())
+}
+
+fn retention_root_path(dir: &Path, record: &RetentionRootRecord) -> PathBuf {
+    dir.join(RETENTION_ROOTS_DIR).join(format!("{}.json", record.root_id))
+}
+
+fn retention_status_text(input_name: &str, plan: &RetentionPlan) -> String {
+    let Some(status) = plan.statuses.iter().find(|status| status.input_name == input_name) else {
+        return "unpinned (undeclared input)".into();
+    };
+    render_retention_status(status)
+}
+
+fn render_retention_status(status: &RetentionInputStatus) -> String {
+    match status.state {
+        RetentionInputState::Pinned => format!(
+            "pinned (root {}, lock {})",
+            status.root_id.as_deref().unwrap_or("<missing>"),
+            status.lock_digest.as_deref().unwrap_or("<unknown>")
+        ),
+        RetentionInputState::MissingRoot => "missing-root".into(),
+        RetentionInputState::StaleRoot => "stale-root".into(),
+        RetentionInputState::GcEligible => "gc-eligible".into(),
+        RetentionInputState::Unpinned => "unpinned".into(),
+    }
+}
+
+fn write_file_atomic(path: &Path, content: &[u8], label: &str) -> Result<(), RunError> {
+    let tmp_path = atomic_tmp_path(path);
+    std::fs::write(&tmp_path, content)
+        .map_err(|err| RunError::Internal(format!("writing temporary {label}: {err}")))?;
+    std::fs::rename(&tmp_path, path).map_err(|err| RunError::Internal(format!("committing {label}: {err}")))?;
+    Ok(())
+}
+
+fn atomic_tmp_path(path: &Path) -> PathBuf {
+    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("project-file");
+    path.with_file_name(format!("{file_name}.{ATOMIC_TMP_SUFFIX}"))
 }
 
 fn reject_conflicting_legacy_project_files(dir: &Path) -> Result<(), RunError> {

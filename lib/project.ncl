@@ -38,6 +38,23 @@ let InputFetchPolicy = std.contract.from_validator (fun value =>
     'Error { message = "fetch_policy must be one of generation-material, build-fetch-action, imported-source-required" }
 ) in
 
+let InputRetentionPolicy = std.contract.from_validator (fun value =>
+  if std.is_record value then
+    if std.record.has_field "mode" value then
+      let mode = value.mode in
+      if mode == "untracked" || mode == "current" then
+        'Ok
+      else if mode == "recent-generations" then
+        if std.record.has_field "generations" value then 'Ok
+        else 'Error { message = "retention recent-generations policy must have a generations field" }
+      else
+        'Error { message = "retention mode must be untracked, current, or recent-generations" }
+    else
+      'Error { message = "retention policy must have a mode field" }
+  else
+    'Error { message = "retention policy must be a record" }
+) in
+
 let FreshnessProbe = std.contract.from_validator (fun value =>
   if std.is_record value then
     if std.record.has_field "type" value then
@@ -74,6 +91,7 @@ let ManifestInput = {
   mirrors | Array String | default = [],
   patches | Array String | default = [],
   fetch_policy | InputFetchPolicy | default = "generation-material",
+  retention | InputRetentionPolicy | optional,
   freshness | FreshnessProbe | optional,
 } in
 
@@ -106,6 +124,7 @@ let PatchDef = {
     version | String | default = "1.0.0",
     inputs | Array ManifestInput | default = [],
     patches | Array PatchDef | default = [],
+    retention | InputRetentionPolicy | default = { mode = "untracked" },
   },
 
   # Re-export sub-contracts for external use.
@@ -114,6 +133,7 @@ let PatchDef = {
   GitReference = GitReference,
   ManifestInput = ManifestInput,
   InputFetchPolicy = InputFetchPolicy,
+  InputRetentionPolicy = InputRetentionPolicy,
   FreshnessProbe = FreshnessProbe,
   PatchDef = PatchDef,
 }

@@ -831,6 +831,7 @@ mod tests {
                 mirrors: vec!["https://mirror.example.com/pkg.txt".into()],
                 patches: vec!["fix".into()],
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                retention: None,
                 freshness: None,
             }],
             patches: vec![crate::manifest::PatchDef {
@@ -839,6 +840,7 @@ mod tests {
                     path: "patches/fix.patch".into(),
                 },
             }],
+            retention: crate::InputRetentionPolicy::Untracked,
         }
     }
 
@@ -945,6 +947,7 @@ mod tests {
             mirrors: vec![],
             patches: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            retention: None,
             freshness: None,
         });
         let report = report_for(manifest, clean_lock());

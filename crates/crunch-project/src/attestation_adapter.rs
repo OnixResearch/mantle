@@ -51,9 +51,11 @@ mod tests {
                 mirrors: vec![],
                 patches: vec![],
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+                retention: None,
                 freshness: None,
             }],
             patches: vec![],
+            retention: crate::InputRetentionPolicy::Untracked,
         };
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,

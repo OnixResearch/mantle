@@ -321,6 +321,7 @@ fn map_pin_set(pin_set: &ExternalPinSet, blockers: &mut Vec<PinImportBlocker>) -
             version: IMPORT_MANIFEST_VERSION.to_string(),
             inputs: mapped_inputs.manifest_inputs,
             patches: mapped_patches.manifest_patches,
+            retention: crate::InputRetentionPolicy::Untracked,
         },
         lock: Lockfile {
             version: SchemaVersion::CURRENT,
@@ -605,6 +606,7 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
             mirrors: pin.mirrors.clone(),
             patches: pin.patches.clone(),
             fetch_policy,
+            retention: None,
             freshness: None,
         },
         lock_entry: LockEntry {
