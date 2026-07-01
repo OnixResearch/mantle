@@ -52,6 +52,8 @@ const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 const REMOTE_ACTION_SPEC_SCHEMA: &str = "mantle-remote-action-v1";
 const DEFAULT_REMOTE_ACTION_SYSTEM: &str = "x86_64-linux";
 const REMOTE_LOCAL_BUILD_WORKDIR_NAME: &str = "mantle-remote-builds";
+const REMOTE_CLIENT_REQUEST_ID_LABEL: &str = "remote-client-request";
+const REMOTE_CLIENT_SESSION_ID_LABEL: &str = "remote-client-session";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -514,6 +516,17 @@ impl RemoteTransferCapabilities {
             simulate_delta_failure: false,
         }
     }
+
+    fn as_capability_labels(self) -> Vec<String> {
+        let mut labels = Vec::new();
+        if self.delta {
+            labels.push(RemoteTransferMode::Delta.as_str().to_string());
+        }
+        if self.full {
+            labels.push(RemoteTransferMode::Full.as_str().to_string());
+        }
+        labels
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -676,6 +689,61 @@ pub struct RemoteStdioCommand {
     pub program: PathBuf,
     pub args: Vec<String>,
     pub input_frames: Vec<RemoteFrame>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteTicketCredential {
+    pub ticket_id: String,
+    pub secret: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteStdioBuilderCommand {
+    pub endpoint_id: String,
+    pub program: PathBuf,
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteClientBuildOptions {
+    pub store_prefix: String,
+    pub ticket: RemoteTicketCredential,
+    pub builder: RemoteStdioBuilderCommand,
+    pub trusted_output_keys: Vec<String>,
+    pub now_unix_s: u64,
+    pub build_time_limit_secs: u64,
+    pub client_endpoint: Option<String>,
+    pub transfer_capabilities: RemoteTransferCapabilities,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteClientDerivationInput {
+    pub label: String,
+    pub drv_path: StorePath<String>,
+    pub crunch_derivation: crunch_glue::CrunchDerivation,
+    pub nix_derivation: nix_compat::derivation::Derivation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteClientDispatchPlan {
+    pub label: String,
+    pub command: RemoteStdioCommand,
+    pub client: RemoteLoopbackClient,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteClientImportedBuild {
+    pub label: String,
+    pub request_id: String,
+    pub imported: RemoteOutputImportReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteClientBuildReport {
+    pub schema: String,
+    pub builder: String,
+    pub store_prefix: String,
+    pub imported: Vec<RemoteClientImportedBuild>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1824,15 +1892,18 @@ pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdi
     let output = child.wait_with_output().map_err(|err| {
         RunError::Internal(format!("waiting for stdio remote child {}: {err}", command.program.display()))
     })?;
-    validate_stdio_child_output(&RemoteStdioChildOutput {
+    let child_output = RemoteStdioChildOutput {
         stdout: output.stdout,
         stderr: output.stderr,
         status_success: output.status.success(),
-    })
-    .map_err(|failure| {
+    };
+    validate_stdio_child_output(&child_output).map_err(|failure| {
         RunError::Internal(format!(
-            "stdio remote child failed phase={:?} retry={:?}: {}",
-            failure.phase, failure.retry_class, failure.reason
+            "stdio remote child failed phase={:?} retry={:?}: {}; stderr={}",
+            failure.phase,
+            failure.retry_class,
+            failure.reason,
+            bounded_stderr_summary(&child_output.stderr)
         ))
     })
 }
@@ -1859,6 +1930,169 @@ pub fn remote_client_request_frames(client: &RemoteLoopbackClient) -> Vec<Remote
             },
         },
     ]
+}
+
+pub fn parse_remote_ticket_credential(token: &str) -> Result<RemoteTicketCredential, String> {
+    let (ticket_id, secret) = token.split_once(':').ok_or_else(|| "remote-ticket-token-missing-colon".to_string())?;
+    if ticket_id.is_empty() {
+        return Err("remote-ticket-id-empty".to_string());
+    }
+    if secret.is_empty() {
+        return Err("remote-ticket-secret-empty".to_string());
+    }
+    Ok(RemoteTicketCredential {
+        ticket_id: ticket_id.to_string(),
+        secret: secret.to_string(),
+    })
+}
+
+pub fn plan_remote_stdio_client_dispatch(
+    input: RemoteClientDerivationInput,
+    options: &RemoteClientBuildOptions,
+) -> Result<RemoteClientDispatchPlan, String> {
+    validate_remote_client_options(options)?;
+    let request = concrete_remote_derivation_request(&input, options)?;
+    let client = remote_loopback_client_for_request(request, options);
+    let command = RemoteStdioCommand {
+        program: options.builder.program.clone(),
+        args: options.builder.args.clone(),
+        input_frames: remote_client_request_frames(&client),
+    };
+    Ok(RemoteClientDispatchPlan {
+        label: input.label,
+        command,
+        client,
+    })
+}
+
+pub fn concrete_remote_derivation_request(
+    input: &RemoteClientDerivationInput,
+    options: &RemoteClientBuildOptions,
+) -> Result<ConcreteBuildRequest, String> {
+    validate_remote_client_options(options)?;
+    let drv_json = serde_json::to_string(&input.crunch_derivation)
+        .map_err(|err| format!("remote-client-derivation-json-invalid: {err}"))?;
+    let expected_outputs = remote_expected_outputs_from_derivation(&input.nix_derivation, &options.store_prefix)?;
+    let input_refs = remote_input_refs_from_derivation(&input.nix_derivation, &options.store_prefix);
+    Ok(ConcreteBuildRequest {
+        request_id: remote_client_request_id(&input.label, &input.drv_path, &options.store_prefix),
+        store_prefix: options.store_prefix.clone(),
+        input_refs,
+        upload_bytes: 0,
+        build_time_limit_secs: options.build_time_limit_secs,
+        contains_raw_frontend_eval: false,
+        payload: RemoteConcreteBuildPayload::Derivation {
+            drv_path: input.drv_path.to_absolute_path_with_prefix(&options.store_prefix),
+            drv_json,
+        },
+        expected_outputs,
+    })
+}
+
+pub fn remote_expected_outputs_from_derivation(
+    derivation: &nix_compat::derivation::Derivation,
+    store_prefix: &str,
+) -> Result<Vec<RemoteExpectedOutput>, String> {
+    if !store_prefix.starts_with('/') {
+        return Err("remote-client-store-prefix-not-absolute".to_string());
+    }
+    if derivation.outputs.is_empty() {
+        return Err("remote-client-outputs-empty".to_string());
+    }
+    if derivation.outputs.len() > MAX_REMOTE_EXPECTED_OUTPUTS {
+        return Err(format!("remote-client-output-count-exceeds-{MAX_REMOTE_EXPECTED_OUTPUTS}"));
+    }
+    let mut outputs = Vec::with_capacity(derivation.outputs.len());
+    for (name, output) in &derivation.outputs {
+        let Some(path) = &output.path else {
+            return Err("remote-client-output-path-missing".to_string());
+        };
+        outputs.push(RemoteExpectedOutput {
+            name: name.clone(),
+            logical_path: path.to_absolute_path_with_prefix(store_prefix),
+        });
+    }
+    Ok(outputs)
+}
+
+pub fn remote_input_refs_from_derivation(
+    derivation: &nix_compat::derivation::Derivation,
+    store_prefix: &str,
+) -> Vec<String> {
+    let mut refs =
+        Vec::with_capacity(derivation.input_derivations.len().saturating_add(derivation.input_sources.len()));
+    refs.extend(derivation.input_derivations.keys().map(|path| path.to_absolute_path_with_prefix(store_prefix)));
+    refs.extend(derivation.input_sources.iter().map(|path| path.to_absolute_path_with_prefix(store_prefix)));
+    refs.sort();
+    refs.dedup();
+    refs
+}
+
+fn validate_remote_client_options(options: &RemoteClientBuildOptions) -> Result<(), String> {
+    if options.store_prefix.is_empty() || !options.store_prefix.starts_with('/') {
+        return Err("remote-client-store-prefix-not-absolute".to_string());
+    }
+    if options.builder.endpoint_id.is_empty() {
+        return Err("remote-client-builder-endpoint-empty".to_string());
+    }
+    if options.builder.program.as_os_str().is_empty() {
+        return Err("remote-client-builder-program-empty".to_string());
+    }
+    if options.trusted_output_keys.is_empty() {
+        return Err("remote-client-trusted-output-keys-empty".to_string());
+    }
+    if options.build_time_limit_secs == 0 || options.build_time_limit_secs > MAX_REMOTE_BUILD_TIME_SECS {
+        return Err("remote-client-build-time-limit-invalid".to_string());
+    }
+    Ok(())
+}
+
+fn remote_loopback_client_for_request(
+    request: ConcreteBuildRequest,
+    options: &RemoteClientBuildOptions,
+) -> RemoteLoopbackClient {
+    let input_manifest = RemoteInputManifest {
+        request_id: request.request_id.clone(),
+        store_prefix: request.store_prefix.clone(),
+        input_refs: request.input_refs.clone(),
+        closure_refs: request.input_refs.clone(),
+    };
+    let session_id = remote_client_session_id(&request.request_id);
+    RemoteLoopbackClient {
+        session_id,
+        hello: RemoteHello {
+            alpn: REMOTE_PROTOCOL_ALPN.to_string(),
+            version: REMOTE_PROTOCOL_VERSION,
+            endpoint_id: options.builder.endpoint_id.clone(),
+            capabilities: options.transfer_capabilities.as_capability_labels(),
+        },
+        auth: TicketAuthRequest {
+            ticket_id: options.ticket.ticket_id.clone(),
+            secret: options.ticket.secret.clone(),
+            client_endpoint: options.client_endpoint.clone(),
+            now_unix_s: options.now_unix_s,
+        },
+        uploaded_input_refs: request.input_refs.clone(),
+        request,
+        input_manifest,
+        trusted_output_keys: options.trusted_output_keys.clone(),
+        transfer_capabilities: options.transfer_capabilities,
+    }
+}
+
+fn remote_client_request_id(label: &str, drv_path: &StorePath<String>, store_prefix: &str) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "kind", REMOTE_CLIENT_REQUEST_ID_LABEL);
+    hash_labeled_str(&mut hasher, "label", label);
+    hash_labeled_str(&mut hasher, "drv-path", &drv_path.to_absolute_path_with_prefix(store_prefix));
+    hasher.finalize().to_hex().to_string()
+}
+
+fn remote_client_session_id(request_id: &str) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "kind", REMOTE_CLIENT_SESSION_ID_LABEL);
+    hash_labeled_str(&mut hasher, "request-id", request_id);
+    hasher.finalize().to_hex().to_string()
 }
 
 pub fn plan_remote_builder_frames(
@@ -3176,6 +3410,7 @@ mod tests {
     use super::*;
 
     const CUSTOM_REMOTE_OUTPUT_BYTES: u64 = 777;
+    const REMOTE_CLIENT_DISPATCH_FRAME_COUNT: usize = 5;
     const ED25519_SIGNATURE_BYTES: usize = 64;
     const SHA256_DIGEST_BYTES: usize = 32;
     const BUILDER_SIGNATURE_FILL_BYTE: u8 = 3;
@@ -3392,6 +3627,48 @@ mod tests {
             .expect_err("wrong path does not satisfy derivation expectation");
 
         assert_eq!(err, "remote-local-executor-output-path-mismatch");
+    }
+
+    #[test]
+    fn remote_ticket_credential_parses_bearer_token() {
+        let credential = parse_remote_ticket_credential("ticket-1:secret-1").expect("ticket parses");
+
+        assert_eq!(credential.ticket_id, "ticket-1");
+        assert_eq!(credential.secret, "secret-1");
+    }
+
+    #[test]
+    fn remote_ticket_credential_rejects_missing_secret() {
+        let err = parse_remote_ticket_credential("ticket-1:").expect_err("empty secret rejected");
+
+        assert_eq!(err, "remote-ticket-secret-empty");
+    }
+
+    #[test]
+    fn remote_stdio_client_dispatch_plans_derivation_payload_frames() {
+        let input = fixture_remote_client_derivation_input();
+        let options = fixture_remote_client_options();
+        let plan = plan_remote_stdio_client_dispatch(input, &options).expect("client dispatch plans");
+
+        assert_eq!(plan.label, "root");
+        assert_eq!(plan.command.program, PathBuf::from("/bin/mantle-remote"));
+        assert_eq!(plan.command.args, vec!["serve".to_string()]);
+        assert_eq!(plan.command.input_frames.len(), REMOTE_CLIENT_DISPATCH_FRAME_COUNT);
+        assert_eq!(plan.client.hello.endpoint_id, "builder-1");
+        assert_eq!(plan.client.trusted_output_keys, vec!["builder-key".to_string()]);
+        assert!(matches!(plan.client.request.payload, RemoteConcreteBuildPayload::Derivation { .. }));
+        assert!(plan.client.request.input_refs.is_empty());
+        assert_eq!(plan.client.input_manifest.request_id, plan.client.request.request_id);
+    }
+
+    #[test]
+    fn remote_stdio_client_dispatch_rejects_missing_trusted_keys() {
+        let input = fixture_remote_client_derivation_input();
+        let mut options = fixture_remote_client_options();
+        options.trusted_output_keys.clear();
+        let err = plan_remote_stdio_client_dispatch(input, &options).expect_err("trusted keys required");
+
+        assert_eq!(err, "remote-client-trusted-output-keys-empty");
     }
 
     #[test]
@@ -4403,10 +4680,7 @@ mod tests {
     }
 
     fn fixture_derivation_request() -> ConcreteBuildRequest {
-        let drv_json = fixture_derivation_json();
-        let drv: crunch_glue::CrunchDerivation = serde_json::from_str(&drv_json).expect("fixture drv parses");
-        let mut known_paths = crunch_glue::ConversionCache::new("/mantle/store");
-        let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut known_paths).expect("fixture drv converts");
+        let (drv_json, drv_path, nix_drv) = fixture_derivation_parts();
         let out_path = nix_drv.outputs["out"]
             .path
             .as_ref()
@@ -4423,6 +4697,47 @@ mod tests {
             }],
             ..fixture_request()
         }
+    }
+
+    fn fixture_remote_client_derivation_input() -> RemoteClientDerivationInput {
+        let drv_json = fixture_derivation_json();
+        let drv: crunch_glue::CrunchDerivation = serde_json::from_str(&drv_json).expect("fixture drv parses");
+        let mut known_paths = crunch_glue::ConversionCache::new("/mantle/store");
+        let (drv_path, nix_derivation) = crunch_glue::convert(&drv, &mut known_paths).expect("fixture drv converts");
+        RemoteClientDerivationInput {
+            label: "root".to_string(),
+            drv_path,
+            crunch_derivation: drv,
+            nix_derivation,
+        }
+    }
+
+    fn fixture_remote_client_options() -> RemoteClientBuildOptions {
+        RemoteClientBuildOptions {
+            store_prefix: "/mantle/store".to_string(),
+            ticket: RemoteTicketCredential {
+                ticket_id: "ticket-1".to_string(),
+                secret: "secret-1".to_string(),
+            },
+            builder: RemoteStdioBuilderCommand {
+                endpoint_id: "builder-1".to_string(),
+                program: PathBuf::from("/bin/mantle-remote"),
+                args: vec!["serve".to_string()],
+            },
+            trusted_output_keys: vec!["builder-key".to_string()],
+            now_unix_s: 2,
+            build_time_limit_secs: DEFAULT_TICKET_BUILD_TIME_SECS,
+            client_endpoint: None,
+            transfer_capabilities: RemoteTransferCapabilities::delta_and_full(),
+        }
+    }
+
+    fn fixture_derivation_parts() -> (String, StorePath<String>, nix_compat::derivation::Derivation) {
+        let drv_json = fixture_derivation_json();
+        let drv: crunch_glue::CrunchDerivation = serde_json::from_str(&drv_json).expect("fixture drv parses");
+        let mut known_paths = crunch_glue::ConversionCache::new("/mantle/store");
+        let (drv_path, nix_drv) = crunch_glue::convert(&drv, &mut known_paths).expect("fixture drv converts");
+        (drv_json, drv_path, nix_drv)
     }
 
     fn fixture_derivation_drv_path(request: &ConcreteBuildRequest) -> String {

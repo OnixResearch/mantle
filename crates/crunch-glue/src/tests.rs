@@ -20,6 +20,33 @@ fn minimal_drv(name: &str, builder: &str) -> CrunchDerivation {
 }
 
 #[test]
+fn derivation_payload_json_roundtrips_for_remote_dispatch() {
+    let dep = minimal_drv("dep", "/bin/sh");
+    let drv = CrunchDerivation {
+        inputs: vec![
+            Input::Source("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source".to_string()),
+            Input::Derivation(Box::new(dep)),
+        ],
+        fixed_output: Some(FixedOutput {
+            hash: "sha256-CIE8vumQPGK+TFAnJqQYowoNpFALLTadOvkob0gVzro=".to_string(),
+            algo: "sha256".to_string(),
+            mode: "flat".to_string(),
+        }),
+        ..minimal_drv("remote", "/bin/sh")
+    };
+    let json = serde_json::to_string(&drv).expect("remote payload serializes");
+    let roundtrip: CrunchDerivation = serde_json::from_str(&json).expect("remote payload parses");
+    let mut original_cache = ConversionCache::default();
+    let mut roundtrip_cache = ConversionCache::default();
+    let (original_drv_path, original_nix_drv) = convert(&drv, &mut original_cache).expect("original converts");
+    let (roundtrip_drv_path, roundtrip_nix_drv) =
+        convert(&roundtrip, &mut roundtrip_cache).expect("roundtrip converts");
+
+    assert_eq!(original_drv_path, roundtrip_drv_path);
+    assert_eq!(original_nix_drv, roundtrip_nix_drv);
+}
+
+#[test]
 fn convert_minimal() {
     let drv = minimal_drv("hello", "/bin/sh");
     let mut kp = ConversionCache::default();

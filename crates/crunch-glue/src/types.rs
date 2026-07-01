@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use crunch_attestation::Claims;
 use serde::Deserialize;
 use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use serde::de;
 use serde::de::MapAccess;
 use serde::de::Visitor;
@@ -25,7 +27,7 @@ fn deserialize_nickel_string<'de, D: serde::Deserializer<'de>>(d: D) -> Result<S
 /// This struct is the serde target for Nickel's `Derivation` contract.
 /// After deserialization, use `convert()` to turn it into a
 /// `nix_compat::Derivation` with computed store paths.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CrunchDerivation {
     pub name: String,
     pub builder: String,
@@ -252,19 +254,30 @@ impl<'de> Deserialize<'de> for Input {
     }
 }
 
+impl Serialize for Input {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        match self {
+            Self::Source(path) => serializer.serialize_str(path),
+            Self::OutputSelection(output_ref) => output_ref.serialize(serializer),
+            Self::Derivation(derivation) => derivation.serialize(serializer),
+        }
+    }
+}
+
 /// Reference to a specific output of a derivation.
 ///
 /// Used in the `inputs` array as `{ drv = some_pkg, output = "dev" }`.
 /// The `drv` field is the full derivation record; `output` is the single
 /// output name to depend on.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OutputRef {
     pub drv: CrunchDerivation,
     pub output: String,
 }
 
 /// Fixed-output derivation parameters.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FixedOutput {
     /// Hash in SRI format ("sha256-...") or hex.
     pub hash: String,

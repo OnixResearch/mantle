@@ -64,11 +64,14 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 const EXPECTED_RUN_OUTCOME_COUNT: usize = 1;
 const CHILD_NO_EXIT_CODE_STATUS: i32 = 1;
 const DEFAULT_SUBSTITUTER_COUNT: u32 = 1;
 const EMPTY_TRUSTED_PUBLIC_KEY_COUNT: usize = 0;
+const REMOTE_CLIENT_BUILD_REPORT_SCHEMA: &str = "mantle-remote-client-build-v1";
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
@@ -191,6 +194,30 @@ enum Command {
         /// Permit ambient host dependencies; outputs are not proof-eligible.
         #[arg(long, conflicts_with = "strict_hermetic")]
         impure: bool,
+
+        /// Remote builder endpoint id for stdio remote-build dispatch.
+        #[arg(long)]
+        builder: Option<String>,
+
+        /// Bearer ticket as <ticket-id>:<secret> for remote-build dispatch.
+        #[arg(long)]
+        ticket: Option<String>,
+
+        /// Program to spawn for stdio remote-build dispatch. Defaults to this mantle binary.
+        #[arg(long)]
+        builder_program: Option<PathBuf>,
+
+        /// Argument passed to --builder-program; repeat to pass multiple arguments.
+        #[arg(long = "builder-arg")]
+        builder_args: Vec<String>,
+
+        /// Trusted remote builder signing key name; repeat for multiple keys.
+        #[arg(long = "trusted-builder-key")]
+        trusted_builder_keys: Vec<String>,
+
+        /// Remote request build-time limit in seconds.
+        #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_BUILD_TIME_SECS)]
+        remote_build_time_secs: u64,
     },
 
     /// Run no-mutate operator preflight checks for a workflow profile
@@ -1922,16 +1949,24 @@ fn runtime_fingerprint_mode_fields(args: &Args) -> RuntimeFingerprintModeFields 
             trust_unsigned,
             strict_hermetic,
             impure,
+            builder,
+            ticket,
             ..
-        } => apply_build_mode_fields(
-            &mut modes,
-            selected_hermeticity_mode_label(*strict_hermetic, *impure),
-            *no_substitute,
-            Some(substituters),
-            signing_key.is_some(),
-            trusted_public_keys.len(),
-            *trust_unsigned,
-        ),
+        } => {
+            apply_build_mode_fields(
+                &mut modes,
+                selected_hermeticity_mode_label(*strict_hermetic, *impure),
+                *no_substitute,
+                Some(substituters),
+                signing_key.is_some(),
+                trusted_public_keys.len(),
+                *trust_unsigned,
+            );
+            if builder.is_some() || ticket.is_some() {
+                modes.bearer_ticket_count =
+                    Some(operator_diagnostics::bounded_runtime_count(usize::from(ticket.is_some())));
+            }
+        }
         Command::SelfBuild {
             no_substitute,
             signing_key,
@@ -2489,6 +2524,12 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             trust_unsigned,
             strict_hermetic,
             impure,
+            builder,
+            ticket,
+            builder_program,
+            builder_args,
+            trusted_builder_keys,
+            remote_build_time_secs,
         } => run_build_command(
             ctx,
             file.as_ref(),
@@ -2504,6 +2545,12 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             *trust_unsigned,
             *strict_hermetic,
             *impure,
+            builder.as_deref(),
+            ticket.as_deref(),
+            builder_program.as_deref(),
+            builder_args,
+            trusted_builder_keys,
+            *remote_build_time_secs,
         ),
         _ => unreachable!("build helper called with non-build command"),
     }
@@ -2534,11 +2581,32 @@ fn run_build_command(
     trust_unsigned: bool,
     strict_hermetic: bool,
     impure: bool,
+    remote_builder: Option<&str>,
+    remote_ticket: Option<&str>,
+    remote_builder_program: Option<&Path>,
+    remote_builder_args: &[String],
+    trusted_builder_keys: &[String],
+    remote_build_time_secs: u64,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
     let substituter_url = (!no_substitute).then_some(substituters);
     let hermeticity_mode = select_hermeticity_mode(strict_hermetic, impure)?;
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
+    let remote_selection = remote_build_selection(
+        remote_builder,
+        remote_ticket,
+        remote_builder_program,
+        remote_builder_args,
+        trusted_builder_keys,
+        remote_build_time_secs,
+        ctx,
+    )?;
+    if remote_selection.is_some() && fix {
+        return Err(RunError::Internal("remote build dispatch does not support --fix yet".to_string()));
+    }
+    if remote_selection.is_some() && plan {
+        return Err(RunError::Internal("remote build dispatch does not support --plan yet".to_string()));
+    }
     let target = project_build::parse_build_target(file.map(PathBuf::as_path));
     match target {
         project_build::BuildTarget::File(path) => {
@@ -2551,6 +2619,17 @@ fn run_build_command(
                 &ctx.store_prefix,
                 ctx.output_mode(),
             )?;
+            if let Some(remote_selection) = &remote_selection {
+                return run_remote_build_file_command(
+                    remote_selection,
+                    &path,
+                    &import_paths,
+                    &ctx.store,
+                    &ctx.resolved_state_dir,
+                    &ctx.store_prefix,
+                    ctx.output_mode(),
+                );
+            }
             if plan {
                 return build_plan::cmd_build_plan(build_plan::BuildPlanConfig {
                     file: &path,
@@ -2596,6 +2675,17 @@ fn run_build_command(
                 &ctx.store_prefix,
                 ctx.output_mode(),
             )?;
+            if let Some(remote_selection) = &remote_selection {
+                return run_remote_build_expr_command(
+                    remote_selection,
+                    &expr,
+                    &full_import_paths,
+                    &ctx.store,
+                    &ctx.resolved_state_dir,
+                    &ctx.store_prefix,
+                    ctx.output_mode(),
+                );
+            }
             if plan {
                 return build_plan_from_expr(
                     &expr,
@@ -2628,6 +2718,258 @@ fn run_build_command(
             )
         }
     }
+}
+
+struct RemoteBuildSelection {
+    options: remote_build::RemoteClientBuildOptions,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn remote_build_selection(
+    builder: Option<&str>,
+    ticket: Option<&str>,
+    builder_program: Option<&Path>,
+    builder_args: &[String],
+    trusted_builder_keys: &[String],
+    build_time_limit_secs: u64,
+    ctx: &RunContext,
+) -> Result<Option<RemoteBuildSelection>, RunError> {
+    if builder.is_none() && ticket.is_none() && builder_program.is_none() && builder_args.is_empty() {
+        return Ok(None);
+    }
+    let builder = builder.ok_or_else(|| RunError::Internal("remote build dispatch requires --builder".to_string()))?;
+    let ticket = ticket.ok_or_else(|| RunError::Internal("remote build dispatch requires --ticket".to_string()))?;
+    let ticket = remote_build::parse_remote_ticket_credential(ticket).map_err(RunError::Internal)?;
+    let (program, args) = remote_stdio_builder_command(builder, builder_program, builder_args, ctx)?;
+    let trusted_output_keys = remote_trusted_builder_keys(trusted_builder_keys, builder_program, ctx)?;
+    let options = remote_build::RemoteClientBuildOptions {
+        store_prefix: ctx.store_prefix.clone(),
+        ticket,
+        builder: remote_build::RemoteStdioBuilderCommand {
+            endpoint_id: builder.to_string(),
+            program,
+            args,
+        },
+        trusted_output_keys,
+        now_unix_s: unix_time_now_s()?,
+        build_time_limit_secs,
+        client_endpoint: None,
+        transfer_capabilities: remote_build::RemoteTransferCapabilities::delta_and_full(),
+    };
+    Ok(Some(RemoteBuildSelection { options }))
+}
+
+fn remote_stdio_builder_command(
+    builder: &str,
+    builder_program: Option<&Path>,
+    builder_args: &[String],
+    ctx: &RunContext,
+) -> Result<(PathBuf, Vec<String>), RunError> {
+    if let Some(program) = builder_program {
+        return Ok((program.to_path_buf(), builder_args.to_vec()));
+    }
+    if !builder_args.is_empty() {
+        return Err(RunError::Internal(
+            "--builder-arg requires --builder-program; default local builder args are generated automatically"
+                .to_string(),
+        ));
+    }
+    let program =
+        std::env::current_exe().map_err(|err| RunError::Internal(format!("resolving current executable: {err}")))?;
+    let args = vec![
+        "--state-dir".to_string(),
+        ctx.resolved_state_dir.display().to_string(),
+        "--store".to_string(),
+        ctx.store.display().to_string(),
+        "--store-prefix".to_string(),
+        ctx.store_prefix.clone(),
+        "remote".to_string(),
+        "serve".to_string(),
+        "--endpoint-id".to_string(),
+        builder.to_string(),
+        "--binding".to_string(),
+        "stdio-once".to_string(),
+        "--executor".to_string(),
+        "local-build".to_string(),
+    ];
+    Ok((program, args))
+}
+
+fn remote_trusted_builder_keys(
+    trusted_builder_keys: &[String],
+    builder_program: Option<&Path>,
+    ctx: &RunContext,
+) -> Result<Vec<String>, RunError> {
+    if !trusted_builder_keys.is_empty() {
+        return Ok(trusted_builder_keys.to_vec());
+    }
+    if builder_program.is_some() {
+        return Err(RunError::Internal(
+            "remote build dispatch with --builder-program requires --trusted-builder-key".to_string(),
+        ));
+    }
+    let keypair = build_cmd::load_or_generate_signing_keypair(None, &ctx.resolved_state_dir, false)?;
+    Ok(vec![keypair.verifying_key.name().to_string()])
+}
+
+fn unix_time_now_s() -> Result<u64, RunError> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| RunError::Internal(format!("system clock before unix epoch: {err}")))?;
+    Ok(duration.as_secs())
+}
+
+fn run_remote_build_file_command(
+    selection: &RemoteBuildSelection,
+    file: &Path,
+    import_paths: &[OsString],
+    output_dir: &Path,
+    state_dir: &Path,
+    store_prefix: &str,
+    output_mode: BuildOutputMode,
+) -> Result<(), RunError> {
+    let inputs = evaluate_remote_client_derivation_inputs(file, import_paths, store_prefix)?;
+    let report = run_remote_build_dispatches(selection, inputs, output_dir, state_dir, store_prefix)?;
+    print_remote_client_build_report(&report, output_mode)
+}
+
+fn run_remote_build_expr_command(
+    selection: &RemoteBuildSelection,
+    expr: &str,
+    import_paths: &[OsString],
+    output_dir: &Path,
+    state_dir: &Path,
+    store_prefix: &str,
+    output_mode: BuildOutputMode,
+) -> Result<(), RunError> {
+    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
+        .map_err(|err| RunError::Internal(format!("creating temp file: {err}")))?;
+    std::fs::write(tmp.path(), expr).map_err(|err| RunError::Internal(format!("writing temp file: {err}")))?;
+    run_remote_build_file_command(selection, tmp.path(), import_paths, output_dir, state_dir, store_prefix, output_mode)
+}
+
+fn evaluate_remote_client_derivation_inputs(
+    file: &Path,
+    import_paths: &[OsString],
+    store_prefix: &str,
+) -> Result<Vec<remote_build::RemoteClientDerivationInput>, RunError> {
+    let mut session = crunch_eval::session::EvaluationSession::open_file(file, import_paths)
+        .map_err(|err| RunError::Eval(format!("{err}")))?;
+    let derivations = session
+        .force_all_roots::<crunch_glue::CrunchDerivation>()
+        .map_err(|err| RunError::Eval(format!("{err}")))?;
+    let mut cache = crunch_glue::ConversionCache::new(store_prefix);
+    let mut inputs = Vec::with_capacity(derivations.len());
+    for (label, crunch_derivation) in derivations {
+        let (drv_path, nix_derivation) = crunch_glue::convert(&crunch_derivation, &mut cache)
+            .map_err(|err| RunError::Build(format!("{label}: {err}")))?;
+        inputs.push(remote_build::RemoteClientDerivationInput {
+            label,
+            drv_path,
+            crunch_derivation,
+            nix_derivation,
+        });
+    }
+    Ok(inputs)
+}
+
+fn run_remote_build_dispatches(
+    selection: &RemoteBuildSelection,
+    inputs: Vec<remote_build::RemoteClientDerivationInput>,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<remote_build::RemoteClientBuildReport, RunError> {
+    let rt = tokio::runtime::Runtime::new().map_err(|err| RunError::Internal(format!("tokio runtime: {err}")))?;
+    rt.block_on(run_remote_build_dispatches_async(selection, inputs, output_dir, state_dir, store_prefix))
+}
+
+async fn run_remote_build_dispatches_async(
+    selection: &RemoteBuildSelection,
+    inputs: Vec<remote_build::RemoteClientDerivationInput>,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<remote_build::RemoteClientBuildReport, RunError> {
+    let mut imported = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let plan =
+            remote_build::plan_remote_stdio_client_dispatch(input, &selection.options).map_err(RunError::Internal)?;
+        if !plan.client.request.input_refs.is_empty() {
+            return Err(RunError::Internal(
+                "remote build input upload is not implemented yet for derivations with input refs".to_string(),
+            ));
+        }
+        let transcript = remote_build::run_stdio_remote_child(&plan.command)?;
+        let admission = remote_build::validate_remote_builder_frames_output_import(
+            &plan.client.request,
+            &plan.client.trusted_output_keys,
+            &transcript.frames,
+        )
+        .map_err(|err| RunError::Internal(format!("remote output import admission failed: {err}")))?;
+        let import_report =
+            import_remote_client_admission(output_dir, state_dir, store_prefix, &plan.client.request, &admission)
+                .await?;
+        imported.push(remote_build::RemoteClientImportedBuild {
+            label: plan.label,
+            request_id: plan.client.request.request_id,
+            imported: import_report,
+        });
+    }
+    Ok(remote_build::RemoteClientBuildReport {
+        schema: REMOTE_CLIENT_BUILD_REPORT_SCHEMA.to_string(),
+        builder: selection.options.builder.endpoint_id.clone(),
+        store_prefix: store_prefix.to_string(),
+        imported,
+    })
+}
+
+async fn import_remote_client_admission(
+    output_dir: &Path,
+    state_dir: &Path,
+    store_prefix: &str,
+    request: &remote_build::ConcreteBuildRequest,
+    admission: &remote_build::RemoteOutputAdmissionReport,
+) -> Result<remote_build::RemoteOutputImportReport, RunError> {
+    let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        state_dir: state_dir.to_path_buf(),
+        output_dir: output_dir.to_path_buf(),
+        remote_cache_url: None,
+        fallback_mode: crunch_store::StoreFallbackMode::Practical,
+        store_dir: store_prefix.to_string(),
+    })
+    .await
+    .map_err(|err| RunError::Internal(format!("opening local store for remote output import: {err}")))?;
+    remote_build::import_admitted_remote_outputs(
+        &mut store,
+        request,
+        admission,
+        true,
+        Some(crunch_store::GcRootSource::Build),
+    )
+    .await
+    .map_err(|err| RunError::Internal(format!("remote output import failed: {err}")))
+}
+
+fn print_remote_client_build_report(
+    report: &remote_build::RemoteClientBuildReport,
+    output_mode: BuildOutputMode,
+) -> Result<(), RunError> {
+    match output_mode {
+        BuildOutputMode::Json => {
+            let rendered = serde_json::to_string_pretty(report)
+                .map_err(|err| RunError::Internal(format!("serializing remote build report: {err}")))?;
+            println!("{rendered}");
+        }
+        BuildOutputMode::Human => {
+            for build in &report.imported {
+                for output in &build.imported.outputs {
+                    println!("{}", output.logical_path);
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn run_offline_source_preflight_if_requested(
@@ -4162,6 +4504,42 @@ mod tests {
         let args = Args::parse_from(["mantle", "build", ".#app"]);
         assert!(matches!(args.command, Command::Build { .. }));
         assert!(!matches!(args.command, Command::RustPlan { .. }));
+    }
+
+    #[test]
+    fn build_cli_accepts_remote_builder_ticket_dispatch_flags() {
+        let args = Args::parse_from([
+            "mantle",
+            "build",
+            "demo.ncl",
+            "--builder",
+            "builder-1",
+            "--ticket",
+            "ticket-1:secret-1",
+            "--builder-program",
+            "/bin/remote-builder",
+            "--builder-arg",
+            "serve",
+            "--trusted-builder-key",
+            "builder-key",
+        ]);
+        let Command::Build {
+            builder,
+            ticket,
+            builder_program,
+            builder_args,
+            trusted_builder_keys,
+            ..
+        } = args.command
+        else {
+            panic!("expected build command");
+        };
+
+        assert_eq!(builder.as_deref(), Some("builder-1"));
+        assert_eq!(ticket.as_deref(), Some("ticket-1:secret-1"));
+        assert_eq!(builder_program.as_deref(), Some(Path::new("/bin/remote-builder")));
+        assert_eq!(builder_args, vec!["serve".to_string()]);
+        assert_eq!(trusted_builder_keys, vec!["builder-key".to_string()]);
     }
 
     #[test]
