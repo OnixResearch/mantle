@@ -28,6 +28,7 @@ pub const MAX_SOURCE_RECORD_METADATA_BYTES: usize = 16_384;
 pub const MAX_DERIVED_SOURCE_WALK_NODES: usize = 65_536;
 
 const BLAKE3_HEX_BYTES: usize = 64;
+const GIT_OBJECT_ID_HEX_BYTES: usize = 40;
 const SYMLINK_PAYLOAD_BYTES: u64 = 0;
 #[cfg(unix)]
 const UNIX_EXECUTABLE_FILE_MODE: u32 = 0o755;
@@ -46,6 +47,13 @@ const FETCH_ENV_URL_KEY: &str = "url";
 const FETCH_ENV_TYPE_GIT: &str = "git";
 const DOT_GIT_DIR_NAME: &str = ".git";
 const FILE_URL_SCHEME: &str = "file";
+const GIT_DIR_POINTER_PREFIX: &str = "gitdir:";
+const GIT_HEAD_REF: &str = "HEAD";
+const GIT_PACKED_REFS_FILE: &str = "packed-refs";
+const GIT_REF_PREFIX: &str = "ref: ";
+const GIT_REFS_PREFIX: &str = "refs/";
+const PACKED_REF_COMMENT_PREFIX: char = '#';
+const PACKED_REF_PEELED_PREFIX: char = '^';
 const RECORD_CONTENT_FILES_MARKER: &[u8] = b"files\0";
 const RECORD_CONTENT_KIND_MARKER: &[u8] = b"kind\0";
 const RECORD_CONTENT_METADATA_MARKER: &[u8] = b"metadata\0";
@@ -1289,7 +1297,133 @@ fn materialize_file_url_record(record: &SourceRecord, skip_git_dir: bool) -> Res
             record.identity
         ))
     })?;
+    if record.kind == SourceRecordKind::VcsSnapshot {
+        verify_local_vcs_snapshot_revision(record, &payload_path)?;
+    }
     materialize_source_record_from_path(record, &payload_path, skip_git_dir)
+}
+
+fn verify_local_vcs_snapshot_revision(record: &SourceRecord, checkout_path: &Path) -> Result<(), RunError> {
+    let requested_rev = record.metadata.get(FETCH_ENV_REV_KEY).ok_or_else(|| {
+        RunError::Internal(format!("VCS source record {} is missing revision metadata", record.identity))
+    })?;
+    let git_dir = local_checkout_git_dir(checkout_path)?;
+    let head_revision = resolve_git_revision(&git_dir, GIT_HEAD_REF)?;
+    let requested_revision = resolve_git_revision(&git_dir, requested_rev)?;
+    if head_revision != requested_revision {
+        return Err(RunError::Internal(format!(
+            "VCS source record {} checkout revision mismatch: {head_revision} != {requested_revision}",
+            record.identity
+        )));
+    }
+    Ok(())
+}
+
+fn local_checkout_git_dir(checkout_path: &Path) -> Result<PathBuf, RunError> {
+    let dot_git = checkout_path.join(DOT_GIT_DIR_NAME);
+    let metadata = fs::symlink_metadata(&dot_git)
+        .map_err(|err| RunError::Internal(format!("reading local VCS metadata {}: {err}", dot_git.display())))?;
+    if metadata.is_dir() {
+        return Ok(dot_git);
+    }
+    if metadata.is_file() {
+        let pointer = fs::read_to_string(&dot_git).map_err(|err| {
+            RunError::Internal(format!("reading local VCS gitdir pointer {}: {err}", dot_git.display()))
+        })?;
+        let target = pointer.trim().strip_prefix(GIT_DIR_POINTER_PREFIX).ok_or_else(|| {
+            RunError::Internal(format!("local VCS metadata {} is not a gitdir pointer", dot_git.display()))
+        })?;
+        if target.is_empty() || target.contains('\0') {
+            return Err(RunError::Internal(format!("unsafe local VCS gitdir pointer in {}", dot_git.display())));
+        }
+        let target_path = PathBuf::from(target.trim());
+        if target_path.is_absolute() {
+            return Ok(target_path);
+        }
+        return Ok(checkout_path.join(target_path));
+    }
+    Err(RunError::Internal(format!("local VCS metadata {} is not a file or dir", dot_git.display())))
+}
+
+fn resolve_git_revision(git_dir: &Path, rev: &str) -> Result<String, RunError> {
+    validate_git_revision_text(rev)?;
+    if is_git_object_id(rev) {
+        return Ok(rev.to_string());
+    }
+    let ref_text = read_git_ref_text(git_dir, rev)?;
+    if let Some(target_ref) = ref_text.strip_prefix(GIT_REF_PREFIX) {
+        return resolve_git_revision(git_dir, target_ref.trim());
+    }
+    if is_git_object_id(ref_text.as_str()) {
+        return Ok(ref_text);
+    }
+    Err(RunError::Internal(format!("local VCS ref {rev} does not resolve to an object id")))
+}
+
+fn read_git_ref_text(git_dir: &Path, rev: &str) -> Result<String, RunError> {
+    let ref_path = git_dir.join(rev);
+    match fs::read_to_string(&ref_path) {
+        Ok(text) => return Ok(text.trim().to_string()),
+        Err(err) if err.kind() == ErrorKind::NotFound => {}
+        Err(err) => {
+            return Err(RunError::Internal(format!("reading local VCS ref {}: {err}", ref_path.display())));
+        }
+    }
+    read_git_packed_ref(git_dir, rev)
+}
+
+fn read_git_packed_ref(git_dir: &Path, rev: &str) -> Result<String, RunError> {
+    let packed_refs_path = git_dir.join(GIT_PACKED_REFS_FILE);
+    let text = fs::read_to_string(&packed_refs_path).map_err(|err| {
+        RunError::Internal(format!("reading local VCS packed refs {} for {rev}: {err}", packed_refs_path.display()))
+    })?;
+    for line in text.lines() {
+        if git_packed_ref_line_matches(line, rev) {
+            let object_id = line
+                .split_whitespace()
+                .next()
+                .ok_or_else(|| RunError::Internal(format!("local VCS packed ref {rev} is malformed")))?;
+            validate_git_object_id(object_id)?;
+            return Ok(object_id.to_string());
+        }
+    }
+    Err(RunError::Internal(format!("local VCS ref {rev} was not found")))
+}
+
+fn git_packed_ref_line_matches(line: &str, rev: &str) -> bool {
+    if line.is_empty() {
+        return false;
+    }
+    if line.starts_with(PACKED_REF_COMMENT_PREFIX) {
+        return false;
+    }
+    if line.starts_with(PACKED_REF_PEELED_PREFIX) {
+        return false;
+    }
+    line.split_whitespace().nth(1) == Some(rev)
+}
+
+fn validate_git_revision_text(rev: &str) -> Result<(), RunError> {
+    if rev.is_empty() || rev.contains('\0') || rev.contains("..") || rev.contains('\\') || rev.starts_with('/') {
+        return Err(RunError::Internal(format!("unsafe local VCS revision '{rev}'")));
+    }
+    if rev == GIT_HEAD_REF || rev.starts_with(GIT_REFS_PREFIX) || is_git_object_id(rev) {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!("local VCS revision '{rev}' must be an object id or refs/* name")))
+}
+
+fn is_git_object_id(value: &str) -> bool {
+    value.len() == GIT_OBJECT_ID_HEX_BYTES && HEXLOWER.decode(value.as_bytes()).is_ok()
+}
+
+fn validate_git_object_id(value: &str) -> Result<(), RunError> {
+    if is_git_object_id(value) {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "local VCS object id must be {GIT_OBJECT_ID_HEX_BYTES} lowercase hex bytes"
+    )))
 }
 
 pub(crate) fn materialize_source_record_from_path(
@@ -2202,8 +2336,9 @@ mod tests {
     fn source_bundle_export_materializes_local_vcs_snapshot_without_dot_git() {
         let temp = tempfile::tempdir().unwrap();
         let checkout = temp.path().join("checkout");
+        let revision = "0123456789abcdef0123456789abcdef01234567";
         fs::create_dir_all(checkout.join("src")).unwrap();
-        fs::create_dir_all(checkout.join(DOT_GIT_DIR_NAME)).unwrap();
+        write_git_checkout_revision(&checkout, "refs/heads/main", revision);
         fs::write(checkout.join("src/main.txt"), b"hello").unwrap();
         fs::write(checkout.join(DOT_GIT_DIR_NAME).join("config"), b"secret").unwrap();
         let mut git = fixed_fetcher("repo-src", &file_url(&checkout));
@@ -2218,6 +2353,34 @@ mod tests {
         let paths = exported.records[0].files.iter().map(|file| file.path.as_str()).collect::<Vec<_>>();
         assert_eq!(paths, vec!["src/main.txt"]);
         assert_eq!(exported.records[0].metadata.get(FETCH_ENV_REV_KEY).map(String::as_str), Some("refs/heads/main"));
+    }
+
+    #[test]
+    fn source_bundle_export_rejects_local_vcs_revision_mismatch() {
+        let temp = tempfile::tempdir().unwrap();
+        let checkout = temp.path().join("checkout");
+        let head_revision = "0123456789abcdef0123456789abcdef01234567";
+        let requested_revision = "89abcdef0123456789abcdef0123456789abcdef";
+        fs::create_dir_all(checkout.join("src")).unwrap();
+        write_git_checkout_revision(&checkout, "refs/heads/main", head_revision);
+        fs::write(checkout.join("src/main.txt"), b"hello").unwrap();
+        let mut git = fixed_fetcher("repo-src", &file_url(&checkout));
+        git.env.insert(FETCH_ENV_TYPE_KEY.to_string(), FETCH_ENV_TYPE_GIT.to_string());
+        git.env.insert(FETCH_ENV_REV_KEY.to_string(), requested_revision.to_string());
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(git))]);
+
+        let err =
+            export_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap_err();
+
+        assert!(err.to_string().contains("checkout revision mismatch"));
+    }
+
+    fn write_git_checkout_revision(checkout: &Path, ref_name: &str, revision: &str) {
+        let git_dir = checkout.join(DOT_GIT_DIR_NAME);
+        let ref_path = git_dir.join(ref_name);
+        fs::create_dir_all(ref_path.parent().unwrap()).unwrap();
+        fs::write(git_dir.join(GIT_HEAD_REF), format!("{GIT_REF_PREFIX}{ref_name}\n")).unwrap();
+        fs::write(ref_path, format!("{revision}\n")).unwrap();
     }
 
     #[test]
