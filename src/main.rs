@@ -3031,10 +3031,11 @@ async fn run_remote_build_dispatches_async(
     for input in inputs {
         let mut plan =
             remote_build::plan_remote_stdio_client_dispatch(input, &selection.options).map_err(RunError::Internal)?;
-        remote_build::populate_remote_input_upload_artifacts_from_store(
+        remote_build::populate_remote_input_upload_artifacts_from_store_or_source_state(
             &store,
             &mut plan.command,
             &plan.client.request,
+            state_dir,
         )
         .await
         .map_err(|err| RunError::Internal(format!("remote input upload preparation failed: {err}")))?;

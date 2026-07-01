@@ -1661,6 +1661,25 @@ pub async fn populate_remote_input_upload_artifacts_from_store(
     request: &ConcreteBuildRequest,
 ) -> Result<(), String> {
     let artifacts = plan_remote_input_upload_artifacts_from_store(store, request).await?;
+    attach_remote_input_upload_artifacts(command, request, artifacts)
+}
+
+pub async fn populate_remote_input_upload_artifacts_from_store_or_source_state(
+    store: &crunch_store::StoreHandle,
+    command: &mut RemoteStdioCommand,
+    request: &ConcreteBuildRequest,
+    source_state_dir: &Path,
+) -> Result<(), String> {
+    let artifacts =
+        plan_remote_input_upload_artifacts_from_store_or_source_state(store, request, source_state_dir).await?;
+    attach_remote_input_upload_artifacts(command, request, artifacts)
+}
+
+fn attach_remote_input_upload_artifacts(
+    command: &mut RemoteStdioCommand,
+    request: &ConcreteBuildRequest,
+    artifacts: Vec<RemoteInputUploadArtifact>,
+) -> Result<(), String> {
     for frame in &mut command.input_frames {
         if let RemoteFrame::InputUpload { upload } = frame {
             upload.artifacts = artifacts;
@@ -1681,11 +1700,26 @@ pub async fn plan_remote_input_upload_artifacts_from_store(
     store: &crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
 ) -> Result<Vec<RemoteInputUploadArtifact>, String> {
+    plan_remote_input_upload_artifacts(store, request, None).await
+}
+
+pub async fn plan_remote_input_upload_artifacts_from_store_or_source_state(
+    store: &crunch_store::StoreHandle,
+    request: &ConcreteBuildRequest,
+    source_state_dir: &Path,
+) -> Result<Vec<RemoteInputUploadArtifact>, String> {
+    plan_remote_input_upload_artifacts(store, request, Some(source_state_dir)).await
+}
+
+async fn plan_remote_input_upload_artifacts(
+    store: &crunch_store::StoreHandle,
+    request: &ConcreteBuildRequest,
+    source_state_dir: Option<&Path>,
+) -> Result<Vec<RemoteInputUploadArtifact>, String> {
     validate_source_input_refs(request)?;
     let mut artifacts = Vec::with_capacity(request.source_input_refs.len());
     for input_ref in &request.source_input_refs {
-        let host_path = remote_input_ref_host_path(store, &request.store_prefix, input_ref)?;
-        let payload = render_remote_input_nar_payload(store, &host_path).await?;
+        let payload = render_remote_input_nar_payload_for_ref(store, request, input_ref, source_state_dir).await?;
         let size_bytes = remote_payload_size_bytes(payload.len())?;
         artifacts.push(RemoteInputUploadArtifact {
             request_id: request.request_id.clone(),
@@ -1727,6 +1761,45 @@ fn remote_input_ref_host_path(
         return Ok(store_host_path);
     }
     Err("remote-input-source-path-missing".to_string())
+}
+
+async fn render_remote_input_nar_payload_for_ref(
+    store: &crunch_store::StoreHandle,
+    request: &ConcreteBuildRequest,
+    input_ref: &str,
+    source_state_dir: Option<&Path>,
+) -> Result<Vec<u8>, String> {
+    match remote_input_ref_host_path(store, &request.store_prefix, input_ref) {
+        Ok(host_path) => render_remote_input_nar_payload(store, &host_path).await,
+        Err(err) if err == "remote-input-source-path-missing" => {
+            render_remote_input_nar_payload_from_source_state(store, request, input_ref, source_state_dir).await
+        }
+        Err(err) => Err(err),
+    }
+}
+
+async fn render_remote_input_nar_payload_from_source_state(
+    store: &crunch_store::StoreHandle,
+    request: &ConcreteBuildRequest,
+    input_ref: &str,
+    source_state_dir: Option<&Path>,
+) -> Result<Vec<u8>, String> {
+    let source_state_dir = source_state_dir.ok_or_else(|| "remote-input-source-path-missing".to_string())?;
+    let scratch = tempfile::Builder::new()
+        .prefix("mantle-remote-source-input-")
+        .tempdir()
+        .map_err(|err| format!("remote-input-source-state-scratch-failed: {err}"))?;
+    let materialized = crate::source_bundle::materialize_imported_source_record_for_store_path(
+        source_state_dir,
+        &request.store_prefix,
+        input_ref,
+        scratch.path(),
+    )
+    .map_err(|err| format!("remote-input-source-state-materialize-failed: {err}"))?;
+    if !materialized {
+        return Err("remote-input-source-path-missing".to_string());
+    }
+    render_remote_input_nar_payload(store, scratch.path()).await
 }
 
 async fn render_remote_input_nar_payload(
@@ -5565,6 +5638,86 @@ mod tests {
         assert_eq!(upload.artifacts[0].artifact_kind, RemoteInputUploadArtifactKind::Nar);
         assert_eq!(upload.artifacts[0].input_ref, source_ref);
         assert_eq!(std::fs::read(remote_source_path).unwrap(), b"remote-source-bytes");
+    }
+
+    #[tokio::test]
+    async fn source_input_upload_reuses_imported_source_state_when_store_path_is_absent() {
+        let client_temp = tempfile::tempdir().unwrap();
+        let remote_temp = tempfile::tempdir().unwrap();
+        let state_temp = tempfile::tempdir().unwrap();
+        let payload_temp = tempfile::tempdir().unwrap();
+        let client_store = remote_import_store(client_temp.path()).await;
+        let remote_store = remote_import_store(remote_temp.path()).await;
+        let source_store_path = importable_store_path();
+        let source_ref = source_store_path.to_absolute_path_with_prefix("/mantle/store");
+        let payload_root = payload_temp.path().join("payload");
+        std::fs::create_dir_all(payload_root.join("bin")).unwrap();
+        std::fs::write(payload_root.join("bin/tool"), b"source-state-tool").unwrap();
+        let record = source_state_toolchain_record(&source_ref);
+        let materialized_record =
+            crate::source_bundle::materialize_source_record_from_path(&record, &payload_root, true)
+                .expect("source-state record is materialized");
+        write_imported_source_state_record(state_temp.path(), &materialized_record);
+        let mut client = fixture_loopback_client(vec![source_ref.clone()], vec!["builder-key".to_string()]);
+        client.request.input_refs = vec![source_ref.clone()];
+        client.request.source_input_refs = vec![source_ref.clone()];
+        client.input_manifest.input_refs = vec![source_ref.clone()];
+        client.input_manifest.closure_refs = vec![source_ref.clone()];
+        let mut command = RemoteStdioCommand {
+            program: PathBuf::from("unused"),
+            args: Vec::new(),
+            input_frames: remote_client_request_frames(&client),
+        };
+
+        populate_remote_input_upload_artifacts_from_store_or_source_state(
+            &client_store,
+            &mut command,
+            &client.request,
+            state_temp.path(),
+        )
+        .await
+        .expect("source-state source input artifact is attached");
+        let upload = command
+            .input_frames
+            .iter()
+            .find_map(|frame| match frame {
+                RemoteFrame::InputUpload { upload } => Some(upload.clone()),
+                _ => None,
+            })
+            .expect("input upload frame present");
+        materialize_remote_input_upload(&remote_store, &client.request, &upload)
+            .await
+            .expect("source-state source input artifact materializes");
+        let remote_source_path = source_store_path.to_absolute_path_with_prefix(remote_store.output_dir_str());
+
+        assert_eq!(upload.artifacts.len(), 1);
+        assert_eq!(upload.artifacts[0].artifact_kind, RemoteInputUploadArtifactKind::Nar);
+        assert_eq!(upload.artifacts[0].input_ref, source_ref);
+        assert_eq!(std::fs::read(Path::new(&remote_source_path).join("bin/tool")).unwrap(), b"source-state-tool");
+    }
+
+    fn source_state_toolchain_record(source_ref: &str) -> crate::source_bundle::SourceRecord {
+        let mut metadata = BTreeMap::new();
+        metadata.insert("source_kind".to_string(), "pre-existing-store-path".to_string());
+        metadata.insert("store_path".to_string(), source_ref.to_string());
+        crate::source_bundle::SourceRecord {
+            kind: crate::source_bundle::SourceRecordKind::ToolchainSourceRoot,
+            identity: "store-path-imported-toolchain".to_string(),
+            store_prefix: Some("/mantle/store".to_string()),
+            adapter: None,
+            metadata,
+            payload_bytes: 0,
+            content_blake3: String::new(),
+            files: Vec::new(),
+        }
+    }
+
+    fn write_imported_source_state_record(state_dir: &Path, record: &crate::source_bundle::SourceRecord) {
+        let records_dir = state_dir.join("source-bundles").join("records");
+        std::fs::create_dir_all(&records_dir).unwrap();
+        let record_path = records_dir.join(format!("{}.json", record.content_blake3));
+        let record_json = serde_json::to_vec_pretty(record).unwrap();
+        std::fs::write(record_path, record_json).unwrap();
     }
 
     #[tokio::test]

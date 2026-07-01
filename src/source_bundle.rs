@@ -29,6 +29,10 @@ pub const MAX_DERIVED_SOURCE_WALK_NODES: usize = 65_536;
 
 const BLAKE3_HEX_BYTES: usize = 64;
 const SYMLINK_PAYLOAD_BYTES: u64 = 0;
+#[cfg(unix)]
+const UNIX_EXECUTABLE_FILE_MODE: u32 = 0o755;
+#[cfg(unix)]
+const UNIX_REGULAR_FILE_MODE: u32 = 0o644;
 
 const BUILTIN_FETCHURL_BUILDER: &str = "builtin:fetchurl";
 const DERIVED_FIXED_URL_ID_PREFIX: &str = "fixed-url";
@@ -840,8 +844,31 @@ fn validate_source_record_files(record: &SourceRecord) -> Result<(), RunError> {
             RunError::Internal(format!("source record {} payload byte count overflow", record.identity))
         })?;
     }
+    validate_no_symlink_descendants(record)?;
     if total_bytes != record.payload_bytes {
         return Err(RunError::Internal(format!("source record {} payload byte count mismatch", record.identity)));
+    }
+    Ok(())
+}
+
+fn validate_no_symlink_descendants(record: &SourceRecord) -> Result<(), RunError> {
+    let symlink_paths = record
+        .files
+        .iter()
+        .filter(|file| matches!(file.file_type, SourceFileType::Symlink))
+        .map(|file| file.path.as_str())
+        .collect::<BTreeSet<_>>();
+    for file in &record.files {
+        let mut ancestor = file.path.as_str();
+        while let Some((parent, _name)) = ancestor.rsplit_once('/') {
+            if symlink_paths.contains(parent) {
+                return Err(RunError::Internal(format!(
+                    "source record {} has file {} below symlink {}",
+                    record.identity, file.path, parent
+                )));
+            }
+            ancestor = parent;
+        }
     }
     Ok(())
 }
@@ -866,13 +893,7 @@ fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
     if file.symlink_target.is_some() {
         return Err(RunError::Internal(format!("regular source file {} carries a symlink target", file.path)));
     }
-    let content_hex = file
-        .content_hex
-        .as_ref()
-        .ok_or_else(|| RunError::Internal(format!("regular source file {} is missing payload bytes", file.path)))?;
-    let content = HEXLOWER.decode(content_hex.as_bytes()).map_err(|err| {
-        RunError::Internal(format!("regular source file {} has invalid lowercase hex payload: {err}", file.path))
-    })?;
+    let content = decode_regular_file_content(file)?;
     let content_len = u64::try_from(content.len())
         .map_err(|_| RunError::Internal(format!("regular source file {} length does not fit in u64", file.path)))?;
     if content_len != file.size {
@@ -883,6 +904,16 @@ fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
         return Err(RunError::Internal(format!("regular source file {} digest mismatch", file.path)));
     }
     Ok(())
+}
+
+fn decode_regular_file_content(file: &SourceFileEntry) -> Result<Vec<u8>, RunError> {
+    let content_hex = file
+        .content_hex
+        .as_ref()
+        .ok_or_else(|| RunError::Internal(format!("regular source file {} is missing payload bytes", file.path)))?;
+    HEXLOWER.decode(content_hex.as_bytes()).map_err(|err| {
+        RunError::Internal(format!("regular source file {} has invalid lowercase hex payload: {err}", file.path))
+    })
 }
 
 fn validate_symlink_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
@@ -1258,7 +1289,15 @@ fn materialize_file_url_record(record: &SourceRecord, skip_git_dir: bool) -> Res
             record.identity
         ))
     })?;
-    let (files, payload_bytes) = canonicalize_payload_entries(&payload_path, skip_git_dir)?;
+    materialize_source_record_from_path(record, &payload_path, skip_git_dir)
+}
+
+pub(crate) fn materialize_source_record_from_path(
+    record: &SourceRecord,
+    payload_path: &Path,
+    skip_git_dir: bool,
+) -> Result<SourceRecord, RunError> {
+    let (files, payload_bytes) = canonicalize_payload_entries(payload_path, skip_git_dir)?;
     let content_blake3 = digest_source_record_content(&record.kind, &record.metadata, &files)?;
     Ok(SourceRecord {
         payload_bytes,
@@ -1266,6 +1305,105 @@ fn materialize_file_url_record(record: &SourceRecord, skip_git_dir: bool) -> Res
         files,
         ..record.clone()
     })
+}
+
+pub(crate) fn materialize_imported_source_record_for_store_path(
+    state_dir: &Path,
+    store_prefix: &str,
+    logical_store_path: &str,
+    target: &Path,
+) -> Result<bool, RunError> {
+    let imported_records = read_imported_source_records(state_dir)?;
+    for record in &imported_records {
+        if imported_record_matches_store_path(record, store_prefix, logical_store_path) {
+            materialize_source_record_payload(record, target)?;
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn imported_record_matches_store_path(record: &SourceRecord, store_prefix: &str, logical_store_path: &str) -> bool {
+    if record.files.is_empty() {
+        return false;
+    }
+    if record.store_prefix.as_deref() != Some(store_prefix) {
+        return false;
+    }
+    record.metadata.get(RECORD_METADATA_STORE_PATH_KEY).map(String::as_str) == Some(logical_store_path)
+}
+
+fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
+    validate_source_record(record)?;
+    if record.files.is_empty() {
+        return Err(RunError::Internal(format!("source record {} has no materialized payload", record.identity)));
+    }
+    fs::create_dir_all(target)
+        .map_err(|err| RunError::Internal(format!("creating materialized source root {}: {err}", target.display())))?;
+    for file in &record.files {
+        materialize_source_file_entry(file, target)?;
+    }
+    Ok(())
+}
+
+fn materialize_source_file_entry(file: &SourceFileEntry, target: &Path) -> Result<(), RunError> {
+    validate_source_file_entry(file)?;
+    let output_path = target.join(&file.path);
+    if !output_path.starts_with(target) {
+        return Err(RunError::Internal(format!("source file {} escapes materialization root", file.path)));
+    }
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| RunError::Internal(format!("creating source payload dir {}: {err}", parent.display())))?;
+    }
+    match file.file_type {
+        SourceFileType::Regular => materialize_regular_file_entry(file, &output_path),
+        SourceFileType::Symlink => materialize_symlink_file_entry(file, &output_path),
+    }
+}
+
+fn materialize_regular_file_entry(file: &SourceFileEntry, output_path: &Path) -> Result<(), RunError> {
+    let content = decode_regular_file_content(file)?;
+    fs::write(output_path, content)
+        .map_err(|err| RunError::Internal(format!("writing source payload file {}: {err}", output_path.display())))?;
+    set_materialized_file_permissions(output_path, file.executable)
+}
+
+#[cfg(unix)]
+fn set_materialized_file_permissions(output_path: &Path, executable: bool) -> Result<(), RunError> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = if executable {
+        UNIX_EXECUTABLE_FILE_MODE
+    } else {
+        UNIX_REGULAR_FILE_MODE
+    };
+    let permissions = fs::Permissions::from_mode(mode);
+    fs::set_permissions(output_path, permissions)
+        .map_err(|err| RunError::Internal(format!("setting source payload file mode {}: {err}", output_path.display())))
+}
+
+#[cfg(not(unix))]
+fn set_materialized_file_permissions(_output_path: &Path, _executable: bool) -> Result<(), RunError> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn materialize_symlink_file_entry(file: &SourceFileEntry, output_path: &Path) -> Result<(), RunError> {
+    use std::os::unix::fs::symlink;
+    let target = file
+        .symlink_target
+        .as_ref()
+        .ok_or_else(|| RunError::Internal(format!("symlink source file {} is missing target", file.path)))?;
+    symlink(target, output_path)
+        .map_err(|err| RunError::Internal(format!("creating source payload symlink {}: {err}", output_path.display())))
+}
+
+#[cfg(not(unix))]
+fn materialize_symlink_file_entry(file: &SourceFileEntry, _output_path: &Path) -> Result<(), RunError> {
+    Err(RunError::Internal(format!(
+        "symlink source file {} cannot be materialized on this platform",
+        file.path
+    )))
 }
 
 fn local_file_url_path(raw_url: &str) -> Option<PathBuf> {
@@ -2251,5 +2389,44 @@ mod tests {
         };
         let err = plan_source_bundle(&[spec], "/mantle/store").unwrap_err();
         assert!(err.to_string().contains("unsafe source symlink"));
+    }
+
+    #[test]
+    fn source_bundle_rejects_file_below_symlink_record() {
+        let content = b"payload";
+        let regular = SourceFileEntry {
+            path: "link/payload.txt".to_string(),
+            file_type: SourceFileType::Regular,
+            executable: false,
+            size: u64::try_from(content.len()).unwrap(),
+            content_hex: Some(HEXLOWER.encode(content)),
+            symlink_target: None,
+            blake3: blake3::hash(content).to_hex().to_string(),
+        };
+        let symlink = SourceFileEntry {
+            path: "link".to_string(),
+            file_type: SourceFileType::Symlink,
+            executable: false,
+            size: SYMLINK_PAYLOAD_BYTES,
+            content_hex: None,
+            symlink_target: Some("safe-target".to_string()),
+            blake3: blake3::hash(b"symlink\0link\0safe-target").to_hex().to_string(),
+        };
+        let files = vec![symlink, regular];
+        let content_blake3 =
+            digest_source_record_content(&SourceRecordKind::LocalPath, &BTreeMap::new(), &files).unwrap();
+        let record = SourceRecord {
+            kind: SourceRecordKind::LocalPath,
+            identity: "symlink-descendant".to_string(),
+            store_prefix: None,
+            adapter: None,
+            metadata: BTreeMap::new(),
+            payload_bytes: u64::try_from(content.len()).unwrap(),
+            content_blake3,
+            files,
+        };
+
+        let err = validate_source_record(&record).unwrap_err();
+        assert!(err.to_string().contains("below symlink"));
     }
 }
