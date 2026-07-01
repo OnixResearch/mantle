@@ -41,6 +41,7 @@ pub use archive::plan_archive_import_action;
 pub use attestation::ArtifactProvenance;
 pub use attestation::StoredArtifactAttestation;
 pub use attestation::StoredClosureAttestation;
+pub use attestation::artifact_attestation_digest_for_pathinfo;
 pub use attestation::artifact_attestation_file_path;
 pub use attestation::closure_attestation_file_path;
 pub use attestation::persist_artifact_attestation;

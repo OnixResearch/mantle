@@ -639,6 +639,14 @@ impl StoreHandle {
         self.output_substitution_reports.remove(output_path)
     }
 
+    pub fn record_verified_output_substitution_report(
+        &mut self,
+        output_path: &StorePath<String>,
+        report: OutputSubstitutionReport,
+    ) {
+        self.record_output_substitution_report(output_path, report);
+    }
+
     fn record_output_substitution_report(&mut self, output_path: &StorePath<String>, report: OutputSubstitutionReport) {
         let previous = self.output_substitution_reports.insert(output_path.clone(), report);
         debug_assert!(previous.is_none(), "substitution report should only be recorded once per output path");

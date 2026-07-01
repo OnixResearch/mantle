@@ -8,8 +8,10 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
+use nix_compat::store_path::StorePath;
 use serde::Deserialize;
 use serde::Serialize;
+use snix_store::path_info::PathInfo;
 
 use crate::errors::RunError;
 
@@ -182,6 +184,8 @@ pub struct RemoteProducedOutput {
     pub size_bytes: u64,
     pub path_info_signing_key_id: String,
     pub artifact_attestation_digest_blake3: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_info: Option<PathInfo>,
 }
 
 pub trait RemoteBuildExecutor {
@@ -554,6 +558,34 @@ pub struct RemoteOutputAdmissionReport {
     pub builder_signing_key_id: String,
     pub store_prefix: String,
     pub outputs: Vec<RemoteProducedOutput>,
+    pub transfer: RemoteTransferReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteOutputImportAction {
+    pub output_name: String,
+    pub logical_path: String,
+    pub store_path: StorePath<String>,
+    pub path_info: PathInfo,
+    pub final_node: snix_castore::Node,
+    pub path_info_signing_key_id: String,
+    pub artifact_attestation_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteImportedOutput {
+    pub name: String,
+    pub logical_path: String,
+    pub path_info_signing_key_id: String,
+    pub artifact_attestation_digest_blake3: String,
+    pub artifact_attestation_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteOutputImportReport {
+    pub request_id: String,
+    pub store_prefix: String,
+    pub outputs: Vec<RemoteImportedOutput>,
     pub transfer: RemoteTransferReport,
 }
 
@@ -1105,6 +1137,7 @@ fn sign_remote_execution_outputs(outputs: &[RemoteExecutionOutput], signing_key_
             size_bytes: output.size_bytes,
             path_info_signing_key_id: signing_key_id.to_string(),
             artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
+            path_info: None,
         })
         .collect()
 }
@@ -1680,6 +1713,41 @@ pub fn validate_remote_builder_frames_output_import(
     validate_remote_output_admission(request, trusted_output_keys, result, transfer)
 }
 
+pub fn plan_remote_output_import_actions(
+    request: &ConcreteBuildRequest,
+    admission: &RemoteOutputAdmissionReport,
+) -> Result<Vec<RemoteOutputImportAction>, String> {
+    validate_admission_report_for_import(request, admission)?;
+    let mut actions = Vec::with_capacity(admission.outputs.len());
+    for output in &admission.outputs {
+        actions.push(plan_remote_output_import_action(request, output)?);
+    }
+    Ok(actions)
+}
+
+pub async fn import_admitted_remote_outputs(
+    store: &mut crunch_store::StoreHandle,
+    request: &ConcreteBuildRequest,
+    admission: &RemoteOutputAdmissionReport,
+    is_root: bool,
+    root_source: Option<crunch_store::GcRootSource>,
+) -> Result<RemoteOutputImportReport, String> {
+    let actions = plan_remote_output_import_actions(request, admission)?;
+    let store_report = remote_transfer_to_store_report(&admission.transfer);
+    let mut imported = Vec::with_capacity(actions.len());
+    for action in actions {
+        let stored = persist_remote_output_action(store, &action, is_root, root_source).await?;
+        store.record_verified_output_substitution_report(&action.store_path, store_report.clone());
+        imported.push(imported_remote_output_report(store, &action, &stored));
+    }
+    Ok(RemoteOutputImportReport {
+        request_id: admission.request_id.clone(),
+        store_prefix: admission.store_prefix.clone(),
+        outputs: imported,
+        transfer: admission.transfer.clone(),
+    })
+}
+
 pub fn classify_remote_failure(phase: RemoteFailurePhase, reason: String) -> RemoteFailureClassification {
     let retry_class = match phase {
         RemoteFailurePhase::TransportSetup => RemoteRetryClass::Retryable,
@@ -1702,6 +1770,133 @@ fn remote_failure(
         phase,
         retry_class,
         reason,
+    }
+}
+
+fn validate_admission_report_for_import(
+    request: &ConcreteBuildRequest,
+    admission: &RemoteOutputAdmissionReport,
+) -> Result<(), String> {
+    let result = RemoteBuildFinished {
+        request_id: admission.request_id.clone(),
+        output_digest_blake3: admission.output_digest_blake3.clone(),
+        builder_signing_key_id: admission.builder_signing_key_id.clone(),
+        store_prefix: admission.store_prefix.clone(),
+        outputs: admission.outputs.clone(),
+    };
+    let trusted = vec![admission.builder_signing_key_id.clone()];
+    validate_remote_output_admission(request, &trusted, &result, &admission.transfer).map(|_| ())
+}
+
+fn plan_remote_output_import_action(
+    request: &ConcreteBuildRequest,
+    output: &RemoteProducedOutput,
+) -> Result<RemoteOutputImportAction, String> {
+    let path_info = output.path_info.clone().ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
+    let store_path = parse_remote_output_store_path(&output.logical_path, &request.store_prefix)?;
+    validate_remote_output_pathinfo(output, &path_info, &store_path, &request.store_prefix)?;
+    Ok(RemoteOutputImportAction {
+        output_name: output.name.clone(),
+        logical_path: output.logical_path.clone(),
+        store_path,
+        final_node: path_info.node.clone(),
+        path_info,
+        path_info_signing_key_id: output.path_info_signing_key_id.clone(),
+        artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
+    })
+}
+
+fn parse_remote_output_store_path(logical_path: &str, store_prefix: &str) -> Result<StorePath<String>, String> {
+    StorePath::from_absolute_path_with_prefix(logical_path.as_bytes(), store_prefix)
+        .map_err(|_| "remote-output-store-path-invalid".to_string())
+}
+
+fn validate_remote_output_pathinfo(
+    output: &RemoteProducedOutput,
+    path_info: &PathInfo,
+    store_path: &StorePath<String>,
+    store_prefix: &str,
+) -> Result<(), String> {
+    if path_info.store_path != *store_path {
+        return Err("remote-output-pathinfo-store-path-mismatch".to_string());
+    }
+    if path_info.signatures.is_empty() {
+        return Err("remote-output-pathinfo-unsigned".to_string());
+    }
+    if !pathinfo_has_signature_name(path_info, &output.path_info_signing_key_id) {
+        return Err("remote-output-pathinfo-signing-key-mismatch".to_string());
+    }
+    validate_remote_output_attestation_digest(output, path_info, store_prefix)
+}
+
+fn validate_remote_output_attestation_digest(
+    output: &RemoteProducedOutput,
+    path_info: &PathInfo,
+    store_prefix: &str,
+) -> Result<(), String> {
+    let digest = crunch_store::artifact_attestation_digest_for_pathinfo(store_prefix, path_info, &output.name, None)
+        .map_err(|err| format!("remote-output-artifact-attestation-digest-failed: {err}"))?
+        .to_hex();
+    if digest != output.artifact_attestation_digest_blake3 {
+        return Err("remote-output-artifact-attestation-digest-mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn pathinfo_has_signature_name(path_info: &PathInfo, signing_key_id: &str) -> bool {
+    path_info.signatures.iter().any(|signature| signature.name().as_str() == signing_key_id)
+}
+
+fn remote_transfer_to_store_report(transfer: &RemoteTransferReport) -> crunch_store::OutputSubstitutionReport {
+    crunch_store::OutputSubstitutionReport {
+        mode: remote_transfer_mode_to_store_mode(transfer.mode),
+        transferred_bytes: transfer.transferred_bytes,
+        reused_bytes: transfer.reused_bytes,
+        fallback_reason: transfer.fallback_reason.clone(),
+    }
+}
+
+fn remote_transfer_mode_to_store_mode(mode: RemoteTransferMode) -> crunch_store::OutputSubstitutionMode {
+    match mode {
+        RemoteTransferMode::Delta => crunch_store::OutputSubstitutionMode::Delta,
+        RemoteTransferMode::Full => crunch_store::OutputSubstitutionMode::Full,
+    }
+}
+
+async fn persist_remote_output_action(
+    store: &mut crunch_store::StoreHandle,
+    action: &RemoteOutputImportAction,
+    is_root: bool,
+    root_source: Option<crunch_store::GcRootSource>,
+) -> Result<PathInfo, String> {
+    store
+        .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
+            output_name: &action.output_name,
+            output_path: &action.store_path,
+            path_info: action.path_info.clone(),
+            final_node: action.final_node.clone(),
+            provenance: None,
+            is_root,
+            root_source,
+        })
+        .await
+        .map_err(|err| format!("remote-output-persist-failed: {err}"))
+}
+
+fn imported_remote_output_report(
+    store: &crunch_store::StoreHandle,
+    action: &RemoteOutputImportAction,
+    stored: &PathInfo,
+) -> RemoteImportedOutput {
+    debug_assert_eq!(stored.store_path, action.store_path, "persisted remote output path must match action");
+    let artifact_path =
+        crunch_store::artifact_attestation_file_path(store.state_dir(), store.store_dir(), &action.store_path);
+    RemoteImportedOutput {
+        name: action.output_name.clone(),
+        logical_path: action.logical_path.clone(),
+        path_info_signing_key_id: action.path_info_signing_key_id.clone(),
+        artifact_attestation_digest_blake3: action.artifact_attestation_digest_blake3.clone(),
+        artifact_attestation_path: artifact_path.display().to_string(),
     }
 }
 
@@ -2399,6 +2594,12 @@ mod tests {
     use super::*;
 
     const CUSTOM_REMOTE_OUTPUT_BYTES: u64 = 777;
+    const ED25519_SIGNATURE_BYTES: usize = 64;
+    const SHA256_DIGEST_BYTES: usize = 32;
+    const BUILDER_SIGNATURE_FILL_BYTE: u8 = 3;
+    const OTHER_SIGNATURE_FILL_BYTE: u8 = 4;
+    const IMPORT_NAR_SHA256_FILL_BYTE: u8 = 7;
+    const IMPORT_NAR_SIZE_BYTES: u64 = 1;
 
     #[test]
     fn compatible_hello_reaches_authorization() {
@@ -2816,6 +3017,78 @@ mod tests {
         assert_eq!(err, "remote-output-digest-invalid");
     }
 
+    #[tokio::test]
+    async fn durable_remote_output_import_persists_signed_pathinfo_attestation_and_report() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = remote_import_store(temp.path()).await;
+        let request = fixture_request();
+        let admission = importable_admission_report();
+        let store_path = importable_store_path();
+
+        let report = import_admitted_remote_outputs(
+            &mut store,
+            &request,
+            &admission,
+            true,
+            Some(crunch_store::GcRootSource::Build),
+        )
+        .await
+        .expect("remote output imports durably");
+        let stored_pathinfo = store.pathinfo_service().get(*store_path.digest()).await.unwrap().unwrap();
+        let stored_attestation = store.get_artifact_attestation(&store_path).await.unwrap().unwrap();
+        let substitution = store.take_output_substitution_report(&store_path).expect("substitution report");
+        let exported_path = store_path.to_absolute_path_with_prefix(store.output_dir_str());
+
+        assert_eq!(report.outputs.len(), 1);
+        assert_eq!(report.outputs[0].artifact_attestation_digest_blake3, stored_attestation.digest.to_hex());
+        assert_eq!(report.outputs[0].path_info_signing_key_id, "builder-key");
+        assert_eq!(stored_pathinfo.store_path, store_path);
+        assert_eq!(substitution.mode, crunch_store::OutputSubstitutionMode::Full);
+        assert_eq!(substitution.transferred_bytes, admission.transfer.transferred_bytes);
+        assert!(std::fs::symlink_metadata(exported_path).is_ok());
+    }
+
+    #[test]
+    fn durable_remote_output_import_rejects_missing_pathinfo_bundle() {
+        let request = fixture_request();
+        let mut admission = importable_admission_report();
+        admission.outputs[0].path_info = None;
+
+        let err = plan_remote_output_import_actions(&request, &admission).expect_err("missing pathinfo fails");
+        assert_eq!(err, "remote-output-pathinfo-missing");
+    }
+
+    #[test]
+    fn durable_remote_output_import_rejects_attestation_digest_mismatch() {
+        let request = fixture_request();
+        let mut admission = importable_admission_report();
+        admission.outputs[0].artifact_attestation_digest_blake3 = blake3::hash(b"wrong-artifact").to_hex().to_string();
+        admission.output_digest_blake3 = remote_produced_outputs_content_digest(&admission.outputs);
+
+        let err = plan_remote_output_import_actions(&request, &admission).expect_err("wrong attestation digest fails");
+        assert_eq!(err, "remote-output-artifact-attestation-digest-mismatch");
+    }
+
+    #[test]
+    fn durable_remote_output_import_rejects_pathinfo_signature_key_mismatch() {
+        let request = fixture_request();
+        let mut admission = importable_admission_report();
+        let output_name = admission.outputs[0].name.clone();
+        let path_info = admission.outputs[0].path_info.as_mut().expect("pathinfo fixture");
+        path_info.signatures = vec![nix_compat::narinfo::Signature::new(
+            "other-key".to_string(),
+            [OTHER_SIGNATURE_FILL_BYTE; ED25519_SIGNATURE_BYTES],
+        )];
+        let digest =
+            crunch_store::artifact_attestation_digest_for_pathinfo("/mantle/store", path_info, &output_name, None)
+                .unwrap();
+        admission.outputs[0].artifact_attestation_digest_blake3 = digest.to_hex();
+        admission.output_digest_blake3 = remote_produced_outputs_content_digest(&admission.outputs);
+
+        let err = plan_remote_output_import_actions(&request, &admission).expect_err("wrong signature key fails");
+        assert_eq!(err, "remote-output-pathinfo-signing-key-mismatch");
+    }
+
     #[test]
     fn stdio_server_rejects_incomplete_client_sequence_without_redeeming_ticket() {
         let builder = fixture_loopback_builder();
@@ -3097,6 +3370,74 @@ mod tests {
                 result.output_digest_blake3 = digest.to_string();
             }
         }
+    }
+
+    async fn remote_import_store(root: &std::path::Path) -> crunch_store::StoreHandle {
+        crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            state_dir: root.join("state"),
+            output_dir: root.join("store"),
+            remote_cache_url: None,
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: "/mantle/store".to_string(),
+        })
+        .await
+        .expect("remote import store opens")
+    }
+
+    fn importable_admission_report() -> RemoteOutputAdmissionReport {
+        let output = importable_produced_output();
+        let transfer = full_transfer_report(output.size_bytes, "builder-key", None);
+        RemoteOutputAdmissionReport {
+            request_id: "r1".to_string(),
+            output_digest_blake3: remote_produced_outputs_content_digest(std::slice::from_ref(&output)),
+            builder_signing_key_id: "builder-key".to_string(),
+            store_prefix: "/mantle/store".to_string(),
+            outputs: vec![output],
+            transfer,
+        }
+    }
+
+    fn importable_produced_output() -> RemoteProducedOutput {
+        let path_info = importable_pathinfo();
+        let artifact_digest =
+            crunch_store::artifact_attestation_digest_for_pathinfo("/mantle/store", &path_info, "out", None)
+                .expect("artifact digest")
+                .to_hex();
+        RemoteProducedOutput {
+            name: "out".to_string(),
+            logical_path: fixture_expected_outputs()[0].logical_path.clone(),
+            content_digest_blake3: blake3::hash(b"remote-output-content").to_hex().to_string(),
+            size_bytes: path_info.nar_size,
+            path_info_signing_key_id: "builder-key".to_string(),
+            artifact_attestation_digest_blake3: artifact_digest,
+            path_info: Some(path_info),
+        }
+    }
+
+    fn importable_pathinfo() -> PathInfo {
+        PathInfo {
+            store_path: importable_store_path(),
+            node: snix_castore::Node::Symlink {
+                target: snix_castore::SymlinkTarget::try_from("remote-target").unwrap(),
+            },
+            references: vec![],
+            nar_size: IMPORT_NAR_SIZE_BYTES,
+            nar_sha256: [IMPORT_NAR_SHA256_FILL_BYTE; SHA256_DIGEST_BYTES],
+            signatures: vec![nix_compat::narinfo::Signature::new(
+                "builder-key".to_string(),
+                [BUILDER_SIGNATURE_FILL_BYTE; ED25519_SIGNATURE_BYTES],
+            )],
+            deriver: None,
+            ca: None,
+        }
+    }
+
+    fn importable_store_path() -> StorePath<String> {
+        StorePath::from_absolute_path_with_prefix(
+            fixture_expected_outputs()[0].logical_path.as_bytes(),
+            "/mantle/store",
+        )
+        .expect("fixture output path parses")
     }
 
     fn fixture_ticket() -> RemoteTicket {

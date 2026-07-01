@@ -52,10 +52,20 @@ pub async fn persist_artifact_attestation(
     provenance: Option<&ArtifactProvenance>,
 ) -> Result<StoredArtifactAttestation, Error> {
     let attestation = synthesize_artifact_attestation(store_dir, path_info, output_name, provenance);
-    let digest = attestation.canonical_digest().map_err(|e| Error::Attestation(format!("artifact digest: {e}")))?;
+    let digest = artifact_attestation_digest(attestation.clone())?;
     let path = artifact_attestation_path(state_dir, &attestation.facts.logical_path);
     write_canonical_artifact_file(&path, &attestation).await?;
     Ok(StoredArtifactAttestation { digest, attestation })
+}
+
+pub fn artifact_attestation_digest_for_pathinfo(
+    store_dir: &str,
+    path_info: &PathInfo,
+    output_name: &str,
+    provenance: Option<&ArtifactProvenance>,
+) -> Result<crunch_attestation::AttestationDigest, Error> {
+    let attestation = synthesize_artifact_attestation(store_dir, path_info, output_name, provenance);
+    artifact_attestation_digest(attestation)
 }
 
 pub async fn load_artifact_attestation(
@@ -501,8 +511,14 @@ fn push_unique_edge(edges: &mut Vec<Edge>, seen: &mut BTreeSet<(String, EdgeKind
 }
 
 fn stored_artifact_attestation(attestation: ArtifactAttestation) -> Result<StoredArtifactAttestation, Error> {
-    let digest = attestation.canonical_digest().map_err(|e| Error::Attestation(format!("artifact digest: {e}")))?;
+    let digest = artifact_attestation_digest(attestation.clone())?;
     Ok(StoredArtifactAttestation { digest, attestation })
+}
+
+fn artifact_attestation_digest(
+    attestation: ArtifactAttestation,
+) -> Result<crunch_attestation::AttestationDigest, Error> {
+    attestation.canonical_digest().map_err(|e| Error::Attestation(format!("artifact digest: {e}")))
 }
 
 fn stored_closure_attestation(attestation: ClosureAttestation) -> Result<StoredClosureAttestation, Error> {
