@@ -5,13 +5,17 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::process::Command;
 use std::process::Stdio;
+use std::task::Context;
+use std::task::Poll;
 
 use nix_compat::store_path::StorePath;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_store::path_info::PathInfo;
+use tokio::io::AsyncWrite;
 
 use crate::errors::RunError;
 
@@ -22,6 +26,11 @@ pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
 pub const MAX_REMOTE_EXPECTED_OUTPUTS: usize = 128;
 pub const MAX_REMOTE_BUILD_PAYLOAD_BYTES: usize = 1_048_576;
 pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
+const REMOTE_JSON_BYTE_ARRAY_MAX_CHARS_PER_BYTE: usize = 4;
+const REMOTE_INLINE_NAR_FRAME_METADATA_RESERVE_BYTES: usize = 4_096;
+pub const MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES: usize = (MAX_REMOTE_FRAME_BYTES
+    / REMOTE_JSON_BYTE_ARRAY_MAX_CHARS_PER_BYTE)
+    - REMOTE_INLINE_NAR_FRAME_METADATA_RESERVE_BYTES;
 pub const MAX_REMOTE_STDIO_STDERR_BYTES: usize = 65_536;
 pub const MAX_REMOTE_STDIO_FRAME_COUNT: usize = 4_096;
 pub const MAX_REMOTE_STDIO_INPUT_BYTES: usize = 4_194_304;
@@ -55,6 +64,7 @@ const DEFAULT_REMOTE_ACTION_SYSTEM: &str = "x86_64-linux";
 const REMOTE_LOCAL_BUILD_WORKDIR_NAME: &str = "mantle-remote-builds";
 const REMOTE_CLIENT_REQUEST_ID_LABEL: &str = "remote-client-request";
 const REMOTE_CLIENT_SESSION_ID_LABEL: &str = "remote-client-session";
+const REMOTE_TRANSFER_ARTIFACTS_PER_PATHINFO_OUTPUT: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -183,6 +193,8 @@ pub struct RemoteExecutionOutput {
     pub artifact_attestation_digest_blake3: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path_info: Option<PathInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nar_payload: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -195,6 +207,10 @@ pub struct RemoteProducedOutput {
     pub artifact_attestation_digest_blake3: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path_info: Option<PathInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nar_payload_digest_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nar_payload_size_bytes: Option<u64>,
 }
 
 pub trait RemoteBuildExecutor {
@@ -410,6 +426,7 @@ pub struct RemoteBuildFinished {
 #[serde(rename_all = "kebab-case")]
 pub enum RemoteOutputTransferArtifactKind {
     PathInfoJson,
+    Nar,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -647,6 +664,7 @@ pub struct RemoteOutputAdmissionReport {
     pub builder_signing_key_id: String,
     pub store_prefix: String,
     pub outputs: Vec<RemoteProducedOutput>,
+    pub transfer_artifacts: Vec<RemoteOutputTransferArtifact>,
     pub transfer: RemoteTransferReport,
 }
 
@@ -659,6 +677,7 @@ pub struct RemoteOutputImportAction {
     pub final_node: snix_castore::Node,
     pub path_info_signing_key_id: String,
     pub artifact_attestation_digest_blake3: String,
+    pub nar_payload: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1193,7 +1212,7 @@ fn execute_remote_fixture_plan(
         outputs.push(fixture_execution_output(plan, input_refs, expected));
     }
     let output_size_bytes = sum_remote_execution_output_sizes(&outputs)?;
-    let output_digest_blake3 = remote_execution_outputs_digest(&outputs);
+    let output_digest_blake3 = remote_execution_outputs_digest(&outputs)?;
     Ok(RemoteExecutionOutcome {
         request_id: plan.request_id.clone(),
         plan_digest_blake3: plan.plan_digest_blake3.clone(),
@@ -1281,7 +1300,7 @@ async fn execute_remote_local_build_linux(
         .build(&drv_path, &mut known_paths)
         .await
         .map_err(|err| format!("remote-local-executor-build: {err}"))?;
-    remote_execution_outcome_from_build_outcome(request, plan, &outcome)
+    remote_execution_outcome_from_build_outcome_with_payloads(request, plan, &outcome, &store).await
 }
 
 fn local_derivation_registry(
@@ -1328,10 +1347,41 @@ fn remote_execution_outcome_from_build_outcome(
             .outputs
             .get(&expected.name)
             .ok_or_else(|| "remote-local-executor-output-missing".to_string())?;
-        outputs.push(remote_execution_output_from_pathinfo(&request.store_prefix, expected, path_info)?);
+        outputs.push(remote_execution_output_from_pathinfo(&request.store_prefix, expected, path_info, None)?);
     }
+    remote_execution_outcome_from_outputs(request, plan, outputs)
+}
+
+async fn remote_execution_outcome_from_build_outcome_with_payloads(
+    request: &ConcreteBuildRequest,
+    plan: &RemoteExecutablePlan,
+    outcome: &crunch_build::BuildOutcome,
+    store: &crunch_store::StoreHandle,
+) -> Result<RemoteExecutionOutcome, String> {
+    let mut outputs = Vec::with_capacity(plan.expected_outputs.len());
+    for expected in &plan.expected_outputs {
+        let path_info = outcome
+            .outputs
+            .get(&expected.name)
+            .ok_or_else(|| "remote-local-executor-output-missing".to_string())?;
+        let nar_payload = render_remote_output_nar_payload(store, path_info).await?;
+        outputs.push(remote_execution_output_from_pathinfo(
+            &request.store_prefix,
+            expected,
+            path_info,
+            Some(nar_payload),
+        )?);
+    }
+    remote_execution_outcome_from_outputs(request, plan, outputs)
+}
+
+fn remote_execution_outcome_from_outputs(
+    request: &ConcreteBuildRequest,
+    plan: &RemoteExecutablePlan,
+    outputs: Vec<RemoteExecutionOutput>,
+) -> Result<RemoteExecutionOutcome, String> {
     let output_size_bytes = sum_remote_execution_output_sizes(&outputs)?;
-    let output_digest_blake3 = remote_execution_outputs_digest(&outputs);
+    let output_digest_blake3 = remote_execution_outputs_digest(&outputs)?;
     Ok(RemoteExecutionOutcome {
         request_id: request.request_id.clone(),
         plan_digest_blake3: plan.plan_digest_blake3.clone(),
@@ -1345,6 +1395,7 @@ fn remote_execution_output_from_pathinfo(
     store_prefix: &str,
     expected: &RemoteExpectedOutput,
     path_info: &PathInfo,
+    nar_payload: Option<Vec<u8>>,
 ) -> Result<RemoteExecutionOutput, String> {
     let logical_path = path_info.store_path.to_absolute_path_with_prefix(store_prefix);
     if let Some(expected_logical_path) = &expected.logical_path {
@@ -1364,6 +1415,7 @@ fn remote_execution_output_from_pathinfo(
         size_bytes: path_info.nar_size,
         artifact_attestation_digest_blake3,
         path_info: Some(path_info.clone()),
+        nar_payload,
     })
 }
 
@@ -1371,6 +1423,68 @@ fn remote_pathinfo_node_digest_blake3(path_info: &PathInfo) -> Result<String, St
     let node_bytes =
         serde_json::to_vec(&path_info.node).map_err(|err| format!("remote-local-executor-node-digest-json: {err}"))?;
     Ok(blake3::hash(&node_bytes).to_hex().to_string())
+}
+
+async fn render_remote_output_nar_payload(
+    store: &crunch_store::StoreHandle,
+    path_info: &PathInfo,
+) -> Result<Vec<u8>, String> {
+    let max_payload_bytes = u64::try_from(MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES)
+        .map_err(|_| "remote-output-nar-payload-limit-overflow".to_string())?;
+    if path_info.nar_size > max_payload_bytes {
+        return Err("remote-output-nar-payload-too-large".to_string());
+    }
+    let mut writer = BoundedAsyncVecWriter::new(MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES);
+    store
+        .render_nar(&path_info.node, &mut writer)
+        .await
+        .map_err(|err| format!("remote-output-nar-render-failed: {err}"))?;
+    let payload = writer.into_inner();
+    let payload_size = remote_payload_size_bytes(payload.len())?;
+    if payload_size != path_info.nar_size {
+        return Err("remote-output-nar-size-mismatch".to_string());
+    }
+    Ok(payload)
+}
+
+struct BoundedAsyncVecWriter {
+    bytes: Vec<u8>,
+    max_bytes: usize,
+}
+
+impl BoundedAsyncVecWriter {
+    fn new(max_bytes: usize) -> Self {
+        Self {
+            bytes: Vec::new(),
+            max_bytes,
+        }
+    }
+
+    fn into_inner(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
+impl AsyncWrite for BoundedAsyncVecWriter {
+    fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
+        let remaining = self.max_bytes.saturating_sub(self.bytes.len());
+        if buf.len() > remaining {
+            return Poll::Ready(Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "remote output NAR payload exceeds frame limit",
+            )));
+        }
+        self.bytes.extend_from_slice(buf);
+        Poll::Ready(Ok(buf.len()))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
 }
 
 fn validate_local_executor_input_refs(request: &ConcreteBuildRequest, input_refs: &[String]) -> Result<(), String> {
@@ -1415,6 +1529,7 @@ fn fixture_execution_output(
         size_bytes: REMOTE_LOOPBACK_OUTPUT_BYTES,
         artifact_attestation_digest_blake3,
         path_info: None,
+        nar_payload: None,
     }
 }
 
@@ -1473,36 +1588,95 @@ fn sum_remote_execution_output_sizes(outputs: &[RemoteExecutionOutput]) -> Resul
     Ok(total)
 }
 
-fn remote_execution_outputs_digest(outputs: &[RemoteExecutionOutput]) -> String {
+fn remote_execution_outputs_digest(outputs: &[RemoteExecutionOutput]) -> Result<String, String> {
     let mut hasher = blake3::Hasher::new();
     for output in outputs {
-        hash_labeled_str(&mut hasher, "output-name", &output.name);
-        hash_labeled_str(&mut hasher, "output-path", &output.logical_path);
-        hash_labeled_str(&mut hasher, "content-digest", &output.content_digest_blake3);
-        hash_labeled_str(&mut hasher, "artifact-digest", &output.artifact_attestation_digest_blake3);
-        hash_labeled_str(&mut hasher, "size-bytes", &output.size_bytes.to_string());
+        let (nar_payload_digest_blake3, nar_payload_size_bytes) = remote_nar_payload_summary(output)?;
+        hash_remote_output_digest_fields(
+            &mut hasher,
+            &output.name,
+            &output.logical_path,
+            &output.content_digest_blake3,
+            &output.artifact_attestation_digest_blake3,
+            output.size_bytes,
+            nar_payload_digest_blake3.as_deref(),
+            nar_payload_size_bytes,
+        );
     }
-    hasher.finalize().to_hex().to_string()
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
-fn sign_remote_execution_outputs(outputs: &[RemoteExecutionOutput], signing_key_id: &str) -> Vec<RemoteProducedOutput> {
+fn hash_remote_output_digest_fields(
+    hasher: &mut blake3::Hasher,
+    name: &str,
+    logical_path: &str,
+    content_digest_blake3: &str,
+    artifact_attestation_digest_blake3: &str,
+    size_bytes: u64,
+    nar_payload_digest_blake3: Option<&str>,
+    nar_payload_size_bytes: Option<u64>,
+) {
+    hash_labeled_str(hasher, "output-name", name);
+    hash_labeled_str(hasher, "output-path", logical_path);
+    hash_labeled_str(hasher, "content-digest", content_digest_blake3);
+    hash_labeled_str(hasher, "artifact-digest", artifact_attestation_digest_blake3);
+    hash_labeled_str(hasher, "size-bytes", &size_bytes.to_string());
+    hash_optional_digest_field(hasher, "nar-payload-digest", nar_payload_digest_blake3);
+    hash_optional_u64_field(hasher, "nar-payload-size", nar_payload_size_bytes);
+}
+
+fn hash_optional_digest_field(hasher: &mut blake3::Hasher, label: &str, value: Option<&str>) {
+    match value {
+        Some(value) => hash_labeled_str(hasher, label, value),
+        None => hash_labeled_str(hasher, label, "<absent>"),
+    }
+}
+
+fn hash_optional_u64_field(hasher: &mut blake3::Hasher, label: &str, value: Option<u64>) {
+    match value {
+        Some(value) => hash_labeled_str(hasher, label, &value.to_string()),
+        None => hash_labeled_str(hasher, label, "<absent>"),
+    }
+}
+
+fn sign_remote_execution_outputs(
+    outputs: &[RemoteExecutionOutput],
+    signing_key_id: &str,
+) -> Result<Vec<RemoteProducedOutput>, String> {
     outputs
         .iter()
-        .map(|output| RemoteProducedOutput {
-            name: output.name.clone(),
-            logical_path: output.logical_path.clone(),
-            content_digest_blake3: output.content_digest_blake3.clone(),
-            size_bytes: output.size_bytes,
-            path_info_signing_key_id: signing_key_id.to_string(),
-            artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
-            path_info: output.path_info.clone(),
+        .map(|output| {
+            let (nar_payload_digest_blake3, nar_payload_size_bytes) = remote_nar_payload_summary(output)?;
+            Ok(RemoteProducedOutput {
+                name: output.name.clone(),
+                logical_path: output.logical_path.clone(),
+                content_digest_blake3: output.content_digest_blake3.clone(),
+                size_bytes: output.size_bytes,
+                path_info_signing_key_id: signing_key_id.to_string(),
+                artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
+                path_info: output.path_info.clone(),
+                nar_payload_digest_blake3,
+                nar_payload_size_bytes,
+            })
         })
         .collect()
+}
+
+fn remote_nar_payload_summary(output: &RemoteExecutionOutput) -> Result<(Option<String>, Option<u64>), String> {
+    let Some(payload) = &output.nar_payload else {
+        return Ok((None, None));
+    };
+    let size_bytes = remote_payload_size_bytes(payload.len())?;
+    if size_bytes != output.size_bytes {
+        return Err("remote-output-nar-summary-size-mismatch".to_string());
+    }
+    Ok((Some(blake3::hash(payload).to_hex().to_string()), Some(size_bytes)))
 }
 
 fn plan_output_transfer_artifacts(
     request_id: &str,
     outputs: &[RemoteProducedOutput],
+    execution_outputs: &[RemoteExecutionOutput],
 ) -> Result<Vec<RemoteOutputTransferArtifact>, String> {
     if request_id.is_empty() {
         return Err("remote-output-transfer-request-id-empty".to_string());
@@ -1510,14 +1684,64 @@ fn plan_output_transfer_artifacts(
     if outputs.len() > MAX_REMOTE_TRANSFER_ARTIFACTS {
         return Err(format!("remote-output-transfer-artifact-count-exceeds-{MAX_REMOTE_TRANSFER_ARTIFACTS}"));
     }
-    let mut artifacts = Vec::with_capacity(outputs.len());
+    let execution_by_name = execution_output_by_name(execution_outputs)?;
+    let mut artifacts = Vec::with_capacity(outputs.len().saturating_mul(REMOTE_TRANSFER_ARTIFACTS_PER_PATHINFO_OUTPUT));
     for output in outputs {
         if let Some(path_info) = &output.path_info {
             artifacts.push(pathinfo_json_transfer_artifact(request_id, output, path_info)?);
         }
+        if output.nar_payload_digest_blake3.is_some() {
+            let execution = execution_by_name
+                .get(output.name.as_str())
+                .ok_or_else(|| "remote-output-transfer-execution-output-missing".to_string())?;
+            artifacts.push(nar_transfer_artifact(request_id, output, execution)?);
+        }
     }
     validate_remote_output_transfer_artifacts(request_id, outputs, &artifacts)?;
     Ok(artifacts)
+}
+
+fn execution_output_by_name(
+    outputs: &[RemoteExecutionOutput],
+) -> Result<BTreeMap<&str, &RemoteExecutionOutput>, String> {
+    let mut by_name = BTreeMap::new();
+    for output in outputs {
+        if by_name.insert(output.name.as_str(), output).is_some() {
+            return Err("remote-output-transfer-execution-output-duplicate".to_string());
+        }
+    }
+    Ok(by_name)
+}
+
+fn nar_transfer_artifact(
+    request_id: &str,
+    output: &RemoteProducedOutput,
+    execution: &RemoteExecutionOutput,
+) -> Result<RemoteOutputTransferArtifact, String> {
+    if execution.name != output.name {
+        return Err("remote-output-transfer-nar-output-mismatch".to_string());
+    }
+    let payload = execution
+        .nar_payload
+        .clone()
+        .ok_or_else(|| "remote-output-transfer-nar-payload-missing".to_string())?;
+    let size_bytes = remote_payload_size_bytes(payload.len())?;
+    if Some(size_bytes) != output.nar_payload_size_bytes {
+        return Err("remote-output-transfer-nar-size-mismatch".to_string());
+    }
+    let digest_blake3 = blake3::hash(&payload).to_hex().to_string();
+    if Some(digest_blake3.as_str()) != output.nar_payload_digest_blake3.as_deref() {
+        return Err("remote-output-transfer-nar-digest-mismatch".to_string());
+    }
+    Ok(RemoteOutputTransferArtifact {
+        request_id: request_id.to_string(),
+        output_name: output.name.clone(),
+        logical_path: output.logical_path.clone(),
+        artifact_kind: RemoteOutputTransferArtifactKind::Nar,
+        digest_blake3,
+        size_bytes,
+        payload,
+    })
 }
 
 fn pathinfo_json_transfer_artifact(
@@ -1637,14 +1861,24 @@ fn expected_remote_output_transfer_artifacts(
     let mut expected = BTreeMap::new();
     for output in outputs {
         if let Some(path_info) = &output.path_info {
-            let artifact = expected_pathinfo_transfer_artifact(output, path_info)?;
-            let key = (artifact.output_name.clone(), artifact.artifact_kind);
-            if expected.insert(key, artifact).is_some() {
-                return Err("remote-output-transfer-expected-artifact-duplicate".to_string());
-            }
+            insert_expected_transfer_artifact(&mut expected, expected_pathinfo_transfer_artifact(output, path_info)?)?;
+        }
+        if output.nar_payload_digest_blake3.is_some() || output.nar_payload_size_bytes.is_some() {
+            insert_expected_transfer_artifact(&mut expected, expected_nar_transfer_artifact(output)?)?;
         }
     }
     Ok(expected)
+}
+
+fn insert_expected_transfer_artifact(
+    expected: &mut BTreeMap<(String, RemoteOutputTransferArtifactKind), ExpectedRemoteOutputTransferArtifact>,
+    artifact: ExpectedRemoteOutputTransferArtifact,
+) -> Result<(), String> {
+    let key = (artifact.output_name.clone(), artifact.artifact_kind);
+    if expected.insert(key, artifact).is_some() {
+        return Err("remote-output-transfer-expected-artifact-duplicate".to_string());
+    }
+    Ok(())
 }
 
 fn expected_pathinfo_transfer_artifact(
@@ -1662,19 +1896,42 @@ fn expected_pathinfo_transfer_artifact(
     })
 }
 
+fn expected_nar_transfer_artifact(
+    output: &RemoteProducedOutput,
+) -> Result<ExpectedRemoteOutputTransferArtifact, String> {
+    let digest_blake3 = output
+        .nar_payload_digest_blake3
+        .clone()
+        .ok_or_else(|| "remote-output-transfer-nar-digest-missing".to_string())?;
+    let size_bytes =
+        output.nar_payload_size_bytes.ok_or_else(|| "remote-output-transfer-nar-size-missing".to_string())?;
+    if output.path_info.is_none() {
+        return Err("remote-output-transfer-nar-pathinfo-missing".to_string());
+    }
+    Ok(ExpectedRemoteOutputTransferArtifact {
+        output_name: output.name.clone(),
+        logical_path: output.logical_path.clone(),
+        artifact_kind: RemoteOutputTransferArtifactKind::Nar,
+        digest_blake3,
+        size_bytes,
+    })
+}
+
 fn remote_produced_outputs_content_digest(outputs: &[RemoteProducedOutput]) -> String {
-    let execution_outputs = outputs
-        .iter()
-        .map(|output| RemoteExecutionOutput {
-            name: output.name.clone(),
-            logical_path: output.logical_path.clone(),
-            content_digest_blake3: output.content_digest_blake3.clone(),
-            size_bytes: output.size_bytes,
-            artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
-            path_info: output.path_info.clone(),
-        })
-        .collect::<Vec<_>>();
-    remote_execution_outputs_digest(&execution_outputs)
+    let mut hasher = blake3::Hasher::new();
+    for output in outputs {
+        hash_remote_output_digest_fields(
+            &mut hasher,
+            &output.name,
+            &output.logical_path,
+            &output.content_digest_blake3,
+            &output.artifact_attestation_digest_blake3,
+            output.size_bytes,
+            output.nar_payload_digest_blake3.as_deref(),
+            output.nar_payload_size_bytes,
+        );
+    }
+    hasher.finalize().to_hex().to_string()
 }
 
 fn validate_remote_execution_outcome(
@@ -1691,7 +1948,7 @@ fn validate_remote_execution_outcome(
     if !is_blake3_hex_digest(&outcome.output_digest_blake3) {
         return Err("remote-execution-output-digest-invalid".to_string());
     }
-    if remote_execution_outputs_digest(&outcome.outputs) != outcome.output_digest_blake3 {
+    if remote_execution_outputs_digest(&outcome.outputs)? != outcome.output_digest_blake3 {
         return Err("remote-execution-output-digest-mismatch".to_string());
     }
     if sum_remote_execution_output_sizes(&outcome.outputs)? != outcome.output_size_bytes {
@@ -1800,6 +2057,10 @@ fn validate_execution_outputs_match_expected(
         {
             return Err("remote-execution-output-metadata-digest-invalid".to_string());
         }
+        if output.nar_payload.is_some() && output.path_info.is_none() {
+            return Err("remote-execution-output-nar-pathinfo-missing".to_string());
+        }
+        remote_nar_payload_summary(output)?;
     }
     Ok(())
 }
@@ -2439,6 +2700,7 @@ pub fn validate_remote_output_admission(
     trusted_output_keys: &[String],
     result: &RemoteBuildFinished,
     transfer: &RemoteTransferReport,
+    transfer_artifacts: &[RemoteOutputTransferArtifact],
 ) -> Result<RemoteOutputAdmissionReport, String> {
     if result.request_id != request.request_id {
         return Err("remote-output-request-id-mismatch".to_string());
@@ -2450,6 +2712,7 @@ pub fn validate_remote_output_admission(
         return Err("remote-output-digest-invalid".to_string());
     }
     validate_remote_produced_outputs(request, result)?;
+    validate_remote_output_transfer_artifacts(&request.request_id, &result.outputs, transfer_artifacts)?;
     validate_transfer_report(transfer)?;
     if transfer.verified_builder_key != result.builder_signing_key_id {
         return Err("remote-transfer-builder-key-mismatch".to_string());
@@ -2461,6 +2724,7 @@ pub fn validate_remote_output_admission(
             builder_signing_key_id: key_id,
             store_prefix: result.store_prefix.clone(),
             outputs: result.outputs.clone(),
+            transfer_artifacts: transfer_artifacts.to_vec(),
             transfer: transfer.clone(),
         }),
         OutputTrustDecision::Reject(reason) => Err(reason),
@@ -2482,7 +2746,13 @@ pub fn validate_remote_builder_response_output_import(
     if import_frames.artifacts != response.transfer_artifacts {
         return Err("remote-output-transfer-artifact-report-mismatch".to_string());
     }
-    validate_remote_output_admission(request, trusted_output_keys, import_frames.result, import_frames.transfer)
+    validate_remote_output_admission(
+        request,
+        trusted_output_keys,
+        import_frames.result,
+        import_frames.transfer,
+        &import_frames.artifacts,
+    )
 }
 
 pub fn validate_remote_builder_frames_output_import(
@@ -2491,7 +2761,13 @@ pub fn validate_remote_builder_frames_output_import(
     frames: &[RemoteFrame],
 ) -> Result<RemoteOutputAdmissionReport, String> {
     let import_frames = extract_output_import_frames(frames, &request.request_id)?;
-    validate_remote_output_admission(request, trusted_output_keys, import_frames.result, import_frames.transfer)
+    validate_remote_output_admission(
+        request,
+        trusted_output_keys,
+        import_frames.result,
+        import_frames.transfer,
+        &import_frames.artifacts,
+    )
 }
 
 pub fn plan_remote_output_import_actions(
@@ -2501,7 +2777,7 @@ pub fn plan_remote_output_import_actions(
     validate_admission_report_for_import(request, admission)?;
     let mut actions = Vec::with_capacity(admission.outputs.len());
     for output in &admission.outputs {
-        actions.push(plan_remote_output_import_action(request, output)?);
+        actions.push(plan_remote_output_import_action(request, output, &admission.transfer_artifacts)?);
     }
     Ok(actions)
 }
@@ -2566,16 +2842,19 @@ fn validate_admission_report_for_import(
         outputs: admission.outputs.clone(),
     };
     let trusted = vec![admission.builder_signing_key_id.clone()];
-    validate_remote_output_admission(request, &trusted, &result, &admission.transfer).map(|_| ())
+    validate_remote_output_admission(request, &trusted, &result, &admission.transfer, &admission.transfer_artifacts)
+        .map(|_| ())
 }
 
 fn plan_remote_output_import_action(
     request: &ConcreteBuildRequest,
     output: &RemoteProducedOutput,
+    transfer_artifacts: &[RemoteOutputTransferArtifact],
 ) -> Result<RemoteOutputImportAction, String> {
     let path_info = output.path_info.clone().ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
     let store_path = parse_remote_output_store_path(&output.logical_path, &request.store_prefix)?;
     validate_remote_output_pathinfo(output, &path_info, &store_path, &request.store_prefix)?;
+    let nar_payload = remote_output_nar_payload_for_import(output, transfer_artifacts)?;
     Ok(RemoteOutputImportAction {
         output_name: output.name.clone(),
         logical_path: output.logical_path.clone(),
@@ -2584,7 +2863,30 @@ fn plan_remote_output_import_action(
         path_info,
         path_info_signing_key_id: output.path_info_signing_key_id.clone(),
         artifact_attestation_digest_blake3: output.artifact_attestation_digest_blake3.clone(),
+        nar_payload,
     })
+}
+
+fn remote_output_nar_payload_for_import(
+    output: &RemoteProducedOutput,
+    transfer_artifacts: &[RemoteOutputTransferArtifact],
+) -> Result<Option<Vec<u8>>, String> {
+    if output.nar_payload_digest_blake3.is_none() && output.nar_payload_size_bytes.is_none() {
+        return Ok(None);
+    }
+    let artifact = transfer_artifacts
+        .iter()
+        .find(|artifact| {
+            artifact.output_name == output.name && artifact.artifact_kind == RemoteOutputTransferArtifactKind::Nar
+        })
+        .ok_or_else(|| "remote-output-nar-transfer-artifact-missing".to_string())?;
+    if Some(artifact.digest_blake3.as_str()) != output.nar_payload_digest_blake3.as_deref() {
+        return Err("remote-output-nar-transfer-digest-mismatch".to_string());
+    }
+    if Some(artifact.size_bytes) != output.nar_payload_size_bytes {
+        return Err("remote-output-nar-transfer-size-mismatch".to_string());
+    }
+    Ok(Some(artifact.payload.clone()))
 }
 
 fn parse_remote_output_store_path(logical_path: &str, store_prefix: &str) -> Result<StorePath<String>, String> {
@@ -2687,12 +2989,41 @@ fn remote_transfer_mode_to_store_mode(mode: RemoteTransferMode) -> crunch_store:
     }
 }
 
+async fn ingest_remote_output_nar_payload(
+    store: &crunch_store::StoreHandle,
+    action: &RemoteOutputImportAction,
+) -> Result<(), String> {
+    let Some(payload) = &action.nar_payload else {
+        return Ok(());
+    };
+    let mut reader = std::io::Cursor::new(payload.as_slice());
+    let (node, nar_sha256, nar_size) = snix_store::nar::ingest_nar_and_hash(
+        store.blob_service(),
+        store.directory_service(),
+        &mut reader,
+        &action.path_info.ca,
+    )
+    .await
+    .map_err(|err| format!("remote-output-nar-ingest-failed: {err}"))?;
+    if node != action.final_node {
+        return Err("remote-output-nar-node-mismatch".to_string());
+    }
+    if nar_sha256 != action.path_info.nar_sha256 {
+        return Err("remote-output-nar-sha256-mismatch".to_string());
+    }
+    if nar_size != action.path_info.nar_size {
+        return Err("remote-output-nar-size-mismatch".to_string());
+    }
+    Ok(())
+}
+
 async fn persist_remote_output_action(
     store: &mut crunch_store::StoreHandle,
     action: &RemoteOutputImportAction,
     is_root: bool,
     root_source: Option<crunch_store::GcRootSource>,
 ) -> Result<PathInfo, String> {
+    ingest_remote_output_nar_payload(store, action).await?;
     store
         .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
             output_name: &action.output_name,
@@ -3002,7 +3333,7 @@ fn build_response_frames(
     let execution = executor.execute(request, &plan, input_refs)?;
     validate_remote_execution_outcome(&execution, request, &plan)?;
     validate_remote_execution_output_pathinfos(&execution.outputs, &builder.signing_key_id, &request.store_prefix)?;
-    let outputs = sign_remote_execution_outputs(&execution.outputs, &builder.signing_key_id);
+    let outputs = sign_remote_execution_outputs(&execution.outputs, &builder.signing_key_id)?;
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildFinished {
         result: RemoteBuildFinished {
             request_id: request.request_id.clone(),
@@ -3012,7 +3343,7 @@ fn build_response_frames(
             outputs: outputs.clone(),
         },
     })?;
-    let transfer_artifacts = plan_output_transfer_artifacts(&request.request_id, &outputs)?;
+    let transfer_artifacts = plan_output_transfer_artifacts(&request.request_id, &outputs, &execution.outputs)?;
     for artifact in &transfer_artifacts {
         push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::OutputTransferArtifact {
             artifact: artifact.clone(),
@@ -3148,8 +3479,25 @@ fn validate_remote_produced_outputs(
         {
             return Err("remote-output-metadata-digest-invalid".to_string());
         }
+        validate_remote_produced_output_nar_summary(output)?;
     }
     Ok(())
+}
+
+fn validate_remote_produced_output_nar_summary(output: &RemoteProducedOutput) -> Result<(), String> {
+    match (&output.nar_payload_digest_blake3, output.nar_payload_size_bytes) {
+        (Some(digest), Some(_)) => {
+            if !is_blake3_hex_digest(digest) {
+                return Err("remote-output-nar-digest-invalid".to_string());
+            }
+            if output.path_info.is_none() {
+                return Err("remote-output-nar-pathinfo-missing".to_string());
+            }
+            Ok(())
+        }
+        (None, None) => Ok(()),
+        _ => Err("remote-output-nar-summary-incomplete".to_string()),
+    }
 }
 
 fn validate_transfer_report(report: &RemoteTransferReport) -> Result<(), String> {
@@ -4108,6 +4456,7 @@ mod tests {
         let executor = PathInfoRemoteExecutor {
             path_info: importable_pathinfo(),
             artifact_attestation_digest_blake3: None,
+            nar_payload: None,
         };
         let mut state = RemoteTicketState::default();
         state.tickets.insert("ticket-1".to_string(), fixture_ticket());
@@ -4144,6 +4493,55 @@ mod tests {
         assert!(store.take_output_substitution_report(&importable_store_path()).is_some());
     }
 
+    #[tokio::test]
+    async fn full_nar_transfer_artifact_materializes_remote_output_bytes() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = remote_import_store(temp.path()).await;
+        let builder = fixture_loopback_builder();
+        let mut ticket = fixture_ticket();
+        let mut client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        client.transfer_capabilities = RemoteTransferCapabilities::full_only();
+        let executor = PathInfoRemoteExecutor {
+            path_info: importable_nar_pathinfo(),
+            artifact_attestation_digest_blake3: None,
+            nar_payload: Some(snix_store::fixtures::NAR_CONTENTS_SYMLINK.to_vec()),
+        };
+
+        let response = plan_remote_builder_frames_with_executor(
+            &builder,
+            &mut ticket,
+            &remote_client_request_frames(&client),
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect("pathinfo plus NAR response plans");
+        let admission =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect("NAR-framed pathinfo output admits");
+        let report = import_admitted_remote_outputs(
+            &mut store,
+            &client.request,
+            &admission,
+            true,
+            Some(crunch_store::GcRootSource::Build),
+        )
+        .await
+        .expect("NAR-framed pathinfo output imports");
+        let exported_path = importable_store_path().to_absolute_path_with_prefix(store.output_dir_str());
+        let exported_target = std::fs::read_link(exported_path).expect("symlink output materialized");
+
+        assert_eq!(response.transfer.mode, RemoteTransferMode::Full);
+        assert!(
+            response
+                .transfer_artifacts
+                .iter()
+                .any(|artifact| artifact.artifact_kind == RemoteOutputTransferArtifactKind::Nar)
+        );
+        assert!(admission.outputs[0].nar_payload_digest_blake3.is_some());
+        assert_eq!(report.outputs.len(), 1);
+        assert_eq!(exported_target, std::path::PathBuf::from("/nix/store/somewhereelse"));
+    }
+
     #[test]
     fn remote_output_import_rejects_tampered_transfer_artifact_payload() {
         let builder = fixture_loopback_builder();
@@ -4152,6 +4550,7 @@ mod tests {
         let executor = PathInfoRemoteExecutor {
             path_info: importable_pathinfo(),
             artifact_attestation_digest_blake3: None,
+            nar_payload: None,
         };
         let mut response = plan_remote_builder_frames_with_executor(
             &builder,
@@ -4178,6 +4577,7 @@ mod tests {
         let executor = PathInfoRemoteExecutor {
             path_info: importable_pathinfo(),
             artifact_attestation_digest_blake3: None,
+            nar_payload: None,
         };
         let mut response = plan_remote_builder_frames_with_executor(
             &builder,
@@ -4206,6 +4606,7 @@ mod tests {
         let executor = PathInfoRemoteExecutor {
             path_info,
             artifact_attestation_digest_blake3: None,
+            nar_payload: None,
         };
 
         let err = plan_remote_builder_frames_with_executor(
@@ -4230,6 +4631,7 @@ mod tests {
         let executor = PathInfoRemoteExecutor {
             path_info,
             artifact_attestation_digest_blake3: None,
+            nar_payload: None,
         };
 
         let err = plan_remote_builder_frames_with_executor(
@@ -4280,6 +4682,7 @@ mod tests {
         let request = fixture_request();
         let mut admission = importable_admission_report();
         admission.outputs[0].path_info = None;
+        admission.transfer_artifacts.clear();
 
         let err = plan_remote_output_import_actions(&request, &admission).expect_err("missing pathinfo fails");
         assert_eq!(err, "remote-output-pathinfo-missing");
@@ -4311,6 +4714,14 @@ mod tests {
                 .unwrap();
         admission.outputs[0].artifact_attestation_digest_blake3 = digest.to_hex();
         admission.output_digest_blake3 = remote_produced_outputs_content_digest(&admission.outputs);
+        admission.transfer_artifacts = vec![
+            pathinfo_json_transfer_artifact(
+                &admission.request_id,
+                &admission.outputs[0],
+                admission.outputs[0].path_info.as_ref().expect("pathinfo remains present"),
+            )
+            .expect("updated pathinfo transfer artifact"),
+        ];
 
         let err = plan_remote_output_import_actions(&request, &admission).expect_err("wrong signature key fails");
         assert_eq!(err, "remote-output-pathinfo-signing-key-mismatch");
@@ -4513,6 +4924,7 @@ mod tests {
     struct PathInfoRemoteExecutor {
         path_info: PathInfo,
         artifact_attestation_digest_blake3: Option<String>,
+        nar_payload: Option<Vec<u8>>,
     }
 
     impl RemoteBuildExecutor for PathInfoRemoteExecutor {
@@ -4527,7 +4939,7 @@ mod tests {
                 .iter()
                 .map(|expected| pathinfo_executor_output(plan, expected, self))
                 .collect::<Result<Vec<_>, _>>()?;
-            let output_digest_blake3 = remote_execution_outputs_digest(&outputs);
+            let output_digest_blake3 = remote_execution_outputs_digest(&outputs)?;
             let output_size_bytes = sum_remote_execution_output_sizes(&outputs)?;
             Ok(RemoteExecutionOutcome {
                 request_id: plan.request_id.clone(),
@@ -4567,6 +4979,7 @@ mod tests {
             size_bytes: executor.path_info.nar_size,
             artifact_attestation_digest_blake3,
             path_info: Some(executor.path_info.clone()),
+            nar_payload: executor.nar_payload.clone(),
         })
     }
 
@@ -4587,7 +5000,7 @@ mod tests {
                 .iter()
                 .map(|expected| fixed_executor_output(plan, expected, self))
                 .collect::<Vec<_>>();
-            let output_digest_blake3 = remote_execution_outputs_digest(&outputs);
+            let output_digest_blake3 = remote_execution_outputs_digest(&outputs)?;
             let output_size_bytes = sum_remote_execution_output_sizes(&outputs)?;
             Ok(RemoteExecutionOutcome {
                 request_id: plan.request_id.clone(),
@@ -4624,6 +5037,7 @@ mod tests {
             size_bytes: executor.output_size_bytes,
             artifact_attestation_digest_blake3,
             path_info: None,
+            nar_payload: None,
         }
     }
 
@@ -4709,12 +5123,17 @@ mod tests {
     fn importable_admission_report() -> RemoteOutputAdmissionReport {
         let output = importable_produced_output();
         let transfer = full_transfer_report(output.size_bytes, "builder-key", None);
+        let transfer_artifacts = vec![
+            pathinfo_json_transfer_artifact("r1", &output, output.path_info.as_ref().unwrap())
+                .expect("pathinfo transfer artifact"),
+        ];
         RemoteOutputAdmissionReport {
             request_id: "r1".to_string(),
             output_digest_blake3: remote_produced_outputs_content_digest(std::slice::from_ref(&output)),
             builder_signing_key_id: "builder-key".to_string(),
             store_prefix: "/mantle/store".to_string(),
             outputs: vec![output],
+            transfer_artifacts,
             transfer,
         }
     }
@@ -4736,6 +5155,8 @@ mod tests {
             path_info_signing_key_id: "builder-key".to_string(),
             artifact_attestation_digest_blake3: artifact_digest,
             path_info: Some(path_info),
+            nar_payload_digest_blake3: None,
+            nar_payload_size_bytes: None,
         }
     }
 
@@ -4748,13 +5169,24 @@ mod tests {
             references: vec![],
             nar_size: IMPORT_NAR_SIZE_BYTES,
             nar_sha256: [IMPORT_NAR_SHA256_FILL_BYTE; SHA256_DIGEST_BYTES],
-            signatures: vec![nix_compat::narinfo::Signature::new(
-                "builder-key".to_string(),
-                [BUILDER_SIGNATURE_FILL_BYTE; ED25519_SIGNATURE_BYTES],
-            )],
+            signatures: vec![builder_signature()],
             deriver: None,
             ca: None,
         }
+    }
+
+    fn importable_nar_pathinfo() -> PathInfo {
+        let mut path_info = (*snix_store::fixtures::PATH_INFO_SYMLINK).clone();
+        path_info.store_path = importable_store_path();
+        path_info.signatures = vec![builder_signature()];
+        path_info
+    }
+
+    fn builder_signature() -> nix_compat::narinfo::Signature<String> {
+        nix_compat::narinfo::Signature::new(
+            "builder-key".to_string(),
+            [BUILDER_SIGNATURE_FILL_BYTE; ED25519_SIGNATURE_BYTES],
+        )
     }
 
     fn pathinfo_for_logical_path(logical_path: &str) -> PathInfo {
