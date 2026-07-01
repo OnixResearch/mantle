@@ -277,3 +277,25 @@
 // Implemented by `src/build_correctness.rs` deterministic
 // `mantle-action-receipt-v1` receipts plus bounded JSON rendering; verified by
 // receipt determinism/non-claim tests and archived change evidence.
+
+// Project input retention bridge.
+//
+// r[impl project_workflows.input_retention_roots]
+// Implemented by `crates/crunch-project-core/src/retention.rs` pure policy and
+// root-action planning plus root-state shell persistence in `src/project_cmd.rs`.
+//
+// r[verify project_workflows.input_retention_roots]
+// Verified by `crates/crunch-project-core/src/retention.rs` positive and
+// negative retention tests, `tests/project_cli.rs` retention diagnostics tests,
+// and archived evidence under
+// `cairn/archive/2026-07-01-project-input-retention-roots/evidence/`.
+//
+// r[impl project_workflows.input_retention_atomicity]
+// Implemented by same-directory temporary commits for `.mantle/retention.json`,
+// root marker persistence under `.mantle/retention-roots/`, and uncommitted
+// retention-state quarantine in the project CLI shell.
+//
+// r[verify project_workflows.input_retention_atomicity]
+// Verified by retention core interruption tests, CLI shell tests for atomic root
+// persistence, and the archived project-input-retention-roots validation
+// transcript.
