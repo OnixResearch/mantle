@@ -72,6 +72,8 @@ const CHILD_NO_EXIT_CODE_STATUS: i32 = 1;
 const DEFAULT_SUBSTITUTER_COUNT: u32 = 1;
 const EMPTY_TRUSTED_PUBLIC_KEY_COUNT: usize = 0;
 const REMOTE_CLIENT_BUILD_REPORT_SCHEMA: &str = "mantle-remote-client-build-v1";
+const BUILD_JSON_REPORT_SCHEMA: &str = "crunch-build-report-v1";
+const REMOTE_BUILD_HERMETICITY_MODE: &str = "practical";
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
@@ -1352,6 +1354,16 @@ pub enum RemoteAction {
         #[command(subcommand)]
         action: RemoteTicketAction,
     },
+    /// Print redacted remote queue, worker, and ticket status
+    Status {
+        /// Builder or coordinator endpoint id for the status snapshot
+        #[arg(long, default_value = "local-builder")]
+        endpoint_id: String,
+
+        /// Configured server concurrency for the status snapshot
+        #[arg(long, default_value_t = remote_build::DEFAULT_REMOTE_CONCURRENCY)]
+        concurrency: u32,
+    },
     /// Print remote server protocol metadata or serve one framed stdio session
     Serve {
         /// Builder endpoint id expected by clients
@@ -1865,6 +1877,7 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
 fn remote_command_label(action: &RemoteAction) -> &'static str {
     match action {
         RemoteAction::Ticket { action } => remote_ticket_command_label(action),
+        RemoteAction::Status { .. } => "remote.status",
         RemoteAction::Serve { .. } => "remote.serve",
     }
 }
@@ -2830,7 +2843,7 @@ fn run_remote_build_file_command(
 ) -> Result<(), RunError> {
     let inputs = evaluate_remote_client_derivation_inputs(file, import_paths, store_prefix)?;
     let report = run_remote_build_dispatches(selection, inputs, output_dir, state_dir, store_prefix)?;
-    print_remote_client_build_report(&report, output_mode)
+    print_remote_client_build_report(&report, file, output_dir, state_dir, output_mode)
 }
 
 fn run_remote_build_expr_command(
@@ -2943,11 +2956,15 @@ async fn run_remote_build_dispatches_async(
 
 fn print_remote_client_build_report(
     report: &remote_build::RemoteClientBuildReport,
+    file: &Path,
+    output_dir: &Path,
+    state_dir: &Path,
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
     match output_mode {
         BuildOutputMode::Json => {
-            let rendered = serde_json::to_string_pretty(report)
+            let json_report = remote_client_build_json_report(report, file, output_dir, state_dir)?;
+            let rendered = serde_json::to_string_pretty(&json_report)
                 .map_err(|err| RunError::Internal(format!("serializing remote build report: {err}")))?;
             println!("{rendered}");
         }
@@ -2960,6 +2977,102 @@ fn print_remote_client_build_report(
         }
     }
     Ok(())
+}
+
+fn remote_client_build_json_report(
+    report: &remote_build::RemoteClientBuildReport,
+    file: &Path,
+    output_dir: &Path,
+    state_dir: &Path,
+) -> Result<serde_json::Value, RunError> {
+    let outcomes = report
+        .imported
+        .iter()
+        .map(|build| remote_client_build_outcome_json(report, build, output_dir))
+        .collect::<Result<Vec<_>, _>>()?;
+    let succeeded_total = remote_report_count(outcomes.len())?;
+    Ok(serde_json::json!({
+        "schema": BUILD_JSON_REPORT_SCHEMA,
+        "file": file.display().to_string(),
+        "output_dir": output_dir.display().to_string(),
+        "state_dir": state_dir.display().to_string(),
+        "store_dir": &report.store_prefix,
+        "hermeticity_mode": REMOTE_BUILD_HERMETICITY_MODE,
+        "hermeticity_audit_events": [],
+        "native_dynamic_plans": [],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "diagnostic_persistence_failures": [],
+        "counts": {
+            "succeeded_total": succeeded_total,
+            "built_total": 0,
+            "cached_total": succeeded_total,
+            "failed_total": 0,
+        },
+        "outcomes": outcomes,
+        "failed": [],
+        "fod_mismatches": [],
+    }))
+}
+
+fn remote_client_build_outcome_json(
+    report: &remote_build::RemoteClientBuildReport,
+    build: &remote_build::RemoteClientImportedBuild,
+    output_dir: &Path,
+) -> Result<serde_json::Value, RunError> {
+    let outputs = build
+        .imported
+        .outputs
+        .iter()
+        .map(|output| remote_client_build_output_json(report, &build.imported.transfer, output, output_dir))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(serde_json::json!({
+        "drv_key": &build.request_id,
+        "label": &build.label,
+        "cached": true,
+        "log_file": null,
+        "outputs": outputs,
+    }))
+}
+
+fn remote_client_build_output_json(
+    report: &remote_build::RemoteClientBuildReport,
+    transfer: &remote_build::RemoteTransferReport,
+    output: &remote_build::RemoteImportedOutput,
+    output_dir: &Path,
+) -> Result<serde_json::Value, RunError> {
+    Ok(serde_json::json!({
+        "name": &output.name,
+        "path": remote_client_output_path(&output.logical_path, &report.store_prefix, output_dir)?,
+        "artifact_attestation": {
+            "logical_path": &output.logical_path,
+            "path": &output.artifact_attestation_path,
+        },
+        "substitution": remote_client_substitution_json(transfer),
+    }))
+}
+
+fn remote_client_substitution_json(transfer: &remote_build::RemoteTransferReport) -> serde_json::Value {
+    let mut fields = serde_json::Map::new();
+    fields.insert("mode".to_string(), serde_json::json!(&transfer.mode_label));
+    fields.insert("transferred_bytes".to_string(), serde_json::json!(transfer.transferred_bytes));
+    fields.insert("reused_bytes".to_string(), serde_json::json!(transfer.reused_bytes));
+    if let Some(reason) = &transfer.fallback_reason {
+        fields.insert("fallback_reason".to_string(), serde_json::json!(reason));
+    }
+    serde_json::Value::Object(fields)
+}
+
+fn remote_client_output_path(logical_path: &str, store_prefix: &str, output_dir: &Path) -> Result<String, RunError> {
+    let suffix = logical_path
+        .strip_prefix(store_prefix)
+        .ok_or_else(|| RunError::Internal("remote output path has wrong store prefix".to_string()))?;
+    let suffix = suffix.strip_prefix('/').unwrap_or(suffix);
+    Ok(output_dir.join(suffix).display().to_string())
+}
+
+fn remote_report_count(count: usize) -> Result<u32, RunError> {
+    u32::try_from(count).map_err(|_| RunError::Internal("remote build report count overflow".to_string()))
 }
 
 fn run_offline_source_preflight_if_requested(
@@ -4440,6 +4553,10 @@ mod tests {
     const TEST_EXEC_MODE: u32 = 0o755;
     #[cfg(unix)]
     const TEST_READ_MODE: u32 = 0o644;
+    const TEST_REMOTE_TRANSFERRED_BYTES: u64 = 11;
+    const TEST_REMOTE_REUSED_BYTES: u64 = 0;
+    const TEST_REMOTE_STATUS_CONCURRENCY: u32 = 2;
+    const TEST_REMOTE_STATUS_CONCURRENCY_TEXT: &str = "2";
 
     fn args_with_store_prefix(store_prefix: &str, nix_compat: bool) -> Args {
         Args {
@@ -4453,6 +4570,37 @@ mod tests {
             command: Command::Doctor {
                 profile: DoctorProfile::Build,
             },
+        }
+    }
+
+    fn remote_client_report_fixture() -> remote_build::RemoteClientBuildReport {
+        remote_build::RemoteClientBuildReport {
+            schema: REMOTE_CLIENT_BUILD_REPORT_SCHEMA.to_string(),
+            builder: "builder-1".to_string(),
+            store_prefix: "/mantle/store".to_string(),
+            imported: vec![remote_build::RemoteClientImportedBuild {
+                label: "root".to_string(),
+                request_id: "request-1".to_string(),
+                imported: remote_build::RemoteOutputImportReport {
+                    request_id: "request-1".to_string(),
+                    store_prefix: "/mantle/store".to_string(),
+                    outputs: vec![remote_build::RemoteImportedOutput {
+                        name: "out".to_string(),
+                        logical_path: "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture".to_string(),
+                        path_info_signing_key_id: "builder-key".to_string(),
+                        artifact_attestation_digest_blake3: blake3::hash(b"artifact").to_hex().to_string(),
+                        artifact_attestation_path: "/tmp/remote-state/attestations/artifacts/out.json".to_string(),
+                    }],
+                    transfer: remote_build::RemoteTransferReport {
+                        mode: remote_build::RemoteTransferMode::Full,
+                        mode_label: "full".to_string(),
+                        transferred_bytes: TEST_REMOTE_TRANSFERRED_BYTES,
+                        reused_bytes: TEST_REMOTE_REUSED_BYTES,
+                        fallback_reason: Some("delta-transfer-failed".to_string()),
+                        verified_builder_key: "builder-key".to_string(),
+                    },
+                },
+            }],
         }
     }
 
@@ -4530,6 +4678,58 @@ mod tests {
         assert_eq!(builder_program.as_deref(), Some(Path::new("/bin/remote-builder")));
         assert_eq!(builder_args, vec!["serve".to_string()]);
         assert_eq!(trusted_builder_keys, vec!["builder-key".to_string()]);
+    }
+
+    #[test]
+    fn remote_status_cli_accepts_endpoint_and_concurrency() {
+        let args = Args::parse_from([
+            "mantle",
+            "remote",
+            "status",
+            "--endpoint-id",
+            "builder-1",
+            "--concurrency",
+            TEST_REMOTE_STATUS_CONCURRENCY_TEXT,
+        ]);
+        let Command::Remote {
+            action: RemoteAction::Status {
+                endpoint_id,
+                concurrency,
+            },
+        } = args.command
+        else {
+            panic!("expected remote status command");
+        };
+
+        assert_eq!(endpoint_id, "builder-1");
+        assert_eq!(concurrency, TEST_REMOTE_STATUS_CONCURRENCY);
+    }
+
+    #[test]
+    fn remote_client_json_report_uses_build_report_schema_and_substitution_fields() {
+        let report = remote_client_report_fixture();
+        let json = remote_client_build_json_report(
+            &report,
+            Path::new("demo.ncl"),
+            Path::new("/tmp/remote-store"),
+            Path::new("/tmp/remote-state"),
+        )
+        .expect("remote build JSON report renders");
+
+        assert_eq!(json["schema"], BUILD_JSON_REPORT_SCHEMA);
+        assert_eq!(json["counts"]["succeeded_total"], 1);
+        assert_eq!(json["counts"]["cached_total"], 1);
+        assert_eq!(json["outcomes"][0]["cached"], true);
+        assert_eq!(
+            json["outcomes"][0]["outputs"][0]["path"],
+            "/tmp/remote-store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture"
+        );
+        assert_eq!(json["outcomes"][0]["outputs"][0]["substitution"]["mode"], "full");
+        assert_eq!(json["outcomes"][0]["outputs"][0]["substitution"]["fallback_reason"], "delta-transfer-failed");
+        assert_eq!(
+            json["outcomes"][0]["outputs"][0]["artifact_attestation"]["path"],
+            "/tmp/remote-state/attestations/artifacts/out.json"
+        );
     }
 
     #[test]

@@ -47,6 +47,7 @@ pub const DEFAULT_TICKET_TTL_SECS: u64 = 3_600;
 pub const DEFAULT_TICKET_USES: u32 = 1;
 pub const DEFAULT_TICKET_BUILD_TIME_SECS: u64 = 3_600;
 pub const DEFAULT_TICKET_UPLOAD_BYTES: u64 = 1_073_741_824;
+pub const DEFAULT_REMOTE_CONCURRENCY: u32 = 1;
 pub const MAX_TICKET_DISPLAY_NAME_BYTES: usize = 128;
 const TICKET_STATE_DIR: &str = "remote-builders";
 const TICKET_STATE_FILE: &str = "tickets.json";
@@ -66,6 +67,11 @@ const REMOTE_LOCAL_BUILD_WORKDIR_NAME: &str = "mantle-remote-builds";
 const REMOTE_CLIENT_REQUEST_ID_LABEL: &str = "remote-client-request";
 const REMOTE_CLIENT_SESSION_ID_LABEL: &str = "remote-client-session";
 const REMOTE_TRANSFER_ARTIFACTS_PER_PATHINFO_OUTPUT: usize = 2;
+const MAX_REMOTE_WORKER_CONCURRENCY: u32 = 1_024;
+const MAX_REMOTE_LOG_CHUNKS: usize = 1_024;
+const MAX_REMOTE_LOG_BYTES: u64 = 1_048_576;
+const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
+const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -804,6 +810,164 @@ pub enum ProtocolDecision {
 pub enum OutputTrustDecision {
     Accept { key_id: String },
     Reject(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteCoordinatorJobPhase {
+    Queued,
+    Running,
+    Finished,
+    Lost,
+}
+
+impl RemoteCoordinatorJobPhase {
+    fn is_live(self) -> bool {
+        matches!(self, Self::Queued | Self::Running)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteWorkerResumeSummary {
+    pub job_id: String,
+    pub normalized_build_key: String,
+    pub phase: RemoteCoordinatorJobPhase,
+    pub result_available: bool,
+    pub log_next_cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteWorkerRegistration {
+    pub endpoint_id: String,
+    pub protocol_version: u32,
+    pub systems: Vec<String>,
+    pub feature_labels: Vec<String>,
+    pub sandbox_modes: Vec<String>,
+    pub network_modes: Vec<String>,
+    pub concurrency: u32,
+    pub output_signing_key_ids: Vec<String>,
+    pub resumable_jobs: Vec<RemoteWorkerResumeSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteCoordinatorBuildRequest {
+    pub request: ConcreteBuildRequest,
+    pub required_system: String,
+    pub required_features: Vec<String>,
+    pub required_sandbox_mode: String,
+    pub required_network_mode: String,
+    pub trusted_output_keys: Vec<String>,
+    pub live_output_claims: Vec<String>,
+    pub wait_for_worker: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteCoordinatorJobSummary {
+    pub job_id: String,
+    pub normalized_build_key: String,
+    pub assigned_worker_endpoint_id: Option<String>,
+    pub phase: RemoteCoordinatorJobPhase,
+    pub live_output_claims: Vec<String>,
+    pub result_available: bool,
+    pub lost_phase: Option<RemoteFailurePhase>,
+    pub log_start_cursor: u64,
+    pub log_next_cursor: u64,
+    pub short_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RemoteCoordinatorState {
+    pub workers: BTreeMap<String, RemoteWorkerRegistration>,
+    pub jobs: BTreeMap<String, RemoteCoordinatorJobSummary>,
+    pub live_output_claims: BTreeMap<String, String>,
+    pub logs: BTreeMap<String, Vec<RemoteCoordinatorLogChunk>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "decision", rename_all = "kebab-case")]
+pub enum RemoteCoordinatorDispatchDecision {
+    Dispatch {
+        worker_endpoint_id: String,
+        job_id: String,
+        normalized_build_key: String,
+    },
+    AttachExisting {
+        job_id: String,
+        normalized_build_key: String,
+    },
+    RedeliverResult {
+        job_id: String,
+        normalized_build_key: String,
+    },
+    Pending {
+        reason: String,
+    },
+    Reject {
+        reason: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteCoordinatorLogChunk {
+    pub cursor: u64,
+    pub bytes: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteLogRetentionPolicy {
+    pub max_chunks: usize,
+    pub max_bytes: u64,
+}
+
+impl Default for RemoteLogRetentionPolicy {
+    fn default() -> Self {
+        Self {
+            max_chunks: MAX_REMOTE_LOG_CHUNKS,
+            max_bytes: MAX_REMOTE_LOG_BYTES,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteLogReplayPlan {
+    pub replay_chunks: Vec<RemoteCoordinatorLogChunk>,
+    pub retained_chunks: Vec<RemoteCoordinatorLogChunk>,
+    pub truncated: bool,
+    pub dropped_bytes: u64,
+    pub next_cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteCoordinatorJobStatus {
+    pub job_id: String,
+    pub phase: RemoteCoordinatorJobPhase,
+    pub worker_endpoint_id: Option<String>,
+    pub short_error: Option<String>,
+    pub log_bytes_retained: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RemoteCoordinatorStatusSnapshot {
+    pub endpoint_id: String,
+    pub configured_concurrency: u32,
+    pub worker_count: u32,
+    pub queued_jobs: Vec<RemoteCoordinatorJobStatus>,
+    pub active_jobs: Vec<RemoteCoordinatorJobStatus>,
+    pub recent_jobs: Vec<RemoteCoordinatorJobStatus>,
+    pub tickets: Vec<RemoteTicketView>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteReconnectDecision {
+    SameSession,
+    NewSession,
+    BackoffRequired,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteLeaseReleaseDecision {
+    Retain,
+    Release,
 }
 
 pub fn validate_hello(
@@ -2276,6 +2440,581 @@ pub fn decide_output_trust(
         };
     }
     OutputTrustDecision::Reject("untrusted-output-key".to_string())
+}
+
+pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> Result<(), String> {
+    if registration.endpoint_id.is_empty() {
+        return Err("remote-worker-endpoint-empty".to_string());
+    }
+    if registration.protocol_version != REMOTE_PROTOCOL_VERSION {
+        return Err("remote-worker-protocol-version-mismatch".to_string());
+    }
+    if registration.concurrency == 0 || registration.concurrency > MAX_REMOTE_WORKER_CONCURRENCY {
+        return Err(format!("remote-worker-concurrency-exceeds-{MAX_REMOTE_WORKER_CONCURRENCY}"));
+    }
+    validate_non_empty_bounded_unique_strings("remote-worker-system", &registration.systems, MAX_REMOTE_CAPABILITIES)?;
+    validate_bounded_unique_strings("remote-worker-feature", &registration.feature_labels, MAX_REMOTE_CAPABILITIES)?;
+    validate_non_empty_bounded_unique_strings(
+        "remote-worker-sandbox",
+        &registration.sandbox_modes,
+        MAX_REMOTE_CAPABILITIES,
+    )?;
+    validate_non_empty_bounded_unique_strings(
+        "remote-worker-network",
+        &registration.network_modes,
+        MAX_REMOTE_CAPABILITIES,
+    )?;
+    validate_non_empty_bounded_unique_strings(
+        "remote-worker-signing-key",
+        &registration.output_signing_key_ids,
+        MAX_REMOTE_CAPABILITIES,
+    )?;
+    if registration.resumable_jobs.len() > MAX_REMOTE_STATUS_ITEMS {
+        return Err(format!("remote-worker-resume-summary-count-exceeds-{MAX_REMOTE_STATUS_ITEMS}"));
+    }
+    for summary in &registration.resumable_jobs {
+        validate_worker_resume_summary(summary)?;
+    }
+    Ok(())
+}
+
+fn validate_worker_resume_summary(summary: &RemoteWorkerResumeSummary) -> Result<(), String> {
+    if summary.job_id.is_empty() || summary.normalized_build_key.is_empty() {
+        return Err("remote-worker-resume-identity-empty".to_string());
+    }
+    if !is_blake3_hex_digest(&summary.normalized_build_key) {
+        return Err("remote-worker-resume-key-invalid".to_string());
+    }
+    Ok(())
+}
+
+fn validate_bounded_unique_strings(label: &str, values: &[String], max_len: usize) -> Result<(), String> {
+    if values.len() > max_len {
+        return Err(format!("{label}-count-exceeds-{max_len}"));
+    }
+    let mut seen = BTreeSet::new();
+    for value in values {
+        if value.is_empty() {
+            return Err(format!("{label}-empty"));
+        }
+        if !seen.insert(value.as_str()) {
+            return Err(format!("{label}-duplicate"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_non_empty_bounded_unique_strings(label: &str, values: &[String], max_len: usize) -> Result<(), String> {
+    if values.is_empty() {
+        return Err(format!("{label}-missing"));
+    }
+    validate_bounded_unique_strings(label, values, max_len)
+}
+
+pub fn validate_coordinator_build_request(
+    request: &RemoteCoordinatorBuildRequest,
+) -> Result<RemoteExecutablePlan, String> {
+    if request.required_system.is_empty() {
+        return Err("remote-coordinator-required-system-empty".to_string());
+    }
+    if request.required_sandbox_mode.is_empty() {
+        return Err("remote-coordinator-required-sandbox-empty".to_string());
+    }
+    if request.required_network_mode.is_empty() {
+        return Err("remote-coordinator-required-network-empty".to_string());
+    }
+    if request.trusted_output_keys.is_empty() {
+        return Err("remote-coordinator-trusted-output-keys-empty".to_string());
+    }
+    validate_bounded_unique_strings(
+        "remote-coordinator-required-feature",
+        &request.required_features,
+        MAX_REMOTE_CAPABILITIES,
+    )?;
+    validate_bounded_unique_strings(
+        "remote-coordinator-live-output-claim",
+        &request.live_output_claims,
+        MAX_REMOTE_EXPECTED_OUTPUTS,
+    )?;
+    if request.request.upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
+        return Err("remote-coordinator-upload-byte-limit-exceeded".to_string());
+    }
+    if request.request.build_time_limit_secs == 0 || request.request.build_time_limit_secs > MAX_REMOTE_BUILD_TIME_SECS
+    {
+        return Err("remote-coordinator-build-time-limit-exceeded".to_string());
+    }
+    plan_remote_executable_request(&request.request)
+}
+
+pub fn normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> Result<String, String> {
+    let plan = validate_coordinator_build_request(request)?;
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "kind", REMOTE_COORDINATOR_BUILD_KEY_LABEL);
+    hash_labeled_str(&mut hasher, "store-prefix", &request.request.store_prefix);
+    hash_executable_plan_source(&mut hasher, &plan.source);
+    hash_labeled_str(&mut hasher, "system", &plan.system);
+    hash_ordered_values(&mut hasher, "command-arg", &plan.command_args);
+    hash_ordered_map(&mut hasher, "env", &plan.command_env);
+    hash_ordered_values(&mut hasher, "input-ref", &request.request.input_refs);
+    hash_ordered_values(&mut hasher, "source-input-ref", &request.request.source_input_refs);
+    hash_expected_outputs_for_key(&mut hasher, &request.request.expected_outputs);
+    hash_labeled_str(&mut hasher, "required-system", &request.required_system);
+    hash_ordered_values(&mut hasher, "required-feature", &request.required_features);
+    hash_labeled_str(&mut hasher, "required-sandbox", &request.required_sandbox_mode);
+    hash_labeled_str(&mut hasher, "required-network", &request.required_network_mode);
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+fn hash_ordered_values(hasher: &mut blake3::Hasher, label: &str, values: &[String]) {
+    for value in values {
+        hash_labeled_str(hasher, label, value);
+    }
+}
+
+fn hash_ordered_map(hasher: &mut blake3::Hasher, label: &str, values: &BTreeMap<String, String>) {
+    for (name, value) in values {
+        hash_labeled_str(hasher, &format!("{label}-name"), name);
+        hash_labeled_str(hasher, &format!("{label}-value"), value);
+    }
+}
+
+fn hash_expected_outputs_for_key(hasher: &mut blake3::Hasher, outputs: &[RemoteExpectedOutput]) {
+    for output in outputs {
+        hash_labeled_str(hasher, "expected-output-name", &output.name);
+        match &output.logical_path {
+            Some(logical_path) => hash_labeled_str(hasher, "expected-output-path", logical_path),
+            None => hash_labeled_str(hasher, "expected-output-path", "<content-addressed>"),
+        }
+    }
+}
+
+pub fn apply_worker_registration(
+    state: &mut RemoteCoordinatorState,
+    registration: RemoteWorkerRegistration,
+) -> Result<Vec<String>, String> {
+    validate_worker_registration(&registration)?;
+    let adopted = adopt_worker_resume_summaries(state, &registration)?;
+    state.workers.insert(registration.endpoint_id.clone(), registration);
+    Ok(adopted)
+}
+
+fn adopt_worker_resume_summaries(
+    state: &mut RemoteCoordinatorState,
+    registration: &RemoteWorkerRegistration,
+) -> Result<Vec<String>, String> {
+    let mut adopted = Vec::with_capacity(registration.resumable_jobs.len());
+    for summary in &registration.resumable_jobs {
+        adopt_worker_resume_summary(state, registration, summary)?;
+        adopted.push(summary.job_id.clone());
+    }
+    Ok(adopted)
+}
+
+fn adopt_worker_resume_summary(
+    state: &mut RemoteCoordinatorState,
+    registration: &RemoteWorkerRegistration,
+    summary: &RemoteWorkerResumeSummary,
+) -> Result<(), String> {
+    if let Some(existing) = state.jobs.get_mut(&summary.job_id) {
+        if existing.normalized_build_key != summary.normalized_build_key {
+            return Err("remote-worker-resume-key-conflict".to_string());
+        }
+        existing.assigned_worker_endpoint_id = Some(registration.endpoint_id.clone());
+        existing.phase = summary.phase;
+        existing.result_available = summary.result_available;
+        existing.log_next_cursor = summary.log_next_cursor;
+        existing.lost_phase = None;
+        return Ok(());
+    }
+    state.jobs.insert(summary.job_id.clone(), resumed_job_summary(registration, summary));
+    Ok(())
+}
+
+fn resumed_job_summary(
+    registration: &RemoteWorkerRegistration,
+    summary: &RemoteWorkerResumeSummary,
+) -> RemoteCoordinatorJobSummary {
+    RemoteCoordinatorJobSummary {
+        job_id: summary.job_id.clone(),
+        normalized_build_key: summary.normalized_build_key.clone(),
+        assigned_worker_endpoint_id: Some(registration.endpoint_id.clone()),
+        phase: summary.phase,
+        live_output_claims: Vec::new(),
+        result_available: summary.result_available,
+        lost_phase: None,
+        log_start_cursor: 0,
+        log_next_cursor: summary.log_next_cursor,
+        short_error: None,
+    }
+}
+
+pub fn plan_coordinator_dispatch(
+    state: &RemoteCoordinatorState,
+    request: &RemoteCoordinatorBuildRequest,
+) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    let normalized_key = normalized_remote_build_key(request)?;
+    if let Some(reason) = conflicting_live_output_claim(state, request, &normalized_key) {
+        return Ok(RemoteCoordinatorDispatchDecision::Reject { reason });
+    }
+    if let Some(decision) = existing_job_decision(state, &normalized_key) {
+        return Ok(decision);
+    }
+    match select_coordinator_worker(state, request) {
+        Some(worker) => Ok(RemoteCoordinatorDispatchDecision::Dispatch {
+            worker_endpoint_id: worker.endpoint_id.clone(),
+            job_id: coordinator_job_id(&normalized_key),
+            normalized_build_key: normalized_key,
+        }),
+        None => {
+            let reason = no_matching_worker_reason(state, request);
+            if request.wait_for_worker {
+                return Ok(RemoteCoordinatorDispatchDecision::Pending { reason });
+            }
+            Ok(RemoteCoordinatorDispatchDecision::Reject { reason })
+        }
+    }
+}
+
+pub fn admit_coordinator_dispatch(
+    state: &mut RemoteCoordinatorState,
+    request: &RemoteCoordinatorBuildRequest,
+) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    let decision = plan_coordinator_dispatch(state, request)?;
+    if let RemoteCoordinatorDispatchDecision::Dispatch {
+        worker_endpoint_id,
+        job_id,
+        normalized_build_key,
+    } = &decision
+    {
+        let summary = queued_job_summary(job_id, normalized_build_key, worker_endpoint_id, request);
+        for claim in &summary.live_output_claims {
+            state.live_output_claims.insert(claim.clone(), normalized_build_key.clone());
+        }
+        state.jobs.insert(job_id.clone(), summary);
+    }
+    Ok(decision)
+}
+
+fn queued_job_summary(
+    job_id: &str,
+    normalized_key: &str,
+    worker_endpoint_id: &str,
+    request: &RemoteCoordinatorBuildRequest,
+) -> RemoteCoordinatorJobSummary {
+    RemoteCoordinatorJobSummary {
+        job_id: job_id.to_string(),
+        normalized_build_key: normalized_key.to_string(),
+        assigned_worker_endpoint_id: Some(worker_endpoint_id.to_string()),
+        phase: RemoteCoordinatorJobPhase::Queued,
+        live_output_claims: request.live_output_claims.clone(),
+        result_available: false,
+        lost_phase: None,
+        log_start_cursor: 0,
+        log_next_cursor: 0,
+        short_error: None,
+    }
+}
+
+fn conflicting_live_output_claim(
+    state: &RemoteCoordinatorState,
+    request: &RemoteCoordinatorBuildRequest,
+    normalized_key: &str,
+) -> Option<String> {
+    for claim in &request.live_output_claims {
+        if let Some(owner_key) = state.live_output_claims.get(claim)
+            && owner_key != normalized_key
+        {
+            return Some("live-output-claim-conflict".to_string());
+        }
+    }
+    None
+}
+
+fn existing_job_decision(
+    state: &RemoteCoordinatorState,
+    normalized_key: &str,
+) -> Option<RemoteCoordinatorDispatchDecision> {
+    state
+        .jobs
+        .values()
+        .find(|job| job.normalized_build_key == normalized_key)
+        .map(existing_job_to_dispatch_decision)
+}
+
+fn existing_job_to_dispatch_decision(job: &RemoteCoordinatorJobSummary) -> RemoteCoordinatorDispatchDecision {
+    match job.phase {
+        RemoteCoordinatorJobPhase::Finished if job.result_available => {
+            RemoteCoordinatorDispatchDecision::RedeliverResult {
+                job_id: job.job_id.clone(),
+                normalized_build_key: job.normalized_build_key.clone(),
+            }
+        }
+        RemoteCoordinatorJobPhase::Lost => RemoteCoordinatorDispatchDecision::Reject {
+            reason: format!(
+                "restart-state-unavailable-phase-{}",
+                job.lost_phase.map(RemoteFailurePhase::as_status_label).unwrap_or("unknown")
+            ),
+        },
+        _ => RemoteCoordinatorDispatchDecision::AttachExisting {
+            job_id: job.job_id.clone(),
+            normalized_build_key: job.normalized_build_key.clone(),
+        },
+    }
+}
+
+fn select_coordinator_worker<'a>(
+    state: &'a RemoteCoordinatorState,
+    request: &RemoteCoordinatorBuildRequest,
+) -> Option<&'a RemoteWorkerRegistration> {
+    let mut eligible = Vec::new();
+    for worker in state.workers.values() {
+        if worker_satisfies_request(worker, request).is_ok()
+            && active_jobs_for_worker(state, &worker.endpoint_id) < worker.concurrency
+        {
+            eligible.push(worker);
+        }
+    }
+    eligible.into_iter().next()
+}
+
+fn no_matching_worker_reason(state: &RemoteCoordinatorState, request: &RemoteCoordinatorBuildRequest) -> String {
+    if state.workers.is_empty() {
+        return "no-workers-registered".to_string();
+    }
+    for worker in state.workers.values() {
+        if active_jobs_for_worker(state, &worker.endpoint_id) >= worker.concurrency {
+            return "worker-concurrency-limit".to_string();
+        }
+        if let Err(reason) = worker_satisfies_request(worker, request) {
+            return reason;
+        }
+    }
+    "capability-mismatch".to_string()
+}
+
+fn worker_satisfies_request(
+    worker: &RemoteWorkerRegistration,
+    request: &RemoteCoordinatorBuildRequest,
+) -> Result<(), String> {
+    validate_worker_registration(worker)?;
+    validate_coordinator_build_request(request)?;
+    require_member("system", &worker.systems, &request.required_system)?;
+    require_all_members("feature", &worker.feature_labels, &request.required_features)?;
+    require_member("sandbox", &worker.sandbox_modes, &request.required_sandbox_mode)?;
+    require_member("network", &worker.network_modes, &request.required_network_mode)?;
+    if !worker.output_signing_key_ids.iter().any(|key| request.trusted_output_keys.contains(key)) {
+        return Err("output-trust-mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn require_member(label: &str, available: &[String], required: &str) -> Result<(), String> {
+    if available.iter().any(|value| value == required) {
+        return Ok(());
+    }
+    Err(format!("remote-worker-{label}-mismatch"))
+}
+
+fn require_all_members(label: &str, available: &[String], required: &[String]) -> Result<(), String> {
+    for value in required {
+        require_member(label, available, value)?;
+    }
+    Ok(())
+}
+
+fn active_jobs_for_worker(state: &RemoteCoordinatorState, endpoint_id: &str) -> u32 {
+    state
+        .jobs
+        .values()
+        .filter(|job| job.assigned_worker_endpoint_id.as_deref() == Some(endpoint_id))
+        .filter(|job| job.phase.is_live())
+        .count()
+        .try_into()
+        .unwrap_or(MAX_REMOTE_WORKER_CONCURRENCY)
+}
+
+fn coordinator_job_id(normalized_key: &str) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "kind", REMOTE_COORDINATOR_JOB_ID_LABEL);
+    hash_labeled_str(&mut hasher, "normalized-key", normalized_key);
+    hasher.finalize().to_hex().to_string()
+}
+
+pub fn retain_remote_log_chunks(
+    existing: &[RemoteCoordinatorLogChunk],
+    next_chunk: RemoteCoordinatorLogChunk,
+    from_cursor: u64,
+    policy: RemoteLogRetentionPolicy,
+) -> Result<RemoteLogReplayPlan, String> {
+    validate_log_policy(policy)?;
+    validate_next_log_chunk(existing, &next_chunk)?;
+    let mut retained = existing.to_vec();
+    retained.push(next_chunk);
+    let dropped_bytes = trim_remote_log_chunks(&mut retained, policy)?;
+    let replay_chunks = retained.iter().filter(|chunk| chunk.cursor >= from_cursor).cloned().collect::<Vec<_>>();
+    let next_cursor = retained.last().map(|chunk| chunk.cursor.saturating_add(1)).unwrap_or(0);
+    Ok(RemoteLogReplayPlan {
+        replay_chunks,
+        retained_chunks: retained,
+        truncated: dropped_bytes > 0,
+        dropped_bytes,
+        next_cursor,
+    })
+}
+
+fn validate_log_policy(policy: RemoteLogRetentionPolicy) -> Result<(), String> {
+    if policy.max_chunks == 0 || policy.max_chunks > MAX_REMOTE_LOG_CHUNKS {
+        return Err("remote-log-chunk-limit-invalid".to_string());
+    }
+    if policy.max_bytes == 0 || policy.max_bytes > MAX_REMOTE_LOG_BYTES {
+        return Err("remote-log-byte-limit-invalid".to_string());
+    }
+    Ok(())
+}
+
+fn validate_next_log_chunk(
+    existing: &[RemoteCoordinatorLogChunk],
+    next: &RemoteCoordinatorLogChunk,
+) -> Result<(), String> {
+    if let Some(last) = existing.last()
+        && next.cursor <= last.cursor
+    {
+        return Err("remote-log-cursor-not-monotonic".to_string());
+    }
+    if remote_log_chunk_bytes(next)? > MAX_REMOTE_LOG_BYTES {
+        return Err("remote-log-chunk-too-large".to_string());
+    }
+    Ok(())
+}
+
+fn trim_remote_log_chunks(
+    retained: &mut Vec<RemoteCoordinatorLogChunk>,
+    policy: RemoteLogRetentionPolicy,
+) -> Result<u64, String> {
+    let mut dropped_bytes = 0_u64;
+    while retained.len() > policy.max_chunks || remote_log_bytes(retained)? > policy.max_bytes {
+        let dropped = retained.remove(0);
+        dropped_bytes = dropped_bytes
+            .checked_add(remote_log_chunk_bytes(&dropped)?)
+            .ok_or_else(|| "remote-log-dropped-bytes-overflow".to_string())?;
+    }
+    Ok(dropped_bytes)
+}
+
+fn remote_log_bytes(chunks: &[RemoteCoordinatorLogChunk]) -> Result<u64, String> {
+    let mut total = 0_u64;
+    for chunk in chunks {
+        total = total
+            .checked_add(remote_log_chunk_bytes(chunk)?)
+            .ok_or_else(|| "remote-log-bytes-overflow".to_string())?;
+    }
+    Ok(total)
+}
+
+fn remote_log_chunk_bytes(chunk: &RemoteCoordinatorLogChunk) -> Result<u64, String> {
+    u64::try_from(chunk.bytes.len()).map_err(|_| "remote-log-chunk-size-overflow".to_string())
+}
+
+pub fn coordinator_status_snapshot(
+    endpoint_id: &str,
+    configured_concurrency: u32,
+    state: &RemoteCoordinatorState,
+    tickets: &[RemoteTicket],
+) -> Result<RemoteCoordinatorStatusSnapshot, String> {
+    if endpoint_id.is_empty() {
+        return Err("remote-status-endpoint-empty".to_string());
+    }
+    if configured_concurrency == 0 || configured_concurrency > MAX_REMOTE_WORKER_CONCURRENCY {
+        return Err("remote-status-concurrency-invalid".to_string());
+    }
+    if state.jobs.len() > MAX_REMOTE_STATUS_ITEMS || tickets.len() > MAX_REMOTE_STATUS_ITEMS {
+        return Err(format!("remote-status-item-count-exceeds-{MAX_REMOTE_STATUS_ITEMS}"));
+    }
+    let mut queued_jobs = Vec::new();
+    let mut active_jobs = Vec::new();
+    let mut recent_jobs = Vec::new();
+    for job in state.jobs.values() {
+        push_status_job(&mut queued_jobs, &mut active_jobs, &mut recent_jobs, state, job)?;
+    }
+    Ok(RemoteCoordinatorStatusSnapshot {
+        endpoint_id: endpoint_id.to_string(),
+        configured_concurrency,
+        worker_count: bounded_runtime_count_u32(state.workers.len())?,
+        queued_jobs,
+        active_jobs,
+        recent_jobs,
+        tickets: tickets.iter().map(redacted_ticket_view).collect(),
+    })
+}
+
+fn push_status_job(
+    queued: &mut Vec<RemoteCoordinatorJobStatus>,
+    active: &mut Vec<RemoteCoordinatorJobStatus>,
+    recent: &mut Vec<RemoteCoordinatorJobStatus>,
+    state: &RemoteCoordinatorState,
+    job: &RemoteCoordinatorJobSummary,
+) -> Result<(), String> {
+    let status = coordinator_job_status(state, job)?;
+    match job.phase {
+        RemoteCoordinatorJobPhase::Queued => queued.push(status),
+        RemoteCoordinatorJobPhase::Running => active.push(status),
+        RemoteCoordinatorJobPhase::Finished | RemoteCoordinatorJobPhase::Lost => recent.push(status),
+    }
+    Ok(())
+}
+
+fn coordinator_job_status(
+    state: &RemoteCoordinatorState,
+    job: &RemoteCoordinatorJobSummary,
+) -> Result<RemoteCoordinatorJobStatus, String> {
+    let retained = state.logs.get(&job.job_id).map(Vec::as_slice).unwrap_or(&[]);
+    Ok(RemoteCoordinatorJobStatus {
+        job_id: job.job_id.clone(),
+        phase: job.phase,
+        worker_endpoint_id: job.assigned_worker_endpoint_id.clone(),
+        short_error: job.short_error.clone(),
+        log_bytes_retained: remote_log_bytes(retained)?,
+    })
+}
+
+fn bounded_runtime_count_u32(count: usize) -> Result<u32, String> {
+    u32::try_from(count).map_err(|_| "remote-status-count-overflow".to_string())
+}
+
+pub fn decide_remote_reconnect(
+    active_session_id: &str,
+    candidate_session_id: &str,
+    attempts: u32,
+    max_attempts: u32,
+) -> RemoteReconnectDecision {
+    if active_session_id == candidate_session_id {
+        return RemoteReconnectDecision::SameSession;
+    }
+    if attempts >= max_attempts {
+        return RemoteReconnectDecision::BackoffRequired;
+    }
+    RemoteReconnectDecision::NewSession
+}
+
+pub fn decide_session_lease_release(phase: RemoteCoordinatorJobPhase) -> RemoteLeaseReleaseDecision {
+    if phase.is_live() {
+        return RemoteLeaseReleaseDecision::Retain;
+    }
+    RemoteLeaseReleaseDecision::Release
+}
+
+impl RemoteFailurePhase {
+    fn as_status_label(self) -> &'static str {
+        match self {
+            Self::TransportSetup => "transport-setup",
+            Self::Authentication => "authentication",
+            Self::RequestValidation => "request-validation",
+            Self::InputSync => "input-sync",
+            Self::Queue => "queue",
+            Self::BuildExecution => "build-execution",
+            Self::OutputImport => "output-import",
+        }
+    }
 }
 
 pub fn encode_remote_frame(frame: &RemoteFrame) -> Result<Vec<u8>, String> {
@@ -3941,6 +4680,10 @@ pub fn cmd_remote(
 ) -> Result<(), RunError> {
     match action {
         crate::RemoteAction::Ticket { action } => cmd_remote_ticket(action, state_dir, json_output),
+        crate::RemoteAction::Status {
+            endpoint_id,
+            concurrency,
+        } => cmd_remote_status(endpoint_id, concurrency, state_dir, json_output),
         crate::RemoteAction::Serve {
             endpoint_id,
             binding,
@@ -4051,6 +4794,20 @@ fn remote_serve_metadata_json(endpoint_id: &str, status: &str) -> serde_json::Va
         "status": status,
         "diagnostic": "remote serve metadata is stable; stdio-once is a framed fixture seam and production P2P listener/build executor dispatch remain gated"
     })
+}
+
+fn cmd_remote_status(
+    endpoint_id: String,
+    concurrency: u32,
+    state_dir: &Path,
+    json_output: bool,
+) -> Result<(), RunError> {
+    let ticket_state = load_ticket_state(state_dir)?;
+    let tickets = ticket_state.tickets.values().cloned().collect::<Vec<_>>();
+    let coordinator_state = RemoteCoordinatorState::default();
+    let snapshot = coordinator_status_snapshot(&endpoint_id, concurrency, &coordinator_state, &tickets)
+        .map_err(RunError::Internal)?;
+    print_json_or_human(&snapshot, json_output)
 }
 
 fn cmd_remote_ticket(action: crate::RemoteTicketAction, state_dir: &Path, json_output: bool) -> Result<(), RunError> {
@@ -5277,6 +6034,168 @@ mod tests {
         assert!(lease.release_when_done);
     }
 
+    #[test]
+    fn coordinator_dispatch_registers_worker_and_dedupes_identical_requests() {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let request = fixture_coordinator_request();
+        let first = admit_coordinator_dispatch(&mut state, &request).expect("first request dispatches");
+        let second = admit_coordinator_dispatch(&mut state, &request).expect("identical request attaches");
+
+        let RemoteCoordinatorDispatchDecision::Dispatch {
+            worker_endpoint_id,
+            job_id,
+            normalized_build_key,
+        } = first
+        else {
+            panic!("first coordinator request should dispatch");
+        };
+        assert_eq!(worker_endpoint_id, "builder-1");
+        assert_eq!(state.jobs.len(), 1);
+        assert_eq!(state.live_output_claims.get("claim-out"), Some(&normalized_build_key));
+        assert!(
+            matches!(second, RemoteCoordinatorDispatchDecision::AttachExisting { job_id: attached, .. } if attached == job_id)
+        );
+    }
+
+    #[test]
+    fn coordinator_resume_summary_redelivers_finished_result() {
+        let request = fixture_coordinator_request();
+        let normalized_key = normalized_remote_build_key(&request).expect("request key");
+        let mut worker = fixture_worker_registration();
+        worker.resumable_jobs.push(RemoteWorkerResumeSummary {
+            job_id: coordinator_job_id(&normalized_key),
+            normalized_build_key: normalized_key.clone(),
+            phase: RemoteCoordinatorJobPhase::Finished,
+            result_available: true,
+            log_next_cursor: 3,
+        });
+        let mut state = RemoteCoordinatorState::default();
+        let adopted = apply_worker_registration(&mut state, worker).expect("resumable worker registers");
+        let decision = plan_coordinator_dispatch(&state, &request).expect("resumed request plans");
+
+        assert_eq!(adopted, vec![coordinator_job_id(&normalized_key)]);
+        assert!(
+            matches!(decision, RemoteCoordinatorDispatchDecision::RedeliverResult { normalized_build_key, .. } if normalized_build_key == normalized_key)
+        );
+    }
+
+    #[test]
+    fn coordinator_rejects_untrusted_worker_key_without_using_coordinator_as_trust_root() {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let mut request = fixture_coordinator_request();
+        request.trusted_output_keys = vec!["other-key".to_string()];
+        let decision = plan_coordinator_dispatch(&state, &request).expect("untrusted worker plans terminally");
+
+        assert!(
+            matches!(decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "output-trust-mismatch")
+        );
+        assert_eq!(
+            worker_satisfies_request(state.workers.get("builder-1").unwrap(), &request),
+            Err("output-trust-mismatch".to_string())
+        );
+    }
+
+    #[test]
+    fn coordinator_rejects_conflicting_live_output_claim_instead_of_deduping() {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let request = fixture_coordinator_request();
+        admit_coordinator_dispatch(&mut state, &request).expect("first request dispatches");
+        let mut conflict = fixture_coordinator_request();
+        conflict.request.payload = RemoteConcreteBuildPayload::Action {
+            action_id: "action-2".to_string(),
+            spec_json: fixture_action_spec_json("action-2"),
+        };
+        let decision = plan_coordinator_dispatch(&state, &conflict).expect("conflict plans");
+
+        assert!(
+            matches!(decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "live-output-claim-conflict")
+        );
+    }
+
+    #[test]
+    fn coordinator_log_replay_stays_bounded_for_slow_subscribers() {
+        let existing = vec![
+            RemoteCoordinatorLogChunk {
+                cursor: 1,
+                bytes: "aa".to_string(),
+            },
+            RemoteCoordinatorLogChunk {
+                cursor: 2,
+                bytes: "bb".to_string(),
+            },
+        ];
+        let next = RemoteCoordinatorLogChunk {
+            cursor: 3,
+            bytes: "cc".to_string(),
+        };
+        let policy = RemoteLogRetentionPolicy {
+            max_chunks: 2,
+            max_bytes: 4,
+        };
+        let plan = retain_remote_log_chunks(&existing, next, 1, policy).expect("bounded log plan");
+
+        assert!(plan.truncated);
+        assert_eq!(plan.dropped_bytes, 2);
+        assert_eq!(plan.retained_chunks.len(), 2);
+        assert_eq!(plan.replay_chunks[0].cursor, 2);
+        assert_eq!(plan.next_cursor, 4);
+    }
+
+    #[test]
+    fn coordinator_status_redacts_ticket_secrets_and_splits_phases() {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let request = fixture_coordinator_request();
+        admit_coordinator_dispatch(&mut state, &request).expect("request dispatches");
+        let ticket = fixture_ticket();
+        let snapshot = coordinator_status_snapshot("coordinator-1", 1, &state, &[ticket.clone()])
+            .expect("status snapshot renders");
+        let rendered = serde_json::to_string(&snapshot).expect("status serializes");
+
+        assert_eq!(snapshot.worker_count, 1);
+        assert_eq!(snapshot.queued_jobs.len(), 1);
+        assert!(snapshot.active_jobs.is_empty());
+        assert_eq!(snapshot.tickets[0].secret, SECRET_REDACTION);
+        assert!(!rendered.contains(&format!("\"secret\":\"{}\"", ticket.secret)));
+    }
+
+    #[test]
+    fn coordinator_lost_restart_state_reports_phase_and_session_guards_backoff() {
+        let request = fixture_coordinator_request();
+        let normalized_key = normalized_remote_build_key(&request).expect("request key");
+        let mut state = RemoteCoordinatorState::default();
+        state.jobs.insert("lost-job".to_string(), RemoteCoordinatorJobSummary {
+            job_id: "lost-job".to_string(),
+            normalized_build_key: normalized_key,
+            assigned_worker_endpoint_id: None,
+            phase: RemoteCoordinatorJobPhase::Lost,
+            live_output_claims: Vec::new(),
+            result_available: false,
+            lost_phase: Some(RemoteFailurePhase::BuildExecution),
+            log_start_cursor: 0,
+            log_next_cursor: 0,
+            short_error: Some("worker restart lost job".to_string()),
+        });
+        let decision = plan_coordinator_dispatch(&state, &request).expect("lost job decision");
+
+        assert!(
+            matches!(decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "restart-state-unavailable-phase-build-execution")
+        );
+        assert_eq!(decide_remote_reconnect("session-a", "session-a", 0, 1), RemoteReconnectDecision::SameSession);
+        assert_eq!(decide_remote_reconnect("session-a", "session-b", 1, 1), RemoteReconnectDecision::BackoffRequired);
+        assert_eq!(
+            decide_session_lease_release(RemoteCoordinatorJobPhase::Running),
+            RemoteLeaseReleaseDecision::Retain
+        );
+        assert_eq!(
+            decide_session_lease_release(RemoteCoordinatorJobPhase::Finished),
+            RemoteLeaseReleaseDecision::Release
+        );
+    }
+
     struct PathInfoRemoteExecutor {
         path_info: PathInfo,
         artifact_attestation_digest_blake3: Option<String>,
@@ -5852,6 +6771,33 @@ mod tests {
             uploaded_input_refs,
             trusted_output_keys,
             transfer_capabilities: RemoteTransferCapabilities::delta_and_full(),
+        }
+    }
+
+    fn fixture_worker_registration() -> RemoteWorkerRegistration {
+        RemoteWorkerRegistration {
+            endpoint_id: "builder-1".to_string(),
+            protocol_version: REMOTE_PROTOCOL_VERSION,
+            systems: vec![DEFAULT_REMOTE_ACTION_SYSTEM.to_string()],
+            feature_labels: vec!["kvm".to_string()],
+            sandbox_modes: vec!["bwrap".to_string()],
+            network_modes: vec!["off".to_string()],
+            concurrency: 1,
+            output_signing_key_ids: vec!["builder-key".to_string()],
+            resumable_jobs: Vec::new(),
+        }
+    }
+
+    fn fixture_coordinator_request() -> RemoteCoordinatorBuildRequest {
+        RemoteCoordinatorBuildRequest {
+            request: fixture_request(),
+            required_system: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
+            required_features: vec!["kvm".to_string()],
+            required_sandbox_mode: "bwrap".to_string(),
+            required_network_mode: "off".to_string(),
+            trusted_output_keys: vec!["builder-key".to_string()],
+            live_output_claims: vec!["claim-out".to_string()],
+            wait_for_worker: false,
         }
     }
 }
