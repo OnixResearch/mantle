@@ -92,6 +92,7 @@ fn build_refresh_request(
         lock: lock.clone(),
         selected: selected.to_vec(),
         resolutions,
+        source_state: Vec::new(),
     }
 }
 
@@ -176,6 +177,7 @@ fn resolve_input(input: &ManifestInput, resolver: &dyn RefreshResolver) -> Resul
         hash,
         patches: input.patches.clone(),
         mirrors: input.mirrors.clone(),
+        fetch_policy: input.fetch_policy,
     })
 }
 
@@ -288,6 +290,7 @@ mod tests {
                 frozen: false,
                 mirrors: vec![],
                 patches: vec!["fix1".into()],
+                fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
             }],
             patches: vec![PatchDef {
                 name: "fix1".into(),
@@ -329,6 +332,7 @@ mod tests {
                 frozen: false,
                 mirrors: vec![],
                 patches: vec![],
+                fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
             }],
             patches: vec![],
         };

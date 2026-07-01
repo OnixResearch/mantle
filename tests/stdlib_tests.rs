@@ -231,6 +231,23 @@ fn fetchurl_produces_fod_record() {
 }
 
 #[test]
+fn fetchurl_preserves_optional_fetch_policy_env() {
+    let result = crunch_eval::evaluate_str(
+        r#"let crunch = import "lib.ncl" in
+           crunch.fetchurl {
+             url = "https://example.com/foo.txt",
+             hash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
+             fetch_policy = "build-fetch-action",
+           }"#,
+        &stdlib_import_path(),
+    );
+    assert!(result.is_ok(), "fetchurl failed: {:?}", result.err());
+    let drv: crunch_glue::CrunchDerivation = result.unwrap().to_serde().unwrap();
+    assert_eq!(drv.env.get("fetch_policy").map(String::as_str), Some("build-fetch-action"));
+    assert_eq!(drv.env.get("url").map(String::as_str), Some("https://example.com/foo.txt"));
+}
+
+#[test]
 fn fetchurl_custom_name() {
     let result = crunch_eval::evaluate_str(
         r#"let crunch = import "lib.ncl" in

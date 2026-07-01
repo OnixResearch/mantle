@@ -8,6 +8,7 @@ use serde::Deserializer;
 use serde::Serialize;
 
 use crate::error::Error;
+use crate::fetch_policy::InputFetchPolicy;
 use crate::manifest::HashAlgo;
 use crate::version::SchemaVersion;
 
@@ -103,6 +104,7 @@ pub struct LockEntry {
     pub hash: LockedHash,
     pub patches: Vec<String>,
     pub mirrors: Vec<String>,
+    pub fetch_policy: InputFetchPolicy,
 }
 
 #[derive(Deserialize)]
@@ -111,6 +113,7 @@ struct RawLockEntry {
     hash: LockedHash,
     patches: Option<Vec<String>>,
     mirrors: Option<Vec<String>>,
+    fetch_policy: Option<InputFetchPolicy>,
 }
 
 impl<'de> Deserialize<'de> for LockEntry {
@@ -122,6 +125,7 @@ impl<'de> Deserialize<'de> for LockEntry {
             hash: raw.hash,
             patches: raw.patches.unwrap_or_else(Vec::new),
             mirrors: raw.mirrors.unwrap_or_else(Vec::new),
+            fetch_policy: raw.fetch_policy.unwrap_or_default(),
         })
     }
 }
@@ -217,6 +221,7 @@ mod tests {
             },
             patches: vec![],
             mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into()],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
         });
         inputs.insert("hello-src".into(), LockEntry {
             kind: LockedKind::Tarball {
@@ -228,6 +233,7 @@ mod tests {
             },
             patches: vec!["hello-fix".into()],
             mirrors: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
         });
 
         let mut patches = BTreeMap::new();
@@ -314,6 +320,7 @@ mod tests {
             },
             patches: vec!["p1".into(), "p2".into()],
             mirrors: vec!["https://mirror1.example.com/file.txt".into()],
+            fetch_policy: InputFetchPolicy::BuildFetchAction,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let parsed: LockEntry = serde_json::from_str(&json).unwrap();

@@ -8,6 +8,8 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
+use crate::fetch_policy::InputFetchPolicy;
+use crate::fetch_policy::fetch_policy_compatibility_problems;
 use crate::version::SchemaVersion;
 use crate::version::parse_version;
 
@@ -101,6 +103,7 @@ pub struct ManifestInput {
     pub frozen: bool,
     pub mirrors: Vec<String>,
     pub patches: Vec<String>,
+    pub fetch_policy: InputFetchPolicy,
 }
 
 #[derive(Deserialize)]
@@ -111,6 +114,7 @@ struct RawManifestInput {
     frozen: Option<bool>,
     mirrors: Option<Vec<String>>,
     patches: Option<Vec<String>>,
+    fetch_policy: Option<InputFetchPolicy>,
 }
 
 impl<'de> Deserialize<'de> for ManifestInput {
@@ -124,6 +128,7 @@ impl<'de> Deserialize<'de> for ManifestInput {
             frozen: raw.frozen.unwrap_or(false),
             mirrors: raw.mirrors.unwrap_or_else(Vec::new),
             patches: raw.patches.unwrap_or_else(Vec::new),
+            fetch_policy: raw.fetch_policy.unwrap_or_default(),
         })
     }
 }
@@ -151,6 +156,8 @@ impl ManifestInput {
                 self.patches.len()
             ));
         }
+
+        problems.extend(fetch_policy_compatibility_problems(self));
 
         problems
     }
@@ -277,6 +284,7 @@ pub enum PatchSource {
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
     use alloc::vec;
 
     use super::*;
@@ -295,6 +303,7 @@ mod tests {
                     frozen: false,
                     mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into()],
                     patches: vec![],
+                    fetch_policy: InputFetchPolicy::GenerationMaterial,
                 },
                 ManifestInput {
                     name: "hello-src".into(),
@@ -308,6 +317,7 @@ mod tests {
                     frozen: true,
                     mirrors: vec![],
                     patches: vec!["hello-fix".into()],
+                    fetch_policy: InputFetchPolicy::GenerationMaterial,
                 },
             ],
             patches: vec![PatchDef {
@@ -365,6 +375,7 @@ mod tests {
                 frozen: false,
                 mirrors: vec![],
                 patches: vec![],
+                fetch_policy: InputFetchPolicy::GenerationMaterial,
             }],
             patches: vec![],
         };
@@ -377,6 +388,36 @@ mod tests {
     fn git_reference_default_is_main() {
         let r = GitReference::default();
         assert_eq!(r, GitReference::Branch("main".into()));
+    }
+
+    #[test]
+    fn fetch_policy_default_is_generation_material() {
+        let json = r#"{
+            "name":"src",
+            "kind":{"type":"file","url":"https://example.com/src"}
+        }"#;
+        let input: ManifestInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.fetch_policy, InputFetchPolicy::GenerationMaterial);
+    }
+
+    #[test]
+    fn build_fetch_policy_with_patches_is_invalid() {
+        let mut m = sample_manifest();
+        m.inputs[0].fetch_policy = InputFetchPolicy::BuildFetchAction;
+        m.inputs[0].patches.push("hello-fix".into());
+        let problems = m.validate();
+        assert!(problems.iter().any(|problem| problem.contains("build-fetch-action")));
+    }
+
+    #[test]
+    fn unknown_fetch_policy_string_is_rejected() {
+        let json = r#"{
+            "name":"src",
+            "kind":{"type":"file","url":"https://example.com/src"},
+            "fetch_policy":"surprise-network"
+        }"#;
+        let error = serde_json::from_str::<ManifestInput>(json).unwrap_err();
+        assert!(error.to_string().contains("unknown variant"));
     }
 
     #[test]

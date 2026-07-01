@@ -271,6 +271,7 @@ mod tests {
             frozen: false,
             mirrors: vec![],
             patches: vec![],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
         }
     }
 
@@ -285,6 +286,7 @@ mod tests {
             },
             patches: vec![],
             mirrors: vec![],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
         }
     }
 
@@ -334,6 +336,7 @@ mod tests {
             },
             patches: vec![],
             mirrors: vec![],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
         })]);
         let report = check_manifest_lock(manifest, lock);
         assert!(report.clone().has_errors());

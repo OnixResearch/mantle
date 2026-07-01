@@ -47,6 +47,13 @@ let detect_algo = fun hash =>
   else 'sha256
 in
 
+let add_fetch_policy_env = fun params env =>
+  if std.record.has_field "fetch_policy" params then
+    std.record.insert "fetch_policy" params.fetch_policy env
+  else
+    env
+in
+
 {
   fetchurl
     | doc "Download a file by URL. Hash is over raw file bytes (flat mode)."
@@ -60,7 +67,7 @@ in
       in
       let the_algo = detect_algo the_hash in
       let the_fixed_output = { hash = the_hash, algo = the_algo, mode = 'flat } in
-      let the_env = { url = the_url } in
+      let the_env = add_fetch_policy_env params { url = the_url } in
       {
         name = the_name,
         builder = "builtin:fetchurl",
@@ -93,7 +100,7 @@ in
       in
       let the_algo = detect_algo the_hash in
       let the_fixed_output = { hash = the_hash, algo = the_algo, mode = 'recursive } in
-      let the_env = { url = the_url, unpack = "1" } in
+      let the_env = add_fetch_policy_env params { url = the_url, unpack = "1" } in
       {
         name = the_name,
         builder = "builtin:fetchurl",
@@ -122,7 +129,7 @@ in
       in
       let the_algo = detect_algo the_hash in
       let the_fixed_output = { hash = the_hash, algo = the_algo, mode = 'recursive } in
-      let the_env = { url = the_url, type = "git", rev = the_rev } in
+      let the_env = add_fetch_policy_env params { url = the_url, type = "git", rev = the_rev } in
       {
         name = the_name,
         builder = "builtin:fetchurl",

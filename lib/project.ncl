@@ -31,6 +31,13 @@ let GitInput = {
   reference | GitReference | default = { ref_type = 'branch, ref_value = "main" },
 } in
 
+let InputFetchPolicy = std.contract.from_validator (fun value =>
+  if value == "generation-material" || value == "build-fetch-action" || value == "imported-source-required" then
+    'Ok
+  else
+    'Error { message = "fetch_policy must be one of generation-material, build-fetch-action, imported-source-required" }
+) in
+
 let InputKind = std.contract.from_validator (fun value =>
   if std.is_record value then
     if std.record.has_field "type" value then
@@ -52,6 +59,7 @@ let ManifestInput = {
   frozen | Bool | default = false,
   mirrors | Array String | default = [],
   patches | Array String | default = [],
+  fetch_policy | InputFetchPolicy | default = "generation-material",
 } in
 
 let PatchSource = std.contract.from_validator (fun value =>
@@ -90,5 +98,6 @@ let PatchDef = {
   HashSpec = HashSpec,
   GitReference = GitReference,
   ManifestInput = ManifestInput,
+  InputFetchPolicy = InputFetchPolicy,
   PatchDef = PatchDef,
 }

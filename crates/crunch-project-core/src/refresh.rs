@@ -4,6 +4,8 @@ use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
+use crate::InputFetchPolicy;
+use crate::InputSourceStateFact;
 use crate::LockEntry;
 use crate::LockedPatch;
 use crate::LockedPatchSource;
@@ -14,6 +16,8 @@ use crate::ManifestInput;
 use crate::PatchDef;
 use crate::PatchSource;
 use crate::ProjectManifest;
+use crate::fetch_policy_compatibility_problems;
+use crate::lock_entry_without_fetch;
 
 const MAX_REFRESH_BATCH: u32 = 256;
 
@@ -67,6 +71,7 @@ pub struct RefreshInputsRequest {
     pub lock: Lockfile,
     pub selected: Vec<String>,
     pub resolutions: Vec<ResolvedInputState>,
+    pub source_state: Vec<InputSourceStateFact>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,7 +105,11 @@ pub struct ApplyResult {
 }
 
 pub fn plan_refresh_inputs(request: RefreshInputsPlanRequest) -> Vec<ManifestInput> {
-    select_inputs(&request.manifest, &request.selected).into_iter().cloned().collect()
+    select_inputs(&request.manifest, &request.selected)
+        .into_iter()
+        .filter(|input| input.fetch_policy.needs_generation_resolution())
+        .cloned()
+        .collect()
 }
 
 pub fn refresh_inputs(request: RefreshInputsRequest) -> Vec<RefreshOutcome> {
@@ -111,10 +120,11 @@ pub fn refresh_inputs(request: RefreshInputsRequest) -> Vec<RefreshOutcome> {
         inputs_to_refresh.len()
     );
     let resolution_map = input_resolution_map(request.resolutions);
+    let source_state_map = source_state_map(&request.source_state);
 
     inputs_to_refresh
         .into_iter()
-        .map(|input| refresh_one(input, &request.lock, &resolution_map))
+        .map(|input| refresh_one(input, &request.lock, &resolution_map, &source_state_map))
         .collect()
 }
 
@@ -203,6 +213,7 @@ fn refresh_one(
     input: &ManifestInput,
     lock: &Lockfile,
     resolutions: &BTreeMap<String, ResolvedInputState>,
+    source_state: &BTreeMap<&str, Vec<&InputSourceStateFact>>,
 ) -> RefreshOutcome {
     assert!(!input.name.is_empty(), "input name must not be empty");
     assert!(
@@ -214,18 +225,28 @@ fn refresh_one(
             name: input.name.clone(),
         };
     }
+    let compatibility = fetch_policy_compatibility_problems(input);
+    if let Some(problem) = compatibility.first() {
+        return RefreshOutcome::Failed {
+            name: input.name.clone(),
+            reason: problem.clone(),
+        };
+    }
 
+    match input.fetch_policy {
+        InputFetchPolicy::GenerationMaterial => refresh_generation_material(input, lock, resolutions),
+        InputFetchPolicy::BuildFetchAction => refresh_without_generation_fetch(input, lock),
+        InputFetchPolicy::ImportedSourceRequired => refresh_imported_source(input, lock, source_state),
+    }
+}
+
+fn refresh_generation_material(
+    input: &ManifestInput,
+    lock: &Lockfile,
+    resolutions: &BTreeMap<String, ResolvedInputState>,
+) -> RefreshOutcome {
     match resolutions.get(input.name.as_str()) {
-        Some(ResolvedInputState::Resolved(resolved)) => {
-            if let Some(existing) = lock.inputs.get(&input.name)
-                && existing == &resolved.entry
-            {
-                return RefreshOutcome::Unchanged {
-                    name: input.name.clone(),
-                };
-            }
-            RefreshOutcome::Updated(resolved.clone())
-        }
+        Some(ResolvedInputState::Resolved(resolved)) => unchanged_or_updated(input, lock, resolved.clone()),
         Some(ResolvedInputState::Failed(failure)) => RefreshOutcome::Failed {
             name: failure.name.clone(),
             reason: failure.reason.clone(),
@@ -235,6 +256,77 @@ fn refresh_one(
             reason: alloc::format!("missing resolution for {}", input.name),
         },
     }
+}
+
+fn refresh_without_generation_fetch(input: &ManifestInput, lock: &Lockfile) -> RefreshOutcome {
+    match lock_entry_without_fetch(input, lock.inputs.get(&input.name)) {
+        Ok(entry) => unchanged_or_updated(input, lock, ResolvedInput {
+            name: input.name.clone(),
+            entry,
+        }),
+        Err(diagnostic) => RefreshOutcome::Failed {
+            name: diagnostic.input_name,
+            reason: diagnostic.message,
+        },
+    }
+}
+
+fn refresh_imported_source(
+    input: &ManifestInput,
+    lock: &Lockfile,
+    source_state: &BTreeMap<&str, Vec<&InputSourceStateFact>>,
+) -> RefreshOutcome {
+    let existing = lock.inputs.get(&input.name);
+    if matching_source_fact(input, existing, source_state).is_none() {
+        return RefreshOutcome::Failed {
+            name: input.name.clone(),
+            reason: "imported-source-required policy has no matching ready source-state record".to_string(),
+        };
+    }
+    refresh_without_generation_fetch(input, lock)
+}
+
+fn unchanged_or_updated(input: &ManifestInput, lock: &Lockfile, resolved: ResolvedInput) -> RefreshOutcome {
+    if let Some(existing) = lock.inputs.get(&input.name)
+        && existing == &resolved.entry
+    {
+        return RefreshOutcome::Unchanged {
+            name: input.name.clone(),
+        };
+    }
+    RefreshOutcome::Updated(resolved)
+}
+
+fn source_state_map(facts: &[InputSourceStateFact]) -> BTreeMap<&str, Vec<&InputSourceStateFact>> {
+    let mut map: BTreeMap<&str, Vec<&InputSourceStateFact>> = BTreeMap::new();
+    for fact in facts {
+        map.entry(fact.input_name.as_str()).or_default().push(fact);
+    }
+    map
+}
+
+fn matching_source_fact<'a>(
+    input: &ManifestInput,
+    existing: Option<&LockEntry>,
+    source_state: &BTreeMap<&str, Vec<&'a InputSourceStateFact>>,
+) -> Option<&'a InputSourceStateFact> {
+    let candidates = source_state.get(input.name.as_str())?;
+    candidates.iter().copied().find(|fact| source_fact_matches(input, existing, fact))
+}
+
+fn source_fact_matches(input: &ManifestInput, existing: Option<&LockEntry>, fact: &InputSourceStateFact) -> bool {
+    if fact.ready_class != crate::InputSourceStateClass::Ready {
+        return false;
+    }
+    if fact.input_name != input.name {
+        return false;
+    }
+    if let Some(existing) = existing
+        && fact.hash_value == existing.hash.value
+    {
+        return true;
+    }
+    input.hash.expected.as_deref() == Some(fact.hash_value.as_str())
 }
 
 fn apply_updated_outcomes(lock: &mut Lockfile, outcomes: &[RefreshOutcome]) -> u32 {
@@ -372,12 +464,14 @@ fn refresh_failures_from_outcomes(outcomes: &[RefreshOutcome]) -> Vec<RefreshFai
 #[cfg(test)]
 mod tests {
     use alloc::collections::BTreeMap;
+    use alloc::format;
     use alloc::vec;
 
     use super::*;
     use crate::HashAlgo;
     use crate::HashSpec;
     use crate::InputKind;
+    use crate::InputSourceStateClass;
     use crate::LockedHash;
     use crate::LockedKind;
     use crate::ManifestInput;
@@ -392,6 +486,7 @@ mod tests {
             frozen: false,
             mirrors: vec![],
             patches: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
         }
     }
 
@@ -422,8 +517,19 @@ mod tests {
                 },
                 patches: vec![],
                 mirrors: vec![],
+                fetch_policy: InputFetchPolicy::GenerationMaterial,
             },
         })
+    }
+
+    fn source_fact(name: &str, hash: &str) -> InputSourceStateFact {
+        InputSourceStateFact {
+            input_name: name.to_string(),
+            hash_value: hash.to_string(),
+            identity: format!("fixture-{name}"),
+            source_state_blake3: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            ready_class: InputSourceStateClass::Ready,
+        }
     }
 
     #[test]
@@ -434,6 +540,7 @@ mod tests {
             lock: empty_lock(),
             selected: Vec::new(),
             resolutions: vec![resolved_file("data", "https://example.com/data.bin", "sha256-abc=")],
+            source_state: Vec::new(),
         });
 
         assert_eq!(outcomes.len(), 1);
@@ -460,6 +567,7 @@ mod tests {
             },
             patches: vec![],
             mirrors: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
         });
 
         let outcomes = refresh_inputs(RefreshInputsRequest {
@@ -467,6 +575,7 @@ mod tests {
             lock,
             selected: Vec::new(),
             resolutions: vec![resolved_file("data", "https://example.com/data.bin", "sha256-same=")],
+            source_state: Vec::new(),
         });
         assert!(matches!(&outcomes[0], RefreshOutcome::Unchanged { .. }));
     }
@@ -480,6 +589,7 @@ mod tests {
             lock: empty_lock(),
             selected: Vec::new(),
             resolutions: Vec::new(),
+            source_state: Vec::new(),
         });
         assert!(matches!(&outcomes[0], RefreshOutcome::Frozen { name } if name == "frozen"));
     }
@@ -501,6 +611,78 @@ mod tests {
     }
 
     #[test]
+    fn plan_refresh_inputs_excludes_build_fetch_policy_from_resolver_work() {
+        let mut build_fetch = file_input("build", "https://example.com/build");
+        build_fetch.fetch_policy = InputFetchPolicy::BuildFetchAction;
+        let manifest = manifest_with(vec![file_input("gen", "https://example.com/gen"), build_fetch]);
+        let plan = plan_refresh_inputs(RefreshInputsPlanRequest {
+            manifest,
+            selected: Vec::new(),
+        });
+
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan[0].name, "gen");
+    }
+
+    #[test]
+    fn refresh_build_fetch_policy_locks_expected_hash_without_resolution() {
+        let mut input = file_input("pkg", "https://example.com/pkg");
+        input.fetch_policy = InputFetchPolicy::BuildFetchAction;
+        input.hash.expected = Some("sha256-expected=".to_string());
+        let outcomes = refresh_inputs(RefreshInputsRequest {
+            manifest: manifest_with(vec![input]),
+            lock: empty_lock(),
+            selected: Vec::new(),
+            resolutions: Vec::new(),
+            source_state: Vec::new(),
+        });
+
+        match &outcomes[0] {
+            RefreshOutcome::Updated(resolved) => {
+                assert_eq!(resolved.entry.hash.value, "sha256-expected=");
+                assert_eq!(resolved.entry.fetch_policy, InputFetchPolicy::BuildFetchAction);
+            }
+            other => panic!("expected Updated, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn refresh_imported_source_policy_requires_ready_source_state() {
+        let mut input = file_input("pkg", "https://example.com/pkg");
+        input.fetch_policy = InputFetchPolicy::ImportedSourceRequired;
+        input.hash.expected = Some("sha256-expected=".to_string());
+        let outcomes = refresh_inputs(RefreshInputsRequest {
+            manifest: manifest_with(vec![input]),
+            lock: empty_lock(),
+            selected: Vec::new(),
+            resolutions: Vec::new(),
+            source_state: vec![source_fact("pkg", "sha256-expected=")],
+        });
+
+        assert!(
+            matches!(&outcomes[0], RefreshOutcome::Updated(resolved) if resolved.entry.fetch_policy == InputFetchPolicy::ImportedSourceRequired)
+        );
+    }
+
+    #[test]
+    fn refresh_imported_source_policy_fails_without_source_state() {
+        let mut input = file_input("pkg", "https://example.com/pkg");
+        input.fetch_policy = InputFetchPolicy::ImportedSourceRequired;
+        input.hash.expected = Some("sha256-expected=".to_string());
+        let outcomes = refresh_inputs(RefreshInputsRequest {
+            manifest: manifest_with(vec![input]),
+            lock: empty_lock(),
+            selected: Vec::new(),
+            resolutions: Vec::new(),
+            source_state: Vec::new(),
+        });
+
+        assert!(
+            matches!(&outcomes[0], RefreshOutcome::Failed { name, reason } if name == "pkg" && reason.contains("source-state"))
+        );
+    }
+
+    #[test]
     fn apply_outcomes_updates_lock_and_resolves_patches() {
         let manifest = ProjectManifest {
             version: "1.0.0".into(),
@@ -513,6 +695,7 @@ mod tests {
                 frozen: false,
                 mirrors: vec![],
                 patches: vec!["fix1".into()],
+                fetch_policy: InputFetchPolicy::GenerationMaterial,
             }],
             patches: vec![PatchDef {
                 name: "fix1".into(),
@@ -533,6 +716,7 @@ mod tests {
                 },
                 patches: vec!["fix1".into()],
                 mirrors: vec![],
+                fetch_policy: InputFetchPolicy::GenerationMaterial,
             },
         })];
         let patch_plan = plan_patch_resolutions(PatchResolutionPlanRequest {
@@ -578,6 +762,7 @@ mod tests {
                 frozen: false,
                 mirrors: vec![],
                 patches: vec!["bad".into()],
+                fetch_policy: InputFetchPolicy::GenerationMaterial,
             }],
             patches: vec![PatchDef {
                 name: "bad".into(),
@@ -598,6 +783,7 @@ mod tests {
                 },
                 patches: vec!["bad".into()],
                 mirrors: vec![],
+                fetch_policy: InputFetchPolicy::GenerationMaterial,
             },
         })];
 
@@ -645,6 +831,7 @@ mod tests {
                     },
                     patches: vec![],
                     mirrors: vec![],
+                    fetch_policy: InputFetchPolicy::GenerationMaterial,
                 },
             })],
             patch_resolutions: Vec::new(),
@@ -672,6 +859,7 @@ mod tests {
             },
             patches: vec![],
             mirrors: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
         });
         let stale = list_stale(RefreshInputsRequest {
             manifest,
@@ -685,6 +873,7 @@ mod tests {
                     reason: "network down".into(),
                 }),
             ],
+            source_state: Vec::new(),
         });
         assert_eq!(stale.stale, vec!["stale"]);
         assert_eq!(stale.failed.len(), 1);

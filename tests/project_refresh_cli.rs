@@ -265,6 +265,43 @@ fn refresh_partial_failure_writes_successes_and_exits_nonzero() {
 }
 
 #[test]
+fn build_fetch_policy_refresh_uses_expected_hash_without_network_resolution() {
+    let dir = TempDir::new().unwrap();
+    init_project(dir.path());
+    let remote_url = "https://example.invalid/unreachable.tar.gz";
+    let expected_hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "remote-src",
+      kind = {{ type = "tarball", url = {} }},
+      hash = {{ algo = 'sha256, expected = {} }},
+      fetch_policy = "build-fetch-action",
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        quoted(remote_url),
+        quoted(expected_hash),
+    );
+    write_project_files(dir.path(), &manifest, &Lockfile::new());
+
+    crunch().arg("refresh").current_dir(dir.path()).assert().success();
+    let lock = read_lock(dir.path());
+    let entry = lock.inputs.get("remote-src").expect("remote-src should be locked");
+
+    assert_eq!(entry.hash.value, expected_hash);
+    assert_eq!(entry.fetch_policy, crunch_project::InputFetchPolicy::BuildFetchAction);
+    let generated = std::fs::read_to_string(dir.path().join(".mantle/inputs.ncl")).unwrap();
+    assert!(generated.contains("fetch_policy = \"build-fetch-action\""));
+
+    crunch().arg("list-stale").current_dir(dir.path()).assert().success();
+}
+
+#[test]
 fn list_stale_reports_stale_and_failed_without_mutating_files() {
     let dir = TempDir::new().unwrap();
     init_project(dir.path());
@@ -296,6 +333,7 @@ fn list_stale_reports_stale_and_failed_without_mutating_files() {
         },
         patches: vec![],
         mirrors: vec![],
+        fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
     });
     write_project_files(dir.path(), &manifest, &lock);
 

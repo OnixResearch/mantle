@@ -812,6 +812,7 @@ fn sample_manifest() -> ProjectManifest {
             frozen: false,
             mirrors: vec!["https://mirror.invalid/hello.tar.gz".to_string()],
             patches: vec!["hello-fix".to_string()],
+            fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
         }],
         patches: vec![PatchDef {
             name: "hello-fix".to_string(),
@@ -834,6 +835,7 @@ fn sample_lock(locked_hash: &str) -> Lockfile {
         },
         patches: vec!["hello-fix".to_string()],
         mirrors: vec!["https://mirror.invalid/hello.tar.gz".to_string()],
+        fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
     });
 
     let mut patches = BTreeMap::new();

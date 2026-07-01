@@ -43,6 +43,7 @@ const DERIVED_FIXED_URL_ID_PREFIX: &str = "fixed-url";
 const DERIVED_STORE_PATH_ID_PREFIX: &str = "store-path";
 const DERIVED_VCS_ID_PREFIX: &str = "vcs-snapshot";
 const FETCH_ENV_EXECUTABLE_KEY: &str = "executable";
+const FETCH_ENV_FETCH_POLICY_KEY: &str = "fetch_policy";
 const FETCH_ENV_REV_KEY: &str = "rev";
 const FETCH_ENV_TYPE_KEY: &str = "type";
 const FETCH_ENV_UNPACK_KEY: &str = "unpack";
@@ -1656,6 +1657,7 @@ fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Re
     metadata.insert(RECORD_METADATA_NAME_KEY.to_string(), derivation.name.clone());
     metadata.insert(RECORD_METADATA_URL_KEY.to_string(), url.clone());
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_EXECUTABLE_KEY);
+    copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_FETCH_POLICY_KEY);
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_REV_KEY);
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_TYPE_KEY);
     copy_optional_env_metadata(&derivation.env, &mut metadata, FETCH_ENV_UNPACK_KEY);
@@ -2295,6 +2297,22 @@ mod tests {
         assert_eq!(store.store_prefix.as_deref(), Some("/mantle/store"));
         assert_eq!(store.metadata.get(RECORD_METADATA_STORE_PATH_KEY), Some(&store_path));
         assert!(store.files.is_empty());
+    }
+
+    #[test]
+    fn source_bundle_preserves_fetch_policy_metadata_from_fetch_derivation() {
+        let mut fetcher = fixed_fetcher("crate-src", "https://static.example.invalid/crate.tar.gz");
+        fetcher.env.insert(FETCH_ENV_FETCH_POLICY_KEY.to_string(), "build-fetch-action".to_string());
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let manifest =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap();
+        let record = manifest.records.iter().find(|record| record.kind == SourceRecordKind::FixedUrl).unwrap();
+
+        assert_eq!(record.metadata.get(FETCH_ENV_FETCH_POLICY_KEY).map(String::as_str), Some("build-fetch-action"));
+        assert_eq!(
+            record.metadata.get(RECORD_METADATA_URL_KEY).map(String::as_str),
+            Some("https://static.example.invalid/crate.tar.gz")
+        );
     }
 
     #[test]

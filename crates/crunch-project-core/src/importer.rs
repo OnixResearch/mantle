@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::InputFetchPolicy;
 use crate::generate::generate_inputs_ncl;
 use crate::lock::LockEntry;
 use crate::lock::LockedHash;
@@ -568,6 +569,13 @@ fn supported_fetch_policy(value: &str) -> bool {
     matches!(value, SEMANTIC_FETCH_REFRESH | SEMANTIC_FETCH_GENERATION)
 }
 
+fn map_external_fetch_policy(metadata: &ExternalPinMetadata) -> InputFetchPolicy {
+    match metadata.fetch_policy.as_deref() {
+        Some(SEMANTIC_FETCH_GENERATION) => InputFetchPolicy::BuildFetchAction,
+        _ => InputFetchPolicy::GenerationMaterial,
+    }
+}
+
 fn supported_trust_policy(value: &str) -> bool {
     matches!(value, SEMANTIC_TRUST_CONTENT_HASH | SEMANTIC_TRUST_HASH_ONLY)
 }
@@ -584,6 +592,7 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
     let (Some(hash), Some((manifest_kind, lock_kind, kind_label))) = (hash, mapped_kind) else {
         return None;
     };
+    let fetch_policy = map_external_fetch_policy(&pin.metadata);
     Some(MappedPin {
         manifest_input: ManifestInput {
             name: pin.name.clone(),
@@ -595,12 +604,14 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
             frozen: pin.frozen,
             mirrors: pin.mirrors.clone(),
             patches: pin.patches.clone(),
+            fetch_policy,
         },
         lock_entry: LockEntry {
             kind: lock_kind,
             hash: hash.clone(),
             patches: pin.patches.clone(),
             mirrors: pin.mirrors.clone(),
+            fetch_policy,
         },
         report: PinImportMappedInput {
             name: pin.name.clone(),
@@ -772,6 +783,7 @@ fn render_manifest_inputs(out: &mut String, inputs: &[ManifestInput]) {
         out.push_str(&format!("      frozen = {},\n", input.frozen));
         render_string_array(out, "mirrors", &input.mirrors, "      ");
         render_string_array(out, "patches", &input.patches, "      ");
+        out.push_str(&format!("      fetch_policy = {},\n", quote(input.fetch_policy.as_str())));
         out.push_str("    },\n");
     }
     out.push_str("  ],\n");

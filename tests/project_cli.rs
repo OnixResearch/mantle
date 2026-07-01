@@ -90,6 +90,55 @@ fn check_json_passes_on_fresh_project_with_bounded_non_claims() {
 }
 
 #[test]
+fn check_static_accepts_build_fetch_policy_without_fetching_remote_url() {
+    let dir = TempDir::new().unwrap();
+    mantle().arg("init").current_dir(dir.path()).assert().success();
+
+    let remote_url = "https://example.invalid/source.tar.gz";
+    let expected_hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "remote-src",
+      kind = {{ type = "tarball", url = {} }},
+      hash = {{ algo = 'sha256, expected = {} }},
+      fetch_policy = "build-fetch-action",
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        serde_json::to_string(remote_url).unwrap(),
+        serde_json::to_string(expected_hash).unwrap(),
+    );
+    let mut lock = crunch_project::Lockfile::new();
+    lock.inputs.insert("remote-src".into(), crunch_project::LockEntry {
+        kind: crunch_project::LockedKind::Tarball {
+            url: remote_url.to_string(),
+        },
+        hash: crunch_project::LockedHash {
+            algo: crunch_project::HashAlgo::Sha256,
+            value: expected_hash.to_string(),
+        },
+        patches: Vec::new(),
+        mirrors: Vec::new(),
+        fetch_policy: crunch_project::InputFetchPolicy::BuildFetchAction,
+    });
+    std::fs::write(dir.path().join("mantle-project.ncl"), manifest).unwrap();
+    std::fs::write(dir.path().join("mantle.lock"), lock.clone().to_json().unwrap()).unwrap();
+    std::fs::write(dir.path().join(".mantle/inputs.ncl"), crunch_project::generate_inputs_ncl(lock)).unwrap();
+
+    mantle()
+        .arg("check")
+        .current_dir(dir.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("project check passed"));
+}
+
+#[test]
 fn check_json_explicit_probe_and_trust_mode_labels_behavior() {
     let dir = TempDir::new().unwrap();
 

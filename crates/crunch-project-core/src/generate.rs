@@ -186,6 +186,11 @@ fn generate_entry(out: &mut String, name: &str, entry: &LockEntry) {
         name: "patches",
         values: &entry.patches,
     });
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "fetch_policy",
+        value: entry.fetch_policy.as_str(),
+    });
 
     out.push_str("  },\n");
 }
@@ -347,6 +352,7 @@ mod tests {
             },
             patches: vec![],
             mirrors: vec![],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
         });
         Lockfile {
             version: SchemaVersion::CURRENT,
@@ -371,6 +377,7 @@ mod tests {
         assert!(ncl.contains("type = \"file\""));
         assert!(ncl.contains("url = \"https://example.com/data.bin\""));
         assert!(ncl.contains("hash = \"sha256-abc=\""));
+        assert!(ncl.contains("fetch_policy = \"generation-material\""));
     }
 
     #[test]
@@ -403,6 +410,7 @@ mod tests {
             },
             patches: vec![],
             mirrors: vec!["https://mirror.example.com/nixpkgs.git".to_string()],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
         });
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,
@@ -490,6 +498,7 @@ mod tests {
             },
             patches: vec!["fix1".into()],
             mirrors: vec![],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
         });
         let mut patches = BTreeMap::new();
         patches.insert("fix1".into(), LockedPatch {
