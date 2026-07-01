@@ -24,9 +24,13 @@ Use a versioned ALPN such as `mantle-remote-build/1`. The control stream should 
 
 Every variable-length list must have explicit chunk, item, and byte limits. Version mismatch, endpoint identity mismatch, unexpected message order, unsupported capabilities, and oversized messages fail closed.
 
+`ConcreteBuildRequest` now carries bounded executable payload identity: either an action spec (`action_id`, serialized concrete action JSON) or a derivation spec (`drv_path`, serialized derivation JSON), plus explicit expected output names and logical paths. Raw frontend/Nickel evaluation remains rejected at the remote boundary. This model is intentionally still a transport payload contract, not proof that the fixture server executes the payload yet.
+
 ## Frame and first-binding decision
 
 The first concrete frame format is `u32be-length-prefixed-json`: a four-byte big-endian payload length followed by one JSON `RemoteFrame` payload. The decoder rejects incomplete headers, payload lengths above `MAX_REMOTE_FRAME_BYTES`, JSON errors, and trailing or missing bytes. This makes stdio pollution deterministic: ordinary human stdout starts with bytes that cannot satisfy the frame contract and fails before queue admission.
+
+Preserves is a plausible later codec because it has a syntax-neutral data model, Rust support, schema tooling, and canonical binary syntax. Do not switch this change to Preserves while the request/executor semantics are still moving: the current validation and CLI fixture depend on readable framed JSON evidence. Revisit Preserves when the protocol fields stabilize and the work is mostly codec/schema generation rather than behavioral semantics.
 
 The first implementation binding is in-process loopback over the same `RemoteFrame` state machine. Stdio and SSH-stdio use the same length-prefixed frame contract when the shell grows process spawning. Production P2P remains a later binding and must not add a second protocol core.
 

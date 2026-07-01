@@ -17,6 +17,8 @@ pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
 pub const REMOTE_PROTOCOL_VERSION: u32 = 1;
 pub const MAX_REMOTE_CAPABILITIES: usize = 32;
 pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
+pub const MAX_REMOTE_EXPECTED_OUTPUTS: usize = 128;
+pub const MAX_REMOTE_BUILD_PAYLOAD_BYTES: usize = 1_048_576;
 pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
 pub const MAX_REMOTE_STDIO_STDERR_BYTES: usize = 65_536;
 pub const MAX_REMOTE_STDIO_FRAME_COUNT: usize = 4_096;
@@ -104,6 +106,21 @@ pub struct ConcreteBuildRequest {
     pub upload_bytes: u64,
     pub build_time_limit_secs: u64,
     pub contains_raw_frontend_eval: bool,
+    pub payload: RemoteConcreteBuildPayload,
+    pub expected_outputs: Vec<RemoteExpectedOutput>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum RemoteConcreteBuildPayload {
+    Derivation { drv_path: String, drv_json: String },
+    Action { action_id: String, spec_json: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteExpectedOutput {
+    pub name: String,
+    pub logical_path: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -538,6 +555,8 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
     if !request.store_prefix.starts_with('/') {
         return Err("store-prefix-not-absolute".to_string());
     }
+    validate_remote_build_payload(&request.payload, &request.store_prefix)?;
+    validate_expected_outputs(&request.expected_outputs, &request.store_prefix)?;
     if request.input_refs.len() > MAX_REMOTE_INPUT_REFS {
         return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
     }
@@ -548,6 +567,56 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
         || request.build_time_limit_secs > MAX_REMOTE_BUILD_TIME_SECS
     {
         return Err("build-time-limit-exceeded".to_string());
+    }
+    Ok(())
+}
+
+fn validate_remote_build_payload(payload: &RemoteConcreteBuildPayload, store_prefix: &str) -> Result<(), String> {
+    match payload {
+        RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } => {
+            if drv_path.is_empty() || !drv_path.starts_with(store_prefix) {
+                return Err("remote-derivation-path-store-prefix-mismatch".to_string());
+            }
+            if drv_json.is_empty() {
+                return Err("remote-build-payload-empty".to_string());
+            }
+            if drv_json.len() > MAX_REMOTE_BUILD_PAYLOAD_BYTES {
+                return Err(format!("remote-build-payload-exceeds-{MAX_REMOTE_BUILD_PAYLOAD_BYTES}"));
+            }
+        }
+        RemoteConcreteBuildPayload::Action { action_id, spec_json } => {
+            if action_id.is_empty() {
+                return Err("remote-action-id-empty".to_string());
+            }
+            if spec_json.is_empty() {
+                return Err("remote-build-payload-empty".to_string());
+            }
+            if spec_json.len() > MAX_REMOTE_BUILD_PAYLOAD_BYTES {
+                return Err(format!("remote-build-payload-exceeds-{MAX_REMOTE_BUILD_PAYLOAD_BYTES}"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_expected_outputs(outputs: &[RemoteExpectedOutput], store_prefix: &str) -> Result<(), String> {
+    if outputs.is_empty() {
+        return Err("remote-expected-outputs-empty".to_string());
+    }
+    if outputs.len() > MAX_REMOTE_EXPECTED_OUTPUTS {
+        return Err(format!("remote-expected-output-count-exceeds-{MAX_REMOTE_EXPECTED_OUTPUTS}"));
+    }
+    let mut names = BTreeSet::new();
+    for output in outputs {
+        if output.name.is_empty() {
+            return Err("remote-expected-output-name-empty".to_string());
+        }
+        if !names.insert(output.name.as_str()) {
+            return Err("remote-expected-output-name-duplicate".to_string());
+        }
+        if output.logical_path.is_empty() || !output.logical_path.starts_with(store_prefix) {
+            return Err("remote-expected-output-store-prefix-mismatch".to_string());
+        }
     }
     Ok(())
 }
@@ -1207,10 +1276,30 @@ fn remote_loopback_output_digest(request: &ConcreteBuildRequest, input_refs: &[S
     let mut hasher = blake3::Hasher::new();
     hasher.update(request.request_id.as_bytes());
     hasher.update(request.store_prefix.as_bytes());
+    hash_remote_build_payload(&mut hasher, &request.payload);
+    for expected_output in &request.expected_outputs {
+        hasher.update(expected_output.name.as_bytes());
+        hasher.update(expected_output.logical_path.as_bytes());
+    }
     for input_ref in input_refs {
         hasher.update(input_ref.as_bytes());
     }
     hasher.finalize().to_hex().to_string()
+}
+
+fn hash_remote_build_payload(hasher: &mut blake3::Hasher, payload: &RemoteConcreteBuildPayload) {
+    match payload {
+        RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } => {
+            hasher.update(b"derivation");
+            hasher.update(drv_path.as_bytes());
+            hasher.update(drv_json.as_bytes());
+        }
+        RemoteConcreteBuildPayload::Action { action_id, spec_json } => {
+            hasher.update(b"action");
+            hasher.update(action_id.as_bytes());
+            hasher.update(spec_json.as_bytes());
+        }
+    }
 }
 
 fn take_hello<'a>(
@@ -1730,6 +1819,8 @@ mod tests {
             upload_bytes: 0,
             build_time_limit_secs: 1,
             contains_raw_frontend_eval: true,
+            payload: fixture_payload(),
+            expected_outputs: fixture_expected_outputs(),
         };
         assert!(validate_concrete_request(&request, &ticket).is_err());
         redeem_after_queue(&mut ticket, false).unwrap();
@@ -1753,10 +1844,47 @@ mod tests {
             upload_bytes: 1,
             build_time_limit_secs: 1,
             contains_raw_frontend_eval: false,
+            payload: fixture_payload(),
+            expected_outputs: fixture_expected_outputs(),
         };
         validate_concrete_request(&request, &ticket).unwrap();
         redeem_after_queue(&mut ticket, true).unwrap();
         assert_eq!(ticket.uses_remaining, 0);
+    }
+
+    #[test]
+    fn concrete_request_requires_executable_payload_and_expected_outputs() {
+        let ticket = fixture_ticket();
+        let mut empty_payload = fixture_request();
+        empty_payload.payload = RemoteConcreteBuildPayload::Action {
+            action_id: "action-1".to_string(),
+            spec_json: String::new(),
+        };
+        let mut empty_outputs = fixture_request();
+        empty_outputs.expected_outputs = Vec::new();
+
+        assert_eq!(
+            validate_concrete_request(&empty_payload, &ticket).expect_err("empty payload is rejected"),
+            "remote-build-payload-empty"
+        );
+        assert_eq!(
+            validate_concrete_request(&empty_outputs, &ticket).expect_err("empty outputs are rejected"),
+            "remote-expected-outputs-empty"
+        );
+    }
+
+    #[test]
+    fn remote_output_digest_changes_when_payload_identity_changes() {
+        let mut changed = fixture_request();
+        changed.payload = RemoteConcreteBuildPayload::Action {
+            action_id: "action-2".to_string(),
+            spec_json: "{\"builder\":\"builtin:fixture\"}".to_string(),
+        };
+        let original_digest = remote_loopback_output_digest(&fixture_request(), &["input-a".to_string()]);
+        let changed_digest = remote_loopback_output_digest(&changed, &["input-a".to_string()]);
+
+        assert_ne!(original_digest, changed_digest);
+        assert_eq!(original_digest.len(), BLAKE3_HEX_LENGTH_CHARS);
     }
 
     #[test]
@@ -2246,7 +2374,23 @@ mod tests {
             upload_bytes: 1,
             build_time_limit_secs: 1,
             contains_raw_frontend_eval: false,
+            payload: fixture_payload(),
+            expected_outputs: fixture_expected_outputs(),
         }
+    }
+
+    fn fixture_payload() -> RemoteConcreteBuildPayload {
+        RemoteConcreteBuildPayload::Action {
+            action_id: "action-1".to_string(),
+            spec_json: "{\"builder\":\"builtin:fixture\"}".to_string(),
+        }
+    }
+
+    fn fixture_expected_outputs() -> Vec<RemoteExpectedOutput> {
+        vec![RemoteExpectedOutput {
+            name: "out".to_string(),
+            logical_path: "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture".to_string(),
+        }]
     }
 
     fn fixture_manifest() -> RemoteInputManifest {

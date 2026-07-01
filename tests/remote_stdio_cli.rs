@@ -133,7 +133,16 @@ fn client_request_frames() -> Vec<Value> {
                 "input_refs": ["input-a"],
                 "upload_bytes": TEST_UPLOAD_BYTES,
                 "build_time_limit_secs": TEST_BUILD_TIME_LIMIT_SECS,
-                "contains_raw_frontend_eval": false
+                "contains_raw_frontend_eval": false,
+                "payload": {
+                    "kind": "action",
+                    "action_id": "action-1",
+                    "spec_json": "{\"builder\":\"builtin:fixture\"}"
+                },
+                "expected_outputs": [{
+                    "name": "out",
+                    "logical_path": "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture"
+                }]
             }
         }),
         serde_json::json!({
