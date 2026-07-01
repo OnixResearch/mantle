@@ -51,6 +51,7 @@ const STDERR_TRUNCATION_MARKER: &str = "\n<stderr-truncated>";
 const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 const REMOTE_ACTION_SPEC_SCHEMA: &str = "mantle-remote-action-v1";
 const DEFAULT_REMOTE_ACTION_SYSTEM: &str = "x86_64-linux";
+const REMOTE_LOCAL_BUILD_WORKDIR_NAME: &str = "mantle-remote-builds";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -193,15 +194,53 @@ pub struct RemoteProducedOutput {
 }
 
 pub trait RemoteBuildExecutor {
-    fn execute(&self, plan: &RemoteExecutablePlan, input_refs: &[String]) -> Result<RemoteExecutionOutcome, String>;
+    fn execute(
+        &self,
+        request: &ConcreteBuildRequest,
+        plan: &RemoteExecutablePlan,
+        input_refs: &[String],
+    ) -> Result<RemoteExecutionOutcome, String>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RemoteFixtureExecutor;
 
 impl RemoteBuildExecutor for RemoteFixtureExecutor {
-    fn execute(&self, plan: &RemoteExecutablePlan, input_refs: &[String]) -> Result<RemoteExecutionOutcome, String> {
+    fn execute(
+        &self,
+        _request: &ConcreteBuildRequest,
+        plan: &RemoteExecutablePlan,
+        input_refs: &[String],
+    ) -> Result<RemoteExecutionOutcome, String> {
         execute_remote_fixture_plan(plan, input_refs)
+    }
+}
+
+#[derive(Clone)]
+pub struct RemoteLocalBuildExecutor {
+    pub state_dir: PathBuf,
+    pub output_dir: PathBuf,
+    pub store_prefix: String,
+    pub keypair: crunch_build::KeyPair,
+    pub trusted_keys: Vec<nix_compat::narinfo::VerifyingKey>,
+    pub trust_unsigned: bool,
+    pub verbose: bool,
+}
+
+impl RemoteLocalBuildExecutor {
+    fn signing_key_id(&self) -> String {
+        self.keypair.verifying_key.name().to_string()
+    }
+}
+
+impl RemoteBuildExecutor for RemoteLocalBuildExecutor {
+    fn execute(
+        &self,
+        request: &ConcreteBuildRequest,
+        plan: &RemoteExecutablePlan,
+        input_refs: &[String],
+    ) -> Result<RemoteExecutionOutcome, String> {
+        execute_remote_local_build(self, request, plan, input_refs)
     }
 }
 
@@ -1082,6 +1121,176 @@ fn execute_remote_fixture_plan(
         output_size_bytes,
         outputs,
     })
+}
+
+fn execute_remote_local_build(
+    executor: &RemoteLocalBuildExecutor,
+    request: &ConcreteBuildRequest,
+    plan: &RemoteExecutablePlan,
+    input_refs: &[String],
+) -> Result<RemoteExecutionOutcome, String> {
+    if !input_refs.is_empty() {
+        return Err("remote-local-executor-input-refs-unsupported".to_string());
+    }
+    if executor.store_prefix != request.store_prefix {
+        return Err("remote-local-executor-store-prefix-mismatch".to_string());
+    }
+    validate_remote_execution_plan(plan)?;
+
+    #[cfg(target_os = "linux")]
+    {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|err| format!("remote-local-executor-runtime: {err}"))?;
+        return rt.block_on(execute_remote_local_build_linux(executor, request, plan));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = executor;
+        let _ = request;
+        let _ = plan;
+        Err("remote-local-executor-unsupported-platform".to_string())
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn execute_remote_local_build_linux(
+    executor: &RemoteLocalBuildExecutor,
+    request: &ConcreteBuildRequest,
+    plan: &RemoteExecutablePlan,
+) -> Result<RemoteExecutionOutcome, String> {
+    use snix_build::buildservice::BubblewrapBuildService;
+
+    let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&executor.state_dir)
+        .map_err(|err| format!("remote-local-executor-mutation-lock: {err}"))?;
+    let (drv_path, mut known_paths) = local_derivation_registry(request, plan)?;
+    let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        state_dir: executor.state_dir.clone(),
+        output_dir: executor.output_dir.clone(),
+        remote_cache_url: None,
+        fallback_mode: crunch_store::StoreFallbackMode::Practical,
+        store_dir: executor.store_prefix.clone(),
+    })
+    .await
+    .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
+
+    let blob_service = store.blob_service();
+    let directory_service = store.directory_service();
+    let pathinfo_service = store.pathinfo_service();
+    let workdir = std::env::temp_dir().join(REMOTE_LOCAL_BUILD_WORKDIR_NAME);
+    std::fs::create_dir_all(&workdir).map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
+    let bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
+    let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
+    let build_service = crunch_build::DispatchBuildService::new(fetch_service, bwrap_service);
+    let mut builder = crunch_build::Builder::with_state_dir(
+        blob_service,
+        directory_service,
+        build_service,
+        pathinfo_service,
+        executor.output_dir.clone(),
+        Some(store.state_dir().to_path_buf()),
+        store.remote_pathinfo(),
+        &executor.store_prefix,
+        executor.keypair.clone(),
+        executor.trusted_keys.clone(),
+        executor.trust_unsigned,
+        executor.verbose,
+    );
+    builder.set_root_retention_source(Some(crunch_store::GcRootSource::Build));
+    let outcome = builder
+        .build(&drv_path, &mut known_paths)
+        .await
+        .map_err(|err| format!("remote-local-executor-build: {err}"))?;
+    remote_execution_outcome_from_build_outcome(request, plan, &outcome)
+}
+
+fn local_derivation_registry(
+    request: &ConcreteBuildRequest,
+    plan: &RemoteExecutablePlan,
+) -> Result<(StorePath<String>, crunch_build::DerivationRegistry), String> {
+    let RemoteConcreteBuildPayload::Derivation { drv_path, drv_json } = &request.payload else {
+        return Err("remote-local-executor-action-unsupported".to_string());
+    };
+    let declared = StorePath::from_absolute_path_with_prefix(drv_path.as_bytes(), &request.store_prefix)
+        .map_err(|_| "remote-local-executor-drv-path-invalid".to_string())?;
+    let drv: crunch_glue::CrunchDerivation = serde_json::from_str(drv_json)
+        .map_err(|err| format!("remote-local-executor-derivation-json-invalid: {err}"))?;
+    let mut conversion_cache = crunch_glue::ConversionCache::new(&request.store_prefix);
+    let (computed, _) = crunch_glue::convert(&drv, &mut conversion_cache)
+        .map_err(|err| format!("remote-local-executor-derivation-convert-invalid: {err}"))?;
+    if declared != computed {
+        return Err("remote-local-executor-drv-path-mismatch".to_string());
+    }
+    if !matches!(
+        &plan.source,
+        RemoteExecutablePlanSource::Derivation { computed_drv_path, .. }
+            if computed_drv_path == &computed.to_absolute_path_with_prefix(&request.store_prefix)
+    ) {
+        return Err("remote-local-executor-plan-source-mismatch".to_string());
+    }
+    let mut registry = crunch_build::DerivationRegistry::new(&request.store_prefix);
+    crunch_build::populate_registry(&mut registry, conversion_cache.iter_entries());
+    let computed_abs = computed.to_absolute_path_with_prefix(&request.store_prefix);
+    if registry.get_by_drv_path(&computed_abs).is_none() {
+        return Err("remote-local-executor-registry-root-missing".to_string());
+    }
+    Ok((computed, registry))
+}
+
+fn remote_execution_outcome_from_build_outcome(
+    request: &ConcreteBuildRequest,
+    plan: &RemoteExecutablePlan,
+    outcome: &crunch_build::BuildOutcome,
+) -> Result<RemoteExecutionOutcome, String> {
+    let mut outputs = Vec::with_capacity(plan.expected_outputs.len());
+    for expected in &plan.expected_outputs {
+        let path_info = outcome
+            .outputs
+            .get(&expected.name)
+            .ok_or_else(|| "remote-local-executor-output-missing".to_string())?;
+        outputs.push(remote_execution_output_from_pathinfo(&request.store_prefix, expected, path_info)?);
+    }
+    let output_size_bytes = sum_remote_execution_output_sizes(&outputs)?;
+    let output_digest_blake3 = remote_execution_outputs_digest(&outputs);
+    Ok(RemoteExecutionOutcome {
+        request_id: request.request_id.clone(),
+        plan_digest_blake3: plan.plan_digest_blake3.clone(),
+        output_digest_blake3,
+        output_size_bytes,
+        outputs,
+    })
+}
+
+fn remote_execution_output_from_pathinfo(
+    store_prefix: &str,
+    expected: &RemoteExpectedOutput,
+    path_info: &PathInfo,
+) -> Result<RemoteExecutionOutput, String> {
+    let logical_path = path_info.store_path.to_absolute_path_with_prefix(store_prefix);
+    if logical_path != expected.logical_path {
+        return Err("remote-local-executor-output-path-mismatch".to_string());
+    }
+    let content_digest_blake3 = remote_pathinfo_node_digest_blake3(path_info)?;
+    let artifact_attestation_digest_blake3 =
+        crunch_store::artifact_attestation_digest_for_pathinfo(store_prefix, path_info, &expected.name, None)
+            .map_err(|err| format!("remote-local-executor-artifact-digest: {err}"))?
+            .to_hex();
+    Ok(RemoteExecutionOutput {
+        name: expected.name.clone(),
+        logical_path,
+        content_digest_blake3,
+        size_bytes: path_info.nar_size,
+        artifact_attestation_digest_blake3,
+        path_info: Some(path_info.clone()),
+    })
+}
+
+fn remote_pathinfo_node_digest_blake3(path_info: &PathInfo) -> Result<String, String> {
+    let node_bytes =
+        serde_json::to_vec(&path_info.node).map_err(|err| format!("remote-local-executor-node-digest-json: {err}"))?;
+    Ok(blake3::hash(&node_bytes).to_hex().to_string())
 }
 
 fn validate_remote_execution_plan(plan: &RemoteExecutablePlan) -> Result<(), String> {
@@ -2357,7 +2566,7 @@ fn expect_output_trust(builder: &RemoteLoopbackBuilder, client: &RemoteLoopbackC
 fn remote_loopback_output_digest(request: &ConcreteBuildRequest, input_refs: &[String]) -> Result<String, String> {
     let plan = plan_remote_executable_request(request)?;
     let executor = RemoteFixtureExecutor;
-    let execution = executor.execute(&plan, input_refs)?;
+    let execution = executor.execute(request, &plan, input_refs)?;
     validate_remote_execution_outcome(&execution, request, &plan)?;
     Ok(execution.output_digest_blake3)
 }
@@ -2469,7 +2678,7 @@ fn build_response_frames(
     push_builder_frame(&mut response_frames, &mut phase, RemoteFrame::BuildStarted {
         request_id: request.request_id.clone(),
     })?;
-    let execution = executor.execute(&plan, input_refs)?;
+    let execution = executor.execute(request, &plan, input_refs)?;
     validate_remote_execution_outcome(&execution, request, &plan)?;
     validate_remote_execution_output_pathinfos(&execution.outputs, &builder.signing_key_id, &request.store_prefix)?;
     let outputs = sign_remote_execution_outputs(&execution.outputs, &builder.signing_key_id);
@@ -2785,6 +2994,7 @@ fn ticket_state_path(state_dir: &Path) -> std::path::PathBuf {
 
 pub fn cmd_remote(
     action: crate::RemoteAction,
+    output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
     json_output: bool,
@@ -2795,12 +3005,15 @@ pub fn cmd_remote(
             endpoint_id,
             binding,
             signing_key_id,
+            executor,
             present_input_refs,
         } => cmd_remote_serve(
             endpoint_id,
             binding,
             signing_key_id,
+            executor,
             present_input_refs,
+            output_dir,
             state_dir,
             store_prefix,
             json_output,
@@ -2808,11 +3021,38 @@ pub fn cmd_remote(
     }
 }
 
+fn remote_serve_executor(
+    executor: crate::RemoteServeExecutor,
+    fixture_signing_key_id: String,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<(String, Option<RemoteLocalBuildExecutor>), RunError> {
+    match executor {
+        crate::RemoteServeExecutor::Fixture => Ok((fixture_signing_key_id, None)),
+        crate::RemoteServeExecutor::LocalBuild => {
+            let keypair = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir, false)?;
+            let local = RemoteLocalBuildExecutor {
+                state_dir: state_dir.to_path_buf(),
+                output_dir: output_dir.to_path_buf(),
+                store_prefix: store_prefix.to_string(),
+                keypair,
+                trusted_keys: Vec::new(),
+                trust_unsigned: false,
+                verbose: false,
+            };
+            Ok((local.signing_key_id(), Some(local)))
+        }
+    }
+}
+
 fn cmd_remote_serve(
     endpoint_id: String,
     binding: crate::RemoteServeBinding,
     signing_key_id: String,
+    executor: crate::RemoteServeExecutor,
     present_input_refs: Vec<String>,
+    output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
     json_output: bool,
@@ -2823,20 +3063,31 @@ fn cmd_remote_serve(
         }
         crate::RemoteServeBinding::StdioOnce => {
             let mut state = load_ticket_state(state_dir)?;
+            let (builder_signing_key_id, local_executor) =
+                remote_serve_executor(executor, signing_key_id, output_dir, state_dir, store_prefix)?;
             let builder = RemoteLoopbackBuilder {
                 endpoint_id,
                 store_prefix: store_prefix.to_string(),
                 supported_capabilities: vec!["delta".to_string(), "full".to_string()],
                 present_input_refs,
-                signing_key_id,
+                signing_key_id: builder_signing_key_id,
                 transfer_capabilities: RemoteTransferCapabilities::delta_and_full(),
             };
-            let response = plan_stdio_remote_once_from_state(
-                std::io::stdin().lock(),
-                &builder,
-                &mut state,
-                RemoteTransferCapabilities::delta_and_full(),
-            )
+            let response = match local_executor {
+                Some(local_executor) => plan_stdio_remote_once_from_state_with_executor(
+                    std::io::stdin().lock(),
+                    &builder,
+                    &mut state,
+                    RemoteTransferCapabilities::delta_and_full(),
+                    &local_executor,
+                ),
+                None => plan_stdio_remote_once_from_state(
+                    std::io::stdin().lock(),
+                    &builder,
+                    &mut state,
+                    RemoteTransferCapabilities::delta_and_full(),
+                ),
+            }
             .map_err(|err| RunError::Internal(format!("remote stdio serve once: {err}")))?;
             save_ticket_state(state_dir, &state)?;
             write_remote_response_frames(std::io::stdout().lock(), &response)
@@ -3074,6 +3325,73 @@ mod tests {
         request.expected_outputs[0].logical_path = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-stale".to_string();
         let err = plan_remote_executable_request(&request).expect_err("stale output path fails");
         assert_eq!(err, "remote-derivation-output-path-mismatch");
+    }
+
+    #[test]
+    fn local_derivation_registry_accepts_declared_derivation_payload() {
+        let request = fixture_derivation_request();
+        let plan = plan_remote_executable_request(&request).expect("derivation request plans");
+        let (drv_path, registry) = local_derivation_registry(&request, &plan).expect("registry builds from payload");
+        let drv_abs = drv_path.to_absolute_path_with_prefix(&request.store_prefix);
+
+        assert_eq!(drv_abs, fixture_derivation_drv_path(&request));
+        assert!(registry.get_by_drv_path(&drv_abs).is_some());
+    }
+
+    #[test]
+    fn local_derivation_registry_rejects_action_payload() {
+        let request = fixture_request();
+        let plan = plan_remote_executable_request(&request).expect("action request plans");
+        let err = match local_derivation_registry(&request, &plan) {
+            Ok(_) => panic!("actions are not local derivation builds"),
+            Err(err) => err,
+        };
+
+        assert_eq!(err, "remote-local-executor-action-unsupported");
+    }
+
+    #[test]
+    fn local_executor_rejects_missing_input_materialization_boundary() {
+        let mut request = fixture_derivation_request();
+        request.input_refs = vec!["cas:missing".to_string()];
+        let plan = plan_remote_executable_request(&request).expect("derivation request plans");
+        let executor = fixture_local_build_executor();
+        let err = executor
+            .execute(&request, &plan, &request.input_refs)
+            .expect_err("input refs need materialization before local execution");
+
+        assert_eq!(err, "remote-local-executor-input-refs-unsupported");
+    }
+
+    #[test]
+    fn build_outcome_maps_pathinfo_to_remote_execution_output() {
+        let request = fixture_derivation_request();
+        let plan = plan_remote_executable_request(&request).expect("derivation request plans");
+        let expected = plan.expected_outputs[0].clone();
+        let mut outputs = BTreeMap::new();
+        outputs.insert(expected.name.clone(), pathinfo_for_logical_path(&expected.logical_path));
+        let outcome = fixture_build_outcome(&request, outputs);
+        let remote = remote_execution_outcome_from_build_outcome(&request, &plan, &outcome)
+            .expect("build outcome maps to remote outcome");
+
+        assert_eq!(remote.request_id, request.request_id);
+        assert_eq!(remote.plan_digest_blake3, plan.plan_digest_blake3);
+        assert_eq!(remote.outputs.len(), 1);
+        assert_eq!(remote.outputs[0].path_info, Some(pathinfo_for_logical_path(&expected.logical_path)));
+        assert_eq!(remote.outputs[0].artifact_attestation_digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+    }
+
+    #[test]
+    fn build_outcome_rejects_unexpected_output_path() {
+        let request = fixture_derivation_request();
+        let plan = plan_remote_executable_request(&request).expect("derivation request plans");
+        let mut outputs = BTreeMap::new();
+        outputs.insert("out".to_string(), importable_pathinfo());
+        let outcome = fixture_build_outcome(&request, outputs);
+        let err = remote_execution_outcome_from_build_outcome(&request, &plan, &outcome)
+            .expect_err("wrong path does not satisfy derivation expectation");
+
+        assert_eq!(err, "remote-local-executor-output-path-mismatch");
     }
 
     #[test]
@@ -3768,6 +4086,7 @@ mod tests {
     impl RemoteBuildExecutor for PathInfoRemoteExecutor {
         fn execute(
             &self,
+            _request: &ConcreteBuildRequest,
             plan: &RemoteExecutablePlan,
             _input_refs: &[String],
         ) -> Result<RemoteExecutionOutcome, String> {
@@ -3824,6 +4143,7 @@ mod tests {
     impl RemoteBuildExecutor for FixedRemoteExecutor {
         fn execute(
             &self,
+            _request: &ConcreteBuildRequest,
             plan: &RemoteExecutablePlan,
             _input_refs: &[String],
         ) -> Result<RemoteExecutionOutcome, String> {
@@ -3995,6 +4315,13 @@ mod tests {
         }
     }
 
+    fn pathinfo_for_logical_path(logical_path: &str) -> PathInfo {
+        let mut path_info = importable_pathinfo();
+        path_info.store_path = StorePath::from_absolute_path_with_prefix(logical_path.as_bytes(), "/mantle/store")
+            .expect("fixture output path parses");
+        path_info
+    }
+
     fn importable_store_path() -> StorePath<String> {
         StorePath::from_absolute_path_with_prefix(
             fixture_expected_outputs()[0].logical_path.as_bytes(),
@@ -4098,6 +4425,31 @@ mod tests {
         }
     }
 
+    fn fixture_derivation_drv_path(request: &ConcreteBuildRequest) -> String {
+        match &request.payload {
+            RemoteConcreteBuildPayload::Derivation { drv_path, .. } => drv_path.clone(),
+            RemoteConcreteBuildPayload::Action { .. } => panic!("fixture expected derivation payload"),
+        }
+    }
+
+    fn fixture_build_outcome(
+        request: &ConcreteBuildRequest,
+        outputs: BTreeMap<String, PathInfo>,
+    ) -> crunch_build::BuildOutcome {
+        let drv_path = StorePath::from_absolute_path_with_prefix(
+            fixture_derivation_drv_path(request).as_bytes(),
+            &request.store_prefix,
+        )
+        .expect("fixture drv path parses");
+        crunch_build::BuildOutcome {
+            drv_path,
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        }
+    }
+
     fn fixture_derivation_json() -> String {
         serde_json::json!({
             "name": "remote-fixture",
@@ -4107,6 +4459,25 @@ mod tests {
             "addressing_mode": "input-addressed"
         })
         .to_string()
+    }
+
+    fn fixture_local_build_executor() -> RemoteLocalBuildExecutor {
+        RemoteLocalBuildExecutor {
+            state_dir: PathBuf::from("/tmp/mantle-remote-build-test-state"),
+            output_dir: PathBuf::from("/tmp/mantle-remote-build-test-store"),
+            store_prefix: "/mantle/store".to_string(),
+            keypair: fixture_keypair(),
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+            verbose: false,
+        }
+    }
+
+    fn fixture_keypair() -> crunch_build::KeyPair {
+        crunch_build::load_keypair(
+            "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==",
+        )
+        .expect("fixture keypair parses")
     }
 
     fn fixture_expected_outputs() -> Vec<RemoteExpectedOutput> {

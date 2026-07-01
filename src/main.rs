@@ -1335,9 +1335,14 @@ pub enum RemoteAction {
         #[arg(long, value_enum, default_value = "metadata")]
         binding: RemoteServeBinding,
 
-        /// Builder signing key id advertised in framed responses
+        /// Builder signing key id advertised in fixture framed responses
         #[arg(long, default_value = "builder-key")]
         signing_key_id: String,
+
+        /// Executor used by stdio-once; fixture is deterministic, local-build runs derivation
+        /// payloads locally
+        #[arg(long, value_enum, default_value = "fixture")]
+        executor: RemoteServeExecutor,
 
         /// Input ref already present on this builder; repeat for multiple refs
         #[arg(long = "present-input-ref")]
@@ -1349,6 +1354,12 @@ pub enum RemoteAction {
 pub enum RemoteServeBinding {
     Metadata,
     StdioOnce,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteServeExecutor {
+    Fixture,
+    LocalBuild,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -2089,7 +2100,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             portable_receipt::cmd_receipt(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
         Command::Remote { action } => {
-            remote_build::cmd_remote(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
+            remote_build::cmd_remote(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
         Command::Artifact { action } => {
             artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)
