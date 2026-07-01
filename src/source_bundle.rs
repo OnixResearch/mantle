@@ -27,6 +27,9 @@ pub const MAX_ADAPTER_METADATA_BYTES: usize = 8_192;
 pub const MAX_SOURCE_RECORD_METADATA_BYTES: usize = 16_384;
 pub const MAX_DERIVED_SOURCE_WALK_NODES: usize = 65_536;
 
+const BLAKE3_HEX_BYTES: usize = 64;
+const SYMLINK_PAYLOAD_BYTES: u64 = 0;
+
 const BUILTIN_FETCHURL_BUILDER: &str = "builtin:fetchurl";
 const DERIVED_FIXED_URL_ID_PREFIX: &str = "fixed-url";
 const DERIVED_STORE_PATH_ID_PREFIX: &str = "store-path";
@@ -586,9 +589,7 @@ fn safe_symlink_target(target: &Path) -> Result<String, RunError> {
     let target_text = target
         .to_str()
         .ok_or_else(|| RunError::Internal(format!("symlink target is not UTF-8: {}", target.display())))?;
-    if target.is_absolute() || target_text.contains("..") || target_text.is_empty() {
-        return Err(RunError::Internal(format!("unsafe source symlink target '{target_text}'")));
-    }
+    validate_symlink_target_text(target_text)?;
     Ok(target_text.to_string())
 }
 
@@ -621,8 +622,12 @@ fn validate_adapter_metadata(adapter: Option<&SourceAdapterMetadata>) -> Result<
     if rendered.len() > MAX_ADAPTER_METADATA_BYTES {
         return Err(RunError::Internal(format!("adapter metadata exceeds {MAX_ADAPTER_METADATA_BYTES} bytes")));
     }
-    if adapter.adapter.is_empty() || adapter.lock_identity.is_empty() || adapter.offline_control.is_empty() {
-        return Err(RunError::Internal("adapter metadata missing lock/offline identity".to_string()));
+    if adapter.adapter.is_empty()
+        || adapter.lock_identity.is_empty()
+        || adapter.offline_control.is_empty()
+        || adapter.generated_source_boundary.is_empty()
+    {
+        return Err(RunError::Internal("adapter metadata missing lock/offline/generated-source identity".to_string()));
     }
     Ok(())
 }
@@ -704,6 +709,12 @@ fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
     if manifest.records.len() > MAX_SOURCE_RECORDS {
         return Err(RunError::Internal(format!("source bundle records exceed {MAX_SOURCE_RECORDS}")));
     }
+    if manifest.non_claim != SOURCE_BUNDLE_NON_CLAIM {
+        return Err(RunError::Internal("source bundle non-claim boundary mismatch".to_string()));
+    }
+    validate_manifest_roots(manifest)?;
+    validate_manifest_record_order(&manifest.records)?;
+    validate_manifest_store_prefix(manifest)?;
     reject_duplicate_records(&manifest.records)?;
     let expected = digest_manifest_without_digest(manifest)?;
     if expected != manifest.manifest_blake3 {
@@ -731,6 +742,41 @@ fn normalize_source_records(mut records: Vec<SourceRecord>) -> Result<Vec<Source
     Ok(normalized)
 }
 
+fn validate_manifest_roots(manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    let expected_roots = manifest.records.iter().map(|record| record.identity.clone()).collect::<Vec<_>>();
+    if manifest.roots != expected_roots {
+        return Err(RunError::Internal("source bundle roots do not match canonical record order".to_string()));
+    }
+    Ok(())
+}
+
+fn validate_manifest_record_order(records: &[SourceRecord]) -> Result<(), RunError> {
+    let mut previous_key: Option<String> = None;
+    for record in records {
+        let current_key = record_sort_key(record);
+        if let Some(previous_key) = previous_key.as_ref()
+            && previous_key > &current_key
+        {
+            return Err(RunError::Internal("source bundle records are not in canonical order".to_string()));
+        }
+        previous_key = Some(current_key);
+    }
+    Ok(())
+}
+
+fn validate_manifest_store_prefix(manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    if !manifest.store_prefix.starts_with('/') {
+        return Err(RunError::Internal(format!("store prefix must be absolute: {}", manifest.store_prefix)));
+    }
+    for record in &manifest.records {
+        let expected = record_store_prefix(&record.kind, &manifest.store_prefix);
+        if record.store_prefix != expected {
+            return Err(RunError::Internal(format!("source record {} store prefix mismatch", record.identity)));
+        }
+    }
+    Ok(())
+}
+
 fn reject_duplicate_records(records: &[SourceRecord]) -> Result<(), RunError> {
     let mut seen = BTreeSet::new();
     for record in records {
@@ -753,10 +799,108 @@ fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
             "source record metadata exceeds {MAX_SOURCE_RECORD_METADATA_BYTES} bytes"
         )));
     }
+    validate_source_record_files(record)?;
     let expected_digest = digest_source_record_content(&record.kind, &record.metadata, &record.files)?;
     if expected_digest != record.content_blake3 {
         return Err(RunError::Internal(format!("source record {} content digest mismatch", record.identity)));
     }
+    Ok(())
+}
+
+fn validate_source_record_files(record: &SourceRecord) -> Result<(), RunError> {
+    let mut total_bytes = 0u64;
+    let mut case_folded_paths = BTreeSet::new();
+    for file in &record.files {
+        validate_source_file_entry(file)?;
+        let case_key = file.path.to_lowercase();
+        if !case_folded_paths.insert(case_key) {
+            return Err(RunError::Internal(format!("source record {} has a path case collision", record.identity)));
+        }
+        total_bytes = total_bytes.checked_add(file.size).ok_or_else(|| {
+            RunError::Internal(format!("source record {} payload byte count overflow", record.identity))
+        })?;
+    }
+    if total_bytes != record.payload_bytes {
+        return Err(RunError::Internal(format!("source record {} payload byte count mismatch", record.identity)));
+    }
+    Ok(())
+}
+
+fn validate_source_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
+    validate_source_entry_path(&file.path)?;
+    validate_blake3_hex(&file.blake3, "source file digest")?;
+    match file.file_type {
+        SourceFileType::Regular => validate_regular_file_entry(file),
+        SourceFileType::Symlink => validate_symlink_file_entry(file),
+    }
+}
+
+fn validate_source_entry_path(path: &str) -> Result<(), RunError> {
+    if path.is_empty() || path.starts_with('/') || path.contains("..") || path.contains('\\') {
+        return Err(RunError::Internal(format!("unsafe source relative path '{path}'")));
+    }
+    Ok(())
+}
+
+fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
+    if file.symlink_target.is_some() {
+        return Err(RunError::Internal(format!("regular source file {} carries a symlink target", file.path)));
+    }
+    let content_hex = file
+        .content_hex
+        .as_ref()
+        .ok_or_else(|| RunError::Internal(format!("regular source file {} is missing payload bytes", file.path)))?;
+    let content = HEXLOWER.decode(content_hex.as_bytes()).map_err(|err| {
+        RunError::Internal(format!("regular source file {} has invalid lowercase hex payload: {err}", file.path))
+    })?;
+    let content_len = u64::try_from(content.len())
+        .map_err(|_| RunError::Internal(format!("regular source file {} length does not fit in u64", file.path)))?;
+    if content_len != file.size {
+        return Err(RunError::Internal(format!("regular source file {} size mismatch", file.path)));
+    }
+    let expected = blake3::hash(&content).to_hex().to_string();
+    if expected != file.blake3 {
+        return Err(RunError::Internal(format!("regular source file {} digest mismatch", file.path)));
+    }
+    Ok(())
+}
+
+fn validate_symlink_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
+    if file.content_hex.is_some() {
+        return Err(RunError::Internal(format!("symlink source file {} carries payload bytes", file.path)));
+    }
+    if file.executable {
+        return Err(RunError::Internal(format!("symlink source file {} cannot be executable", file.path)));
+    }
+    if file.size != SYMLINK_PAYLOAD_BYTES {
+        return Err(RunError::Internal(format!("symlink source file {} size mismatch", file.path)));
+    }
+    let target = file
+        .symlink_target
+        .as_ref()
+        .ok_or_else(|| RunError::Internal(format!("symlink source file {} is missing target", file.path)))?;
+    validate_symlink_target_text(target)?;
+    let expected = blake3::hash(format!("symlink\0{}\0{target}", file.path).as_bytes()).to_hex().to_string();
+    if expected != file.blake3 {
+        return Err(RunError::Internal(format!("symlink source file {} digest mismatch", file.path)));
+    }
+    Ok(())
+}
+
+fn validate_symlink_target_text(target: &str) -> Result<(), RunError> {
+    if target.starts_with('/') || target.contains("..") || target.is_empty() {
+        return Err(RunError::Internal(format!("unsafe source symlink target '{target}'")));
+    }
+    Ok(())
+}
+
+fn validate_blake3_hex(value: &str, label: &str) -> Result<(), RunError> {
+    if value.len() != BLAKE3_HEX_BYTES {
+        return Err(RunError::Internal(format!("{label} must be {BLAKE3_HEX_BYTES} lowercase hex bytes")));
+    }
+    HEXLOWER
+        .decode(value.as_bytes())
+        .map_err(|err| RunError::Internal(format!("{label} must be lowercase hex: {err}")))?;
     Ok(())
 }
 
@@ -1481,6 +1625,18 @@ mod tests {
         Url::from_file_path(path).unwrap().to_string()
     }
 
+    fn non_cargo_adapter() -> SourceAdapterMetadata {
+        let mut extra = BTreeMap::new();
+        extra.insert("mirror-kind".to_string(), "npm-tarballs".to_string());
+        SourceAdapterMetadata {
+            adapter: "npm".to_string(),
+            lock_identity: "package-lock:demo".to_string(),
+            offline_control: "npm-cache-offline".to_string(),
+            generated_source_boundary: "no-generated-node-modules".to_string(),
+            extra,
+        }
+    }
+
     #[test]
     fn source_bundle_canonicalizes_equivalent_traversal() {
         let temp = tempfile::tempdir().unwrap();
@@ -1516,9 +1672,124 @@ mod tests {
     }
 
     #[test]
+    fn source_bundle_accepts_language_neutral_package_adapter() {
+        let temp = tempfile::tempdir().unwrap();
+        write_fixture(temp.path());
+        let spec = SourceSpec {
+            kind: SourceRecordKind::PackageMirror,
+            identity: "npm-mirror".to_string(),
+            path: temp.path().to_path_buf(),
+            adapter: Some(non_cargo_adapter()),
+        };
+        let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
+
+        assert_eq!(manifest.records[0].kind, SourceRecordKind::PackageMirror);
+        assert_eq!(manifest.records[0].adapter.as_ref().unwrap().adapter, "npm");
+        assert_eq!(manifest.records[0].adapter.as_ref().unwrap().extra.len(), 1);
+    }
+
+    #[test]
     fn source_bundle_rejects_unsafe_identity() {
         let err = parse_source_spec("local-path:../bad:/tmp").unwrap_err();
         assert!(err.to_string().contains("unsafe source identity"));
+    }
+
+    #[test]
+    fn source_bundle_rejects_incomplete_adapter_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        write_fixture(temp.path());
+        let mut adapter = non_cargo_adapter();
+        adapter.generated_source_boundary.clear();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::PackageMirror,
+            identity: "npm-mirror".to_string(),
+            path: temp.path().to_path_buf(),
+            adapter: Some(adapter),
+        };
+
+        let err = plan_source_bundle(&[spec], "/mantle/store").unwrap_err();
+        assert!(err.to_string().contains("generated-source identity"));
+    }
+
+    #[test]
+    fn source_bundle_rejects_malformed_roots_and_record_order() {
+        let temp = tempfile::tempdir().unwrap();
+        let first_root = temp.path().join("first");
+        let second_root = temp.path().join("second");
+        write_fixture(&first_root);
+        write_fixture(&second_root);
+        let specs = [
+            SourceSpec {
+                kind: SourceRecordKind::LocalPath,
+                identity: "first".to_string(),
+                path: first_root,
+                adapter: None,
+            },
+            SourceSpec {
+                kind: SourceRecordKind::LocalPath,
+                identity: "second".to_string(),
+                path: second_root,
+                adapter: None,
+            },
+        ];
+        let manifest = plan_source_bundle(&specs, "/mantle/store").unwrap();
+
+        let mut bad_roots = manifest.clone();
+        bad_roots.roots = vec!["second".to_string(), "first".to_string()];
+        bad_roots.manifest_blake3 = digest_manifest_without_digest(&bad_roots).unwrap();
+        let roots_err = validate_manifest(&bad_roots).unwrap_err();
+        assert!(roots_err.to_string().contains("roots do not match"));
+
+        let mut bad_order = manifest;
+        bad_order.records.reverse();
+        bad_order.roots = bad_order.records.iter().map(|record| record.identity.clone()).collect();
+        bad_order.manifest_blake3 = digest_manifest_without_digest(&bad_order).unwrap();
+        let order_err = validate_manifest(&bad_order).unwrap_err();
+        assert!(order_err.to_string().contains("canonical order"));
+    }
+
+    #[test]
+    fn source_bundle_rejects_tampered_file_payload_and_store_prefix() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::LocalPath,
+            identity: "fixture".to_string(),
+            path: payload,
+            adapter: None,
+        };
+        let manifest = plan_source_bundle(&[spec], "/mantle/store").unwrap();
+
+        let tampered_payload = b"tamper";
+        let tampered_payload_len = u64::try_from(tampered_payload.len()).unwrap();
+        let mut bad_payload = manifest.clone();
+        bad_payload.records[0].files[0].content_hex = Some(HEXLOWER.encode(tampered_payload));
+        bad_payload.records[0].files[0].size = tampered_payload_len;
+        bad_payload.records[0].payload_bytes = tampered_payload_len;
+        bad_payload.records[0].content_blake3 = digest_source_record_content(
+            &bad_payload.records[0].kind,
+            &bad_payload.records[0].metadata,
+            &bad_payload.records[0].files,
+        )
+        .unwrap();
+        bad_payload.manifest_blake3 = digest_manifest_without_digest(&bad_payload).unwrap();
+        let payload_err = validate_manifest(&bad_payload).unwrap_err();
+        assert!(payload_err.to_string().contains("digest mismatch"));
+
+        let provider_root = temp.path().join("provider");
+        write_fixture(&provider_root);
+        let provider_spec = SourceSpec {
+            kind: SourceRecordKind::ProviderManifest,
+            identity: "provider".to_string(),
+            path: provider_root,
+            adapter: None,
+        };
+        let mut bad_prefix = plan_source_bundle(&[provider_spec], "/mantle/store").unwrap();
+        bad_prefix.records[0].store_prefix = Some("/nix/store".to_string());
+        bad_prefix.manifest_blake3 = digest_manifest_without_digest(&bad_prefix).unwrap();
+        let prefix_err = validate_manifest(&bad_prefix).unwrap_err();
+        assert!(prefix_err.to_string().contains("store prefix mismatch"));
     }
 
     #[test]

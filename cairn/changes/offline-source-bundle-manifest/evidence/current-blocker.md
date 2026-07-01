@@ -1,6 +1,6 @@
 # Current Blocker — Offline source bundle manifest
 
-Date: 2026-06-30
+Date: 2026-07-01
 
 ## Question
 
@@ -16,6 +16,7 @@ Can `offline-source-bundle-manifest` be honestly drained after the pure/source-s
   - remote-builder input preparation from imported source state;
   - CLI tests proving no-mutate plan behavior, no-network import/list/verify behavior, and broader fail-closed stale/missing source preflight fixtures.
 - `src/source_bundle.rs` now provides useful first slices: source-bundle manifest model, local declared source specs, BLAKE3 refs, safe path/symlink rejection, source-state import/list/verify, pin files, CLI wiring, build-root evaluation that derives metadata-only records for fixed fetchers, git fetchers, and declared store-path inputs without running builds or network fetches, export-time materialization for local `file://` fixed fetcher payloads plus local checkout VCS snapshots with `.git/` excluded, and `mantle-source-offline-preflight-v1` over imported source state for local build planning.
+- The 2026-07-01 hardening slice tightened parsed-bundle validation for root/order/store-prefix/non-claim drift, file payload self-consistency, symlink metadata, byte counts, path case collisions, and adapter metadata completeness; it also added pure non-Cargo package-mirror coverage plus CLI plan/list no-mutate and import/verify/tamper tests.
 - The local offline-preflight slice adds `mantle source bundle preflight --build-root ...` plus `mantle build --offline-source-preflight`, and classifies ready, missing, stale, unsupported, network-required, and unpinned source readiness before normal plan/build execution.
 - That slice still does not acquire non-local payloads, verify VCS revisions while snapshotting, gather package-manager/provider/toolchain/proof fixtures, or prepare remote-builder input uploads from imported source state.
 
@@ -31,7 +32,7 @@ Mantle source/input transport owner / next implementation pass.
 
 Implement in dependency order:
 
-1. add package-manager mirror adapter records, including Cargo plus one non-Cargo fixture;
+1. add Cargo adapter fixture coverage and broaden non-Cargo package-manager mirror fixtures beyond the pure metadata smoke;
 2. add bootstrap/provider/toolchain/proof input fixtures;
 3. define the explicit non-local payload acquisition/import handoff for remote fetcher URLs and revision-checked VCS snapshots;
 4. integrate imported source state into remote-builder input preparation before remote dispatch;
