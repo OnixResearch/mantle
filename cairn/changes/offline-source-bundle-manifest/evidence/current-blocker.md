@@ -19,6 +19,7 @@ Can `offline-source-bundle-manifest` be honestly drained after the pure/source-s
 - The 2026-07-01 hardening slice tightened parsed-bundle validation for root/order/store-prefix/non-claim drift, file payload self-consistency, symlink metadata, byte counts, path case collisions, and adapter metadata completeness; it also added pure non-Cargo package-mirror coverage plus CLI plan/list no-mutate and import/verify/tamper tests.
 - The later 2026-07-01 fixture slice added pure Cargo and npm package-mirror fixtures plus bootstrap archive, provider manifest, toolchain/source-root, and proof-input source record coverage.
 - The imported-source handoff slice added a no-network export path that reuses already-imported matching materialized source records for remote fixed URL/VCS metadata, while preserving fail-closed behavior when source state is absent or metadata mismatches.
+- The VCS revision guard slice rejects git/VCS snapshot records without an explicit `rev` fact and keeps that revision in the metadata matched against imported source state.
 - The local offline-preflight slice adds `mantle source bundle preflight --build-root ...` plus `mantle build --offline-source-preflight`, and classifies ready, missing, stale, unsupported, network-required, and unpinned source readiness before normal plan/build execution.
 - That slice still does not acquire non-local payloads, verify VCS revisions while snapshotting, gather package-manager/provider/toolchain/proof fixtures, or prepare remote-builder input uploads from imported source state.
 
@@ -35,7 +36,7 @@ Mantle source/input transport owner / next implementation pass.
 Implement in dependency order:
 
 1. define whether Mantle should ever acquire non-local payloads during source bundle export, or require a separate trusted/imported source-state path for all remote material;
-2. add revision-checked VCS snapshot proof before treating imported checkout payloads as satisfying a selected revision;
+2. add revision-checked checkout materialization proof before treating imported VCS payload bytes as satisfying the selected revision;
 3. integrate imported source state into remote-builder input preparation before remote dispatch;
 4. add CLI and fixture tests for no-network import/list/verify and missing/stale/unsupported/untrusted preflight failures across representative source kinds;
 5. broaden package-manager mirror adapter coverage beyond pure local fixtures if real Cargo/non-Cargo mirror planning gets shell support.

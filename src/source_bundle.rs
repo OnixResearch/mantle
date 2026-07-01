@@ -1336,6 +1336,9 @@ fn fixed_fetcher_source_record(derivation: &crunch_glue::CrunchDerivation) -> Re
     } else {
         SourceRecordKind::FixedUrl
     };
+    if kind == SourceRecordKind::VcsSnapshot && !metadata.contains_key(FETCH_ENV_REV_KEY) {
+        return Err(RunError::Internal(format!("git fetcher {} is missing env.rev", derivation.name)));
+    }
     let id_prefix = if kind == SourceRecordKind::VcsSnapshot {
         DERIVED_VCS_ID_PREFIX
     } else {
@@ -1971,6 +1974,18 @@ mod tests {
         assert_eq!(record.kind, SourceRecordKind::VcsSnapshot);
         assert_eq!(record.metadata.get(FETCH_ENV_REV_KEY).map(String::as_str), Some("refs/tags/v1"));
         assert_eq!(record.metadata.get(FETCH_ENV_TYPE_KEY).map(String::as_str), Some(FETCH_ENV_TYPE_GIT));
+    }
+
+    #[test]
+    fn source_bundle_rejects_vcs_snapshot_without_revision_identity() {
+        let mut git = fixed_fetcher("repo-src", "https://example.invalid/repo.git");
+        git.env.insert(FETCH_ENV_TYPE_KEY.to_string(), FETCH_ENV_TYPE_GIT.to_string());
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(git))]);
+
+        let err =
+            plan_source_bundle_from_derivations(&[("default".to_string(), root)], &[], "/mantle/store").unwrap_err();
+
+        assert!(err.to_string().contains("missing env.rev"));
     }
 
     #[test]
