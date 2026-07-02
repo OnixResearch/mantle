@@ -166,6 +166,36 @@ Earlier aspen1 attempts also failed closed: the first full run used a stable Nix
 
 The existing release note already keeps the claim bounded: it says not to describe the result as external independent rebuild agreement unless a separate operator supplies/imports returned sidecars. No archive is valid until an external operator returns sidecars and the imported witness verifies as signature-valid, release-digest-matched, rebuilt-digest-matched, and policy-counted.
 
+### Root cause for the Aspen digest mismatch
+
+Follow-up comparison of the published proof's staged source tree against the release source archive explains why Aspen cannot reproduce the published `70f02150...` digest from the public request alone. The original proof staged source path was:
+
+```text
+/home/brittonr/.cargo-target/repo-targets/mantle/self-hosting-provider-remap-order-fix-work/tmp/.tmphrmiye/store/bya49al2cav0cddpayw7xvfqlhl32q0m-mantle-src
+```
+
+The release archive extracts to the same allowlisted source set except for one file under `vendor/.pi/`, which `release_source_path_is_releasable()` excludes but `self_build::copy_selected_source_tree()` had copied by recursively staging the whole `vendor` directory:
+
+```text
+orig staged source files: 40776
+archive allowlist files: 40775
+
+files in orig staged source but not release archive allowlist (first 200):
+vendor/.pi/prompt-history.jsonl
+```
+
+Stray-file digest evidence from pueue task 356:
+
+```text
+/home/brittonr/.cargo-target/repo-targets/mantle/self-hosting-provider-remap-order-fix-work/tmp/.tmphrmiye/store/bya49al2cav0cddpayw7xvfqlhl32q0m-mantle-src/vendor/.pi/prompt-history.jsonl present size=143 bytes
+f1a3fc65440b6be92677fecdfe7ed069c52b8851981f0b8c07e6fb1d1d30a860  /home/brittonr/.cargo-target/repo-targets/mantle/self-hosting-provider-remap-order-fix-work/tmp/.tmphrmiye/store/bya49al2cav0cddpayw7xvfqlhl32q0m-mantle-src/vendor/.pi/prompt-history.jsonl
+/tmp/mantle-release-source-compare/src/vendor/.pi/prompt-history.jsonl absent
+/home/brittonr/git/mantle/vendor/.pi/prompt-history.jsonl present size=143 bytes
+f1a3fc65440b6be92677fecdfe7ed069c52b8851981f0b8c07e6fb1d1d30a860  /home/brittonr/git/mantle/vendor/.pi/prompt-history.jsonl
+```
+
+This makes the current provider-bound release bundle internally insufficient for external witness reproduction: the signed release digest was produced from a staged source tree that contains a private `.pi` file not present in the public release source archive or exported witness request. The honest next action is to fix the staging/archive policy mismatch, create fresh release evidence from a clean source tree, and export a new external witness request. The Aspen attempts remain valid blocker evidence but still do not produce importable witness sidecars for this release.
+
 ## Active-change validation
 
 Cairn validation, gates, and whitespace check after recording the aspen1 FUSE/no-FUSE blockers (pueue task 183):
@@ -215,6 +245,89 @@ Cairn validation, gates, and whitespace check after recording the aspen1 FUSE/no
 ```
 
 Cairn validation, gates, and whitespace check after recording the fresh unshare-FUSE blocker (pueue task 265):
+
+```text
+## validate
+{
+  "change_issues": [],
+  "changes": 1,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 16,
+  "valid": true
+}
+## gate proposal
+{
+  "change": "external-release-witness-handoff",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "43e7764744b9c289b831a7e68c34b4e5922f0fa153e2628a485882299b31177a",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "918aad018cb0262116e438054e008fcbd968debe3398b374caea57cd8fdc7c51",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+## gate design
+{
+  "change": "external-release-witness-handoff",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "00d51e9c60e0ee6c6c96535e5646b2de2dd1bcc58ffe8378b174711f00d1de0e",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "baeeadfa3b928492e8688460759bf963d6e1e21ad1fc81846c63e52adff2c680",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+## gate tasks
+{
+  "change": "external-release-witness-handoff",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "1c64ab0b0ab2907c523d9d64a9a9e4a1a11a4201fe1607a042970dced3455123",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "00c4ccc9a724435fd7a88ec56869e47b6da44208f8ef3c05de38e589c28f7ff1",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+## git diff --check
+```
+
+Cairn validation, gates, and whitespace check after recording the source-tree root cause (pueue task 364):
 
 ```text
 ## validate
