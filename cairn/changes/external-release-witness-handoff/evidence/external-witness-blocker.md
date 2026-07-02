@@ -77,9 +77,12 @@ witness identity: aspen1-external-witness
 trusted public key: crunch-aspen1-1:E7hNinFk5f1UKce5eEe8YjTuJmWnlH5mkuav5XpIvjU=
 ```
 
-The final aspen1 attempt used the exact release proof helper Rust toolchain (`nightly-2025-11-01`) and `CRUNCH_NO_FUSE=1` to avoid the earlier aspen1 FUSE descriptor failure. The provider fixed-point proof completed and matched the published provider binary digest, but the self-hosting proof converged to a different stage1/stage2 digest and `mantle release witness-rebuild` failed closed before writing witness sidecars.
+The aspen1 attempts all failed closed before writing witness sidecars. The useful split is:
 
-Final failure (pueue task 177, summarized from copied audit artifacts):
+- FUSE-enabled runs (pueue task 117) can see `/dev/fuse` and a Nix-provided `fusermount3`, but still fail during stage0 at `musl-seed-toolchain.drv` with `descriptor I/O error: No such file or directory (os error 2)`.
+- No-FUSE runs (`CRUNCH_NO_FUSE=1`, pueue tasks 177 and 52) get through the full provider proof and self-hosting proof, but the self-hosting proof converges to a digest that does not match the published release binary.
+
+Best no-FUSE failure, using the exact release proof helper Rust toolchain (`nightly-2025-11-01`) and then rerun with that toolchain installed at the default `/home/brittonr/.rustup` path:
 
 ```text
 provider proof status: valid:aa55e64630390fbb1f1f2ab2102005b1e05ef07c8ed19325a00566631c626a20
@@ -89,13 +92,22 @@ aspen1 rebuilt binaries.stage1: db24660988110725b52e25ff1c0fb4eb456c22209912ab81
 result: no witness attestation written; no signature sidecar written; nothing importable
 ```
 
+Cross-checks from the successful provider-bound local witness and the aspen1 no-FUSE proof show both staged the same packaged source (`sk8fl4g2rk62qyq8g0z1sbmvr8lrzy1c-mantle-src`) and built the same bootstrap bwrap/busybox digests. Comparing the matching local stage2 binary to the aspen1 no-FUSE stage2 binary found the visible embedded string difference in Cargo's generated Nickel parser output path:
+
+```text
+local:  /tmp/cargo-target/x86_64-unknown-linux-musl/release/build/nickel-lang-parser-30857036f500e0c6/out/grammar.rs
+aspen1: /tmp/cargo-target/x86_64-unknown-linux-musl/release/build/nickel-lang-parser-3f9e8346f23f6f7d/out/grammar.rs
+```
+
+This is useful diagnostic evidence, but not a release witness: the published release attestation requires digest `70f02150...`, and aspen1 only produced `db246609...` under its no-FUSE fallback.
+
 Copied aspen1 public audit artifacts are stored outside the repo at:
 
 ```text
 /home/brittonr/releases/mantle/provider-bound-release-evidence-2026-06-28-provider-remap-fixed/external-witness-aspen1-2026-07-02/
 ```
 
-Artifact BLAKE3 digests (pueue task 209):
+Artifact BLAKE3 digests (pueue tasks 209 and 172):
 
 ```text
 788583a1e8b712f001e6dc428f6389b3694b98c3b73772b030a2ab3d197116f3  aspen1-trusted-key.txt
@@ -104,6 +116,14 @@ Artifact BLAKE3 digests (pueue task 209):
 1ae1def2fbae1ccef37449e791f3a6764fe5bc0a2cc2009548b05a24a6368955  witness-check.json
 3410ce30cfbe63548b70d53f30ad8ddc6953d5ae349f107cd7f3847429032157  witness-rebuild-20251101-nofuse.stderr
 9d8d6159c27da3a427b0805074437647e3b25ecda1ecfcbed9babdcca1ee22ea  witness-rebuild-audit-meta.json
+60a4ed779f7705ff92e4e473a2f4f2b878bf342edd5a9e408b9e05ac693137a2  default-rustup-fuse/witness-rebuild-audit-meta.json
+3f420a9cf0d3ab37d571f3fef8aa50f54053ee525d3766405a17431fa8c2203b  default-rustup-fuse/witness-rebuild-default-rustup-fuse.stderr
+21fb7eae3c46eb5e1faed74ddeab42c93d37a6096259795c4285b2a80183e580  default-rustup-fuse/witness-rebuild-stderr.txt
+715840521b75a58c4b5f6375bb4d7474ed42658a98f627f6cd5fde29d2881265  default-rustup-fuse/witness-rebuild-stdout.txt
+86b81a7a90330bb8e8646f73783888beadb878970b2b8c02f0d0cebedd24b582  default-rustup-nofuse/self-hosting-manifest.json
+fb25f4aea66fec65ab1003d7c303108562d0b34d35e4d871fd329199901f3ba0  default-rustup-nofuse/self-hosting-summary.txt
+9e46d0f4d8c459089bf3fa6f7168f325dd912ee3b1a88adddf6cea279e527fb0  default-rustup-nofuse/witness-rebuild-audit-meta.json
+3410ce30cfbe63548b70d53f30ad8ddc6953d5ae349f107cd7f3847429032157  default-rustup-nofuse/witness-rebuild-default-rustup-nofuse.stderr
 ```
 
 Earlier aspen1 attempts also failed closed: the first full run used a stable Nix rustc and the proof helper rejected it (`nightly rustc required`); a second latest-nightly run required `CRUNCH_NO_FUSE=1` and then produced the same non-matching self-hosting digest. These are blockers, not witness evidence.
@@ -112,7 +132,7 @@ The existing release note already keeps the claim bounded: it says not to descri
 
 ## Active-change validation
 
-Cairn validation and gates after recording the aspen1 blocker (pueue task 222):
+Cairn validation, gates, and whitespace check after recording the aspen1 FUSE/no-FUSE blockers (pueue task 183):
 
 ```text
 ## validate
