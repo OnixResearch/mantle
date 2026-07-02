@@ -79,8 +79,9 @@ trusted public key: crunch-aspen1-1:E7hNinFk5f1UKce5eEe8YjTuJmWnlH5mkuav5XpIvjU=
 
 The aspen1 attempts all failed closed before writing witness sidecars. The useful split is:
 
-- FUSE-enabled runs (pueue task 117) can see `/dev/fuse` and a Nix-provided `fusermount3`, but still fail during stage0 at `musl-seed-toolchain.drv` with `descriptor I/O error: No such file or directory (os error 2)`.
-- No-FUSE runs (`CRUNCH_NO_FUSE=1`, pueue tasks 177 and 52) get through the full provider proof and self-hosting proof, but the self-hosting proof converges to a digest that does not match the published release binary.
+- Non-unshare FUSE runs (pueue task 117) can see `/dev/fuse` and a Nix-provided `fusermount3`, but still fail during stage0 at `musl-seed-toolchain.drv` with `descriptor I/O error: No such file or directory (os error 2)`.
+- A fresh full run under `unshare --user --map-root-user --mount --fork` got through provider proof and self-hosting with direct FUSE, but the self-hosting proof converged to a different digest than the published release binary.
+- No-FUSE runs (`CRUNCH_NO_FUSE=1`, pueue tasks 177 and 52) get through the full provider proof and self-hosting proof, but the self-hosting proof also converges to a digest that does not match the published release binary.
 
 Best no-FUSE failure, using the exact release proof helper Rust toolchain (`nightly-2025-11-01`) and then rerun with that toolchain installed at the default `/home/brittonr/.rustup` path:
 
@@ -124,6 +125,41 @@ Artifact BLAKE3 digests (pueue tasks 209 and 172):
 fb25f4aea66fec65ab1003d7c303108562d0b34d35e4d871fd329199901f3ba0  default-rustup-nofuse/self-hosting-summary.txt
 9e46d0f4d8c459089bf3fa6f7168f325dd912ee3b1a88adddf6cea279e527fb0  default-rustup-nofuse/witness-rebuild-audit-meta.json
 3410ce30cfbe63548b70d53f30ad8ddc6953d5ae349f107cd7f3847429032157  default-rustup-nofuse/witness-rebuild-default-rustup-nofuse.stderr
+```
+
+Fresh full FUSE run under user/mount unshare (pueue task 244) used `CRUNCH_PROOF_RUSTUP_TOOLCHAIN=nightly-2025-11-01`, provider-bound inputs, and no `CRUNCH_NO_FUSE`. It failed closed after the workflow because the rebuilt stage2 binary still did not match the published release attestation digest:
+
+```text
+mode: unshare-user-map-root-mount-fork
+provider proof status: valid:aa55e64630390fbb1f1f2ab2102005b1e05ef07c8ed19325a00566631c626a20
+expected binaries/02-stage2-mantle: 70f02150224073af2dfdabad5b697072a6399c361c8b448f0e17ee01431fc703
+aspen1 unshare-FUSE binaries.stage2: bbaf4413111a5e0d9b9a751ee662ace330313cd1a4e96fc6d9bcd12cf353ca47
+aspen1 unshare-FUSE binaries.stage1: bbaf4413111a5e0d9b9a751ee662ace330313cd1a4e96fc6d9bcd12cf353ca47
+self-hosting fixed-point: stage1_equals_stage2=true
+stage2 hermeticity: strict
+stage2 fallback events: []
+release-verification witnesses: missing witnesses dir
+result: no witness attestation written; no signature sidecar written; nothing importable
+```
+
+The unshare run proves the FUSE setup progressed farther than the earlier non-unshare failure: stage0 and stage2 logs contain `FUSE INIT major 7 minor 45`. It still is not release witness evidence because the proof artifact for `binaries/02-stage2-mantle` has digest `bbaf4413...`, not the required `70f02150...`.
+
+Copied public audit artifacts for this fresh unshare run are stored outside the repo at:
+
+```text
+/home/brittonr/releases/mantle/provider-bound-release-evidence-2026-06-28-provider-remap-fixed/external-witness-aspen1-2026-07-02/unshare-fuse-full2/
+```
+
+BLAKE3 digests for the copied unshare-run evidence (pueue tasks 255 and 259):
+
+```text
+a3992ef18defd9de1370a9a05d20dcd5c7cc0de31f570427c5edbae13b2f25f4  proof-bundle/manifest.json
+c2e142dd1777494d8ac54e475926fbae2fa88a7762778a95355ca2b29eb618cd  proof-bundle/summary.txt
+23e0dfa96ba97d30ef3d82454ec73fc3eca922b73e288d90550cd8d84c09da40  provider-fixed-point-proof/meta.json
+4f1050ebd87a6d9d3d682e0773184664f7cc912db794b7677993517a544d9edc  witness-rebuild-audit/meta.json
+6c61b9973c80052ee41e30a6eca958c486f4910595beea89d8257267dc065cff  stderr.txt
+8703411acc8de21a941655e56a806d7c6fc7ab0a92c4c8f018fefb30afbe2cf5  status.txt
+6236f8b44a6317b7f5da4a430951a702e63a340deaa4d8177bb8110144b479b2  BLAKE3SUMS
 ```
 
 Earlier aspen1 attempts also failed closed: the first full run used a stable Nix rustc and the proof helper rejected it (`nightly rustc required`); a second latest-nightly run required `CRUNCH_NO_FUSE=1` and then produced the same non-matching self-hosting digest. These are blockers, not witness evidence.
@@ -176,4 +212,87 @@ Cairn validation, gates, and whitespace check after recording the aspen1 FUSE/no
   "valid": true,
   "verdict": "PASS"
 }
+```
+
+Cairn validation, gates, and whitespace check after recording the fresh unshare-FUSE blocker (pueue task 265):
+
+```text
+## validate
+{
+  "change_issues": [],
+  "changes": 1,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 16,
+  "valid": true
+}
+## gate proposal
+{
+  "change": "external-release-witness-handoff",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "43e7764744b9c289b831a7e68c34b4e5922f0fa153e2628a485882299b31177a",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "918aad018cb0262116e438054e008fcbd968debe3398b374caea57cd8fdc7c51",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+## gate design
+{
+  "change": "external-release-witness-handoff",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "00d51e9c60e0ee6c6c96535e5646b2de2dd1bcc58ffe8378b174711f00d1de0e",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "baeeadfa3b928492e8688460759bf963d6e1e21ad1fc81846c63e52adff2c680",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+## gate tasks
+{
+  "change": "external-release-witness-handoff",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "1c64ab0b0ab2907c523d9d64a9a9e4a1a11a4201fe1607a042970dced3455123",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "00c4ccc9a724435fd7a88ec56869e47b6da44208f8ef3c05de38e589c28f7ff1",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+## git diff --check
 ```
