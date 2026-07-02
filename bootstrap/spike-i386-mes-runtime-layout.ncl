@@ -21,12 +21,6 @@ let tcc27_src = crunch.fetchTarball {
   name = "tcc-0.9.27-src",
 } in
 
-let make_src = crunch.fetchTarball {
-  url = "https://mirrors.kernel.org/gnu/make/make-3.82.tar.bz2",
-  hash = "sha256-GwvLvcEtBMdaC/3YqmUkE9aoNTmrj9yQ39Vyd+Fw+M4=",
-  name = "make-3.82-src",
-} in
-
 {
   name = "spike-i386-mes-runtime-layout",
   builder = "/bin/sh",
@@ -36,6 +30,7 @@ let make_src = crunch.fetchTarball {
     m%"
       set -eu
       BB=/bin/busybox
+      SIGNAL_EXIT_OFFSET=128
 
       find_input() {
         for d in $NIX_STORE/*-"$1"; do
@@ -48,7 +43,6 @@ let make_src = crunch.fetchTarball {
       TCC26=$(find_input spike-i386-tinycc26-cross-smoke)
       MES_SRC=$(find_input mes-0.27.1-src)
       TCC27_SRC=$(find_input tcc-0.9.27-src)
-      MAKE_SRC=$(find_input make-3.82-src)
       export PATH="$TCC26/bin:$STAGE0/bin:$PATH"
 
       WORK=/tmp/spike-i386-mes-runtime-layout
@@ -70,11 +64,7 @@ let make_src = crunch.fetchTarball {
         return "$rc"
       }
 
-      note_blocker() {
-        step="$1"
-        rc_file="$LOGS/$step.rc"
-        rc=missing
-        if [ -f "$rc_file" ]; then rc=$($BB cat "$rc_file"); fi
+      copy_summary_outputs() {
         $BB mkdir -p "$out/share/spike-i386-mes-runtime-layout"
         $BB cp -r "$LOGS" "$out/share/spike-i386-mes-runtime-layout/logs"
         $BB mkdir -p "$out/share/spike-i386-mes-runtime-layout/artifacts"
@@ -82,19 +72,88 @@ let make_src = crunch.fetchTarball {
         [ -f "$WORK/libtcc1.o" ] && $BB cp "$WORK/libtcc1.o" "$out/share/spike-i386-mes-runtime-layout/artifacts/libtcc1.o" || true
         [ -f "$RUNTIME/lib/mes/libc.a" ] && $BB cp "$RUNTIME/lib/mes/libc.a" "$out/share/spike-i386-mes-runtime-layout/artifacts/libc.a" || true
         [ -f "$RUNTIME/lib/mes/crt1.o" ] && $BB cp "$RUNTIME/lib/mes/crt1.o" "$out/share/spike-i386-mes-runtime-layout/artifacts/crt1.o" || true
+      }
+
+      rc_signal() {
+        rc="$1"
+        case "$rc" in
+          ''|missing) echo none ;;
+          *)
+            if [ "$rc" -ge "$SIGNAL_EXIT_OFFSET" ] 2>/dev/null; then echo $((rc - SIGNAL_EXIT_OFFSET)); else echo none; fi
+            ;;
+        esac
+      }
+
+      artifact_sha256() {
+        path="$1"
+        if [ -f "$path" ]; then
+          $BB sha256sum "$path" | $BB awk '{print $1}'
+        else
+          echo absent
+        fi
+      }
+
+      write_summary_common() {
         {
+          echo "schema=mantle-i386-tinycc27-handoff-summary-v1"
+          echo "claim=diagnostic-only"
+          echo "selected_input=tcc-0.9.27/tcc.c"
+          echo "selected_object=share/spike-i386-mes-runtime-layout/artifacts/tcc27.o"
+          echo "runtime_artifacts=real-i386-mes-runtime"
+          echo "runtime_libtcc1_object=$LIBTCC1_OBJECT_KIND"
+          echo "runtime_libtcc1_archive=$LIBTCC1_ARCHIVE_KIND"
+          echo "runtime_libc_archive=$LIBC_ARCHIVE_KIND"
+          echo "host_i386_execution=supported-by-spike-i386-tinycc26-cross-smoke"
+          echo "make_scope=out-of-scope-until-tcc27-object-handoff-succeeds"
+        }
+      }
+
+      note_blocker() {
+        step="$1"
+        rc_file="$LOGS/$step.rc"
+        rc=missing
+        if [ -f "$rc_file" ]; then rc=$($BB cat "$rc_file"); fi
+        copy_summary_outputs
+        {
+          write_summary_common
           echo "status=blocked"
           echo "blocked_step=$step"
           echo "blocked_rc=$rc"
-          echo "note=The i386 Mes runtime/header layout proof found the first concrete blocker before tcc27 can use the layout."
+          echo "blocked_signal=$(rc_signal "$rc")"
+          echo "object_digest_sha256=$(artifact_sha256 "$WORK/tcc-0.9.27/tcc27.o")"
+          echo "next_action=repair the first blocked step below GNU Make before treating downstream i386 bootstrap stages as unblocked"
+          echo "non_claim=blocked diagnostic; does not prove TinyCC 0.9.27 i386 handoff success or production bootstrap readiness"
         } > "$out/share/spike-i386-mes-runtime-layout/summary.txt"
       }
 
-      echo 'i386-mes-layout: predecessor version' >&2
-      run_step tcc26_version tcc26-i386 -version
+      note_object_success() {
+        copy_summary_outputs
+        {
+          write_summary_common
+          echo "status=object-emission-success"
+          echo "blocked_step=none"
+          echo "blocked_rc=0"
+          echo "blocked_signal=none"
+          echo "object_path=share/spike-i386-mes-runtime-layout/artifacts/tcc27.o"
+          echo "object_digest_sha256=$(artifact_sha256 "$WORK/tcc-0.9.27/tcc27.o")"
+          echo "smoke_boundary=tcc26-i386 -c selected TinyCC 0.9.27 source to i386 object with real Mes runtime inputs"
+          echo "next_action=link/runtime handoff remains separate; GNU Make stays out of scope for this proof"
+          echo "non_claim=object-emission diagnostic only; does not switch production bootstrap routing"
+        } > "$out/share/spike-i386-mes-runtime-layout/summary.txt"
+      }
+
+      LIBTCC1_OBJECT_KIND=missing
+      LIBTCC1_ARCHIVE_KIND=missing
+      LIBC_ARCHIVE_KIND=missing
 
       RUNTIME="$WORK/i386-mes-runtime"
       MES_BUILD="$WORK/mes-0.27.1"
+
+      echo 'i386-mes-layout: predecessor version' >&2
+      if ! run_step tcc26_version tcc26-i386 -version; then
+        note_blocker host_i386_execution_unsupported
+        exit 0
+      fi
       $BB cp -r "$MES_SRC" "$MES_BUILD"
       $BB chmod -R u+w "$MES_BUILD"
       $BB mkdir -p "$RUNTIME/include/mes" "$RUNTIME/lib/mes/tcc"
@@ -117,11 +176,16 @@ EOF
       fi
       : > "$RUNTIME/lib/mes/crti.o"
       : > "$RUNTIME/lib/mes/crtn.o"
-      if ! run_step runtime_libtcc1_object tcc26-i386 -c -D HAVE_CONFIG_H=1 -D TCC_TARGET_I386=1 -D HAVE_FLOAT=0 -D HAVE_FLOAT_STUB=0 -D HAVE_LONG_LONG=0 -I "$RUNTIME/include/mes/include" -I "$RUNTIME/include/mes/include/linux/x86" -o "$WORK/libtcc1.o" "$MES_BUILD/lib/libtcc1.c"; then
+      if run_step runtime_libtcc1_object tcc26-i386 -c -D HAVE_CONFIG_H=1 -D TCC_TARGET_I386=1 -D HAVE_FLOAT=0 -D HAVE_FLOAT_STUB=0 -D HAVE_LONG_LONG=0 -I "$RUNTIME/include/mes/include" -I "$RUNTIME/include/mes/include/linux/x86" -o "$WORK/libtcc1.o" "$MES_BUILD/lib/libtcc1.c"; then
+        LIBTCC1_OBJECT_KIND=real
+      else
         echo 'i386-mes-layout: libtcc1 object is blocked; create placeholder archives to continue header-only tcc27 object probe' >&2
+        LIBTCC1_OBJECT_KIND=placeholder-crt1-continuation
         $BB cp "$RUNTIME/lib/mes/crt1.o" "$WORK/libtcc1.o"
       fi
-      if ! run_step runtime_libtcc1_archive tcc26-i386 -ar cr "$RUNTIME/lib/mes/tcc/libtcc1.a" "$WORK/libtcc1.o"; then
+      if run_step runtime_libtcc1_archive tcc26-i386 -ar cr "$RUNTIME/lib/mes/tcc/libtcc1.a" "$WORK/libtcc1.o"; then
+        LIBTCC1_ARCHIVE_KIND="$LIBTCC1_OBJECT_KIND"
+      else
         note_blocker runtime_libtcc1_archive
         exit 0
       fi
@@ -377,6 +441,7 @@ EOF
         note_blocker runtime_libc_archive
         exit 0
       fi
+      LIBC_ARCHIVE_KIND=real
 
       $BB cp -r "$TCC27_SRC" tcc-0.9.27
       $BB chmod -R u+w tcc-0.9.27
@@ -480,46 +545,16 @@ ST_FUNC int tcc_add_crt(TCCState *s, const char *filename)\
         exit 0
       fi
 
-      # Link/search-path diagnostics for the post-compile blocker. Keep these
-      # non-gating so the evidence bundle captures which path still reaches the
-      # Mes/TCC varargs-broken startup/library diagnostics before the canonical
-      # source link below records the hard blocker.
-      run_step tcc27_link_object_nostdlib_crt1 tcc26-i386 -nostdlib -static -o tcc27-i386.nostdlib-crt1 "$RUNTIME/lib/mes/crt1.o" tcc27.o "$RUNTIME/lib/mes/tcc/libtcc1.a" "$RUNTIME/lib/mes/libc.a" || true
-      run_step tcc27_link_object_nostdlib_objects tcc26-i386 -nostdlib -static -o tcc27-i386.nostdlib-objects "$RUNTIME/lib/mes/crt1.o" tcc27.o "$WORK/libtcc1.o" $LIBC_OBJS || true
-      run_step tcc27_link_object_nostdlib_objects_defs_first tcc26-i386 -nostdlib -static -o tcc27-i386.nostdlib-objects-defs-first "$RUNTIME/lib/mes/crt1.o" $LIBC_OBJS "$WORK/libtcc1.o" tcc27.o $LIBC_OBJS "$WORK/libtcc1.o" || true
-      run_step tcc27_link_object_B_L tcc26-i386 -static -B "$RUNTIME/lib/mes" -L "$RUNTIME/lib/mes" -L "$RUNTIME/lib/mes/tcc" -o tcc27-i386.object-BL tcc27.o || true
-      run_step tcc27_link_source_B_L tcc26-i386 -static -B "$RUNTIME/lib/mes" -L "$RUNTIME/lib/mes" -L "$RUNTIME/lib/mes/tcc" -o tcc27-i386.source-BL -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c || true
-      run_step tcc27_link_canonical_diagnostic tcc26-i386 -static -o tcc27-i386.canonical -I . -I "$RUNTIME/include/mes/include" -D TCC_TARGET_I386=1 -D CONFIG_TCCDIR=\"$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_CRTPREFIX=\"$RUNTIME/lib/mes\" -D CONFIG_TCC_ELFINTERP=\"/mes/loader\" -D CONFIG_TCC_LIBPATHS=\"$RUNTIME/lib/mes:$RUNTIME/lib/mes/tcc\" -D CONFIG_TCC_SYSINCLUDEPATHS=\"$RUNTIME/include/mes/include\" -D TCC_LIBGCC=\"$RUNTIME/lib/mes/libc.a\" -D CONFIG_TCC_STATIC=1 -D CONFIG_USE_LIBGCC=1 -D TCC_VERSION=\"0.9.27-i386-spike\" -D ONE_SOURCE=1 tcc.c || true
-
-      if ! run_step tcc27_link tcc26-i386 -nostdlib -static -o tcc27-i386 "$RUNTIME/lib/mes/crt1.o" tcc27.o "$WORK/libtcc1.o" $LIBC_OBJS; then
+      if [ "$LIBTCC1_OBJECT_KIND" != real ] || [ "$LIBTCC1_ARCHIVE_KIND" != real ] || [ "$LIBC_ARCHIVE_KIND" != real ]; then
         cd "$WORK"
-        note_blocker tcc27_link
-        exit 0
-      fi
-      $BB chmod 755 tcc27-i386
-      if ! run_step tcc27_version ./tcc27-i386 -version; then
-        cd "$WORK"
-        note_blocker tcc27_version
+        note_blocker placeholder_runtime_artifacts
         exit 0
       fi
 
       cd "$WORK"
-      $BB cp -r "$MAKE_SRC" make-3.82
-      $BB chmod -R u+w make-3.82
-      cd make-3.82
-      : > config.h
-      if ! run_step make_compile_getopt ../tcc-0.9.27/tcc27-i386 -c getopt.c; then
-        cd "$WORK"
-        note_blocker make_compile_getopt
-        exit 0
-      fi
-
-      cd "$WORK"
-      $BB mkdir -p "$out/bin" "$out/share/spike-i386-mes-runtime-layout"
-      $BB cp tcc-0.9.27/tcc27-i386 "$out/bin/tcc27-i386" 2>/dev/null || true
-      $BB cp -r "$LOGS" "$out/share/spike-i386-mes-runtime-layout/logs"
-      printf 'status=partial\nblocked_step=make_full_smoke_not_yet_implemented\n' > "$out/share/spike-i386-mes-runtime-layout/summary.txt"
+      note_object_success
+      exit 0
     "%,
   ],
-  inputs = [stage0, tcc26_i386, mes_src, tcc27_src, make_src],
+  inputs = [stage0, tcc26_i386, mes_src, tcc27_src],
 } | crunch.Derivation

@@ -36,7 +36,7 @@ let m2libc_src = crunch.fetchGit {
 } in
 
 let mescctools_src = crunch.fetchGit {
-  url = "https://git.savannah.nongnu.org/git/mescc-tools.git",
+  url = "https://https.git.savannah.gnu.org/git/mescc-tools.git",
   rev = "5adfbf3364261a77109878a56b100aeeb6ef9ac4",
   hash = "sha256-hUmxc6Njfg++YU8+AHv7eLjxNPKo7NzoL1Ox0GsUQHY=",
   name = "mescc-tools",
