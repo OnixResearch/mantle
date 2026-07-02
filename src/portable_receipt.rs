@@ -318,13 +318,44 @@ pub fn verify_receipt_bundle_against_state_with_context(
     context: &TrustVerificationContext,
     outputs: &[String],
 ) -> Result<ReceiptVerifyReport, RunError> {
+    verify_receipt_bundle_against_output_records(
+        bundle,
+        store_prefix,
+        context,
+        outputs,
+        local_output_records_for_outputs(state_dir, store_prefix, outputs)?,
+    )
+}
+
+pub fn verify_receipt_bundle_against_archive_report(
+    bundle: &ReceiptBundle,
+    archive: &crunch_store::ArchiveListReport,
+    store_prefix: &str,
+    context: &TrustVerificationContext,
+    outputs: &[String],
+) -> Result<ReceiptVerifyReport, RunError> {
+    verify_receipt_bundle_against_output_records(
+        bundle,
+        store_prefix,
+        context,
+        outputs,
+        archive_output_records_for_outputs(archive, store_prefix, outputs)?,
+    )
+}
+
+fn verify_receipt_bundle_against_output_records(
+    bundle: &ReceiptBundle,
+    store_prefix: &str,
+    context: &TrustVerificationContext,
+    outputs: &[String],
+    output_records: Vec<ReceiptRecord>,
+) -> Result<ReceiptVerifyReport, RunError> {
     let bundle_report = validate_receipt_bundle(bundle)?;
     if outputs.is_empty() {
         return Err(RunError::Internal("receipt output verification requires at least one --output".to_string()));
     }
     let trust = validate_trust_snapshot(bundle, store_prefix, context)?;
-    let local_output_records = local_output_records_for_outputs(state_dir, store_prefix, outputs)?;
-    let output_matches = verify_output_records(bundle, &local_output_records, outputs)?;
+    let output_matches = verify_output_records(bundle, &output_records, outputs)?;
     Ok(ReceiptVerifyReport {
         format: RECEIPT_BUNDLE_FORMAT,
         store_prefix: bundle.store_prefix.clone(),
@@ -351,6 +382,18 @@ pub fn import_verified_receipt_bundle(
     outputs: &[String],
 ) -> Result<ReceiptImportReport, RunError> {
     verify_receipt_bundle_against_state_with_context(bundle, state_dir, store_prefix, context, outputs)?;
+    import_receipt_bundle(bundle, state_dir)
+}
+
+pub fn import_verified_receipt_bundle_from_archive_report(
+    bundle: &ReceiptBundle,
+    state_dir: &Path,
+    archive: &crunch_store::ArchiveListReport,
+    store_prefix: &str,
+    context: &TrustVerificationContext,
+    outputs: &[String],
+) -> Result<ReceiptImportReport, RunError> {
+    verify_receipt_bundle_against_archive_report(bundle, archive, store_prefix, context, outputs)?;
     import_receipt_bundle(bundle, state_dir)
 }
 
@@ -917,7 +960,7 @@ fn verify_output_records(
     outputs: &[String],
 ) -> Result<Vec<ReceiptOutputMatch>, RunError> {
     if local_records.is_empty() {
-        return Err(RunError::Internal("missing local PathInfo for receipt outputs".to_string()));
+        return Err(RunError::Internal("missing output facts for receipt outputs".to_string()));
     }
     let bundle_outputs = bundle_output_records(bundle);
     if bundle_outputs.is_empty() {
@@ -937,7 +980,7 @@ fn verify_output_records(
         matches.push(output_match_from_record(bundle_record, local)?);
     }
     if matches.is_empty() {
-        return Err(RunError::Internal("missing local PathInfo for receipt outputs".to_string()));
+        return Err(RunError::Internal("missing output facts for receipt outputs".to_string()));
     }
     Ok(matches)
 }
@@ -992,6 +1035,76 @@ fn local_output_records_for_outputs(
 ) -> Result<Vec<ReceiptRecord>, RunError> {
     let records = collect_pathinfo_records_for_outputs(state_dir, store_prefix, outputs)?;
     Ok(records.into_iter().filter(|record| record.kind == ReceiptRecordKind::OutputRef).collect())
+}
+
+fn archive_output_records_for_outputs(
+    archive: &crunch_store::ArchiveListReport,
+    store_prefix: &str,
+    outputs: &[String],
+) -> Result<Vec<ReceiptRecord>, RunError> {
+    if archive.store_prefix != store_prefix {
+        return Err(RunError::Internal(format!(
+            "receipt archive store prefix mismatch: archive={} expected={}",
+            archive.store_prefix, store_prefix
+        )));
+    }
+    let mut records = Vec::new();
+    for path in &archive.paths {
+        if !archive_path_matches_outputs(path, store_prefix, outputs) {
+            continue;
+        }
+        records.push(output_record_from_archive_path(path, store_prefix)?);
+    }
+    Ok(records)
+}
+
+fn archive_path_matches_outputs(
+    path: &crunch_store::ArchiveListedPath,
+    store_prefix: &str,
+    outputs: &[String],
+) -> bool {
+    let logical_path = format!("{store_prefix}/{}", path.store_path);
+    outputs.iter().any(|output| output == &path.store_path || output == &logical_path)
+}
+
+fn output_record_from_archive_path(
+    path: &crunch_store::ArchiveListedPath,
+    store_prefix: &str,
+) -> Result<ReceiptRecord, RunError> {
+    let logical_path = format!("{store_prefix}/{}", path.store_path);
+    let mut metadata = BTreeMap::new();
+    metadata.insert("evidence_source".to_string(), "store-archive".to_string());
+    metadata.insert("pathinfo_store_path".to_string(), path.store_path.clone());
+    metadata.insert("nar_sha256".to_string(), path.nar_sha256_hex.clone());
+    metadata.insert("nar_size_bytes".to_string(), path.nar_size.to_string());
+    metadata.insert("reference_count".to_string(), path.reference_count.to_string());
+    metadata.insert("signature_count".to_string(), path.signature_count.to_string());
+    if let Some(deriver) = &path.deriver {
+        metadata.insert("deriver".to_string(), deriver.clone());
+    }
+    Ok(ReceiptRecord {
+        kind: ReceiptRecordKind::OutputRef,
+        identity: logical_path,
+        digest: blake3_digest_for_json(&archive_path_digest_payload(path, store_prefix))?,
+        metadata,
+    })
+}
+
+fn archive_path_digest_payload(path: &crunch_store::ArchiveListedPath, store_prefix: &str) -> BTreeMap<String, String> {
+    let mut payload = BTreeMap::new();
+    payload.insert("logical_path".to_string(), format!("{store_prefix}/{}", path.store_path));
+    payload.insert("store_path".to_string(), path.store_path.clone());
+    payload.insert("nar_sha256".to_string(), path.nar_sha256_hex.clone());
+    payload.insert("nar_size_bytes".to_string(), path.nar_size.to_string());
+    payload.insert("references".to_string(), joined_sorted(path.references.iter().cloned()));
+    payload.insert("signatures".to_string(), joined_sorted(path.signatures.iter().cloned()));
+    if let Some(deriver) = &path.deriver {
+        payload.insert("deriver".to_string(), deriver.clone());
+    }
+    if let Some(ca) = &path.ca {
+        payload.insert("ca".to_string(), ca.clone());
+    }
+    payload
 }
 
 fn gather_receipt_records_from_state(
@@ -1336,6 +1449,7 @@ fn cmd_receipt_bundle(
             from,
             outputs,
             policy_hash,
+            archive,
             valid_at_unix_s,
             revocation_ref,
             revoked_public_key_digests,
@@ -1353,14 +1467,25 @@ fn cmd_receipt_bundle(
                 revocation_ref,
                 revoked_public_key_digests,
             );
-            let report =
-                verify_receipt_bundle_against_state_with_context(&bundle, state_dir, store_prefix, &context, &outputs)?;
+            let report = if let Some(archive) = archive {
+                let archive_report = read_archive_list_report(&archive)?;
+                verify_receipt_bundle_against_archive_report(
+                    &bundle,
+                    &archive_report,
+                    store_prefix,
+                    &context,
+                    &outputs,
+                )?
+            } else {
+                verify_receipt_bundle_against_state_with_context(&bundle, state_dir, store_prefix, &context, &outputs)?
+            };
             print_verify(&report, json_output)
         }
         crate::ReceiptBundleAction::Import {
             from,
             outputs,
             policy_hash,
+            archive,
             valid_at_unix_s,
             revocation_ref,
             revoked_public_key_digests,
@@ -1378,10 +1503,40 @@ fn cmd_receipt_bundle(
                 revocation_ref,
                 revoked_public_key_digests,
             );
-            let report = import_verified_receipt_bundle(&bundle, state_dir, store_prefix, &context, &outputs)?;
+            let report = if let Some(archive) = archive {
+                let archive_report = read_archive_list_report(&archive)?;
+                import_verified_receipt_bundle_from_archive_report(
+                    &bundle,
+                    state_dir,
+                    &archive_report,
+                    store_prefix,
+                    &context,
+                    &outputs,
+                )?
+            } else {
+                import_verified_receipt_bundle(&bundle, state_dir, store_prefix, &context, &outputs)?
+            };
             print_import(&report, json_output)
         }
     }
+}
+
+fn read_archive_list_report(path: &Path) -> Result<crunch_store::ArchiveListReport, RunError> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| RunError::Internal(format!("creating archive reader runtime: {err}")))?;
+    runtime.block_on(read_archive_list_report_async(path.to_path_buf()))
+}
+
+async fn read_archive_list_report_async(path: PathBuf) -> Result<crunch_store::ArchiveListReport, RunError> {
+    let file = tokio::fs::File::open(&path)
+        .await
+        .map_err(|err| RunError::Internal(format!("opening archive {}: {err}", path.display())))?;
+    let mut reader = tokio::io::BufReader::new(file);
+    crunch_store::list_store_archive(&mut reader)
+        .await
+        .map_err(|err| RunError::Internal(format!("listing archive {}: {err}", path.display())))
 }
 
 fn build_from_cli_records(
@@ -1721,6 +1876,55 @@ mod tests {
     }
 
     #[test]
+    fn archive_output_facts_verify_without_local_pathinfo() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let path_info = test_path_info("archive-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
+        let archive = archive_report_for_pathinfo(&path_info, "/mantle/store");
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S);
+
+        let report = verify_receipt_bundle_against_archive_report(
+            &bundle,
+            &archive,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap();
+
+        assert_eq!(report.output_matches.len(), 1);
+        assert_eq!(report.output_matches[0].identity, output);
+        assert_eq!(report.output_matches[0].nar_size_bytes, TEST_NAR_SIZE_BYTES);
+    }
+
+    #[test]
+    fn stale_archive_output_fact_rejects_verification() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let original = test_path_info("archive-stale-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        let stale = test_path_info("archive-stale-demo", TEST_STORE_DIGEST_BYTE, TEST_STALE_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, original.clone());
+        let output = original.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
+        let archive = archive_report_for_pathinfo(&stale, "/mantle/store");
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S);
+
+        let err = verify_receipt_bundle_against_archive_report(
+            &bundle,
+            &archive,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("output-ref digest mismatch"));
+    }
+
+    #[test]
     fn expired_trust_snapshot_rejects_output_verification() {
         let temp = tempfile::tempdir().unwrap();
         let state_dir = temp.path().join("state");
@@ -1904,6 +2108,28 @@ mod tests {
 
     fn test_store_path(name: &str, digest_byte: u8) -> nix_compat::store_path::StorePath<String> {
         nix_compat::store_path::StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap()
+    }
+
+    fn archive_report_for_pathinfo(path_info: &PathInfo, store_prefix: &str) -> crunch_store::ArchiveListReport {
+        crunch_store::ArchiveListReport {
+            store_prefix: store_prefix.to_string(),
+            record_count: 1,
+            total_payload_bytes: 0,
+            compatibility: "test-archive-list".to_string(),
+            paths: vec![crunch_store::ArchiveListedPath {
+                store_path: path_info.store_path.to_string(),
+                nar_size: path_info.nar_size,
+                nar_sha256_hex: data_encoding::HEXLOWER.encode(&path_info.nar_sha256),
+                references: path_info.references.iter().map(ToString::to_string).collect(),
+                signatures: path_info.signatures.iter().map(ToString::to_string).collect(),
+                reference_count: u32::try_from(path_info.references.len()).unwrap(),
+                signature_count: u32::try_from(path_info.signatures.len()).unwrap(),
+                deriver: path_info.deriver.as_ref().map(ToString::to_string),
+                ca: path_info.ca.as_ref().map(|ca| format!("{ca:?}")),
+                root: true,
+                payload_blake3: "a".repeat(DIGEST_HEX_CHARS),
+            }],
+        }
     }
 
     fn test_path_info(name: &str, digest_byte: u8, nar_hash_byte: u8) -> PathInfo {

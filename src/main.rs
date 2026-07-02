@@ -1573,6 +1573,10 @@ pub enum ReceiptBundleAction {
         #[arg(long)]
         policy_hash: Option<String>,
 
+        /// Store archive whose listed output facts should be used instead of local PathInfo
+        #[arg(long)]
+        archive: Option<std::path::PathBuf>,
+
         /// Verification timestamp for replayed trust-window checks (defaults to current time)
         #[arg(long)]
         valid_at_unix_s: Option<u64>,
@@ -1598,6 +1602,10 @@ pub enum ReceiptBundleAction {
         /// Expected policy hash or policy identifier for verified import
         #[arg(long)]
         policy_hash: Option<String>,
+
+        /// Store archive whose listed output facts should be used instead of local PathInfo
+        #[arg(long)]
+        archive: Option<std::path::PathBuf>,
 
         /// Verification timestamp for replayed trust-window checks (defaults to current time)
         #[arg(long)]
