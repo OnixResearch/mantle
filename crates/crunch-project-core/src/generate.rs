@@ -361,6 +361,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         Lockfile {
             version: SchemaVersion::CURRENT,
@@ -420,6 +421,7 @@ mod tests {
             mirrors: vec!["https://mirror.example.com/nixpkgs.git".to_string()],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,
@@ -448,6 +450,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-p1=".into(),
             },
+            trust: None,
         });
         lock.patches.insert("p2".into(), LockedPatch {
             source: LockedPatchSource::Local {
@@ -457,6 +460,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-p2=".into(),
             },
+            trust: None,
         });
         let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("patches = ["));
@@ -509,6 +513,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         let mut patches = BTreeMap::new();
         patches.insert("fix1".into(), LockedPatch {
@@ -519,6 +524,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-patchhash=".into(),
             },
+            trust: None,
         });
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,
@@ -545,6 +551,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-remotehash=".into(),
             },
+            trust: None,
         });
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,
@@ -569,6 +576,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-fix=".into(),
             },
+            trust: None,
         });
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,

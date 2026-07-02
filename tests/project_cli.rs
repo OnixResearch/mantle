@@ -157,6 +157,7 @@ fn check_static_accepts_build_fetch_policy_without_fetching_remote_url() {
         mirrors: Vec::new(),
         fetch_policy: crunch_project::InputFetchPolicy::BuildFetchAction,
         freshness: None,
+        trust: None,
     });
     std::fs::write(dir.path().join("mantle-project.ncl"), manifest).unwrap();
     std::fs::write(dir.path().join("mantle.lock"), lock.clone().to_json().unwrap()).unwrap();

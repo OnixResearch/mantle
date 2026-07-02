@@ -764,6 +764,7 @@ mod tests {
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
                 retention: None,
                 freshness: None,
+                trust: None,
             }],
             patches: vec![],
         }
@@ -783,6 +784,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         Lockfile {
             version: SchemaVersion::CURRENT,

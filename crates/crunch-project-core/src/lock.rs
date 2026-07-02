@@ -11,6 +11,9 @@ use crate::error::Error;
 use crate::fetch_policy::InputFetchPolicy;
 use crate::freshness::LockedFreshnessValue;
 use crate::manifest::HashAlgo;
+use crate::trust::LockedTrust;
+use crate::trust::TrustSubject;
+use crate::trust::validate_locked_trust;
 use crate::version::SchemaVersion;
 
 const MAX_LOCK_ENTRIES: u32 = 4096;
@@ -90,10 +93,39 @@ impl Lockfile {
                     problems.push(format!("lock entry '{name}': freshness value digest is empty"));
                 }
             }
+            if let Some(trust) = &entry.trust {
+                let subject = TrustSubject::input(name.clone());
+                problems.extend(validate_locked_trust(
+                    trust,
+                    &subject,
+                    &entry.hash.algo,
+                    &entry.hash.value,
+                    &format!("lock entry '{name}'"),
+                ));
+            }
             for patch_name in &entry.patches {
                 if !patches.contains_key(patch_name) {
                     problems.push(format!("lock entry '{name}' references unlocked patch '{patch_name}'"));
                 }
+            }
+        }
+
+        for (name, patch) in &patches {
+            if name.is_empty() {
+                problems.push("locked patch with empty name".into());
+            }
+            if patch.hash.value.is_empty() {
+                problems.push(format!("locked patch '{name}': hash value is empty"));
+            }
+            if let Some(trust) = &patch.trust {
+                let subject = TrustSubject::patch(name.clone());
+                problems.extend(validate_locked_trust(
+                    trust,
+                    &subject,
+                    &patch.hash.algo,
+                    &patch.hash.value,
+                    &format!("locked patch '{name}'"),
+                ));
             }
         }
 
@@ -115,6 +147,7 @@ pub struct LockEntry {
     pub mirrors: Vec<String>,
     pub fetch_policy: InputFetchPolicy,
     pub freshness: Option<LockedFreshnessValue>,
+    pub trust: Option<LockedTrust>,
 }
 
 #[derive(Deserialize)]
@@ -125,6 +158,7 @@ struct RawLockEntry {
     mirrors: Option<Vec<String>>,
     fetch_policy: Option<InputFetchPolicy>,
     freshness: Option<LockedFreshnessValue>,
+    trust: Option<LockedTrust>,
 }
 
 impl<'de> Deserialize<'de> for LockEntry {
@@ -138,6 +172,7 @@ impl<'de> Deserialize<'de> for LockEntry {
             mirrors: raw.mirrors.unwrap_or_else(Vec::new),
             fetch_policy: raw.fetch_policy.unwrap_or_default(),
             freshness: raw.freshness,
+            trust: raw.trust,
         })
     }
 }
@@ -202,6 +237,8 @@ pub struct LockedHash {
 pub struct LockedPatch {
     pub source: LockedPatchSource,
     pub hash: LockedHash,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trust: Option<LockedTrust>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -235,6 +272,7 @@ mod tests {
             mirrors: vec!["https://mirrors.tuna.tsinghua.edu.cn/git/nixpkgs.git".into()],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         inputs.insert("hello-src".into(), LockEntry {
             kind: LockedKind::Tarball {
@@ -248,6 +286,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
 
         let mut patches = BTreeMap::new();
@@ -259,6 +298,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-patchhashvalue123=".into(),
             },
+            trust: None,
         });
 
         Lockfile {
@@ -336,6 +376,7 @@ mod tests {
             mirrors: vec!["https://mirror1.example.com/file.txt".into()],
             fetch_policy: InputFetchPolicy::BuildFetchAction,
             freshness: None,
+            trust: None,
         };
         let json = serde_json::to_string(&entry).unwrap();
         let parsed: LockEntry = serde_json::from_str(&json).unwrap();

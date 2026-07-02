@@ -412,10 +412,12 @@ fn map_patch(patch: &ExternalPatch, blockers: &mut Vec<PinImportBlocker>) -> Opt
         manifest_patch: PatchDef {
             name: patch.name.clone(),
             source: manifest_source,
+            trust: None,
         },
         lock_patch: LockedPatch {
             source: lock_source,
             hash: hash.clone(),
+            trust: None,
         },
         report: PinImportMappedPatch {
             name: patch.name.clone(),
@@ -608,6 +610,7 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
             fetch_policy,
             retention: None,
             freshness: None,
+            trust: None,
         },
         lock_entry: LockEntry {
             kind: lock_kind,
@@ -616,6 +619,7 @@ fn map_pin(pin: &ExternalPin, blockers: &mut Vec<PinImportBlocker>) -> Option<Ma
             mirrors: pin.mirrors.clone(),
             fetch_policy,
             freshness: None,
+            trust: None,
         },
         report: PinImportMappedInput {
             name: pin.name.clone(),

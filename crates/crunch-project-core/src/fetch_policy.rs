@@ -355,6 +355,7 @@ fn lock_entry_from_expected(
         mirrors: input.mirrors.clone(),
         fetch_policy: input.fetch_policy,
         freshness: None,
+        trust: None,
     })
 }
 
@@ -540,6 +541,7 @@ mod tests {
             fetch_policy: policy,
             retention: None,
             freshness: None,
+            trust: None,
         }
     }
 
@@ -566,6 +568,7 @@ mod tests {
             mirrors: Vec::new(),
             fetch_policy: policy,
             freshness: None,
+            trust: None,
         });
         Lockfile {
             version: SchemaVersion::CURRENT,

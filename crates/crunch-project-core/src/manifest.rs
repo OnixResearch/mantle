@@ -13,6 +13,7 @@ use crate::fetch_policy::fetch_policy_compatibility_problems;
 use crate::freshness::FreshnessProbe;
 use crate::freshness::validate_freshness_probe;
 use crate::retention::InputRetentionPolicy;
+use crate::trust::InputTrustPolicy;
 use crate::version::SchemaVersion;
 use crate::version::parse_version;
 
@@ -91,6 +92,14 @@ impl ProjectManifest {
             problems.extend(input.validate());
         }
 
+        let mut seen_patch_names = BTreeSet::new();
+        for patch in &patches {
+            if !seen_patch_names.insert(patch.name.as_str()) {
+                problems.push(format!("duplicate patch name: {}", patch.name));
+            }
+            problems.extend(patch.validate());
+        }
+
         let patch_names: BTreeSet<&str> = patches.iter().map(|p| p.name.as_str()).collect();
         for input in &inputs {
             for patch_ref in &input.patches {
@@ -115,6 +124,7 @@ pub struct ManifestInput {
     pub fetch_policy: InputFetchPolicy,
     pub retention: Option<InputRetentionPolicy>,
     pub freshness: Option<FreshnessProbe>,
+    pub trust: Option<InputTrustPolicy>,
 }
 
 #[derive(Deserialize)]
@@ -128,6 +138,7 @@ struct RawManifestInput {
     fetch_policy: Option<InputFetchPolicy>,
     retention: Option<InputRetentionPolicy>,
     freshness: Option<FreshnessProbe>,
+    trust: Option<InputTrustPolicy>,
 }
 
 impl<'de> Deserialize<'de> for ManifestInput {
@@ -144,6 +155,7 @@ impl<'de> Deserialize<'de> for ManifestInput {
             fetch_policy: raw.fetch_policy.unwrap_or_default(),
             retention: raw.retention,
             freshness: raw.freshness,
+            trust: raw.trust,
         })
     }
 }
@@ -180,6 +192,10 @@ impl ManifestInput {
 
         if let Some(retention) = self.retention {
             problems.extend(retention.validate(&format!("input '{}'", self.name)));
+        }
+
+        if let Some(trust) = &self.trust {
+            problems.extend(trust.validate(&format!("input '{}'", self.name)));
         }
 
         problems.extend(fetch_policy_compatibility_problems(self));
@@ -248,7 +264,7 @@ impl Default for GitReference {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum HashAlgo {
     #[default]
     #[serde(rename = "sha256")]
@@ -292,10 +308,43 @@ impl<'de> Deserialize<'de> for HashSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PatchDef {
     pub name: String,
     pub source: PatchSource,
+    pub trust: Option<InputTrustPolicy>,
+}
+
+#[derive(Deserialize)]
+struct RawPatchDef {
+    name: String,
+    source: PatchSource,
+    trust: Option<InputTrustPolicy>,
+}
+
+impl<'de> Deserialize<'de> for PatchDef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        let raw = RawPatchDef::deserialize(deserializer)?;
+        Ok(Self {
+            name: raw.name,
+            source: raw.source,
+            trust: raw.trust,
+        })
+    }
+}
+
+impl PatchDef {
+    fn validate(&self) -> Vec<String> {
+        let mut problems = Vec::new();
+        if self.name.is_empty() {
+            problems.push("patch name must not be empty".into());
+        }
+        if let Some(trust) = &self.trust {
+            problems.extend(trust.validate(&format!("patch '{}'", self.name)));
+        }
+        problems
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -331,6 +380,7 @@ mod tests {
                     fetch_policy: InputFetchPolicy::GenerationMaterial,
                     retention: None,
                     freshness: None,
+                    trust: None,
                 },
                 ManifestInput {
                     name: "hello-src".into(),
@@ -347,6 +397,7 @@ mod tests {
                     fetch_policy: InputFetchPolicy::GenerationMaterial,
                     retention: None,
                     freshness: None,
+                    trust: None,
                 },
             ],
             patches: vec![PatchDef {
@@ -354,6 +405,7 @@ mod tests {
                 source: PatchSource::Local {
                     path: "patches/hello-fix.patch".into(),
                 },
+                trust: None,
             }],
             retention: InputRetentionPolicy::Untracked,
         }
@@ -408,6 +460,7 @@ mod tests {
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
                 retention: None,
                 freshness: None,
+                trust: None,
             }],
             patches: vec![],
             retention: InputRetentionPolicy::Untracked,

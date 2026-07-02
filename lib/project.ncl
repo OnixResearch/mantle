@@ -69,6 +69,25 @@ let FreshnessProbe = std.contract.from_validator (fun value =>
     'Error { message = "freshness probe must be a record" }
 ) in
 
+let InputTrustPolicy = std.contract.from_validator (fun value =>
+  if std.is_record value then
+    if std.record.has_field "verifier" value then
+      if value.verifier == "ed25519-detached" then
+        if std.record.has_field "signatures" value then
+          if std.record.has_field "trusted_public_keys" value then
+            'Ok
+          else
+            'Error { message = "trust policy must declare trusted_public_keys" }
+        else
+          'Error { message = "trust policy must declare signatures" }
+      else
+        'Error { message = "trust verifier must be ed25519-detached" }
+    else
+      'Error { message = "trust policy must have a verifier field" }
+  else
+    'Error { message = "trust policy must be a record" }
+) in
+
 let InputKind = std.contract.from_validator (fun value =>
   if std.is_record value then
     if std.record.has_field "type" value then
@@ -93,6 +112,7 @@ let ManifestInput = {
   fetch_policy | InputFetchPolicy | default = "generation-material",
   retention | InputRetentionPolicy | optional,
   freshness | FreshnessProbe | optional,
+  trust | InputTrustPolicy | optional,
 } in
 
 let PatchSource = std.contract.from_validator (fun value =>
@@ -116,6 +136,7 @@ let PatchSource = std.contract.from_validator (fun value =>
 let PatchDef = {
   name | String,
   source | PatchSource,
+  trust | InputTrustPolicy | optional,
 } in
 
 # The top-level project manifest contract.
@@ -135,5 +156,6 @@ let PatchDef = {
   InputFetchPolicy = InputFetchPolicy,
   InputRetentionPolicy = InputRetentionPolicy,
   FreshnessProbe = FreshnessProbe,
+  InputTrustPolicy = InputTrustPolicy,
   PatchDef = PatchDef,
 }

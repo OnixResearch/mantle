@@ -105,6 +105,7 @@ mod tests {
             mirrors: alloc::vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
 
         let lock = Lockfile {
@@ -136,6 +137,7 @@ mod tests {
             mirrors: alloc::vec!["https://mirror.example.com/repo.git".into()],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
 
         let mut patches = BTreeMap::new();
@@ -147,6 +149,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-patchhash=".into(),
             },
+            trust: None,
         });
 
         let lock = Lockfile {

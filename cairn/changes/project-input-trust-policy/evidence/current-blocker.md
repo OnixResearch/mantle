@@ -1,6 +1,6 @@
 # Current Blocker — Project input trust policy
 
-Date: 2026-06-30
+Date: 2026-07-01
 
 ## Question
 
@@ -8,22 +8,21 @@ Can `project-input-trust-policy` be honestly drained from the current tree?
 
 ## Inspected evidence
 
-- `cairn/changes/project-input-trust-policy/tasks.md` still has 9 unchecked tasks covering input/patch trust schema, evidence wording, pure policy validation, shell trust verification, refresh/patch/project-attestation integration, and positive/negative/shell tests.
-- The specs require supported verifier kinds, signature refs, trusted key identities/fingerprints, required signer or quorum decisions, digest binding, and bounded claim wording in `verification-evidence`.
-- Current Mantle has release/signature and attestation concepts, but code search did not find a project input trust-policy model, minisign/PGP verifier path, or refresh-time lock update gate for input/patch trust evidence.
-- The proposal explicitly excludes key-server/forge trust; selecting the first verifier formats and fixture strategy is a product/API decision that must be made before support can be claimed.
+- `cairn/changes/project-input-trust-policy/evidence/implementation-validation-2026-07-01.md` records current positive/negative core tests, shell verifier tests, CLI refresh fixtures, root compile check, formatting, and Cairn validate/gate transcripts.
+- The first supported verifier kind is explicit and bounded: local Ed25519 detached signatures over the trust signature payload for the bound source digest. The implementation intentionally does not perform key-server lookup or forge trust.
+- Refresh-time lock writes now require accepted trust facts for inputs and patches that declare trust policy; invalid or detached evidence fails before writing new lock data.
+- Reports and locked trust records carry the bounded non-claim text from `PROJECT_INPUT_TRUST_NON_CLAIM`.
 
 ## Decision
 
-Blocked. The change needs an explicit verifier support decision and refresh/attestation integration. Draining it now would overclaim signed/trusted input evidence from ordinary content hashes.
+No current blocker for the implemented scope. The remaining work is lifecycle cleanup: ensure tasks are checked, rerun Cairn validation after task/evidence edits, then sync/archive when ready.
 
 ## Owner
 
-Mantle verification/project workflow owner for refresh-time input trust evidence.
+Mantle verification/project workflow owner.
 
 ## Next action
 
-1. decide the first verifier kind and local fixture format, keeping key-server/forge lookup out of scope;
-2. implement pure trust-policy decisions over explicit verified facts;
-3. add shell verification for local fixture keys/signatures and fail-closed refresh behavior;
-4. project only bounded trust claims into reports/attestations with positive and negative tests.
+1. check completed tasks in `tasks.md`;
+2. rerun Cairn validate/gates after evidence/task edits;
+3. archive after the implementation commit is ready.

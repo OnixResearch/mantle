@@ -18,8 +18,13 @@ use crate::ManifestInput;
 use crate::PatchDef;
 use crate::PatchSource;
 use crate::ProjectManifest;
+use crate::TrustSubject;
+use crate::VerifiedTrustFact;
+use crate::evaluate_trust_policy;
 use crate::fetch_policy_compatibility_problems;
 use crate::lock_entry_without_fetch;
+use crate::trust_policy_matches_locked;
+use crate::validate_locked_trust;
 
 const MAX_REFRESH_BATCH: u32 = 256;
 
@@ -80,6 +85,7 @@ pub struct RefreshInputsRequest {
     pub resolutions: Vec<ResolvedInputState>,
     pub source_state: Vec<InputSourceStateFact>,
     pub freshness_decisions: Vec<FreshnessDecision>,
+    pub trust_facts: Vec<VerifiedTrustFact>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -101,6 +107,7 @@ pub struct ApplyOutcomesRequest {
     pub lock: Lockfile,
     pub outcomes: Vec<RefreshOutcome>,
     pub patch_resolutions: Vec<PatchResolution>,
+    pub trust_facts: Vec<VerifiedTrustFact>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -133,7 +140,16 @@ pub fn refresh_inputs(request: RefreshInputsRequest) -> Vec<RefreshOutcome> {
 
     inputs_to_refresh
         .into_iter()
-        .map(|input| refresh_one(input, &request.lock, &resolution_map, &source_state_map, &freshness_decision_map))
+        .map(|input| {
+            refresh_one(
+                input,
+                &request.lock,
+                &resolution_map,
+                &source_state_map,
+                &freshness_decision_map,
+                &request.trust_facts,
+            )
+        })
         .collect()
 }
 
@@ -184,8 +200,16 @@ pub fn apply_outcomes(request: ApplyOutcomesRequest) -> ApplyResult {
         let patch_name = patch_def.name.clone();
         match patch_resolution_map.get(patch_name.as_str()) {
             Some(PatchResolution::Resolved { patch, .. }) => {
-                new_lock.patches.insert(patch_name, patch.clone());
-                patch_changed = true;
+                match trusted_locked_patch(&patch_def, patch.clone(), &request.trust_facts) {
+                    Ok(trusted_patch) => {
+                        new_lock.patches.insert(patch_name, trusted_patch);
+                        patch_changed = true;
+                    }
+                    Err(reason) => patch_failures.push(RefreshFailure {
+                        name: patch_name,
+                        reason,
+                    }),
+                }
             }
             Some(PatchResolution::Failed { reason, .. }) => patch_failures.push(RefreshFailure {
                 name: patch_name,
@@ -247,6 +271,7 @@ fn refresh_one(
     resolutions: &BTreeMap<String, ResolvedInputState>,
     source_state: &BTreeMap<&str, Vec<&InputSourceStateFact>>,
     freshness_decisions: &BTreeMap<String, FreshnessDecision>,
+    trust_facts: &[VerifiedTrustFact],
 ) -> RefreshOutcome {
     assert!(!input.name.is_empty(), "input name must not be empty");
     assert!(
@@ -270,9 +295,9 @@ fn refresh_one(
     }
 
     match input.fetch_policy {
-        InputFetchPolicy::GenerationMaterial => refresh_generation_material(input, lock, resolutions),
-        InputFetchPolicy::BuildFetchAction => refresh_without_generation_fetch(input, lock),
-        InputFetchPolicy::ImportedSourceRequired => refresh_imported_source(input, lock, source_state),
+        InputFetchPolicy::GenerationMaterial => refresh_generation_material(input, lock, resolutions, trust_facts),
+        InputFetchPolicy::BuildFetchAction => refresh_without_generation_fetch(input, lock, trust_facts),
+        InputFetchPolicy::ImportedSourceRequired => refresh_imported_source(input, lock, source_state, trust_facts),
     }
 }
 
@@ -305,9 +330,18 @@ fn refresh_generation_material(
     input: &ManifestInput,
     lock: &Lockfile,
     resolutions: &BTreeMap<String, ResolvedInputState>,
+    trust_facts: &[VerifiedTrustFact],
 ) -> RefreshOutcome {
     match resolutions.get(input.name.as_str()) {
-        Some(ResolvedInputState::Resolved(resolved)) => unchanged_or_updated(input, lock, resolved.clone()),
+        Some(ResolvedInputState::Resolved(resolved)) => {
+            match trusted_resolved_input(input, resolved.clone(), trust_facts) {
+                Ok(trusted) => unchanged_or_updated(input, lock, trusted),
+                Err(reason) => RefreshOutcome::Failed {
+                    name: input.name.clone(),
+                    reason,
+                },
+            }
+        }
         Some(ResolvedInputState::Failed(failure)) => RefreshOutcome::Failed {
             name: failure.name.clone(),
             reason: failure.reason.clone(),
@@ -319,12 +353,25 @@ fn refresh_generation_material(
     }
 }
 
-fn refresh_without_generation_fetch(input: &ManifestInput, lock: &Lockfile) -> RefreshOutcome {
+fn refresh_without_generation_fetch(
+    input: &ManifestInput,
+    lock: &Lockfile,
+    trust_facts: &[VerifiedTrustFact],
+) -> RefreshOutcome {
     match lock_entry_without_fetch(input, lock.inputs.get(&input.name)) {
-        Ok(entry) => unchanged_or_updated(input, lock, ResolvedInput {
-            name: input.name.clone(),
-            entry,
-        }),
+        Ok(entry) => {
+            let resolved = ResolvedInput {
+                name: input.name.clone(),
+                entry,
+            };
+            match trusted_resolved_input(input, resolved, trust_facts) {
+                Ok(trusted) => unchanged_or_updated(input, lock, trusted),
+                Err(reason) => RefreshOutcome::Failed {
+                    name: input.name.clone(),
+                    reason,
+                },
+            }
+        }
         Err(diagnostic) => RefreshOutcome::Failed {
             name: diagnostic.input_name,
             reason: diagnostic.message,
@@ -336,6 +383,7 @@ fn refresh_imported_source(
     input: &ManifestInput,
     lock: &Lockfile,
     source_state: &BTreeMap<&str, Vec<&InputSourceStateFact>>,
+    trust_facts: &[VerifiedTrustFact],
 ) -> RefreshOutcome {
     let existing = lock.inputs.get(&input.name);
     if matching_source_fact(input, existing, source_state).is_none() {
@@ -344,7 +392,7 @@ fn refresh_imported_source(
             reason: "imported-source-required policy has no matching ready source-state record".to_string(),
         };
     }
-    refresh_without_generation_fetch(input, lock)
+    refresh_without_generation_fetch(input, lock, trust_facts)
 }
 
 fn unchanged_or_updated(input: &ManifestInput, lock: &Lockfile, resolved: ResolvedInput) -> RefreshOutcome {
@@ -356,6 +404,39 @@ fn unchanged_or_updated(input: &ManifestInput, lock: &Lockfile, resolved: Resolv
         };
     }
     RefreshOutcome::Updated(resolved)
+}
+
+fn trusted_resolved_input(
+    input: &ManifestInput,
+    mut resolved: ResolvedInput,
+    trust_facts: &[VerifiedTrustFact],
+) -> Result<ResolvedInput, String> {
+    assert_eq!(resolved.name, input.name, "resolved input name must match manifest input");
+    if let Some(policy) = &input.trust {
+        let subject = TrustSubject::input(input.name.clone());
+        let trust =
+            evaluate_trust_policy(subject, policy, &resolved.entry.hash.algo, &resolved.entry.hash.value, trust_facts)?;
+        resolved.entry.trust = Some(trust);
+        return Ok(resolved);
+    }
+    resolved.entry.trust = None;
+    Ok(resolved)
+}
+
+fn trusted_locked_patch(
+    def: &PatchDef,
+    mut patch: LockedPatch,
+    trust_facts: &[VerifiedTrustFact],
+) -> Result<LockedPatch, String> {
+    assert!(!def.name.is_empty(), "patch name must not be empty");
+    if let Some(policy) = &def.trust {
+        let subject = TrustSubject::patch(def.name.clone());
+        let trust = evaluate_trust_policy(subject, policy, &patch.hash.algo, &patch.hash.value, trust_facts)?;
+        patch.trust = Some(trust);
+        return Ok(patch);
+    }
+    patch.trust = None;
+    Ok(patch)
 }
 
 fn source_state_map(facts: &[InputSourceStateFact]) -> BTreeMap<&str, Vec<&InputSourceStateFact>> {
@@ -481,6 +562,9 @@ fn revert_failed_patch_inputs(old_lock: &Lockfile, new_lock: &mut Lockfile, fail
 }
 
 fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
+    if !patch_trust_matches_def(locked, def) {
+        return false;
+    }
     match (&locked.source, &def.source) {
         (LockedPatchSource::Local { path: locked_path }, PatchSource::Local { path: def_path }) => {
             locked_path == def_path
@@ -506,6 +590,22 @@ fn patch_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
             true
         }
         _ => false,
+    }
+}
+
+fn patch_trust_matches_def(locked: &LockedPatch, def: &PatchDef) -> bool {
+    match (&def.trust, &locked.trust) {
+        (None, None) => true,
+        (None, Some(_)) => false,
+        (Some(_), None) => false,
+        (Some(policy), Some(trust)) => {
+            if !trust_policy_matches_locked(policy, trust) {
+                return false;
+            }
+            let subject = TrustSubject::patch(def.name.clone());
+            validate_locked_trust(trust, &subject, &locked.hash.algo, &locked.hash.value, "locked patch trust")
+                .is_empty()
+        }
     }
 }
 
@@ -561,11 +661,18 @@ mod tests {
     use crate::HashSpec;
     use crate::InputKind;
     use crate::InputSourceStateClass;
+    use crate::InputTrustPolicy;
     use crate::LockedHash;
     use crate::LockedKind;
     use crate::ManifestInput;
+    use crate::PROJECT_INPUT_TRUST_NON_CLAIM;
     use crate::PatchSource;
     use crate::SchemaVersion;
+    use crate::TrustDigestBinding;
+    use crate::TrustSignatureRef;
+    use crate::TrustSubject;
+    use crate::TrustVerifierKind;
+    use crate::VerifiedTrustFact;
 
     fn file_input(name: &str, url: &str) -> ManifestInput {
         ManifestInput {
@@ -578,6 +685,7 @@ mod tests {
             fetch_policy: InputFetchPolicy::GenerationMaterial,
             retention: None,
             freshness: None,
+            trust: None,
         }
     }
 
@@ -611,6 +719,7 @@ mod tests {
                 mirrors: vec![],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
                 freshness: None,
+                trust: None,
             },
         })
     }
@@ -635,6 +744,32 @@ mod tests {
         }
     }
 
+    fn trust_policy() -> InputTrustPolicy {
+        InputTrustPolicy {
+            verifier: TrustVerifierKind::Ed25519Detached,
+            signatures: vec![TrustSignatureRef::LocalFile {
+                path: "pkg.sig".to_string(),
+            }],
+            trusted_public_keys: vec!["alice:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string()],
+            required_signers: vec!["alice".to_string()],
+            quorum: 1,
+            digest_binding: TrustDigestBinding::ContentHash,
+        }
+    }
+
+    fn trust_fact(subject: TrustSubject, hash: &str) -> VerifiedTrustFact {
+        VerifiedTrustFact {
+            subject,
+            verifier: TrustVerifierKind::Ed25519Detached,
+            digest_binding: TrustDigestBinding::ContentHash,
+            hash_algo: HashAlgo::Sha256,
+            hash_value: hash.to_string(),
+            signer: "alice".to_string(),
+            key_ref: "alice:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string(),
+            signature_ref: "pkg.sig".to_string(),
+        }
+    }
+
     #[test]
     fn refresh_inputs_marks_resolved_entry_updated() {
         let manifest = manifest_with(vec![file_input("data", "https://example.com/data.bin")]);
@@ -645,6 +780,7 @@ mod tests {
             resolutions: vec![resolved_file("data", "https://example.com/data.bin", "sha256-abc=")],
             source_state: Vec::new(),
             freshness_decisions: Vec::new(),
+            trust_facts: Vec::new(),
         });
 
         assert_eq!(outcomes.len(), 1);
@@ -673,6 +809,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
 
         let outcomes = refresh_inputs(RefreshInputsRequest {
@@ -682,6 +819,7 @@ mod tests {
             resolutions: vec![resolved_file("data", "https://example.com/data.bin", "sha256-same=")],
             source_state: Vec::new(),
             freshness_decisions: Vec::new(),
+            trust_facts: Vec::new(),
         });
         assert!(matches!(&outcomes[0], RefreshOutcome::Unchanged { .. }));
     }
@@ -697,6 +835,7 @@ mod tests {
             resolutions: Vec::new(),
             source_state: Vec::new(),
             freshness_decisions: Vec::new(),
+            trust_facts: Vec::new(),
         });
         assert!(matches!(&outcomes[0], RefreshOutcome::Frozen { name } if name == "frozen"));
     }
@@ -718,6 +857,7 @@ mod tests {
                 FreshnessDecisionKind::Unchanged,
                 "freshness value matches lock",
             )],
+            trust_facts: Vec::new(),
         });
 
         assert_eq!(outcomes.len(), 1);
@@ -741,6 +881,7 @@ mod tests {
                 FreshnessDecisionKind::NetworkRequired,
                 "network disabled",
             )],
+            trust_facts: Vec::new(),
         });
 
         assert_eq!(outcomes.len(), 1);
@@ -791,6 +932,7 @@ mod tests {
             resolutions: Vec::new(),
             source_state: Vec::new(),
             freshness_decisions: Vec::new(),
+            trust_facts: Vec::new(),
         });
 
         match &outcomes[0] {
@@ -814,6 +956,7 @@ mod tests {
             resolutions: Vec::new(),
             source_state: vec![source_fact("pkg", "sha256-expected=")],
             freshness_decisions: Vec::new(),
+            trust_facts: Vec::new(),
         });
 
         assert!(
@@ -833,6 +976,7 @@ mod tests {
             resolutions: Vec::new(),
             source_state: Vec::new(),
             freshness_decisions: Vec::new(),
+            trust_facts: Vec::new(),
         });
 
         assert!(
@@ -856,12 +1000,14 @@ mod tests {
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
                 retention: None,
                 freshness: None,
+                trust: None,
             }],
             patches: vec![PatchDef {
                 name: "fix1".into(),
                 source: PatchSource::Local {
                     path: "patches/fix1.patch".into(),
                 },
+                trust: None,
             }],
             retention: crate::InputRetentionPolicy::Untracked,
         };
@@ -879,6 +1025,7 @@ mod tests {
                 mirrors: vec![],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
                 freshness: None,
+                trust: None,
             },
         })];
         let patch_plan = plan_patch_resolutions(PatchResolutionPlanRequest {
@@ -901,8 +1048,10 @@ mod tests {
                         algo: HashAlgo::Sha256,
                         value: "sha256-patchhash=".into(),
                     },
+                    trust: None,
                 },
             }],
+            trust_facts: Vec::new(),
         });
 
         assert!(result.lock.inputs.contains_key("pkg"));
@@ -927,12 +1076,14 @@ mod tests {
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
                 retention: None,
                 freshness: None,
+                trust: None,
             }],
             patches: vec![PatchDef {
                 name: "bad".into(),
                 source: PatchSource::Local {
                     path: "patches/bad.patch".into(),
                 },
+                trust: None,
             }],
             retention: crate::InputRetentionPolicy::Untracked,
         };
@@ -950,6 +1101,7 @@ mod tests {
                 mirrors: vec![],
                 fetch_policy: InputFetchPolicy::GenerationMaterial,
                 freshness: None,
+                trust: None,
             },
         })];
 
@@ -961,6 +1113,7 @@ mod tests {
                 name: "bad".into(),
                 reason: "hash failed".into(),
             }],
+            trust_facts: Vec::new(),
         });
 
         assert_eq!(result.failures.len(), 1);
@@ -981,6 +1134,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-old=".into(),
             },
+            trust: None,
         });
         let result = apply_outcomes(ApplyOutcomesRequest {
             manifest,
@@ -999,13 +1153,110 @@ mod tests {
                     mirrors: vec![],
                     fetch_policy: InputFetchPolicy::GenerationMaterial,
                     freshness: None,
+                    trust: None,
                 },
             })],
             patch_resolutions: Vec::new(),
+            trust_facts: Vec::new(),
         });
 
         assert!(!result.lock.patches.contains_key("old-patch"));
         assert!(result.patches_changed);
+    }
+
+    #[test]
+    fn refresh_inputs_attaches_verified_trust_to_updated_lock() {
+        let mut input = file_input("pkg", "https://example.com/pkg");
+        input.trust = Some(trust_policy());
+        let outcomes = refresh_inputs(RefreshInputsRequest {
+            manifest: manifest_with(vec![input]),
+            lock: empty_lock(),
+            selected: Vec::new(),
+            resolutions: vec![resolved_file("pkg", "https://example.com/pkg", "sha256-trusted=")],
+            source_state: Vec::new(),
+            freshness_decisions: Vec::new(),
+            trust_facts: vec![trust_fact(TrustSubject::input("pkg".to_string()), "sha256-trusted=")],
+        });
+
+        let RefreshOutcome::Updated(resolved) = &outcomes[0] else {
+            panic!("expected trusted update, got {:?}", outcomes[0]);
+        };
+        let trust = resolved.entry.trust.as_ref().expect("trusted input lock should carry evidence");
+        assert_eq!(trust.signers, vec!["alice".to_string()]);
+        assert!(trust.claim.contains(PROJECT_INPUT_TRUST_NON_CLAIM));
+    }
+
+    #[test]
+    fn refresh_inputs_rejects_trusted_input_without_evidence() {
+        let mut input = file_input("pkg", "https://example.com/pkg");
+        input.trust = Some(trust_policy());
+        let outcomes = refresh_inputs(RefreshInputsRequest {
+            manifest: manifest_with(vec![input]),
+            lock: empty_lock(),
+            selected: Vec::new(),
+            resolutions: vec![resolved_file("pkg", "https://example.com/pkg", "sha256-trusted=")],
+            source_state: Vec::new(),
+            freshness_decisions: Vec::new(),
+            trust_facts: Vec::new(),
+        });
+
+        assert!(
+            matches!(&outcomes[0], RefreshOutcome::Failed { reason, .. } if reason.contains("missing required trust signer"))
+        );
+    }
+
+    #[test]
+    fn apply_outcomes_rejects_trusted_patch_without_evidence() {
+        let mut input = file_input("pkg", "https://example.com/pkg");
+        input.patches = vec!["fix".to_string()];
+        let mut manifest = manifest_with(vec![input]);
+        manifest.patches = vec![PatchDef {
+            name: "fix".to_string(),
+            source: PatchSource::Local {
+                path: "patches/fix.patch".to_string(),
+            },
+            trust: Some(trust_policy()),
+        }];
+        let outcomes = vec![RefreshOutcome::Updated(ResolvedInput {
+            name: "pkg".to_string(),
+            entry: LockEntry {
+                kind: LockedKind::File {
+                    url: "https://example.com/pkg".to_string(),
+                },
+                hash: LockedHash {
+                    algo: HashAlgo::Sha256,
+                    value: "sha256-pkg=".to_string(),
+                },
+                patches: vec!["fix".to_string()],
+                mirrors: Vec::new(),
+                fetch_policy: InputFetchPolicy::GenerationMaterial,
+                freshness: None,
+                trust: None,
+            },
+        })];
+        let result = apply_outcomes(ApplyOutcomesRequest {
+            manifest,
+            lock: empty_lock(),
+            outcomes,
+            patch_resolutions: vec![PatchResolution::Resolved {
+                name: "fix".to_string(),
+                patch: LockedPatch {
+                    source: LockedPatchSource::Local {
+                        path: "patches/fix.patch".to_string(),
+                    },
+                    hash: LockedHash {
+                        algo: HashAlgo::Sha256,
+                        value: "sha256-fix=".to_string(),
+                    },
+                    trust: None,
+                },
+            }],
+            trust_facts: Vec::new(),
+        });
+
+        assert_eq!(result.failures.len(), 1);
+        assert!(result.failures[0].reason.contains("missing required trust signer"));
+        assert!(!result.lock.patches.contains_key("fix"));
     }
 
     #[test]
@@ -1028,6 +1279,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         let stale = list_stale(RefreshInputsRequest {
             manifest,
@@ -1043,6 +1295,7 @@ mod tests {
             ],
             source_state: Vec::new(),
             freshness_decisions: Vec::new(),
+            trust_facts: Vec::new(),
         });
         assert_eq!(stale.stale, vec!["stale"]);
         assert_eq!(stale.failed.len(), 1);

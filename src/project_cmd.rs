@@ -249,6 +249,9 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
         if !entry.patches.is_empty() {
             println!("  patches: {}", entry.patches.join(", "));
         }
+        if let Some(trust) = &entry.trust {
+            println!("  trust: {} signer(s) via {} ({})", trust.signers.len(), trust.verifier.as_str(), trust.claim);
+        }
         println!("  retention: {}", retention_status_text(name, &retention_plan));
         println!();
     }

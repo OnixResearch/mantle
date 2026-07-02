@@ -53,6 +53,7 @@ mod tests {
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
                 retention: None,
                 freshness: None,
+                trust: None,
             }],
             patches: vec![],
             retention: crate::InputRetentionPolicy::Untracked,
@@ -71,6 +72,7 @@ mod tests {
                 mirrors: vec![],
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
                 freshness: None,
+                trust: None,
             })]),
             patches: BTreeMap::new(),
         };

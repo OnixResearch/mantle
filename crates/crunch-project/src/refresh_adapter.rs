@@ -12,6 +12,7 @@ use crunch_project_core::RefreshInputsPlanRequest;
 use crunch_project_core::RefreshInputsRequest;
 use crunch_project_core::ResolvedInput;
 use crunch_project_core::ResolvedInputState;
+use crunch_project_core::VerifiedTrustFact;
 
 use crate::Error;
 use crate::GitReference;
@@ -55,6 +56,16 @@ pub trait RefreshResolver {
         let _ = (input, no_network);
         Ok(None)
     }
+
+    fn verify_input_trust(&self, input: &ManifestInput, entry: &LockEntry) -> Result<Vec<VerifiedTrustFact>, Error> {
+        let _ = (input, entry);
+        Ok(Vec::new())
+    }
+
+    fn verify_patch_trust(&self, patch: &PatchDef, locked: &LockedPatch) -> Result<Vec<VerifiedTrustFact>, Error> {
+        let _ = (patch, locked);
+        Ok(Vec::new())
+    }
 }
 
 pub fn refresh_inputs(
@@ -83,12 +94,13 @@ pub fn apply_outcomes(
     outcomes: &[RefreshOutcome],
     resolver: &dyn RefreshResolver,
 ) -> ApplyResult {
-    let patch_resolutions = resolve_needed_patches(manifest, lock, outcomes, resolver);
+    let (patch_resolutions, trust_facts) = resolve_needed_patches(manifest, lock, outcomes, resolver);
     crunch_project_core::apply_outcomes(ApplyOutcomesRequest {
         manifest: manifest.clone(),
         lock: lock.clone(),
         outcomes: outcomes.to_vec(),
         patch_resolutions,
+        trust_facts,
     })
 }
 
@@ -119,11 +131,19 @@ fn build_refresh_request(
     });
     let observations = collect_freshness_observations(&plan, resolver, no_network);
     let decisions = plan_freshness_decisions(&plan, lock, selected, &observations, no_network);
+    let mut trust_facts = Vec::new();
     let resolutions = plan
         .into_iter()
         .filter(|input| !input.frozen)
         .filter(|input| should_resolve_input(input, &decisions))
-        .map(|input| resolve_manifest_input(&input, resolver, freshness_observation_for(&input.name, &observations)))
+        .map(|input| {
+            resolve_manifest_input_with_trust(
+                &input,
+                resolver,
+                freshness_observation_for(&input.name, &observations),
+                &mut trust_facts,
+            )
+        })
         .collect();
     RefreshInputsRequest {
         manifest: manifest.clone(),
@@ -132,6 +152,7 @@ fn build_refresh_request(
         resolutions,
         source_state: Vec::new(),
         freshness_decisions: decisions,
+        trust_facts,
     }
 }
 
@@ -264,6 +285,31 @@ fn resolve_manifest_input(
             name: input.name.clone(),
             entry,
         }),
+        Err(err) => ResolvedInputState::Failed(RefreshFailure {
+            name: input.name.clone(),
+            reason: err.to_string(),
+        }),
+    }
+}
+
+fn resolve_manifest_input_with_trust(
+    input: &ManifestInput,
+    resolver: &dyn RefreshResolver,
+    freshness_observation: Option<&FreshnessObservation>,
+    trust_facts: &mut Vec<VerifiedTrustFact>,
+) -> ResolvedInputState {
+    let resolved = resolve_manifest_input(input, resolver, freshness_observation);
+    let ResolvedInputState::Resolved(resolved_input) = resolved else {
+        return resolved;
+    };
+    if input.trust.is_none() {
+        return ResolvedInputState::Resolved(resolved_input);
+    }
+    match resolver.verify_input_trust(input, &resolved_input.entry) {
+        Ok(mut facts) => {
+            trust_facts.append(&mut facts);
+            ResolvedInputState::Resolved(resolved_input)
+        }
         Err(err) => ResolvedInputState::Failed(RefreshFailure {
             name: input.name.clone(),
             reason: err.to_string(),
@@ -420,6 +466,7 @@ fn resolve_input(
         mirrors: input.mirrors.clone(),
         fetch_policy: input.fetch_policy,
         freshness: freshness_observation.and_then(locked_freshness_from_observation),
+        trust: None,
     })
 }
 
@@ -428,13 +475,18 @@ fn resolve_needed_patches(
     lock: &Lockfile,
     outcomes: &[RefreshOutcome],
     resolver: &dyn RefreshResolver,
-) -> Vec<PatchResolution> {
+) -> (Vec<PatchResolution>, Vec<VerifiedTrustFact>) {
     let plan = crunch_project_core::plan_patch_resolutions(PatchResolutionPlanRequest {
         manifest: manifest.clone(),
         lock: lock.clone(),
         outcomes: outcomes.to_vec(),
     });
-    plan.into_iter().map(|patch_def| resolve_patch_def(&patch_def, resolver)).collect()
+    let mut trust_facts = Vec::new();
+    let resolutions = plan
+        .into_iter()
+        .map(|patch_def| resolve_patch_def_with_trust(&patch_def, resolver, &mut trust_facts))
+        .collect();
+    (resolutions, trust_facts)
 }
 
 fn resolve_patch_def(def: &PatchDef, resolver: &dyn RefreshResolver) -> PatchResolution {
@@ -445,6 +497,30 @@ fn resolve_patch_def(def: &PatchDef, resolver: &dyn RefreshResolver) -> PatchRes
         },
         Err(err) => PatchResolution::Failed {
             name: def.name.clone(),
+            reason: err.to_string(),
+        },
+    }
+}
+
+fn resolve_patch_def_with_trust(
+    def: &PatchDef,
+    resolver: &dyn RefreshResolver,
+    trust_facts: &mut Vec<VerifiedTrustFact>,
+) -> PatchResolution {
+    let resolved = resolve_patch_def(def, resolver);
+    let PatchResolution::Resolved { name, patch } = resolved else {
+        return resolved;
+    };
+    if def.trust.is_none() {
+        return PatchResolution::Resolved { name, patch };
+    }
+    match resolver.verify_patch_trust(def, &patch) {
+        Ok(mut facts) => {
+            trust_facts.append(&mut facts);
+            PatchResolution::Resolved { name, patch }
+        }
+        Err(err) => PatchResolution::Failed {
+            name,
             reason: err.to_string(),
         },
     }
@@ -463,6 +539,7 @@ fn resolve_patch(def: &PatchDef, resolver: &dyn RefreshResolver) -> Result<Locke
                     algo: HashAlgo::Sha256,
                     value: hash_value,
                 },
+                trust: None,
             })
         }
         PatchSource::Remote { url, hash } => {
@@ -476,6 +553,7 @@ fn resolve_patch(def: &PatchDef, resolver: &dyn RefreshResolver) -> Result<Locke
                     algo: hash.algo.clone(),
                     value: hash_value,
                 },
+                trust: None,
             })
         }
     }
@@ -535,12 +613,14 @@ mod tests {
                 fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
                 retention: None,
                 freshness: None,
+                trust: None,
             }],
             patches: vec![PatchDef {
                 name: "fix1".into(),
                 source: PatchSource::Local {
                     path: "patches/fix1.patch".into(),
                 },
+                trust: None,
             }],
             retention: crunch_project_core::InputRetentionPolicy::Untracked,
         };
@@ -580,6 +660,7 @@ mod tests {
                 fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
                 retention: None,
                 freshness: None,
+                trust: None,
             }],
             patches: vec![],
             retention: crunch_project_core::InputRetentionPolicy::Untracked,

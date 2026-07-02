@@ -813,14 +813,18 @@ fn sample_manifest() -> ProjectManifest {
             mirrors: vec!["https://mirror.invalid/hello.tar.gz".to_string()],
             patches: vec!["hello-fix".to_string()],
             fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
+            retention: None,
             freshness: None,
+            trust: None,
         }],
         patches: vec![PatchDef {
             name: "hello-fix".to_string(),
             source: PatchSource::Local {
                 path: "patches/hello-fix.patch".to_string(),
             },
+            trust: None,
         }],
+        retention: crunch_project::InputRetentionPolicy::Untracked,
     }
 }
 
@@ -837,7 +841,8 @@ fn sample_lock(locked_hash: &str) -> Lockfile {
         patches: vec!["hello-fix".to_string()],
         mirrors: vec!["https://mirror.invalid/hello.tar.gz".to_string()],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
-            freshness: None,
+        freshness: None,
+        trust: None,
     });
 
     let mut patches = BTreeMap::new();
@@ -849,6 +854,7 @@ fn sample_lock(locked_hash: &str) -> Lockfile {
             algo: HashAlgo::Sha256,
             value: "sha256-patch=".to_string(),
         },
+        trust: None,
     });
 
     Lockfile {

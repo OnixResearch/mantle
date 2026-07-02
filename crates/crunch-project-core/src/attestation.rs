@@ -460,6 +460,7 @@ mod tests {
                     fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
                     retention: None,
                     freshness: None,
+                    trust: None,
                 },
                 ManifestInput {
                     name: "nixpkgs".to_string(),
@@ -474,6 +475,7 @@ mod tests {
                     fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
                     retention: None,
                     freshness: None,
+                    trust: None,
                 },
             ],
             patches: vec![
@@ -482,6 +484,7 @@ mod tests {
                     source: PatchSource::Local {
                         path: "patches/hello-fix.patch".to_string(),
                     },
+                    trust: None,
                 },
                 PatchDef {
                     name: "hello-remote".to_string(),
@@ -489,6 +492,7 @@ mod tests {
                         url: "https://example.invalid/hello-remote.patch".to_string(),
                         hash: Default::default(),
                     },
+                    trust: None,
                 },
             ],
             retention: crate::InputRetentionPolicy::Untracked,
@@ -512,6 +516,7 @@ mod tests {
             ],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         inputs.insert("nixpkgs".to_string(), LockEntry {
             kind: LockedKind::Git {
@@ -527,6 +532,7 @@ mod tests {
             mirrors: Vec::new(),
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
 
         let mut patches = BTreeMap::new();
@@ -538,6 +544,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-patch-local=".to_string(),
             },
+            trust: None,
         });
         patches.insert("hello-remote".to_string(), LockedPatch {
             source: LockedPatchSource::Remote {
@@ -547,6 +554,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-patch-remote=".to_string(),
             },
+            trust: None,
         });
 
         Lockfile {

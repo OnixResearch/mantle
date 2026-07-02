@@ -18,9 +18,16 @@ use crunch_project::FreshnessProbeKind;
 use crunch_project::GitReference;
 use crunch_project::HashAlgo;
 use crunch_project::HashResolutionMode;
+use crunch_project::LockedHash;
+use crunch_project::LockedPatch;
 use crunch_project::ManifestInput;
+use crunch_project::PatchDef;
 use crunch_project::RefreshResolver;
+use crunch_project::TrustSignatureRef;
+use crunch_project::TrustSubject;
+use crunch_project::VerifiedTrustFact;
 use crunch_project::normalize_freshness_observation;
+use crunch_project::trust_signature_payload;
 use digest::Digest;
 use nix_compat::nixhash::NixHash;
 use snix_castore::Node;
@@ -51,6 +58,7 @@ const BLAKE3_HEX_BYTES: usize = 64;
 const PROJECT_READ_BUFFER_BYTES: usize = 64 * KIB_BYTES_USIZE;
 const FRESHNESS_DIGEST_PREFIX: &str = "blake3:";
 const HTTP_JSON_POINTER_ROOT: &str = "";
+const MAX_PROJECT_TRUST_SIGNATURE_BYTES: u64 = 16 * KIB_BYTES;
 
 pub struct LiveResolver {
     project_root: PathBuf,
@@ -110,6 +118,106 @@ impl RefreshResolver for LiveResolver {
             return Ok(None);
         };
         Ok(Some(observe_freshness_probe(&self.project_root, &input.name, probe, no_network)))
+    }
+
+    fn verify_input_trust(
+        &self,
+        input: &ManifestInput,
+        entry: &crunch_project::LockEntry,
+    ) -> Result<Vec<VerifiedTrustFact>, crunch_project::Error> {
+        let subject = TrustSubject::input(input.name.clone());
+        verify_project_trust_policy(&self.project_root, &subject, input.trust.as_ref(), &entry.hash)
+    }
+
+    fn verify_patch_trust(
+        &self,
+        patch: &PatchDef,
+        locked: &LockedPatch,
+    ) -> Result<Vec<VerifiedTrustFact>, crunch_project::Error> {
+        let subject = TrustSubject::patch(patch.name.clone());
+        verify_project_trust_policy(&self.project_root, &subject, patch.trust.as_ref(), &locked.hash)
+    }
+}
+
+fn verify_project_trust_policy(
+    project_root: &Path,
+    subject: &TrustSubject,
+    policy: Option<&crunch_project::InputTrustPolicy>,
+    hash: &LockedHash,
+) -> Result<Vec<VerifiedTrustFact>, crunch_project::Error> {
+    assert!(project_root.components().next().is_some(), "project root must not be empty");
+    assert!(!subject.name.is_empty(), "trust subject name must not be empty");
+    let Some(policy) = policy else {
+        return Ok(Vec::new());
+    };
+    let payload = trust_signature_payload(subject, policy.digest_binding, &hash.algo, &hash.value);
+    let trusted_keys = parse_trusted_project_keys(&policy.trusted_public_keys)?;
+    let mut facts = Vec::new();
+    for signature_ref in &policy.signatures {
+        let signature_text = read_project_trust_signature(project_root, signature_ref)?;
+        let signature = nix_compat::narinfo::SignatureRef::parse(signature_text.trim()).map_err(|err| {
+            crunch_project::Error::Manifest(format!("{} trust signature is invalid: {err}", subject.label()))
+        })?;
+        for key in &trusted_keys {
+            if key.name() != *signature.name() {
+                continue;
+            }
+            if !key.verify(&payload, &signature) {
+                continue;
+            }
+            facts.push(VerifiedTrustFact {
+                subject: subject.clone(),
+                verifier: policy.verifier,
+                digest_binding: policy.digest_binding,
+                hash_algo: hash.algo.clone(),
+                hash_value: hash.value.clone(),
+                signer: key.name().to_string(),
+                key_ref: key.to_string(),
+                signature_ref: signature_ref.ref_text().to_string(),
+            });
+        }
+    }
+    Ok(facts)
+}
+
+fn parse_trusted_project_keys(
+    keys: &[String],
+) -> Result<Vec<nix_compat::narinfo::VerifyingKey>, crunch_project::Error> {
+    keys.iter()
+        .map(|key| {
+            nix_compat::narinfo::VerifyingKey::parse(key).map_err(|err| {
+                crunch_project::Error::Manifest(format!("invalid project input trusted public key '{key}': {err}"))
+            })
+        })
+        .collect()
+}
+
+fn read_project_trust_signature(
+    project_root: &Path,
+    signature: &TrustSignatureRef,
+) -> Result<String, crunch_project::Error> {
+    match signature {
+        TrustSignatureRef::LocalFile { path } => {
+            let resolved = resolve_local_path(project_root, path);
+            let metadata = std::fs::metadata(&resolved).map_err(|err| {
+                crunch_project::Error::Manifest(format!(
+                    "reading project trust signature '{}': {err}",
+                    resolved.display()
+                ))
+            })?;
+            if metadata.len() > MAX_PROJECT_TRUST_SIGNATURE_BYTES {
+                return Err(crunch_project::Error::Manifest(format!(
+                    "project trust signature '{}' exceeds {MAX_PROJECT_TRUST_SIGNATURE_BYTES} bytes",
+                    resolved.display()
+                )));
+            }
+            std::fs::read_to_string(&resolved).map_err(|err| {
+                crunch_project::Error::Manifest(format!(
+                    "reading project trust signature '{}': {err}",
+                    resolved.display()
+                ))
+            })
+        }
     }
 }
 
@@ -979,6 +1087,29 @@ impl<R: Read> Read for BoundedReader<R> {
 mod tests {
     use super::*;
 
+    const TRUST_TEST_HASH: &str = "sha256-trusted=";
+    const TRUST_TEST_KEYPAIR: &str =
+        "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+
+    fn signed_trust_policy(root: &Path, subject: &TrustSubject, hash: &LockedHash) -> crunch_project::InputTrustPolicy {
+        let (signing_key, verifying_key) =
+            nix_compat::narinfo::parse_keypair(TRUST_TEST_KEYPAIR).expect("dummy keypair should parse");
+        let payload =
+            trust_signature_payload(subject, crunch_project::TrustDigestBinding::ContentHash, &hash.algo, &hash.value);
+        let signature = signing_key.sign(payload.as_bytes()).to_owned().to_string();
+        std::fs::write(root.join("pkg.sig"), signature).expect("signature fixture should be written");
+        crunch_project::InputTrustPolicy {
+            verifier: crunch_project::TrustVerifierKind::Ed25519Detached,
+            signatures: vec![TrustSignatureRef::LocalFile {
+                path: "pkg.sig".to_string(),
+            }],
+            trusted_public_keys: vec![verifying_key.to_string()],
+            required_signers: vec![verifying_key.name().to_string()],
+            quorum: 1,
+            digest_binding: crunch_project::TrustDigestBinding::ContentHash,
+        }
+    }
+
     #[test]
     fn oversized_shell_observation_becomes_failed_observation() {
         let too_large_value = "x".repeat(crunch_project::MAX_FRESHNESS_VALUE_BYTES as usize + 1);
@@ -997,6 +1128,44 @@ mod tests {
         assert_eq!(observation.value, None);
         assert!(observation.value_digest.is_none());
         assert!(observation.diagnostic.contains("rejected"));
+    }
+
+    #[test]
+    fn local_project_trust_signature_produces_verified_fact() {
+        let temp = tempfile::tempdir().expect("temp project should be created");
+        let subject = TrustSubject::input("pkg".to_string());
+        let hash = LockedHash {
+            algo: HashAlgo::Sha256,
+            value: TRUST_TEST_HASH.to_string(),
+        };
+        let policy = signed_trust_policy(temp.path(), &subject, &hash);
+
+        let facts = verify_project_trust_policy(temp.path(), &subject, Some(&policy), &hash)
+            .expect("valid local signature should verify");
+
+        assert_eq!(facts.len(), 1);
+        assert_eq!(facts[0].subject, subject);
+        assert_eq!(facts[0].hash_value, TRUST_TEST_HASH);
+    }
+
+    #[test]
+    fn local_project_trust_signature_with_wrong_digest_yields_no_fact() {
+        let temp = tempfile::tempdir().expect("temp project should be created");
+        let subject = TrustSubject::input("pkg".to_string());
+        let signed_hash = LockedHash {
+            algo: HashAlgo::Sha256,
+            value: TRUST_TEST_HASH.to_string(),
+        };
+        let policy = signed_trust_policy(temp.path(), &subject, &signed_hash);
+        let other_hash = LockedHash {
+            algo: HashAlgo::Sha256,
+            value: "sha256-other=".to_string(),
+        };
+
+        let facts = verify_project_trust_policy(temp.path(), &subject, Some(&policy), &other_hash)
+            .expect("wrong digest should not require a key-server lookup or panic");
+
+        assert!(facts.is_empty());
     }
 
     #[test]

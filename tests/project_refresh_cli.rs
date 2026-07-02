@@ -38,6 +38,8 @@ const HTTP_READ_BUFFER_BYTES: usize = 4096;
 const COMMAND_TIMEOUT_MS: u32 = 100;
 const COMMAND_OUTPUT_LIMIT_BYTES: u32 = 8;
 const COMMAND_SUCCESS_STATUS: i32 = 0;
+const TRUST_TEST_KEYPAIR: &str =
+    "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
@@ -224,6 +226,37 @@ fn flat_sha256_sri(bytes: &[u8]) -> String {
     NixHash::Sha256(digest).to_sri_string()
 }
 
+fn write_input_trust_signature(dir: &Path, input_name: &str, signature_path: &str, hash_value: &str) -> String {
+    let (signing_key, verifying_key) = nix_compat::narinfo::parse_keypair(TRUST_TEST_KEYPAIR).unwrap();
+    let subject = crunch_project::TrustSubject::input(input_name.to_string());
+    let payload = crunch_project::trust_signature_payload(
+        &subject,
+        crunch_project::TrustDigestBinding::ContentHash,
+        &HashAlgo::Sha256,
+        hash_value,
+    );
+    let signature = signing_key.sign(payload.as_bytes()).to_owned().to_string();
+    std::fs::write(dir.join(signature_path), signature).unwrap();
+    verifying_key.to_string()
+}
+
+fn input_trust_policy_ncl(signature_path: &str, trusted_public_key: &str) -> String {
+    let required_signer = trusted_public_key.split(':').next().unwrap();
+    format!(
+        r#"{{
+        verifier = "ed25519-detached",
+        signatures = [{{ type = "local-file", path = {} }}],
+        trusted_public_keys = [{}],
+        required_signers = [{}],
+        quorum = 1,
+        digest_binding = "content-hash",
+      }}"#,
+        quoted(signature_path),
+        quoted(trusted_public_key),
+        quoted(required_signer),
+    )
+}
+
 fn create_tarball(parent: &Path) -> (PathBuf, PathBuf) {
     let source_dir = parent.join("tar-src");
     std::fs::create_dir_all(source_dir.join("nested")).unwrap();
@@ -385,6 +418,87 @@ fn build_fetch_policy_refresh_uses_expected_hash_without_network_resolution() {
 }
 
 #[test]
+fn refresh_trusted_file_input_writes_lock_evidence_and_show_reports_claim() {
+    let dir = TempDir::new().unwrap();
+    init_project(dir.path());
+    let source = dir.path().join("trusted.txt");
+    std::fs::write(&source, "payload\n").unwrap();
+    let source_url = format!("file://{}", source.display());
+    let expected_hash = flat_sha256_sri(b"payload\n");
+    let trusted_public_key = write_input_trust_signature(dir.path(), "pkg", "pkg.sig", &expected_hash);
+    let trust_policy = input_trust_policy_ncl("pkg.sig", &trusted_public_key);
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "pkg",
+      kind = {{ type = "file", url = {} }},
+      trust = {},
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        quoted(&source_url),
+        trust_policy,
+    );
+    write_project_files(dir.path(), &manifest, &Lockfile::new());
+
+    crunch().arg("refresh").current_dir(dir.path()).assert().success();
+
+    let lock = read_lock(dir.path());
+    let entry = lock.inputs.get("pkg").expect("trusted input should be locked");
+    let trust = entry.trust.as_ref().expect("lock should carry trust evidence");
+    assert_eq!(entry.hash.value, expected_hash);
+    assert_eq!(trust.signers, vec!["cache.example.com-1".to_string()]);
+    assert!(trust.claim.contains(crunch_project::PROJECT_INPUT_TRUST_NON_CLAIM));
+
+    let show = crunch().arg("show").current_dir(dir.path()).assert().success();
+    let stdout = String::from_utf8_lossy(&show.get_output().stdout);
+    assert!(stdout.contains("trust: 1 signer(s) via ed25519-detached"), "stdout was: {stdout}");
+    assert!(stdout.contains("does not prove build reproducibility"), "stdout was: {stdout}");
+}
+
+#[test]
+fn refresh_trusted_file_input_with_wrong_signature_rejects_lock_write() {
+    let dir = TempDir::new().unwrap();
+    init_project(dir.path());
+    let source = dir.path().join("trusted.txt");
+    std::fs::write(&source, "payload\n").unwrap();
+    let source_url = format!("file://{}", source.display());
+    let wrong_hash = flat_sha256_sri(b"other\n");
+    let trusted_public_key = write_input_trust_signature(dir.path(), "pkg", "pkg.sig", &wrong_hash);
+    let trust_policy = input_trust_policy_ncl("pkg.sig", &trusted_public_key);
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [
+    {{
+      name = "pkg",
+      kind = {{ type = "file", url = {} }},
+      trust = {},
+    }},
+  ],
+  patches = [],
+}}
+"#,
+        quoted(&source_url),
+        trust_policy,
+    );
+    write_project_files(dir.path(), &manifest, &Lockfile::new());
+
+    let assert = crunch().arg("refresh").current_dir(dir.path()).assert().failure();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(stderr.contains("failed: pkg:"), "stderr was: {stderr}");
+    assert!(stderr.contains("missing required trust signer"), "stderr was: {stderr}");
+    assert!(stderr.contains("refresh failed for 1 item(s)"), "stderr was: {stderr}");
+
+    let lock = read_lock(dir.path());
+    assert!(lock.inputs.is_empty(), "failed trust refresh must not write lock evidence: {lock:?}");
+}
+
+#[test]
 fn list_stale_reports_stale_and_failed_without_mutating_files() {
     let dir = TempDir::new().unwrap();
     init_project(dir.path());
@@ -418,6 +532,7 @@ fn list_stale_reports_stale_and_failed_without_mutating_files() {
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
         freshness: None,
+        trust: None,
     });
     write_project_files(dir.path(), &manifest, &lock);
 
@@ -478,6 +593,7 @@ fn freshness_http_json_template_refreshes_selected_stale_input() {
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
         freshness: Some(locked_freshness("pkg", "v1")),
+        trust: None,
     });
     write_project_files(dir.path(), &manifest, &lock);
 
@@ -533,6 +649,7 @@ fn freshness_git_ref_probe_reports_stale_without_mutating_lock() {
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
         freshness: Some(locked_freshness("repo", &old_rev)),
+        trust: None,
     });
     write_project_files(dir.path(), &manifest, &lock);
     let lock_before = std::fs::read_to_string(dir.path().join("mantle.lock")).unwrap();
@@ -580,6 +697,7 @@ fn freshness_local_directory_probe_updates_lock_digest() {
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
         freshness: Some(locked_freshness("pkg", "state-v1")),
+        trust: None,
     });
     write_project_files(dir.path(), &manifest, &lock);
 

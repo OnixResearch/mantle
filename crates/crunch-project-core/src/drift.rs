@@ -64,6 +64,7 @@ mod tests {
             mirrors: alloc::vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         Lockfile {
             version: SchemaVersion::CURRENT,

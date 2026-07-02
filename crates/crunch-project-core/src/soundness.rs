@@ -833,12 +833,14 @@ mod tests {
                 fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
                 retention: None,
                 freshness: None,
+                trust: None,
             }],
             patches: vec![crate::manifest::PatchDef {
                 name: "fix".into(),
                 source: PatchSource::Local {
                     path: "patches/fix.patch".into(),
                 },
+                trust: None,
             }],
             retention: crate::InputRetentionPolicy::Untracked,
         }
@@ -858,6 +860,7 @@ mod tests {
             mirrors: vec!["https://mirror.example.com/pkg.txt".into()],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         let mut patches = BTreeMap::new();
         patches.insert("fix".into(), crate::lock::LockedPatch {
@@ -868,6 +871,7 @@ mod tests {
                 algo: HashAlgo::Sha256,
                 value: "sha256-patch=".into(),
             },
+            trust: None,
         });
         Lockfile {
             version: SchemaVersion::CURRENT,
@@ -924,6 +928,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         });
         let generated_inputs = crate::generate::generate_inputs_ncl(lock.clone());
 
@@ -949,6 +954,7 @@ mod tests {
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             retention: None,
             freshness: None,
+            trust: None,
         });
         let report = report_for(manifest, clean_lock());
 

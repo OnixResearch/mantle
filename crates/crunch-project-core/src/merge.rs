@@ -275,6 +275,7 @@ mod tests {
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             retention: None,
             freshness: None,
+            trust: None,
         }
     }
 
@@ -291,6 +292,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         }
     }
 
@@ -342,6 +344,7 @@ mod tests {
             mirrors: vec![],
             fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
             freshness: None,
+            trust: None,
         })]);
         let report = check_manifest_lock(manifest, lock);
         assert!(report.clone().has_errors());
