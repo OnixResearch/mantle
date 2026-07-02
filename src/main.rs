@@ -1530,11 +1530,15 @@ pub enum ReceiptAction {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum ReceiptBundleAction {
-    /// Export a portable receipt bundle from explicit evidence records
+    /// Export a portable receipt bundle from explicit evidence records and local output state
     Export {
         /// Record specs as kind:identity:digest
         #[arg(long = "record")]
         records: Vec<String>,
+
+        /// Logical store output path or store-path basename whose local evidence should be gathered
+        #[arg(long = "output")]
+        outputs: Vec<String>,
 
         /// Bundle output path
         #[arg(long)]

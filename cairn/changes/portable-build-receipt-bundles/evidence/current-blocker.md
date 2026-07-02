@@ -11,12 +11,13 @@ Can `portable-build-receipt-bundles` be honestly drained after the store archive
 - `store-archive-transport` is implemented, synced into `cairn/specs/store-transports/spec.md`, archived at `cairn/archive/2026-06-30-store-archive-transport`, and committed as `cb486e3f`.
 - `offline-source-bundle-manifest` is now archived at `cairn/archive/2026-07-01-offline-source-bundle-manifest`, so source-bundle manifest semantics have an accepted foundation rather than an active scaffold blocker.
 - `src/portable_receipt.rs` already provides a first pure/CLI slice: a `mantle-build-receipt-bundle-v1` model, deterministic record ordering, BLAKE3 bundle digests, trust snapshot fields, policy-hash binding, named limits, duplicate/conflict rejection, strong-claim completeness classification, non-claim wording, idempotent evidence-state import, and `mantle receipt bundle export|list|verify|import` wiring.
-- The active tasks still require export/list to gather existing live action receipts, source refs, PathInfo identities, artifact/closure attestations, sandbox reports, semantic graph edges, and trust-basis summaries without fabricating missing evidence.
-- The active tasks also require verify/import against local outputs or archive-provided output facts, source-bundle refs, signatures, revocation, expiration windows, policy hashes, and semantic graph query integration.
+- The 2026-07-01 live-gathering slice adds `mantle receipt bundle export --output <...>` collection for local PathInfo output records, artifact/runtime-closure attestation sidecars, semantic graph edges, graph-derived source/action/sandbox/trust-basis records, and matching imported source-bundle records without placeholder fabrication. Evidence: `evidence/live-evidence-gathering-2026-07-01.md`.
+- The active tasks still require deeper export/list coverage for live action receipt and reference-scan sidecars beyond semantic graph summaries.
+- The active tasks also require verify/import against local outputs or archive-provided output facts, source-bundle refs, signatures, revocation, expiration windows, policy hashes, conflict diagnostics, persisted graph imports, and semantic graph query integration.
 
 ## Decision
 
-Still blocked by missing live evidence-gathering and semantic graph persistence/query integration. The source-bundle foundation is no longer active, but receipt bundles still do not gather, verify, import, and explain the full evidence chain required by the remaining tasks.
+Still blocked by missing verify/import trust and semantic graph persistence/query integration. The source-bundle foundation and a first live-gathering slice exist, but receipt bundles still do not verify, import, and explain the full evidence chain required by the remaining tasks.
 
 ## Owner
 
