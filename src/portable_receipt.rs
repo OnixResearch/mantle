@@ -110,6 +110,29 @@ pub struct ReceiptBundleReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ReceiptOutputMatch {
+    pub identity: String,
+    pub record_digest: String,
+    pub local_digest: String,
+    pub nar_sha256: String,
+    pub nar_size_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ReceiptVerifyReport {
+    pub format: &'static str,
+    pub store_prefix: String,
+    pub policy_hash: String,
+    pub expected_policy_hash: String,
+    pub policy_hash_matched: bool,
+    pub bundle_blake3: String,
+    pub evidence_complete: bool,
+    pub missing_evidence: Vec<ReceiptRecordKind>,
+    pub output_matches: Vec<ReceiptOutputMatch>,
+    pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReceiptImportReport {
     pub imported: bool,
     pub idempotent: bool,
@@ -255,6 +278,34 @@ pub fn read_receipt_bundle(path: &Path) -> Result<ReceiptBundle, RunError> {
         .map_err(|err| RunError::Internal(format!("parsing receipt bundle {}: {err}", path.display())))?;
     validate_receipt_bundle(&bundle)?;
     Ok(bundle)
+}
+
+pub fn verify_receipt_bundle_against_state(
+    bundle: &ReceiptBundle,
+    state_dir: &Path,
+    store_prefix: &str,
+    expected_policy_hash: &str,
+    outputs: &[String],
+) -> Result<ReceiptVerifyReport, RunError> {
+    let bundle_report = validate_receipt_bundle(bundle)?;
+    if outputs.is_empty() {
+        return Err(RunError::Internal("receipt output verification requires at least one --output".to_string()));
+    }
+    validate_expected_policy_and_prefix(bundle, store_prefix, expected_policy_hash)?;
+    let local_output_records = local_output_records_for_outputs(state_dir, store_prefix, outputs)?;
+    let output_matches = verify_output_records(bundle, &local_output_records, outputs)?;
+    Ok(ReceiptVerifyReport {
+        format: RECEIPT_BUNDLE_FORMAT,
+        store_prefix: bundle.store_prefix.clone(),
+        policy_hash: bundle.trust_snapshot.policy_hash.clone(),
+        expected_policy_hash: expected_policy_hash.to_string(),
+        policy_hash_matched: true,
+        bundle_blake3: bundle.bundle_blake3.clone(),
+        evidence_complete: bundle_report.evidence_complete,
+        missing_evidence: bundle_report.missing_evidence,
+        output_matches,
+        non_claim: RECEIPT_BUNDLE_NON_CLAIM,
+    })
 }
 
 pub fn import_receipt_bundle(bundle: &ReceiptBundle, state_dir: &Path) -> Result<ReceiptImportReport, RunError> {
@@ -440,6 +491,110 @@ fn output_identities(bundle: &ReceiptBundle) -> Vec<String> {
 
 fn checked_u32(count: usize, label: &str) -> Result<u32, RunError> {
     u32::try_from(count).map_err(|_| RunError::Internal(format!("{label} does not fit in u32: {count}")))
+}
+
+fn validate_expected_policy_and_prefix(
+    bundle: &ReceiptBundle,
+    store_prefix: &str,
+    expected_policy_hash: &str,
+) -> Result<(), RunError> {
+    validate_field("expected_policy_hash", expected_policy_hash)?;
+    if bundle.store_prefix != store_prefix {
+        return Err(RunError::Internal(format!(
+            "receipt bundle store prefix mismatch: bundle={} local={}",
+            bundle.store_prefix, store_prefix
+        )));
+    }
+    if bundle.trust_snapshot.policy_hash != expected_policy_hash {
+        return Err(RunError::Internal(format!(
+            "receipt bundle policy hash mismatch: bundle={} expected={}",
+            bundle.trust_snapshot.policy_hash, expected_policy_hash
+        )));
+    }
+    Ok(())
+}
+
+fn verify_output_records(
+    bundle: &ReceiptBundle,
+    local_records: &[ReceiptRecord],
+    outputs: &[String],
+) -> Result<Vec<ReceiptOutputMatch>, RunError> {
+    if local_records.is_empty() {
+        return Err(RunError::Internal("missing local PathInfo for receipt outputs".to_string()));
+    }
+    let bundle_outputs = bundle_output_records(bundle);
+    if bundle_outputs.is_empty() {
+        return Err(RunError::Internal("receipt bundle is missing output-ref evidence".to_string()));
+    }
+    let mut matches = Vec::with_capacity(local_records.len());
+    for local in local_records {
+        if !selector_matches_record(outputs, &local.identity, local.metadata.get("pathinfo_store_path")) {
+            continue;
+        }
+        let Some(bundle_record) = bundle_outputs.get(&local.identity) else {
+            return Err(RunError::Internal(format!("receipt bundle is missing output-ref for {}", local.identity)));
+        };
+        if bundle_record.digest != local.digest {
+            return Err(RunError::Internal(format!("receipt output-ref digest mismatch for {}", local.identity)));
+        }
+        matches.push(output_match_from_record(bundle_record, local)?);
+    }
+    if matches.is_empty() {
+        return Err(RunError::Internal("missing local PathInfo for receipt outputs".to_string()));
+    }
+    Ok(matches)
+}
+
+fn bundle_output_records(bundle: &ReceiptBundle) -> BTreeMap<String, &ReceiptRecord> {
+    bundle
+        .records
+        .iter()
+        .filter(|record| record.kind == ReceiptRecordKind::OutputRef)
+        .map(|record| (record.identity.clone(), record))
+        .collect()
+}
+
+fn selector_matches_record(outputs: &[String], logical_path: &str, store_path: Option<&String>) -> bool {
+    outputs.iter().any(|output| output == logical_path || store_path.is_some_and(|path| output == path))
+}
+
+fn output_match_from_record(
+    bundle_record: &ReceiptRecord,
+    local_record: &ReceiptRecord,
+) -> Result<ReceiptOutputMatch, RunError> {
+    let nar_sha256 = required_metadata(local_record, "nar_sha256")?;
+    let nar_size_bytes = parse_u64_metadata(local_record, "nar_size_bytes")?;
+    Ok(ReceiptOutputMatch {
+        identity: local_record.identity.clone(),
+        record_digest: bundle_record.digest.clone(),
+        local_digest: local_record.digest.clone(),
+        nar_sha256,
+        nar_size_bytes,
+    })
+}
+
+fn required_metadata(record: &ReceiptRecord, key: &str) -> Result<String, RunError> {
+    record
+        .metadata
+        .get(key)
+        .cloned()
+        .ok_or_else(|| RunError::Internal(format!("receipt local output metadata missing {key}")))
+}
+
+fn parse_u64_metadata(record: &ReceiptRecord, key: &str) -> Result<u64, RunError> {
+    let value = required_metadata(record, key)?;
+    value
+        .parse::<u64>()
+        .map_err(|err| RunError::Internal(format!("receipt local output metadata {key} is not u64: {err}")))
+}
+
+fn local_output_records_for_outputs(
+    state_dir: &Path,
+    store_prefix: &str,
+    outputs: &[String],
+) -> Result<Vec<ReceiptRecord>, RunError> {
+    let records = collect_pathinfo_records_for_outputs(state_dir, store_prefix, outputs)?;
+    Ok(records.into_iter().filter(|record| record.kind == ReceiptRecordKind::OutputRef).collect())
 }
 
 fn gather_receipt_records_from_state(
@@ -772,9 +927,24 @@ fn cmd_receipt_bundle(
             write_receipt_bundle(&to, &bundle)?;
             print_report(&validate_receipt_bundle(&bundle)?, json_output)
         }
-        crate::ReceiptBundleAction::List { from } | crate::ReceiptBundleAction::Verify { from } => {
+        crate::ReceiptBundleAction::List { from } => {
             let bundle = read_receipt_bundle(&from)?;
             print_report(&validate_receipt_bundle(&bundle)?, json_output)
+        }
+        crate::ReceiptBundleAction::Verify {
+            from,
+            outputs,
+            policy_hash,
+        } => {
+            let bundle = read_receipt_bundle(&from)?;
+            if outputs.is_empty() {
+                return print_report(&validate_receipt_bundle(&bundle)?, json_output);
+            }
+            let Some(policy_hash) = policy_hash.as_deref() else {
+                return Err(RunError::Internal("receipt bundle verify --output requires --policy-hash".to_string()));
+            };
+            let report = verify_receipt_bundle_against_state(&bundle, state_dir, store_prefix, policy_hash, &outputs)?;
+            print_verify(&report, json_output)
         }
         crate::ReceiptBundleAction::Import { from } => {
             let bundle = read_receipt_bundle(&from)?;
@@ -814,6 +984,31 @@ fn print_report(report: &ReceiptBundleReport, json_output: bool) -> Result<(), R
     );
     if !report.output_identities.is_empty() {
         println!("outputs={}", report.output_identities.join(","));
+    }
+    if !report.missing_evidence.is_empty() {
+        println!("missing_evidence={:?}", report.missing_evidence);
+    }
+    eprintln!("non_claim={}", report.non_claim);
+    Ok(())
+}
+
+fn print_verify(report: &ReceiptVerifyReport, json_output: bool) -> Result<(), RunError> {
+    if json_output {
+        println!("{}", render_json(report)?);
+        return Ok(());
+    }
+    println!(
+        "RECEIPT_VERIFY bundle_blake3={} store_prefix={} outputs={} policy_hash_matched={}",
+        report.bundle_blake3,
+        report.store_prefix,
+        report.output_matches.len(),
+        report.policy_hash_matched
+    );
+    for output in &report.output_matches {
+        println!(
+            "OUTPUT_MATCH {} nar_size={} nar_sha256={} digest={}",
+            output.identity, output.nar_size_bytes, output.nar_sha256, output.record_digest
+        );
     }
     if !report.missing_evidence.is_empty() {
         println!("missing_evidence={:?}", report.missing_evidence);
@@ -968,6 +1163,127 @@ mod tests {
     }
 
     #[test]
+    fn matching_local_output_verifies_against_policy_and_pathinfo() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        let path_info = test_path_info("verify-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&state_dir, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&state_dir, &output, "policy-v1");
+
+        let report = verify_receipt_bundle_against_state(
+            &bundle,
+            &state_dir,
+            "/mantle/store",
+            "policy-v1",
+            std::slice::from_ref(&output),
+        )
+        .unwrap();
+
+        assert!(report.policy_hash_matched);
+        assert_eq!(report.output_matches.len(), 1);
+        assert_eq!(report.output_matches[0].identity, output);
+        assert_eq!(report.output_matches[0].nar_size_bytes, TEST_NAR_SIZE_BYTES);
+    }
+
+    #[test]
+    fn wrong_store_prefix_rejects_output_verification() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        let path_info = test_path_info("prefix-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&state_dir, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&state_dir, &output, "policy-v1");
+
+        let err = verify_receipt_bundle_against_state(
+            &bundle,
+            &state_dir,
+            "/other/store",
+            "policy-v1",
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("store prefix mismatch"));
+    }
+
+    #[test]
+    fn stale_local_output_digest_rejects_output_verification() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let verify_state = temp.path().join("verify-state");
+        let original = test_path_info("stale-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        let stale = test_path_info("stale-demo", TEST_STORE_DIGEST_BYTE, TEST_STALE_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, original.clone());
+        write_pathinfo_db(&verify_state, stale.clone());
+        let output = original.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
+
+        let err = verify_receipt_bundle_against_state(
+            &bundle,
+            &verify_state,
+            "/mantle/store",
+            "policy-v1",
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("output-ref digest mismatch"));
+    }
+
+    #[test]
+    fn missing_output_ref_rejects_output_verification() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        let path_info = test_path_info("missing-ref-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&state_dir, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = build_receipt_bundle(
+            &[ReceiptRecordSpec {
+                kind: ReceiptRecordKind::ActionRef,
+                identity: "recipe:demo".to_string(),
+                digest: format!("{BLAKE3_DIGEST_PREFIX}{}", "d".repeat(DIGEST_HEX_CHARS)),
+            }],
+            "/mantle/store",
+            "policy-v1",
+            ClaimStrengthRequest::Diagnostic,
+        )
+        .unwrap();
+
+        let err = verify_receipt_bundle_against_state(
+            &bundle,
+            &state_dir,
+            "/mantle/store",
+            "policy-v1",
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("missing output-ref evidence"));
+    }
+
+    #[test]
+    fn policy_hash_mismatch_rejects_output_verification() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        let path_info = test_path_info("policy-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&state_dir, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&state_dir, &output, "policy-v1");
+
+        let err = verify_receipt_bundle_against_state(
+            &bundle,
+            &state_dir,
+            "/mantle/store",
+            "policy-v2",
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("policy hash mismatch"));
+    }
+
+    #[test]
     fn missing_output_state_does_not_fabricate_records() {
         let temp = tempfile::tempdir().unwrap();
         let records = gather_receipt_records_from_state(temp.path(), "/mantle/store", &[
@@ -1006,7 +1322,14 @@ mod tests {
 
     const TEST_STORE_DIGEST_BYTE: u8 = 7;
     const TEST_NAR_HASH_BYTE: u8 = 0x11;
+    const TEST_STALE_NAR_HASH_BYTE: u8 = 0x22;
     const TEST_NAR_SIZE_BYTES: u64 = 17;
+
+    fn bundle_for_state_output(state_dir: &Path, output: &str, policy_hash: &str) -> ReceiptBundle {
+        let records = gather_receipt_records_from_state(state_dir, "/mantle/store", &[output.to_string()]).unwrap();
+        build_receipt_bundle_from_records(records, "/mantle/store", policy_hash, ClaimStrengthRequest::Diagnostic)
+            .unwrap()
+    }
 
     fn test_store_path(name: &str, digest_byte: u8) -> nix_compat::store_path::StorePath<String> {
         nix_compat::store_path::StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap()

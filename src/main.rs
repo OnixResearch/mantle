@@ -1558,11 +1558,20 @@ pub enum ReceiptBundleAction {
         #[arg(long)]
         from: std::path::PathBuf,
     },
-    /// Verify receipt bundle structure, trust snapshot, and completeness
+    /// Verify receipt bundle structure, trust snapshot, completeness, and optional local output
+    /// facts
     Verify {
         /// Bundle input path
         #[arg(long)]
         from: std::path::PathBuf,
+
+        /// Logical store output path or store-path basename to match against local PathInfo
+        #[arg(long = "output")]
+        outputs: Vec<String>,
+
+        /// Expected policy hash or policy identifier for output verification
+        #[arg(long)]
+        policy_hash: Option<String>,
     },
     /// Import a verified receipt bundle into Mantle evidence state
     Import {

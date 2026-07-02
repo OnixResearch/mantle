@@ -12,12 +12,13 @@ Can `portable-build-receipt-bundles` be honestly drained after the store archive
 - `offline-source-bundle-manifest` is now archived at `cairn/archive/2026-07-01-offline-source-bundle-manifest`, so source-bundle manifest semantics have an accepted foundation rather than an active scaffold blocker.
 - `src/portable_receipt.rs` already provides a first pure/CLI slice: a `mantle-build-receipt-bundle-v1` model, deterministic record ordering, BLAKE3 bundle digests, trust snapshot fields, policy-hash binding, named limits, duplicate/conflict rejection, strong-claim completeness classification, non-claim wording, idempotent evidence-state import, and `mantle receipt bundle export|list|verify|import` wiring.
 - The 2026-07-01 live-gathering slice adds `mantle receipt bundle export --output <...>` collection for local PathInfo output records, artifact/runtime-closure attestation sidecars, semantic graph edges, graph-derived source/action/sandbox/trust-basis records, and matching imported source-bundle records without placeholder fabrication. Evidence: `evidence/live-evidence-gathering-2026-07-01.md`.
+- The 2026-07-01 output-verification slice adds `mantle receipt bundle verify --output <...> --policy-hash <expected>` checks against local PathInfo facts, including store-prefix binding, policy-hash binding, output-ref presence, and stale local digest rejection. Evidence: `evidence/output-verification-2026-07-01.md`.
 - The active tasks still require deeper export/list coverage for live action receipt and reference-scan sidecars beyond semantic graph summaries.
-- The active tasks also require verify/import against local outputs or archive-provided output facts, source-bundle refs, signatures, revocation, expiration windows, policy hashes, conflict diagnostics, persisted graph imports, and semantic graph query integration.
+- The active tasks also require verify/import against archive-provided output facts, source-bundle refs beyond imported state matching, signatures, revocation, expiration windows, trust-root snapshots, conflict diagnostics, persisted graph imports, and semantic graph query integration.
 
 ## Decision
 
-Still blocked by missing verify/import trust and semantic graph persistence/query integration. The source-bundle foundation and a first live-gathering slice exist, but receipt bundles still do not verify, import, and explain the full evidence chain required by the remaining tasks.
+Still blocked by missing trust-root/revocation verification and semantic graph persistence/query integration. The source-bundle foundation, live-gathering slice, and local output verification slice exist, but receipt bundles still do not import and explain the full evidence chain required by the remaining tasks.
 
 ## Owner
 
