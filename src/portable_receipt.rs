@@ -121,6 +121,15 @@ pub struct ReceiptOutputMatch {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ReceiptSourceMatch {
+    pub identity: String,
+    pub record_digest: String,
+    pub source_blake3: String,
+    pub payload_bytes: u64,
+    pub file_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReceiptVerifyReport {
     pub format: &'static str,
     pub store_prefix: String,
@@ -135,6 +144,7 @@ pub struct ReceiptVerifyReport {
     pub evidence_complete: bool,
     pub missing_evidence: Vec<ReceiptRecordKind>,
     pub output_matches: Vec<ReceiptOutputMatch>,
+    pub source_matches: Vec<ReceiptSourceMatch>,
     pub non_claim: &'static str,
 }
 
@@ -324,6 +334,7 @@ pub fn verify_receipt_bundle_against_state_with_context(
         context,
         outputs,
         local_output_records_for_outputs(state_dir, store_prefix, outputs)?,
+        read_source_records_by_identity(state_dir)?,
     )
 }
 
@@ -340,6 +351,25 @@ pub fn verify_receipt_bundle_against_archive_report(
         context,
         outputs,
         archive_output_records_for_outputs(archive, store_prefix, outputs)?,
+        BTreeMap::new(),
+    )
+}
+
+pub fn verify_receipt_bundle_against_archive_report_with_source_state(
+    bundle: &ReceiptBundle,
+    archive: &crunch_store::ArchiveListReport,
+    state_dir: &Path,
+    store_prefix: &str,
+    context: &TrustVerificationContext,
+    outputs: &[String],
+) -> Result<ReceiptVerifyReport, RunError> {
+    verify_receipt_bundle_against_output_records(
+        bundle,
+        store_prefix,
+        context,
+        outputs,
+        archive_output_records_for_outputs(archive, store_prefix, outputs)?,
+        read_source_records_by_identity(state_dir)?,
     )
 }
 
@@ -349,6 +379,7 @@ fn verify_receipt_bundle_against_output_records(
     context: &TrustVerificationContext,
     outputs: &[String],
     output_records: Vec<ReceiptRecord>,
+    source_records: BTreeMap<String, crate::source_bundle::SourceRecord>,
 ) -> Result<ReceiptVerifyReport, RunError> {
     let bundle_report = validate_receipt_bundle(bundle)?;
     if outputs.is_empty() {
@@ -356,6 +387,7 @@ fn verify_receipt_bundle_against_output_records(
     }
     let trust = validate_trust_snapshot(bundle, store_prefix, context)?;
     let output_matches = verify_output_records(bundle, &output_records, outputs)?;
+    let source_matches = verify_source_records(bundle, &source_records)?;
     Ok(ReceiptVerifyReport {
         format: RECEIPT_BUNDLE_FORMAT,
         store_prefix: bundle.store_prefix.clone(),
@@ -370,6 +402,7 @@ fn verify_receipt_bundle_against_output_records(
         evidence_complete: bundle_report.evidence_complete,
         missing_evidence: bundle_report.missing_evidence,
         output_matches,
+        source_matches,
         non_claim: RECEIPT_BUNDLE_NON_CLAIM,
     })
 }
@@ -393,7 +426,14 @@ pub fn import_verified_receipt_bundle_from_archive_report(
     context: &TrustVerificationContext,
     outputs: &[String],
 ) -> Result<ReceiptImportReport, RunError> {
-    verify_receipt_bundle_against_archive_report(bundle, archive, store_prefix, context, outputs)?;
+    verify_receipt_bundle_against_archive_report_with_source_state(
+        bundle,
+        archive,
+        state_dir,
+        store_prefix,
+        context,
+        outputs,
+    )?;
     import_receipt_bundle(bundle, state_dir)
 }
 
@@ -994,6 +1034,38 @@ fn bundle_output_records(bundle: &ReceiptBundle) -> BTreeMap<String, &ReceiptRec
         .collect()
 }
 
+fn verify_source_records(
+    bundle: &ReceiptBundle,
+    source_records: &BTreeMap<String, crate::source_bundle::SourceRecord>,
+) -> Result<Vec<ReceiptSourceMatch>, RunError> {
+    let source_refs = bundle
+        .records
+        .iter()
+        .filter(|record| record.kind == ReceiptRecordKind::SourceRef)
+        .collect::<Vec<_>>();
+    let mut matches = Vec::with_capacity(source_refs.len());
+    for source_ref in source_refs {
+        let Some(source) = source_records.get(&source_ref.identity) else {
+            return Err(RunError::Internal(format!(
+                "missing source record for receipt source-ref {}",
+                source_ref.identity
+            )));
+        };
+        let expected_digest = format!("{BLAKE3_DIGEST_PREFIX}{}", source.content_blake3);
+        if source_ref.digest != expected_digest {
+            return Err(RunError::Internal(format!("source-ref digest mismatch for {}", source_ref.identity)));
+        }
+        matches.push(ReceiptSourceMatch {
+            identity: source_ref.identity.clone(),
+            record_digest: source_ref.digest.clone(),
+            source_blake3: source.content_blake3.clone(),
+            payload_bytes: source.payload_bytes,
+            file_count: checked_u32(source.files.len(), "source record file count")?,
+        });
+    }
+    Ok(matches)
+}
+
 fn selector_matches_record(outputs: &[String], logical_path: &str, store_path: Option<&String>) -> bool {
     outputs.iter().any(|output| output == logical_path || store_path.is_some_and(|path| output == path))
 }
@@ -1382,7 +1454,14 @@ fn read_source_records_by_identity(
             .map_err(|err| RunError::Internal(format!("reading source record {}: {err}", entry.display())))?;
         let record = serde_json::from_slice::<crate::source_bundle::SourceRecord>(&bytes)
             .map_err(|err| RunError::Internal(format!("parsing source record {}: {err}", entry.display())))?;
-        records.insert(record.identity.clone(), record);
+        if let Some(existing) = records.insert(record.identity.clone(), record.clone())
+            && existing != record
+        {
+            return Err(RunError::Internal(format!(
+                "conflicting source records for receipt source-ref {}",
+                record.identity
+            )));
+        }
     }
     Ok(records)
 }
@@ -1469,9 +1548,10 @@ fn cmd_receipt_bundle(
             );
             let report = if let Some(archive) = archive {
                 let archive_report = read_archive_list_report(&archive)?;
-                verify_receipt_bundle_against_archive_report(
+                verify_receipt_bundle_against_archive_report_with_source_state(
                     &bundle,
                     &archive_report,
+                    state_dir,
                     store_prefix,
                     &context,
                     &outputs,
@@ -1583,10 +1663,11 @@ fn print_verify(report: &ReceiptVerifyReport, json_output: bool) -> Result<(), R
         return Ok(());
     }
     println!(
-        "RECEIPT_VERIFY bundle_blake3={} store_prefix={} outputs={} policy_hash_matched={} trust_window_valid={}",
+        "RECEIPT_VERIFY bundle_blake3={} store_prefix={} outputs={} sources={} policy_hash_matched={} trust_window_valid={}",
         report.bundle_blake3,
         report.store_prefix,
         report.output_matches.len(),
+        report.source_matches.len(),
         report.policy_hash_matched,
         report.trust_window_valid
     );
@@ -1925,6 +2006,32 @@ mod tests {
     }
 
     #[test]
+    fn missing_source_state_rejects_source_ref_verification() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let verify_state = temp.path().join("verify-state");
+        let path_info = test_path_info("source-missing-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, path_info.clone());
+        write_pathinfo_db(&verify_state, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        write_source_record(&bundle_state, "src:demo", &"b".repeat(DIGEST_HEX_CHARS));
+        write_semantic_graph(&bundle_state, &output);
+        let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S);
+
+        let err = verify_receipt_bundle_against_state_with_context(
+            &bundle,
+            &verify_state,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("missing source record"));
+    }
+
+    #[test]
     fn expired_trust_snapshot_rejects_output_verification() {
         let temp = tempfile::tempdir().unwrap();
         let state_dir = temp.path().join("state");
@@ -1989,6 +2096,7 @@ mod tests {
         write_pathinfo_db(&import_state, path_info.clone());
         let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
         write_source_record(&bundle_state, "src:demo", &"b".repeat(DIGEST_HEX_CHARS));
+        write_source_record(&import_state, "src:demo", &"b".repeat(DIGEST_HEX_CHARS));
         write_semantic_graph(&bundle_state, &output);
         let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
         let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S);
@@ -2022,6 +2130,7 @@ mod tests {
         write_pathinfo_db(&import_state, path_info.clone());
         let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
         write_source_record(&bundle_state, "src:demo", &"b".repeat(DIGEST_HEX_CHARS));
+        write_source_record(&import_state, "src:demo", &"b".repeat(DIGEST_HEX_CHARS));
         write_semantic_graph(&bundle_state, &output);
         write_conflicting_semantic_node(&import_state, "recipe:demo");
         let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");

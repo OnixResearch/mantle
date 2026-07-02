@@ -15,12 +15,13 @@ Can `portable-build-receipt-bundles` be honestly drained after the store archive
 - The 2026-07-01 output-verification slice adds `mantle receipt bundle verify --output <...> --policy-hash <expected>` checks against local PathInfo facts, including store-prefix binding, policy-hash binding, output-ref presence, and stale local digest rejection. Evidence: `evidence/output-verification-2026-07-01.md`.
 - The 2026-07-01 verified-import slice adds explicit trust replay context, expiration-window and revoked-key rejection, verified import requiring local output facts/policy hash, semantic graph node/edge persistence, graph conflict rejection, and a `mantle why` core proof over imported graph evidence. Evidence: `evidence/verified-import-2026-07-01.md`.
 - The 2026-07-01 archive-output-facts slice extends store archive list records with full PathInfo identity facts and lets `mantle receipt bundle verify|import --archive <path>` verify output refs without local PathInfo. Evidence: `evidence/archive-output-facts-2026-07-01.md`.
+- The 2026-07-01 source-ref verification slice checks receipt source refs against imported source-bundle records before verified import. Evidence: `evidence/source-ref-verification-2026-07-01.md`.
 - The active tasks still require deeper export/list coverage for live action receipt and reference-scan sidecars beyond semantic graph summaries.
-- The active tasks also require source-bundle ref verification beyond imported state matching, real signature cryptographic verification against trust snapshots, attestation sidecar persistence from embedded/copied payloads, CLI-level import/list/verify conflict diagnostics, and a store-archive/remote-output integration test.
+- The active tasks also require real signature cryptographic verification against trust snapshots, attestation sidecar persistence from embedded/copied payloads, CLI-level import/list/verify conflict diagnostics, and a store-archive/remote-output integration test.
 
 ## Decision
 
-Still blocked by missing real signature verification, sidecar payload persistence, source-bundle ref verification, and broader CLI/integration coverage. The source-bundle foundation, live-gathering slice, local/archive output verification slices, and verified graph-import/trust replay slice exist, but receipt bundles still do not import and explain the full evidence chain required by the remaining tasks.
+Still blocked by missing real signature verification, sidecar payload persistence, and broader CLI/integration coverage. The source-bundle foundation, live-gathering slice, local/archive output verification slices, source-ref verification, and verified graph-import/trust replay slice exist, but receipt bundles still do not import and explain the full evidence chain required by the remaining tasks.
 
 ## Owner
 
@@ -31,7 +32,7 @@ Mantle evidence/receipt transport owner after live evidence gathering and semant
 Drain after prerequisites or split into smaller accepted increments:
 
 1. gather and persist artifact/closure attestation payloads from local/store-archive outputs;
-2. attach and verify source-bundle refs from archived source-bundle manifest semantics;
-3. export/list available action/sandbox/reference-scan/graph material without placeholders;
-4. verify/import with real signatures, attestation payload persistence, and CLI conflict diagnostics;
+2. export/list available action/sandbox/reference-scan/graph material without placeholders;
+3. add real signature verification against trust snapshots and revocation state;
+4. verify/import with attestation payload persistence and CLI conflict diagnostics;
 5. prove a store-archive or remote-output handoff keeps `mantle why` explanations when evidence exists and preserves incomplete-graph diagnostics for missing evidence.
