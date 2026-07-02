@@ -1572,12 +1572,44 @@ pub enum ReceiptBundleAction {
         /// Expected policy hash or policy identifier for output verification
         #[arg(long)]
         policy_hash: Option<String>,
+
+        /// Verification timestamp for replayed trust-window checks (defaults to current time)
+        #[arg(long)]
+        valid_at_unix_s: Option<u64>,
+
+        /// Expected revocation-list reference for replayed trust checks
+        #[arg(long)]
+        revocation_ref: Option<String>,
+
+        /// Revoked public key digest; repeat for multiple revoked keys
+        #[arg(long = "revoked-public-key-digest")]
+        revoked_public_key_digests: Vec<String>,
     },
     /// Import a verified receipt bundle into Mantle evidence state
     Import {
         /// Bundle input path
         #[arg(long)]
         from: std::path::PathBuf,
+
+        /// Logical store output path or store-path basename to verify before import
+        #[arg(long = "output")]
+        outputs: Vec<String>,
+
+        /// Expected policy hash or policy identifier for verified import
+        #[arg(long)]
+        policy_hash: Option<String>,
+
+        /// Verification timestamp for replayed trust-window checks (defaults to current time)
+        #[arg(long)]
+        valid_at_unix_s: Option<u64>,
+
+        /// Expected revocation-list reference for replayed trust checks
+        #[arg(long)]
+        revocation_ref: Option<String>,
+
+        /// Revoked public key digest; repeat for multiple revoked keys
+        #[arg(long = "revoked-public-key-digest")]
+        revoked_public_key_digests: Vec<String>,
     },
 }
 
@@ -2240,9 +2272,13 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Source { action } => {
             source_bundle::cmd_source(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
-        Command::Receipt { action } => {
-            portable_receipt::cmd_receipt(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
-        }
+        Command::Receipt { action } => portable_receipt::cmd_receipt(
+            action.clone(),
+            &ctx.resolved_state_dir,
+            &ctx.store_prefix,
+            ctx.json,
+            unix_time_now_s()?,
+        ),
         Command::Remote { action } => {
             remote_build::cmd_remote(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
