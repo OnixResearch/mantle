@@ -12,12 +12,13 @@ Usage: ./scripts/check-bootstrap-blocker-inventory.sh [--report-only] [--self-te
 
 Run the lightweight bootstrap blocker inventory/readiness-drift gate. The gate
 scans repository-controlled bootstrap sources and canonical bootstrap specs,
-then emits JSON and Markdown reports. In the default enforcement mode it fails
-unless the checked baseline stays clean: 0 unsuppressed blocker findings and 0
-promotion claims. Use --report-only for non-gating inventory reports.
+then emits JSON and Markdown reports. Report-only mode exits successfully after
+valid report generation even when blockers remain. Default enforcement mode
+fails unless the checked baseline stays clean: 0 unsuppressed actionable findings
+and 0 promotion claims.
 
 Options:
-  --report-only     inventory blockers but do not enforce clean-baseline failure
+  --report-only     write inventory reports without clean-baseline enforcement
   --self-test       run built-in matcher regression tests before scanning
   --json PATH       write JSON report (default: target/bootstrap-blocker-inventory/current.json)
   --markdown PATH   write Markdown report (default: target/bootstrap-blocker-inventory/current.md)
@@ -70,8 +71,44 @@ if [[ -z "$cargo_bin" ]]; then
   fi
 fi
 
+rustc_bin="${CRUNCH_NIGHTLY_RUSTC:-}"
+if [[ -z "$rustc_bin" && -x "${cargo_bin%/cargo}/rustc" ]]; then
+  rustc_bin="${cargo_bin%/cargo}/rustc"
+fi
+if [[ -z "$rustc_bin" ]]; then
+  if [[ -x "$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc" ]]; then
+    rustc_bin="$HOME/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc"
+  else
+    rustc_bin="rustc"
+  fi
+fi
+
+runner_dir="${TMPDIR:-$REPO_ROOT/target/bootstrap-blocker-inventory}/bootstrap-blocker-inventory-runner"
+runner_bin="$runner_dir/check-bootstrap-blocker-inventory"
+mkdir -p -- "$runner_dir"
+
+rustc_args=(
+  --edition=2024
+  scripts/check-bootstrap-blocker-inventory.rs
+  -o "$runner_bin"
+)
+if [[ -n "${CC:-}" ]]; then
+  rustc_args+=(-C "linker=$CC")
+else
+  for linker_candidate in \
+    /nix/store/*-clang-wrapper-*/bin/clang \
+    /run/current-system/sw/bin/cc \
+    /usr/bin/cc
+  do
+    if [[ -x "$linker_candidate" ]]; then
+      rustc_args+=(-C "linker=$linker_candidate")
+      break
+    fi
+  done
+fi
+"$rustc_bin" "${rustc_args[@]}"
+
 args=(
-  -Zscript scripts/check-bootstrap-blocker-inventory.rs
   --json "$json_path"
   --markdown "$markdown_path"
   bootstrap
@@ -85,4 +122,4 @@ if [[ "$self_test" == 1 ]]; then
   args+=(--self-test)
 fi
 
-"$cargo_bin" "${args[@]}"
+"$runner_bin" "${args[@]}"

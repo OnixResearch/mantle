@@ -1,10 +1,4 @@
-#!/usr/bin/env -S cargo +nightly -Zscript
----
-[package]
-edition = "2024"
-[dependencies]
----
-
+#!/usr/bin/env -S rustc --edition=2024
 //! Deterministic bootstrap blocker inventory and promotion-drift gate.
 //!
 //! The gate is intentionally source-derived and lightweight. It does not prove
@@ -113,11 +107,27 @@ struct Finding {
     excerpt: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SuppressionKind {
+    Source,
+    Metadata,
+}
+
+impl SuppressionKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            SuppressionKind::Source => "source",
+            SuppressionKind::Metadata => "metadata",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Suppression {
     class_id: &'static str,
     path: String,
     line: usize,
+    kind: SuppressionKind,
     reason: &'static str,
     excerpt: String,
 }
@@ -171,6 +181,12 @@ struct Outcome {
     promotion_claims: Vec<PromotionClaim>,
     enforce: bool,
     require_clean: bool,
+}
+
+impl Outcome {
+    fn suppression_count(&self, kind: SuppressionKind) -> usize {
+        self.suppressions.iter().filter(|suppression| suppression.kind == kind).count()
+    }
 }
 
 fn enforcement_failure_reason(outcome: &Outcome) -> Option<&'static str> {
@@ -261,7 +277,7 @@ fn parse_args() -> Result<Config, String> {
 }
 
 fn help() -> String {
-    "usage: check-bootstrap-blocker-inventory.rs [--enforce] [--require-clean] [--self-test] [--json PATH] [--markdown PATH] [PATH ...]"
+    "usage: check-bootstrap-blocker-inventory.rs [--enforce] [--require-clean] [--self-test] [--json PATH] [--markdown PATH] [PATH ...]\n\nReport-only mode omits --enforce and exits successfully after writing valid reports. Enforcement mode fails closed when --require-clean sees unsuppressed actionable findings or promotion claims."
         .to_string()
 }
 
@@ -379,6 +395,36 @@ fn run_self_tests() -> Result<(), String> {
     }
 
     let evidence = EvidenceState::load();
+    let mut report_only = empty_outcome(false, false);
+    report_only.findings.push(Finding {
+        class_id: "bridge-output",
+        path: "bootstrap/source.ncl".to_string(),
+        line: 1,
+        excerpt: "bridge smoke".to_string(),
+    });
+    if enforcement_failure_reason(&report_only).is_some() {
+        return Err("self-test expected report-only findings to exit successfully".to_string());
+    }
+    report_only.suppressions.push(Suppression {
+        class_id: "bridge-output",
+        path: "bootstrap/evidence/fixture.json".to_string(),
+        line: 1,
+        kind: SuppressionKind::Metadata,
+        reason: "checked fixture metadata",
+        excerpt: "bridge-boundary-only".to_string(),
+    });
+    if report_only.suppression_count(SuppressionKind::Metadata) != 1 {
+        return Err("self-test expected metadata suppression count to include checked evidence".to_string());
+    }
+    if report_only.suppression_count(SuppressionKind::Source) != 0 {
+        return Err("self-test expected metadata suppression not to count as source suppression".to_string());
+    }
+    if suppression_kind(Path::new("bootstrap/evidence/fixture.json")) != SuppressionKind::Metadata {
+        return Err("self-test expected evidence files to classify as metadata suppressions".to_string());
+    }
+    if suppression_kind(Path::new("bootstrap/source.ncl")) != SuppressionKind::Source {
+        return Err("self-test expected source files to classify as source suppressions".to_string());
+    }
     if evidence.binutils_tcc_tool_smoke_checked
         && suppression_reason(Path::new("bootstrap/binutils-tcc.ncl"), 382, MARKERS[0], &evidence).is_none()
     {
@@ -1511,6 +1557,7 @@ fn scan_file(
                         class_id: marker.id,
                         path: path_s.clone(),
                         line: idx + 1,
+                        kind: suppression_kind(path),
                         reason,
                         excerpt: compact(line),
                     });
@@ -1535,24 +1582,51 @@ fn scan_file(
     Ok(())
 }
 
-fn compact(line: &str) -> String {
-    let s = line.split_whitespace().collect::<Vec<_>>().join(" ");
-    if s.len() > 180 { format!("{}…", &s[..180]) } else { s }
+fn suppression_kind(path: &Path) -> SuppressionKind {
+    let path_s = path.to_string_lossy();
+    if is_metadata_suppression_path(&path_s) {
+        return SuppressionKind::Metadata;
+    }
+    SuppressionKind::Source
 }
 
+fn is_metadata_suppression_path(path: &str) -> bool {
+    path.contains("bootstrap/evidence/")
+        || path.ends_with("bootstrap/BLOCKER-INVENTORY.md")
+        || path.ends_with("openspec/specs/bootstrap/spec.md")
+}
+
+const EXCERPT_MAX_BYTES: usize = 180;
+
+fn compact(line: &str) -> String {
+    let s = line.split_whitespace().collect::<Vec<_>>().join(" ");
+    if s.len() > EXCERPT_MAX_BYTES {
+        format!("{}…", &s[..EXCERPT_MAX_BYTES])
+    } else {
+        s
+    }
+}
+
+const REPORT_SCHEMA_VERSION: u32 = 2;
+
 fn render_json(outcome: &Outcome) -> String {
+    let metadata_suppression_count = outcome.suppression_count(SuppressionKind::Metadata);
+    let source_suppression_count = outcome.suppression_count(SuppressionKind::Source);
     let mut s = String::new();
     s.push_str("{\n");
     s.push_str(&format!(
-        "  \"schema_version\": 1,\n  \"enforce\": {},\n  \"require_clean\": {},\n",
-        outcome.enforce, outcome.require_clean
+        "  \"schema_version\": {},\n  \"enforce\": {},\n  \"require_clean\": {},\n",
+        REPORT_SCHEMA_VERSION, outcome.enforce, outcome.require_clean
     ));
     s.push_str("  \"summary\": {\n");
     s.push_str(&format!(
-        "    \"finding_count\": {},\n    \"class_count\": {},\n    \"evidence_suppression_count\": {},\n    \"promotion_claim_count\": {}\n  }},\n",
+        "    \"finding_count\": {},\n    \"actionable_finding_count\": {},\n    \"class_count\": {},\n    \"evidence_suppression_count\": {},\n    \"metadata_suppression_count\": {},\n    \"source_suppression_count\": {},\n    \"promotion_claim_count\": {}\n  }},\n",
+        outcome.findings.len(),
         outcome.findings.len(),
         outcome.by_class.len(),
         outcome.suppressions.len(),
+        metadata_suppression_count,
+        source_suppression_count,
         outcome.promotion_claims.len()
     ));
     s.push_str("  \"classes\": [\n");
@@ -1566,11 +1640,16 @@ fn render_json(outcome: &Outcome) -> String {
             comma(i, MARKERS.len())
         ));
     }
+    s.push_str("  ],\n  \"metadata_suppressions\": [\n");
+    render_suppression_json_array(&mut s, outcome, SuppressionKind::Metadata);
+    s.push_str("  ],\n  \"source_suppressions\": [\n");
+    render_suppression_json_array(&mut s, outcome, SuppressionKind::Source);
     s.push_str("  ],\n  \"evidence_suppressions\": [\n");
     for (i, suppression) in outcome.suppressions.iter().enumerate() {
         s.push_str(&format!(
-            "    {{\"class\": \"{}\", \"path\": \"{}\", \"line\": {}, \"reason\": \"{}\", \"excerpt\": \"{}\"}}{}\n",
+            "    {{\"class\": \"{}\", \"kind\": \"{}\", \"path\": \"{}\", \"line\": {}, \"reason\": \"{}\", \"excerpt\": \"{}\"}}{}\n",
             json_escape(suppression.class_id),
+            json_escape(suppression.kind.as_str()),
             json_escape(&suppression.path),
             suppression.line,
             json_escape(suppression.reason),
@@ -1604,25 +1683,20 @@ fn render_json(outcome: &Outcome) -> String {
 }
 
 fn render_markdown(outcome: &Outcome) -> String {
+    let metadata_suppression_count = outcome.suppression_count(SuppressionKind::Metadata);
+    let source_suppression_count = outcome.suppression_count(SuppressionKind::Source);
     let mut s = String::new();
     s.push_str("# Bootstrap blocker inventory report\n\n");
-    s.push_str(&format!("- Schema version: 1\n- Enforcement mode: {}\n- Require clean baseline: {}\n- Findings: {}\n- Marker classes present: {}\n- Evidence-backed suppressions: {}\n- Promotion claims: {}\n\n", outcome.enforce, outcome.require_clean, outcome.findings.len(), outcome.by_class.len(), outcome.suppressions.len(), outcome.promotion_claims.len()));
+    s.push_str(&format!("- Schema version: {}\n- Enforcement mode: {}\n- Require clean baseline: {}\n- Actionable findings: {}\n- Marker classes present: {}\n- Evidence-backed suppressions: {}\n- Metadata suppressions: {}\n- Source suppressions: {}\n- Promotion claims: {}\n\n", REPORT_SCHEMA_VERSION, outcome.enforce, outcome.require_clean, outcome.findings.len(), outcome.by_class.len(), outcome.suppressions.len(), metadata_suppression_count, source_suppression_count, outcome.promotion_claims.len()));
     s.push_str("## Marker classes\n\n");
     for marker in MARKERS {
         let count = outcome.by_class.get(marker.id).copied().unwrap_or(0);
         s.push_str(&format!("- `{}`: {} finding(s) — {}\n", marker.id, count, marker.description));
     }
-    s.push_str("\n## Evidence-backed suppressions\n\n");
-    if outcome.suppressions.is_empty() {
-        s.push_str("No evidence-backed suppressions applied.\n");
-    } else {
-        for suppression in &outcome.suppressions {
-            s.push_str(&format!(
-                "- `{}` {}:{} — {} — `{}`\n",
-                suppression.class_id, suppression.path, suppression.line, suppression.reason, suppression.excerpt
-            ));
-        }
-    }
+    s.push_str("\n## Metadata suppressions\n\n");
+    render_suppression_markdown(&mut s, outcome, SuppressionKind::Metadata);
+    s.push_str("\n## Source suppressions\n\n");
+    render_suppression_markdown(&mut s, outcome, SuppressionKind::Source);
     s.push_str("\n## Promotion claims\n\n");
     if outcome.promotion_claims.is_empty() {
         s.push_str("No promotion claims detected.\n");
@@ -1631,11 +1705,48 @@ fn render_markdown(outcome: &Outcome) -> String {
             s.push_str(&format!("- {}:{} — `{}`\n", claim.path, claim.line, claim.excerpt));
         }
     }
-    s.push_str("\n## Findings\n\n");
-    for finding in &outcome.findings {
-        s.push_str(&format!("- `{}` {}:{} — `{}`\n", finding.class_id, finding.path, finding.line, finding.excerpt));
+    s.push_str("\n## Actionable findings\n\n");
+    if outcome.findings.is_empty() {
+        s.push_str("No actionable findings detected.\n");
+    } else {
+        for finding in &outcome.findings {
+            s.push_str(&format!(
+                "- `{}` {}:{} — `{}`\n",
+                finding.class_id, finding.path, finding.line, finding.excerpt
+            ));
+        }
     }
     s
+}
+
+fn render_suppression_json_array(s: &mut String, outcome: &Outcome, kind: SuppressionKind) {
+    let suppressions: Vec<&Suppression> =
+        outcome.suppressions.iter().filter(|suppression| suppression.kind == kind).collect();
+    for (i, suppression) in suppressions.iter().enumerate() {
+        s.push_str(&format!(
+            "    {{\"class\": \"{}\", \"path\": \"{}\", \"line\": {}, \"reason\": \"{}\", \"excerpt\": \"{}\"}}{}\n",
+            json_escape(suppression.class_id),
+            json_escape(&suppression.path),
+            suppression.line,
+            json_escape(suppression.reason),
+            json_escape(&suppression.excerpt),
+            comma(i, suppressions.len())
+        ));
+    }
+}
+
+fn render_suppression_markdown(s: &mut String, outcome: &Outcome, kind: SuppressionKind) {
+    let mut rendered = false;
+    for suppression in outcome.suppressions.iter().filter(|suppression| suppression.kind == kind) {
+        rendered = true;
+        s.push_str(&format!(
+            "- `{}` {}:{} — {} — `{}`\n",
+            suppression.class_id, suppression.path, suppression.line, suppression.reason, suppression.excerpt
+        ));
+    }
+    if !rendered {
+        s.push_str("No suppressions in this category.\n");
+    }
 }
 
 fn comma(index: usize, len: usize) -> &'static str {

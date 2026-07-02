@@ -9,7 +9,7 @@ The wrapper writes deterministic reports by default:
 - JSON: `target/bootstrap-blocker-inventory/current.json`
 - Markdown: `target/bootstrap-blocker-inventory/current.md`
 
-Both reports omit timestamps and host-specific absolute paths so they can be saved as OpenSpec evidence.
+Both reports omit timestamps and host-specific absolute paths so they can be saved as evidence. The JSON summary names `actionable_finding_count`, `metadata_suppression_count`, and `source_suppression_count`; the Markdown report renders metadata suppressions, source suppressions, promotion claims, and actionable findings in separate sections.
 
 ## Marker classes
 
@@ -30,7 +30,7 @@ Default enforcement mode:
 ./scripts/check-bootstrap-blocker-inventory.sh
 ```
 
-This exits successfully when blockers are present but status remains explicitly gated. It exits nonzero only if a promotion claim conflicts with remaining blockers.
+This exits successfully only when the checked baseline is clean: no unsuppressed actionable findings and no promotion claims. It exits nonzero while preserving the JSON/Markdown reports when source blockers or promotion claims remain.
 
 Report-only mode:
 
@@ -38,7 +38,7 @@ Report-only mode:
 ./scripts/check-bootstrap-blocker-inventory.sh --report-only
 ```
 
-Use this when refreshing inventory evidence without enforcing promotion-drift rejection.
+Use this when refreshing inventory evidence or choosing the next repair target. It exits successfully after valid JSON/Markdown report generation even when blockers remain, and the report still states that the repository is not clean.
 
 ## Retiring a marker
 
