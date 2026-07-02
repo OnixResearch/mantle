@@ -15,6 +15,9 @@ use crate::lock::LockedKind;
 use crate::lock::LockedPatch;
 use crate::lock::LockedPatchSource;
 use crate::lock::Lockfile;
+use crate::manifest::DarcsSelector;
+use crate::manifest::FossilSelector;
+use crate::manifest::PijulSelector;
 
 /// Maximum number of inputs to generate (guard against runaway locks).
 const MAX_GENERATED_INPUTS: u32 = 4096;
@@ -218,6 +221,23 @@ fn generate_kind_fields(out: &mut String, kind: &LockedKind) {
             rev,
             ref_name: ref_name.as_deref(),
         }),
+        LockedKind::Darcs {
+            repository,
+            selector,
+            context,
+            weak_hash,
+        } => generate_darcs_kind_fields(out, repository, selector, context.as_deref(), weak_hash.as_deref()),
+        LockedKind::Pijul {
+            repository,
+            selector,
+            state,
+            change,
+        } => generate_pijul_kind_fields(out, repository, selector, state, change.as_deref()),
+        LockedKind::Fossil {
+            repository,
+            selector,
+            checkin,
+        } => generate_fossil_kind_fields(out, repository, selector, checkin),
     }
 }
 
@@ -261,6 +281,121 @@ fn generate_git_kind_fields(out: &mut String, fields: GitKindFields<'_>) {
             value: ref_name_value,
         });
     }
+}
+
+fn generate_darcs_kind_fields(
+    out: &mut String,
+    repository: &str,
+    selector: &DarcsSelector,
+    context: Option<&str>,
+    weak_hash: Option<&str>,
+) {
+    assert!(!repository.is_empty(), "darcs repository must not be empty");
+    assert!(context.is_some() || weak_hash.is_some(), "darcs identity metadata must be present");
+    generate_vcs_common_fields(out, "darcs", repository);
+    match selector {
+        DarcsSelector::Tag(tag) => push_selector_fields(out, "tag", tag),
+        DarcsSelector::Context(value) => push_selector_fields(out, "context", value),
+    }
+    if let Some(context) = context {
+        push_string_field(out, RenderedStringField {
+            indent: "    ",
+            name: "context",
+            value: context,
+        });
+    }
+    if let Some(weak_hash) = weak_hash {
+        push_string_field(out, RenderedStringField {
+            indent: "    ",
+            name: "weak_hash",
+            value: weak_hash,
+        });
+    }
+}
+
+fn generate_pijul_kind_fields(
+    out: &mut String,
+    repository: &str,
+    selector: &PijulSelector,
+    state: &str,
+    change: Option<&str>,
+) {
+    assert!(!repository.is_empty(), "pijul repository must not be empty");
+    assert!(!state.is_empty(), "pijul state must not be empty");
+    generate_vcs_common_fields(out, "pijul", repository);
+    match selector {
+        PijulSelector::Channel { channel } => push_selector_fields(out, "channel", channel),
+        PijulSelector::State { channel, state } => {
+            push_selector_fields(out, "state", state);
+            push_string_field(out, RenderedStringField {
+                indent: "    ",
+                name: "channel",
+                value: channel,
+            });
+        }
+        PijulSelector::Change { channel, change } => {
+            push_selector_fields(out, "change", change);
+            push_string_field(out, RenderedStringField {
+                indent: "    ",
+                name: "channel",
+                value: channel,
+            });
+        }
+    }
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "state",
+        value: state,
+    });
+    if let Some(change) = change {
+        push_string_field(out, RenderedStringField {
+            indent: "    ",
+            name: "change",
+            value: change,
+        });
+    }
+}
+
+fn generate_fossil_kind_fields(out: &mut String, repository: &str, selector: &FossilSelector, checkin: &str) {
+    assert!(!repository.is_empty(), "fossil repository must not be empty");
+    assert!(!checkin.is_empty(), "fossil check-in must not be empty");
+    generate_vcs_common_fields(out, "fossil", repository);
+    match selector {
+        FossilSelector::Branch(branch) => push_selector_fields(out, "branch", branch),
+        FossilSelector::Tag(tag) => push_selector_fields(out, "tag", tag),
+        FossilSelector::Checkin(value) => push_selector_fields(out, "checkin", value),
+    }
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "checkin",
+        value: checkin,
+    });
+}
+
+fn generate_vcs_common_fields(out: &mut String, kind_name: &str, repository: &str) {
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "type",
+        value: kind_name,
+    });
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "repository",
+        value: repository,
+    });
+}
+
+fn push_selector_fields(out: &mut String, selector_type: &str, selector_value: &str) {
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "selector_type",
+        value: selector_type,
+    });
+    push_string_field(out, RenderedStringField {
+        indent: "    ",
+        name: "selector_value",
+        value: selector_value,
+    });
 }
 
 fn render_field_name(name: &str) -> String {
@@ -587,6 +722,78 @@ mod tests {
         let ncl = generate_inputs_ncl(lock);
         assert!(ncl.contains("\"fix\\\"name\" = {"));
         assert!(!ncl.contains("\"fix\"name\" = {"));
+    }
+
+    #[test]
+    fn generate_vcs_entries_include_native_lock_metadata() {
+        let mut inputs = BTreeMap::new();
+        inputs.insert("darcs".to_string(), LockEntry {
+            kind: LockedKind::Darcs {
+                repository: "https://example.invalid/repo.darcs".to_string(),
+                selector: crate::DarcsSelector::Tag("v1".to_string()),
+                context: Some("darcs-context".to_string()),
+                weak_hash: Some("weak".to_string()),
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-darcs=".to_string(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
+            trust: None,
+        });
+        inputs.insert("pijul".to_string(), LockEntry {
+            kind: LockedKind::Pijul {
+                repository: "https://example.invalid/repo.pijul".to_string(),
+                selector: crate::PijulSelector::Change {
+                    channel: "main".to_string(),
+                    change: "change".to_string(),
+                },
+                state: "state".to_string(),
+                change: Some("change".to_string()),
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-pijul=".to_string(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
+            trust: None,
+        });
+        inputs.insert("fossil".to_string(), LockEntry {
+            kind: LockedKind::Fossil {
+                repository: "https://example.invalid/repo.fossil".to_string(),
+                selector: crate::FossilSelector::Branch("trunk".to_string()),
+                checkin: "checkin".to_string(),
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-fossil=".to_string(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+            fetch_policy: crate::InputFetchPolicy::GenerationMaterial,
+            freshness: None,
+            trust: None,
+        });
+        let ncl = generate_inputs_ncl(Lockfile {
+            version: SchemaVersion::CURRENT,
+            inputs,
+            patches: BTreeMap::new(),
+        });
+
+        assert!(ncl.contains("type = \"darcs\""));
+        assert!(ncl.contains("context = \"darcs-context\""));
+        assert!(ncl.contains("weak_hash = \"weak\""));
+        assert!(ncl.contains("type = \"pijul\""));
+        assert!(ncl.contains("state = \"state\""));
+        assert!(ncl.contains("change = \"change\""));
+        assert!(ncl.contains("type = \"fossil\""));
+        assert!(ncl.contains("checkin = \"checkin\""));
     }
 
     #[test]

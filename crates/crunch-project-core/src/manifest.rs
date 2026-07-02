@@ -1,6 +1,7 @@
 use alloc::collections::BTreeSet;
 use alloc::format;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -198,6 +199,7 @@ impl ManifestInput {
             problems.extend(trust.validate(&format!("input '{}'", self.name)));
         }
 
+        problems.extend(self.kind.validate(&self.name));
         problems.extend(fetch_policy_compatibility_problems(self));
 
         problems
@@ -216,6 +218,21 @@ pub enum InputKind {
         repository: String,
         reference: GitReference,
     },
+    #[serde(rename = "darcs")]
+    Darcs {
+        repository: String,
+        selector: DarcsSelector,
+    },
+    #[serde(rename = "pijul")]
+    Pijul {
+        repository: String,
+        selector: PijulSelector,
+    },
+    #[serde(rename = "fossil")]
+    Fossil {
+        repository: String,
+        selector: FossilSelector,
+    },
 }
 
 #[derive(Deserialize)]
@@ -230,6 +247,21 @@ enum RawInputKind {
         repository: String,
         reference: Option<GitReference>,
     },
+    #[serde(rename = "darcs")]
+    Darcs {
+        repository: String,
+        selector: DarcsSelector,
+    },
+    #[serde(rename = "pijul")]
+    Pijul {
+        repository: String,
+        selector: PijulSelector,
+    },
+    #[serde(rename = "fossil")]
+    Fossil {
+        repository: String,
+        selector: FossilSelector,
+    },
 }
 
 impl<'de> Deserialize<'de> for InputKind {
@@ -243,8 +275,60 @@ impl<'de> Deserialize<'de> for InputKind {
                 repository,
                 reference: reference.unwrap_or_else(GitReference::default),
             },
+            RawInputKind::Darcs { repository, selector } => Self::Darcs { repository, selector },
+            RawInputKind::Pijul { repository, selector } => Self::Pijul { repository, selector },
+            RawInputKind::Fossil { repository, selector } => Self::Fossil { repository, selector },
         })
     }
+}
+
+impl InputKind {
+    fn validate(&self, input_name: &str) -> Vec<String> {
+        match self {
+            Self::File { .. } | Self::Tarball { .. } => Vec::new(),
+            Self::Git { repository, .. } => validate_repository(input_name, "git", repository),
+            Self::Darcs { repository, selector } => {
+                let mut problems = validate_repository(input_name, "darcs", repository);
+                problems.extend(selector.validate(input_name));
+                problems
+            }
+            Self::Pijul { repository, selector } => {
+                let mut problems = validate_repository(input_name, "pijul", repository);
+                problems.extend(selector.validate(input_name));
+                problems
+            }
+            Self::Fossil { repository, selector } => {
+                let mut problems = validate_repository(input_name, "fossil", repository);
+                problems.extend(selector.validate(input_name));
+                problems
+            }
+        }
+    }
+}
+
+fn validate_repository(input_name: &str, kind: &str, repository: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    if repository.is_empty() {
+        problems.push(format!("input '{input_name}': {kind} repository must not be empty"));
+    }
+    if is_forge_shortcut(repository) {
+        problems.push(format!(
+            "input '{input_name}': {kind} repository must be an explicit URL, not forge shorthand '{repository}'"
+        ));
+    }
+    problems
+}
+
+fn is_forge_shortcut(repository: &str) -> bool {
+    const FORGE_SHORTCUT_PREFIXES: &[&str] = &["github:", "gitlab:", "codeberg:", "sourcehut:", "pijul:", "fossil:"];
+    FORGE_SHORTCUT_PREFIXES.iter().any(|prefix| repository.starts_with(prefix))
+}
+
+fn validate_selector_value(input_name: &str, selector: &str, value: &str) -> Vec<String> {
+    if value.is_empty() {
+        return vec![format!("input '{input_name}': {selector} selector must not be empty")];
+    }
+    Vec::new()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -261,6 +345,97 @@ pub enum GitReference {
 impl Default for GitReference {
     fn default() -> Self {
         GitReference::Branch("main".into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "selector_type", content = "selector_value")]
+pub enum DarcsSelector {
+    #[serde(rename = "tag")]
+    Tag(String),
+    #[serde(rename = "context")]
+    Context(String),
+}
+
+impl DarcsSelector {
+    pub fn identity_fragment(&self) -> String {
+        match self {
+            Self::Tag(tag) => format!("tag:{tag}"),
+            Self::Context(context) => format!("context:{context}"),
+        }
+    }
+
+    pub(crate) fn validate(&self, input_name: &str) -> Vec<String> {
+        match self {
+            Self::Tag(tag) => validate_selector_value(input_name, "darcs tag", tag),
+            Self::Context(context) => validate_selector_value(input_name, "darcs context", context),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "selector_type")]
+pub enum PijulSelector {
+    #[serde(rename = "channel")]
+    Channel { channel: String },
+    #[serde(rename = "state")]
+    State { channel: String, state: String },
+    #[serde(rename = "change")]
+    Change { channel: String, change: String },
+}
+
+impl PijulSelector {
+    pub fn identity_fragment(&self) -> String {
+        match self {
+            Self::Channel { channel } => format!("channel:{channel}"),
+            Self::State { channel, state } => format!("channel:{channel}:state:{state}"),
+            Self::Change { channel, change } => format!("channel:{channel}:change:{change}"),
+        }
+    }
+
+    pub fn channel(&self) -> &str {
+        match self {
+            Self::Channel { channel } | Self::State { channel, .. } | Self::Change { channel, .. } => channel,
+        }
+    }
+
+    pub(crate) fn validate(&self, input_name: &str) -> Vec<String> {
+        let mut problems = validate_selector_value(input_name, "pijul channel", self.channel());
+        match self {
+            Self::Channel { .. } => {}
+            Self::State { state, .. } => problems.extend(validate_selector_value(input_name, "pijul state", state)),
+            Self::Change { change, .. } => problems.extend(validate_selector_value(input_name, "pijul change", change)),
+        }
+        problems
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "selector_type", content = "selector_value")]
+pub enum FossilSelector {
+    #[serde(rename = "branch")]
+    Branch(String),
+    #[serde(rename = "tag")]
+    Tag(String),
+    #[serde(rename = "checkin")]
+    Checkin(String),
+}
+
+impl FossilSelector {
+    pub fn identity_fragment(&self) -> String {
+        match self {
+            Self::Branch(branch) => format!("branch:{branch}"),
+            Self::Tag(tag) => format!("tag:{tag}"),
+            Self::Checkin(checkin) => format!("checkin:{checkin}"),
+        }
+    }
+
+    pub(crate) fn validate(&self, input_name: &str) -> Vec<String> {
+        match self {
+            Self::Branch(branch) => validate_selector_value(input_name, "fossil branch", branch),
+            Self::Tag(tag) => validate_selector_value(input_name, "fossil tag", tag),
+            Self::Checkin(checkin) => validate_selector_value(input_name, "fossil checkin", checkin),
+        }
     }
 }
 
@@ -570,5 +745,116 @@ mod tests {
         let v = m.schema_version().unwrap();
         assert_eq!(v.major, 1);
         assert_eq!(v.minor, 0);
+    }
+
+    #[test]
+    fn vcs_input_selectors_roundtrip() {
+        let manifest = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![
+                ManifestInput {
+                    name: "darcs-src".into(),
+                    kind: InputKind::Darcs {
+                        repository: "https://example.invalid/src.darcs".into(),
+                        selector: DarcsSelector::Tag("v1".into()),
+                    },
+                    hash: HashSpec::default(),
+                    frozen: false,
+                    mirrors: vec!["https://mirror.invalid/src.darcs".into()],
+                    patches: vec![],
+                    fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    retention: None,
+                    freshness: None,
+                    trust: None,
+                },
+                ManifestInput {
+                    name: "pijul-src".into(),
+                    kind: InputKind::Pijul {
+                        repository: "https://example.invalid/src.pijul".into(),
+                        selector: PijulSelector::State {
+                            channel: "main".into(),
+                            state: "state-1".into(),
+                        },
+                    },
+                    hash: HashSpec::default(),
+                    frozen: false,
+                    mirrors: vec![],
+                    patches: vec![],
+                    fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    retention: None,
+                    freshness: None,
+                    trust: None,
+                },
+                ManifestInput {
+                    name: "fossil-src".into(),
+                    kind: InputKind::Fossil {
+                        repository: "https://example.invalid/src.fossil".into(),
+                        selector: FossilSelector::Checkin("abc123".into()),
+                    },
+                    hash: HashSpec::default(),
+                    frozen: false,
+                    mirrors: vec![],
+                    patches: vec![],
+                    fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    retention: None,
+                    freshness: None,
+                    trust: None,
+                },
+            ],
+            patches: vec![],
+            retention: InputRetentionPolicy::Untracked,
+        };
+
+        let json = serde_json::to_string(&manifest).unwrap();
+        let parsed: ProjectManifest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(manifest, parsed);
+        assert!(parsed.validate().is_empty());
+    }
+
+    #[test]
+    fn vcs_manifest_validation_rejects_forge_shortcuts_and_empty_selectors() {
+        let manifest = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![
+                ManifestInput {
+                    name: "forge".into(),
+                    kind: InputKind::Darcs {
+                        repository: "github:owner/repo".into(),
+                        selector: DarcsSelector::Tag("v1".into()),
+                    },
+                    hash: HashSpec::default(),
+                    frozen: false,
+                    mirrors: vec![],
+                    patches: vec![],
+                    fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    retention: None,
+                    freshness: None,
+                    trust: None,
+                },
+                ManifestInput {
+                    name: "empty".into(),
+                    kind: InputKind::Pijul {
+                        repository: "https://example.invalid/repo".into(),
+                        selector: PijulSelector::Channel { channel: "".into() },
+                    },
+                    hash: HashSpec::default(),
+                    frozen: false,
+                    mirrors: vec![],
+                    patches: vec![],
+                    fetch_policy: InputFetchPolicy::GenerationMaterial,
+                    retention: None,
+                    freshness: None,
+                    trust: None,
+                },
+            ],
+            patches: vec![],
+            retention: InputRetentionPolicy::Untracked,
+        };
+
+        let problems = manifest.validate();
+
+        assert!(problems.iter().any(|problem| problem.contains("explicit URL")));
+        assert!(problems.iter().any(|problem| problem.contains("selector must not be empty")));
     }
 }

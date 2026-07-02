@@ -22,6 +22,9 @@ const MAX_SOURCE_STATE_FACTS: u32 = 4096;
 const SOURCE_ID_FILE_PREFIX: &str = "file:";
 const SOURCE_ID_TARBALL_PREFIX: &str = "tarball:";
 const SOURCE_ID_GIT_PREFIX: &str = "git:";
+const SOURCE_ID_DARCS_PREFIX: &str = "darcs:";
+const SOURCE_ID_PIJUL_PREFIX: &str = "pijul:";
+const SOURCE_ID_FOSSIL_PREFIX: &str = "fossil:";
 const SOURCE_ID_GIT_REF_SEPARATOR: &str = "#";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -375,6 +378,9 @@ fn locked_kind_from_manifest(
         InputKind::File { url } => Ok(LockedKind::File { url: url.clone() }),
         InputKind::Tarball { url } => Ok(LockedKind::Tarball { url: url.clone() }),
         InputKind::Git { repository, reference } => locked_git_kind(repository, reference, existing, &input.name),
+        InputKind::Darcs { repository, selector } => locked_darcs_kind(repository, selector, existing, &input.name),
+        InputKind::Pijul { repository, selector } => locked_pijul_kind(repository, selector, existing, &input.name),
+        InputKind::Fossil { repository, selector } => locked_fossil_kind(repository, selector, existing, &input.name),
     }
 }
 
@@ -412,6 +418,126 @@ fn locked_git_kind(
         input_name,
         InputFetchDiagnosticKind::BuildFetchRequired,
         "git build-time or imported fetch policy requires an existing lock rev or explicit rev reference",
+    ))
+}
+
+fn locked_darcs_kind(
+    repository: &str,
+    selector: &crate::DarcsSelector,
+    existing: Option<&LockEntry>,
+    input_name: &str,
+) -> Result<LockedKind, InputFetchDiagnostic> {
+    if let Some(LockEntry {
+        kind:
+            LockedKind::Darcs {
+                repository: locked_repository,
+                selector: locked_selector,
+                context,
+                weak_hash,
+            },
+        ..
+    }) = existing
+        && locked_repository == repository
+        && locked_selector == selector
+    {
+        return Ok(LockedKind::Darcs {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            context: context.clone(),
+            weak_hash: weak_hash.clone(),
+        });
+    }
+    if let crate::DarcsSelector::Context(context) = selector {
+        return Ok(LockedKind::Darcs {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            context: Some(context.clone()),
+            weak_hash: None,
+        });
+    }
+    Err(diagnostic(
+        input_name,
+        InputFetchDiagnosticKind::BuildFetchRequired,
+        "darcs build-time or imported fetch policy requires an existing lock context/weak-hash or an explicit context selector",
+    ))
+}
+
+fn locked_pijul_kind(
+    repository: &str,
+    selector: &crate::PijulSelector,
+    existing: Option<&LockEntry>,
+    input_name: &str,
+) -> Result<LockedKind, InputFetchDiagnostic> {
+    if let Some(LockEntry {
+        kind:
+            LockedKind::Pijul {
+                repository: locked_repository,
+                selector: locked_selector,
+                state,
+                change,
+            },
+        ..
+    }) = existing
+        && locked_repository == repository
+        && locked_selector == selector
+    {
+        return Ok(LockedKind::Pijul {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            state: state.clone(),
+            change: change.clone(),
+        });
+    }
+    if let crate::PijulSelector::State { state, .. } = selector {
+        return Ok(LockedKind::Pijul {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            state: state.clone(),
+            change: None,
+        });
+    }
+    Err(diagnostic(
+        input_name,
+        InputFetchDiagnosticKind::BuildFetchRequired,
+        "pijul build-time or imported fetch policy requires an existing lock state or an explicit state selector",
+    ))
+}
+
+fn locked_fossil_kind(
+    repository: &str,
+    selector: &crate::FossilSelector,
+    existing: Option<&LockEntry>,
+    input_name: &str,
+) -> Result<LockedKind, InputFetchDiagnostic> {
+    if let Some(LockEntry {
+        kind:
+            LockedKind::Fossil {
+                repository: locked_repository,
+                selector: locked_selector,
+                checkin,
+            },
+        ..
+    }) = existing
+        && locked_repository == repository
+        && locked_selector == selector
+    {
+        return Ok(LockedKind::Fossil {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            checkin: checkin.clone(),
+        });
+    }
+    if let crate::FossilSelector::Checkin(checkin) = selector {
+        return Ok(LockedKind::Fossil {
+            repository: repository.to_string(),
+            selector: selector.clone(),
+            checkin: checkin.clone(),
+        });
+    }
+    Err(diagnostic(
+        input_name,
+        InputFetchDiagnosticKind::BuildFetchRequired,
+        "fossil build-time or imported fetch policy requires an existing lock check-in or an explicit check-in selector",
     ))
 }
 
@@ -456,6 +582,21 @@ fn source_identity_from_lock_kind(kind: &LockedKind) -> String {
         LockedKind::Git { repository, rev, .. } => {
             source_identity(SOURCE_ID_GIT_PREFIX, &git_identity(repository, rev))
         }
+        LockedKind::Darcs {
+            repository,
+            context,
+            weak_hash,
+            ..
+        } => source_identity(SOURCE_ID_DARCS_PREFIX, &darcs_locked_identity(repository, context, weak_hash)),
+        LockedKind::Pijul {
+            repository,
+            state,
+            change,
+            ..
+        } => source_identity(SOURCE_ID_PIJUL_PREFIX, &pijul_locked_identity(repository, state, change)),
+        LockedKind::Fossil {
+            repository, checkin, ..
+        } => source_identity(SOURCE_ID_FOSSIL_PREFIX, &fossil_identity(repository, checkin)),
     }
 }
 
@@ -465,6 +606,15 @@ fn source_identity_from_input_kind(kind: &InputKind) -> String {
         InputKind::Tarball { url } => source_identity(SOURCE_ID_TARBALL_PREFIX, url),
         InputKind::Git { repository, reference } => {
             source_identity(SOURCE_ID_GIT_PREFIX, &git_reference_identity(repository, reference))
+        }
+        InputKind::Darcs { repository, selector } => {
+            source_identity(SOURCE_ID_DARCS_PREFIX, &vcs_selector_identity(repository, &selector.identity_fragment()))
+        }
+        InputKind::Pijul { repository, selector } => {
+            source_identity(SOURCE_ID_PIJUL_PREFIX, &vcs_selector_identity(repository, &selector.identity_fragment()))
+        }
+        InputKind::Fossil { repository, selector } => {
+            source_identity(SOURCE_ID_FOSSIL_PREFIX, &vcs_selector_identity(repository, &selector.identity_fragment()))
         }
     }
 }
@@ -479,6 +629,31 @@ fn git_reference_identity(repository: &str, reference: &GitReference) -> String 
 
 fn git_identity(repository: &str, revision_or_ref: &str) -> String {
     format!("{repository}{SOURCE_ID_GIT_REF_SEPARATOR}{revision_or_ref}")
+}
+
+fn darcs_locked_identity(repository: &str, context: &Option<String>, weak_hash: &Option<String>) -> String {
+    if let Some(context) = context {
+        return vcs_selector_identity(repository, &format!("context:{context}"));
+    }
+    if let Some(weak_hash) = weak_hash {
+        return vcs_selector_identity(repository, &format!("weak-hash:{weak_hash}"));
+    }
+    vcs_selector_identity(repository, "unresolved")
+}
+
+fn pijul_locked_identity(repository: &str, state: &str, change: &Option<String>) -> String {
+    if let Some(change) = change {
+        return vcs_selector_identity(repository, &format!("state:{state}:change:{change}"));
+    }
+    vcs_selector_identity(repository, &format!("state:{state}"))
+}
+
+fn fossil_identity(repository: &str, checkin: &str) -> String {
+    vcs_selector_identity(repository, &format!("checkin:{checkin}"))
+}
+
+fn vcs_selector_identity(repository: &str, selector: &str) -> String {
+    format!("{repository}{SOURCE_ID_GIT_REF_SEPARATOR}{selector}")
 }
 
 fn source_identity(prefix: &str, value: &str) -> String {
@@ -704,5 +879,72 @@ mod tests {
         assert_eq!(report.items[0].requirement, InputFetchRequirement::Conflicting);
         assert!(diagnostics.contains(&InputFetchDiagnosticKind::SourceStateRequired));
         assert!(report.items[0].source_state_blake3.is_none());
+    }
+
+    #[test]
+    fn vcs_source_identity_uses_locked_native_identity() {
+        let input = ManifestInput {
+            name: "src".into(),
+            kind: InputKind::Darcs {
+                repository: "https://example.invalid/repo".into(),
+                selector: crate::DarcsSelector::Tag("v1".into()),
+            },
+            hash: HashSpec::default(),
+            frozen: false,
+            mirrors: Vec::new(),
+            patches: Vec::new(),
+            fetch_policy: InputFetchPolicy::ImportedSourceRequired,
+            retention: None,
+            freshness: None,
+            trust: None,
+        };
+        let entry = LockEntry {
+            kind: LockedKind::Darcs {
+                repository: "https://example.invalid/repo".into(),
+                selector: crate::DarcsSelector::Tag("v1".into()),
+                context: Some("ctx".into()),
+                weak_hash: None,
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Sha256,
+                value: HASH_A.into(),
+            },
+            patches: Vec::new(),
+            mirrors: Vec::new(),
+            fetch_policy: InputFetchPolicy::ImportedSourceRequired,
+            freshness: None,
+            trust: None,
+        };
+
+        let identity = input_source_identity(&input, Some(&entry));
+
+        assert_eq!(identity, "darcs:https://example.invalid/repo#context:ctx");
+    }
+
+    #[test]
+    fn non_generation_vcs_policy_requires_proven_identity_for_ambiguous_selector() {
+        let input = ManifestInput {
+            name: "src".into(),
+            kind: InputKind::Fossil {
+                repository: "https://example.invalid/repo".into(),
+                selector: crate::FossilSelector::Branch("trunk".into()),
+            },
+            hash: HashSpec {
+                algo: HashAlgo::Sha256,
+                expected: Some(HASH_A.into()),
+            },
+            frozen: false,
+            mirrors: Vec::new(),
+            patches: Vec::new(),
+            fetch_policy: InputFetchPolicy::BuildFetchAction,
+            retention: None,
+            freshness: None,
+            trust: None,
+        };
+
+        let err = lock_entry_without_fetch(&input, None).expect_err("branch selector needs resolved check-in");
+
+        assert_eq!(err.kind, InputFetchDiagnosticKind::BuildFetchRequired);
+        assert!(err.message.contains("existing lock check-in"));
     }
 }

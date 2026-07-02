@@ -234,6 +234,46 @@ fn source_node(input_name: &str, manifest_input: &ManifestInput, entry: &LockEnt
                 attributes.insert("ref_name".to_string(), ref_name.clone());
             }
         }
+        LockedKind::Darcs {
+            repository,
+            selector,
+            context,
+            weak_hash,
+        } => {
+            attributes.insert("kind".to_string(), "darcs".to_string());
+            attributes.insert("repository".to_string(), repository.clone());
+            attributes.insert("selector".to_string(), selector.identity_fragment());
+            if let Some(context) = context {
+                attributes.insert("context".to_string(), context.clone());
+            }
+            if let Some(weak_hash) = weak_hash {
+                attributes.insert("weak_hash".to_string(), weak_hash.clone());
+            }
+        }
+        LockedKind::Pijul {
+            repository,
+            selector,
+            state,
+            change,
+        } => {
+            attributes.insert("kind".to_string(), "pijul".to_string());
+            attributes.insert("repository".to_string(), repository.clone());
+            attributes.insert("selector".to_string(), selector.identity_fragment());
+            attributes.insert("state".to_string(), state.clone());
+            if let Some(change) = change {
+                attributes.insert("change".to_string(), change.clone());
+            }
+        }
+        LockedKind::Fossil {
+            repository,
+            selector,
+            checkin,
+        } => {
+            attributes.insert("kind".to_string(), "fossil".to_string());
+            attributes.insert("repository".to_string(), repository.clone());
+            attributes.insert("selector".to_string(), selector.identity_fragment());
+            attributes.insert("checkin".to_string(), checkin.clone());
+        }
     }
 
     Ok(Node {

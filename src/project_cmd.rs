@@ -237,6 +237,29 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
                 let ref_str = ref_name.as_deref().map(|r| format!(" ({r})")).unwrap_or_default();
                 format!("git: {repository} @ {rev}{ref_str}")
             }
+            crunch_project::LockedKind::Darcs {
+                repository,
+                selector,
+                context,
+                weak_hash,
+            } => {
+                let identity = context.as_deref().or(weak_hash.as_deref()).unwrap_or("<unresolved>");
+                format!("darcs: {repository} @ {} ({identity})", selector.identity_fragment())
+            }
+            crunch_project::LockedKind::Pijul {
+                repository,
+                selector,
+                state,
+                change,
+            } => {
+                let change_str = change.as_deref().map(|value| format!(" change {value}")).unwrap_or_default();
+                format!("pijul: {repository} @ {} state {state}{change_str}", selector.identity_fragment())
+            }
+            crunch_project::LockedKind::Fossil {
+                repository,
+                selector,
+                checkin,
+            } => format!("fossil: {repository} @ {} check-in {checkin}", selector.identity_fragment()),
         };
 
         println!("{name}{frozen_tag}");

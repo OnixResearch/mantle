@@ -280,6 +280,31 @@ pub fn locked_source_identity(kind: &LockedKind) -> String {
             rev,
             ref_name,
         } => format!("git:{repository}@{}:{rev}", ref_name.clone().unwrap_or_else(|| "<detached>".into())),
+        LockedKind::Darcs {
+            repository,
+            selector,
+            context,
+            weak_hash,
+        } => format!(
+            "darcs:{repository}@{}:{}",
+            selector.identity_fragment(),
+            context.clone().or_else(|| weak_hash.clone()).unwrap_or_else(|| "<unresolved>".into())
+        ),
+        LockedKind::Pijul {
+            repository,
+            selector,
+            state,
+            change,
+        } => format!(
+            "pijul:{repository}@{}:{state}:{}",
+            selector.identity_fragment(),
+            change.clone().unwrap_or_else(|| "<no-change>".into())
+        ),
+        LockedKind::Fossil {
+            repository,
+            selector,
+            checkin,
+        } => format!("fossil:{repository}@{}:{checkin}", selector.identity_fragment()),
     }
 }
 
@@ -709,6 +734,40 @@ fn hash_locked_kind(hasher: &mut blake3::Hasher, kind: &LockedKind) {
             hash_field(hasher, "repository", repository);
             hash_field(hasher, "rev", rev);
             hash_field(hasher, "ref_name", ref_name.as_deref().unwrap_or(""));
+        }
+        LockedKind::Darcs {
+            repository,
+            selector,
+            context,
+            weak_hash,
+        } => {
+            hash_field(hasher, "kind", "darcs");
+            hash_field(hasher, "repository", repository);
+            hash_field(hasher, "selector", &selector.identity_fragment());
+            hash_field(hasher, "context", context.as_deref().unwrap_or(""));
+            hash_field(hasher, "weak_hash", weak_hash.as_deref().unwrap_or(""));
+        }
+        LockedKind::Pijul {
+            repository,
+            selector,
+            state,
+            change,
+        } => {
+            hash_field(hasher, "kind", "pijul");
+            hash_field(hasher, "repository", repository);
+            hash_field(hasher, "selector", &selector.identity_fragment());
+            hash_field(hasher, "state", state);
+            hash_field(hasher, "change", change.as_deref().unwrap_or(""));
+        }
+        LockedKind::Fossil {
+            repository,
+            selector,
+            checkin,
+        } => {
+            hash_field(hasher, "kind", "fossil");
+            hash_field(hasher, "repository", repository);
+            hash_field(hasher, "selector", &selector.identity_fragment());
+            hash_field(hasher, "checkin", checkin);
         }
     }
 }

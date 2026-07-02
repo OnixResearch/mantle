@@ -1,3 +1,5 @@
+pub use crunch_project_core::DarcsSelector;
+pub use crunch_project_core::FossilSelector;
 pub use crunch_project_core::GitReference;
 pub use crunch_project_core::HashAlgo;
 pub use crunch_project_core::HashSpec;
@@ -6,4 +8,5 @@ pub use crunch_project_core::MAX_PATCHES_PER_INPUT;
 pub use crunch_project_core::ManifestInput;
 pub use crunch_project_core::PatchDef;
 pub use crunch_project_core::PatchSource;
+pub use crunch_project_core::PijulSelector;
 pub use crunch_project_core::ProjectManifest;

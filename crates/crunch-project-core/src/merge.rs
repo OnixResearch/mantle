@@ -166,6 +166,9 @@ fn kinds_compatible(manifest: &InputKind, locked: &crate::lock::LockedKind) -> b
         (InputKind::File { .. }, LockedKind::File { .. })
             | (InputKind::Tarball { .. }, LockedKind::Tarball { .. })
             | (InputKind::Git { .. }, LockedKind::Git { .. })
+            | (InputKind::Darcs { .. }, LockedKind::Darcs { .. })
+            | (InputKind::Pijul { .. }, LockedKind::Pijul { .. })
+            | (InputKind::Fossil { .. }, LockedKind::Fossil { .. })
     )
 }
 
@@ -174,6 +177,9 @@ fn kind_label(kind: &InputKind) -> &'static str {
         InputKind::File { .. } => "file",
         InputKind::Tarball { .. } => "tarball",
         InputKind::Git { .. } => "git",
+        InputKind::Darcs { .. } => "darcs",
+        InputKind::Pijul { .. } => "pijul",
+        InputKind::Fossil { .. } => "fossil",
     }
 }
 
@@ -183,6 +189,9 @@ fn locked_kind_label(kind: &crate::lock::LockedKind) -> &'static str {
         LockedKind::File { .. } => "file",
         LockedKind::Tarball { .. } => "tarball",
         LockedKind::Git { .. } => "git",
+        LockedKind::Darcs { .. } => "darcs",
+        LockedKind::Pijul { .. } => "pijul",
+        LockedKind::Fossil { .. } => "fossil",
     }
 }
 

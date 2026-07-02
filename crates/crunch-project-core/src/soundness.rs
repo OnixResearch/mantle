@@ -665,6 +665,9 @@ fn same_kind(manifest: &InputKind, locked: &LockedKind) -> bool {
         (InputKind::File { .. }, LockedKind::File { .. })
             | (InputKind::Tarball { .. }, LockedKind::Tarball { .. })
             | (InputKind::Git { .. }, LockedKind::Git { .. })
+            | (InputKind::Darcs { .. }, LockedKind::Darcs { .. })
+            | (InputKind::Pijul { .. }, LockedKind::Pijul { .. })
+            | (InputKind::Fossil { .. }, LockedKind::Fossil { .. })
     )
 }
 
@@ -683,6 +686,41 @@ fn source_identity_matches(manifest: &InputKind, locked: &LockedKind) -> bool {
                 ref_name,
             },
         ) => manifest_repo == lock_repo && git_reference_matches(reference, rev, ref_name),
+        (
+            InputKind::Darcs {
+                repository: manifest_repo,
+                selector: manifest_selector,
+            },
+            LockedKind::Darcs {
+                repository: lock_repo,
+                selector: lock_selector,
+                context,
+                ..
+            },
+        ) => manifest_repo == lock_repo && darcs_reference_matches(manifest_selector, lock_selector, context),
+        (
+            InputKind::Pijul {
+                repository: manifest_repo,
+                selector: manifest_selector,
+            },
+            LockedKind::Pijul {
+                repository: lock_repo,
+                selector: lock_selector,
+                state,
+                change,
+            },
+        ) => manifest_repo == lock_repo && pijul_reference_matches(manifest_selector, lock_selector, state, change),
+        (
+            InputKind::Fossil {
+                repository: manifest_repo,
+                selector: manifest_selector,
+            },
+            LockedKind::Fossil {
+                repository: lock_repo,
+                selector: lock_selector,
+                checkin,
+            },
+        ) => manifest_repo == lock_repo && fossil_reference_matches(manifest_selector, lock_selector, checkin),
         _ => false,
     }
 }
@@ -691,6 +729,46 @@ fn git_reference_matches(reference: &GitReference, rev: &str, ref_name: &Option<
     match reference {
         GitReference::Rev(expected_rev) => expected_rev == rev,
         GitReference::Branch(branch) | GitReference::Tag(branch) => ref_name.as_deref() == Some(branch.as_str()),
+    }
+}
+
+fn darcs_reference_matches(
+    manifest: &crate::DarcsSelector,
+    locked: &crate::DarcsSelector,
+    context: &Option<String>,
+) -> bool {
+    if manifest != locked {
+        return false;
+    }
+    match manifest {
+        crate::DarcsSelector::Context(expected) => context.as_deref() == Some(expected.as_str()),
+        crate::DarcsSelector::Tag(_) => true,
+    }
+}
+
+fn pijul_reference_matches(
+    manifest: &crate::PijulSelector,
+    locked: &crate::PijulSelector,
+    state: &str,
+    change: &Option<String>,
+) -> bool {
+    if manifest != locked {
+        return false;
+    }
+    match manifest {
+        crate::PijulSelector::Channel { .. } => !state.is_empty(),
+        crate::PijulSelector::State { state: expected, .. } => state == expected,
+        crate::PijulSelector::Change { change: expected, .. } => change.as_deref() == Some(expected.as_str()),
+    }
+}
+
+fn fossil_reference_matches(manifest: &crate::FossilSelector, locked: &crate::FossilSelector, checkin: &str) -> bool {
+    if manifest != locked {
+        return false;
+    }
+    match manifest {
+        crate::FossilSelector::Checkin(expected) => checkin == expected,
+        crate::FossilSelector::Branch(_) | crate::FossilSelector::Tag(_) => !checkin.is_empty(),
     }
 }
 
@@ -707,6 +785,9 @@ fn input_kind_label(kind: &InputKind) -> &'static str {
         InputKind::File { .. } => "file",
         InputKind::Tarball { .. } => "tarball",
         InputKind::Git { .. } => "git",
+        InputKind::Darcs { .. } => "darcs",
+        InputKind::Pijul { .. } => "pijul",
+        InputKind::Fossil { .. } => "fossil",
     }
 }
 
@@ -715,6 +796,9 @@ fn locked_kind_label(kind: &LockedKind) -> &'static str {
         LockedKind::File { .. } => "file",
         LockedKind::Tarball { .. } => "tarball",
         LockedKind::Git { .. } => "git",
+        LockedKind::Darcs { .. } => "darcs",
+        LockedKind::Pijul { .. } => "pijul",
+        LockedKind::Fossil { .. } => "fossil",
     }
 }
 
@@ -723,6 +807,9 @@ fn input_source_label(kind: &InputKind) -> String {
         InputKind::File { url } => format!("file:{url}"),
         InputKind::Tarball { url } => format!("tarball:{url}"),
         InputKind::Git { repository, reference } => format!("git:{repository}@{}", git_reference_label(reference)),
+        InputKind::Darcs { repository, selector } => format!("darcs:{repository}@{}", selector.identity_fragment()),
+        InputKind::Pijul { repository, selector } => format!("pijul:{repository}@{}", selector.identity_fragment()),
+        InputKind::Fossil { repository, selector } => format!("fossil:{repository}@{}", selector.identity_fragment()),
     }
 }
 
@@ -735,6 +822,31 @@ fn lock_source_label(kind: &LockedKind) -> String {
             rev,
             ref_name,
         } => format!("git:{repository}@{}:{rev}", ref_name.clone().unwrap_or_else(|| "<detached>".into())),
+        LockedKind::Darcs {
+            repository,
+            selector,
+            context,
+            weak_hash,
+        } => format!(
+            "darcs:{repository}@{}:{}",
+            selector.identity_fragment(),
+            context.clone().or_else(|| weak_hash.clone()).unwrap_or_else(|| "<unresolved>".into())
+        ),
+        LockedKind::Pijul {
+            repository,
+            selector,
+            state,
+            change,
+        } => format!(
+            "pijul:{repository}@{}:{state}:{}",
+            selector.identity_fragment(),
+            change.clone().unwrap_or_else(|| "<no-change>".into())
+        ),
+        LockedKind::Fossil {
+            repository,
+            selector,
+            checkin,
+        } => format!("fossil:{repository}@{}:{checkin}", selector.identity_fragment()),
     }
 }
 

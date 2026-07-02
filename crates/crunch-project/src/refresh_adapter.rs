@@ -14,7 +14,9 @@ use crunch_project_core::ResolvedInput;
 use crunch_project_core::ResolvedInputState;
 use crunch_project_core::VerifiedTrustFact;
 
+use crate::DarcsSelector;
 use crate::Error;
+use crate::FossilSelector;
 use crate::GitReference;
 use crate::HashAlgo;
 use crate::HashResolutionMode;
@@ -28,10 +30,29 @@ use crate::Lockfile;
 use crate::ManifestInput;
 use crate::PatchDef;
 use crate::PatchSource;
+use crate::PijulSelector;
 use crate::ProjectManifest;
 use crate::refresh::ApplyResult;
 use crate::refresh::RefreshOutcome;
 use crate::refresh::StaleReport;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedDarcsIdentity {
+    pub context: Option<String>,
+    pub weak_hash: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedPijulIdentity {
+    pub channel: String,
+    pub state: String,
+    pub change: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedFossilIdentity {
+    pub checkin: String,
+}
 
 pub trait RefreshResolver {
     fn resolve_git_rev(&self, repository: &str, reference: &GitReference) -> Result<Option<String>, Error>;
@@ -41,6 +62,63 @@ pub trait RefreshResolver {
     fn hash_git_checkout(&self, repository: &str, rev: &str, algo: &HashAlgo) -> Result<Option<String>, Error> {
         let _ = (repository, rev, algo);
         Ok(None)
+    }
+
+    fn resolve_darcs_identity(
+        &self,
+        repository: &str,
+        selector: &DarcsSelector,
+    ) -> Result<Option<ResolvedDarcsIdentity>, Error> {
+        let _ = (repository, selector);
+        Err(Error::Manifest("unsupported-VCS-tool: darcs resolver is not implemented".into()))
+    }
+
+    fn hash_darcs_checkout(
+        &self,
+        repository: &str,
+        identity: &ResolvedDarcsIdentity,
+        algo: &HashAlgo,
+    ) -> Result<Option<String>, Error> {
+        let _ = (repository, identity, algo);
+        Err(Error::Manifest("unsupported-VCS-tool: darcs checkout hashing is not implemented".into()))
+    }
+
+    fn resolve_pijul_identity(
+        &self,
+        repository: &str,
+        selector: &PijulSelector,
+    ) -> Result<Option<ResolvedPijulIdentity>, Error> {
+        let _ = (repository, selector);
+        Err(Error::Manifest("unsupported-VCS-tool: pijul resolver is not implemented".into()))
+    }
+
+    fn hash_pijul_checkout(
+        &self,
+        repository: &str,
+        identity: &ResolvedPijulIdentity,
+        algo: &HashAlgo,
+    ) -> Result<Option<String>, Error> {
+        let _ = (repository, identity, algo);
+        Err(Error::Manifest("unsupported-VCS-tool: pijul checkout hashing is not implemented".into()))
+    }
+
+    fn resolve_fossil_identity(
+        &self,
+        repository: &str,
+        selector: &FossilSelector,
+    ) -> Result<Option<ResolvedFossilIdentity>, Error> {
+        let _ = (repository, selector);
+        Err(Error::Manifest("unsupported-VCS-tool: fossil resolver is not implemented".into()))
+    }
+
+    fn hash_fossil_checkout(
+        &self,
+        repository: &str,
+        identity: &ResolvedFossilIdentity,
+        algo: &HashAlgo,
+    ) -> Result<Option<String>, Error> {
+        let _ = (repository, identity, algo);
+        Err(Error::Manifest("unsupported-VCS-tool: fossil checkout hashing is not implemented".into()))
     }
 
     fn hash_local_file(&self, path: &str, algo: &HashAlgo) -> Result<Option<String>, Error> {
@@ -317,8 +395,12 @@ fn resolve_manifest_input_with_trust(
     }
 }
 
-fn require_resolution(value: Option<String>, what: &str) -> Result<String, Error> {
-    let resolved = value.ok_or_else(|| Error::Manifest(format!("unable to resolve {what}")))?;
+fn require_resolution<T>(value: Option<T>, what: &str) -> Result<T, Error> {
+    value.ok_or_else(|| Error::Manifest(format!("unable to resolve {what}")))
+}
+
+fn require_string_resolution(value: Option<String>, what: &str) -> Result<String, Error> {
+    let resolved = require_resolution(value, what)?;
     if resolved.is_empty() {
         return Err(Error::Manifest(format!("resolver returned empty {what}")));
     }
@@ -339,6 +421,18 @@ fn render_input_kind(
         InputKind::Git { repository, reference } => Ok(InputKind::Git {
             repository: repository.clone(),
             reference: render_git_reference(input, freshness_observation, reference)?,
+        }),
+        InputKind::Darcs { repository, selector } => Ok(InputKind::Darcs {
+            repository: repository.clone(),
+            selector: render_darcs_selector(input, freshness_observation, selector)?,
+        }),
+        InputKind::Pijul { repository, selector } => Ok(InputKind::Pijul {
+            repository: repository.clone(),
+            selector: render_pijul_selector(input, freshness_observation, selector)?,
+        }),
+        InputKind::Fossil { repository, selector } => Ok(InputKind::Fossil {
+            repository: repository.clone(),
+            selector: render_fossil_selector(input, freshness_observation, selector)?,
         }),
     }
 }
@@ -365,6 +459,99 @@ fn render_git_reference(
             input,
             freshness_observation,
             rev,
+            FreshnessTemplateDestination::Reference,
+        )?)),
+    }
+}
+
+fn render_darcs_selector(
+    input: &ManifestInput,
+    freshness_observation: Option<&FreshnessObservation>,
+    selector: &DarcsSelector,
+) -> Result<DarcsSelector, Error> {
+    match selector {
+        DarcsSelector::Tag(tag) => Ok(DarcsSelector::Tag(render_template_if_needed(
+            input,
+            freshness_observation,
+            tag,
+            FreshnessTemplateDestination::Reference,
+        )?)),
+        DarcsSelector::Context(context) => Ok(DarcsSelector::Context(render_template_if_needed(
+            input,
+            freshness_observation,
+            context,
+            FreshnessTemplateDestination::Reference,
+        )?)),
+    }
+}
+
+fn render_pijul_selector(
+    input: &ManifestInput,
+    freshness_observation: Option<&FreshnessObservation>,
+    selector: &PijulSelector,
+) -> Result<PijulSelector, Error> {
+    match selector {
+        PijulSelector::Channel { channel } => Ok(PijulSelector::Channel {
+            channel: render_template_if_needed(
+                input,
+                freshness_observation,
+                channel,
+                FreshnessTemplateDestination::Reference,
+            )?,
+        }),
+        PijulSelector::State { channel, state } => Ok(PijulSelector::State {
+            channel: render_template_if_needed(
+                input,
+                freshness_observation,
+                channel,
+                FreshnessTemplateDestination::Reference,
+            )?,
+            state: render_template_if_needed(
+                input,
+                freshness_observation,
+                state,
+                FreshnessTemplateDestination::Reference,
+            )?,
+        }),
+        PijulSelector::Change { channel, change } => Ok(PijulSelector::Change {
+            channel: render_template_if_needed(
+                input,
+                freshness_observation,
+                channel,
+                FreshnessTemplateDestination::Reference,
+            )?,
+            change: render_template_if_needed(
+                input,
+                freshness_observation,
+                change,
+                FreshnessTemplateDestination::Reference,
+            )?,
+        }),
+    }
+}
+
+fn render_fossil_selector(
+    input: &ManifestInput,
+    freshness_observation: Option<&FreshnessObservation>,
+    selector: &FossilSelector,
+) -> Result<FossilSelector, Error> {
+    match selector {
+        FossilSelector::Branch(branch) => Ok(FossilSelector::Branch(render_template_if_needed(
+            input,
+            freshness_observation,
+            branch,
+            FreshnessTemplateDestination::Reference,
+        )?)),
+        FossilSelector::Tag(tag) => Ok(FossilSelector::Tag(render_template_if_needed(
+            input,
+            freshness_observation,
+            tag,
+            FreshnessTemplateDestination::Reference,
+        )?)),
+        FossilSelector::Checkin(checkin) => Ok(FossilSelector::Checkin(render_template_if_needed(
+            input,
+            freshness_observation,
+            checkin,
             FreshnessTemplateDestination::Reference,
         )?)),
     }
@@ -412,7 +599,7 @@ fn resolve_input(
     let effective_kind = render_input_kind(input, freshness_observation)?;
     let (kind, hash) = match &effective_kind {
         InputKind::File { url } => {
-            let hash_value = require_resolution(
+            let hash_value = require_string_resolution(
                 resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Flat)?,
                 &format!("flat hash for {}", input.name),
             )?;
@@ -422,7 +609,7 @@ fn resolve_input(
             })
         }
         InputKind::Tarball { url } => {
-            let hash_value = require_resolution(
+            let hash_value = require_string_resolution(
                 resolver.hash_url_content(url, &input.hash.algo, HashResolutionMode::Recursive)?,
                 &format!("tarball tree hash for {}", input.name),
             )?;
@@ -432,7 +619,7 @@ fn resolve_input(
             })
         }
         InputKind::Git { repository, reference } => {
-            let rev = require_resolution(
+            let rev = require_string_resolution(
                 resolver.resolve_git_rev(repository, reference)?,
                 &format!("git revision for {}", input.name),
             )?;
@@ -441,7 +628,7 @@ fn resolve_input(
                 GitReference::Tag(tag) => Some(tag.clone()),
                 GitReference::Rev(_) => None,
             };
-            let hash_value = require_resolution(
+            let hash_value = require_string_resolution(
                 resolver.hash_git_checkout(repository, &rev, &input.hash.algo)?,
                 &format!("git tree hash for {}", input.name),
             )?;
@@ -450,6 +637,74 @@ fn resolve_input(
                     repository: repository.clone(),
                     rev,
                     ref_name,
+                },
+                LockedHash {
+                    algo: input.hash.algo.clone(),
+                    value: hash_value,
+                },
+            )
+        }
+        InputKind::Darcs { repository, selector } => {
+            let identity = require_resolution(
+                resolver.resolve_darcs_identity(repository, selector)?,
+                &format!("darcs identity for {}", input.name),
+            )?;
+            require_darcs_identity(&input.name, &identity)?;
+            let hash_value = require_string_resolution(
+                resolver.hash_darcs_checkout(repository, &identity, &input.hash.algo)?,
+                &format!("darcs tree hash for {}", input.name),
+            )?;
+            (
+                LockedKind::Darcs {
+                    repository: repository.clone(),
+                    selector: selector.clone(),
+                    context: identity.context,
+                    weak_hash: identity.weak_hash,
+                },
+                LockedHash {
+                    algo: input.hash.algo.clone(),
+                    value: hash_value,
+                },
+            )
+        }
+        InputKind::Pijul { repository, selector } => {
+            let identity = require_resolution(
+                resolver.resolve_pijul_identity(repository, selector)?,
+                &format!("pijul identity for {}", input.name),
+            )?;
+            require_nonempty_identity(&input.name, "pijul state", &identity.state)?;
+            let hash_value = require_string_resolution(
+                resolver.hash_pijul_checkout(repository, &identity, &input.hash.algo)?,
+                &format!("pijul tree hash for {}", input.name),
+            )?;
+            (
+                LockedKind::Pijul {
+                    repository: repository.clone(),
+                    selector: selector.clone(),
+                    state: identity.state,
+                    change: identity.change,
+                },
+                LockedHash {
+                    algo: input.hash.algo.clone(),
+                    value: hash_value,
+                },
+            )
+        }
+        InputKind::Fossil { repository, selector } => {
+            let identity = require_resolution(
+                resolver.resolve_fossil_identity(repository, selector)?,
+                &format!("fossil identity for {}", input.name),
+            )?;
+            require_nonempty_identity(&input.name, "fossil check-in", &identity.checkin)?;
+            let hash_value = require_string_resolution(
+                resolver.hash_fossil_checkout(repository, &identity, &input.hash.algo)?,
+                &format!("fossil tree hash for {}", input.name),
+            )?;
+            (
+                LockedKind::Fossil {
+                    repository: repository.clone(),
+                    selector: selector.clone(),
+                    checkin: identity.checkin,
                 },
                 LockedHash {
                     algo: input.hash.algo.clone(),
@@ -468,6 +723,30 @@ fn resolve_input(
         freshness: freshness_observation.and_then(locked_freshness_from_observation),
         trust: None,
     })
+}
+
+fn require_darcs_identity(input_name: &str, identity: &ResolvedDarcsIdentity) -> Result<(), Error> {
+    if identity.context.as_deref().unwrap_or("").is_empty() && identity.weak_hash.as_deref().unwrap_or("").is_empty() {
+        return Err(Error::Manifest(format!(
+            "input '{input_name}' darcs resolver did not prove context or weak-hash identity"
+        )));
+    }
+    require_optional_nonempty_identity(input_name, "darcs context", &identity.context)?;
+    require_optional_nonempty_identity(input_name, "darcs weak hash", &identity.weak_hash)
+}
+
+fn require_optional_nonempty_identity(input_name: &str, label: &str, value: &Option<String>) -> Result<(), Error> {
+    if matches!(value, Some(text) if text.is_empty()) {
+        return Err(Error::Manifest(format!("input '{input_name}' resolver returned empty {label}")));
+    }
+    Ok(())
+}
+
+fn require_nonempty_identity(input_name: &str, label: &str, value: &str) -> Result<(), Error> {
+    if value.is_empty() {
+        return Err(Error::Manifest(format!("input '{input_name}' resolver returned empty {label}")));
+    }
+    Ok(())
 }
 
 fn resolve_needed_patches(
@@ -529,7 +808,7 @@ fn resolve_patch_def_with_trust(
 fn resolve_patch(def: &PatchDef, resolver: &dyn RefreshResolver) -> Result<LockedPatch, Error> {
     match &def.source {
         PatchSource::Local { path } => {
-            let hash_value = require_resolution(
+            let hash_value = require_string_resolution(
                 resolver.hash_local_file(path, &HashAlgo::Sha256)?,
                 &format!("local patch hash for {path}"),
             )?;
@@ -543,7 +822,7 @@ fn resolve_patch(def: &PatchDef, resolver: &dyn RefreshResolver) -> Result<Locke
             })
         }
         PatchSource::Remote { url, hash } => {
-            let hash_value = require_resolution(
+            let hash_value = require_string_resolution(
                 resolver.hash_url_content(url, &hash.algo, HashResolutionMode::Flat)?,
                 &format!("remote patch hash for {url}"),
             )?;
@@ -572,6 +851,12 @@ mod tests {
         git_hash: Option<String>,
         url_hash: Option<String>,
         local_hash: Option<String>,
+        darcs_identity: Option<ResolvedDarcsIdentity>,
+        darcs_hash: Option<String>,
+        pijul_identity: Option<ResolvedPijulIdentity>,
+        pijul_hash: Option<String>,
+        fossil_identity: Option<ResolvedFossilIdentity>,
+        fossil_hash: Option<String>,
     }
 
     impl RefreshResolver for MockResolver {
@@ -594,6 +879,57 @@ mod tests {
 
         fn hash_local_file(&self, _path: &str, _algo: &HashAlgo) -> Result<Option<String>, Error> {
             Ok(self.local_hash.clone())
+        }
+
+        fn resolve_darcs_identity(
+            &self,
+            _repository: &str,
+            _selector: &DarcsSelector,
+        ) -> Result<Option<ResolvedDarcsIdentity>, Error> {
+            Ok(self.darcs_identity.clone())
+        }
+
+        fn hash_darcs_checkout(
+            &self,
+            _repository: &str,
+            _identity: &ResolvedDarcsIdentity,
+            _algo: &HashAlgo,
+        ) -> Result<Option<String>, Error> {
+            Ok(self.darcs_hash.clone())
+        }
+
+        fn resolve_pijul_identity(
+            &self,
+            _repository: &str,
+            _selector: &PijulSelector,
+        ) -> Result<Option<ResolvedPijulIdentity>, Error> {
+            Ok(self.pijul_identity.clone())
+        }
+
+        fn hash_pijul_checkout(
+            &self,
+            _repository: &str,
+            _identity: &ResolvedPijulIdentity,
+            _algo: &HashAlgo,
+        ) -> Result<Option<String>, Error> {
+            Ok(self.pijul_hash.clone())
+        }
+
+        fn resolve_fossil_identity(
+            &self,
+            _repository: &str,
+            _selector: &FossilSelector,
+        ) -> Result<Option<ResolvedFossilIdentity>, Error> {
+            Ok(self.fossil_identity.clone())
+        }
+
+        fn hash_fossil_checkout(
+            &self,
+            _repository: &str,
+            _identity: &ResolvedFossilIdentity,
+            _algo: &HashAlgo,
+        ) -> Result<Option<String>, Error> {
+            Ok(self.fossil_hash.clone())
         }
     }
 
@@ -629,6 +965,12 @@ mod tests {
             git_hash: None,
             url_hash: Some("sha256-data=".into()),
             local_hash: Some("sha256-patch=".into()),
+            darcs_identity: None,
+            darcs_hash: None,
+            pijul_identity: None,
+            pijul_hash: None,
+            fossil_identity: None,
+            fossil_hash: None,
         };
         let lock = Lockfile {
             version: SchemaVersion::CURRENT,
@@ -687,6 +1029,135 @@ mod tests {
         );
         assert!(
             matches!(&outcomes[0], RefreshOutcome::Failed { name, reason } if name == "broken" && reason.contains("network down"))
+        );
+    }
+
+    #[test]
+    fn adapter_resolves_vcs_identities_and_tree_hashes() {
+        let manifest = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![
+                ManifestInput {
+                    name: "darcs".into(),
+                    kind: InputKind::Darcs {
+                        repository: "https://example.invalid/darcs".into(),
+                        selector: DarcsSelector::Tag("v1".into()),
+                    },
+                    hash: HashSpec::default(),
+                    frozen: false,
+                    mirrors: vec![],
+                    patches: vec![],
+                    fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+                    retention: None,
+                    freshness: None,
+                    trust: None,
+                },
+                ManifestInput {
+                    name: "pijul".into(),
+                    kind: InputKind::Pijul {
+                        repository: "https://example.invalid/pijul".into(),
+                        selector: PijulSelector::Channel { channel: "main".into() },
+                    },
+                    hash: HashSpec::default(),
+                    frozen: false,
+                    mirrors: vec![],
+                    patches: vec![],
+                    fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+                    retention: None,
+                    freshness: None,
+                    trust: None,
+                },
+                ManifestInput {
+                    name: "fossil".into(),
+                    kind: InputKind::Fossil {
+                        repository: "https://example.invalid/fossil".into(),
+                        selector: FossilSelector::Branch("trunk".into()),
+                    },
+                    hash: HashSpec::default(),
+                    frozen: false,
+                    mirrors: vec![],
+                    patches: vec![],
+                    fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+                    retention: None,
+                    freshness: None,
+                    trust: None,
+                },
+            ],
+            patches: vec![],
+            retention: crunch_project_core::InputRetentionPolicy::Untracked,
+        };
+        let resolver = MockResolver {
+            git_rev: None,
+            git_hash: None,
+            url_hash: None,
+            local_hash: None,
+            darcs_identity: Some(ResolvedDarcsIdentity {
+                context: Some("ctx".into()),
+                weak_hash: None,
+            }),
+            darcs_hash: Some("blake3-darcs=".into()),
+            pijul_identity: Some(ResolvedPijulIdentity {
+                channel: "main".into(),
+                state: "state".into(),
+                change: None,
+            }),
+            pijul_hash: Some("blake3-pijul=".into()),
+            fossil_identity: Some(ResolvedFossilIdentity {
+                checkin: "checkin".into(),
+            }),
+            fossil_hash: Some("blake3-fossil=".into()),
+        };
+
+        let outcomes = refresh_inputs(&manifest, &Lockfile::new(), &[], &resolver);
+
+        assert_eq!(outcomes.len(), 3);
+        assert!(
+            matches!(&outcomes[0], RefreshOutcome::Updated(resolved) if matches!(resolved.entry.kind, LockedKind::Darcs { .. }))
+        );
+        assert!(
+            matches!(&outcomes[1], RefreshOutcome::Updated(resolved) if matches!(resolved.entry.kind, LockedKind::Pijul { .. }))
+        );
+        assert!(
+            matches!(&outcomes[2], RefreshOutcome::Updated(resolved) if matches!(resolved.entry.kind, LockedKind::Fossil { .. }))
+        );
+    }
+
+    #[test]
+    fn default_vcs_hooks_fail_closed_with_unsupported_tool_diagnostic() {
+        struct UnsupportedResolver;
+        impl RefreshResolver for UnsupportedResolver {
+            fn resolve_git_rev(&self, _: &str, _: &GitReference) -> Result<Option<String>, Error> {
+                Ok(None)
+            }
+            fn hash_url_content(&self, _: &str, _: &HashAlgo, _: HashResolutionMode) -> Result<Option<String>, Error> {
+                Ok(None)
+            }
+        }
+        let manifest = ProjectManifest {
+            version: "1.0.0".into(),
+            inputs: vec![ManifestInput {
+                name: "darcs".into(),
+                kind: InputKind::Darcs {
+                    repository: "https://example.invalid/darcs".into(),
+                    selector: DarcsSelector::Tag("v1".into()),
+                },
+                hash: HashSpec::default(),
+                frozen: false,
+                mirrors: vec![],
+                patches: vec![],
+                fetch_policy: crunch_project_core::InputFetchPolicy::GenerationMaterial,
+                retention: None,
+                freshness: None,
+                trust: None,
+            }],
+            patches: vec![],
+            retention: crunch_project_core::InputRetentionPolicy::Untracked,
+        };
+
+        let outcomes = refresh_inputs(&manifest, &Lockfile::new(), &[], &UnsupportedResolver);
+
+        assert!(
+            matches!(&outcomes[0], RefreshOutcome::Failed { reason, .. } if reason.contains("unsupported-VCS-tool"))
         );
     }
 }

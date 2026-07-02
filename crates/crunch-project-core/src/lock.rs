@@ -1,6 +1,7 @@
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use serde::Deserialize;
@@ -10,7 +11,10 @@ use serde::Serialize;
 use crate::error::Error;
 use crate::fetch_policy::InputFetchPolicy;
 use crate::freshness::LockedFreshnessValue;
+use crate::manifest::DarcsSelector;
+use crate::manifest::FossilSelector;
 use crate::manifest::HashAlgo;
+use crate::manifest::PijulSelector;
 use crate::trust::LockedTrust;
 use crate::trust::TrustSubject;
 use crate::trust::validate_locked_trust;
@@ -85,6 +89,7 @@ impl Lockfile {
             if entry.hash.value.is_empty() {
                 problems.push(format!("lock entry '{name}': hash value is empty"));
             }
+            problems.extend(entry.kind.validate(name));
             if let Some(freshness) = &entry.freshness {
                 if freshness.input_name != *name {
                     problems.push(format!("lock entry '{name}': freshness input name mismatch"));
@@ -190,6 +195,26 @@ pub enum LockedKind {
         rev: String,
         ref_name: Option<String>,
     },
+    #[serde(rename = "darcs")]
+    Darcs {
+        repository: String,
+        selector: DarcsSelector,
+        context: Option<String>,
+        weak_hash: Option<String>,
+    },
+    #[serde(rename = "pijul")]
+    Pijul {
+        repository: String,
+        selector: PijulSelector,
+        state: String,
+        change: Option<String>,
+    },
+    #[serde(rename = "fossil")]
+    Fossil {
+        repository: String,
+        selector: FossilSelector,
+        checkin: String,
+    },
 }
 
 #[derive(Deserialize)]
@@ -204,6 +229,26 @@ enum RawLockedKind {
         repository: String,
         rev: String,
         ref_name: Option<String>,
+    },
+    #[serde(rename = "darcs")]
+    Darcs {
+        repository: String,
+        selector: DarcsSelector,
+        context: Option<String>,
+        weak_hash: Option<String>,
+    },
+    #[serde(rename = "pijul")]
+    Pijul {
+        repository: String,
+        selector: PijulSelector,
+        state: String,
+        change: Option<String>,
+    },
+    #[serde(rename = "fossil")]
+    Fossil {
+        repository: String,
+        selector: FossilSelector,
+        checkin: String,
     },
 }
 
@@ -223,8 +268,147 @@ impl<'de> Deserialize<'de> for LockedKind {
                 rev,
                 ref_name,
             },
+            RawLockedKind::Darcs {
+                repository,
+                selector,
+                context,
+                weak_hash,
+            } => Self::Darcs {
+                repository,
+                selector,
+                context,
+                weak_hash,
+            },
+            RawLockedKind::Pijul {
+                repository,
+                selector,
+                state,
+                change,
+            } => Self::Pijul {
+                repository,
+                selector,
+                state,
+                change,
+            },
+            RawLockedKind::Fossil {
+                repository,
+                selector,
+                checkin,
+            } => Self::Fossil {
+                repository,
+                selector,
+                checkin,
+            },
         })
     }
+}
+
+impl LockedKind {
+    fn validate(&self, input_name: &str) -> Vec<String> {
+        match self {
+            Self::File { url } => validate_locked_url(input_name, "file", url),
+            Self::Tarball { url } => validate_locked_url(input_name, "tarball", url),
+            Self::Git { repository, rev, .. } => validate_locked_git(input_name, repository, rev),
+            Self::Darcs {
+                repository,
+                selector,
+                context,
+                weak_hash,
+            } => validate_locked_darcs(input_name, repository, selector, context, weak_hash),
+            Self::Pijul {
+                repository,
+                selector,
+                state,
+                change,
+            } => validate_locked_pijul(input_name, repository, selector, state, change),
+            Self::Fossil {
+                repository,
+                selector,
+                checkin,
+            } => validate_locked_fossil(input_name, repository, selector, checkin),
+        }
+    }
+}
+
+fn validate_locked_url(input_name: &str, kind: &str, url: &str) -> Vec<String> {
+    if url.is_empty() {
+        return vec![format!("lock entry '{input_name}': {kind} URL is empty")];
+    }
+    Vec::new()
+}
+
+fn validate_locked_git(input_name: &str, repository: &str, rev: &str) -> Vec<String> {
+    let mut problems = validate_locked_repository(input_name, "git", repository);
+    if rev.is_empty() {
+        problems.push(format!("lock entry '{input_name}': git rev is empty"));
+    }
+    problems
+}
+
+fn validate_locked_darcs(
+    input_name: &str,
+    repository: &str,
+    selector: &DarcsSelector,
+    context: &Option<String>,
+    weak_hash: &Option<String>,
+) -> Vec<String> {
+    let mut problems = validate_locked_repository(input_name, "darcs", repository);
+    problems.extend(selector.validate(input_name));
+    validate_optional_identity(input_name, "darcs context", context, &mut problems);
+    validate_optional_identity(input_name, "darcs weak hash", weak_hash, &mut problems);
+    if context.as_deref().unwrap_or("").is_empty() && weak_hash.as_deref().unwrap_or("").is_empty() {
+        problems.push(format!("lock entry '{input_name}': darcs lock metadata requires context or weak-hash identity"));
+    }
+    problems
+}
+
+fn validate_locked_pijul(
+    input_name: &str,
+    repository: &str,
+    selector: &PijulSelector,
+    state: &str,
+    change: &Option<String>,
+) -> Vec<String> {
+    let mut problems = validate_locked_repository(input_name, "pijul", repository);
+    problems.extend(selector.validate(input_name));
+    if state.is_empty() {
+        problems.push(format!("lock entry '{input_name}': pijul state is empty"));
+    }
+    validate_optional_identity(input_name, "pijul change", change, &mut problems);
+    problems
+}
+
+fn validate_locked_fossil(input_name: &str, repository: &str, selector: &FossilSelector, checkin: &str) -> Vec<String> {
+    let mut problems = validate_locked_repository(input_name, "fossil", repository);
+    problems.extend(selector.validate(input_name));
+    if checkin.is_empty() {
+        problems.push(format!("lock entry '{input_name}': fossil check-in is empty"));
+    }
+    problems
+}
+
+fn validate_locked_repository(input_name: &str, kind: &str, repository: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    if repository.is_empty() {
+        problems.push(format!("lock entry '{input_name}': {kind} repository is empty"));
+    }
+    if is_locked_forge_shortcut(repository) {
+        problems.push(format!(
+            "lock entry '{input_name}': {kind} repository must be an explicit URL, not forge shorthand '{repository}'"
+        ));
+    }
+    problems
+}
+
+fn validate_optional_identity(input_name: &str, label: &str, value: &Option<String>, problems: &mut Vec<String>) {
+    if matches!(value, Some(text) if text.is_empty()) {
+        problems.push(format!("lock entry '{input_name}': {label} is empty"));
+    }
+}
+
+fn is_locked_forge_shortcut(repository: &str) -> bool {
+    const FORGE_SHORTCUT_PREFIXES: &[&str] = &["github:", "gitlab:", "codeberg:", "sourcehut:", "pijul:", "fossil:"];
+    FORGE_SHORTCUT_PREFIXES.iter().any(|prefix| repository.starts_with(prefix))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -416,5 +600,114 @@ mod tests {
         let remote_parsed: LockedPatchSource = serde_json::from_str(&remote_json).unwrap();
         assert_eq!(local, local_parsed);
         assert_eq!(remote, remote_parsed);
+    }
+
+    #[test]
+    fn locked_vcs_kinds_roundtrip_and_validate() {
+        let mut lock = Lockfile::new();
+        lock.inputs.insert("darcs".into(), LockEntry {
+            kind: LockedKind::Darcs {
+                repository: "https://example.invalid/repo.darcs".into(),
+                selector: DarcsSelector::Context("ctx".into()),
+                context: Some("ctx".into()),
+                weak_hash: None,
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-darcs=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
+            trust: None,
+        });
+        lock.inputs.insert("pijul".into(), LockEntry {
+            kind: LockedKind::Pijul {
+                repository: "https://example.invalid/repo.pijul".into(),
+                selector: PijulSelector::State {
+                    channel: "main".into(),
+                    state: "state".into(),
+                },
+                state: "state".into(),
+                change: None,
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-pijul=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
+            trust: None,
+        });
+        lock.inputs.insert("fossil".into(), LockEntry {
+            kind: LockedKind::Fossil {
+                repository: "https://example.invalid/repo.fossil".into(),
+                selector: FossilSelector::Checkin("checkin".into()),
+                checkin: "checkin".into(),
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-fossil=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
+            trust: None,
+        });
+
+        let json = lock.clone().to_json().unwrap();
+        let parsed = Lockfile::from_json(json).unwrap();
+
+        assert_eq!(lock, parsed);
+        assert!(parsed.validate().is_empty());
+    }
+
+    #[test]
+    fn lock_validation_rejects_unproven_vcs_identity() {
+        let mut lock = Lockfile::new();
+        lock.inputs.insert("darcs".into(), LockEntry {
+            kind: LockedKind::Darcs {
+                repository: "pijul:owner/repo".into(),
+                selector: DarcsSelector::Tag("v1".into()),
+                context: None,
+                weak_hash: None,
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-hash=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
+            trust: None,
+        });
+        lock.inputs.insert("pijul".into(), LockEntry {
+            kind: LockedKind::Pijul {
+                repository: "https://example.invalid/repo".into(),
+                selector: PijulSelector::Channel { channel: "main".into() },
+                state: "".into(),
+                change: None,
+            },
+            hash: LockedHash {
+                algo: HashAlgo::Blake3,
+                value: "blake3-hash=".into(),
+            },
+            patches: vec![],
+            mirrors: vec![],
+            fetch_policy: InputFetchPolicy::GenerationMaterial,
+            freshness: None,
+            trust: None,
+        });
+
+        let problems = lock.validate();
+
+        assert!(problems.iter().any(|problem| problem.contains("explicit URL")));
+        assert!(problems.iter().any(|problem| problem.contains("requires context or weak-hash")));
+        assert!(problems.iter().any(|problem| problem.contains("pijul state is empty")));
     }
 }

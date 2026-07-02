@@ -9,7 +9,9 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crunch_project::CommandFreshnessProbe;
+use crunch_project::DarcsSelector;
 use crunch_project::FRESHNESS_PROBE_VERSION;
+use crunch_project::FossilSelector;
 use crunch_project::FreshnessObservation;
 use crunch_project::FreshnessObservationRequest;
 use crunch_project::FreshnessObservationStatus;
@@ -22,7 +24,11 @@ use crunch_project::LockedHash;
 use crunch_project::LockedPatch;
 use crunch_project::ManifestInput;
 use crunch_project::PatchDef;
+use crunch_project::PijulSelector;
 use crunch_project::RefreshResolver;
+use crunch_project::ResolvedDarcsIdentity;
+use crunch_project::ResolvedFossilIdentity;
+use crunch_project::ResolvedPijulIdentity;
 use crunch_project::TrustSignatureRef;
 use crunch_project::TrustSubject;
 use crunch_project::VerifiedTrustFact;
@@ -102,6 +108,57 @@ impl RefreshResolver for LiveResolver {
         algo: &HashAlgo,
     ) -> Result<Option<String>, crunch_project::Error> {
         Ok(Some(hash_git_tree(repository, rev, algo)?))
+    }
+
+    fn resolve_darcs_identity(
+        &self,
+        repository: &str,
+        selector: &DarcsSelector,
+    ) -> Result<Option<ResolvedDarcsIdentity>, crunch_project::Error> {
+        Ok(Some(resolve_darcs_identity(repository, selector)?))
+    }
+
+    fn hash_darcs_checkout(
+        &self,
+        repository: &str,
+        identity: &ResolvedDarcsIdentity,
+        algo: &HashAlgo,
+    ) -> Result<Option<String>, crunch_project::Error> {
+        Ok(Some(hash_darcs_tree(repository, identity, algo)?))
+    }
+
+    fn resolve_pijul_identity(
+        &self,
+        repository: &str,
+        selector: &PijulSelector,
+    ) -> Result<Option<ResolvedPijulIdentity>, crunch_project::Error> {
+        Ok(Some(resolve_pijul_identity(repository, selector)?))
+    }
+
+    fn hash_pijul_checkout(
+        &self,
+        repository: &str,
+        identity: &ResolvedPijulIdentity,
+        algo: &HashAlgo,
+    ) -> Result<Option<String>, crunch_project::Error> {
+        Ok(Some(hash_pijul_tree(repository, identity, algo)?))
+    }
+
+    fn resolve_fossil_identity(
+        &self,
+        repository: &str,
+        selector: &FossilSelector,
+    ) -> Result<Option<ResolvedFossilIdentity>, crunch_project::Error> {
+        Ok(Some(resolve_fossil_identity(repository, selector)?))
+    }
+
+    fn hash_fossil_checkout(
+        &self,
+        repository: &str,
+        identity: &ResolvedFossilIdentity,
+        algo: &HashAlgo,
+    ) -> Result<Option<String>, crunch_project::Error> {
+        Ok(Some(hash_fossil_tree(repository, identity, algo)?))
     }
 
     fn hash_local_file(&self, path: &str, algo: &HashAlgo) -> Result<Option<String>, crunch_project::Error> {
@@ -804,6 +861,270 @@ fn hash_git_tree(repository: &str, rev: &str, algo: &HashAlgo) -> Result<String,
     hash_recursive_path(&checkout, algo)
 }
 
+fn resolve_darcs_identity(
+    repository: &str,
+    selector: &DarcsSelector,
+) -> Result<ResolvedDarcsIdentity, crunch_project::Error> {
+    match selector {
+        DarcsSelector::Context(context) => Ok(ResolvedDarcsIdentity {
+            context: Some(context.clone()),
+            weak_hash: None,
+        }),
+        DarcsSelector::Tag(tag) => {
+            let darcs =
+                find_vcs_binary("darcs", &["/usr/bin/darcs", "/bin/darcs", "/run/current-system/sw/bin/darcs"])?;
+            let dir = tempdir()?;
+            let checkout = dir.path().join("checkout");
+            run_darcs_clone_tag(&darcs, repository, tag, &checkout)?;
+            let context = darcs_context_for_checkout(&darcs, &checkout)?;
+            Ok(ResolvedDarcsIdentity {
+                context: Some(context),
+                weak_hash: None,
+            })
+        }
+    }
+}
+
+fn hash_darcs_tree(
+    repository: &str,
+    identity: &ResolvedDarcsIdentity,
+    algo: &HashAlgo,
+) -> Result<String, crunch_project::Error> {
+    let darcs = find_vcs_binary("darcs", &["/usr/bin/darcs", "/bin/darcs", "/run/current-system/sw/bin/darcs"])?;
+    let context = identity.context.as_deref().ok_or_else(|| {
+        crunch_project::Error::Manifest(
+            "unsupported-VCS-tool: darcs checkout hashing requires context identity metadata".to_string(),
+        )
+    })?;
+    let dir = tempdir()?;
+    let context_file = dir.path().join("context");
+    let checkout = dir.path().join("checkout");
+    std::fs::write(&context_file, context).map_err(|err| {
+        crunch_project::Error::Manifest(format!("writing temporary darcs context {}: {err}", context_file.display()))
+    })?;
+    run_darcs_clone_context(&darcs, repository, &context_file, &checkout)?;
+    ensure_tree_within_limits(&checkout)?;
+    hash_recursive_path(&checkout, algo)
+}
+
+fn resolve_pijul_identity(
+    repository: &str,
+    selector: &PijulSelector,
+) -> Result<ResolvedPijulIdentity, crunch_project::Error> {
+    match selector {
+        PijulSelector::State { channel, state } => Ok(ResolvedPijulIdentity {
+            channel: channel.clone(),
+            state: state.clone(),
+            change: None,
+        }),
+        PijulSelector::Change { .. } => Err(crunch_project::Error::Manifest(
+            "unsupported-VCS-tool: pijul change selector cannot prove channel state with this adapter".to_string(),
+        )),
+        PijulSelector::Channel { channel } => {
+            let pijul =
+                find_vcs_binary("pijul", &["/usr/bin/pijul", "/bin/pijul", "/run/current-system/sw/bin/pijul"])?;
+            let dir = tempdir()?;
+            let checkout = dir.path().join("checkout");
+            run_pijul_clone(&pijul, repository, channel, &checkout)?;
+            let state = pijul_channel_state(&pijul, &checkout, channel)?;
+            Ok(ResolvedPijulIdentity {
+                channel: channel.clone(),
+                state,
+                change: None,
+            })
+        }
+    }
+}
+
+fn hash_pijul_tree(
+    repository: &str,
+    identity: &ResolvedPijulIdentity,
+    algo: &HashAlgo,
+) -> Result<String, crunch_project::Error> {
+    let pijul = find_vcs_binary("pijul", &["/usr/bin/pijul", "/bin/pijul", "/run/current-system/sw/bin/pijul"])?;
+    let dir = tempdir()?;
+    let checkout = dir.path().join("checkout");
+    run_pijul_clone(&pijul, repository, &identity.channel, &checkout)?;
+    run_pijul_reset(&pijul, &checkout, &identity.state)?;
+    ensure_tree_within_limits(&checkout)?;
+    hash_recursive_path(&checkout, algo)
+}
+
+fn resolve_fossil_identity(
+    repository: &str,
+    selector: &FossilSelector,
+) -> Result<ResolvedFossilIdentity, crunch_project::Error> {
+    match selector {
+        FossilSelector::Checkin(checkin) => Ok(ResolvedFossilIdentity {
+            checkin: checkin.clone(),
+        }),
+        FossilSelector::Branch(branch) => resolve_fossil_named_selector(repository, branch),
+        FossilSelector::Tag(tag) => resolve_fossil_named_selector(repository, tag),
+    }
+}
+
+fn hash_fossil_tree(
+    repository: &str,
+    identity: &ResolvedFossilIdentity,
+    algo: &HashAlgo,
+) -> Result<String, crunch_project::Error> {
+    let fossil = find_vcs_binary("fossil", &["/usr/bin/fossil", "/bin/fossil", "/run/current-system/sw/bin/fossil"])?;
+    let dir = tempdir()?;
+    let checkout = dir.path().join("checkout");
+    materialize_fossil_checkout(&fossil, repository, &identity.checkin, &checkout)?;
+    ensure_tree_within_limits(&checkout)?;
+    hash_recursive_path(&checkout, algo)
+}
+
+fn run_darcs_clone_tag(
+    darcs: &Path,
+    repository: &str,
+    tag: &str,
+    checkout: &Path,
+) -> Result<(), crunch_project::Error> {
+    let mut command = Command::new(darcs);
+    command.args(["clone", "--quiet", "--tag", tag, repository]).arg(checkout);
+    run_status_command(command, &format!("darcs clone tag {tag} from {repository}"))
+}
+
+fn run_darcs_clone_context(
+    darcs: &Path,
+    repository: &str,
+    context_file: &Path,
+    checkout: &Path,
+) -> Result<(), crunch_project::Error> {
+    let mut command = Command::new(darcs);
+    command.args(["clone", "--quiet", "--context"]).arg(context_file).arg(repository).arg(checkout);
+    run_status_command(command, &format!("darcs clone context from {repository}"))
+}
+
+fn darcs_context_for_checkout(darcs: &Path, checkout: &Path) -> Result<String, crunch_project::Error> {
+    let mut command = Command::new(darcs);
+    command.args(["changes", "--context"]).current_dir(checkout);
+    let context = run_stdout_command(command, &format!("darcs changes --context in {}", checkout.display()))?;
+    require_nonempty_command_value(context, "darcs context")
+}
+
+fn run_pijul_clone(
+    pijul: &Path,
+    repository: &str,
+    channel: &str,
+    checkout: &Path,
+) -> Result<(), crunch_project::Error> {
+    let mut command = Command::new(pijul);
+    command.arg("clone");
+    if !channel.is_empty() {
+        command.args(["--channel", channel]);
+    }
+    command.arg(repository).arg(checkout);
+    run_status_command(command, &format!("pijul clone from {repository}"))
+}
+
+fn run_pijul_reset(pijul: &Path, checkout: &Path, state: &str) -> Result<(), crunch_project::Error> {
+    let mut command = Command::new(pijul);
+    command.args(["reset", "--state", state]).current_dir(checkout);
+    run_status_command(command, &format!("pijul reset --state {state}"))
+}
+
+fn pijul_channel_state(pijul: &Path, checkout: &Path, channel: &str) -> Result<String, crunch_project::Error> {
+    let mut command = Command::new(pijul);
+    command.arg("channel").current_dir(checkout);
+    let output = run_stdout_command(command, &format!("pijul channel in {}", checkout.display()))?;
+    parse_pijul_channel_state(&output, channel)
+}
+
+fn parse_pijul_channel_state(output: &str, channel: &str) -> Result<String, crunch_project::Error> {
+    for line in output.lines() {
+        if !line.contains(channel) {
+            continue;
+        }
+        if let Some((_, state)) = line.rsplit_once(' ') {
+            return require_nonempty_command_value(state.trim().to_string(), "pijul channel state");
+        }
+    }
+    Err(crunch_project::Error::Manifest(format!("pijul channel state not found for channel '{channel}'")))
+}
+
+fn resolve_fossil_named_selector(
+    repository: &str,
+    selector: &str,
+) -> Result<ResolvedFossilIdentity, crunch_project::Error> {
+    let fossil = find_vcs_binary("fossil", &["/usr/bin/fossil", "/bin/fossil", "/run/current-system/sw/bin/fossil"])?;
+    let dir = tempdir()?;
+    let checkout = dir.path().join("checkout");
+    materialize_fossil_checkout(&fossil, repository, selector, &checkout)?;
+    let checkin = fossil_checkout_id(&fossil, &checkout)?;
+    Ok(ResolvedFossilIdentity { checkin })
+}
+
+fn materialize_fossil_checkout(
+    fossil: &Path,
+    repository: &str,
+    selector: &str,
+    checkout: &Path,
+) -> Result<(), crunch_project::Error> {
+    let repo_file = checkout.with_extension("fossil");
+    let mut clone = Command::new(fossil);
+    clone.args(["clone", repository]).arg(&repo_file);
+    run_status_command(clone, &format!("fossil clone {repository}"))?;
+    std::fs::create_dir_all(checkout)?;
+    let mut open = Command::new(fossil);
+    open.arg("open").arg(&repo_file).current_dir(checkout);
+    run_status_command(open, &format!("fossil open {}", repo_file.display()))?;
+    let mut update = Command::new(fossil);
+    update.args(["update", selector]).current_dir(checkout);
+    run_status_command(update, &format!("fossil update {selector}"))
+}
+
+fn fossil_checkout_id(fossil: &Path, checkout: &Path) -> Result<String, crunch_project::Error> {
+    let mut command = Command::new(fossil);
+    command.arg("info").current_dir(checkout);
+    let output = run_stdout_command(command, &format!("fossil info in {}", checkout.display()))?;
+    parse_fossil_checkout_id(&output)
+}
+
+fn parse_fossil_checkout_id(output: &str) -> Result<String, crunch_project::Error> {
+    for line in output.lines() {
+        let trimmed = line.trim_start();
+        let Some(value) = trimmed.strip_prefix("checkout:") else {
+            continue;
+        };
+        let id = value.split_whitespace().next().unwrap_or("").to_string();
+        return require_nonempty_command_value(id, "fossil check-in");
+    }
+    Err(crunch_project::Error::Manifest("fossil checkout id not found in `fossil info`".to_string()))
+}
+
+fn run_status_command(mut command: Command, label: &str) -> Result<(), crunch_project::Error> {
+    let output = command.output().map_err(|err| crunch_project::Error::Manifest(format!("running {label}: {err}")))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(crunch_project::Error::Manifest(format!(
+        "{label} failed: {}",
+        bounded_utf8_lossy(&output.stderr, FRESHNESS_STDERR_LIMIT_BYTES)
+    )))
+}
+
+fn run_stdout_command(mut command: Command, label: &str) -> Result<String, crunch_project::Error> {
+    let output = command.output().map_err(|err| crunch_project::Error::Manifest(format!("running {label}: {err}")))?;
+    if !output.status.success() {
+        return Err(crunch_project::Error::Manifest(format!(
+            "{label} failed: {}",
+            bounded_utf8_lossy(&output.stderr, FRESHNESS_STDERR_LIMIT_BYTES)
+        )));
+    }
+    String::from_utf8(output.stdout)
+        .map_err(|err| crunch_project::Error::Manifest(format!("{label} output is not UTF-8: {err}")))
+}
+
+fn require_nonempty_command_value(value: String, label: &str) -> Result<String, crunch_project::Error> {
+    if value.is_empty() {
+        return Err(crunch_project::Error::Manifest(format!("{label} was empty")));
+    }
+    Ok(value)
+}
+
 fn run_git_clone_bare(git: &Path, repository: &str, bare: &Path) -> Result<(), crunch_project::Error> {
     let output = Command::new(git)
         .args(["clone", "--bare", repository])
@@ -996,32 +1317,37 @@ fn path_to_str<'a>(path: &'a Path, what: &str) -> Result<&'a str, crunch_project
 }
 
 fn find_git_binary() -> Result<PathBuf, crunch_project::Error> {
-    for candidate in [
+    find_vcs_binary("git", &[
         "/usr/bin/git",
         "/bin/git",
         "/usr/local/bin/git",
         "/run/current-system/sw/bin/git",
-    ] {
+    ])
+}
+
+fn find_vcs_binary(name: &str, absolute_candidates: &[&str]) -> Result<PathBuf, crunch_project::Error> {
+    assert!(!name.is_empty(), "VCS tool name must not be empty");
+    for candidate in absolute_candidates {
         let path = Path::new(candidate);
         if path.exists() {
             return Ok(path.to_path_buf());
         }
     }
     if let Ok(user) = std::env::var("USER") {
-        let profile = PathBuf::from(format!("/etc/profiles/per-user/{user}/bin/git"));
+        let profile = PathBuf::from(format!("/etc/profiles/per-user/{user}/bin/{name}"));
         if profile.exists() {
             return Ok(profile);
         }
     }
     if let Ok(path_var) = std::env::var("PATH") {
         for dir in path_var.split(':') {
-            let candidate = Path::new(dir).join("git");
+            let candidate = Path::new(dir).join(name);
             if candidate.exists() {
                 return Ok(candidate);
             }
         }
     }
-    Err(crunch_project::Error::Manifest("git not found in PATH".to_string()))
+    Err(crunch_project::Error::Manifest(format!("unsupported-VCS-tool: {name} not found in PATH")))
 }
 
 fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, crunch_project::Error> {
@@ -1196,5 +1522,38 @@ mod tests {
     fn validate_git_rev_rejects_short_rev() {
         let err = validate_git_rev("deadbeef").unwrap_err();
         assert!(err.to_string().contains("40 hex"));
+    }
+
+    #[test]
+    fn missing_vcs_tool_reports_unsupported_blocker() {
+        let err = find_vcs_binary("mantle-definitely-missing-vcs-tool", &[]).unwrap_err();
+        assert!(err.to_string().contains("unsupported-VCS-tool"));
+        assert!(err.to_string().contains("mantle-definitely-missing-vcs-tool"));
+    }
+
+    #[test]
+    fn parse_pijul_channel_state_uses_named_channel_line() {
+        let output = "  dev abc\n* main state-main\n";
+        let state = parse_pijul_channel_state(output, "main").unwrap();
+        assert_eq!(state, "state-main");
+    }
+
+    #[test]
+    fn pijul_change_selector_fails_closed_without_state_proof() {
+        let err = resolve_pijul_identity("https://example.invalid/repo", &PijulSelector::Change {
+            channel: "main".into(),
+            change: "change".into(),
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("unsupported-VCS-tool"));
+        assert!(err.to_string().contains("cannot prove channel state"));
+    }
+
+    #[test]
+    fn parse_fossil_checkout_id_reads_checkout_line() {
+        let output = "repository: /tmp/repo.fossil\ncheckout: 0123456789abcdef tags: trunk\n";
+        let checkin = parse_fossil_checkout_id(output).unwrap();
+        assert_eq!(checkin, "0123456789abcdef");
     }
 }

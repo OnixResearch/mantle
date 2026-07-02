@@ -44,6 +44,9 @@ const HASH_ALGO_BLAKE3: &str = "blake3";
 const KIND_FILE: &str = "file";
 const KIND_TARBALL: &str = "tarball";
 const KIND_GIT: &str = "git";
+const KIND_DARCS: &str = "darcs";
+const KIND_PIJUL: &str = "pijul";
+const KIND_FOSSIL: &str = "fossil";
 const PATCH_KIND_LOCAL: &str = "local";
 const PATCH_KIND_REMOTE: &str = "remote";
 const SEMANTIC_FRESHNESS_LOCKED: &str = "locked";
@@ -812,6 +815,27 @@ fn render_input_kind(out: &mut String, kind: &InputKind) {
             render_git_reference(out, reference);
             out.push_str("      },\n");
         }
+        InputKind::Darcs { repository, selector } => {
+            out.push_str("      kind = {\n");
+            out.push_str(&format!("        type = {},\n", quote(KIND_DARCS)));
+            out.push_str(&format!("        repository = {},\n", quote(repository)));
+            render_darcs_selector(out, selector);
+            out.push_str("      },\n");
+        }
+        InputKind::Pijul { repository, selector } => {
+            out.push_str("      kind = {\n");
+            out.push_str(&format!("        type = {},\n", quote(KIND_PIJUL)));
+            out.push_str(&format!("        repository = {},\n", quote(repository)));
+            render_pijul_selector(out, selector);
+            out.push_str("      },\n");
+        }
+        InputKind::Fossil { repository, selector } => {
+            out.push_str("      kind = {\n");
+            out.push_str(&format!("        type = {},\n", quote(KIND_FOSSIL)));
+            out.push_str(&format!("        repository = {},\n", quote(repository)));
+            render_fossil_selector(out, selector);
+            out.push_str("      },\n");
+        }
     }
 }
 
@@ -822,6 +846,59 @@ fn render_git_reference(out: &mut String, reference: &GitReference) {
         GitReference::Rev(value) => ("rev", value),
     };
     out.push_str(&format!("        reference = {{ ref_type = {}, ref_value = {} }},\n", quote(kind), quote(value)));
+}
+
+fn render_darcs_selector(out: &mut String, selector: &crate::DarcsSelector) {
+    let (kind, value) = match selector {
+        crate::DarcsSelector::Tag(value) => ("tag", value),
+        crate::DarcsSelector::Context(value) => ("context", value),
+    };
+    out.push_str(&format!(
+        "        selector = {{ selector_type = {}, selector_value = {} }},\n",
+        quote(kind),
+        quote(value)
+    ));
+}
+
+fn render_pijul_selector(out: &mut String, selector: &crate::PijulSelector) {
+    match selector {
+        crate::PijulSelector::Channel { channel } => {
+            out.push_str(&format!(
+                "        selector = {{ selector_type = {}, channel = {} }},\n",
+                quote("channel"),
+                quote(channel)
+            ));
+        }
+        crate::PijulSelector::State { channel, state } => {
+            out.push_str(&format!(
+                "        selector = {{ selector_type = {}, channel = {}, state = {} }},\n",
+                quote("state"),
+                quote(channel),
+                quote(state)
+            ));
+        }
+        crate::PijulSelector::Change { channel, change } => {
+            out.push_str(&format!(
+                "        selector = {{ selector_type = {}, channel = {}, change = {} }},\n",
+                quote("change"),
+                quote(channel),
+                quote(change)
+            ));
+        }
+    }
+}
+
+fn render_fossil_selector(out: &mut String, selector: &crate::FossilSelector) {
+    let (kind, value) = match selector {
+        crate::FossilSelector::Branch(value) => ("branch", value),
+        crate::FossilSelector::Tag(value) => ("tag", value),
+        crate::FossilSelector::Checkin(value) => ("checkin", value),
+    };
+    out.push_str(&format!(
+        "        selector = {{ selector_type = {}, selector_value = {} }},\n",
+        quote(kind),
+        quote(value)
+    ));
 }
 
 fn render_hash_spec(out: &mut String, field: &str, hash: &HashSpec, indent: &str) {
