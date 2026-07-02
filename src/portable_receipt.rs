@@ -21,7 +21,8 @@ pub const RECEIPT_BUNDLE_NON_CLAIM: &str =
 pub const MAX_RECEIPT_RECORDS: usize = 65_536;
 pub const MAX_RECEIPT_FIELD_BYTES: usize = 4_096;
 pub const MAX_RECEIPT_METADATA_ENTRIES: usize = 128;
-pub const MAX_RECEIPT_METADATA_BYTES: usize = 16_384;
+pub const MAX_RECEIPT_METADATA_BYTES: usize = 65_536;
+pub const MAX_RECEIPT_EMBEDDED_SIDECAR_BYTES: usize = 16_384;
 
 const RECORD_SPEC_SEPARATOR: char = ':';
 const SEMANTIC_EDGE_SEPARATOR: &str = "->";
@@ -145,7 +146,16 @@ pub struct ReceiptVerifyReport {
     pub missing_evidence: Vec<ReceiptRecordKind>,
     pub output_matches: Vec<ReceiptOutputMatch>,
     pub source_matches: Vec<ReceiptSourceMatch>,
+    pub signature_matches: Vec<ReceiptSignatureMatch>,
     pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ReceiptSignatureMatch {
+    pub identity: String,
+    pub trusted_signature_count: u32,
+    pub total_signature_count: u32,
+    pub trusted_public_key_digests: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -156,6 +166,7 @@ pub struct ReceiptImportReport {
     pub graph_imported: bool,
     pub graph_nodes_imported: u32,
     pub graph_edges_imported: u32,
+    pub attestation_sidecars_imported: u32,
     pub bundle_blake3: String,
     pub non_claim: &'static str,
 }
@@ -166,6 +177,7 @@ pub struct TrustVerificationContext {
     pub valid_at_unix_s: u64,
     pub expected_revocation_ref: Option<String>,
     pub revoked_public_key_digests: BTreeSet<String>,
+    pub trusted_public_keys: Vec<nix_compat::narinfo::VerifyingKey>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -386,7 +398,8 @@ fn verify_receipt_bundle_against_output_records(
         return Err(RunError::Internal("receipt output verification requires at least one --output".to_string()));
     }
     let trust = validate_trust_snapshot(bundle, store_prefix, context)?;
-    let output_matches = verify_output_records(bundle, &output_records, outputs)?;
+    let (output_matches, signature_matches) =
+        verify_output_records(bundle, &output_records, outputs, store_prefix, context)?;
     let source_matches = verify_source_records(bundle, &source_records)?;
     Ok(ReceiptVerifyReport {
         format: RECEIPT_BUNDLE_FORMAT,
@@ -403,6 +416,7 @@ fn verify_receipt_bundle_against_output_records(
         missing_evidence: bundle_report.missing_evidence,
         output_matches,
         source_matches,
+        signature_matches,
         non_claim: RECEIPT_BUNDLE_NON_CLAIM,
     })
 }
@@ -445,11 +459,9 @@ pub fn import_receipt_bundle(bundle: &ReceiptBundle, state_dir: &Path) -> Result
     let target = records_dir.join(format!("{}.json", bundle.bundle_blake3));
     let bundle_imported = plan_receipt_bundle_import(bundle, &target)?;
     let graph_plan = plan_semantic_graph_import(bundle, state_dir)?;
-    if bundle_imported {
-        let tmp = target.with_extension(TEMP_FILE_EXTENSION);
-        write_receipt_bundle(&tmp, bundle)?;
-        fs::rename(&tmp, &target)
-            .map_err(|err| RunError::Internal(format!("committing receipt bundle {}: {err}", target.display())))?;
+    let sidecar_plan = plan_attestation_sidecar_imports(bundle, state_dir, &bundle.store_prefix)?;
+    if sidecar_plan.changed {
+        write_attestation_sidecars(&sidecar_plan)?;
     }
     if graph_plan.changed {
         graph_plan
@@ -457,7 +469,13 @@ pub fn import_receipt_bundle(bundle: &ReceiptBundle, state_dir: &Path) -> Result
             .save(&state_dir.join(SEMANTIC_GRAPH_FILE))
             .map_err(|err| RunError::Internal(err.to_string()))?;
     }
-    let imported = bundle_imported || graph_plan.changed;
+    if bundle_imported {
+        let tmp = target.with_extension(TEMP_FILE_EXTENSION);
+        write_receipt_bundle(&tmp, bundle)?;
+        fs::rename(&tmp, &target)
+            .map_err(|err| RunError::Internal(format!("committing receipt bundle {}: {err}", target.display())))?;
+    }
+    let imported = bundle_imported || graph_plan.changed || sidecar_plan.changed;
     Ok(ReceiptImportReport {
         imported,
         idempotent: !imported,
@@ -465,6 +483,7 @@ pub fn import_receipt_bundle(bundle: &ReceiptBundle, state_dir: &Path) -> Result
         graph_imported: graph_plan.changed,
         graph_nodes_imported: checked_u32(graph_plan.nodes_imported, "imported semantic graph node count")?,
         graph_edges_imported: checked_u32(graph_plan.edges_imported, "imported semantic graph edge count")?,
+        attestation_sidecars_imported: checked_u32(sidecar_plan.writes.len(), "imported attestation sidecar count")?,
         bundle_blake3: bundle.bundle_blake3.clone(),
         non_claim: RECEIPT_BUNDLE_NON_CLAIM,
     })
@@ -482,7 +501,13 @@ impl TrustVerificationContext {
             valid_at_unix_s,
             expected_revocation_ref,
             revoked_public_key_digests: revoked_public_key_digests.into_iter().collect(),
+            trusted_public_keys: Vec::new(),
         }
+    }
+
+    pub fn with_trusted_public_keys(mut self, trusted_public_keys: Vec<nix_compat::narinfo::VerifyingKey>) -> Self {
+        self.trusted_public_keys = trusted_public_keys;
+        self
     }
 }
 
@@ -498,6 +523,18 @@ struct SemanticGraphImportPlan {
     changed: bool,
     nodes_imported: usize,
     edges_imported: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AttestationSidecarImportPlan {
+    writes: Vec<AttestationSidecarWrite>,
+    changed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AttestationSidecarWrite {
+    path: PathBuf,
+    bytes: Vec<u8>,
 }
 
 fn plan_receipt_bundle_import(bundle: &ReceiptBundle, target: &Path) -> Result<bool, RunError> {
@@ -528,6 +565,7 @@ fn validate_trust_snapshot(
         context.expected_revocation_ref.as_deref(),
     )?;
     reject_revoked_public_keys(&public_key_digests, &context.revoked_public_key_digests)?;
+    validate_trusted_public_key_snapshot(&public_key_digests, &context.trusted_public_keys)?;
     Ok(TrustSnapshotValidation {
         public_key_digests,
         revocation_ref: bundle.trust_snapshot.revocation_ref.clone(),
@@ -605,6 +643,31 @@ fn reject_revoked_public_keys(
     Ok(())
 }
 
+fn validate_trusted_public_key_snapshot(
+    public_key_digests: &[String],
+    trusted_public_keys: &[nix_compat::narinfo::VerifyingKey],
+) -> Result<(), RunError> {
+    if trusted_public_keys.is_empty() {
+        return Ok(());
+    }
+    if public_key_digests.is_empty() {
+        return Err(RunError::Internal(
+            "receipt bundle trust snapshot missing public key digest for trusted verification".to_string(),
+        ));
+    }
+    let trusted_digests = trusted_public_keys.iter().map(public_key_digest).collect::<BTreeSet<_>>();
+    if public_key_digests.iter().any(|digest| trusted_digests.contains(digest)) {
+        return Ok(());
+    }
+    Err(RunError::Internal(
+        "receipt bundle public key digests did not match configured trusted public keys".to_string(),
+    ))
+}
+
+fn public_key_digest(key: &nix_compat::narinfo::VerifyingKey) -> String {
+    blake3_digest_for_bytes(key.to_string().as_bytes())
+}
+
 fn plan_semantic_graph_import(bundle: &ReceiptBundle, state_dir: &Path) -> Result<SemanticGraphImportPlan, RunError> {
     let imported = semantic_graph_from_receipt_bundle(bundle)?;
     let path = state_dir.join(SEMANTIC_GRAPH_FILE);
@@ -614,6 +677,97 @@ fn plan_semantic_graph_import(bundle: &ReceiptBundle, state_dir: &Path) -> Resul
         crate::semantic_graph::SemanticGraph::empty()
     };
     merge_semantic_graph_import(existing, imported)
+}
+
+fn plan_attestation_sidecar_imports(
+    bundle: &ReceiptBundle,
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<AttestationSidecarImportPlan, RunError> {
+    assert!(store_prefix.starts_with('/'), "store prefix must be absolute");
+    let mut writes = Vec::new();
+    for record in &bundle.records {
+        if record.kind != ReceiptRecordKind::ArtifactAttestation && record.kind != ReceiptRecordKind::ClosureAttestation
+        {
+            continue;
+        }
+        let Some(encoded) = record.metadata.get("sidecar_payload_base64") else {
+            continue;
+        };
+        let bytes = decode_sidecar_payload(record, encoded)?;
+        let path = sidecar_import_path(record, state_dir, store_prefix)?;
+        if path.is_file() {
+            let existing = fs::read(&path)
+                .map_err(|err| RunError::Internal(format!("reading imported sidecar {}: {err}", path.display())))?;
+            if existing != bytes {
+                return Err(RunError::Internal(format!(
+                    "receipt attestation sidecar conflict for {} at {}",
+                    record.identity,
+                    path.display()
+                )));
+            }
+            continue;
+        }
+        writes.push(AttestationSidecarWrite { path, bytes });
+    }
+    Ok(AttestationSidecarImportPlan {
+        changed: !writes.is_empty(),
+        writes,
+    })
+}
+
+fn decode_sidecar_payload(record: &ReceiptRecord, encoded: &str) -> Result<Vec<u8>, RunError> {
+    let bytes = data_encoding::BASE64
+        .decode(encoded.as_bytes())
+        .map_err(|err| RunError::Internal(format!("decoding embedded sidecar for {}: {err}", record.identity)))?;
+    if bytes.len() > MAX_RECEIPT_EMBEDDED_SIDECAR_BYTES {
+        return Err(RunError::Internal(format!(
+            "embedded receipt sidecar exceeds {MAX_RECEIPT_EMBEDDED_SIDECAR_BYTES} bytes"
+        )));
+    }
+    let digest = blake3_digest_for_bytes(&bytes);
+    if digest != record.digest {
+        return Err(RunError::Internal(format!("embedded sidecar digest mismatch for {}", record.identity)));
+    }
+    Ok(bytes)
+}
+
+fn sidecar_import_path(record: &ReceiptRecord, state_dir: &Path, store_prefix: &str) -> Result<PathBuf, RunError> {
+    let store_path: nix_compat::store_path::StorePath<String> =
+        nix_compat::store_path::StorePath::from_absolute_path_with_prefix(record.identity.as_bytes(), store_prefix)
+            .map_err(|_| {
+                RunError::Internal(format!(
+                    "receipt sidecar identity is not under configured store prefix {store_prefix}: {}",
+                    record.identity
+                ))
+            })?;
+    match record.kind {
+        ReceiptRecordKind::ArtifactAttestation => {
+            Ok(crunch_store::artifact_attestation_file_path(state_dir, store_prefix, &store_path))
+        }
+        ReceiptRecordKind::ClosureAttestation => Ok(crunch_store::closure_attestation_file_path(
+            state_dir,
+            store_prefix,
+            std::slice::from_ref(&store_path),
+            crunch_attestation::ClosureSemantics::Runtime,
+        )),
+        _ => Err(RunError::Internal(format!("receipt record kind {:?} has no attestation sidecar path", record.kind))),
+    }
+}
+
+fn write_attestation_sidecars(plan: &AttestationSidecarImportPlan) -> Result<(), RunError> {
+    for write in &plan.writes {
+        if let Some(parent) = write.path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|err| RunError::Internal(format!("creating sidecar dir {}: {err}", parent.display())))?;
+        }
+        let tmp = write.path.with_extension(TEMP_FILE_EXTENSION);
+        fs::write(&tmp, &write.bytes)
+            .map_err(|err| RunError::Internal(format!("writing sidecar temp {}: {err}", tmp.display())))?;
+        fs::rename(&tmp, &write.path)
+            .map_err(|err| RunError::Internal(format!("committing sidecar {}: {err}", write.path.display())))?;
+    }
+    Ok(())
 }
 
 fn semantic_graph_from_receipt_bundle(
@@ -849,7 +1003,16 @@ fn normalize_receipt_records(mut records: Vec<ReceiptRecord>) -> Result<Vec<Rece
 fn validate_record(record: &ReceiptRecord) -> Result<(), RunError> {
     validate_field("identity", &record.identity)?;
     validate_digest(&record.digest)?;
-    validate_metadata(&record.metadata)
+    validate_metadata(&record.metadata)?;
+    validate_embedded_sidecar_digest(record)
+}
+
+fn validate_embedded_sidecar_digest(record: &ReceiptRecord) -> Result<(), RunError> {
+    let Some(encoded) = record.metadata.get("sidecar_payload_base64") else {
+        return Ok(());
+    };
+    decode_sidecar_payload(record, encoded)?;
+    Ok(())
 }
 
 fn classify_missing_evidence(bundle: &ReceiptBundle) -> Vec<ReceiptRecordKind> {
@@ -920,11 +1083,22 @@ fn validate_metadata(metadata: &BTreeMap<String, String>) -> Result<(), RunError
     let mut total_bytes = 0usize;
     for (key, value) in metadata {
         validate_field("metadata key", key)?;
-        validate_field("metadata value", value)?;
+        if key == "sidecar_payload_base64" {
+            validate_sidecar_payload_field(value)?;
+        } else {
+            validate_field("metadata value", value)?;
+        }
         total_bytes = total_bytes.saturating_add(key.len()).saturating_add(value.len());
     }
     if total_bytes > MAX_RECEIPT_METADATA_BYTES {
         return Err(RunError::Internal(format!("receipt metadata exceeds {MAX_RECEIPT_METADATA_BYTES} bytes")));
+    }
+    Ok(())
+}
+
+fn validate_sidecar_payload_field(value: &str) -> Result<(), RunError> {
+    if value.is_empty() || value.contains('\0') || value.len() > MAX_RECEIPT_METADATA_BYTES {
+        return Err(RunError::Internal("invalid receipt embedded sidecar payload".to_string()));
     }
     Ok(())
 }
@@ -998,7 +1172,9 @@ fn verify_output_records(
     bundle: &ReceiptBundle,
     local_records: &[ReceiptRecord],
     outputs: &[String],
-) -> Result<Vec<ReceiptOutputMatch>, RunError> {
+    store_prefix: &str,
+    context: &TrustVerificationContext,
+) -> Result<(Vec<ReceiptOutputMatch>, Vec<ReceiptSignatureMatch>), RunError> {
     if local_records.is_empty() {
         return Err(RunError::Internal("missing output facts for receipt outputs".to_string()));
     }
@@ -1007,6 +1183,7 @@ fn verify_output_records(
         return Err(RunError::Internal("receipt bundle is missing output-ref evidence".to_string()));
     }
     let mut matches = Vec::with_capacity(local_records.len());
+    let mut signature_matches = Vec::new();
     for local in local_records {
         if !selector_matches_record(outputs, &local.identity, local.metadata.get("pathinfo_store_path")) {
             continue;
@@ -1017,12 +1194,15 @@ fn verify_output_records(
         if bundle_record.digest != local.digest {
             return Err(RunError::Internal(format!("receipt output-ref digest mismatch for {}", local.identity)));
         }
+        if let Some(signature_match) = verify_output_signature_trust(local, store_prefix, context)? {
+            signature_matches.push(signature_match);
+        }
         matches.push(output_match_from_record(bundle_record, local)?);
     }
     if matches.is_empty() {
         return Err(RunError::Internal("missing output facts for receipt outputs".to_string()));
     }
-    Ok(matches)
+    Ok((matches, signature_matches))
 }
 
 fn bundle_output_records(bundle: &ReceiptBundle) -> BTreeMap<String, &ReceiptRecord> {
@@ -1083,6 +1263,91 @@ fn output_match_from_record(
         nar_sha256,
         nar_size_bytes,
     })
+}
+
+fn verify_output_signature_trust(
+    record: &ReceiptRecord,
+    store_prefix: &str,
+    context: &TrustVerificationContext,
+) -> Result<Option<ReceiptSignatureMatch>, RunError> {
+    if context.trusted_public_keys.is_empty() {
+        return Ok(None);
+    }
+    let signatures = metadata_list(record, "signatures")?;
+    if signatures.is_empty() {
+        return Err(RunError::Internal(format!(
+            "receipt output {} has no signatures for trusted verification",
+            record.identity
+        )));
+    }
+    let fingerprint = output_record_fingerprint(record, store_prefix)?;
+    let mut trusted_count = 0usize;
+    let mut trusted_public_key_digests = BTreeSet::new();
+    for signature in &signatures {
+        let parsed = nix_compat::narinfo::SignatureRef::parse(signature).map_err(|err| {
+            RunError::Internal(format!("invalid receipt output signature for {}: {err}", record.identity))
+        })?;
+        for key in &context.trusted_public_keys {
+            if key.verify(&fingerprint, &parsed) {
+                trusted_count = trusted_count.saturating_add(1);
+                trusted_public_key_digests.insert(public_key_digest(key));
+            }
+        }
+    }
+    if trusted_count == 0 {
+        return Err(RunError::Internal(format!(
+            "receipt output signatures for {} did not match configured trusted public keys",
+            record.identity
+        )));
+    }
+    Ok(Some(ReceiptSignatureMatch {
+        identity: record.identity.clone(),
+        trusted_signature_count: checked_u32(trusted_count, "trusted signature count")?,
+        total_signature_count: checked_u32(signatures.len(), "total signature count")?,
+        trusted_public_key_digests: trusted_public_key_digests.into_iter().collect(),
+    }))
+}
+
+fn output_record_fingerprint(record: &ReceiptRecord, store_prefix: &str) -> Result<String, RunError> {
+    let store_path: nix_compat::store_path::StorePath<String> =
+        nix_compat::store_path::StorePath::from_absolute_path_with_prefix(record.identity.as_bytes(), store_prefix)
+            .map_err(|_| {
+                RunError::Internal(format!("receipt output identity is not under {store_prefix}: {}", record.identity))
+            })?;
+    let nar_sha256 = decode_nar_sha256(&required_metadata(record, "nar_sha256")?)?;
+    let nar_size_bytes = parse_u64_metadata(record, "nar_size_bytes")?;
+    let references: Vec<nix_compat::store_path::StorePath<String>> = metadata_list(record, "references")?
+        .into_iter()
+        .map(|reference| {
+            nix_compat::store_path::StorePath::from_bytes(reference.as_bytes())
+                .map_err(|_| RunError::Internal(format!("receipt output reference is not a store path: {reference}")))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let reference_refs = references.iter().map(|reference| reference.as_ref()).collect::<Vec<_>>();
+    Ok(nix_compat::narinfo::fingerprint_with_store_dir(
+        &store_path.as_ref(),
+        &nar_sha256,
+        nar_size_bytes,
+        reference_refs.iter(),
+        store_prefix,
+    ))
+}
+
+fn decode_nar_sha256(hex: &str) -> Result<[u8; 32], RunError> {
+    let bytes = data_encoding::HEXLOWER
+        .decode(hex.as_bytes())
+        .map_err(|err| RunError::Internal(format!("receipt nar_sha256 is not hex: {err}")))?;
+    bytes.try_into().map_err(|bytes: Vec<u8>| {
+        RunError::Internal(format!("receipt nar_sha256 length is {}, expected 32", bytes.len()))
+    })
+}
+
+fn metadata_list(record: &ReceiptRecord, key: &str) -> Result<Vec<String>, RunError> {
+    let Some(raw) = record.metadata.get(key) else {
+        return Ok(Vec::new());
+    };
+    validate_field(key, raw)?;
+    Ok(raw.split(',').filter(|item| !item.is_empty()).map(ToString::to_string).collect())
 }
 
 fn required_metadata(record: &ReceiptRecord, key: &str) -> Result<String, RunError> {
@@ -1151,6 +1416,8 @@ fn output_record_from_archive_path(
     metadata.insert("nar_size_bytes".to_string(), path.nar_size.to_string());
     metadata.insert("reference_count".to_string(), path.reference_count.to_string());
     metadata.insert("signature_count".to_string(), path.signature_count.to_string());
+    insert_joined_metadata(&mut metadata, "references", path.references.iter().cloned());
+    insert_joined_metadata(&mut metadata, "signatures", path.signatures.iter().cloned());
     if let Some(deriver) = &path.deriver {
         metadata.insert("deriver".to_string(), deriver.clone());
     }
@@ -1235,6 +1502,7 @@ async fn collect_pathinfo_records_for_outputs_async(
             continue;
         }
         records.push(output_record_from_pathinfo(&path_info, &store_prefix)?);
+        records.extend(signature_records_for_pathinfo(&store_prefix, &path_info)?);
         records.extend(attestation_records_for_pathinfo(&state_dir, &store_prefix, &path_info)?);
     }
     Ok(records)
@@ -1256,6 +1524,8 @@ fn output_record_from_pathinfo(path_info: &PathInfo, store_prefix: &str) -> Resu
     metadata.insert("nar_size_bytes".to_string(), path_info.nar_size.to_string());
     metadata.insert("reference_count".to_string(), path_info.references.len().to_string());
     metadata.insert("signature_count".to_string(), path_info.signatures.len().to_string());
+    insert_joined_metadata(&mut metadata, "references", path_info.references.iter().map(ToString::to_string));
+    insert_joined_metadata(&mut metadata, "signatures", path_info.signatures.iter().map(ToString::to_string));
     if let Some(deriver) = &path_info.deriver {
         metadata.insert("deriver".to_string(), deriver.to_string());
     }
@@ -1285,6 +1555,25 @@ fn pathinfo_digest_payload(path_info: &PathInfo, store_prefix: &str) -> BTreeMap
     payload
 }
 
+fn signature_records_for_pathinfo(store_prefix: &str, path_info: &PathInfo) -> Result<Vec<ReceiptRecord>, RunError> {
+    let logical_path = path_info.store_path.to_absolute_path_with_prefix(store_prefix);
+    let mut records = Vec::with_capacity(path_info.signatures.len());
+    for signature in &path_info.signatures {
+        let signature_text = signature.to_string();
+        let mut metadata = BTreeMap::new();
+        metadata.insert("output".to_string(), logical_path.clone());
+        metadata.insert("signer".to_string(), signature.name().to_string());
+        metadata.insert("signature".to_string(), signature_text.clone());
+        records.push(ReceiptRecord {
+            kind: ReceiptRecordKind::Signature,
+            identity: format!("{}#{}", logical_path, signature.name()),
+            digest: blake3_digest_for_bytes(signature_text.as_bytes()),
+            metadata,
+        });
+    }
+    Ok(records)
+}
+
 fn attestation_records_for_pathinfo(
     state_dir: &Path,
     store_prefix: &str,
@@ -1311,11 +1600,18 @@ fn attestation_records_for_pathinfo(
 fn sidecar_record(kind: ReceiptRecordKind, identity: &str, path: &Path) -> Result<ReceiptRecord, RunError> {
     let bytes = fs::read(path)
         .map_err(|err| RunError::Internal(format!("reading evidence sidecar {}: {err}", path.display())))?;
+    if bytes.len() > MAX_RECEIPT_EMBEDDED_SIDECAR_BYTES {
+        return Err(RunError::Internal(format!(
+            "receipt sidecar {} exceeds {MAX_RECEIPT_EMBEDDED_SIDECAR_BYTES} byte embedding limit",
+            path.display()
+        )));
+    }
     let mut metadata = BTreeMap::new();
     if let Some(file_name) = path.file_name().and_then(|name| name.to_str()) {
         metadata.insert("sidecar_file".to_string(), file_name.to_string());
     }
     metadata.insert("sidecar_bytes".to_string(), bytes.len().to_string());
+    metadata.insert("sidecar_payload_base64".to_string(), data_encoding::BASE64.encode(&bytes));
     Ok(ReceiptRecord {
         kind,
         identity: identity.to_string(),
@@ -1478,6 +1774,13 @@ fn sorted_json_files(dir: &Path) -> Result<Vec<PathBuf>, RunError> {
     Ok(paths)
 }
 
+fn insert_joined_metadata(metadata: &mut BTreeMap<String, String>, key: &str, values: impl Iterator<Item = String>) {
+    let joined = joined_sorted(values);
+    if !joined.is_empty() {
+        metadata.insert(key.to_string(), joined);
+    }
+}
+
 fn joined_sorted(values: impl Iterator<Item = String>) -> String {
     values.collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>().join(",")
 }
@@ -1515,8 +1818,17 @@ fn cmd_receipt_bundle(
             to,
             policy_hash,
             strong,
+            trusted_public_keys,
         } => {
-            let bundle = build_from_cli_records(&records, &outputs, state_dir, store_prefix, &policy_hash, strong)?;
+            let bundle = build_from_cli_records(
+                &records,
+                &outputs,
+                state_dir,
+                store_prefix,
+                &policy_hash,
+                strong,
+                &trusted_public_keys,
+            )?;
             write_receipt_bundle(&to, &bundle)?;
             print_report(&validate_receipt_bundle(&bundle)?, json_output)
         }
@@ -1532,6 +1844,7 @@ fn cmd_receipt_bundle(
             valid_at_unix_s,
             revocation_ref,
             revoked_public_key_digests,
+            trusted_public_keys,
         } => {
             let bundle = read_receipt_bundle(&from)?;
             if outputs.is_empty() {
@@ -1545,7 +1858,8 @@ fn cmd_receipt_bundle(
                 valid_at_unix_s.unwrap_or(now_unix_s),
                 revocation_ref,
                 revoked_public_key_digests,
-            );
+            )
+            .with_trusted_public_keys(parse_trusted_public_keys(&trusted_public_keys)?);
             let report = if let Some(archive) = archive {
                 let archive_report = read_archive_list_report(&archive)?;
                 verify_receipt_bundle_against_archive_report_with_source_state(
@@ -1569,6 +1883,7 @@ fn cmd_receipt_bundle(
             valid_at_unix_s,
             revocation_ref,
             revoked_public_key_digests,
+            trusted_public_keys,
         } => {
             let bundle = read_receipt_bundle(&from)?;
             if outputs.is_empty() {
@@ -1582,7 +1897,8 @@ fn cmd_receipt_bundle(
                 valid_at_unix_s.unwrap_or(now_unix_s),
                 revocation_ref,
                 revoked_public_key_digests,
-            );
+            )
+            .with_trusted_public_keys(parse_trusted_public_keys(&trusted_public_keys)?);
             let report = if let Some(archive) = archive {
                 let archive_report = read_archive_list_report(&archive)?;
                 import_verified_receipt_bundle_from_archive_report(
@@ -1619,6 +1935,16 @@ async fn read_archive_list_report_async(path: PathBuf) -> Result<crunch_store::A
         .map_err(|err| RunError::Internal(format!("listing archive {}: {err}", path.display())))
 }
 
+fn parse_trusted_public_keys(raw_keys: &[String]) -> Result<Vec<nix_compat::narinfo::VerifyingKey>, RunError> {
+    let mut keys = Vec::with_capacity(raw_keys.len());
+    for raw_key in raw_keys {
+        let key = nix_compat::narinfo::VerifyingKey::parse(raw_key)
+            .map_err(|err| RunError::Internal(format!("invalid receipt trusted public key '{raw_key}': {err}")))?;
+        keys.push(key);
+    }
+    Ok(keys)
+}
+
 fn build_from_cli_records(
     records: &[String],
     outputs: &[String],
@@ -1626,6 +1952,7 @@ fn build_from_cli_records(
     store_prefix: &str,
     policy_hash: &str,
     strong: bool,
+    trusted_public_keys: &[String],
 ) -> Result<ReceiptBundle, RunError> {
     let specs = records.iter().map(|record| parse_receipt_record_spec(record)).collect::<Result<Vec<_>, _>>()?;
     let mut gathered = specs.iter().map(record_from_spec).collect::<Vec<_>>();
@@ -1635,7 +1962,21 @@ fn build_from_cli_records(
     } else {
         ClaimStrengthRequest::Diagnostic
     };
-    build_receipt_bundle_from_records(gathered, store_prefix, policy_hash, claim)
+    let mut bundle = build_receipt_bundle_from_records(gathered, store_prefix, policy_hash, claim)?;
+    bundle.trust_snapshot.public_key_digests = trusted_public_key_digests(trusted_public_keys)?;
+    refresh_bundle_digest_for_trust_snapshot(&mut bundle)?;
+    Ok(bundle)
+}
+
+fn trusted_public_key_digests(raw_keys: &[String]) -> Result<Vec<String>, RunError> {
+    let keys = parse_trusted_public_keys(raw_keys)?;
+    Ok(keys.iter().map(public_key_digest).collect::<BTreeSet<_>>().into_iter().collect())
+}
+
+fn refresh_bundle_digest_for_trust_snapshot(bundle: &mut ReceiptBundle) -> Result<(), RunError> {
+    bundle.bundle_blake3 = digest_bundle_without_digest(bundle)?;
+    validate_receipt_bundle(bundle)?;
+    Ok(())
 }
 
 fn print_report(report: &ReceiptBundleReport, json_output: bool) -> Result<(), RunError> {
@@ -1663,11 +2004,12 @@ fn print_verify(report: &ReceiptVerifyReport, json_output: bool) -> Result<(), R
         return Ok(());
     }
     println!(
-        "RECEIPT_VERIFY bundle_blake3={} store_prefix={} outputs={} sources={} policy_hash_matched={} trust_window_valid={}",
+        "RECEIPT_VERIFY bundle_blake3={} store_prefix={} outputs={} sources={} signatures={} policy_hash_matched={} trust_window_valid={}",
         report.bundle_blake3,
         report.store_prefix,
         report.output_matches.len(),
         report.source_matches.len(),
+        report.signature_matches.len(),
         report.policy_hash_matched,
         report.trust_window_valid
     );
@@ -1690,14 +2032,15 @@ fn print_import(report: &ReceiptImportReport, json_output: bool) -> Result<(), R
         return Ok(());
     }
     println!(
-        "RECEIPT_IMPORT bundle_blake3={} imported={} idempotent={} bundle_imported={} graph_imported={} graph_nodes={} graph_edges={}",
+        "RECEIPT_IMPORT bundle_blake3={} imported={} idempotent={} bundle_imported={} graph_imported={} graph_nodes={} graph_edges={} attestation_sidecars={}",
         report.bundle_blake3,
         report.imported,
         report.idempotent,
         report.bundle_imported,
         report.graph_imported,
         report.graph_nodes_imported,
-        report.graph_edges_imported
+        report.graph_edges_imported,
+        report.attestation_sidecars_imported
     );
     eprintln!("non_claim={}", report.non_claim);
     Ok(())
@@ -1813,6 +2156,8 @@ mod tests {
         assert_eq!(output_record.identity, output);
         assert!(output_record.digest.starts_with(BLAKE3_DIGEST_PREFIX));
         assert_eq!(output_record.metadata.get("nar_size_bytes").map(String::as_str), Some("17"));
+        let sidecar = records.iter().find(|record| record.kind == ReceiptRecordKind::ArtifactAttestation).unwrap();
+        assert!(sidecar.metadata.contains_key("sidecar_payload_base64"));
     }
 
     #[test]
@@ -1857,6 +2202,283 @@ mod tests {
         assert_eq!(report.output_matches.len(), 1);
         assert_eq!(report.output_matches[0].identity, output);
         assert_eq!(report.output_matches[0].nar_size_bytes, TEST_NAR_SIZE_BYTES);
+    }
+
+    #[test]
+    fn trusted_public_key_verifies_pathinfo_signature_and_snapshot_digest() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        let keypair = test_keypair();
+        let verifying_key = keypair.verifying_key.clone();
+        let mut path_info = test_path_info("signed-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        sign_pathinfo(&mut path_info, "/mantle/store", &keypair);
+        write_pathinfo_db(&state_dir, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let mut bundle = bundle_for_state_output(&state_dir, &output, "policy-v1");
+        bundle.trust_snapshot.public_key_digests = vec![public_key_digest(&verifying_key)];
+        refresh_bundle_digest(&mut bundle);
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S)
+            .with_trusted_public_keys(vec![verifying_key.clone()]);
+
+        let report = verify_receipt_bundle_against_state_with_context(
+            &bundle,
+            &state_dir,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap();
+
+        assert_eq!(report.signature_matches.len(), 1);
+        assert_eq!(report.signature_matches[0].trusted_signature_count, 1);
+        assert_eq!(report.signature_matches[0].trusted_public_key_digests, vec![public_key_digest(&verifying_key)]);
+        assert!(bundle.records.iter().any(|record| record.kind == ReceiptRecordKind::Signature));
+    }
+
+    #[test]
+    fn same_name_different_key_rejects_trusted_signature_replay() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        let keypair = test_keypair();
+        let verifying_key = keypair.verifying_key.clone();
+        let mut path_info = test_path_info("wrong-key-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        sign_pathinfo(&mut path_info, "/mantle/store", &keypair);
+        write_pathinfo_db(&state_dir, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let mut bundle = bundle_for_state_output(&state_dir, &output, "policy-v1");
+        bundle.trust_snapshot.public_key_digests = vec![public_key_digest(&verifying_key)];
+        refresh_bundle_digest(&mut bundle);
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S)
+            .with_trusted_public_keys(vec![wrong_verifying_key_same_name()]);
+
+        let err = verify_receipt_bundle_against_state_with_context(
+            &bundle,
+            &state_dir,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("public key digests did not match"));
+    }
+
+    #[test]
+    fn trusted_signature_verification_rejects_unsigned_output() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        let verifying_key = test_keypair().verifying_key;
+        let path_info = test_path_info("unsigned-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&state_dir, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let mut bundle = bundle_for_state_output(&state_dir, &output, "policy-v1");
+        bundle.trust_snapshot.public_key_digests = vec![public_key_digest(&verifying_key)];
+        refresh_bundle_digest(&mut bundle);
+        let context =
+            verification_context("policy-v1", TEST_VALID_AT_UNIX_S).with_trusted_public_keys(vec![verifying_key]);
+
+        let err = verify_receipt_bundle_against_state_with_context(
+            &bundle,
+            &state_dir,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("has no signatures"));
+    }
+
+    #[test]
+    fn verified_import_persists_embedded_attestation_sidecar() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let import_state = temp.path().join("import-state");
+        let path_info = test_path_info("sidecar-import-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, path_info.clone());
+        write_pathinfo_db(&import_state, path_info.clone());
+        write_artifact_sidecar(&bundle_state, "/mantle/store", &path_info.store_path, b"artifact-attestation");
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S);
+
+        let report = import_verified_receipt_bundle(
+            &bundle,
+            &import_state,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap();
+
+        let imported_path =
+            crunch_store::artifact_attestation_file_path(&import_state, "/mantle/store", &path_info.store_path);
+        assert_eq!(report.attestation_sidecars_imported, 1);
+        assert_eq!(fs::read(imported_path).unwrap(), b"artifact-attestation");
+    }
+
+    #[test]
+    fn attestation_sidecar_conflict_rejects_verified_import() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let import_state = temp.path().join("import-state");
+        let path_info = test_path_info("sidecar-conflict-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, path_info.clone());
+        write_pathinfo_db(&import_state, path_info.clone());
+        write_artifact_sidecar(&bundle_state, "/mantle/store", &path_info.store_path, b"artifact-attestation");
+        write_artifact_sidecar(&import_state, "/mantle/store", &path_info.store_path, b"different-attestation");
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S);
+
+        let err = import_verified_receipt_bundle(
+            &bundle,
+            &import_state,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("attestation sidecar conflict"));
+        assert!(!receipt_bundle_state_file(&import_state, &bundle).exists());
+    }
+
+    #[test]
+    fn cli_bundle_export_list_verify_import_covers_human_and_json_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let import_state = temp.path().join("import-state");
+        let bundle_path = temp.path().join("receipt-bundle.json");
+        let keypair = test_keypair();
+        let verifying_key = keypair.verifying_key.clone();
+        let verifying_key_token = verifying_key.to_string();
+        let mut path_info = test_path_info("cli-sidecar-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        sign_pathinfo(&mut path_info, "/mantle/store", &keypair);
+        write_pathinfo_db(&bundle_state, path_info.clone());
+        write_pathinfo_db(&import_state, path_info.clone());
+        write_artifact_sidecar(&bundle_state, "/mantle/store", &path_info.store_path, b"artifact-attestation");
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+
+        cmd_receipt_bundle(
+            crate::ReceiptBundleAction::Export {
+                records: Vec::new(),
+                outputs: vec![output.clone()],
+                to: bundle_path.clone(),
+                policy_hash: "policy-v1".to_string(),
+                strong: false,
+                trusted_public_keys: vec![verifying_key_token.clone()],
+            },
+            &bundle_state,
+            "/mantle/store",
+            false,
+            TEST_VALID_AT_UNIX_S,
+        )
+        .unwrap();
+        let bundle = read_receipt_bundle(&bundle_path).unwrap();
+        assert_eq!(bundle.trust_snapshot.public_key_digests, vec![public_key_digest(&verifying_key)]);
+        assert!(bundle.records.iter().any(|record| record.kind == ReceiptRecordKind::ArtifactAttestation));
+
+        cmd_receipt_bundle(
+            crate::ReceiptBundleAction::List {
+                from: bundle_path.clone(),
+            },
+            &import_state,
+            "/mantle/store",
+            true,
+            TEST_VALID_AT_UNIX_S,
+        )
+        .unwrap();
+        cmd_receipt_bundle(
+            crate::ReceiptBundleAction::Verify {
+                from: bundle_path.clone(),
+                outputs: vec![output.clone()],
+                policy_hash: Some("policy-v1".to_string()),
+                archive: None,
+                valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
+                revocation_ref: None,
+                revoked_public_key_digests: Vec::new(),
+                trusted_public_keys: vec![verifying_key_token.clone()],
+            },
+            &import_state,
+            "/mantle/store",
+            true,
+            TEST_VALID_AT_UNIX_S,
+        )
+        .unwrap();
+        cmd_receipt_bundle(
+            crate::ReceiptBundleAction::Import {
+                from: bundle_path.clone(),
+                outputs: vec![output.clone()],
+                policy_hash: Some("policy-v1".to_string()),
+                archive: None,
+                valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
+                revocation_ref: None,
+                revoked_public_key_digests: Vec::new(),
+                trusted_public_keys: vec![verifying_key_token],
+            },
+            &import_state,
+            "/mantle/store",
+            false,
+            TEST_VALID_AT_UNIX_S,
+        )
+        .unwrap();
+
+        let imported_sidecar =
+            crunch_store::artifact_attestation_file_path(&import_state, "/mantle/store", &path_info.store_path);
+        assert_eq!(fs::read(imported_sidecar).unwrap(), b"artifact-attestation");
+        assert!(receipt_bundle_state_file(&import_state, &bundle).exists());
+    }
+
+    #[test]
+    fn cli_bundle_import_conflict_reports_before_persisting_bundle() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let import_state = temp.path().join("import-state");
+        let bundle_path = temp.path().join("receipt-bundle.json");
+        let path_info = test_path_info("cli-conflict-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, path_info.clone());
+        write_pathinfo_db(&import_state, path_info.clone());
+        write_artifact_sidecar(&bundle_state, "/mantle/store", &path_info.store_path, b"artifact-attestation");
+        write_artifact_sidecar(&import_state, "/mantle/store", &path_info.store_path, b"conflicting-attestation");
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        cmd_receipt_bundle(
+            crate::ReceiptBundleAction::Export {
+                records: Vec::new(),
+                outputs: vec![output.clone()],
+                to: bundle_path.clone(),
+                policy_hash: "policy-v1".to_string(),
+                strong: false,
+                trusted_public_keys: Vec::new(),
+            },
+            &bundle_state,
+            "/mantle/store",
+            true,
+            TEST_VALID_AT_UNIX_S,
+        )
+        .unwrap();
+        let bundle = read_receipt_bundle(&bundle_path).unwrap();
+
+        let err = cmd_receipt_bundle(
+            crate::ReceiptBundleAction::Import {
+                from: bundle_path,
+                outputs: vec![output],
+                policy_hash: Some("policy-v1".to_string()),
+                archive: None,
+                valid_at_unix_s: Some(TEST_VALID_AT_UNIX_S),
+                revocation_ref: None,
+                revoked_public_key_digests: Vec::new(),
+                trusted_public_keys: Vec::new(),
+            },
+            &import_state,
+            "/mantle/store",
+            true,
+            TEST_VALID_AT_UNIX_S,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("attestation sidecar conflict"));
+        assert!(!receipt_bundle_state_file(&import_state, &bundle).exists());
     }
 
     #[test]
@@ -1954,6 +2576,66 @@ mod tests {
         .unwrap_err();
 
         assert!(err.to_string().contains("policy hash mismatch"));
+    }
+
+    #[test]
+    fn archive_verified_import_persists_graph_evidence_for_why() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let import_state = temp.path().join("import-state");
+        let path_info = test_path_info("archive-why-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        write_source_record(&bundle_state, "src:demo", &"b".repeat(DIGEST_HEX_CHARS));
+        write_source_record(&import_state, "src:demo", &"b".repeat(DIGEST_HEX_CHARS));
+        write_semantic_graph(&bundle_state, &output);
+        let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
+        let archive = archive_report_for_pathinfo(&path_info, "/mantle/store");
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S);
+
+        let report = import_verified_receipt_bundle_from_archive_report(
+            &bundle,
+            &import_state,
+            &archive,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap();
+
+        assert!(report.imported);
+        assert!(report.graph_imported);
+        let graph = crate::semantic_graph::SemanticGraph::load(&import_state.join(SEMANTIC_GRAPH_FILE)).unwrap();
+        let why = graph.why(&output).unwrap();
+        assert_eq!(why.producing_recipe.unwrap().id, "recipe:demo");
+        assert_eq!(why.sources[0].id, "src:demo");
+    }
+
+    #[test]
+    fn archive_import_without_graph_keeps_why_incomplete() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_state = temp.path().join("bundle-state");
+        let import_state = temp.path().join("import-state");
+        let path_info = test_path_info("archive-incomplete-demo", TEST_STORE_DIGEST_BYTE, TEST_NAR_HASH_BYTE);
+        write_pathinfo_db(&bundle_state, path_info.clone());
+        let output = path_info.store_path.to_absolute_path_with_prefix("/mantle/store");
+        let bundle = bundle_for_state_output(&bundle_state, &output, "policy-v1");
+        let archive = archive_report_for_pathinfo(&path_info, "/mantle/store");
+        let context = verification_context("policy-v1", TEST_VALID_AT_UNIX_S);
+
+        import_verified_receipt_bundle_from_archive_report(
+            &bundle,
+            &import_state,
+            &archive,
+            "/mantle/store",
+            &context,
+            std::slice::from_ref(&output),
+        )
+        .unwrap();
+
+        let graph = crate::semantic_graph::SemanticGraph::load(&import_state.join(SEMANTIC_GRAPH_FILE)).unwrap();
+        let err = graph.why(&output).unwrap_err();
+        assert!(err.to_string().contains("producing recipe edge"));
     }
 
     #[test]
@@ -2167,6 +2849,26 @@ mod tests {
     }
 
     #[test]
+    fn embedded_sidecar_digest_mismatch_rejects_bundle() {
+        let mut metadata = BTreeMap::new();
+        metadata.insert("sidecar_payload_base64".to_string(), data_encoding::BASE64.encode(b"sidecar"));
+        let record = ReceiptRecord {
+            kind: ReceiptRecordKind::ArtifactAttestation,
+            identity: "/mantle/store/11111111111111111111111111111111-demo".to_string(),
+            digest: format!("{BLAKE3_DIGEST_PREFIX}{}", "a".repeat(DIGEST_HEX_CHARS)),
+            metadata,
+        };
+        let err = build_receipt_bundle_from_records(
+            vec![record],
+            "/mantle/store",
+            "policy-v1",
+            ClaimStrengthRequest::Diagnostic,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("embedded sidecar digest mismatch"));
+    }
+
+    #[test]
     fn metadata_path_traversal_is_rejected() {
         let mut metadata = BTreeMap::new();
         metadata.insert("sidecar_file".to_string(), "../artifact.json".to_string());
@@ -2202,6 +2904,28 @@ mod tests {
 
     fn verification_context(policy_hash: &str, valid_at_unix_s: u64) -> TrustVerificationContext {
         TrustVerificationContext::new(policy_hash.to_string(), valid_at_unix_s, None, Vec::new())
+    }
+
+    fn test_keypair() -> crunch_build::KeyPair {
+        const TEST_KEYPAIR: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+        crunch_build::load_keypair(TEST_KEYPAIR).unwrap()
+    }
+
+    fn wrong_verifying_key_same_name() -> nix_compat::narinfo::VerifyingKey {
+        nix_compat::narinfo::VerifyingKey::parse("cache.example.com-1:tLAEn+EeaBUJYqEpTd2yeerr7Ic6+0vWe+aXL/vYUpE=")
+            .unwrap()
+    }
+
+    fn sign_pathinfo(path_info: &mut PathInfo, store_prefix: &str, keypair: &crunch_build::KeyPair) {
+        let refs = path_info.references.iter().map(|reference| reference.as_ref()).collect::<Vec<_>>();
+        let fingerprint = nix_compat::narinfo::fingerprint_with_store_dir(
+            &path_info.store_path.as_ref(),
+            &path_info.nar_sha256,
+            path_info.nar_size,
+            refs.iter(),
+            store_prefix,
+        );
+        path_info.signatures.push(keypair.signing_key.sign(fingerprint.as_bytes()).to_owned());
     }
 
     fn refresh_bundle_digest(bundle: &mut ReceiptBundle) {

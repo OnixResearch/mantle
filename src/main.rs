@@ -1551,6 +1551,11 @@ pub enum ReceiptBundleAction {
         /// Require complete strong action-correctness evidence
         #[arg(long)]
         strong: bool,
+
+        /// Trusted public key token name:base64 to snapshot into the bundle; repeat for multiple
+        /// keys
+        #[arg(long = "trusted-public-key")]
+        trusted_public_keys: Vec<String>,
     },
     /// List receipt bundle metadata
     List {
@@ -1588,6 +1593,11 @@ pub enum ReceiptBundleAction {
         /// Revoked public key digest; repeat for multiple revoked keys
         #[arg(long = "revoked-public-key-digest")]
         revoked_public_key_digests: Vec<String>,
+
+        /// Trusted public key token name:base64 for signature verification; repeat for multiple
+        /// keys
+        #[arg(long = "trusted-public-key")]
+        trusted_public_keys: Vec<String>,
     },
     /// Import a verified receipt bundle into Mantle evidence state
     Import {
@@ -1618,6 +1628,11 @@ pub enum ReceiptBundleAction {
         /// Revoked public key digest; repeat for multiple revoked keys
         #[arg(long = "revoked-public-key-digest")]
         revoked_public_key_digests: Vec<String>,
+
+        /// Trusted public key token name:base64 for signature verification; repeat for multiple
+        /// keys
+        #[arg(long = "trusted-public-key")]
+        trusted_public_keys: Vec<String>,
     },
 }
 
@@ -4822,6 +4837,79 @@ mod tests {
         let args = Args::parse_from(["mantle", "build", ".#app"]);
         assert!(matches!(args.command, Command::Build { .. }));
         assert!(!matches!(args.command, Command::RustPlan { .. }));
+    }
+
+    #[test]
+    fn receipt_bundle_cli_accepts_trusted_public_key_flags() {
+        const TEST_KEY_A: &str = "cache.example.com-1:tLAEn+EeaBUJYqEpTd2yeerr7Ic6+0vWe+aXL/vYUpE=";
+        const TEST_KEY_B: &str = "cache.example.com-2:tLAEn+EeaBUJYqEpTd2yeerr7Ic6+0vWe+aXL/vYUpE=";
+        let export = Args::parse_from([
+            "mantle",
+            "receipt",
+            "bundle",
+            "export",
+            "--output",
+            "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo",
+            "--to",
+            "/tmp/receipt.json",
+            "--trusted-public-key",
+            TEST_KEY_A,
+            "--trusted-public-key",
+            TEST_KEY_B,
+        ]);
+        let Command::Receipt {
+            action:
+                ReceiptAction::Bundle {
+                    action:
+                        ReceiptBundleAction::Export {
+                            trusted_public_keys, ..
+                        },
+                },
+        } = export.command
+        else {
+            panic!("expected receipt bundle export command");
+        };
+        assert_eq!(trusted_public_keys, vec![TEST_KEY_A.to_string(), TEST_KEY_B.to_string()]);
+
+        let verify = Args::parse_from([
+            "mantle",
+            "receipt",
+            "bundle",
+            "verify",
+            "--from",
+            "/tmp/receipt.json",
+            "--output",
+            "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo",
+            "--policy-hash",
+            "policy-v1",
+            "--trusted-public-key",
+            TEST_KEY_A,
+        ]);
+        assert!(matches!(verify.command, Command::Receipt {
+            action: ReceiptAction::Bundle {
+                action: ReceiptBundleAction::Verify { trusted_public_keys, .. },
+            },
+        } if trusted_public_keys == vec![TEST_KEY_A.to_string()]));
+
+        let import = Args::parse_from([
+            "mantle",
+            "receipt",
+            "bundle",
+            "import",
+            "--from",
+            "/tmp/receipt.json",
+            "--output",
+            "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo",
+            "--policy-hash",
+            "policy-v1",
+            "--trusted-public-key",
+            TEST_KEY_B,
+        ]);
+        assert!(matches!(import.command, Command::Receipt {
+            action: ReceiptAction::Bundle {
+                action: ReceiptBundleAction::Import { trusted_public_keys, .. },
+            },
+        } if trusted_public_keys == vec![TEST_KEY_B.to_string()]));
     }
 
     #[test]
