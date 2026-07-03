@@ -791,10 +791,23 @@ fn proof_path_from_meta(
     };
     let path = Path::new(raw);
     if path.is_absolute() {
-        Some(path.to_path_buf())
-    } else {
-        Some(proof_dir.join(path))
+        if let Some(local_path) = copied_proof_path(proof_dir, meta, path) {
+            if local_path.exists() {
+                return Some(local_path);
+            }
+        }
+        return Some(path.to_path_buf());
     }
+    Some(proof_dir.join(path))
+}
+
+fn copied_proof_path(proof_dir: &Path, meta: &Value, absolute_path: &Path) -> Option<PathBuf> {
+    let bundle_dir = optional_str(meta, "/bundle_dir").map(Path::new)?;
+    let relative_path = absolute_path.strip_prefix(bundle_dir).ok()?;
+    if relative_path.components().any(|component| !matches!(component, Component::Normal(_))) {
+        return None;
+    }
+    Some(proof_dir.join(relative_path))
 }
 
 fn non_claims_from_meta(meta: Option<&Value>) -> Vec<String> {
@@ -3131,6 +3144,41 @@ mod tests {
         assert!(!result.valid);
         assert!(result.blockers.iter().any(|blocker| blocker.contains(NOT_FULL_CARGO_COMPATIBILITY_NON_CLAIM)));
         assert!(result.blockers.iter().any(|blocker| blocker.contains("full Cargo compatibility")));
+    }
+
+    #[test]
+    fn provider_fixed_point_verifier_rebases_copied_bundle_stage_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let original_dir = dir.path().join("original-proof");
+        let copied_dir = dir.path().join("copied-proof");
+        let stage1_dir = copied_dir.join(STAGE1_DIR);
+        let stage2_dir = copied_dir.join(STAGE2_DIR);
+        fs::create_dir_all(&stage1_dir).unwrap();
+        fs::create_dir_all(&stage2_dir).unwrap();
+        let binary_bytes = b"copied provider fixed point binary";
+        let binary_digest = blake3::hash(binary_bytes).to_hex().to_string();
+        fs::write(stage1_dir.join(PRODUCED_MANTLE_FILE), binary_bytes).unwrap();
+        fs::write(stage2_dir.join(PRODUCED_MANTLE_FILE), binary_bytes).unwrap();
+        write_summary(&stage1_dir.join(RECEIPT_FILE), &fixed_point_stage_receipt_json()).unwrap();
+        write_summary(&stage2_dir.join(RECEIPT_FILE), &fixed_point_stage_receipt_json()).unwrap();
+        let mut evidence = valid_provider_fixed_point_evidence();
+        let meta = evidence.meta.as_mut().unwrap();
+        meta["bundle_dir"] = Value::String(original_dir.display().to_string());
+        for stage in [STAGE1_DIR, STAGE2_DIR] {
+            meta[stage]["binary"] =
+                Value::String(original_dir.join(stage).join(PRODUCED_MANTLE_FILE).display().to_string());
+            meta[stage]["binary_blake3"] = Value::String(binary_digest.clone());
+            meta[stage]["receipt"] = Value::String(original_dir.join(stage).join(RECEIPT_FILE).display().to_string());
+        }
+        write_summary(&copied_dir.join(META_FILE), meta).unwrap();
+        write_summary(&copied_dir.join(PRE_FLIGHT_FILE), evidence.preflight.as_ref().unwrap()).unwrap();
+        fs::write(copied_dir.join(NON_CLAIMS_FILE), evidence.non_claims_text.as_ref().unwrap()).unwrap();
+
+        let result = verify_provider_fixed_point_proof_bundle(&copied_dir);
+
+        assert!(result.valid, "blockers: {:?}", result.blockers);
+        assert_eq!(result.stage_binary_digest_blake3.as_deref(), Some(binary_digest.as_str()));
+        assert!(!original_dir.join(STAGE1_DIR).join(PRODUCED_MANTLE_FILE).exists());
     }
 
     #[test]

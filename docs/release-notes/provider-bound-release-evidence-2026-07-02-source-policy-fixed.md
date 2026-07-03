@@ -75,11 +75,12 @@ Claimed:
 - The bundled provider fixed-point proof is valid and matches `binaries/01-mantle`.
 - The bundled self-hosting proof is fixed-point, strict for stage2, and matches `binaries/02-stage2-mantle`.
 - Aspen returned signed witness sidecars for `aspen1-external-witness`; final policy counted that witness and classified the release as `independent-rebuild-agreement`.
+- The explicit two-binary release universe now has an eligible `mantle-global-reproducibility-report-v1` after provider fixed-point verifier facts admitted `binaries/01-mantle`.
 
 Not claimed:
 
 - This does not prove full compiler correctness.
-- This does not prove global reproducibility for all Mantle builds; that claim requires an eligible `mantle-global-reproducibility-report-v1` for an explicit universe and policy.
+- This does not prove global reproducibility for all Mantle builds; the eligible global report is limited to the explicit two-binary release universe and policy named below.
 - This does not make the superseded 2026-06-28 request externally reproducible.
 - This does not claim the provider fixed-point proof by itself is a full bootstrap proof; it remains bounded source-built handoff evidence.
 
@@ -95,14 +96,16 @@ included_surface: binaries/02-stage2-mantle
 accepted_witness: aspen1-external-witness
 ```
 
-The full two-binary release universe is intentionally blocked:
+The full two-binary release universe is now eligible after the helper validates the bundled provider fixed-point proof and binds `binaries/01-mantle` to the verifier stage digest, proof metadata digest, source-built toolchain closure policy digest, release artifact digest, and Aspen witness identity:
 
 ```text
 universe_digest: ab5cb6a4fe4f411b5b4cc55e43f85001dccb9bcc7ec5aa6496b0d95f6bc085a2
 policy_digest: 03da83116b1432a520bcc7c07e0213d486615d4bd5baa83476374a7c304eb4d8
-report_digest: f6727befe87856b939d3de6f1771ab75b672e612cc978a0c7f3d9db147890467
-blocked_surface: binaries/01-mantle
-blockers: unsupported-surface, weak-hermeticity, reused-store
+evidence_digest: 06b99a0968cbe4afb705b42318fdb3f16a01a3061b45c1cee3962175828c14fb
+report_digest: ddcf15edea2b0b2e10ef653fcf1efe89803bfa6db49ee3c4ab7ee62ceb6e7b8f
+claim_class: eligible
+included_surfaces: binaries/01-mantle, binaries/02-stage2-mantle
+accepted_witness: aspen1-external-witness
 ```
 
 Durable generated artifacts live under the release copy:
@@ -112,7 +115,7 @@ Durable generated artifacts live under the release copy:
 /home/brittonr/releases/mantle/provider-bound-release-evidence-2026-07-02-source-policy-fixed/global-reproducibility-full-release
 ```
 
-These reports do not change the broader non-claims: the eligible report is scoped to the single stage2 surface, while the full release report remains blocked until `binaries/01-mantle` has strict/fresh global evidence or is excluded from the admitted universe.
+These reports do not change the broader non-claims: the stage2 report is scoped to the single stage2 surface, and the full-release report is scoped only to the two published release binaries. Neither report claims compiler correctness, deploy success, future code, physical-target determinism, undeclared frontends or target systems, or all other Mantle build surfaces.
 
 ## Negative check
 

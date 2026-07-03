@@ -551,11 +551,18 @@ WHEN Mantle derives global reproducibility surface evidence from those inputs
 THEN the evidence MUST bind the universe digest, policy digest, action receipt digest, source acquisition digest, toolchain/proof digest, strict hermeticity digest, output digest set, and policy-counted witness identity for the named surface
 AND the global reproducibility evaluator MUST be able to admit that surface only when the generated evidence satisfies the existing policy.
 
-#### Scenario: provider fixed-point artifacts do not overclaim strict global eligibility
+#### Scenario: verified provider fixed-point artifacts can satisfy strict/fresh surface evidence
 
-GIVEN a release universe includes a provider fixed-point handoff artifact whose evidence is release-bounded but not a strict/fresh global reproducibility proof
+GIVEN a release universe includes a provider fixed-point artifact and the release bundle contains provider proof material
 WHEN Mantle derives surface evidence for that artifact
-THEN the evidence MUST include an unsupported-surface reason or equivalent blocker-producing fact
+THEN it MUST validate the provider proof bundle before setting strict hermeticity or fresh rebuild-store evidence for that surface
+AND it MUST bind the provider surface to the proof metadata digest, source-built toolchain closure policy digest, verifier stage binary digest, release artifact digest, and policy-counted witness identity.
+
+#### Scenario: invalid provider fixed-point artifacts fail closed
+
+GIVEN a release universe includes a provider fixed-point artifact whose provider proof is missing, invalid, weak, copied incompletely, or digest-mismatched against the release artifact
+WHEN Mantle derives surface evidence for that artifact
+THEN the evidence MUST include an unsupported-surface reason or equivalent blocker-producing fact naming the concrete verifier blocker
 AND the final global report MUST remain blocked for that surface instead of promoting the full release universe.
 
 #### Scenario: helper stays separate from final global admission

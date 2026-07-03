@@ -439,8 +439,11 @@ surface evidence first, use `mantle release global-reproducibility-evidence
 --evidence-path <json>`. Then use `mantle release global-reproducibility
 --universe <json> --policy <json> --evidence <json> --report-path <json>` to
 produce the separate `mantle-global-reproducibility-report-v1` admission report
-for an explicit universe. The helper output alone is not an eligible report;
-the evaluator remains the gate. `bootstrap parity-report` also consumes the checked-in compact
+for an explicit universe. Provider fixed-point release artifacts are admitted
+only when the bundled provider proof verifier is valid and its stage digest
+matches the release artifact; invalid or incomplete provider proof material
+stays blocker-producing evidence. The helper output alone is not an eligible
+report; the evaluator remains the gate. `bootstrap parity-report` also consumes the checked-in compact
 descriptor at
 `bootstrap/evidence/real-self-build-proof-parity.json` for the
 `crunch.self-build` row; that descriptor surfaces the bounded proof digest and

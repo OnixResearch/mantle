@@ -18,6 +18,7 @@ const RELEASE_SURFACE_EVIDENCE_OUTPUT_KIND: &str = "mantle-global-reproducibilit
 const RELEASE_MANIFEST_RELATIVE_PATH: &str = "manifest.json";
 const SELF_HOSTING_MANIFEST_RELATIVE_PATH: &str = "proof/self-hosting/manifest.json";
 const SELF_HOSTING_SUMMARY_RELATIVE_PATH: &str = "proof/self-hosting/summary.txt";
+const PROVIDER_FIXED_POINT_RELATIVE_DIR: &str = "proof/provider-fixed-point";
 const PROVIDER_FIXED_POINT_META_RELATIVE_PATH: &str = "proof/provider-fixed-point/meta.json";
 const RELEASE_ATTESTATION_RELATIVE_PATH: &str = "release-attestation.json";
 const WITNESSES_RELATIVE_DIR: &str = "witnesses";
@@ -27,7 +28,8 @@ const EMPTY_FALLBACK_EVENTS: &str = "[]";
 const SELF_HOSTING_STAGE2_SURFACE_KIND: &str = "self-hosting-stage2";
 const PROVIDER_FIXED_POINT_SURFACE_KIND: &str = "provider-fixed-point-handoff";
 const UNKNOWN_RELEASE_SURFACE_KIND: &str = "unknown-release-artifact";
-const PROVIDER_FIXED_POINT_UNSUPPORTED_REASON: &str = "provider fixed-point handoff evidence is release-bounded but is not admitted as strict/fresh global reproducibility evidence";
+const PROVIDER_FIXED_POINT_INVALID_REASON: &str =
+    "provider fixed-point proof is missing or invalid for strict/fresh global reproducibility evidence";
 const UNKNOWN_ARTIFACT_UNSUPPORTED_REASON: &str =
     "release artifact set is not present in the release evidence manifest";
 const UNRECOGNIZED_ARTIFACT_UNSUPPORTED_REASON: &str =
@@ -55,6 +57,16 @@ struct ReleaseSurfaceEvidenceDerivationInput {
     self_hosting_manifest: Option<SelfHostingManifestSubset>,
     self_hosting_summary: SelfHostingSummaryFacts,
     provider_fixed_point_meta: Option<ProviderFixedPointMetaSubset>,
+    provider_fixed_point_verification: Option<ProviderFixedPointGlobalProofFacts>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProviderFixedPointGlobalProofFacts {
+    valid: bool,
+    meta_digest_blake3: Option<String>,
+    closure_policy_digest_blake3: Option<String>,
+    stage_binary_digest_blake3: Option<String>,
+    blockers: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -212,6 +224,9 @@ fn derive_release_surface_evidence_from_paths(
     let provider_fixed_point_meta = read_optional_json_file::<ProviderFixedPointMetaSubset>(
         &bundle_dir.join(PROVIDER_FIXED_POINT_META_RELATIVE_PATH),
     )?;
+    let provider_fixed_point_verification = provider_fixed_point_meta
+        .as_ref()
+        .map(|_meta| provider_fixed_point_global_proof_facts(&bundle_dir.join(PROVIDER_FIXED_POINT_RELATIVE_DIR)));
     let evidence = derive_release_surface_evidence(ReleaseSurfaceEvidenceDerivationInput {
         universe,
         policy,
@@ -225,6 +240,7 @@ fn derive_release_surface_evidence_from_paths(
         self_hosting_manifest,
         self_hosting_summary,
         provider_fixed_point_meta,
+        provider_fixed_point_verification,
     })?;
     write_surface_evidence(&evidence_path, &evidence)?;
     Ok(ReleaseSurfaceEvidenceCommandOutput {
@@ -372,7 +388,7 @@ fn classify_release_surface(
         return self_hosting_stage2_classification(input);
     }
     if is_provider_fixed_point_surface(input, output_digest) {
-        return provider_fixed_point_classification(input);
+        return provider_fixed_point_classification(input, output_digest);
     }
     unsupported_classification(UNKNOWN_RELEASE_SURFACE_KIND, UNRECOGNIZED_ARTIFACT_UNSUPPORTED_REASON)
 }
@@ -408,16 +424,62 @@ fn is_provider_fixed_point_surface(input: &ReleaseSurfaceEvidenceDerivationInput
         .is_some_and(|meta| meta.fixed_point && meta.stage2.binary_blake3 == output_digest)
 }
 
-fn provider_fixed_point_classification(input: &ReleaseSurfaceEvidenceDerivationInput) -> SurfaceClassification {
+fn provider_fixed_point_classification(
+    input: &ReleaseSurfaceEvidenceDerivationInput,
+    output_digest: &str,
+) -> SurfaceClassification {
     let proof_digest =
         input.manifest.provider_fixed_point_proof.as_ref().map(|artifact| artifact.digest_blake3.clone());
+    let Some(verification) = input.provider_fixed_point_verification.as_ref() else {
+        return invalid_provider_fixed_point_classification(
+            proof_digest,
+            "provider fixed-point verification facts are missing",
+        );
+    };
+    if !verification.valid {
+        return invalid_provider_fixed_point_classification(proof_digest, &verification.blockers.join("; "));
+    }
+    if verification.stage_binary_digest_blake3.as_deref() != Some(output_digest) {
+        return invalid_provider_fixed_point_classification(
+            proof_digest,
+            "provider fixed-point stage binary digest does not match release artifact digest",
+        );
+    }
+    let Some(toolchain_digest) = verification.closure_policy_digest_blake3.clone() else {
+        return invalid_provider_fixed_point_classification(
+            proof_digest,
+            "provider fixed-point closure policy digest is missing",
+        );
+    };
+    let Some(hermeticity_digest) = verification.meta_digest_blake3.clone() else {
+        return invalid_provider_fixed_point_classification(
+            proof_digest,
+            "provider fixed-point meta digest is missing",
+        );
+    };
+    SurfaceClassification {
+        kind: PROVIDER_FIXED_POINT_SURFACE_KIND,
+        strict_hermeticity: true,
+        fresh_rebuild_store: true,
+        toolchain_provenance_digest_blake3: Some(toolchain_digest),
+        hermeticity_evidence_digest_blake3: Some(hermeticity_digest),
+        unsupported_reason: None,
+    }
+}
+
+fn invalid_provider_fixed_point_classification(proof_digest: Option<String>, reason: &str) -> SurfaceClassification {
+    let message = if reason.trim().is_empty() {
+        PROVIDER_FIXED_POINT_INVALID_REASON.to_string()
+    } else {
+        format!("{PROVIDER_FIXED_POINT_INVALID_REASON}: {reason}")
+    };
     SurfaceClassification {
         kind: PROVIDER_FIXED_POINT_SURFACE_KIND,
         strict_hermeticity: false,
         fresh_rebuild_store: false,
         toolchain_provenance_digest_blake3: proof_digest.clone(),
         hermeticity_evidence_digest_blake3: proof_digest,
-        unsupported_reason: Some(PROVIDER_FIXED_POINT_UNSUPPORTED_REASON.to_string()),
+        unsupported_reason: Some(message),
     }
 }
 
@@ -453,6 +515,17 @@ fn witnesses_for_surface(
         }
     }
     evidence
+}
+
+fn provider_fixed_point_global_proof_facts(proof_dir: &Path) -> ProviderFixedPointGlobalProofFacts {
+    let verification = crate::cargo_free_self_build::verify_provider_fixed_point_proof_bundle(proof_dir);
+    ProviderFixedPointGlobalProofFacts {
+        valid: verification.valid,
+        meta_digest_blake3: verification.meta_digest_blake3,
+        closure_policy_digest_blake3: verification.closure_policy_digest_blake3,
+        stage_binary_digest_blake3: verification.stage_binary_digest_blake3,
+        blockers: verification.blockers,
+    }
 }
 
 fn read_witness_attestations(witness_dir: &Path) -> Result<Vec<WitnessAttestationSubset>, RunError> {
@@ -720,6 +793,17 @@ mod tests {
                     binary_blake3: digest(10),
                 },
             }),
+            provider_fixed_point_verification: Some(provider_fixed_point_valid_facts()),
+        }
+    }
+
+    fn provider_fixed_point_valid_facts() -> ProviderFixedPointGlobalProofFacts {
+        ProviderFixedPointGlobalProofFacts {
+            valid: true,
+            meta_digest_blake3: Some(digest(30)),
+            closure_policy_digest_blake3: Some(digest(31)),
+            stage_binary_digest_blake3: Some(digest(10)),
+            blockers: Vec::new(),
         }
     }
 
@@ -768,7 +852,7 @@ mod tests {
     }
 
     #[test]
-    fn release_derived_full_release_blocks_provider_fixed_point_surface() {
+    fn release_derived_full_release_admits_verified_provider_fixed_point_surface() {
         let universe = full_release_universe();
         let evidence = derive_release_surface_evidence(derivation_input(universe.clone())).unwrap();
         let report = evaluate_generated(universe, evidence.clone());
@@ -776,10 +860,31 @@ mod tests {
         let stage2 = evidence.iter().find(|item| item.surface_id == STAGE2_SURFACE_ID).unwrap();
 
         assert_eq!(evidence.len(), 2);
-        assert!(provider.unsupported_reason.as_ref().unwrap().contains("provider fixed-point"));
+        assert_eq!(provider.unsupported_reason, None);
+        assert!(provider.strict_hermeticity);
+        assert!(provider.fresh_rebuild_store);
+        assert_eq!(stage2.unsupported_reason, None);
+        assert_eq!(report.claim_class, GlobalReproducibilityClaimClass::Eligible);
+    }
+
+    #[test]
+    fn release_derived_full_release_blocks_invalid_provider_fixed_point_surface() {
+        let universe = full_release_universe();
+        let mut input = derivation_input(universe.clone());
+        input.provider_fixed_point_verification = Some(ProviderFixedPointGlobalProofFacts {
+            valid: false,
+            meta_digest_blake3: Some(digest(30)),
+            closure_policy_digest_blake3: Some(digest(31)),
+            stage_binary_digest_blake3: Some(digest(10)),
+            blockers: vec!["missing stage receipt".to_string()],
+        });
+        let evidence = derive_release_surface_evidence(input).unwrap();
+        let report = evaluate_generated(universe, evidence.clone());
+        let provider = evidence.iter().find(|item| item.surface_id == PROVIDER_SURFACE_ID).unwrap();
+
+        assert!(provider.unsupported_reason.as_ref().unwrap().contains("missing stage receipt"));
         assert!(!provider.strict_hermeticity);
         assert!(!provider.fresh_rebuild_store);
-        assert_eq!(stage2.unsupported_reason, None);
         assert_eq!(report.claim_class, GlobalReproducibilityClaimClass::Blocked);
         assert!(report.blockers.iter().any(|blocker| blocker.surface_id.as_deref() == Some(PROVIDER_SURFACE_ID)));
     }

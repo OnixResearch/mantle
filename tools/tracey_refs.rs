@@ -232,8 +232,9 @@
 // r[verify verification_evidence.global_reproducibility_release_surface_evidence]
 // Implemented by `src/global_reproducibility_release.rs`, which derives release
 // bundle facts into surface evidence while leaving final admission to
-// `src/global_reproducibility_cmd.rs`. Verified by positive stage2-only helper
-// tests and negative full-release/provider-fixed-point blocker tests.
+// `src/global_reproducibility_cmd.rs`. Verified by positive stage2/full-release
+// helper tests, invalid-provider blocker tests, and provider proof copied-bundle
+// verifier tests in `src/cargo_free_self_build.rs`.
 //
 // r[impl compiled-eval.cranelift-prototype-subset]
 // r[verify compiled-eval.cranelift-prototype-subset]
