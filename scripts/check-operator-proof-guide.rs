@@ -79,6 +79,16 @@ const REQUIRED_CARGO_FREE_PATHS: &[&str] = &[
     "stage2/smoke-stdout.txt",
 ];
 
+const REQUIRED_CURRENT_EVIDENCE_FRAGMENTS: &[&str] = &[
+    "Current refreshed evidence (2026-07-03)",
+    "/tmp/mantle-cargo-free-fixed-point-classifier2-20260703T203015Z",
+    "blocker_diagnostic",
+    "vendor-checksum-mismatch",
+    "registry+https://github.com/rust-lang/crates.io-index#astral-tokio-tar@0.6.3",
+    "stage1 blocked before binary",
+    "not a Nix-free fixed-point success claim",
+];
+
 const REQUIRED_DEMO_FIELDS: &[&str] = &[
     "mantle-nix-free-demo-summary-v1",
     "source-root-cargo-free-fixed-point",
@@ -199,6 +209,12 @@ fn validate_inputs(inputs: GuideInputs<'_>) -> Result<(), String> {
     require_all(inputs.readme, "README linkage", REQUIRED_README_FRAGMENTS, &mut errors);
     require_all(inputs.guide, "self-build evidence path", REQUIRED_SELF_BUILD_PATHS, &mut errors);
     require_all(inputs.guide, "cargo-free evidence path", REQUIRED_CARGO_FREE_PATHS, &mut errors);
+    require_all(
+        inputs.guide,
+        "current cargo-free evidence",
+        REQUIRED_CURRENT_EVIDENCE_FRAGMENTS,
+        &mut errors,
+    );
     require_all(inputs.guide, "demo summary field", REQUIRED_DEMO_FIELDS, &mut errors);
     require_all(inputs.guide, "outcome vocabulary", REQUIRED_OUTCOME_FRAGMENTS, &mut errors);
     require_all(inputs.guide, "bounded non-claim", REQUIRED_NON_CLAIMS, &mut errors);
@@ -253,6 +269,12 @@ fn run_self_test() -> Result<(), String> {
         guide.replace("toolchain_policy_digest_blake3", "toolchain_policy_digest"),
         &readme,
     )?;
+    assert_rejected("missing cargo-free bundle path", guide.replace("stage1/receipt.json", "stage1/old-receipt.json"), &readme)?;
+    assert_rejected(
+        "stale current blocker",
+        guide.replace("vendor-checksum-mismatch", "cargo-free-bounded-topology"),
+        &readme,
+    )?;
     let overbroad = format!("{guide}\nThis guide proves compiler correctness.\n");
     assert_rejected("overbroad claim", overbroad, &readme)?;
     println!("operator proof guide checker self-test passed");
@@ -272,6 +294,7 @@ fn sample_valid_guide() -> String {
     append_lines(&mut text, REQUIRED_COMMANDS);
     append_lines(&mut text, REQUIRED_SELF_BUILD_PATHS);
     append_lines(&mut text, REQUIRED_CARGO_FREE_PATHS);
+    append_lines(&mut text, REQUIRED_CURRENT_EVIDENCE_FRAGMENTS);
     append_lines(&mut text, REQUIRED_DEMO_FIELDS);
     append_lines(&mut text, REQUIRED_OUTCOME_FRAGMENTS);
     append_lines(&mut text, REQUIRED_NON_CLAIMS);

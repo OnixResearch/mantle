@@ -129,6 +129,22 @@ A successful Cargo-free fixed-point report requires `status = "success"`,
 bounded non-claims. A blocked report with `status = "blocked"` is still useful
 frontier evidence, but it is not a Nix-free fixed-point success claim.
 
+### Current refreshed evidence (2026-07-03)
+
+The current inspected Cargo-free fixed-point evidence is blocked, not successful.
+Use this as the current status until a newer same-tree bundle supersedes it:
+
+- Command: `mantle self-build --cargo-free --fixed-point --out /tmp/mantle-cargo-free-fixed-point-classifier2-20260703T203015Z --rustc /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc`
+- Output bundle: `/tmp/mantle-cargo-free-fixed-point-classifier2-20260703T203015Z`
+- Verdict: `status = "blocked"`, `fixed_point = false`; stage1 blocked before binary, so no stage binary BLAKE3 digests were produced.
+- Machine field: `blocker_diagnostic`.
+- Blocker class: `vendor-checksum-mismatch` nested under `/rust_plan/native_registry_source_planning/blockers/0`.
+- Blocked package: `registry+https://github.com/rust-lang/crates.io-index#astral-tokio-tar@0.6.3`.
+- Receipt digests: topology receipt `11d5c390fe79fbc1227079c4275baefeceb2d941cc0d0985c2f6c973fc8a2660`, rust-plan receipt `1bdc412bce65980d883057db2b67a2a947d08cb1ed1f21591260998b9f0e3768`, native registry source digest `ba666c4b9c177ab3e64fe2b8818ed56e5fe0ed1b5577b3375fb6019ff6e76214`.
+- Next action: refresh or repair checked-in `vendor-deps/` / declared source material against `Cargo.lock`, then rerun the fixed-point proof.
+
+This evidence is not a Nix-free fixed-point success claim.
+
 This lane does not prove compiler correctness, does not prove full Cargo
 compatibility, does not prove release reproducibility, does not prove deploy
 success, and does not prove general Nix replacement completeness.

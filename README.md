@@ -789,7 +789,10 @@ pinned fetched artifacts, mantle-built outputs, and host-convenience probes.
   `--out` outside the source root so evidence does not change native source
   digests. The rust-plan receipt labels this as `cargo-free-bounded-topology`
   when supported, `blocked-unsupported-surface` when native planning stops at an
-  unsupported surface, and always `not-default-project-build`.
+  unsupported surface, and always `not-default-project-build`. Current refreshed
+  evidence is blocked by `vendor-checksum-mismatch` for declared vendor source
+  material; see `docs/operator-proof-guide.md` before reporting any Cargo-free
+  fixed-point status.
 - **Not yet proven**: this first build still relies on host tooling and the
   reduced seed provider, while Cargo-free topology mode is bounded Rust topology
   evidence rather than compiler correctness, release reproducibility, bootstrap
