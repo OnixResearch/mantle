@@ -185,7 +185,10 @@ non-claims, see
 
 For self-build, Cargo-free fixed-point, Nix-free demo-bundle proof operations,
 and foreign import receipt trust-model links, see
-[`docs/operator-proof-guide.md`](docs/operator-proof-guide.md).
+[`docs/operator-proof-guide.md`](docs/operator-proof-guide.md). For repeatable Cairn
+change validation, sync/archive, post-archive validation, and final status
+evidence capture, see
+[`docs/cairn-lifecycle-evidence-runner.md`](docs/cairn-lifecycle-evidence-runner.md).
 For project-facing name rules and exact legacy compatibility exceptions, see
 [`docs/mantle-naming.md`](docs/mantle-naming.md). Keep the proof guide current
 with:

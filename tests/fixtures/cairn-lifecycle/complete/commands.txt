@@ -1,0 +1,2 @@
+cargo test -p mantle fixture
+git diff --check
