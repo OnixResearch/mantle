@@ -17,6 +17,7 @@ mod cargo_free_self_build;
 mod cargo_import;
 mod errors;
 mod fix;
+mod foreign_derivation_import;
 mod frontend_artifact_export;
 mod frontend_artifact_spec;
 mod frontend_artifact_store;
