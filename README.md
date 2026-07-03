@@ -1438,6 +1438,10 @@ mantle nix-free-demo validate <summary.json>
                                  Validate bounded demo-bundle claimability
 mantle nix-free-demo readme <summary.json>
                                  Render the derived demo-bundle README
+mantle foreign-import validate --graph <graph.json> --package-index <index.json> --policy <policy.json>
+                                 Validate lowered foreign import artifacts without live Guix/Nix frontends
+mantle foreign-import plan --graph <graph.json> --package-index <index.json> --policy <policy.json> --package hello
+                                 Emit a receipt-bound adapter plan with explicit non-claims
 
 # Store, logs, attestations, release evidence
 mantle store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state

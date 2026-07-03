@@ -1,0 +1,67 @@
+{
+  "schema": "mantle-foreign-import-cli-v1",
+  "command": "plan",
+  "verdict": "accepted",
+  "accepted": true,
+  "diagnostics": [],
+  "receipt": {
+    "schema": "foreign-derivation-import-receipt-v1",
+    "producer_identity": "nix-derivation-json:hello",
+    "raw_graph_digest": "0b67022339a27d76dc309024de1ac1a10d8425f5dc662b42f2505aa096127eed",
+    "translation_policy_digest": "9f72d829c8d1e8acc773e7ceb535b73d3582b65c5d351661219fe718d4c70eb8",
+    "translated_graph_digest": "bc1dde4d233cb85583c3adf661dfca372722369ecf1ad885e6e9d7599ab2a51f",
+    "package_index_digest": "80ce2bf9825b032f4af37481eda46262b19ad950cbf058eca6f2d85bbeab9fc5",
+    "fetch_cache_policy_digest": "292b2c9f121b3f3e207fc74aca1b9c2e72bd188ec7ccd9c9434a4e0476577ff4",
+    "sandbox_policy_digest": "b80fdec27a0955fcb9748d1ac75b7da507959fdab796a2f223c6bc8d76424afc",
+    "diagnostics": [],
+    "non_claims": [
+      "not-build-success",
+      "not-package-correctness",
+      "not-bootstrap-parity",
+      "not-output-trust",
+      "not-reproducibility",
+      "not-foreign-frontend-availability"
+    ]
+  },
+  "plan": {
+    "schema": "mantle-foreign-derivation-adapter-plan-v1",
+    "roots": [
+      {
+        "package_name": "hello",
+        "node_id": "nix:hello",
+        "output_paths": {
+          "out": "/mantle/store/b2a7b75ff2ef0b905efb11b4ab6f53f9-hello"
+        }
+      }
+    ],
+    "source_payloads": [
+      {
+        "payload_id": "nix-hello-source",
+        "kind": "fixed-output-source",
+        "content_ref": "/mantle/store/00000000000000000000000000000000-hello-source",
+        "embedded_text": null,
+        "mirrors": [
+          "https://cache.example.invalid/hello.tar.gz"
+        ]
+      }
+    ],
+    "sandbox_audit": [],
+    "forbidden_process_invocations": [],
+    "non_claims": [
+      "not-build-success",
+      "not-package-correctness",
+      "not-bootstrap-parity",
+      "not-output-trust",
+      "not-reproducibility",
+      "not-foreign-frontend-availability"
+    ]
+  },
+  "non_claims": [
+    "not-build-success",
+    "not-package-correctness",
+    "not-bootstrap-parity",
+    "not-output-trust",
+    "not-reproducibility",
+    "not-foreign-frontend-availability"
+  ]
+}

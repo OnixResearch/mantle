@@ -18,6 +18,7 @@ mod cargo_import;
 mod errors;
 mod fix;
 mod foreign_derivation_import;
+mod foreign_import_cmd;
 mod frontend_artifact_export;
 mod frontend_artifact_spec;
 mod frontend_artifact_store;
@@ -92,6 +93,7 @@ use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
 use errors::RunError;
+use foreign_import_cmd::ForeignImportAction;
 use nix_free_demo_cmd::NixFreeDemoAction;
 use operator_diagnostics::DoctorProfile;
 use operator_diagnostics::RuntimeFingerprintModeFields;
@@ -296,6 +298,12 @@ enum Command {
     NixFreeDemo {
         #[command(subcommand)]
         action: NixFreeDemoAction,
+    },
+
+    /// Validate and plan from lowered foreign derivation import artifacts.
+    ForeignImport {
+        #[command(subcommand)]
+        action: ForeignImportAction,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -2109,6 +2117,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::Transcript { .. } => "transcript",
         Command::Stage0Inventory { .. } => "stage0-inventory",
         Command::NixFreeDemo { .. } => "nix-free-demo",
+        Command::ForeignImport { .. } => "foreign-import",
         Command::Eval { .. } => "eval",
         Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
         Command::Log { .. } => "log",
@@ -2403,6 +2412,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Transcript { action } => run_transcript_command(action.clone()),
         Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
         Command::NixFreeDemo { action } => nix_free_demo_cmd::cmd_nix_free_demo(action.clone(), ctx.json),
+        Command::ForeignImport { action } => foreign_import_cmd::cmd_foreign_import(action.clone(), ctx.json),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),

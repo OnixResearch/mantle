@@ -851,13 +851,14 @@ fn diagnostic(class: &str, node_id: Option<&str>, message: &str) -> ImportDiagno
     }
 }
 
-fn foreign_import_non_claims() -> Vec<String> {
+pub(crate) fn foreign_import_non_claims() -> Vec<String> {
     vec![
         "not-build-success".to_string(),
         "not-package-correctness".to_string(),
         "not-bootstrap-parity".to_string(),
         "not-output-trust".to_string(),
         "not-reproducibility".to_string(),
+        "not-foreign-frontend-availability".to_string(),
     ]
 }
 

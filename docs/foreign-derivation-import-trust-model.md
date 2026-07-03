@@ -11,6 +11,33 @@ Use this guide when reviewing `foreign-derivation-graph-v1`,
 receipt binds, which trust decisions remain separate, and which extra evidence is
 needed before reporting trusted build outputs.
 
+## CLI usage
+
+Validate lowered artifacts without invoking a foreign frontend:
+
+```bash
+mantle --json foreign-import validate \
+  --graph tests/fixtures/foreign-import/guix-hello.graph.json \
+  --package-index tests/fixtures/foreign-import/guix-hello.index.json \
+  --policy tests/fixtures/foreign-import/policy.json
+```
+
+Emit a receipt-bound adapter plan:
+
+```bash
+mantle --json foreign-import plan \
+  --graph tests/fixtures/foreign-import/nix-hello.graph.json \
+  --package-index tests/fixtures/foreign-import/nix-hello.index.json \
+  --policy tests/fixtures/foreign-import/policy.json \
+  --package hello \
+  --system x86_64-linux
+```
+
+`validate` and `plan` read JSON artifacts in the CLI shell, pass owned in-memory
+data into the import core, and print deterministic reports. `validate --receipt
+<path>` additionally checks that an existing receipt still matches the current
+graph and policy digests.
+
 ## What an import receipt binds
 
 A foreign import receipt binds the reviewable import inputs:
