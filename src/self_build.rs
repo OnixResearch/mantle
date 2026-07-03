@@ -16,10 +16,12 @@ use std::fs::File;
 use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crunch_release_core::release_source_path_is_releasable;
 use serde::Deserialize;
 use sha2::Sha256;
 
@@ -610,7 +612,7 @@ pub fn stage_source(src_dir: &Path, store_dir: &Path) -> Result<String, RunError
     }
 
     let mut copied_entry_count: u32 = 0;
-    copy_tree_entry(&stage_root, &dest, 0, &mut copied_entry_count)?;
+    copy_tree_root(&stage_root, &dest, &mut copied_entry_count)?;
     assert!(copied_entry_count > 0, "staged source copy must copy at least one entry");
 
     eprintln!("  staged: {}", dest.display());
@@ -1445,16 +1447,72 @@ fn copy_selected_source_tree(src_dir: &Path, stage_root: &Path) -> Result<(), Ru
         // Follow symlinks so the staged tree is self-contained inside sandboxed builds.
         let resolved = std::fs::canonicalize(&source_path)
             .map_err(|e| RunError::Internal(format!("canonicalize {}: {e}", source_path.display())))?;
-        copy_tree_entry(&resolved, &dest_path, 0, &mut copied_entry_count)?;
+        let relative_path = Path::new(entry_name);
+        copy_tree_entry(&resolved, &dest_path, relative_path, 0, &mut copied_entry_count)?;
     }
     assert!(copied_entry_count > 0, "source staging must copy at least one entry");
     assert!(copied_entry_count <= MAX_STAGE_SOURCE_ENTRIES, "source staging copied too many entries");
     Ok(())
 }
 
-fn copy_tree_entry(source: &Path, dest: &Path, depth: u32, copied_entry_count: &mut u32) -> Result<(), RunError> {
+fn staged_source_path_is_copyable(relative_path: &Path) -> Result<bool, RunError> {
+    let release_path = staged_source_release_path(relative_path).map_err(RunError::Internal)?;
+    release_source_path_is_releasable(&release_path).map_err(|err| RunError::Internal(err.to_string()))
+}
+
+fn staged_source_release_path(relative_path: &Path) -> Result<String, String> {
+    assert!(relative_path.is_relative(), "staged source path must be relative: {}", relative_path.display());
+    let mut components = Vec::new();
+    for component in relative_path.components() {
+        match component {
+            Component::Normal(raw_component) => {
+                let component_text = raw_component
+                    .to_str()
+                    .ok_or_else(|| format!("staged source path component is not UTF-8: {}", relative_path.display()))?;
+                if component_text.is_empty() {
+                    return Err(format!("staged source path has empty component: {}", relative_path.display()));
+                }
+                components.push(component_text.to_string());
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                return Err(format!(
+                    "staged source path contains parent-directory component: {}",
+                    relative_path.display()
+                ));
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(format!("staged source path must be relative: {}", relative_path.display()));
+            }
+        }
+    }
+    if components.is_empty() {
+        return Err("staged source path must not be empty".to_string());
+    }
+    Ok(components.join("/"))
+}
+
+fn copy_tree_root(source: &Path, dest: &Path, copied_entry_count: &mut u32) -> Result<(), RunError> {
+    assert!(source.is_dir(), "source root must be a directory: {}", source.display());
+    assert!(!dest.exists(), "destination root must not exist yet: {}", dest.display());
+    let metadata = std::fs::symlink_metadata(source)
+        .map_err(|e| RunError::Internal(format!("symlink_metadata {}: {e}", source.display())))?;
+    copy_dir_entry(source, dest, Path::new(""), 0, copied_entry_count, metadata.permissions())
+}
+
+fn copy_tree_entry(
+    source: &Path,
+    dest: &Path,
+    relative_path: &Path,
+    depth: u32,
+    copied_entry_count: &mut u32,
+) -> Result<(), RunError> {
     assert!(source.exists(), "source entry must exist: {}", source.display());
     assert!(depth <= MAX_STAGE_SOURCE_DEPTH, "stage source recursion depth exceeded {MAX_STAGE_SOURCE_DEPTH}");
+    assert!(relative_path.is_relative(), "staged source path must be relative: {}", relative_path.display());
+    if !staged_source_path_is_copyable(relative_path)? {
+        return Ok(());
+    }
     *copied_entry_count = copied_entry_count.saturating_add(1);
     if *copied_entry_count > MAX_STAGE_SOURCE_ENTRIES {
         return Err(RunError::Internal(format!(
@@ -1473,7 +1531,7 @@ fn copy_tree_entry(source: &Path, dest: &Path, depth: u32, copied_entry_count: &
         return copy_file_entry(source, dest, metadata.permissions());
     }
     if metadata.is_dir() {
-        return copy_dir_entry(source, dest, depth, copied_entry_count, metadata.permissions());
+        return copy_dir_entry(source, dest, relative_path, depth, copied_entry_count, metadata.permissions());
     }
 
     Err(RunError::Internal(format!("unsupported source entry type while staging {}", source.display(),)))
@@ -1494,6 +1552,7 @@ fn copy_file_entry(source: &Path, dest: &Path, permissions: std::fs::Permissions
 fn copy_dir_entry(
     source: &Path,
     dest: &Path,
+    relative_path: &Path,
     depth: u32,
     copied_entry_count: &mut u32,
     permissions: std::fs::Permissions,
@@ -1511,7 +1570,14 @@ fn copy_dir_entry(
         let child_name = child
             .file_name()
             .ok_or_else(|| RunError::Internal(format!("staged child has no file name: {}", child.display())))?;
-        copy_tree_entry(child, &dest.join(child_name), depth.saturating_add(1), copied_entry_count)?;
+        let child_relative_path = relative_path.join(child_name);
+        copy_tree_entry(
+            child,
+            &dest.join(child_name),
+            &child_relative_path,
+            depth.saturating_add(1),
+            copied_entry_count,
+        )?;
     }
     std::fs::set_permissions(dest, permissions)
         .map_err(|e| RunError::Internal(format!("chmod {}: {e}", dest.display())))?;
@@ -3357,17 +3423,38 @@ mod tests {
         let repo = tempfile::tempdir().unwrap();
         write_stageable_checkout(repo.path());
         std::fs::create_dir_all(repo.path().join("target").join("debug")).unwrap();
+        std::fs::create_dir_all(repo.path().join("vendor").join(".pi")).unwrap();
         std::fs::write(repo.path().join("target").join("debug").join("junk"), "skip me\n").unwrap();
         std::fs::write(repo.path().join("scratch.txt"), "skip me too\n").unwrap();
+        std::fs::write(repo.path().join("vendor").join(".pi").join("prompt-history.jsonl"), "skip me too\n").unwrap();
 
         let stage = tempfile::tempdir().unwrap();
         copy_selected_source_tree(repo.path(), stage.path()).unwrap();
 
         assert!(stage.path().join("Cargo.toml").is_file());
+        assert!(stage.path().join("vendor").join("patched").join("README").is_file());
         assert!(stage.path().join("vendor-deps").join("dep-a").join("Cargo.toml").is_file());
         assert!(stage.path().join(".cargo").join("vendor-config.toml").is_file());
         assert!(!stage.path().join("target").exists());
         assert!(!stage.path().join("scratch.txt").exists());
+        assert!(!stage.path().join("vendor").join(".pi").exists());
+    }
+
+    #[test]
+    fn staged_source_path_policy_matches_release_archive_policy() {
+        assert!(staged_source_path_is_copyable(Path::new("vendor/patched/README")).unwrap());
+        assert!(staged_source_path_is_copyable(Path::new(".cargo/vendor-config.toml")).unwrap());
+        assert!(staged_source_path_is_copyable(Path::new("vendor-deps/cc/src/target/apple.rs")).unwrap());
+        assert!(!staged_source_path_is_copyable(Path::new("vendor/.pi/prompt-history.jsonl")).unwrap());
+        assert!(!staged_source_path_is_copyable(Path::new("target/debug/junk")).unwrap());
+    }
+
+    #[test]
+    fn staged_source_path_policy_rejects_unsafe_relative_paths() {
+        let parent_err = staged_source_path_is_copyable(Path::new("vendor/../escape")).unwrap_err();
+        assert!(parent_err.message().contains("parent-directory"), "unexpected error: {parent_err}");
+        let empty_err = staged_source_path_is_copyable(Path::new("")).unwrap_err();
+        assert!(empty_err.message().contains("must not be empty"), "unexpected error: {empty_err}");
     }
 
     #[test]

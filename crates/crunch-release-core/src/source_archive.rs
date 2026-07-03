@@ -13,8 +13,8 @@ pub const RELEASE_SOURCE_ARCHIVE_VERSION: &str = "v1";
 
 const MAX_RELEASE_SOURCE_MEMBERS_COUNT: u32 = 200_000;
 const MAX_RELEASE_SOURCE_PATH_BYTES_COUNT: u32 = 4096;
-const RELEASE_SOURCE_SKIP_ANYWHERE: &[&str] = &[".agent", ".git", ".jj", ".pi", "target"];
-const RELEASE_SOURCE_SKIP_AT_ROOT: &[&str] = &["cairn"];
+const RELEASE_SOURCE_SKIP_ANYWHERE: &[&str] = &[".agent", ".git", ".jj", ".pi"];
+const RELEASE_SOURCE_SKIP_AT_ROOT: &[&str] = &["cairn", "target"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReleaseSourceEntryKind {
@@ -174,12 +174,25 @@ mod tests {
             candidate("src/main.rs", ReleaseSourceEntryKind::File),
             candidate("target/release/mantle", ReleaseSourceEntryKind::File),
             candidate(".pi/private-note", ReleaseSourceEntryKind::File),
+            candidate("vendor/.pi/prompt-history.jsonl", ReleaseSourceEntryKind::File),
             candidate("cairn/specs/demo/spec.md", ReleaseSourceEntryKind::File),
         ])
         .unwrap();
 
         assert_eq!(members.len(), 1);
         assert_eq!(members[0].relative_path, "src/main.rs");
+    }
+
+    #[test]
+    fn source_paths_with_target_named_components_are_preserved() {
+        let members = plan_release_source_archive_members(vec![
+            candidate("vendor-deps/cc/src/target/apple.rs", ReleaseSourceEntryKind::File),
+            candidate("vendor/patched/src/target.rs", ReleaseSourceEntryKind::File),
+        ])
+        .unwrap();
+
+        let paths = members.into_iter().map(|member| member.relative_path).collect::<Vec<_>>();
+        assert_eq!(paths, vec!["vendor-deps/cc/src/target/apple.rs", "vendor/patched/src/target.rs"]);
     }
 
     #[test]
