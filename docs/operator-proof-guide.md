@@ -15,6 +15,7 @@ were observed in the current run.
 | Host-tool-free stage0 boundary | `./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>` | `target/self-hosting-proof/run-.../protected-exec-audit.json` | The protected stage0 boundary used declared seed executables under protected exec supervision. |
 | Cargo-free fixed point | `mantle self-build --cargo-free --out /tmp/mantle-cargo-free` | `/tmp/mantle-cargo-free/` | Mantle built the requested Mantle binary through the bounded native Rust topology and stage1/stage2 binary digests matched. |
 | Nix-free demo bundle | `mantle --json nix-free-demo validate <summary.json>` | generated demo README plus machine summary | The recorded source-root Cargo-free fixed-point demo profile is claimable only when all validator diagnostics are absent. |
+| Foreign import receipt review | [`docs/foreign-derivation-import-trust-model.md`](foreign-derivation-import-trust-model.md) | import receipt, graph, index, and policy files | Admission evidence is claim-safe only when reported with receipt non-claims and without output-trust or build-success wording. |
 
 Run the fast prerequisite check before starting expensive self-build proof work:
 
@@ -22,11 +23,29 @@ Run the fast prerequisite check before starting expensive self-build proof work:
 ./scripts/prove-self-hosting.sh --check
 ```
 
-Use the checked-in guide drift check after documentation or proof-surface edits:
+Use the checked-in guide drift checks after documentation, trust-model, or
+proof-surface edits:
 
 ```bash
 nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs
+nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs
+nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self-test
 ```
+
+## Foreign import receipt trust model
+
+Foreign derivation import receipts are admission records, not proof success
+records. The trust model guide explains graph provenance, policy digests, source
+verification, cache/substitution trust, sandbox capabilities, realization,
+output verification, Guix-like examples, Nix-like examples, and exact receipt
+non-claims:
+
+- [`docs/foreign-derivation-import-trust-model.md`](foreign-derivation-import-trust-model.md)
+
+Use that guide before claiming anything stronger than import admission. A receipt
+alone does not claim build success, package correctness, bootstrap parity, output
+trust, reproducibility, or foreign-frontend availability; later Mantle
+realization and verification evidence must carry those claims.
 
 ## Self-build proof
 
@@ -214,9 +233,14 @@ Run the guide guard after proof documentation, command, or receipt-field edits:
 ```bash
 nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs
 nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs --self-test
+nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs
+nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self-test
 ```
 
-The guard checks that this guide still names the current command snippets,
-important bundle paths, required demo summary fields, outcome vocabulary, and
-bounded non-claims. Its self-test covers positive validation plus negative stale
-command, missing bundle field, and overbroad proof-claim fixtures.
+The proof guide guard checks that this guide still names the current command
+snippets, important bundle paths, required demo summary fields, outcome
+vocabulary, and bounded non-claims. Its self-test covers positive validation
+plus negative stale command, missing bundle field, and overbroad proof-claim
+fixtures. The foreign import trust-model guard checks the linked guide's trust
+boundaries, non-claims, Guix-like and Nix-like examples, README linkage, and this
+proof-guide linkage.

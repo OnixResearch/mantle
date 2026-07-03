@@ -178,15 +178,22 @@ For the full command path, examples, and sidecar rules, see
 
 For frontend-neutral action/object/reference-scan evidence contracts, see
 [`docs/build-correctness-primitives.md`](docs/build-correctness-primitives.md).
+For foreign derivation import receipt boundaries, policy digests, cache/source
+trust, sandbox capabilities, Guix-like and Nix-like examples, and admission-only
+non-claims, see
+[`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).
 
-For self-build, Cargo-free fixed-point, and Nix-free demo-bundle proof
-operations, see [`docs/operator-proof-guide.md`](docs/operator-proof-guide.md).
+For self-build, Cargo-free fixed-point, Nix-free demo-bundle proof operations,
+and foreign import receipt trust-model links, see
+[`docs/operator-proof-guide.md`](docs/operator-proof-guide.md).
 For project-facing name rules and exact legacy compatibility exceptions, see
 [`docs/mantle-naming.md`](docs/mantle-naming.md). Keep the proof guide current
 with:
 
 ```bash
 nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs
+nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs
+nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self-test
 ```
 
 ## Validation tiers
