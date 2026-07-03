@@ -232,6 +232,21 @@ struct ChildRun {
     execution_status: String,
     cargo_marker_absent: bool,
     blocker: Option<String>,
+    blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+struct BlockedTopologyDiagnostic {
+    classification: String,
+    topology_execution_status: String,
+    root_blocked_unit: Option<String>,
+    package_id: Option<String>,
+    execution_role: Option<String>,
+    selected_triple: Option<String>,
+    target_kind: Option<String>,
+    predecessor_status: Option<String>,
+    blocker_class: Option<String>,
+    diagnostic: String,
 }
 
 #[derive(Debug)]
@@ -277,6 +292,7 @@ struct FixedPointStageRun {
     source_built_toolchain_closure_policy_digest_blake3: Option<String>,
     selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
     blocker: Option<String>,
+    blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
 }
 
 #[derive(Debug)]
@@ -299,6 +315,8 @@ struct FixedPointSummary {
     source_built_toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     rust_source_provider: RustSourceProviderBindingStatus,
     blocker: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
     non_claims: Vec<&'static str>,
 }
 
@@ -322,6 +340,8 @@ struct FixedPointStageSummary {
     source_built_toolchain_closure_policy_digest_blake3: Option<String>,
     selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
     blocker: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -403,6 +423,8 @@ struct SelfBuildSummary {
     failed_unit_count: u64,
     smoke_status_code: Option<i32>,
     blocker: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
     source_built_toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     rust_source_provider: RustSourceProviderBindingStatus,
     non_claims: Vec<&'static str>,
@@ -1412,27 +1434,234 @@ fn run_rust_plan_child(
     let receipt = parse_receipt(&paths.receipt_path, output.status.success())?;
     let execution_status = receipt_execution_status(receipt.as_ref());
     let cargo_marker_absent = !paths.marker_path.exists();
-    let blocker = child_blocker(output.status.code(), &execution_status, cargo_marker_absent);
+    let (blocker, blocker_diagnostic) =
+        child_blocker_with_diagnostic(output.status.code(), &execution_status, cargo_marker_absent, receipt.as_ref());
     Ok(ChildRun {
         status_code: output.status.code(),
         receipt,
         execution_status,
         cargo_marker_absent,
         blocker,
+        blocker_diagnostic,
     })
 }
 
 fn child_blocker(status_code: Option<i32>, execution_status: &str, cargo_marker_absent: bool) -> Option<String> {
+    child_blocker_with_diagnostic(status_code, execution_status, cargo_marker_absent, None).0
+}
+
+fn child_blocker_with_diagnostic(
+    status_code: Option<i32>,
+    execution_status: &str,
+    cargo_marker_absent: bool,
+    receipt: Option<&Value>,
+) -> (Option<String>, Option<BlockedTopologyDiagnostic>) {
     if !cargo_marker_absent {
-        return Some("cargo guard was invoked".to_string());
+        return (Some("cargo guard was invoked".to_string()), None);
     }
     if status_code != Some(SUCCESS_EXIT_CODE) {
-        return Some(format!("rust-plan exited with {}", status_text(status_code).trim_end()));
+        return (Some(format!("rust-plan exited with {}", status_text(status_code).trim_end())), None);
     }
     if execution_status != SUCCESS_STATUS {
-        return Some(format!("topology execution status was {execution_status}"));
+        let diagnostic = classify_blocked_topology_receipt(receipt, execution_status);
+        return (Some(blocked_topology_summary(&diagnostic)), Some(diagnostic));
     }
-    None
+    (None, None)
+}
+
+fn classify_blocked_topology_receipt(receipt: Option<&Value>, execution_status: &str) -> BlockedTopologyDiagnostic {
+    debug_assert!(execution_status != SUCCESS_STATUS);
+    let Some(receipt) = receipt else {
+        return malformed_blocked_topology_diagnostic(
+            execution_status,
+            "missing-blocked-receipt",
+            "blocked topology execution did not produce a parseable receipt",
+        );
+    };
+    let Some(units) = receipt.pointer("/topology_execution/unit_executions").and_then(Value::as_array) else {
+        return topology_level_blocked_diagnostic(receipt, execution_status);
+    };
+    let blocked_units = units
+        .iter()
+        .enumerate()
+        .filter(|(_, unit)| optional_str(unit, "/execution_status") != Some(SUCCESS_STATUS))
+        .collect::<Vec<_>>();
+    match blocked_units.as_slice() {
+        [] => topology_level_blocked_diagnostic(receipt, execution_status),
+        [(unit_index, unit)] => blocked_unit_diagnostic(execution_status, units, *unit_index, unit),
+        _ => malformed_blocked_topology_diagnostic(
+            execution_status,
+            "ambiguous-blocked-units",
+            &format!("blocked topology receipt contains {} non-success unit executions", blocked_units.len()),
+        ),
+    }
+}
+
+fn blocked_unit_diagnostic(
+    execution_status: &str,
+    units: &[Value],
+    unit_index: usize,
+    unit: &Value,
+) -> BlockedTopologyDiagnostic {
+    let required = [
+        ("unit_id", optional_str(unit, "/unit_id")),
+        ("package_id", optional_str(unit, "/package_id")),
+        ("execution_kind", optional_str(unit, "/execution_kind")),
+        ("selected_triple", optional_str(unit, "/selected_triple")),
+        ("target_kind", optional_str(unit, "/target_kind")),
+    ];
+    if let Some((field, _)) = required.iter().find(|(_, value)| value.is_none()) {
+        return malformed_blocked_topology_diagnostic(
+            execution_status,
+            "malformed-blocked-unit",
+            &format!("blocked unit at index {unit_index} is missing required field {field}"),
+        );
+    }
+    let blocker_class = optional_str(unit, "/blocker/class").map(ToOwned::to_owned);
+    let diagnostic = match blocker_class.as_deref() {
+        Some(class) => format!("blocked unit classified with blocker class {class}"),
+        None => format!("blocked unit at index {unit_index} is missing blocker class"),
+    };
+    BlockedTopologyDiagnostic {
+        classification: if blocker_class.is_some() {
+            "blocked-unit".to_string()
+        } else {
+            "malformed-blocked-unit".to_string()
+        },
+        topology_execution_status: execution_status.to_string(),
+        root_blocked_unit: optional_str(unit, "/unit_id").map(ToOwned::to_owned),
+        package_id: optional_str(unit, "/package_id").map(ToOwned::to_owned),
+        execution_role: optional_str(unit, "/execution_kind").map(ToOwned::to_owned),
+        selected_triple: optional_str(unit, "/selected_triple").map(ToOwned::to_owned),
+        target_kind: optional_str(unit, "/target_kind").map(ToOwned::to_owned),
+        predecessor_status: predecessor_status(units, unit_index),
+        blocker_class,
+        diagnostic,
+    }
+}
+
+fn topology_level_blocked_diagnostic(receipt: &Value, execution_status: &str) -> BlockedTopologyDiagnostic {
+    let top_class = optional_str(receipt, "/topology_execution/blocker/class").map(ToOwned::to_owned);
+    let nested = first_nested_planner_blocker(receipt);
+    let blocker_class = nested
+        .as_ref()
+        .and_then(|(_, blocker)| optional_str(blocker, "/class"))
+        .map(ToOwned::to_owned)
+        .or_else(|| top_class.clone());
+    let diagnostic = topology_level_diagnostic_message(top_class.as_deref(), nested.as_ref());
+    BlockedTopologyDiagnostic {
+        classification: if blocker_class.is_some() {
+            "topology-level-blocker".to_string()
+        } else {
+            "malformed-blocked-receipt".to_string()
+        },
+        topology_execution_status: execution_status.to_string(),
+        root_blocked_unit: nested
+            .as_ref()
+            .and_then(|(_, blocker)| optional_str(blocker, "/unit_id"))
+            .map(ToOwned::to_owned),
+        package_id: nested
+            .as_ref()
+            .and_then(|(_, blocker)| optional_str(blocker, "/package_id"))
+            .map(ToOwned::to_owned),
+        execution_role: nested
+            .as_ref()
+            .and_then(|(_, blocker)| optional_str(blocker, "/execution_kind"))
+            .map(ToOwned::to_owned),
+        selected_triple: nested
+            .as_ref()
+            .and_then(|(_, blocker)| optional_str(blocker, "/selected_triple"))
+            .map(ToOwned::to_owned),
+        target_kind: nested
+            .as_ref()
+            .and_then(|(_, blocker)| optional_str(blocker, "/target_kind"))
+            .map(ToOwned::to_owned),
+        predecessor_status: None,
+        blocker_class,
+        diagnostic,
+    }
+}
+
+fn first_nested_planner_blocker(receipt: &Value) -> Option<(&'static str, &Value)> {
+    const NESTED_BLOCKER_POINTERS: [&str; 6] = [
+        "/rust_plan/native_registry_source_planning/blockers/0",
+        "/rust_plan/native_git_source_planning/blockers/0",
+        "/rust_plan/native_package_target_planning/blockers/0",
+        "/rust_plan/native_unit_graph_planning/blockers/0",
+        "/rust_plan/native_host_unit_graph_planning/blockers/0",
+        "/rust_plan/unit_derivation_graph/blockers/0",
+    ];
+    NESTED_BLOCKER_POINTERS
+        .iter()
+        .find_map(|pointer| receipt.pointer(pointer).map(|blocker| (*pointer, blocker)))
+}
+
+fn topology_level_diagnostic_message(top_class: Option<&str>, nested: Option<&(&'static str, &Value)>) -> String {
+    match (top_class, nested) {
+        (Some(top_class), Some((pointer, blocker))) => {
+            let nested_class = optional_str(blocker, "/class").unwrap_or("missing-class");
+            let nested_message = optional_str(blocker, "/message").unwrap_or("missing-message");
+            format!("topology-level blocker class {top_class}; nested {pointer} class {nested_class}: {nested_message}")
+        }
+        (Some(top_class), None) => format!("topology-level blocker class {top_class}"),
+        (None, Some((pointer, blocker))) => {
+            let nested_class = optional_str(blocker, "/class").unwrap_or("missing-class");
+            let nested_message = optional_str(blocker, "/message").unwrap_or("missing-message");
+            format!("topology-level blocker has nested {pointer} class {nested_class}: {nested_message}")
+        }
+        (None, None) => "blocked topology receipt has no non-success unit and no topology blocker class".to_string(),
+    }
+}
+
+fn malformed_blocked_topology_diagnostic(
+    execution_status: &str,
+    classification: &str,
+    diagnostic: &str,
+) -> BlockedTopologyDiagnostic {
+    BlockedTopologyDiagnostic {
+        classification: classification.to_string(),
+        topology_execution_status: execution_status.to_string(),
+        root_blocked_unit: None,
+        package_id: None,
+        execution_role: None,
+        selected_triple: None,
+        target_kind: None,
+        predecessor_status: None,
+        blocker_class: None,
+        diagnostic: diagnostic.to_string(),
+    }
+}
+
+fn predecessor_status(units: &[Value], unit_index: usize) -> Option<String> {
+    if unit_index == 0 {
+        return None;
+    }
+    units
+        .get(unit_index - 1)
+        .and_then(|unit| optional_str(unit, "/execution_status"))
+        .map(ToOwned::to_owned)
+}
+
+fn blocked_topology_summary(diagnostic: &BlockedTopologyDiagnostic) -> String {
+    let mut parts = vec![
+        format!("topology execution status was {}", diagnostic.topology_execution_status),
+        format!("classification={}", diagnostic.classification),
+        diagnostic.diagnostic.clone(),
+    ];
+    push_optional_summary_part(&mut parts, "unit", diagnostic.root_blocked_unit.as_deref());
+    push_optional_summary_part(&mut parts, "package", diagnostic.package_id.as_deref());
+    push_optional_summary_part(&mut parts, "role", diagnostic.execution_role.as_deref());
+    push_optional_summary_part(&mut parts, "triple", diagnostic.selected_triple.as_deref());
+    push_optional_summary_part(&mut parts, "target_kind", diagnostic.target_kind.as_deref());
+    push_optional_summary_part(&mut parts, "predecessor_status", diagnostic.predecessor_status.as_deref());
+    push_optional_summary_part(&mut parts, "blocker_class", diagnostic.blocker_class.as_deref());
+    parts.join("; ")
+}
+
+fn push_optional_summary_part(parts: &mut Vec<String>, label: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        parts.push(format!("{label}={value}"));
+    }
 }
 
 fn execute_fixed_point_stage(
@@ -1535,8 +1764,12 @@ fn fixed_point_stage_from_output(
     )?;
     let execution_status = receipt_execution_status(receipt.as_ref());
     let cargo_marker_absent = !stage.cargo_marker_path.exists();
+    let mut blocker_diagnostic = None;
     if blocker.is_none() {
-        blocker = child_blocker(status_code, &execution_status, cargo_marker_absent);
+        let classified =
+            child_blocker_with_diagnostic(status_code, &execution_status, cargo_marker_absent, receipt.as_ref());
+        blocker = classified.0;
+        blocker_diagnostic = classified.1;
     }
     let produced = if blocker.is_none() {
         materialize_fixed_point_stage_artifact(stage, receipt.as_ref())?
@@ -1550,6 +1783,7 @@ fn fixed_point_stage_from_output(
         execution_status,
         cargo_marker_absent,
         blocker,
+        blocker_diagnostic,
         produced,
         policy_digest_blake3,
         c_compiler_route,
@@ -1563,6 +1797,7 @@ fn fixed_point_stage_with_artifact(
     execution_status: String,
     cargo_marker_absent: bool,
     mut blocker: Option<String>,
+    blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
     produced: Option<FixedPointStageArtifact>,
     policy_digest_blake3: Option<&str>,
     c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
@@ -1594,6 +1829,7 @@ fn fixed_point_stage_with_artifact(
         source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
         selected_c_compiler: c_compiler_route,
         blocker,
+        blocker_diagnostic,
     })
 }
 
@@ -1656,6 +1892,7 @@ fn materialize_fixed_point_stage_artifact(
 fn blocked_fixed_point_stage(mut stage: FixedPointStageRun, blocker: String) -> FixedPointStageRun {
     stage.success = false;
     stage.blocker = Some(blocker);
+    stage.blocker_diagnostic = None;
     stage
 }
 
@@ -1686,6 +1923,7 @@ fn blocked_fixed_point_stage_from_plan(
         source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
         selected_c_compiler: c_compiler_route,
         blocker: Some(blocker),
+        blocker_diagnostic: None,
     }
 }
 
@@ -1765,6 +2003,7 @@ fn fixed_point_summary(
         source_built_toolchain_closure: toolchain_closure.clone(),
         rust_source_provider: rust_source_provider.clone(),
         blocker: fixed_point_blocker(stage1, stage2, status),
+        blocker_diagnostic: fixed_point_blocker_diagnostic(stage1, stage2),
         non_claims,
     }
 }
@@ -1791,6 +2030,7 @@ fn stage_summary(stage: &FixedPointStageRun, bundle_dir: &Path) -> FixedPointSta
             .clone(),
         selected_c_compiler: stage.selected_c_compiler.clone(),
         blocker: stage.blocker.clone(),
+        blocker_diagnostic: stage.blocker_diagnostic.clone(),
     }
 }
 
@@ -1800,6 +2040,16 @@ fn bundle_local_path(bundle_dir: &Path, path: &Path) -> PathBuf {
         Ok(relative) => relative.to_path_buf(),
         Err(_) => path.to_path_buf(),
     }
+}
+
+fn fixed_point_blocker_diagnostic(
+    stage1: &FixedPointStageRun,
+    stage2: Option<&FixedPointStageRun>,
+) -> Option<BlockedTopologyDiagnostic> {
+    stage1
+        .blocker_diagnostic
+        .clone()
+        .or_else(|| stage2.and_then(|stage| stage.blocker_diagnostic.clone()))
 }
 
 fn fixed_point_blocker(
@@ -1968,6 +2218,7 @@ fn summarize(
         failed_unit_count: receipt.map(failed_unit_count).unwrap_or_default(),
         smoke_status_code: produced.and_then(|value| value.smoke_status_code),
         blocker: child.blocker.clone(),
+        blocker_diagnostic: child.blocker_diagnostic.clone(),
         source_built_toolchain_closure: toolchain_closure,
         rust_source_provider,
         non_claims,
@@ -2926,6 +3177,159 @@ mod tests {
     }
 
     #[test]
+    fn blocked_topology_classifier_names_root_unit_package_role_triple_and_predecessor() {
+        let receipt = json!({
+            "topology_execution": {
+                "execution_status": BLOCKED_STATUS,
+                "unit_executions": [
+                    {
+                        "unit_id": "native:dep:lib:target",
+                        "package_id": "registry+https://github.com/rust-lang/crates.io-index#dep@1.0.0",
+                        "execution_kind": "target",
+                        "selected_triple": "x86_64-unknown-linux-musl",
+                        "target_kind": "lib",
+                        "execution_status": SUCCESS_STATUS
+                    },
+                    {
+                        "unit_id": "native:aws-lc-sys:build:host",
+                        "package_id": "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1",
+                        "execution_kind": "host",
+                        "selected_triple": "x86_64-unknown-linux-gnu",
+                        "target_kind": "custom-build",
+                        "execution_status": BLOCKED_STATUS,
+                        "blocker": { "class": "missing-build-script-metadata-producer" }
+                    }
+                ]
+            }
+        });
+
+        let diagnostic = classify_blocked_topology_receipt(Some(&receipt), BLOCKED_STATUS);
+        let summary = blocked_topology_summary(&diagnostic);
+        let (blocker, child_diagnostic) =
+            child_blocker_with_diagnostic(Some(SUCCESS_EXIT_CODE), BLOCKED_STATUS, true, Some(&receipt));
+
+        assert_eq!(diagnostic.classification, "blocked-unit");
+        assert_eq!(diagnostic.root_blocked_unit.as_deref(), Some("native:aws-lc-sys:build:host"));
+        assert_eq!(
+            diagnostic.package_id.as_deref(),
+            Some("registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1")
+        );
+        assert_eq!(diagnostic.execution_role.as_deref(), Some("host"));
+        assert_eq!(diagnostic.selected_triple.as_deref(), Some("x86_64-unknown-linux-gnu"));
+        assert_eq!(diagnostic.target_kind.as_deref(), Some("custom-build"));
+        assert_eq!(diagnostic.predecessor_status.as_deref(), Some(SUCCESS_STATUS));
+        assert_eq!(diagnostic.blocker_class.as_deref(), Some("missing-build-script-metadata-producer"));
+        assert!(summary.contains("unit=native:aws-lc-sys:build:host"));
+        assert!(summary.contains("package=registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1"));
+        assert!(summary.contains("role=host"));
+        assert!(summary.contains("triple=x86_64-unknown-linux-gnu"));
+        assert_eq!(child_diagnostic, Some(diagnostic));
+        assert_eq!(blocker.as_deref(), Some(summary.as_str()));
+    }
+
+    #[test]
+    fn blocked_topology_classifier_surfaces_nested_planner_blocker() {
+        let receipt = json!({
+            "rust_plan": {
+                "native_registry_source_planning": {
+                    "blockers": [{
+                        "package_id": "registry+https://github.com/rust-lang/crates.io-index#astral-tokio-tar@0.6.3",
+                        "class": "vendor-checksum-mismatch",
+                        "message": "vendor package checksum does not match Cargo.lock checksum material"
+                    }]
+                }
+            },
+            "topology_execution": {
+                "execution_status": BLOCKED_STATUS,
+                "blocker": {
+                    "class": "native-host-unit-graph-blocked",
+                    "message": "native_host_unit_graph_planning is not ready"
+                },
+                "unit_executions": []
+            }
+        });
+
+        let diagnostic = classify_blocked_topology_receipt(Some(&receipt), BLOCKED_STATUS);
+        let summary = blocked_topology_summary(&diagnostic);
+
+        assert_eq!(diagnostic.classification, "topology-level-blocker");
+        assert_eq!(diagnostic.blocker_class.as_deref(), Some("vendor-checksum-mismatch"));
+        assert_eq!(
+            diagnostic.package_id.as_deref(),
+            Some("registry+https://github.com/rust-lang/crates.io-index#astral-tokio-tar@0.6.3")
+        );
+        assert!(diagnostic.diagnostic.contains("native-host-unit-graph-blocked"));
+        assert!(diagnostic.diagnostic.contains("/rust_plan/native_registry_source_planning/blockers/0"));
+        assert!(summary.contains("blocker_class=vendor-checksum-mismatch"));
+        assert!(
+            summary.contains("package=registry+https://github.com/rust-lang/crates.io-index#astral-tokio-tar@0.6.3")
+        );
+    }
+
+    #[test]
+    fn blocked_topology_classifier_fails_closed_on_missing_identity() {
+        let receipt = json!({
+            "topology_execution": {
+                "execution_status": BLOCKED_STATUS,
+                "unit_executions": [{
+                    "unit_id": "native:missing-package",
+                    "execution_kind": "target",
+                    "selected_triple": "x86_64-unknown-linux-musl",
+                    "target_kind": "lib",
+                    "execution_status": BLOCKED_STATUS,
+                    "blocker": { "class": "missing-dependency-producer" }
+                }]
+            }
+        });
+
+        let diagnostic = classify_blocked_topology_receipt(Some(&receipt), BLOCKED_STATUS);
+        let summary = blocked_topology_summary(&diagnostic);
+
+        assert_eq!(diagnostic.classification, "malformed-blocked-unit");
+        assert!(diagnostic.diagnostic.contains("package_id"));
+        assert!(diagnostic.root_blocked_unit.is_none());
+        assert!(diagnostic.blocker_class.is_none());
+        assert!(summary.contains("classification=malformed-blocked-unit"));
+        assert!(!summary.contains("fixed_point=true"));
+    }
+
+    #[test]
+    fn blocked_topology_classifier_fails_closed_on_ambiguous_units() {
+        let receipt = json!({
+            "topology_execution": {
+                "execution_status": BLOCKED_STATUS,
+                "unit_executions": [
+                    {
+                        "unit_id": "unit-a",
+                        "package_id": "package-a",
+                        "execution_kind": "target",
+                        "selected_triple": "x86_64-unknown-linux-musl",
+                        "target_kind": "lib",
+                        "execution_status": BLOCKED_STATUS,
+                        "blocker": { "class": "missing-a" }
+                    },
+                    {
+                        "unit_id": "unit-b",
+                        "package_id": "package-b",
+                        "execution_kind": "host",
+                        "selected_triple": "x86_64-unknown-linux-gnu",
+                        "target_kind": "custom-build",
+                        "execution_status": "failed",
+                        "blocker": { "class": "missing-b" }
+                    }
+                ]
+            }
+        });
+
+        let diagnostic = classify_blocked_topology_receipt(Some(&receipt), BLOCKED_STATUS);
+
+        assert_eq!(diagnostic.classification, "ambiguous-blocked-units");
+        assert!(diagnostic.diagnostic.contains("2 non-success"));
+        assert!(diagnostic.root_blocked_unit.is_none());
+        assert!(diagnostic.blocker_class.is_none());
+    }
+
+    #[test]
     fn mantle_unit_from_receipt_requires_source_digest() {
         let receipt = json!({
             "topology_execution": {
@@ -3461,6 +3865,7 @@ mod tests {
             source_built_toolchain_closure_policy_digest_blake3: Some(FIXED_POINT_TEST_DIGEST_A.to_string()),
             selected_c_compiler: None,
             blocker: None,
+            blocker_diagnostic: None,
         }
     }
 
@@ -3488,6 +3893,7 @@ mod tests {
             source_built_toolchain_closure_policy_digest_blake3: policy_digest.map(ToOwned::to_owned),
             selected_c_compiler: None,
             blocker: None,
+            blocker_diagnostic: None,
         }
     }
 
