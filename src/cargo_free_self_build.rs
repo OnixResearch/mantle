@@ -3,6 +3,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
+use std::io::Read;
 use std::io::Write;
 use std::path::Component;
 use std::path::Path;
@@ -72,6 +73,10 @@ const LINK_SELF_CONTAINED_PROBE_ARG: &str = "link-self-contained=no";
 const LINK_SELF_CONTAINED_JOINED_ARG: &str = "-Clink-self-contained=no";
 const RUSTC_BOOTSTRAP_ENV: &str = "RUSTC_BOOTSTRAP";
 const REAL_RUSTC_ENV: &str = "MANTLE_REAL_RUSTC";
+const EXTERNAL_WRAPPER_BLOCKER: &str = "external-wrapper";
+const WRAPPER_PROBE_BYTES_MAX: usize = 4096;
+const SHEBANG_BYTES: &[u8] = b"#!";
+const WRAPPER_RUSTC_MARKER: &[u8] = b"rustc";
 const NORMALIZATION_NONE: &str = "none";
 const NORMALIZATION_STRIP_LINK_SELF_CONTAINED: &str = "strip-link-self-contained-no";
 const SIGNAL_STATUS_TEXT: &str = "signal";
@@ -2061,6 +2066,7 @@ fn prepare_execution_toolchain(
         });
     };
     let rustc = resolve_executable(requested_rustc, "rustc")?;
+    reject_undeclared_external_rustc_wrapper(&rustc, manifest)?;
     let status = enforce_receipt_bound_toolchain(&rustc, toolchain_closure, manifest)?;
     let c_compiler_route = Some(receipt_bound_c_compiler_route(manifest)?);
     Ok(ExecutionToolchain {
@@ -2079,11 +2085,53 @@ fn prepare_rustc_for_compatibility(
         return Ok(requested_rustc.to_path_buf());
     };
     let rustc = resolve_executable(requested_rustc, "rustc")?;
+    reject_undeclared_external_rustc_wrapper(&rustc, manifest)?;
     enforce_observed_toolchain_subset(manifest, &[observed_file_tool(
         crate::source_toolchain_closure::ToolchainRole::Rustc,
         &rustc,
     )?])?;
     Ok(rustc)
+}
+
+fn reject_undeclared_external_rustc_wrapper(
+    rustc: &Path,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<(), RunError> {
+    debug_assert!(rustc.is_absolute());
+    if declared_toolchain_member_path_matches(manifest, crate::source_toolchain_closure::ToolchainRole::Rustc, rustc) {
+        return Ok(());
+    }
+    if !is_probable_external_wrapper(rustc)? {
+        return Ok(());
+    }
+    Err(RunError::Build(format!(
+        "{EXTERNAL_WRAPPER_BLOCKER}: rustc {} is not a declared source-built toolchain closure member",
+        rustc.display()
+    )))
+}
+
+fn declared_toolchain_member_path_matches(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    role: crate::source_toolchain_closure::ToolchainRole,
+    path: &Path,
+) -> bool {
+    manifest.members.iter().filter(|member| member.role == role).any(|member| {
+        canonicalize_toolchain_path(Path::new(&member.execution_path), role).is_ok_and(|declared| declared == path)
+    })
+}
+
+fn is_probable_external_wrapper(path: &Path) -> Result<bool, RunError> {
+    let mut file =
+        fs::File::open(path).map_err(|err| internal(format!("open rustc candidate {}: {err}", path.display())))?;
+    let mut bytes = vec![0u8; WRAPPER_PROBE_BYTES_MAX];
+    let read = file
+        .read(&mut bytes)
+        .map_err(|err| internal(format!("read rustc candidate {}: {err}", path.display())))?;
+    bytes.truncate(read);
+    if !bytes.starts_with(SHEBANG_BYTES) {
+        return Ok(false);
+    }
+    Ok(bytes.windows(WRAPPER_RUSTC_MARKER.len()).any(|window| window == WRAPPER_RUSTC_MARKER))
 }
 
 fn enforce_fixed_point_toolchain(
@@ -3838,6 +3886,22 @@ mod tests {
 
         assert!(err.message().contains("receipt-bound toolchain PATH"));
         assert!(!bundle_dir.join(TOOLCHAIN_DIR).join(RUSTC_WRAPPER_FILE).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fixed_point_preflight_rejects_undeclared_external_rustc_wrapper() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let wrapper = dir.path().join("outside-rustc-wrapper");
+        write_fake_executable(&wrapper, &format!("#!/bin/sh\nexec {} \"$@\"\n", shell_quote(&tools.rustc)));
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest);
+
+        let err = prepare_rustc_for_compatibility(&wrapper, &closure).unwrap_err();
+
+        assert!(err.message().contains(EXTERNAL_WRAPPER_BLOCKER));
+        assert!(err.message().contains("not a declared source-built toolchain closure member"));
     }
 
     #[cfg(unix)]
