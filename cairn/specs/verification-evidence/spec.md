@@ -603,3 +603,153 @@ GIVEN witness expansion evidence is available for a release
 WHEN Mantle renders operator-facing summaries
 THEN the summary MUST name the quorum policy, counted witness count, skipped witness count, failed witness count, and accepted identities
 AND it MUST NOT claim broader reproducibility than the surfaces and policy covered by the witnesses.
+
+### Requirement: Adversarial hermeticity gauntlet
+
+r[verification_evidence.adversarial_hermeticity_gauntlet] Mantle MUST exercise hermeticity claims with declared adversarial perturbations and fail closed or record blockers when hidden host influence is observed.
+
+#### Scenario: perturbation profile is declared
+
+GIVEN an adversarial hermeticity gauntlet run is requested
+WHEN Mantle creates the gauntlet plan
+THEN the plan MUST bind the selected host-tool, environment, network, timestamp, locale, umask, temp-path, store-path, and randomness perturbation axes
+AND unsupported axes MUST be recorded as explicit non-claims.
+
+#### Scenario: strict mode fails closed
+
+GIVEN a strict hermeticity cell observes undeclared host execution, network access, ambient environment leakage, undeclared store references, or nondeterministic path dependence
+WHEN Mantle emits evidence for that cell
+THEN the cell MUST fail closed or carry a strict blocker before release/global reproducibility evidence can be admitted
+AND the diagnostic MUST identify the violated hermeticity class.
+
+#### Scenario: practical mode degradation cannot satisfy strict evidence
+
+GIVEN a practical-mode cell continues after a degraded hermeticity event
+WHEN Mantle summarizes the gauntlet result
+THEN the report MAY preserve the build output and audit event for diagnostics
+AND it MUST NOT use that cell as strict reproducibility evidence.
+
+### Requirement: Bootstrap pressure gauntlet
+
+r[verification_evidence.bootstrap_pressure_gauntlet] Mantle MUST track bootstrap-strengthening profiles with explicit trust roots, protected-exec evidence, fixed-point status, and remaining blockers before claiming stronger bootstrap or reproducibility properties.
+
+#### Scenario: proof profile ladder is closed
+
+GIVEN Mantle runs bootstrap pressure profiles such as default, non-Nix-host, no-host-tools, source-built-provider, reduced-seed, or full-source-root attempt
+WHEN it emits a bootstrap pressure report
+THEN the report MUST classify the profile with a stable verdict and bind seed inventory digest, protected-exec audit digest when applicable, stage output digest set, fixed-point status, and host-tool availability policy
+AND intermediate profiles MUST NOT be described as full-source bootstrap roots.
+
+#### Scenario: undeclared host execution fails closed
+
+GIVEN a no-host-tools or protected-exec bootstrap profile observes an undeclared compiler, build tool, archive tool, Nix command, shell, or helper executable
+WHEN Mantle evaluates the protected phase
+THEN the profile MUST fail closed before stronger bootstrap evidence is emitted
+AND the report MUST identify the missing inventory entry or forbidden execution class.
+
+#### Scenario: remaining seed trust is explicit
+
+GIVEN a bootstrap pressure run still depends on a binary seed, fetched artifact, host prerequisite, or unsupported source-built stage
+WHEN Mantle summarizes bootstrap status
+THEN the report MUST list the remaining trusted root and next blocker
+AND release/global reproducibility summaries MUST NOT turn that partial proof into compiler correctness or full-source bootstrap correctness.
+
+### Requirement: Continuous reproducibility gauntlet
+
+r[verification_evidence.continuous_reproducibility_gauntlet] Mantle MUST aggregate reproducibility confirmation tracks into current, stale-aware gauntlet reports before claiming broad empirical strength.
+
+#### Scenario: aggregate report binds track evidence
+
+GIVEN repeatability, witness, comparison, hermeticity, cache attack, and bootstrap pressure track reports exist
+WHEN Mantle creates a continuous reproducibility gauntlet report
+THEN the report MUST bind each track report digest, source digest, policy digest, universe digest, toolchain digest, host class, witness set, run id, status, blockers, and schema version
+AND the aggregate report digest MUST be deterministic for equivalent inputs.
+
+#### Scenario: stale evidence is not promoted
+
+GIVEN a prior gauntlet report was produced for a different source, policy, universe, toolchain, host class, witness set, or track schema version
+WHEN Mantle evaluates current release-readiness or reproducibility status
+THEN the report MUST classify the prior evidence as stale or out-of-scope
+AND it MUST NOT promote stale evidence to a current global or broad reproducibility claim.
+
+#### Scenario: flakes and blockers remain visible
+
+GIVEN one or more gauntlet tracks fail, block, skip unsupported axes, or alternate between pass and fail across runs
+WHEN Mantle renders the aggregate summary
+THEN it MUST preserve pass, fail, blocked, unsupported, stale, and flaky states with first and last seen run ids
+AND the summary MUST name next actions instead of collapsing partial evidence into a single green claim.
+
+### Requirement: Nix Mantle comparison corpus
+
+r[verification_evidence.nix_mantle_comparison_corpus] Mantle MUST compare Nix and Mantle builds only through an explicit corpus that binds equivalence policy, input provenance, output surfaces, and byte-level digest evidence.
+
+#### Scenario: corpus cases declare equivalence
+
+GIVEN a corpus case compares a Nix build and a Mantle build
+WHEN Mantle evaluates the case
+THEN the case MUST bind source refs, toolchain refs, dependency refs, build recipe identity, output surfaces, normalization policy, and allowed differences
+AND cases lacking equivalent inputs MUST be reported as blocked rather than matched or mismatched.
+
+#### Scenario: comparison uses content digests
+
+GIVEN a corpus case has produced Nix and Mantle outputs
+WHEN Mantle compares them
+THEN the report MUST compare BLAKE3 object digests, NAR/content digests, or another declared byte-level digest surface
+AND store path strings, derivation hashes, and logical prefixes MUST NOT be treated as output equality proof.
+
+#### Scenario: unsupported cases do not overclaim
+
+GIVEN Nix or Mantle cannot build a corpus case because a feature is unsupported, non-equivalent, or missing required evidence
+WHEN the corpus report is emitted
+THEN the report MUST preserve an unsupported or blocker class with next action
+AND the summary MUST NOT treat the blocked case as evidence that either system is more reproducible.
+
+### Requirement: Release repeatability matrix
+
+r[verification_evidence.release_repeatability_matrix] Mantle MUST provide a deterministic repeatability matrix before widening a release reproducibility claim beyond a single recorded proof context.
+
+#### Scenario: matrix axes are explicit
+
+GIVEN an operator requests a release repeatability matrix for a release evidence bundle
+WHEN Mantle creates the matrix plan
+THEN the plan MUST bind the release id, artifact surfaces, expected output digest set, matrix profile digest, cache mode, store isolation mode, environment controls, temp-root controls, user controls, host class, and run count
+AND any omitted axis MUST be recorded as an explicit non-claim.
+
+#### Scenario: fresh-store cells cannot reuse prior outputs silently
+
+GIVEN a matrix cell is configured as a fresh-store rebuild
+WHEN Mantle executes that cell
+THEN the cell MUST use isolated output and store roots and record their identities
+AND reused-store or substitution evidence MUST be recorded as a blocker unless the cell explicitly tests reuse.
+
+#### Scenario: mismatches block wider admission
+
+GIVEN any matrix cell produces a missing or mismatched output digest for an included release surface
+WHEN Mantle emits the matrix report or global reproducibility evidence
+THEN the report MUST preserve the expected digest, observed digest when present, failing axis, and blocker class
+AND the affected surface MUST NOT be admitted as repeatability-proven.
+
+### Requirement: Substitution cache attack gauntlet
+
+r[verification_evidence.substitution_cache_attack_gauntlet] Mantle MUST prove substitution trust boundaries with deterministic attack fixtures before using cache acceptance as strict reproducibility evidence.
+
+#### Scenario: trusted substitutes are accepted only with matching evidence
+
+GIVEN a cache fixture serves a substitute signed by a trusted key with matching PathInfo, closure facts, content digest, and artifact attestation
+WHEN Mantle imports or reuses that substitute
+THEN the report MUST record the trusted key material, expected digest set, accepted output identity, and closure evidence
+AND the substitute MAY be accepted only within the configured fallback and reproducibility policy.
+
+#### Scenario: malicious cache material fails closed
+
+GIVEN a cache fixture serves unsigned material, wrong-key signatures, mismatched PathInfo, corrupted NAR content, incomplete closures, stale attestations, or authority/query-confused endpoints
+WHEN Mantle evaluates the substitute in strict mode
+THEN the substitute MUST be rejected or marked as a strict blocker before admissible reuse evidence is emitted
+AND the report MUST name the failed trust edge and expected/observed digest information when available.
+
+#### Scenario: practical fallback is not strict cache proof
+
+GIVEN practical mode falls back from an invalid substitute to a local build or degraded closure resolution
+WHEN Mantle summarizes substitution evidence
+THEN the report MUST keep fallback/degradation events separate from trusted substitute acceptance
+AND strict release/global reproducibility admission MUST remain blocked for that cache evidence class.

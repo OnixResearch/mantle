@@ -59,6 +59,7 @@ mod source_toolchain_closure;
 mod store_cmd;
 mod structured_refactor;
 mod transcript_cmd;
+mod verification_gauntlet_cmd;
 mod witness_handoff;
 mod witness_rebuild;
 
@@ -1145,6 +1146,11 @@ pub enum ReleaseAction {
         #[arg(long)]
         evidence_path: PathBuf,
     },
+    /// Validate, canonicalize, and aggregate reproducibility gauntlet evidence
+    Gauntlet {
+        #[command(subcommand)]
+        action: ReleaseGauntletAction,
+    },
     /// Compare release bundle artifacts against located Nix-built artifacts and emit a Nix witness
     /// receipt
     NixWitness {
@@ -1334,6 +1340,61 @@ pub enum ArtifactAction {
         #[arg(long = "report-out")]
         report_out: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ReleaseGauntletAction {
+    /// Validate and rewrite a gauntlet report as canonical compact JSON
+    Canonicalize {
+        /// Report kind to parse and canonicalize
+        #[arg(long, value_enum)]
+        kind: GauntletReportKind,
+
+        /// Input report JSON
+        input: PathBuf,
+
+        /// Output path for canonical JSON; stdout when omitted
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Aggregate current track evidence into a continuous gauntlet report
+    Continuous {
+        /// Current claim-boundary context JSON
+        #[arg(long)]
+        context: PathBuf,
+
+        /// Track evidence JSON object or array; repeat for multiple files
+        #[arg(long = "track", required = true)]
+        track: Vec<PathBuf>,
+
+        /// Output path for the canonical aggregate report
+        #[arg(long)]
+        report_path: Option<PathBuf>,
+    },
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GauntletReportKind {
+    AdversarialHermeticity,
+    BootstrapPressure,
+    SubstitutionCacheAttack,
+    NixMantleComparison,
+    ReleaseRepeatability,
+    Continuous,
+}
+
+impl GauntletReportKind {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::AdversarialHermeticity => "adversarial-hermeticity",
+            Self::BootstrapPressure => "bootstrap-pressure",
+            Self::SubstitutionCacheAttack => "substitution-cache-attack",
+            Self::NixMantleComparison => "nix-mantle-comparison",
+            Self::ReleaseRepeatability => "release-repeatability",
+            Self::Continuous => "continuous",
+        }
+    }
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -5522,6 +5583,48 @@ let Plan = {
         assert_eq!(commit, "0123456789abcdef0123456789abcdef01234567");
         assert_eq!(reference, "refs/heads/main");
         assert_eq!(tag, "v0.1.0");
+    }
+
+    #[test]
+    fn release_gauntlet_continuous_accepts_track_inputs() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "gauntlet",
+            "continuous",
+            "--context",
+            "/tmp/context.json",
+            "--track",
+            "/tmp/repeatability.json",
+            "--report-path",
+            "/tmp/report.json",
+        ]);
+        assert!(matches!(args.command, Command::Release {
+            action: ReleaseAction::Gauntlet {
+                action: ReleaseGauntletAction::Continuous { track, .. },
+            }
+        } if track.len() == EXPECTED_RUN_OUTCOME_COUNT));
+    }
+
+    #[test]
+    fn release_gauntlet_canonicalize_accepts_report_kind() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "gauntlet",
+            "canonicalize",
+            "--kind",
+            "substitution-cache-attack",
+            "/tmp/report.json",
+        ]);
+        assert!(matches!(args.command, Command::Release {
+            action: ReleaseAction::Gauntlet {
+                action: ReleaseGauntletAction::Canonicalize {
+                    kind: GauntletReportKind::SubstitutionCacheAttack,
+                    ..
+                },
+            }
+        }));
     }
 
     #[test]

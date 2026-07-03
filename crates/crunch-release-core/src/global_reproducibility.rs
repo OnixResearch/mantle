@@ -93,6 +93,10 @@ pub struct GlobalSurfaceEvidence {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hermeticity_evidence_digest_blake3: Option<String>,
     #[serde(default)]
+    pub gauntlet_report_digests_blake3: Vec<String>,
+    #[serde(default)]
+    pub gauntlet_blockers: Vec<GlobalReproducibilityBlocker>,
+    #[serde(default)]
     pub output_digest_set_blake3: Vec<String>,
     pub strict_hermeticity: bool,
     pub fresh_rebuild_store: bool,
@@ -520,6 +524,8 @@ fn validate_surface_evidence(evidence: &GlobalSurfaceEvidence) -> Result<(), Rel
     validate_optional_digest(&evidence.source_acquisition_digest_blake3, "source_acquisition_digest_blake3")?;
     validate_optional_digest(&evidence.toolchain_provenance_digest_blake3, "toolchain_provenance_digest_blake3")?;
     validate_optional_digest(&evidence.hermeticity_evidence_digest_blake3, "hermeticity_evidence_digest_blake3")?;
+    validate_digest_set(&evidence.gauntlet_report_digests_blake3, "gauntlet_report_digests_blake3")?;
+    validate_blockers(&evidence.gauntlet_blockers)?;
     validate_digest_set(&evidence.output_digest_set_blake3, "output_digest_set_blake3")?;
     validate_witnesses(&evidence.witnesses)?;
     if let Some(reason) = &evidence.unsupported_reason {
@@ -603,6 +609,7 @@ fn evaluate_surface_evidence_blockers(
         "regenerate the surface evidence under the current global reproducibility policy",
     );
     push_required_digest_blockers(evidence, blockers);
+    push_gauntlet_blockers(evidence, blockers);
     push_policy_blockers(evidence, policy, blockers);
 }
 
@@ -620,6 +627,16 @@ fn push_required_digest_blockers(evidence: &GlobalSurfaceEvidence, blockers: &mu
             "missing output digest evidence for included surface",
             "record the expected BLAKE3 output digest set for this surface",
         ));
+    }
+}
+
+fn push_gauntlet_blockers(evidence: &GlobalSurfaceEvidence, blockers: &mut Vec<GlobalReproducibilityBlocker>) {
+    for gauntlet_blocker in &evidence.gauntlet_blockers {
+        let mut scoped = gauntlet_blocker.clone();
+        if scoped.surface_id.is_none() {
+            scoped.surface_id = Some(evidence.surface_id.clone());
+        }
+        blockers.push(scoped);
     }
 }
 
@@ -882,6 +899,9 @@ fn collect_surface_report_digests(evidence: Option<&GlobalSurfaceEvidence>) -> V
         insert_optional_digest(&mut digests, &evidence.source_acquisition_digest_blake3);
         insert_optional_digest(&mut digests, &evidence.toolchain_provenance_digest_blake3);
         insert_optional_digest(&mut digests, &evidence.hermeticity_evidence_digest_blake3);
+        for digest in &evidence.gauntlet_report_digests_blake3 {
+            digests.insert(digest.clone());
+        }
         for digest in &evidence.output_digest_set_blake3 {
             digests.insert(digest.clone());
         }
@@ -1259,6 +1279,8 @@ mod tests {
             source_acquisition_digest_blake3: Some(sample_digest(2)),
             toolchain_provenance_digest_blake3: Some(sample_digest(3)),
             hermeticity_evidence_digest_blake3: Some(sample_digest(4)),
+            gauntlet_report_digests_blake3: Vec::new(),
+            gauntlet_blockers: Vec::new(),
             output_digest_set_blake3: vec![output_digest.clone()],
             strict_hermeticity: true,
             fresh_rebuild_store: true,
@@ -1322,6 +1344,7 @@ mod tests {
             ("weak-hermeticity", make_weak_hermeticity_fixture),
             ("policy-digest", make_stale_policy_fixture),
             ("unsupported-surface", make_unsupported_fixture),
+            ("gauntlet-cache-attack", make_gauntlet_blocker_fixture),
             ("witness-output-digest", make_digest_mismatch_fixture),
             ("witness-operator-domain-quorum", make_insufficient_quorum_fixture),
         ];
@@ -1379,6 +1402,21 @@ mod tests {
         mut input: GlobalReproducibilityEvaluationInput,
     ) -> GlobalReproducibilityEvaluationInput {
         input.surface_evidence[0].unsupported_reason = Some("source transport lacks replay receipts".to_string());
+        input
+    }
+
+    fn make_gauntlet_blocker_fixture(
+        mut input: GlobalReproducibilityEvaluationInput,
+    ) -> GlobalReproducibilityEvaluationInput {
+        input.surface_evidence[0].gauntlet_report_digests_blake3 = vec![sample_digest(88)];
+        input.surface_evidence[0].gauntlet_blockers = vec![GlobalReproducibilityBlocker {
+            surface_id: None,
+            evidence_class: "gauntlet-cache-attack".to_string(),
+            expected_digest_blake3: Some(sample_digest(1)),
+            observed_digest_blake3: Some(sample_digest(2)),
+            message: "substitution cache attack gauntlet observed invalid cache acceptance".to_string(),
+            next_action: "reject invalid substitutes before admitting strict cache evidence".to_string(),
+        }];
         input
     }
 

@@ -29,6 +29,7 @@ use crate::release_reproducibility::VerifiedReproducibilityReport;
 use crate::release_reproducibility::load_bundle_reproducibility_report;
 use crate::release_reproducibility::reproduce_release_artifacts;
 use crate::release_source::write_tracked_source_archive;
+use crate::verification_gauntlet_cmd::cmd_release_gauntlet;
 use crate::witness_handoff::create_witness_request_directory;
 use crate::witness_handoff::default_witness_request_dir;
 use crate::witness_rebuild::WITNESS_SCRATCH_ENV;
@@ -153,6 +154,7 @@ pub(crate) fn cmd_release(
             release_verify_json,
             evidence_path,
         ),
+        crate::ReleaseAction::Gauntlet { action } => cmd_release_gauntlet(action, current_dir, json),
         crate::ReleaseAction::NixWitness {
             bundle_dir,
             nix_output_dir,

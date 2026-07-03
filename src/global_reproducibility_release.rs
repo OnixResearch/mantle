@@ -282,6 +282,8 @@ fn derive_release_surface_evidence(
             source_acquisition_digest_blake3: Some(input.manifest.source_archive.digest_blake3.clone()),
             toolchain_provenance_digest_blake3: classification.toolchain_provenance_digest_blake3,
             hermeticity_evidence_digest_blake3: classification.hermeticity_evidence_digest_blake3,
+            gauntlet_report_digests_blake3: Vec::new(),
+            gauntlet_blockers: Vec::new(),
             output_digest_set_blake3: output_digest.into_iter().collect(),
             strict_hermeticity: classification.strict_hermeticity,
             fresh_rebuild_store: classification.fresh_rebuild_store,

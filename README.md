@@ -264,7 +264,9 @@ proof regression. The Nix witness rail exercises the bounded `mantle release
 nix-witness` CLI path and is exposed as both
 `packages.<system>.release-nix-witness-quality` and
 `checks.<system>.release-nix-witness-quality`, keeping it opt-in rather than part
-of ordinary developer builds. `bootstrap parity-report` consumes the checked compact
+of ordinary developer builds. Deterministic verification-gauntlet report schemas
+and CLI aggregation are documented in
+[`docs/verification-gauntlets.md`](docs/verification-gauntlets.md). `bootstrap parity-report` consumes the checked compact
 self-build descriptor in `bootstrap/evidence/real-self-build-proof-parity.json`
 and surfaces bounded `crunch.self-build` proof details without marking Guix or
 StageX parity complete. The determinism probe is an ignored integration rail,
