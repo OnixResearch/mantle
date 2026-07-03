@@ -432,11 +432,15 @@ a verified canonical reproducibility report whose artifact set matches the
 published release artifact set; ordinary bundle-local integrity never implies
 that label. This still does not prove a full-source bootstrap root,
 independent rebuild agreement, or global reproducibility. `release verify` now
-reports global reproducibility as `not-evaluated`; use
-`mantle release global-reproducibility --universe <json> --policy <json>
---evidence <json> --report-path <json>` to produce the separate
-`mantle-global-reproducibility-report-v1` admission report for an explicit
-universe. `bootstrap parity-report` also consumes the checked-in compact
+reports global reproducibility as `not-evaluated`. To prepare release-derived
+surface evidence first, use `mantle release global-reproducibility-evidence
+--universe <json> --policy <json> --bundle-dir <release-evidence>
+--verification-dir <release-verification> --release-verify-json <json>
+--evidence-path <json>`. Then use `mantle release global-reproducibility
+--universe <json> --policy <json> --evidence <json> --report-path <json>` to
+produce the separate `mantle-global-reproducibility-report-v1` admission report
+for an explicit universe. The helper output alone is not an eligible report;
+the evaluator remains the gate. `bootstrap parity-report` also consumes the checked-in compact
 descriptor at
 `bootstrap/evidence/real-self-build-proof-parity.json` for the
 `crunch.self-build` row; that descriptor surfaces the bounded proof digest and

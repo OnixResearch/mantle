@@ -10,6 +10,7 @@ use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
 
 use crate::errors::RunError;
 use crate::global_reproducibility_cmd::cmd_global_reproducibility;
+use crate::global_reproducibility_release::cmd_global_reproducibility_release_evidence;
 use crate::release_attestation::create_release_attestation;
 use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::default_verification_dir;
@@ -134,6 +135,23 @@ pub(crate) fn cmd_release(
             evidence,
             report_path,
         } => cmd_global_reproducibility(current_dir, json, universe, policy, evidence, report_path),
+        crate::ReleaseAction::GlobalReproducibilityEvidence {
+            universe,
+            policy,
+            bundle_dir,
+            verification_dir,
+            release_verify_json,
+            evidence_path,
+        } => cmd_global_reproducibility_release_evidence(
+            current_dir,
+            json,
+            universe,
+            policy,
+            bundle_dir,
+            verification_dir,
+            release_verify_json,
+            evidence_path,
+        ),
         crate::ReleaseAction::NixWitness {
             bundle_dir,
             nix_output_dir,

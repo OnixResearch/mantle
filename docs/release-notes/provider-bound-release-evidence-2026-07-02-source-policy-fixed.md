@@ -83,6 +83,37 @@ Not claimed:
 - This does not make the superseded 2026-06-28 request externally reproducible.
 - This does not claim the provider fixed-point proof by itself is a full bootstrap proof; it remains bounded source-built handoff evidence.
 
+## Global reproducibility follow-up
+
+A stage2-only global reproducibility universe is now eligible through helper-derived surface evidence:
+
+```text
+universe_digest: 8d7f292084fd41051f4db9587872dc78f627617acfcd9b5a35c3c866c982ac33
+policy_digest: aa35734ed3edfeb13e8c7fab583fef9860c3f306d8c5e05fd40f4a65c155f1e3
+report_digest: 255f9caf8dbd420e9e78093b7d0aee3c5914def80d2f9debdb7b9e45353b710a
+included_surface: binaries/02-stage2-mantle
+accepted_witness: aspen1-external-witness
+```
+
+The full two-binary release universe is intentionally blocked:
+
+```text
+universe_digest: ab5cb6a4fe4f411b5b4cc55e43f85001dccb9bcc7ec5aa6496b0d95f6bc085a2
+policy_digest: 03da83116b1432a520bcc7c07e0213d486615d4bd5baa83476374a7c304eb4d8
+report_digest: f6727befe87856b939d3de6f1771ab75b672e612cc978a0c7f3d9db147890467
+blocked_surface: binaries/01-mantle
+blockers: unsupported-surface, weak-hermeticity, reused-store
+```
+
+Durable generated artifacts live under the release copy:
+
+```text
+/home/brittonr/releases/mantle/provider-bound-release-evidence-2026-07-02-source-policy-fixed/global-reproducibility-stage2-strict
+/home/brittonr/releases/mantle/provider-bound-release-evidence-2026-07-02-source-policy-fixed/global-reproducibility-full-release
+```
+
+These reports do not change the broader non-claims: the eligible report is scoped to the single stage2 surface, while the full release report remains blocked until `binaries/01-mantle` has strict/fresh global evidence or is excluded from the admitted universe.
+
 ## Negative check
 
 A missing-signature import check failed closed:

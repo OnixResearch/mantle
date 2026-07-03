@@ -21,6 +21,7 @@ mod frontend_artifact_export;
 mod frontend_artifact_spec;
 mod frontend_artifact_store;
 mod global_reproducibility_cmd;
+mod global_reproducibility_release;
 mod log_cmd;
 mod native_toolchain_closure;
 #[allow(dead_code)]
@@ -1117,6 +1118,32 @@ pub enum ReleaseAction {
         /// Optional path where the canonical report JSON is written
         #[arg(long)]
         report_path: Option<PathBuf>,
+    },
+    /// Derive global reproducibility surface evidence from a verified release bundle
+    GlobalReproducibilityEvidence {
+        /// Global reproducibility universe manifest JSON
+        #[arg(long)]
+        universe: PathBuf,
+
+        /// Global reproducibility policy JSON
+        #[arg(long)]
+        policy: PathBuf,
+
+        /// Release evidence bundle directory
+        #[arg(long)]
+        bundle_dir: PathBuf,
+
+        /// Release verification directory containing release/witness attestations
+        #[arg(long)]
+        verification_dir: PathBuf,
+
+        /// JSON output from `mantle attest release-verify --json`
+        #[arg(long)]
+        release_verify_json: PathBuf,
+
+        /// Output path for generated surface evidence JSON
+        #[arg(long)]
+        evidence_path: PathBuf,
     },
     /// Compare release bundle artifacts against located Nix-built artifacts and emit a Nix witness
     /// receipt

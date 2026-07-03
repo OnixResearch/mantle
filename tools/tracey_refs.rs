@@ -228,6 +228,13 @@
 // unit tests and `mantle` bin tests for loading evidence, writing canonical
 // reports, and blocking missing global evidence.
 //
+// r[impl verification_evidence.global_reproducibility_release_surface_evidence]
+// r[verify verification_evidence.global_reproducibility_release_surface_evidence]
+// Implemented by `src/global_reproducibility_release.rs`, which derives release
+// bundle facts into surface evidence while leaving final admission to
+// `src/global_reproducibility_cmd.rs`. Verified by positive stage2-only helper
+// tests and negative full-release/provider-fixed-point blocker tests.
+//
 // r[impl compiled-eval.cranelift-prototype-subset]
 // r[verify compiled-eval.cranelift-prototype-subset]
 // r[impl compiled-eval.cranelift-prototype-subset.default]
