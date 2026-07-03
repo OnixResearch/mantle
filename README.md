@@ -179,6 +179,14 @@ For the full command path, examples, and sidecar rules, see
 For frontend-neutral action/object/reference-scan evidence contracts, see
 [`docs/build-correctness-primitives.md`](docs/build-correctness-primitives.md).
 
+For self-build, Cargo-free fixed-point, and Nix-free demo-bundle proof
+operations, see [`docs/operator-proof-guide.md`](docs/operator-proof-guide.md).
+Keep that guide current with:
+
+```bash
+nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs
+```
+
 ## Validation tiers
 
 Use the checked-in toolchain from [`rust-toolchain.toml`](rust-toolchain.toml)
