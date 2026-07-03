@@ -173,9 +173,12 @@ success, and does not prove general Nix replacement completeness.
 Nix-free demo wording is claimable only from the demo-profile validator. The
 machine summary schema is `mantle-nix-free-demo-summary-v1`, and the current
 profile is `source-root-cargo-free-fixed-point`. Use `mantle --json
-nix-free-demo validate <summary.json>` for a stable machine decision and
+nix-free-demo validate <summary.json>` for a stable machine decision,
 `mantle nix-free-demo readme <summary.json>` to regenerate the derived demo
-README; do not invent a wider CLI success claim.
+README, and `mantle --json nix-free-demo generate --out <dir> ...` to assemble a
+self-contained demo bundle from explicit existing evidence inputs. The generator
+packages evidence only; it does not run hidden proofs. Do not invent a wider CLI
+success claim.
 
 The machine summary must include these fields:
 
@@ -199,7 +202,48 @@ stable diagnostics such as `missing-fixed-point-evidence`,
 A generated demo README may say `Nix-free fixed-point demo: claimable` only when
 validation succeeds. When validation does not succeed, the generated outcome is
 `Demo claim: not claimable`; report the narrower fixed-point artifact or blocker
-and the diagnostic codes instead.
+and the diagnostic codes instead. For blocked or synthetic evidence, pass
+explicit `--non-claim` values and expect the generated `validation.json` to keep
+the bundle non-claimable rather than turning packaging into proof success.
+
+Minimal successful generator shape:
+
+```bash
+mantle --json nix-free-demo generate \
+  --out /tmp/mantle-demo-bundle \
+  --proof-status success \
+  --source-root-identity source-root-v1 \
+  --toolchain-policy-digest-blake3 <blake3> \
+  --stage1-binary-blake3 <blake3> \
+  --stage2-binary-blake3 <same-blake3> \
+  --transcript proof.log \
+  --receipt-digest receipt:<blake3> \
+  --artifact-digest stage2-mantle:<blake3> \
+  --guard cargo:denied:"cargo denied by fixture" \
+  --guard nix:denied:"nix denied by fixture" \
+  --guard rustup:denied:"rustup denied by fixture" \
+  --guard ambient-wrapper:denied:"ambient wrapper denied by fixture" \
+  --non-claim "not release reproducibility"
+```
+
+Blocked-proof example:
+
+```bash
+mantle --json nix-free-demo generate \
+  --out /tmp/mantle-demo-blocked \
+  --proof-status blocked \
+  --source-root-identity source-root-v1 \
+  --toolchain-policy-digest-blake3 <blake3> \
+  --transcript proof.log \
+  --receipt-digest receipt:<blake3> \
+  --artifact-digest stage1-receipt:<blake3> \
+  --guard cargo:denied:"cargo denied by fixture" \
+  --guard nix:denied:"nix denied by fixture" \
+  --guard rustup:denied:"rustup denied by fixture" \
+  --guard ambient-wrapper:denied:"ambient wrapper denied by fixture" \
+  --non-claim "blocked before producing a stage binary" \
+  --non-claim "not Nix-free fixed-point success"
+```
 
 Use this exact non-claim vocabulary when summarizing any proof family in this
 guide:

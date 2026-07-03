@@ -35,6 +35,8 @@ const REQUIRED_COMMANDS: &[&str] = &[
     "mantle self-build --cargo-free --out /tmp/mantle-cargo-free",
     "mantle --json nix-free-demo validate <summary.json>",
     "mantle nix-free-demo readme <summary.json>",
+    "mantle --json nix-free-demo generate --out <dir> ...",
+    "--proof-status blocked",
     "nix develop -c cargo -Zscript scripts/prove-cargo-free-fixed-point.rs --check --root .",
     "nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs",
     "nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs --self-test",
@@ -49,6 +51,7 @@ const REQUIRED_README_FRAGMENTS: &[&str] = &[
     "mantle self-build --cargo-free --out /tmp/mantle-cargo-free",
     "mantle --json nix-free-demo validate <summary.json>",
     "mantle nix-free-demo readme <summary.json>",
+    "mantle nix-free-demo generate --out <dir> --proof-status <status>",
 ];
 
 const REQUIRED_SELF_BUILD_PATHS: &[&str] = &[

@@ -15,6 +15,12 @@ const MISSING_GUARD_EVIDENCE: &str = "missing-guard-evidence";
 const MISSING_NON_CLAIMS: &str = "missing-non-claims";
 const INVALID_SOURCE_ROOT_IDENTITY: &str = "invalid-source-root-identity";
 const INVALID_TOOLCHAIN_POLICY_DIGEST: &str = "invalid-toolchain-policy-digest";
+const BUNDLE_MANIFEST_SCHEMA: &str = "mantle-nix-free-demo-bundle-manifest-v1";
+const GENERATED_VALIDATION_PATH: &str = "validation.json";
+const GENERATED_SUMMARY_PATH: &str = "summary.json";
+const GENERATED_README_PATH: &str = "README.md";
+const GENERATED_MANIFEST_PATH: &str = "manifest.json";
+const SUCCESS_STAGE_DIGEST_COUNT: usize = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct NixFreeDemoMachineSummary {
@@ -49,6 +55,53 @@ pub(crate) struct NixFreeDemoGuardEvidence {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixFreeDemoEvidenceRef {
+    pub(crate) name: String,
+    pub(crate) digest_blake3: String,
+    pub(crate) bundle_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixFreeDemoBundleManifest {
+    pub(crate) schema: String,
+    pub(crate) profile: String,
+    pub(crate) proof_status: String,
+    pub(crate) synthetic: bool,
+    pub(crate) summary_path: String,
+    pub(crate) readme_path: String,
+    pub(crate) validation_path: String,
+    pub(crate) transcripts: Vec<NixFreeDemoEvidenceRef>,
+    pub(crate) receipt_digests: Vec<NixFreeDemoNamedDigest>,
+    pub(crate) artifact_digests: Vec<NixFreeDemoNamedDigest>,
+    pub(crate) non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NixFreeDemoManifestInput {
+    pub(crate) proof_status: String,
+    pub(crate) stage1_binary_blake3: Option<String>,
+    pub(crate) stage2_binary_blake3: Option<String>,
+    pub(crate) source_root_identity: String,
+    pub(crate) toolchain_policy_digest_blake3: String,
+    pub(crate) command_owned_wrappers: Vec<NixFreeDemoNamedDigest>,
+    pub(crate) guards: Vec<NixFreeDemoGuardEvidence>,
+    pub(crate) replay_hints: Vec<String>,
+    pub(crate) non_claims: Vec<String>,
+    pub(crate) transcripts: Vec<NixFreeDemoEvidenceRef>,
+    pub(crate) receipt_digests: Vec<NixFreeDemoNamedDigest>,
+    pub(crate) artifact_digests: Vec<NixFreeDemoNamedDigest>,
+    pub(crate) synthetic: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixFreeDemoGeneratedBundle {
+    pub(crate) summary: NixFreeDemoMachineSummary,
+    pub(crate) validation: NixFreeDemoValidation,
+    pub(crate) manifest: NixFreeDemoBundleManifest,
+    pub(crate) readme: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct NixFreeDemoValidation {
     pub(crate) schema: String,
     pub(crate) profile: String,
@@ -60,6 +113,25 @@ pub(crate) struct NixFreeDemoValidation {
 pub(crate) struct NixFreeDemoDiagnostic {
     pub(crate) code: String,
     pub(crate) message: String,
+}
+
+pub(crate) fn build_nix_free_demo_bundle(
+    input: NixFreeDemoManifestInput,
+) -> Result<NixFreeDemoGeneratedBundle, NixFreeDemoDiagnostic> {
+    validate_manifest_input(&input)?;
+    let summary = summary_from_manifest_input(&input);
+    let validation = validate_nix_free_demo_bundle(&summary);
+    if input.proof_status == SUCCESS_VERDICT && !validation.demo_claimable {
+        return Err(diagnostic("contradictory-proof-status", "success status lacks claimable fixed-point evidence"));
+    }
+    let manifest = manifest_from_input(&input);
+    let readme = render_generated_nix_free_demo_readme(&summary, &validation, &manifest);
+    Ok(NixFreeDemoGeneratedBundle {
+        summary,
+        validation,
+        manifest,
+        readme,
+    })
 }
 
 pub(crate) fn validate_nix_free_demo_bundle(summary: &NixFreeDemoMachineSummary) -> NixFreeDemoValidation {
@@ -115,6 +187,32 @@ pub(crate) fn render_nix_free_demo_readme(
     lines.join("\n")
 }
 
+fn render_generated_nix_free_demo_readme(
+    summary: &NixFreeDemoMachineSummary,
+    validation: &NixFreeDemoValidation,
+    manifest: &NixFreeDemoBundleManifest,
+) -> String {
+    let mut readme = render_nix_free_demo_readme(summary, validation);
+    readme.push_str("generated bundle:\n");
+    readme.push_str(&format!("- manifest: {}\n", GENERATED_MANIFEST_PATH));
+    readme.push_str(&format!("- summary: {}\n", GENERATED_SUMMARY_PATH));
+    readme.push_str(&format!("- validation: {}\n", GENERATED_VALIDATION_PATH));
+    readme.push_str(&format!("- synthetic evidence: {}\n", manifest.synthetic));
+    readme.push_str("transcripts:\n");
+    for transcript in &manifest.transcripts {
+        readme.push_str(&format!("- {}: {} ({})\n", transcript.name, transcript.digest_blake3, transcript.bundle_path));
+    }
+    readme.push_str("receipt digests:\n");
+    for receipt in &manifest.receipt_digests {
+        readme.push_str(&format!("- {}: {}\n", receipt.name, receipt.digest_blake3));
+    }
+    readme.push_str("artifact digests:\n");
+    for artifact in &manifest.artifact_digests {
+        readme.push_str(&format!("- {}: {}\n", artifact.name, artifact.digest_blake3));
+    }
+    readme
+}
+
 pub(crate) fn nix_free_demo_claim(summary: &NixFreeDemoMachineSummary) -> Option<String> {
     let validation = validate_nix_free_demo_bundle(summary);
     if !validation.demo_claimable {
@@ -124,6 +222,120 @@ pub(crate) fn nix_free_demo_claim(summary: &NixFreeDemoMachineSummary) -> Option
         "Nix-free fixed-point demo profile `{}` is claimable for source root `{}`",
         DEMO_PROFILE, summary.source_root_identity
     ))
+}
+
+fn validate_manifest_input(input: &NixFreeDemoManifestInput) -> Result<(), NixFreeDemoDiagnostic> {
+    if input.proof_status.trim().is_empty() {
+        return Err(diagnostic("missing-proof-status", "proof status is required"));
+    }
+    if input.transcripts.is_empty() {
+        return Err(diagnostic("missing-transcript", "at least one transcript is required"));
+    }
+    validate_named_digests(&input.command_owned_wrappers, "command-wrapper-digest")?;
+    validate_named_digests(&input.receipt_digests, "receipt-digest")?;
+    validate_named_digests(&input.artifact_digests, "artifact-digest")?;
+    validate_evidence_refs(&input.transcripts)?;
+    if input.proof_status != SUCCESS_VERDICT && input.non_claims.is_empty() {
+        return Err(diagnostic("missing-non-claims", "non-success evidence requires explicit non-claims"));
+    }
+    if input.synthetic && input.non_claims.is_empty() {
+        return Err(diagnostic("missing-non-claims", "synthetic evidence requires explicit non-claims"));
+    }
+    if input.proof_status != SUCCESS_VERDICT && has_matching_stage_digests(input) {
+        return Err(diagnostic(
+            "contradictory-proof-status",
+            "non-success status includes matching fixed-point stage digests",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_named_digests(digests: &[NixFreeDemoNamedDigest], code: &str) -> Result<(), NixFreeDemoDiagnostic> {
+    for digest in digests {
+        if digest.name.trim().is_empty() {
+            return Err(diagnostic(code, "digest name is required"));
+        }
+        if !is_blake3_hex(&digest.digest_blake3) {
+            return Err(diagnostic(code, "digest value is not a BLAKE3 hex digest"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_evidence_refs(refs: &[NixFreeDemoEvidenceRef]) -> Result<(), NixFreeDemoDiagnostic> {
+    for reference in refs {
+        if reference.name.trim().is_empty() {
+            return Err(diagnostic("transcript-digest", "transcript name is required"));
+        }
+        if reference.bundle_path.trim().is_empty() {
+            return Err(diagnostic("transcript-path", "transcript bundle path is required"));
+        }
+        if !is_blake3_hex(&reference.digest_blake3) {
+            return Err(diagnostic("transcript-digest", "transcript digest is not a BLAKE3 hex digest"));
+        }
+    }
+    Ok(())
+}
+
+fn has_matching_stage_digests(input: &NixFreeDemoManifestInput) -> bool {
+    let stage_digests = [
+        input.stage1_binary_blake3.as_deref(),
+        input.stage2_binary_blake3.as_deref(),
+    ];
+    let valid = stage_digests.iter().flatten().filter(|digest| is_blake3_hex(digest)).count();
+    valid == SUCCESS_STAGE_DIGEST_COUNT && input.stage1_binary_blake3 == input.stage2_binary_blake3
+}
+
+fn summary_from_manifest_input(input: &NixFreeDemoManifestInput) -> NixFreeDemoMachineSummary {
+    NixFreeDemoMachineSummary {
+        schema: SUMMARY_SCHEMA.to_string(),
+        profile: DEMO_PROFILE.to_string(),
+        fixed_point_verdict: input.proof_status.clone(),
+        stage1_binary_blake3: input.stage1_binary_blake3.clone(),
+        stage2_binary_blake3: input.stage2_binary_blake3.clone(),
+        source_root_identity: input.source_root_identity.clone(),
+        toolchain_policy_digest_blake3: input.toolchain_policy_digest_blake3.clone(),
+        command_owned_wrappers: sorted_named_digests(input.command_owned_wrappers.clone()),
+        guards: sorted_guard_evidence(input.guards.clone()),
+        replay_hints: sorted_strings(input.replay_hints.clone()),
+        non_claims: sorted_strings(input.non_claims.clone()),
+    }
+}
+
+fn manifest_from_input(input: &NixFreeDemoManifestInput) -> NixFreeDemoBundleManifest {
+    NixFreeDemoBundleManifest {
+        schema: BUNDLE_MANIFEST_SCHEMA.to_string(),
+        profile: DEMO_PROFILE.to_string(),
+        proof_status: input.proof_status.clone(),
+        synthetic: input.synthetic,
+        summary_path: GENERATED_SUMMARY_PATH.to_string(),
+        readme_path: GENERATED_README_PATH.to_string(),
+        validation_path: GENERATED_VALIDATION_PATH.to_string(),
+        transcripts: sorted_evidence_refs(input.transcripts.clone()),
+        receipt_digests: sorted_named_digests(input.receipt_digests.clone()),
+        artifact_digests: sorted_named_digests(input.artifact_digests.clone()),
+        non_claims: sorted_strings(input.non_claims.clone()),
+    }
+}
+
+fn sorted_named_digests(mut values: Vec<NixFreeDemoNamedDigest>) -> Vec<NixFreeDemoNamedDigest> {
+    values.sort_by(|left, right| left.name.cmp(&right.name));
+    values
+}
+
+fn sorted_guard_evidence(mut values: Vec<NixFreeDemoGuardEvidence>) -> Vec<NixFreeDemoGuardEvidence> {
+    values.sort_by(|left, right| left.guard.cmp(&right.guard));
+    values
+}
+
+fn sorted_evidence_refs(mut values: Vec<NixFreeDemoEvidenceRef>) -> Vec<NixFreeDemoEvidenceRef> {
+    values.sort_by(|left, right| left.name.cmp(&right.name));
+    values
+}
+
+fn sorted_strings(mut values: Vec<String>) -> Vec<String> {
+    values.sort();
+    values
 }
 
 fn validate_fixed_point(summary: &NixFreeDemoMachineSummary, diagnostics: &mut Vec<NixFreeDemoDiagnostic>) {
@@ -191,7 +403,7 @@ fn diagnostic(code: &str, message: &str) -> NixFreeDemoDiagnostic {
     }
 }
 
-fn is_blake3_hex(value: &str) -> bool {
+pub(crate) fn is_blake3_hex(value: &str) -> bool {
     value.len() == BLAKE3_HEX_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 

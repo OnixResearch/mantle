@@ -1438,6 +1438,8 @@ mantle nix-free-demo validate <summary.json>
                                  Validate bounded demo-bundle claimability
 mantle nix-free-demo readme <summary.json>
                                  Render the derived demo-bundle README
+mantle nix-free-demo generate --out <dir> --proof-status <status> ...
+                                 Assemble a deterministic demo bundle from explicit evidence inputs
 mantle foreign-import validate --graph <graph.json> --package-index <index.json> --policy <policy.json>
                                  Validate lowered foreign import artifacts without live Guix/Nix frontends
 mantle foreign-import plan --graph <graph.json> --package-index <index.json> --policy <policy.json> --package hello
