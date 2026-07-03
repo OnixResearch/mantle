@@ -181,7 +181,9 @@ For frontend-neutral action/object/reference-scan evidence contracts, see
 
 For self-build, Cargo-free fixed-point, and Nix-free demo-bundle proof
 operations, see [`docs/operator-proof-guide.md`](docs/operator-proof-guide.md).
-Keep that guide current with:
+For project-facing name rules and exact legacy compatibility exceptions, see
+[`docs/mantle-naming.md`](docs/mantle-naming.md). Keep the proof guide current
+with:
 
 ```bash
 nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs

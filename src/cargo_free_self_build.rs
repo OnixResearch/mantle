@@ -2648,7 +2648,7 @@ fn self_build_non_claims_text(
 ) -> Vec<&'static str> {
     let mut lines = vec![
         "This build claims only bounded Mantle Cargo-free Rust topology execution.",
-        "This build does not claim Crunch bootstrap or release reproducibility.",
+        "This build does not claim Mantle bootstrap or release reproducibility.",
     ];
     if !toolchain_status.claim {
         lines.push("This build does not claim source-built compiler/toolchain closure provenance.");
@@ -2672,7 +2672,7 @@ fn fixed_point_non_claims_text(
 ) -> Vec<&'static str> {
     let mut lines = vec![
         "This proof claims only a bounded Mantle stage1/stage2 fixed point through native Rust topology execution.",
-        "This proof does not claim Crunch bootstrap or release reproducibility.",
+        "This proof does not claim Mantle bootstrap or release reproducibility.",
     ];
     if !toolchain_status.claim {
         lines.push("This proof does not claim source-built compiler/toolchain closure provenance.");
@@ -3608,7 +3608,7 @@ mod tests {
             meta_digest_blake3: Some(FIXED_POINT_TEST_DIGEST_A.to_string()),
             preflight: Some(preflight),
             non_claims_text: Some(
-                "This proof does not claim Crunch bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n"
+                "This proof does not claim Mantle bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n"
                     .to_string(),
             ),
             stage1_binary_digest_actual: Some(FIXED_POINT_TEST_DIGEST_A.to_string()),

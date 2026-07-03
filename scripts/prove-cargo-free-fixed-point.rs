@@ -10,7 +10,7 @@ serde_json = "1"
 
 //! Prove a bounded Mantle Cargo-free fixed point: host Mantle builds stage1,
 //! stage1 builds stage2, and the two produced Mantle binaries have identical
-//! BLAKE3 digests. This is still not Crunch bootstrap or release evidence.
+//! BLAKE3 digests. This is still not Mantle bootstrap or release evidence.
 
 use std::collections::BTreeMap;
 use std::env;
@@ -672,7 +672,7 @@ fn write_preflight(
 fn write_non_claims(bundle_dir: &Path) -> Result<(), String> {
     let text = [
         "This proof claims only a bounded Mantle stage1/stage2 fixed point through native Rust topology execution.",
-        "This proof does not claim Crunch bootstrap or release reproducibility.",
+        "This proof does not claim Mantle bootstrap or release reproducibility.",
         "This proof does not claim source-built compiler/toolchain closure provenance.",
         "This proof does not claim full Cargo compatibility, tests, doctests, examples, or general resolver parity.",
         "This proof still depends on the recorded host rustc/linker/tool environment.",

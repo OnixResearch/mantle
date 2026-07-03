@@ -2392,7 +2392,7 @@ mod tests {
         std::fs::create_dir_all(provider_proof_dir).unwrap();
         std::fs::write(
             provider_proof_dir.join("non-claims.txt"),
-            b"This proof does not claim Crunch bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n",
+            b"This proof does not claim Mantle bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n",
         )
         .unwrap();
     }

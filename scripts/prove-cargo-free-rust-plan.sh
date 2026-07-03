@@ -16,7 +16,7 @@ Runs bounded Cargo-free Rust planning/topology proofs. --check validates tools o
 --full creates a two-crate path workspace, runs rust-plan --no-cargo-oracle with a failing Cargo shim,
 and writes an audit bundle with receipts, streams, tool/source identity, output digests, and smoke output.
 --self-build runs the same Cargo-forbidden path against the checked-out Mantle workspace and smoke-checks
-its produced mantle CLI with --help. This is not Crunch fixed-point or release reproducibility evidence.
+its produced mantle CLI with --help. This is not Mantle fixed-point or release reproducibility evidence.
 USAGE
 }
 
@@ -239,7 +239,7 @@ write_blocked_meta() {
 
 write_non_claims() {
   cat > "$bundle_dir/non-claims.txt" <<'TXT'
-This proof does not claim Crunch fixed-point self-hosting.
+This proof does not claim Mantle fixed-point self-hosting.
 This proof does not claim source-built bootstrap closure provenance.
 This proof does not claim release-quality reproducibility.
 This proof does not claim network source fetching.

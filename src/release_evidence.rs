@@ -973,7 +973,7 @@ mod tests {
         write_file(&bundle_dir.join("stage2/mantle"), binary_bytes);
         write_provider_stage_receipt(&bundle_dir.join("stage1/receipt.json"));
         write_provider_stage_receipt(&bundle_dir.join("stage2/receipt.json"));
-        write_file(&bundle_dir.join("non-claims.txt"), b"This proof does not claim Crunch bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n");
+        write_file(&bundle_dir.join("non-claims.txt"), b"This proof does not claim Mantle bootstrap or release reproducibility.\nThis proof does not claim full Cargo compatibility.\n");
         write_file(
             &bundle_dir.join("preflight.json"),
             &serde_json::to_vec(&provider_preflight_json(&policy_digest)).unwrap(),

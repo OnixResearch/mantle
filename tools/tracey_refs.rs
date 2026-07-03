@@ -67,7 +67,7 @@
 //
 // r[verify examples.documentation_drift]
 // Verified by `tests/examples_inventory.rs`: README drift tests reject omitted
-// catalog paths, stale example links, and stale Crunch branding outside exact
+// catalog paths, stale example links, and stale legacy branding outside exact
 // compatibility identifiers such as `crunch.ncl`.
 //
 // r[impl examples.validation_matrix]
