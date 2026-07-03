@@ -1424,6 +1424,10 @@ mantle self-build --cargo-free --out /tmp/mantle-out
                                  Build mantle through Cargo-free Rust topology
 mantle rust-plan [--execute-topology]
                                  Explicit bounded Rust planner verification lane
+mantle nix-free-demo validate <summary.json>
+                                 Validate bounded demo-bundle claimability
+mantle nix-free-demo readme <summary.json>
+                                 Render the derived demo-bundle README
 
 # Store, logs, attestations, release evidence
 mantle store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state
@@ -1445,10 +1449,13 @@ mantle run [target] [-- args...] Build and execute a package binary (`.#name`, b
 ```
 
 Nix-free fixed-point demo wording is claimable only from a validated demo-profile
-proof bundle. The validator must see matching stage digests, source-root and
-toolchain-policy evidence, Cargo/Nix/rustup/ambient-wrapper guard denials, replay
-hints, and explicit non-claims; otherwise summaries should describe only the
-narrower blocker or fixed-point artifact that was actually proven.
+proof bundle. Run `mantle --json nix-free-demo validate <summary.json>` for a
+stable `mantle-nix-free-demo-cli-v1` decision, or `mantle nix-free-demo readme
+<summary.json>` to render the derived operator README. The validator must see
+matching stage digests, source-root and toolchain-policy evidence,
+Cargo/Nix/rustup/ambient-wrapper guard denials, replay hints, and explicit
+non-claims; otherwise summaries should describe only the narrower blocker or
+fixed-point artifact that was actually proven.
 
 ### Global flags
 

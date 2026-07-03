@@ -33,6 +33,8 @@ const REQUIRED_COMMANDS: &[&str] = &[
     "./scripts/prove-self-hosting.sh --non-nix-host",
     "./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>",
     "mantle self-build --cargo-free --out /tmp/mantle-cargo-free",
+    "mantle --json nix-free-demo validate <summary.json>",
+    "mantle nix-free-demo readme <summary.json>",
     "nix develop -c cargo -Zscript scripts/prove-cargo-free-fixed-point.rs --check --root .",
     "nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs",
     "nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs --self-test",
@@ -45,6 +47,8 @@ const REQUIRED_README_FRAGMENTS: &[&str] = &[
     "./scripts/prove-self-hosting.sh --non-nix-host",
     "./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>",
     "mantle self-build --cargo-free --out /tmp/mantle-cargo-free",
+    "mantle --json nix-free-demo validate <summary.json>",
+    "mantle nix-free-demo readme <summary.json>",
 ];
 
 const REQUIRED_SELF_BUILD_PATHS: &[&str] = &[
@@ -147,7 +151,10 @@ fn run() -> Result<(), String> {
     }
     let guide = read_to_string(GUIDE_PATH)?;
     let readme = read_to_string(README_PATH)?;
-    validate_inputs(GuideInputs { guide: &guide, readme: &readme })?;
+    validate_inputs(GuideInputs {
+        guide: &guide,
+        readme: &readme,
+    })?;
     println!("operator proof guide drift check passed");
     Ok(())
 }
@@ -160,10 +167,11 @@ struct Args {
 
 impl Args {
     fn parse<I>(args: I) -> Result<Self, String>
-    where
-        I: Iterator<Item = String>,
-    {
-        let mut parsed = Args { help: false, self_test: false };
+    where I: Iterator<Item = String> {
+        let mut parsed = Args {
+            help: false,
+            self_test: false,
+        };
         for arg in args {
             match arg.as_str() {
                 "--self-test" => parsed.self_test = true,
@@ -196,7 +204,11 @@ fn validate_inputs(inputs: GuideInputs<'_>) -> Result<(), String> {
     require_all(inputs.guide, "bounded non-claim", REQUIRED_NON_CLAIMS, &mut errors);
     reject_forbidden(inputs.guide, FORBIDDEN_OVERBROAD_CLAIMS, &mut errors);
     reject_forbidden(inputs.readme, FORBIDDEN_OVERBROAD_CLAIMS, &mut errors);
-    if errors.is_empty() { Ok(()) } else { Err(errors.join("\n")) }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
+    }
 }
 
 fn require_all(haystack: &str, label: &str, needles: &[&str], errors: &mut Vec<String>) {
@@ -224,10 +236,16 @@ fn read_to_string(path: impl AsRef<Path>) -> Result<String, String> {
 fn run_self_test() -> Result<(), String> {
     let guide = sample_valid_guide();
     let readme = sample_valid_readme();
-    validate_inputs(GuideInputs { guide: &guide, readme: &readme })?;
+    validate_inputs(GuideInputs {
+        guide: &guide,
+        readme: &readme,
+    })?;
     assert_rejected(
         "stale cargo-free command",
-        guide.replace("mantle self-build --cargo-free --out /tmp/mantle-cargo-free", "mantle self-build --cargo-free --fixed-point"),
+        guide.replace(
+            "mantle self-build --cargo-free --out /tmp/mantle-cargo-free",
+            "mantle self-build --cargo-free --fixed-point",
+        ),
         &readme,
     )?;
     assert_rejected(

@@ -25,6 +25,7 @@ mod global_reproducibility_release;
 mod log_cmd;
 mod native_toolchain_closure;
 mod nix_free_demo_bundle;
+mod nix_free_demo_cmd;
 #[allow(dead_code)]
 mod offline_cargo;
 mod operator_diagnostics;
@@ -90,6 +91,7 @@ use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
 use errors::RunError;
+use nix_free_demo_cmd::NixFreeDemoAction;
 use operator_diagnostics::DoctorProfile;
 use operator_diagnostics::RuntimeFingerprintModeFields;
 
@@ -287,6 +289,12 @@ enum Command {
         /// Output inventory path.
         #[arg(short, long, default_value = "target/host-tool-free-stage0/stage0-inventory.ncl")]
         output: PathBuf,
+    },
+
+    /// Validate or render the bounded Nix-free fixed-point demo bundle profile.
+    NixFreeDemo {
+        #[command(subcommand)]
+        action: NixFreeDemoAction,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -2099,6 +2107,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::Refactor { .. } => "refactor",
         Command::Transcript { .. } => "transcript",
         Command::Stage0Inventory { .. } => "stage0-inventory",
+        Command::NixFreeDemo { .. } => "nix-free-demo",
         Command::Eval { .. } => "eval",
         Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
         Command::Log { .. } => "log",
@@ -2392,6 +2401,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Refactor { action } => run_refactor_command(ctx, action.clone()),
         Command::Transcript { action } => run_transcript_command(action.clone()),
         Command::Stage0Inventory { output } => run_stage0_inventory_command(ctx, output),
+        Command::NixFreeDemo { action } => nix_free_demo_cmd::cmd_nix_free_demo(action.clone(), ctx.json),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),

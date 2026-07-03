@@ -14,7 +14,7 @@ were observed in the current run.
 | Non-Nix-host self-build | `./scripts/prove-self-hosting.sh --non-nix-host` | `target/self-hosting-proof/run-.../` | The fixed-point proof also ran with Nix commands scrubbed from the proof-runner `PATH`. |
 | Host-tool-free stage0 boundary | `./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>` | `target/self-hosting-proof/run-.../protected-exec-audit.json` | The protected stage0 boundary used declared seed executables under protected exec supervision. |
 | Cargo-free fixed point | `mantle self-build --cargo-free --out /tmp/mantle-cargo-free` | `/tmp/mantle-cargo-free/` | Mantle built the requested Mantle binary through the bounded native Rust topology and stage1/stage2 binary digests matched. |
-| Nix-free demo bundle | validated `mantle-nix-free-demo-summary-v1` bundle | generated demo README plus machine summary | The recorded source-root Cargo-free fixed-point demo profile is claimable only when all validator diagnostics are absent. |
+| Nix-free demo bundle | `mantle --json nix-free-demo validate <summary.json>` | generated demo README plus machine summary | The recorded source-root Cargo-free fixed-point demo profile is claimable only when all validator diagnostics are absent. |
 
 Run the fast prerequisite check before starting expensive self-build proof work:
 
@@ -137,9 +137,10 @@ success, and does not prove general Nix replacement completeness.
 
 Nix-free demo wording is claimable only from the demo-profile validator. The
 machine summary schema is `mantle-nix-free-demo-summary-v1`, and the current
-profile is `source-root-cargo-free-fixed-point`. Until a dedicated operator CLI
-for this profile lands, treat the generated demo README and its machine summary
-as the bundle-local validation surface; do not invent a wider CLI success claim.
+profile is `source-root-cargo-free-fixed-point`. Use `mantle --json
+nix-free-demo validate <summary.json>` for a stable machine decision and
+`mantle nix-free-demo readme <summary.json>` to regenerate the derived demo
+README; do not invent a wider CLI success claim.
 
 The machine summary must include these fields:
 
