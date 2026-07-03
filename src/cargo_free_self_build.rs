@@ -890,6 +890,7 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         options.targets,
         &execution_toolchain.path_env,
         execution_toolchain.c_compiler_route.as_ref(),
+        initial_toolchain_status.policy_digest_blake3.as_deref(),
     )?;
     let produced = if child.blocker.is_none() {
         materialize_or_block(&paths, &mut child)?
@@ -1359,6 +1360,7 @@ fn run_rust_plan_child(
     targets: &[String],
     path_env: &OsStr,
     c_compiler_route: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+    policy_digest_blake3: Option<&str>,
 ) -> Result<ChildRun, RunError> {
     let current_exe = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let mut command = Command::new(&current_exe);
@@ -1383,6 +1385,9 @@ fn run_rust_plan_child(
             .arg("--source-built-c-compiler-route-json")
             .arg(&route_json)
             .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
+    }
+    if let Some(policy_digest_blake3) = policy_digest_blake3 {
+        command.env(crate::rust_plan::RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV, policy_digest_blake3);
     }
     let output = command
         .arg("--no-cargo-oracle")
@@ -1451,6 +1456,9 @@ fn execute_fixed_point_stage(
             .arg("--source-built-c-compiler-route-json")
             .arg(route_json)
             .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
+    }
+    if let Some(policy_digest_blake3) = policy_digest_blake3 {
+        command.env(crate::rust_plan::RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV, policy_digest_blake3);
     }
     let output = command.output();
     let output = match output {

@@ -48,6 +48,9 @@ const BUILD_SCRIPT_HOST_ENV: &str = "HOST";
 const BUILD_SCRIPT_TARGET_ENV: &str = "TARGET";
 const BUILD_SCRIPT_PROFILE_ENV: &str = "PROFILE";
 const RUST_UNIT_EXECUTION_KIND_ENV: &str = "MANTLE_RUST_UNIT_EXECUTION_KIND";
+pub(crate) const RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV: &str = "MANTLE_RUST_TOOLCHAIN_POLICY_DIGEST_BLAKE3";
+const TARGET_EXECUTION_KIND: &str = "target";
+const HOST_EXECUTION_KIND: &str = "host";
 const HOST_DEPENDENCY_EXECUTION_KIND: &str = "host-dependency";
 const HOST_DEPENDENCY_CRATE_KIND: &str = "host-lib";
 const HOST_DEPENDENCY_MODE: &str = "host-build";
@@ -571,6 +574,8 @@ pub(crate) struct RustUnitDerivationSummary {
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
     pub(crate) execution_kind: String,
+    pub(crate) selected_triple: String,
+    pub(crate) rustc_metadata_hash: String,
     pub(crate) crate_types: Vec<String>,
     pub(crate) mode: String,
     pub(crate) profile: String,
@@ -803,12 +808,27 @@ struct RustCompilerPolicyAdapterReport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustConsumedArtifactRoleEvidence {
+    pub(crate) package_id: String,
+    pub(crate) name: String,
+    pub(crate) producer_unit_id: Option<String>,
+    pub(crate) role: String,
+    pub(crate) selected_triple: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct RustUnitExecutionReceipt {
     pub(crate) schema_version: u32,
     pub(crate) unit_id: String,
     pub(crate) package_id: String,
     pub(crate) target_name: String,
     pub(crate) target_kind: String,
+    pub(crate) execution_kind: String,
+    pub(crate) selected_triple: String,
+    pub(crate) rustc_metadata_hash: String,
+    pub(crate) toolchain_policy_digest_blake3: String,
+    pub(crate) artifact_identity_digest_blake3: String,
+    pub(crate) consumed_artifact_roles: Vec<RustConsumedArtifactRoleEvidence>,
     pub(crate) execution_status: String,
     pub(crate) rebuild_reason: String,
     pub(crate) source_digest: SourceDigest,
@@ -4680,6 +4700,15 @@ fn active_rust_target(options: &RustPlanOptions) -> String {
     options.targets.first().cloned().unwrap_or_else(host_target_triple)
 }
 
+fn selected_triple_for_execution_kind(execution_kind: &str, options: &RustPlanOptions) -> String {
+    debug_assert!(!execution_kind.is_empty());
+    if execution_kind == TARGET_EXECUTION_KIND {
+        active_rust_target(options)
+    } else {
+        host_target_triple()
+    }
+}
+
 fn host_target_triple() -> String {
     format!("{}-unknown-{}-gnu", std::env::consts::ARCH, match std::env::consts::OS {
         "macos" => "darwin",
@@ -7142,6 +7171,29 @@ fn append_rustc_metadata_args(args: &mut Vec<String>, metadata: &str) {
     args.push(format!("{RUSTC_METADATA_ARG_PREFIX}{metadata}"));
 }
 
+fn replace_rustc_metadata_arg(args: &mut [String], metadata: &str) {
+    debug_assert!(!metadata.is_empty());
+    debug_assert!(metadata.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    let mut replaced = false;
+    for arg in args {
+        if arg.starts_with(RUSTC_METADATA_ARG_PREFIX) {
+            *arg = format!("{RUSTC_METADATA_ARG_PREFIX}{metadata}");
+            replaced = true;
+        }
+    }
+    debug_assert!(replaced);
+}
+
+fn retagged_rustc_metadata_hash(base_metadata: &str, execution_kind: &str, mode: &str) -> String {
+    debug_assert!(!base_metadata.is_empty());
+    debug_assert!(!execution_kind.is_empty());
+    debug_assert!(!mode.is_empty());
+    let material = [base_metadata, execution_kind, mode].join("\0");
+    let hex = blake3::hash(material.as_bytes()).to_hex().to_string();
+    debug_assert!(hex.len() >= RUSTC_METADATA_HEX_CHARS);
+    hex[..RUSTC_METADATA_HEX_CHARS].to_string()
+}
+
 pub(crate) fn deterministic_release_path_remaps(
     root: &Path,
     execution_output_root: Option<&Path>,
@@ -7436,18 +7488,16 @@ fn native_unit_derivation(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    append_rustc_metadata_args(
-        &mut args,
-        &rustc_unit_metadata_disambiguator(
-            &unit.package_id,
-            &unit.target_name,
-            &unit.target_kind,
-            &unit.mode,
-            &unit.source_digest,
-            &unit.selected_features,
-            &unit.crate_types,
-        ),
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
+        &unit.package_id,
+        &unit.target_name,
+        &unit.target_kind,
+        &unit.mode,
+        &unit.source_digest,
+        &unit.selected_features,
+        &unit.crate_types,
     );
+    append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
     append_cap_lints_args(&mut args, &unit.package_id, source_closure);
     if unit.target_kind == "bin" {
@@ -7492,7 +7542,9 @@ fn native_unit_derivation(
         package_id: unit.package_id.clone(),
         target_name: unit.target_name.clone(),
         target_kind: unit.target_kind.clone(),
-        execution_kind: "target".to_string(),
+        execution_kind: TARGET_EXECUTION_KIND.to_string(),
+        selected_triple: active_rust_target(options),
+        rustc_metadata_hash,
         crate_types: unit.crate_types.clone(),
         mode: unit.mode.clone(),
         profile: options.profile.clone(),
@@ -7535,18 +7587,16 @@ fn native_host_unit_derivation(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    append_rustc_metadata_args(
-        &mut args,
-        &rustc_unit_metadata_disambiguator(
-            &unit.package_id,
-            &unit.target_name,
-            &unit.target_kind,
-            &unit.mode,
-            &unit.source_digest,
-            &unit.selected_features,
-            &unit.crate_types,
-        ),
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
+        &unit.package_id,
+        &unit.target_name,
+        &unit.target_kind,
+        &unit.mode,
+        &unit.source_digest,
+        &unit.selected_features,
+        &unit.crate_types,
     );
+    append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     append_rustc_feature_cfg_args(&mut args, &unit.selected_features);
     append_cap_lints_args(&mut args, &unit.package_id, source_closure);
     if unit.target_kind == "proc-macro" {
@@ -7593,7 +7643,9 @@ fn native_host_unit_derivation(
         package_id: unit.package_id.clone(),
         target_name: unit.target_name.clone(),
         target_kind: unit.target_kind.clone(),
-        execution_kind: "host".to_string(),
+        execution_kind: HOST_EXECUTION_KIND.to_string(),
+        selected_triple: host_target_triple(),
+        rustc_metadata_hash,
         crate_types: unit.crate_types.clone(),
         mode: unit.mode.clone(),
         profile: options.profile.clone(),
@@ -7751,7 +7803,16 @@ fn host_dependency_derivation(
     let mut host_unit = target_unit.clone();
     host_unit.unit_id = host_dependency_unit_id(&target_unit.unit_id);
     host_unit.execution_kind = HOST_DEPENDENCY_EXECUTION_KIND.to_string();
+    host_unit.selected_triple = host_target_triple();
     host_unit.mode = HOST_DEPENDENCY_MODE.to_string();
+    host_unit.rustc_metadata_hash = retagged_rustc_metadata_hash(
+        &target_unit.rustc_metadata_hash,
+        HOST_DEPENDENCY_EXECUTION_KIND,
+        HOST_DEPENDENCY_MODE,
+    );
+    replace_rustc_metadata_arg(&mut host_unit.derivation.args, &host_unit.rustc_metadata_hash);
+    host_unit.rustc_args_digest_blake3 =
+        blake3::hash(host_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
     host_unit.derivation.name = format!("{}-host", target_unit.derivation.name);
     host_unit.derivation.env.insert("CRATE_KIND".to_string(), HOST_DEPENDENCY_CRATE_KIND.to_string());
     host_unit
@@ -8027,9 +8088,9 @@ fn summarize_unit_derivation(
     }
     let target_kind = select_supported_target_kind(target, index, &package_id)?;
     let execution_kind = if is_host_target_kind(&target_kind) {
-        "host"
+        HOST_EXECUTION_KIND
     } else {
-        "target"
+        TARGET_EXECUTION_KIND
     }
     .to_string();
     let crate_types = target_string_array(target, "crate_types");
@@ -8071,6 +8132,16 @@ fn summarize_unit_derivation(
             args.push(rustc_linker_arg(&linker, options));
         }
     }
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
+        &package_id,
+        &target_name,
+        &target_kind,
+        &mode,
+        &source.source_digest,
+        &features,
+        &crate_types,
+    );
+    append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     append_rustc_feature_cfg_args(&mut args, &features);
     append_cap_lints_args_for_source_kind(&mut args, &source.kind);
     for dependency in &dependency_artifacts {
@@ -8103,6 +8174,8 @@ fn summarize_unit_derivation(
         target_name: target_name.clone(),
         target_kind,
         execution_kind: execution_kind.clone(),
+        selected_triple: selected_triple_for_execution_kind(&execution_kind, options),
+        rustc_metadata_hash,
         crate_types,
         mode,
         profile: options.profile.clone(),
@@ -8644,6 +8717,246 @@ pub(crate) fn execute_first_rust_unit_dependency_chain(
     dependency_chain_receipt(status, vec![producer_receipt, consumer_receipt], blocker)
 }
 
+fn validate_role_sensitive_artifact_graph(graph: &UnitDerivationGraphSummary) -> Option<RustUnitExecutionBlocker> {
+    let unit_indices_by_id = rust_unit_indices_by_id(graph);
+    for unit in &graph.derivations {
+        if let Some(blocker) = validate_unit_role_triple(unit) {
+            return Some(blocker);
+        }
+        for dependency in &unit.dependency_artifacts {
+            if let Some(blocker) = validate_dependency_artifact_role(unit, dependency, graph, &unit_indices_by_id) {
+                return Some(blocker);
+            }
+        }
+        for artifact in &unit.consumed_host_artifacts {
+            if let Some(blocker) = validate_host_artifact_role(unit, artifact, graph, &unit_indices_by_id) {
+                return Some(blocker);
+            }
+        }
+    }
+    None
+}
+
+fn validate_unit_role_triple(unit: &RustUnitDerivationSummary) -> Option<RustUnitExecutionBlocker> {
+    if unit.execution_kind == TARGET_EXECUTION_KIND {
+        if unit.selected_triple.is_empty() {
+            return Some(role_mismatch_blocker(
+                unit,
+                "unit",
+                TARGET_EXECUTION_KIND,
+                "non-empty-target-triple",
+                &unit.execution_kind,
+                &unit.selected_triple,
+            ));
+        }
+        return None;
+    }
+    if unit.execution_kind == HOST_EXECUTION_KIND || unit.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND {
+        let host_triple = host_target_triple();
+        if unit.selected_triple != host_triple {
+            return Some(role_mismatch_blocker(
+                unit,
+                "unit",
+                &unit.execution_kind,
+                &host_triple,
+                &unit.execution_kind,
+                &unit.selected_triple,
+            ));
+        }
+        return None;
+    }
+    Some(role_mismatch_blocker(
+        unit,
+        "unit",
+        "known-execution-kind",
+        "known-selected-triple",
+        &unit.execution_kind,
+        &unit.selected_triple,
+    ))
+}
+
+fn validate_dependency_artifact_role(
+    consumer: &RustUnitDerivationSummary,
+    dependency: &RustDependencyArtifact,
+    graph: &UnitDerivationGraphSummary,
+    unit_indices_by_id: &BTreeMap<String, usize>,
+) -> Option<RustUnitExecutionBlocker> {
+    let expected_role = expected_dependency_artifact_role(consumer);
+    let expected_triple = expected_triple_for_role(consumer, expected_role);
+    let producer = dependency_artifact_producer(consumer, dependency, expected_role, graph, unit_indices_by_id)?;
+    if producer.execution_kind != expected_role || producer.selected_triple != expected_triple {
+        return Some(role_mismatch_blocker(
+            consumer,
+            &format!("dependency:{}", dependency.name),
+            expected_role,
+            &expected_triple,
+            &producer.execution_kind,
+            &producer.selected_triple,
+        ));
+    }
+    validate_dependency_artifact_identity(consumer, dependency, producer)
+}
+
+fn validate_host_artifact_role(
+    consumer: &RustUnitDerivationSummary,
+    artifact: &RustHostArtifact,
+    graph: &UnitDerivationGraphSummary,
+    unit_indices_by_id: &BTreeMap<String, usize>,
+) -> Option<RustUnitExecutionBlocker> {
+    let expected_triple = host_target_triple();
+    let producer = host_artifact_producer(artifact, graph, unit_indices_by_id)?;
+    if producer.execution_kind != HOST_EXECUTION_KIND || producer.selected_triple != expected_triple {
+        return Some(role_mismatch_blocker(
+            consumer,
+            &format!("host-artifact:{}", artifact.target_name),
+            HOST_EXECUTION_KIND,
+            &expected_triple,
+            &producer.execution_kind,
+            &producer.selected_triple,
+        ));
+    }
+    None
+}
+
+fn validate_dependency_artifact_identity(
+    consumer: &RustUnitDerivationSummary,
+    dependency: &RustDependencyArtifact,
+    producer: &RustUnitDerivationSummary,
+) -> Option<RustUnitExecutionBlocker> {
+    if dependency.package_id != producer.package_id {
+        return Some(identity_mismatch_blocker(
+            consumer,
+            &format!("dependency:{}", dependency.name),
+            "source package",
+            &dependency.package_id,
+            &producer.package_id,
+        ));
+    }
+    let observed_metadata = rustc_metadata_hash_from_args(&producer.derivation.args);
+    if observed_metadata.as_deref() != Some(producer.rustc_metadata_hash.as_str()) {
+        return Some(identity_mismatch_blocker(
+            consumer,
+            &format!("dependency:{}", dependency.name),
+            "metadata hash",
+            &producer.rustc_metadata_hash,
+            observed_metadata.as_deref().unwrap_or("missing"),
+        ));
+    }
+    if let Some(blocker) = validate_dependency_toolchain_policy_digest(consumer, dependency, producer) {
+        return Some(blocker);
+    }
+    None
+}
+
+fn validate_dependency_toolchain_policy_digest(
+    consumer: &RustUnitDerivationSummary,
+    dependency: &RustDependencyArtifact,
+    producer: &RustUnitDerivationSummary,
+) -> Option<RustUnitExecutionBlocker> {
+    let expected = source_root_policy_digest_from_unit(consumer)?;
+    let observed = source_root_policy_digest_from_unit(producer)?;
+    if expected == observed {
+        return None;
+    }
+    Some(identity_mismatch_blocker(
+        consumer,
+        &format!("dependency:{}", dependency.name),
+        "toolchain-policy digest",
+        &expected,
+        &observed,
+    ))
+}
+
+fn source_root_policy_digest_from_unit(unit: &RustUnitDerivationSummary) -> Option<String> {
+    unit.derivation
+        .env
+        .get(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV)
+        .and_then(|value| normalized_blake3_hex(value))
+}
+
+fn rustc_metadata_hash_from_args(args: &[String]) -> Option<String> {
+    args.iter().find_map(|arg| arg.strip_prefix(RUSTC_METADATA_ARG_PREFIX)).map(ToOwned::to_owned)
+}
+
+fn expected_dependency_artifact_role(consumer: &RustUnitDerivationSummary) -> &'static str {
+    if consumer.execution_kind == HOST_EXECUTION_KIND || consumer.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND {
+        HOST_DEPENDENCY_EXECUTION_KIND
+    } else {
+        TARGET_EXECUTION_KIND
+    }
+}
+
+fn expected_triple_for_role(consumer: &RustUnitDerivationSummary, role: &str) -> String {
+    if role == TARGET_EXECUTION_KIND {
+        consumer.selected_triple.clone()
+    } else {
+        host_target_triple()
+    }
+}
+
+fn dependency_artifact_producer<'a>(
+    consumer: &RustUnitDerivationSummary,
+    dependency: &RustDependencyArtifact,
+    expected_role: &str,
+    graph: &'a UnitDerivationGraphSummary,
+    unit_indices_by_id: &BTreeMap<String, usize>,
+) -> Option<&'a RustUnitDerivationSummary> {
+    if let Some(producer_unit_id) = &dependency.producer_unit_id {
+        return unit_indices_by_id.get(producer_unit_id).and_then(|index| graph.derivations.get(*index));
+    }
+    graph.derivations.iter().find(|candidate| {
+        candidate.package_id == dependency.package_id
+            && candidate.target_kind == "lib"
+            && candidate.execution_kind == expected_role
+            && candidate.unit_id != consumer.unit_id
+    })
+}
+
+fn host_artifact_producer<'a>(
+    artifact: &RustHostArtifact,
+    graph: &'a UnitDerivationGraphSummary,
+    unit_indices_by_id: &BTreeMap<String, usize>,
+) -> Option<&'a RustUnitDerivationSummary> {
+    if let Some(producer_unit_id) = &artifact.producer_unit_id {
+        return unit_indices_by_id.get(producer_unit_id).and_then(|index| graph.derivations.get(*index));
+    }
+    graph.derivations.iter().find(|candidate| {
+        candidate.package_id == artifact.package_id
+            && candidate.target_name == artifact.target_name
+            && candidate.target_kind == artifact.target_kind
+    })
+}
+
+fn role_mismatch_blocker(
+    unit: &RustUnitDerivationSummary,
+    edge: &str,
+    expected_role: &str,
+    expected_triple: &str,
+    actual_role: &str,
+    actual_triple: &str,
+) -> RustUnitExecutionBlocker {
+    RustUnitExecutionBlocker {
+        class: "artifact-identity-mismatch".to_string(),
+        message: format!(
+            "unit {} {edge} expected role {expected_role} triple {expected_triple}, got role {actual_role} triple {actual_triple}",
+            unit.unit_id
+        ),
+    }
+}
+
+fn identity_mismatch_blocker(
+    unit: &RustUnitDerivationSummary,
+    edge: &str,
+    field: &str,
+    expected: &str,
+    observed: &str,
+) -> RustUnitExecutionBlocker {
+    RustUnitExecutionBlocker {
+        class: "artifact-identity-mismatch".to_string(),
+        message: format!("unit {} {edge} expected {field} {expected}, got {field} {observed}", unit.unit_id),
+    }
+}
+
 pub(crate) fn execute_rust_target_unit_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
@@ -8659,6 +8972,9 @@ pub(crate) fn execute_rust_target_unit_topology(
                         .to_string(),
             }),
         );
+    }
+    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
+        return target_topology_receipt("blocked", Vec::new(), Some(blocker));
     }
 
     let mut selected_indices = Vec::new();
@@ -9177,6 +9493,9 @@ pub(crate) fn execute_rust_unit_topology(
                     .to_string(),
             }),
         );
+    }
+    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
+        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
 
     let host_indices = graph
@@ -9725,6 +10044,16 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
         args.push("-C".to_string());
         args.push(format!("linker={}", normalize_path_string(&linker)));
     }
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
+        &package.package_id,
+        test_name,
+        "test",
+        "test",
+        &package.source_digest,
+        &[],
+        &["bin".to_string()],
+    );
+    append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     for dependency in &dependency_artifacts {
         args.push("--extern".to_string());
         args.push(format!("{}={}", dependency.name, dependency.artifact));
@@ -9744,7 +10073,9 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
         package_id: package.package_id.clone(),
         target_name: test_name.to_string(),
         target_kind: "test".to_string(),
-        execution_kind: "target".to_string(),
+        execution_kind: TARGET_EXECUTION_KIND.to_string(),
+        selected_triple: host_target_triple(),
+        rustc_metadata_hash,
         crate_types: vec!["bin".to_string()],
         mode: "test".to_string(),
         profile: DEFAULT_CARGO_PROFILE.to_string(),
@@ -13274,7 +13605,7 @@ fn dev_dependency_lib_derivation(
     }
     let target = libs[0];
     let unit_id = format!("native-dev-dependency-lib:{}:{}", package.package_id, target.name);
-    let args = vec![
+    let mut args = vec![
         "--crate-name".to_string(),
         target.crate_name.clone(),
         "--edition".to_string(),
@@ -13284,6 +13615,16 @@ fn dev_dependency_lib_derivation(
         "--crate-type".to_string(),
         "lib".to_string(),
     ];
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(
+        &package.package_id,
+        &target.name,
+        "lib",
+        "build",
+        &package.source_digest,
+        &[],
+        &["lib".to_string()],
+    );
+    append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     let args_digest = blake3::hash(args.join("\0").as_bytes()).to_hex().to_string();
     let mut env = BTreeMap::new();
     env.insert("CRATE_KIND".to_string(), "lib".to_string());
@@ -13295,7 +13636,9 @@ fn dev_dependency_lib_derivation(
         package_id: package.package_id.clone(),
         target_name: target.name.clone(),
         target_kind: "lib".to_string(),
-        execution_kind: "target".to_string(),
+        execution_kind: TARGET_EXECUTION_KIND.to_string(),
+        selected_triple: host_target_triple(),
+        rustc_metadata_hash,
         crate_types: vec!["lib".to_string()],
         mode: "build".to_string(),
         profile: DEFAULT_CARGO_PROFILE.to_string(),
@@ -13427,38 +13770,56 @@ fn blocked_execution_receipt(
         algorithm: "missing".to_string(),
         value: "missing".to_string(),
     };
-    let (unit_id, package_id, target_name, target_kind, source_digest, rustc_args_digest_blake3, derivation_env) = unit
-        .map_or_else(
-            || {
-                (
-                    "missing".to_string(),
-                    "missing".to_string(),
-                    "missing".to_string(),
-                    "missing".to_string(),
-                    fallback_source_digest.clone(),
-                    "missing".to_string(),
-                    BTreeMap::new(),
-                )
-            },
-            |unit| {
-                (
-                    unit.unit_id.clone(),
-                    unit.package_id.clone(),
-                    unit.target_name.clone(),
-                    unit.target_kind.clone(),
-                    unit.source_digest.clone(),
-                    unit.rustc_args_digest_blake3.clone(),
-                    unit.derivation.env.clone(),
-                )
-            },
-        );
+    let (
+        unit_id,
+        package_id,
+        target_name,
+        target_kind,
+        execution_kind,
+        selected_triple,
+        rustc_metadata_hash,
+        source_digest,
+        rustc_args_digest_blake3,
+        derivation_env,
+    ) = unit.map_or_else(
+        || {
+            (
+                "missing".to_string(),
+                "missing".to_string(),
+                "missing".to_string(),
+                "missing".to_string(),
+                TARGET_EXECUTION_KIND.to_string(),
+                host_target_triple(),
+                "missing".to_string(),
+                fallback_source_digest.clone(),
+                "missing".to_string(),
+                BTreeMap::new(),
+            )
+        },
+        |unit| {
+            (
+                unit.unit_id.clone(),
+                unit.package_id.clone(),
+                unit.target_name.clone(),
+                unit.target_kind.clone(),
+                unit.execution_kind.clone(),
+                unit.selected_triple.clone(),
+                unit.rustc_metadata_hash.clone(),
+                unit.source_digest.clone(),
+                unit.rustc_args_digest_blake3.clone(),
+                unit.derivation.env.clone(),
+            )
+        },
+    );
     finalized_execution_receipt(
         &RustUnitDerivationSummary {
             unit_id,
             package_id,
             target_name,
             target_kind,
-            execution_kind: "target".to_string(),
+            execution_kind,
+            selected_triple,
+            rustc_metadata_hash,
             crate_types: Vec::new(),
             mode: "build".to_string(),
             profile: String::new(),
@@ -13519,6 +13880,139 @@ fn failed_execution_receipt(
     )
 }
 
+fn normalized_blake3_hex(value: &str) -> Option<String> {
+    let candidate = value.strip_prefix("b3:").or_else(|| value.strip_prefix("blake3:")).unwrap_or(value);
+    if candidate.len() != BLAKE3_HEX_CHARS {
+        return None;
+    }
+    if !candidate.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(candidate.to_ascii_lowercase())
+}
+
+fn rust_unit_toolchain_policy_digest(
+    unit: &RustUnitDerivationSummary,
+    compiler_policy: Option<&RustCompilerPolicyExecutionReceipt>,
+) -> Result<String, RunError> {
+    if let Some(env_digest) = unit
+        .derivation
+        .env
+        .get(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV)
+        .and_then(|value| normalized_blake3_hex(value))
+    {
+        return Ok(env_digest);
+    }
+    if let Some(policy) = compiler_policy {
+        if let Some(manifest_digest) =
+            policy.identity.provider_manifest_digest_blake3.as_deref().and_then(normalized_blake3_hex)
+        {
+            return Ok(manifest_digest);
+        }
+        let canonical = serde_json::to_vec(&policy.identity)
+            .map_err(|err| RunError::Internal(format!("canonicalizing Rust compiler policy identity: {err}")))?;
+        return Ok(blake3::hash(&canonical).to_hex().to_string());
+    }
+    #[derive(Serialize)]
+    struct PlainToolchainPolicy<'a> {
+        role: &'a str,
+        selected_triple: &'a str,
+        builder: &'a str,
+    }
+    let canonical = serde_json::to_vec(&PlainToolchainPolicy {
+        role: &unit.execution_kind,
+        selected_triple: &unit.selected_triple,
+        builder: &unit.derivation.builder,
+    })
+    .map_err(|err| RunError::Internal(format!("canonicalizing plain Rust toolchain policy: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+fn consumed_artifact_role_evidence(unit: &RustUnitDerivationSummary) -> Vec<RustConsumedArtifactRoleEvidence> {
+    let mut evidence = Vec::new();
+    evidence.extend(unit.dependency_artifacts.iter().map(|artifact| {
+        let role = dependency_artifact_role(unit, artifact);
+        let selected_triple = if role == TARGET_EXECUTION_KIND {
+            unit.selected_triple.clone()
+        } else {
+            host_target_triple()
+        };
+        RustConsumedArtifactRoleEvidence {
+            package_id: artifact.package_id.clone(),
+            name: artifact.name.clone(),
+            producer_unit_id: artifact.producer_unit_id.clone(),
+            role,
+            selected_triple,
+        }
+    }));
+    evidence.extend(unit.consumed_host_artifacts.iter().map(|artifact| RustConsumedArtifactRoleEvidence {
+        package_id: artifact.package_id.clone(),
+        name: artifact.target_name.clone(),
+        producer_unit_id: artifact.producer_unit_id.clone(),
+        role: HOST_EXECUTION_KIND.to_string(),
+        selected_triple: host_target_triple(),
+    }));
+    evidence.sort_by(|left, right| {
+        left.package_id
+            .cmp(&right.package_id)
+            .then(left.name.cmp(&right.name))
+            .then(left.producer_unit_id.cmp(&right.producer_unit_id))
+    });
+    evidence
+}
+
+fn dependency_artifact_role(unit: &RustUnitDerivationSummary, artifact: &RustDependencyArtifact) -> String {
+    if artifact
+        .producer_unit_id
+        .as_deref()
+        .is_some_and(|unit_id| unit_id.ends_with(HOST_DEPENDENCY_UNIT_ID_SUFFIX))
+    {
+        return HOST_DEPENDENCY_EXECUTION_KIND.to_string();
+    }
+    if unit.execution_kind == HOST_EXECUTION_KIND || unit.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND {
+        return HOST_DEPENDENCY_EXECUTION_KIND.to_string();
+    }
+    TARGET_EXECUTION_KIND.to_string()
+}
+
+fn rust_unit_artifact_identity_digest(
+    unit: &RustUnitDerivationSummary,
+    toolchain_policy_digest_blake3: &str,
+    consumed_roles: &[RustConsumedArtifactRoleEvidence],
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct ArtifactIdentity<'a> {
+        unit_id: &'a str,
+        package_id: &'a str,
+        target_name: &'a str,
+        target_kind: &'a str,
+        execution_kind: &'a str,
+        selected_triple: &'a str,
+        mode: &'a str,
+        profile: &'a str,
+        source_digest: &'a SourceDigest,
+        rustc_metadata_hash: &'a str,
+        toolchain_policy_digest_blake3: &'a str,
+        consumed_artifact_roles: &'a [RustConsumedArtifactRoleEvidence],
+    }
+    let canonical = serde_json::to_vec(&ArtifactIdentity {
+        unit_id: &unit.unit_id,
+        package_id: &unit.package_id,
+        target_name: &unit.target_name,
+        target_kind: &unit.target_kind,
+        execution_kind: &unit.execution_kind,
+        selected_triple: &unit.selected_triple,
+        mode: &unit.mode,
+        profile: &unit.profile,
+        source_digest: &unit.source_digest,
+        rustc_metadata_hash: &unit.rustc_metadata_hash,
+        toolchain_policy_digest_blake3,
+        consumed_artifact_roles: consumed_roles,
+    })
+    .map_err(|err| RunError::Internal(format!("canonicalizing Rust artifact identity: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
 fn finalized_execution_receipt(
     unit: &RustUnitDerivationSummary,
     execution_status: &str,
@@ -13531,12 +14025,22 @@ fn finalized_execution_receipt(
     compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     blocker: Option<RustUnitExecutionBlocker>,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
+    let consumed_artifact_roles = consumed_artifact_role_evidence(unit);
+    let toolchain_policy_digest_blake3 = rust_unit_toolchain_policy_digest(unit, compiler_policy.as_ref())?;
+    let artifact_identity_digest_blake3 =
+        rust_unit_artifact_identity_digest(unit, &toolchain_policy_digest_blake3, &consumed_artifact_roles)?;
     let mut receipt = RustUnitExecutionReceipt {
         schema_version: RECEIPT_SCHEMA_VERSION,
         unit_id: unit.unit_id.clone(),
         package_id: unit.package_id.clone(),
         target_name: unit.target_name.clone(),
         target_kind: unit.target_kind.clone(),
+        execution_kind: unit.execution_kind.clone(),
+        selected_triple: unit.selected_triple.clone(),
+        rustc_metadata_hash: unit.rustc_metadata_hash.clone(),
+        toolchain_policy_digest_blake3,
+        artifact_identity_digest_blake3,
+        consumed_artifact_roles,
         execution_status: execution_status.to_string(),
         rebuild_reason: rebuild_reason.to_string(),
         source_digest: unit.source_digest.clone(),
@@ -14126,12 +14630,25 @@ mod tests {
         execution_kind: &str,
         dependencies: Vec<RustDependencyArtifact>,
     ) -> RustUnitDerivationSummary {
+        let selected_triple = if execution_kind == TARGET_EXECUTION_KIND {
+            "x86_64-unknown-linux-gnu".to_string()
+        } else {
+            host_target_triple()
+        };
+        let rustc_metadata_hash =
+            test_source_digest(&format!("metadata-{index}")).value[..RUSTC_METADATA_HEX_CHARS].to_string();
+        let rustc_args = vec![
+            RUSTC_CODEGEN_OPTION_FLAG.to_string(),
+            format!("{RUSTC_METADATA_ARG_PREFIX}{rustc_metadata_hash}"),
+        ];
         RustUnitDerivationSummary {
             unit_id: rust_unit_id(index, package_id, package_id, target_kind, "build"),
             package_id: package_id.to_string(),
             target_name: package_id.to_string(),
             target_kind: target_kind.to_string(),
             execution_kind: execution_kind.to_string(),
+            selected_triple,
+            rustc_metadata_hash,
             crate_types: vec![target_kind.to_string()],
             mode: "build".to_string(),
             profile: default_profile(),
@@ -14144,7 +14661,7 @@ mod tests {
                 name: format!("unit-{index}"),
                 builder: "rustc".to_string(),
                 system: "x86_64-linux".to_string(),
-                args: Vec::new(),
+                args: rustc_args,
                 outputs: vec!["out".to_string()],
                 env: BTreeMap::new(),
                 inputs: Vec::new(),
@@ -17314,8 +17831,9 @@ rust-version = "1.80"
         let dependency_id = "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59";
         let host_consumer_id = "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1";
         let target_consumer_id = "path+file://mantle#mantle@0.1.0";
-        let target_dependency = test_rust_derivation(0, dependency_id, "lib", "target", Vec::new());
+        let target_dependency = test_rust_derivation(0, dependency_id, "lib", TARGET_EXECUTION_KIND, Vec::new());
         let target_dependency_unit_id = target_dependency.unit_id.clone();
+        let target_dependency_metadata = target_dependency.rustc_metadata_hash.clone();
         let host_dependency_id = host_dependency_unit_id(&target_dependency_unit_id);
         let dependency_artifact = RustDependencyArtifact {
             package_id: dependency_id.to_string(),
@@ -17323,9 +17841,11 @@ rust-version = "1.80"
             producer_unit_id: Some(target_dependency_unit_id.clone()),
             artifact: format!("artifact:{dependency_id}:cc"),
         };
-        let host_consumer =
-            test_rust_derivation(1, host_consumer_id, "custom-build", "host", vec![dependency_artifact.clone()]);
-        let target_consumer = test_rust_derivation(2, target_consumer_id, "lib", "target", vec![dependency_artifact]);
+        let host_consumer = test_rust_derivation(1, host_consumer_id, "custom-build", HOST_EXECUTION_KIND, vec![
+            dependency_artifact.clone(),
+        ]);
+        let target_consumer =
+            test_rust_derivation(2, target_consumer_id, "lib", TARGET_EXECUTION_KIND, vec![dependency_artifact]);
         let mut derivations = vec![target_dependency, host_consumer, target_consumer];
 
         add_host_dependency_derivations(&mut derivations);
@@ -17335,6 +17855,8 @@ rust-version = "1.80"
             .find(|unit| unit.unit_id == host_dependency_id)
             .expect("host dependency clone exists");
         assert_eq!(host_dependency.execution_kind, HOST_DEPENDENCY_EXECUTION_KIND);
+        assert_eq!(host_dependency.selected_triple, host_target_triple());
+        assert_ne!(host_dependency.rustc_metadata_hash, target_dependency_metadata);
         assert_eq!(host_dependency.target_kind, "lib");
         assert_eq!(host_dependency.derivation.env.get("CRATE_KIND").unwrap(), HOST_DEPENDENCY_CRATE_KIND);
         assert_eq!(
@@ -17351,6 +17873,156 @@ rust-version = "1.80"
             untouched_target_consumer.dependency_artifacts[0].producer_unit_id.as_deref(),
             Some(target_dependency_unit_id.as_str())
         );
+    }
+
+    #[test]
+    fn finalized_receipt_records_role_triple_policy_and_identity() {
+        let mut unit =
+            test_rust_derivation(0, "path+file://mantle#mantle@0.1.0", "lib", TARGET_EXECUTION_KIND, Vec::new());
+        unit.derivation
+            .env
+            .insert(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV.to_string(), TEST_DIGEST_A.to_string());
+
+        let receipt = finalized_execution_receipt(
+            &unit,
+            "success",
+            "test",
+            missing_toolchain_identity(),
+            TEST_DIGEST_B.to_string(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(receipt.execution_kind, TARGET_EXECUTION_KIND);
+        assert_eq!(receipt.selected_triple, unit.selected_triple);
+        assert_eq!(receipt.rustc_metadata_hash, unit.rustc_metadata_hash);
+        assert_eq!(receipt.toolchain_policy_digest_blake3, TEST_DIGEST_A);
+        assert_eq!(receipt.artifact_identity_digest_blake3.len(), BLAKE3_HEX_CHARS);
+    }
+
+    #[test]
+    fn role_validation_rejects_host_consumer_bound_to_target_dependency() {
+        let dependency_id = "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59";
+        let target_dependency = test_rust_derivation(0, dependency_id, "lib", TARGET_EXECUTION_KIND, Vec::new());
+        let dependency_artifact = RustDependencyArtifact {
+            package_id: dependency_id.to_string(),
+            name: "cc".to_string(),
+            producer_unit_id: Some(target_dependency.unit_id.clone()),
+            artifact: format!("artifact:{dependency_id}:cc"),
+        };
+        let host_consumer = test_rust_derivation(
+            1,
+            "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1",
+            "custom-build",
+            HOST_EXECUTION_KIND,
+            vec![dependency_artifact],
+        );
+        let graph = test_unit_derivation_graph(vec![target_dependency, host_consumer]);
+
+        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+
+        assert_eq!(blocker.class, "artifact-identity-mismatch");
+        assert!(blocker.message.contains("expected role host-dependency"));
+        assert!(blocker.message.contains("got role target"));
+    }
+
+    #[test]
+    fn role_validation_rejects_host_unit_target_triple_mismatch() {
+        let mut host_unit = test_rust_derivation(
+            0,
+            "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.39.1",
+            "custom-build",
+            HOST_EXECUTION_KIND,
+            Vec::new(),
+        );
+        host_unit.selected_triple = "x86_64-unknown-linux-musl".to_string();
+        let graph = test_unit_derivation_graph(vec![host_unit]);
+
+        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+
+        assert_eq!(blocker.class, "artifact-identity-mismatch");
+        assert!(blocker.message.contains("expected role host"));
+        assert!(blocker.message.contains("x86_64-unknown-linux-musl"));
+    }
+
+    #[test]
+    fn role_validation_rejects_source_package_mismatch() {
+        let producer_id = "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59";
+        let producer = test_rust_derivation(0, producer_id, "lib", TARGET_EXECUTION_KIND, Vec::new());
+        let dependency_artifact = RustDependencyArtifact {
+            package_id: "registry+https://github.com/rust-lang/crates.io-index#wrong@1.0.0".to_string(),
+            name: "cc".to_string(),
+            producer_unit_id: Some(producer.unit_id.clone()),
+            artifact: "artifact:wrong:cc".to_string(),
+        };
+        let consumer = test_rust_derivation(1, "path+file://mantle#mantle@0.1.0", "lib", TARGET_EXECUTION_KIND, vec![
+            dependency_artifact,
+        ]);
+        let graph = test_unit_derivation_graph(vec![producer, consumer]);
+
+        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+
+        assert_eq!(blocker.class, "artifact-identity-mismatch");
+        assert!(blocker.message.contains("expected source package"));
+        assert!(blocker.message.contains("wrong@1.0.0"));
+    }
+
+    #[test]
+    fn role_validation_rejects_metadata_hash_mismatch() {
+        let dependency_id = "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59";
+        let mut producer = test_rust_derivation(0, dependency_id, "lib", TARGET_EXECUTION_KIND, Vec::new());
+        producer.rustc_metadata_hash = TEST_DIGEST_B[..RUSTC_METADATA_HEX_CHARS].to_string();
+        let dependency_artifact = RustDependencyArtifact {
+            package_id: dependency_id.to_string(),
+            name: "cc".to_string(),
+            producer_unit_id: Some(producer.unit_id.clone()),
+            artifact: format!("artifact:{dependency_id}:cc"),
+        };
+        let consumer = test_rust_derivation(1, "path+file://mantle#mantle@0.1.0", "lib", TARGET_EXECUTION_KIND, vec![
+            dependency_artifact,
+        ]);
+        let graph = test_unit_derivation_graph(vec![producer, consumer]);
+
+        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+
+        assert_eq!(blocker.class, "artifact-identity-mismatch");
+        assert!(blocker.message.contains("expected metadata hash"));
+        assert!(blocker.message.contains("got metadata hash"));
+    }
+
+    #[test]
+    fn role_validation_rejects_toolchain_policy_digest_mismatch() {
+        let dependency_id = "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59";
+        let mut producer = test_rust_derivation(0, dependency_id, "lib", TARGET_EXECUTION_KIND, Vec::new());
+        producer
+            .derivation
+            .env
+            .insert(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV.to_string(), TEST_DIGEST_A.to_string());
+        let dependency_artifact = RustDependencyArtifact {
+            package_id: dependency_id.to_string(),
+            name: "cc".to_string(),
+            producer_unit_id: Some(producer.unit_id.clone()),
+            artifact: format!("artifact:{dependency_id}:cc"),
+        };
+        let mut consumer =
+            test_rust_derivation(1, "path+file://mantle#mantle@0.1.0", "lib", TARGET_EXECUTION_KIND, vec![
+                dependency_artifact,
+            ]);
+        consumer
+            .derivation
+            .env
+            .insert(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV.to_string(), TEST_DIGEST_B.to_string());
+        let graph = test_unit_derivation_graph(vec![producer, consumer]);
+
+        let blocker = validate_role_sensitive_artifact_graph(&graph).unwrap();
+
+        assert_eq!(blocker.class, "artifact-identity-mismatch");
+        assert!(blocker.message.contains("expected toolchain-policy digest"));
+        assert!(blocker.message.contains(TEST_DIGEST_B));
     }
 
     #[test]
