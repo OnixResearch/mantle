@@ -27,6 +27,7 @@ const SNIX_BUILD_SANDBOX_SHELL_ENV: &str = "SNIX_BUILD_SANDBOX_SHELL";
 const RUSTC_BOOTSTRAP_ENV: &str = "RUSTC_BOOTSTRAP";
 const RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST: &[&str] = &[SNIX_BUILD_SANDBOX_SHELL_ENV, RUSTC_BOOTSTRAP_ENV];
 const BUILD_SCRIPT_OUT_DIR_ENV: &str = "OUT_DIR";
+const BUILD_SCRIPT_OUT_DIR_NAME: &str = "out-dir";
 const BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV: &str = "CARGO_MANIFEST_DIR";
 const BUILD_SCRIPT_CARGO_MANIFEST_LINKS_ENV: &str = "CARGO_MANIFEST_LINKS";
 const BUILD_SCRIPT_CARGO_PKG_NAME_ENV: &str = "CARGO_PKG_NAME";
@@ -11919,6 +11920,11 @@ fn absolute_path_from(path: &Path, base: &Path) -> PathBuf {
     base.join(path)
 }
 
+fn build_script_out_dir(output_root: &Path, invocation_dir: &Path, unit_id: &str) -> PathBuf {
+    let absolute_output_root = absolute_path_from(output_root, invocation_dir);
+    absolute_output_root.join(safe_path_component(unit_id)).join(BUILD_SCRIPT_OUT_DIR_NAME)
+}
+
 fn build_script_child_env(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
@@ -11995,8 +12001,7 @@ fn run_build_script_metadata(
     }
     let invocation_dir = std::env::current_dir()
         .map_err(|err| RunError::Internal(format!("reading current directory for build-script execution: {err}")))?;
-    let output_root = absolute_path_from(&options.output_root, &invocation_dir);
-    let out_dir = output_root.join(safe_path_component(&unit.unit_id)).join("out-dir");
+    let out_dir = build_script_out_dir(&options.output_root, &invocation_dir, &unit.unit_id);
     if out_dir.exists() {
         fs::remove_dir_all(&out_dir).map_err(|err| {
             RunError::Internal(format!("removing prior build-script OUT_DIR {}: {err}", out_dir.display()))
@@ -14522,6 +14527,11 @@ mod tests {
     const TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const TEST_DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    const PROCESS_GLOBAL_ENV_PREFIX: &str = "std::env::";
+    const PROCESS_GLOBAL_ENV_SET_FN: &str = "set_var";
+    const PROCESS_GLOBAL_ENV_REMOVE_FN: &str = "remove_var";
+    const PROCESS_GLOBAL_ENV_SAMPLE_KEY: &str = "MANTLE_TEST_RACY_ENV";
+    const PROCESS_GLOBAL_ENV_SAMPLE_VALUE: &str = "bad";
 
     struct FixedOracle {
         cargo_version: CargoOutput,
@@ -15084,6 +15094,41 @@ mod tests {
         args.windows(2)
             .find(|window| window[0] == RUSTC_CODEGEN_OPTION_FLAG && window[1].starts_with(RUSTC_METADATA_ARG_PREFIX))
             .map(|window| window[1].as_str())
+    }
+
+    fn rust_plan_source_contains_process_global_env_mutation(source: &str) -> bool {
+        let set_var_call = format!("{PROCESS_GLOBAL_ENV_PREFIX}{PROCESS_GLOBAL_ENV_SET_FN}");
+        if source.contains(&set_var_call) {
+            return true;
+        }
+        let remove_var_call = format!("{PROCESS_GLOBAL_ENV_PREFIX}{PROCESS_GLOBAL_ENV_REMOVE_FN}");
+        source.contains(&remove_var_call)
+    }
+
+    #[test]
+    fn rust_plan_tests_do_not_mutate_process_global_environment_in_process() {
+        let source = include_str!("rust_plan.rs");
+
+        assert!(!source.is_empty());
+        assert!(!rust_plan_source_contains_process_global_env_mutation(source));
+    }
+
+    #[test]
+    fn process_global_env_mutation_guard_detects_set_and_remove_var_calls() {
+        let set_sample = format!(
+            "{}{}(\"{}\", \"{}\");",
+            PROCESS_GLOBAL_ENV_PREFIX,
+            PROCESS_GLOBAL_ENV_SET_FN,
+            PROCESS_GLOBAL_ENV_SAMPLE_KEY,
+            PROCESS_GLOBAL_ENV_SAMPLE_VALUE,
+        );
+        let remove_sample = format!(
+            "{}{}(\"{}\");",
+            PROCESS_GLOBAL_ENV_PREFIX, PROCESS_GLOBAL_ENV_REMOVE_FN, PROCESS_GLOBAL_ENV_SAMPLE_KEY,
+        );
+
+        assert!(rust_plan_source_contains_process_global_env_mutation(&set_sample));
+        assert!(rust_plan_source_contains_process_global_env_mutation(&remove_sample));
     }
 
     #[test]
@@ -16689,12 +16734,54 @@ rust-version = "1.80"
     }
 
     #[test]
+    fn build_script_metadata_out_dir_is_scoped_by_output_root_and_unit_id() {
+        let dir = TempDir::new().unwrap();
+        let invocation_dir = dir.path().join("invocation");
+        let first_root = dir.path().join("first-output");
+        let second_root = dir.path().join("second-output");
+        let first_unit = "unit:alpha/lib";
+        let second_unit = "unit:beta/lib";
+
+        let first = build_script_out_dir(&first_root, &invocation_dir, first_unit);
+        let repeated = build_script_out_dir(&first_root, &invocation_dir, first_unit);
+        let different_root = build_script_out_dir(&second_root, &invocation_dir, first_unit);
+        let different_unit = build_script_out_dir(&first_root, &invocation_dir, second_unit);
+
+        assert_eq!(first, repeated);
+        assert!(first.starts_with(&first_root));
+        assert!(first.ends_with(BUILD_SCRIPT_OUT_DIR_NAME));
+        assert_ne!(first, different_root);
+        assert_ne!(first, different_unit);
+    }
+
+    #[test]
+    fn compiler_policy_report_path_is_scoped_by_output_root_and_unit_id() {
+        let dir = TempDir::new().unwrap();
+        let first_root = dir.path().join("first-policy-output");
+        let second_root = dir.path().join("second-policy-output");
+        let first_unit =
+            test_rust_derivation(0, "path+file://policy-a#policy-a@0.1.0", "lib", TARGET_EXECUTION_KIND, Vec::new());
+        let second_unit =
+            test_rust_derivation(1, "path+file://policy-b#policy-b@0.1.0", "lib", TARGET_EXECUTION_KIND, Vec::new());
+
+        let first = compiler_policy_report_path(&first_root, &first_unit);
+        let repeated = compiler_policy_report_path(&first_root, &first_unit);
+        let different_root = compiler_policy_report_path(&second_root, &first_unit);
+        let different_unit = compiler_policy_report_path(&first_root, &second_unit);
+
+        assert_eq!(first, repeated);
+        assert!(first.starts_with(&first_root));
+        assert!(first.parent().unwrap().ends_with(COMPILER_POLICY_REPORT_DIR));
+        assert_ne!(first, different_root);
+        assert_ne!(first, different_unit);
+    }
+
+    #[test]
     fn build_script_child_env_ignores_ambient_profile_env() {
         let output = Command::new(std::env::current_exe().expect("test binary path is available"))
             .arg("rust_plan::tests::build_script_profile_env_child_ignores_ambient_process_env_probe")
             .arg("--exact")
             .arg("--nocapture")
-            .arg("--test-threads=1")
             .env(PROFILE_ENV_CHILD_PROBE_ENV, PROFILE_ENV_CHILD_PROBE_VALUE)
             .env(BUILD_SCRIPT_OPT_LEVEL_ENV, AMBIENT_OPT_LEVEL_VALUE)
             .env(BUILD_SCRIPT_DEBUG_ENV, AMBIENT_DEBUG_VALUE)
