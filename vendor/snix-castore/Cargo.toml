@@ -24,7 +24,7 @@ hashbrown = "0.15.4"
 irpc = { version = "0.13", default-features = false, features = ["derive"] }
 hyper-util = "0.1.7"
 libc = { version = "0.2.158", optional = true }
-object_store = { version = "0.13.1", features = ["http"] }
+object_store = { version = "0.14.0", features = ["http"] }
 parking_lot = "0.12.3"
 petgraph = "0.6.5"
 pin-project-lite = "0.2.14"
@@ -47,7 +47,7 @@ tokio = { version = "1.39.3", features = [
   "signal",
 ] }
 tokio-stream = { version = "0.1.15", features = ["fs", "net"] }
-tokio-tar = { package = "astral-tokio-tar", version = "0.6.0" }
+tokio-tar = { package = "astral-tokio-tar", version = "0.6.3" }
 tokio-util = { version = "0.7.11", features = ["io", "io-util", "codec"] }
 toml = { version = "0.8.19", optional = true }
 

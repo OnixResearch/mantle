@@ -136,37 +136,45 @@
 
         mantleTranscriptQuality = craneLib.cargoNextest {
           pname = "mantle-transcript-quality";
-          inherit src cargoArtifacts nativeBuildInputs buildInputs;
+          inherit
+            src
+            cargoArtifacts
+            nativeBuildInputs
+            buildInputs
+            ;
           cargoNextestExtraArgs = "--test transcript_cli";
           partitions = 1;
           partitionType = "count";
           SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
         };
 
-        bootstrapBlockerInventory = pkgs.runCommand "bootstrap-blocker-inventory" {
-          nativeBuildInputs = nativeBuildInputs ++ [
-            pkgs.bash
-            pkgs.coreutils
-            rustToolchain
-          ];
-        } ''
-          cp -R ${src} source
-          chmod -R u+w source
-          cd source
+        bootstrapBlockerInventory =
+          pkgs.runCommand "bootstrap-blocker-inventory"
+            {
+              nativeBuildInputs = nativeBuildInputs ++ [
+                pkgs.bash
+                pkgs.coreutils
+                rustToolchain
+              ];
+            }
+            ''
+              cp -R ${src} source
+              chmod -R u+w source
+              cd source
 
-          export CRUNCH_NIGHTLY_CARGO="${rustToolchain}/bin/cargo"
-          export CARGO_HOME="$TMPDIR/cargo-home"
-          export RUSTUP_HOME="$TMPDIR/rustup-home"
+              export CRUNCH_NIGHTLY_CARGO="${rustToolchain}/bin/cargo"
+              export CARGO_HOME="$TMPDIR/cargo-home"
+              export RUSTUP_HOME="$TMPDIR/rustup-home"
 
-          bash scripts/check-bootstrap-blocker-inventory.sh \
-            --self-test \
-            --json "$TMPDIR/bootstrap-blocker-inventory.json" \
-            --markdown "$TMPDIR/bootstrap-blocker-inventory.md"
+              bash scripts/check-bootstrap-blocker-inventory.sh \
+                --self-test \
+                --json "$TMPDIR/bootstrap-blocker-inventory.json" \
+                --markdown "$TMPDIR/bootstrap-blocker-inventory.md"
 
-          mkdir -p "$out"
-          cp "$TMPDIR/bootstrap-blocker-inventory.json" "$out/current.json"
-          cp "$TMPDIR/bootstrap-blocker-inventory.md" "$out/current.md"
-        '';
+              mkdir -p "$out"
+              cp "$TMPDIR/bootstrap-blocker-inventory.json" "$out/current.json"
+              cp "$TMPDIR/bootstrap-blocker-inventory.md" "$out/current.md"
+            '';
       in
       {
         packages = {
@@ -240,6 +248,7 @@
           packages =
             with pkgs;
             [
+              cargo-deny
               cargo-nextest
               cargo-watch
               rust-analyzer
