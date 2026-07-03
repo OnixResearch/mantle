@@ -107,6 +107,10 @@ const RUSTC_REMAP_PATH_PREFIX_FLAG: &str = "--remap-path-prefix";
 const RUSTC_REMAP_SEPARATOR: char = '=';
 const RUSTC_METADATA_HEX_CHARS: usize = 16;
 const BLAKE3_HEX_CHARS: usize = 64;
+const BYTES_PER_KIBIBYTE: usize = 1024;
+const RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES: usize = 16;
+const RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES: usize = RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES * BYTES_PER_KIBIBYTE;
+const RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS: u32 = 4096;
 const DETERMINISTIC_RELEASE_SOURCE_PREFIX: &str = "/mantle/release/source";
 const DETERMINISTIC_RELEASE_EXECUTION_PREFIX: &str = "/mantle/release/execution";
 const DETERMINISTIC_RELEASE_PROVIDER_C_TOOLCHAIN_PREFIX: &str = "/mantle/release/provider/c-toolchain";
@@ -842,7 +846,51 @@ pub(crate) struct RustUnitExecutionReceipt {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) diagnostic_context: Option<RustUnitDiagnosticContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) replay_evidence: Option<RustUnitReplayEvidence>,
     pub(crate) receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustUnitDiagnosticContext {
+    pub(crate) unit_id: String,
+    pub(crate) package_id: String,
+    pub(crate) target_name: String,
+    pub(crate) target_kind: String,
+    pub(crate) execution_kind: String,
+    pub(crate) selected_triple: String,
+    pub(crate) blocker_class: String,
+    pub(crate) artifact_roles: Vec<RustConsumedArtifactRoleEvidence>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustUnitReplayEvidence {
+    pub(crate) schema_version: u32,
+    pub(crate) unit_id: String,
+    pub(crate) package_id: String,
+    pub(crate) target_name: String,
+    pub(crate) target_kind: String,
+    pub(crate) execution_kind: String,
+    pub(crate) selected_triple: String,
+    pub(crate) rustc_metadata_hash: String,
+    pub(crate) source_digest: SourceDigest,
+    pub(crate) rustc_args_digest_blake3: String,
+    pub(crate) environment_digest_blake3: String,
+    pub(crate) toolchain_policy_digest_blake3: String,
+    pub(crate) artifact_identity_digest_blake3: String,
+    pub(crate) declared_output_count: u32,
+    pub(crate) dependency_artifact_count: u32,
+    pub(crate) host_artifact_count: u32,
+    pub(crate) output_artifact_count: u32,
+    pub(crate) consumed_artifact_role_count: u32,
+    pub(crate) declared_outputs_digest_blake3: String,
+    pub(crate) dependency_artifacts_digest_blake3: String,
+    pub(crate) host_artifacts_digest_blake3: String,
+    pub(crate) output_artifacts_digest_blake3: String,
+    pub(crate) consumed_artifact_roles_digest_blake3: String,
+    pub(crate) blocker_class: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -14053,10 +14101,160 @@ fn finalized_execution_receipt(
         output_artifact_digests,
         compiler_policy,
         blocker,
+        diagnostic_context: None,
+        replay_evidence: None,
         receipt_hash: String::new(),
     };
+    if rust_unit_receipt_needs_replay_evidence(&receipt) {
+        receipt.diagnostic_context = Some(rust_unit_diagnostic_context(&receipt));
+        receipt.replay_evidence = Some(rust_unit_replay_evidence(&receipt)?);
+    }
     receipt.receipt_hash = rust_unit_execution_receipt_hash(&receipt)?;
     Ok(receipt)
+}
+
+fn rust_unit_receipt_needs_replay_evidence(receipt: &RustUnitExecutionReceipt) -> bool {
+    receipt.execution_status != "success" || receipt.blocker.is_some()
+}
+
+fn rust_unit_diagnostic_context(receipt: &RustUnitExecutionReceipt) -> RustUnitDiagnosticContext {
+    debug_assert!(!receipt.unit_id.is_empty());
+    debug_assert!(!receipt.package_id.is_empty());
+    RustUnitDiagnosticContext {
+        unit_id: receipt.unit_id.clone(),
+        package_id: receipt.package_id.clone(),
+        target_name: receipt.target_name.clone(),
+        target_kind: receipt.target_kind.clone(),
+        execution_kind: receipt.execution_kind.clone(),
+        selected_triple: receipt.selected_triple.clone(),
+        blocker_class: receipt
+            .blocker
+            .as_ref()
+            .map(|blocker| blocker.class.clone())
+            .unwrap_or_else(|| "none".to_string()),
+        artifact_roles: receipt.consumed_artifact_roles.clone(),
+    }
+}
+
+fn rust_unit_replay_evidence(receipt: &RustUnitExecutionReceipt) -> Result<RustUnitReplayEvidence, RunError> {
+    debug_assert!(rust_unit_receipt_needs_replay_evidence(receipt));
+    debug_assert_eq!(receipt.artifact_identity_digest_blake3.len(), BLAKE3_HEX_CHARS);
+    Ok(RustUnitReplayEvidence {
+        schema_version: RECEIPT_SCHEMA_VERSION,
+        unit_id: receipt.unit_id.clone(),
+        package_id: receipt.package_id.clone(),
+        target_name: receipt.target_name.clone(),
+        target_kind: receipt.target_kind.clone(),
+        execution_kind: receipt.execution_kind.clone(),
+        selected_triple: receipt.selected_triple.clone(),
+        rustc_metadata_hash: receipt.rustc_metadata_hash.clone(),
+        source_digest: receipt.source_digest.clone(),
+        rustc_args_digest_blake3: receipt.rustc_args_digest_blake3.clone(),
+        environment_digest_blake3: receipt.environment_digest_blake3.clone(),
+        toolchain_policy_digest_blake3: receipt.toolchain_policy_digest_blake3.clone(),
+        artifact_identity_digest_blake3: receipt.artifact_identity_digest_blake3.clone(),
+        declared_output_count: replay_item_count(receipt.declared_outputs.len(), "declared outputs")?,
+        dependency_artifact_count: replay_item_count(
+            receipt.dependency_artifact_digests.len(),
+            "dependency artifacts",
+        )?,
+        host_artifact_count: replay_item_count(receipt.host_artifact_digests.len(), "host artifacts")?,
+        output_artifact_count: replay_item_count(receipt.output_artifact_digests.len(), "output artifacts")?,
+        consumed_artifact_role_count: replay_item_count(
+            receipt.consumed_artifact_roles.len(),
+            "consumed artifact roles",
+        )?,
+        declared_outputs_digest_blake3: canonical_blake3_digest(&receipt.declared_outputs, "declared outputs")?,
+        dependency_artifacts_digest_blake3: canonical_blake3_digest(
+            &receipt.dependency_artifact_digests,
+            "dependency artifact digests",
+        )?,
+        host_artifacts_digest_blake3: canonical_blake3_digest(&receipt.host_artifact_digests, "host artifact digests")?,
+        output_artifacts_digest_blake3: canonical_blake3_digest(
+            &receipt.output_artifact_digests,
+            "output artifact digests",
+        )?,
+        consumed_artifact_roles_digest_blake3: canonical_blake3_digest(
+            &receipt.consumed_artifact_roles,
+            "consumed artifact roles",
+        )?,
+        blocker_class: receipt
+            .blocker
+            .as_ref()
+            .map(|blocker| blocker.class.clone())
+            .unwrap_or_else(|| "none".to_string()),
+    })
+}
+
+fn replay_item_count(len: usize, label: &str) -> Result<u32, RunError> {
+    let count =
+        u32::try_from(len).map_err(|_| RunError::Internal(format!("{label} exceed replay evidence count capacity")))?;
+    if count > RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS {
+        return Err(RunError::Internal(format!("{label} exceed replay evidence bounded item limit")));
+    }
+    Ok(count)
+}
+
+fn canonical_blake3_digest<T: Serialize>(value: &T, label: &str) -> Result<String, RunError> {
+    let canonical = serde_json::to_vec(value)
+        .map_err(|err| RunError::Internal(format!("canonicalizing Rust unit replay evidence {label}: {err}")))?;
+    Ok(blake3::hash(&canonical).to_hex().to_string())
+}
+
+#[cfg(test)]
+fn rust_unit_replay_evidence_from_json(bytes: &[u8]) -> Result<RustUnitReplayEvidence, String> {
+    if bytes.len() > RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES {
+        return Err(format!(
+            "rust unit replay evidence JSON exceeds {} byte limit",
+            RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES
+        ));
+    }
+    let evidence: RustUnitReplayEvidence =
+        serde_json::from_slice(bytes).map_err(|err| format!("rust unit replay evidence JSON is malformed: {err}"))?;
+    validate_rust_unit_replay_evidence(&evidence)?;
+    Ok(evidence)
+}
+
+#[cfg(test)]
+fn validate_rust_unit_replay_evidence(evidence: &RustUnitReplayEvidence) -> Result<(), String> {
+    if evidence.schema_version != RECEIPT_SCHEMA_VERSION {
+        return Err("rust unit replay evidence schema version is unsupported".to_string());
+    }
+    if evidence.unit_id.is_empty() || evidence.package_id.is_empty() || evidence.blocker_class.is_empty() {
+        return Err("rust unit replay evidence identity fields must be non-empty".to_string());
+    }
+    for (field, value) in [
+        ("rustc_args_digest_blake3", evidence.rustc_args_digest_blake3.as_str()),
+        ("environment_digest_blake3", evidence.environment_digest_blake3.as_str()),
+        ("toolchain_policy_digest_blake3", evidence.toolchain_policy_digest_blake3.as_str()),
+        ("artifact_identity_digest_blake3", evidence.artifact_identity_digest_blake3.as_str()),
+        ("declared_outputs_digest_blake3", evidence.declared_outputs_digest_blake3.as_str()),
+        ("dependency_artifacts_digest_blake3", evidence.dependency_artifacts_digest_blake3.as_str()),
+        ("host_artifacts_digest_blake3", evidence.host_artifacts_digest_blake3.as_str()),
+        ("output_artifacts_digest_blake3", evidence.output_artifacts_digest_blake3.as_str()),
+        ("consumed_artifact_roles_digest_blake3", evidence.consumed_artifact_roles_digest_blake3.as_str()),
+    ] {
+        if !is_lowercase_blake3_hex(value) {
+            return Err(format!("rust unit replay evidence field {field} is not a lowercase BLAKE3 digest"));
+        }
+    }
+    for (field, count) in [
+        ("declared_output_count", evidence.declared_output_count),
+        ("dependency_artifact_count", evidence.dependency_artifact_count),
+        ("host_artifact_count", evidence.host_artifact_count),
+        ("output_artifact_count", evidence.output_artifact_count),
+        ("consumed_artifact_role_count", evidence.consumed_artifact_role_count),
+    ] {
+        if count > RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS {
+            return Err(format!("rust unit replay evidence field {field} exceeds bounded item limit"));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+fn is_lowercase_blake3_hex(value: &str) -> bool {
+    value.len() == BLAKE3_HEX_CHARS && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn rust_derivation_env_digest(env: &BTreeMap<String, String>) -> Result<String, RunError> {
@@ -17902,6 +18100,118 @@ rust-version = "1.80"
         assert_eq!(receipt.rustc_metadata_hash, unit.rustc_metadata_hash);
         assert_eq!(receipt.toolchain_policy_digest_blake3, TEST_DIGEST_A);
         assert_eq!(receipt.artifact_identity_digest_blake3.len(), BLAKE3_HEX_CHARS);
+    }
+
+    #[test]
+    fn blocked_receipt_records_diagnostic_context_and_bounded_replay_evidence() {
+        const EXPECTED_DECLARED_OUTPUT_COUNT: u32 = 1;
+        const EXPECTED_DEPENDENCY_ARTIFACT_COUNT: u32 = 1;
+        const EXPECTED_HOST_ARTIFACT_COUNT: u32 = 1;
+        const EXPECTED_CONSUMED_ROLE_COUNT: u32 = 2;
+        let dependency_id = "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59";
+        let host_id = "registry+https://github.com/rust-lang/crates.io-index#rustversion@1.0.22";
+        let mut unit = test_rust_derivation(0, "path+file://mantle#mantle@0.1.0", "lib", TARGET_EXECUTION_KIND, vec![
+            test_dependency_artifact(dependency_id, "cc"),
+        ]);
+        unit.consumed_host_artifacts = vec![test_host_artifact(host_id, "proc-macro")];
+        let blocker_class = "missing-host-artifact";
+
+        let receipt = finalized_execution_receipt(
+            &unit,
+            "blocked",
+            "test-blocker",
+            missing_toolchain_identity(),
+            TEST_DIGEST_A.to_string(),
+            vec![RustExecutionArtifactDigest {
+                path: "dep/libcc.rlib".to_string(),
+                blake3: TEST_DIGEST_A.to_string(),
+            }],
+            vec![RustExecutionArtifactDigest {
+                path: "host/librustversion.so".to_string(),
+                blake3: TEST_DIGEST_B.to_string(),
+            }],
+            Vec::new(),
+            None,
+            Some(RustUnitExecutionBlocker {
+                class: blocker_class.to_string(),
+                message: "missing host artifact for replay evidence test".to_string(),
+            }),
+        )
+        .unwrap();
+
+        let context = receipt.diagnostic_context.as_ref().expect("blocked receipt has diagnostic context");
+        assert_eq!(context.unit_id, unit.unit_id);
+        assert_eq!(context.package_id, unit.package_id);
+        assert_eq!(context.execution_kind, TARGET_EXECUTION_KIND);
+        assert_eq!(context.selected_triple, unit.selected_triple);
+        assert_eq!(context.target_kind, "lib");
+        assert_eq!(context.blocker_class, blocker_class);
+        assert_eq!(context.artifact_roles.len(), EXPECTED_CONSUMED_ROLE_COUNT as usize);
+        assert!(context.artifact_roles.iter().any(|role| role.role == TARGET_EXECUTION_KIND));
+        assert!(context.artifact_roles.iter().any(|role| role.role == HOST_EXECUTION_KIND));
+
+        let replay = receipt.replay_evidence.as_ref().expect("blocked receipt has replay evidence");
+        assert_eq!(replay.unit_id, unit.unit_id);
+        assert_eq!(replay.package_id, unit.package_id);
+        assert_eq!(replay.target_kind, "lib");
+        assert_eq!(replay.execution_kind, TARGET_EXECUTION_KIND);
+        assert_eq!(replay.blocker_class, blocker_class);
+        assert_eq!(replay.declared_output_count, EXPECTED_DECLARED_OUTPUT_COUNT);
+        assert_eq!(replay.dependency_artifact_count, EXPECTED_DEPENDENCY_ARTIFACT_COUNT);
+        assert_eq!(replay.host_artifact_count, EXPECTED_HOST_ARTIFACT_COUNT);
+        assert_eq!(replay.output_artifact_count, 0);
+        assert_eq!(replay.consumed_artifact_role_count, EXPECTED_CONSUMED_ROLE_COUNT);
+        assert_eq!(replay.declared_outputs_digest_blake3.len(), BLAKE3_HEX_CHARS);
+        assert_eq!(replay.dependency_artifacts_digest_blake3.len(), BLAKE3_HEX_CHARS);
+        assert_eq!(replay.consumed_artifact_roles_digest_blake3.len(), BLAKE3_HEX_CHARS);
+
+        let encoded = serde_json::to_vec(replay).unwrap();
+        let parsed = rust_unit_replay_evidence_from_json(&encoded).unwrap();
+        assert_eq!(parsed, *replay);
+        let encoded_text = String::from_utf8(encoded).unwrap();
+        assert!(!encoded_text.contains("--crate-name"));
+        assert!(!encoded_text.contains("host-artifact:"));
+    }
+
+    #[test]
+    fn replay_evidence_json_rejects_malformed_and_oversized_inputs() {
+        let malformed = rust_unit_replay_evidence_from_json(b"{").unwrap_err();
+        assert!(malformed.contains("malformed"));
+
+        let oversized = vec![b' '; RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES + 1];
+        let oversized_err = rust_unit_replay_evidence_from_json(&oversized).unwrap_err();
+        assert!(oversized_err.contains("exceeds"));
+    }
+
+    #[test]
+    fn replay_evidence_json_rejects_invalid_digest_fields() {
+        let mut unit =
+            test_rust_derivation(0, "path+file://mantle#mantle@0.1.0", "lib", TARGET_EXECUTION_KIND, Vec::new());
+        unit.rustc_args_digest_blake3 = TEST_DIGEST_A.to_string();
+        let receipt = finalized_execution_receipt(
+            &unit,
+            "blocked",
+            "test-blocker",
+            missing_toolchain_identity(),
+            TEST_DIGEST_A.to_string(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            Some(RustUnitExecutionBlocker {
+                class: "test-blocker".to_string(),
+                message: "invalid digest test".to_string(),
+            }),
+        )
+        .unwrap();
+        let mut replay = receipt.replay_evidence.unwrap();
+        replay.environment_digest_blake3 = "not-a-digest".to_string();
+        let encoded = serde_json::to_vec(&replay).unwrap();
+
+        let err = rust_unit_replay_evidence_from_json(&encoded).unwrap_err();
+
+        assert!(err.contains("environment_digest_blake3"));
+        assert!(err.contains("BLAKE3"));
     }
 
     #[test]
