@@ -24,6 +24,7 @@ mod global_reproducibility_cmd;
 mod global_reproducibility_release;
 mod log_cmd;
 mod native_toolchain_closure;
+mod nix_free_demo_bundle;
 #[allow(dead_code)]
 mod offline_cargo;
 mod operator_diagnostics;

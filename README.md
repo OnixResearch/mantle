@@ -1434,6 +1434,12 @@ mantle run [target] [-- args...] Build and execute a package binary (`.#name`, b
 
 ```
 
+Nix-free fixed-point demo wording is claimable only from a validated demo-profile
+proof bundle. The validator must see matching stage digests, source-root and
+toolchain-policy evidence, Cargo/Nix/rustup/ambient-wrapper guard denials, replay
+hints, and explicit non-claims; otherwise summaries should describe only the
+narrower blocker or fixed-point artifact that was actually proven.
+
 ### Global flags
 
 ```
