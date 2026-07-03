@@ -441,6 +441,30 @@ Final validation after tracked evidence and release-note edits:
 }
 ```
 
+## Post-archive validation
+
+Archive and validation command:
+
+```text
+CAIRN_ARCHIVE_DATE=2026-07-02 /home/brittonr/.cargo-target/debug/cairn archive external-release-witness-handoff --root . --execute
+/home/brittonr/.cargo-target/debug/cairn validate --root .
+```
+
+Observed output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 15,
+  "valid": true
+}
+```
+
 ## Evidence hashes
 
 ```text
