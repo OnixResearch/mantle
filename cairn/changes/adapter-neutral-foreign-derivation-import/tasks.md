@@ -1,0 +1,18 @@
+## Implementation
+
+- [ ] [serial] I1 Define `foreign-derivation-graph-v1`, `foreign-package-index-v1`, and import receipt schemas with named field and collection limits, explicit node/edge/source-payload fields, and canonical ordering rules. r[foreign_derivation_import.adapter_neutral_ir] r[foreign_derivation_import.import_receipt]
+- [ ] [serial] I2 Implement the translation core as pure deterministic logic over in-memory graph and policy data, with no filesystem, network, process, environment, clock, or store access. r[foreign_derivation_import.pure_translation_core]
+- [ ] [serial] I3 Add explicit store-prefix rewrite, builtin mapping, source-payload rewrite, and output-path recomputation policy handling. r[foreign_derivation_import.store_prefix_rewrite_policy]
+- [ ] [serial] I4 Add Guix-like and Nix-like fixture producers that export concrete derivation graph facts into the same adapter-neutral IR; Nix coverage MUST use `.drv` or derivation-JSON facts, not flake/evaluator semantics in the core. r[foreign_derivation_import.adapter_neutral_ir] r[foreign_derivation_import.integration_boundary]
+- [ ] [serial] I5 Add a thin Mantle adapter that consumes accepted translated graph artifacts through generic build-plan/source/store APIs without requiring Guix, Nix, flakes, evaluators, or package-set semantics in Mantle core. r[foreign_derivation_import.integration_boundary]
+- [ ] [serial] I6 Add generic by-name package index planning and lookup without making Nix flakes, overlays, or Guix package modules the stable ABI. r[foreign_derivation_import.package_index_boundary]
+- [ ] [serial] I7 Thread ordered mirror and trust-scoped substitution/cache metadata as policy data without bypassing source or store trust admission. r[foreign_derivation_import.fetch_and_cache_policy]
+- [ ] [serial] I8 Model foreign sandbox compatibility exceptions as explicit per-derivation capabilities with audit output. r[foreign_derivation_import.sandbox_capability_audit]
+
+## Verification
+
+- [ ] [serial] V1 Positive: import small Guix-like and Nix-like `hello` derivation graph fixtures into the neutral IR, validate required node/edge/source-payload fields, translate them under target prefixes, and prove canonical output is deterministic across input traversal order. r[foreign_derivation_import.adapter_neutral_ir] r[foreign_derivation_import.pure_translation_core]
+- [ ] [serial] V2 Positive: expose the translated `hello` roots through the Mantle adapter and prove the consuming build/plan path does not execute `guix`, `nix`, flake evaluation, Nix expression evaluation, or package-module evaluation. r[foreign_derivation_import.integration_boundary]
+- [ ] [serial] V3 Negative: reject unsupported builtins, undeclared foreign store references, stale graph digests, malformed package indexes, oversized fields, unsupported mandatory features, and Nix flake/overlay/evaluator metadata that was not lowered into graph facts with deterministic diagnostics. r[foreign_derivation_import.pure_translation_core] r[foreign_derivation_import.store_prefix_rewrite_policy] r[foreign_derivation_import.package_index_boundary]
+- [ ] [serial] V4 Negative: reject cache/substitution metadata without matching trust policy and reject sandbox compatibility behavior that is not declared per derivation. r[foreign_derivation_import.fetch_and_cache_policy] r[foreign_derivation_import.sandbox_capability_audit]
+- [ ] [serial] V5 Run focused import-core tests, adapter boundary tests, `cargo fmt -p mantle --check`, `git diff --check`, Cairn validation, and Cairn proposal/design/tasks gates. r[foreign_derivation_import.import_receipt] r[foreign_derivation_import.integration_boundary]
