@@ -215,6 +215,19 @@
 // pending provider-bound replay evidence under
 // `cairn/changes/witness-provider-bound-replay/evidence/`.
 //
+// r[impl verification_evidence.global_reproducibility_claim_admission]
+// r[impl verification_evidence.global_reproducibility_reports]
+// Implemented by `crates/crunch-release-core/src/global_reproducibility.rs`
+// pure admission/report evaluation plus the thin CLI shell in
+// `src/global_reproducibility_cmd.rs`. `src/release_cmd.rs` keeps release
+// verification explicitly `not-evaluated` for global reproducibility.
+//
+// r[verify verification_evidence.global_reproducibility_claim_admission]
+// r[verify verification_evidence.global_reproducibility_reports]
+// Verified by `crunch-release-core` positive/negative global reproducibility
+// unit tests and `mantle` bin tests for loading evidence, writing canonical
+// reports, and blocking missing global evidence.
+//
 // r[impl compiled-eval.cranelift-prototype-subset]
 // r[verify compiled-eval.cranelift-prototype-subset]
 // r[impl compiled-eval.cranelift-prototype-subset.default]

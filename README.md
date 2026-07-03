@@ -1163,7 +1163,28 @@ canonical reproducibility report verifies and whose artifact set matches the
 published release artifact set. Ordinary bundle-local integrity is still only
 packaged integrity and proof-context evidence. It lets another operator inspect
 exact artifacts and verify they are internally consistent. It does not, by
-itself, prove a full-source bootstrap root or independent rebuild agreement.
+itself, prove a full-source bootstrap root, independent rebuild agreement, or
+global reproducibility for all Mantle builds.
+
+Global reproducibility is a separate admitted-universe claim. Before using that
+wording, evaluate an explicit universe and policy plus per-surface evidence:
+
+```bash
+mantle release global-reproducibility \
+  --universe global-universe.json \
+  --policy global-policy.json \
+  --evidence surface-evidence.json \
+  --report-path target/global-reproducibility/report.json
+```
+
+The command emits a canonical `mantle-global-reproducibility-report-v1` report,
+prints its BLAKE3 digest, and exits non-zero when any included surface is
+missing required receipts, strict hermeticity, output digests, source/toolchain
+provenance, or policy-satisfied independent replay evidence. A scoped release
+report, provider fixed-point proof, deterministic-release receipt, or external
+witness agreement remains valid evidence for its own tier, but none of them is
+promoted to global reproducibility unless this report is `eligible` for the
+bound universe and policy.
 
 ### Release attestations and witness verification
 
@@ -1396,7 +1417,7 @@ mantle rust-plan [--execute-topology]
 mantle store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state
 mantle log [query]               Show a stored build log
 mantle attest <subcommand>       Show, verify, diff, or synthesize attestations
-mantle release <subcommand>      Create or verify a release-evidence bundle
+mantle release <subcommand>      Create, verify, reproduce, attest, witness, or globally gate release evidence
 
 # Project workflows
 mantle init                      Initialize mantle-project.ncl, mantle.lock, .mantle/

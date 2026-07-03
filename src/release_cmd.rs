@@ -9,6 +9,7 @@ use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_byte
 use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
 
 use crate::errors::RunError;
+use crate::global_reproducibility_cmd::cmd_global_reproducibility;
 use crate::release_attestation::create_release_attestation;
 use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::default_verification_dir;
@@ -44,6 +45,8 @@ use crate::witness_rebuild::write_audit_meta;
 
 const PROVIDER_FIXED_POINT_SOURCE_BUNDLED: &str = "bundled";
 const PROVIDER_FIXED_POINT_SOURCE_EXTERNAL: &str = "external";
+const GLOBAL_REPRODUCIBILITY_STATUS_NOT_EVALUATED: &str = "not-evaluated";
+const GLOBAL_REPRODUCIBILITY_RELEASE_VERIFY_REASON: &str = "release verification is scoped to this bundle; run release global-reproducibility with a universe and policy for a global claim";
 
 pub(crate) fn cmd_release(
     action: crate::ReleaseAction,
@@ -125,6 +128,12 @@ pub(crate) fn cmd_release(
             deterministic_proof_runs,
             deterministic_proof_dir,
         ),
+        crate::ReleaseAction::GlobalReproducibility {
+            universe,
+            policy,
+            evidence,
+            report_path,
+        } => cmd_global_reproducibility(current_dir, json, universe, policy, evidence, report_path),
         crate::ReleaseAction::NixWitness {
             bundle_dir,
             nix_output_dir,
@@ -348,6 +357,7 @@ fn cmd_release_verify(
         print_reproducibility_summary(reproducibility.as_ref());
         print_deterministic_release_summary(&deterministic_result);
         print_provider_fixed_point_summary(&provider_fixed_point_result);
+        print_global_reproducibility_not_evaluated_summary();
         if let Some(ref result) = stagex_result {
             println!("stagex no-quorum profile: {}", result.status);
             if !result.failure_reasons.is_empty() {
@@ -709,6 +719,7 @@ fn print_release_verify_json(
         "reproducibility_report": report_json,
         "deterministic_release": deterministic_json,
         "provider_fixed_point_proof": provider_fixed_point_result,
+        "global_reproducibility": global_reproducibility_not_evaluated_json(),
     });
     if let Some(result) = stagex_result {
         rendered["stagex_no_quorum"] = serde_json::to_value(result)
@@ -720,6 +731,14 @@ fn print_release_verify_json(
             .map_err(|err| RunError::Internal(format!("serializing verified release evidence output: {err}")))?
     );
     Ok(())
+}
+
+fn global_reproducibility_not_evaluated_json() -> serde_json::Value {
+    serde_json::json!({
+        "status": GLOBAL_REPRODUCIBILITY_STATUS_NOT_EVALUATED,
+        "claim_class": "non-global",
+        "reason": GLOBAL_REPRODUCIBILITY_RELEASE_VERIFY_REASON,
+    })
 }
 
 fn reproducibility_status(reproducibility: Option<&VerifiedReproducibilityReport>) -> ReproducibilityStatus {
@@ -756,6 +775,11 @@ fn print_provider_fixed_point_summary(result: &crate::cargo_free_self_build::Pro
     for blocker in &result.blockers {
         println!("  provider fixed-point blocker: {blocker}");
     }
+}
+
+fn print_global_reproducibility_not_evaluated_summary() {
+    println!("global reproducibility: {GLOBAL_REPRODUCIBILITY_STATUS_NOT_EVALUATED}");
+    println!("global reproducibility reason: {GLOBAL_REPRODUCIBILITY_RELEASE_VERIFY_REASON}");
 }
 
 fn print_reproducibility_summary(reproducibility: Option<&VerifiedReproducibilityReport>) {
@@ -1457,6 +1481,15 @@ mod tests {
         let json = serde_json::to_string(&result).unwrap();
         assert!(!json.contains("quorum-satisfied"));
         assert!(!json.contains("quorum_satisfied"));
+    }
+
+    #[test]
+    fn release_verify_json_keeps_global_reproducibility_non_global() {
+        let json = global_reproducibility_not_evaluated_json();
+
+        assert_eq!(json["status"], GLOBAL_REPRODUCIBILITY_STATUS_NOT_EVALUATED);
+        assert_eq!(json["claim_class"], "non-global");
+        assert!(json["reason"].as_str().unwrap().contains("release verification is scoped"));
     }
 
     #[test]

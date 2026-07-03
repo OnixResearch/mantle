@@ -430,9 +430,14 @@ is a full proof artifact. Reproducibility is reported separately as `absent`,
 `matched`, or `mismatched`. The bit-for-bit reproducible release label requires
 a verified canonical reproducibility report whose artifact set matches the
 published release artifact set; ordinary bundle-local integrity never implies
-that label. This still does not prove a full-source bootstrap root or
-independent rebuild agreement. `bootstrap parity-report` also consumes the
-checked-in compact descriptor at
+that label. This still does not prove a full-source bootstrap root,
+independent rebuild agreement, or global reproducibility. `release verify` now
+reports global reproducibility as `not-evaluated`; use
+`mantle release global-reproducibility --universe <json> --policy <json>
+--evidence <json> --report-path <json>` to produce the separate
+`mantle-global-reproducibility-report-v1` admission report for an explicit
+universe. `bootstrap parity-report` also consumes the checked-in compact
+descriptor at
 `bootstrap/evidence/real-self-build-proof-parity.json` for the
 `crunch.self-build` row; that descriptor surfaces the bounded proof digest and
 provider kind, but the row remains partial and still blocks Guix/StageX parity
@@ -561,8 +566,12 @@ verification applies.
 A successful single-witness run proves external witness agreement only under
 the configured policy; a satisfied independent-agreement status gives the
 stronger verifier-local `independent-rebuild-agreement` class for the accepted
-witness set. It still does not prove a full-source bootstrap root or globally
-reproducible release outputs.
+witness set. It still does not prove a full-source bootstrap root, globally
+reproducible release outputs, or global reproducibility for all Mantle build
+surfaces. The global claim requires an eligible
+`mantle-global-reproducibility-report-v1` for a digest-bound universe and
+policy; blocked reports remain useful blocker inventories but must not be
+promoted into claim text.
 
 For the current trust boundary behind those claims, see
 [`docs/bootstrap-stage0-inventory.md`](bootstrap-stage0-inventory.md).

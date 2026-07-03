@@ -79,7 +79,7 @@ Claimed:
 Not claimed:
 
 - This does not prove full compiler correctness.
-- This does not prove global reproducibility for all Mantle builds.
+- This does not prove global reproducibility for all Mantle builds; that claim requires an eligible `mantle-global-reproducibility-report-v1` for an explicit universe and policy.
 - This does not make the superseded 2026-06-28 request externally reproducible.
 - This does not claim the provider fixed-point proof by itself is a full bootstrap proof; it remains bounded source-built handoff evidence.
 

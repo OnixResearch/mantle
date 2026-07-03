@@ -20,6 +20,7 @@ mod fix;
 mod frontend_artifact_export;
 mod frontend_artifact_spec;
 mod frontend_artifact_store;
+mod global_reproducibility_cmd;
 mod log_cmd;
 mod native_toolchain_closure;
 #[allow(dead_code)]
@@ -1098,6 +1099,24 @@ pub enum ReleaseAction {
         /// Empty directory for repeated deterministic proof run work areas
         #[arg(long)]
         deterministic_proof_dir: Option<PathBuf>,
+    },
+    /// Evaluate a digest-bound universe before making any global reproducibility claim
+    GlobalReproducibility {
+        /// Global reproducibility universe manifest JSON
+        #[arg(long)]
+        universe: PathBuf,
+
+        /// Global reproducibility policy JSON
+        #[arg(long)]
+        policy: PathBuf,
+
+        /// Surface evidence JSON file; may be repeated and may contain one object or an array
+        #[arg(long = "evidence")]
+        evidence: Vec<PathBuf>,
+
+        /// Optional path where the canonical report JSON is written
+        #[arg(long)]
+        report_path: Option<PathBuf>,
     },
     /// Compare release bundle artifacts against located Nix-built artifacts and emit a Nix witness
     /// receipt
