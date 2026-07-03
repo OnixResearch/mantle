@@ -686,9 +686,11 @@ fn build_matching_agreement_report(
             witness_identity: witness_identity.to_string(),
             signer_key_name: witness_keypair.verifying_key.name().to_string(),
             witness_digest_blake3: witness.canonical_digest().unwrap(),
+            release_attestation_digest_blake3: witness.release_attestation_digest_blake3.clone(),
             signature_valid: true,
             digest_match: true,
             independence_domain: witness_identity.to_string(),
+            source_acquisition_mode: witness.source_acquisition_mode.clone().unwrap(),
             policy_counted: true,
             classification_reason: WitnessClassificationReason::Counted,
             rebuilt_output_digests: release_attestation.binary_digests.clone(),
@@ -4653,6 +4655,7 @@ fn attest_witness_show_and_release_verify_report_quorum_satisfied() {
     let show_json: serde_json::Value = serde_json::from_slice(&show_output.stdout).unwrap();
     assert_eq!(show_json["kind"], "mantle-witness-attestation");
     assert_eq!(show_json["attestation"]["witness_identity"], "witness-a");
+    assert_eq!(show_json["attestation"]["source_acquisition_mode"], "manual-operator-supplied");
 
     let verify_output = crunch()
         .arg("attest")
@@ -4674,12 +4677,26 @@ fn attest_witness_show_and_release_verify_report_quorum_satisfied() {
     assert_eq!(verify_json["policy_status"], "satisfied");
     assert_eq!(verify_json["final_class"], "quorum-satisfied");
     assert_eq!(verify_json["matching_witness_count"], 1);
+    assert_eq!(verify_json["policy_independence_field"], "witness_identity");
+    assert_eq!(verify_json["policy_required_witness_count"], 1);
     assert_eq!(verify_json["independent_agreement_status"], "satisfied");
     assert_eq!(verify_json["independent_agreement_class"], "independent-rebuild-agreement");
     assert_eq!(verify_json["independent_agreement_report_digest"].as_str().unwrap().len(), 64);
     assert_eq!(verify_json["independent_agreement_counted_witness_count"], 1);
     assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 0);
     assert_eq!(verify_json["independent_agreement_failed_witness_count"], 0);
+    assert_eq!(
+        verify_json["independent_agreement_witnesses"][0]["signer_key_name"],
+        witness_keypair.verifying_key.name()
+    );
+    assert_eq!(
+        verify_json["independent_agreement_witnesses"][0]["release_attestation_digest_blake3"],
+        verify_json["release_attestation_digest"]
+    );
+    assert_eq!(
+        verify_json["independent_agreement_witnesses"][0]["source_acquisition_mode"],
+        "manual-operator-supplied"
+    );
     assert_eq!(verify_json["independent_agreement_witnesses"][0]["classification_reason"], "counted");
 }
 

@@ -40,6 +40,8 @@ pub use release::ReleaseAttestationInit;
 pub use release::SignatureSuite;
 pub use release::TechnicalClass;
 pub use release::TrustTier;
+pub use release::WITNESS_SOURCE_ACQUISITION_MODE_NOT_RECORDED;
+pub use release::WITNESS_SOURCE_ACQUISITION_MODE_UNSPECIFIED;
 pub use release::WitnessAttestation;
 pub use release::WitnessClassificationReason;
 pub use release::Workflow;

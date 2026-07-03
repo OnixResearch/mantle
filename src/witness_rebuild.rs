@@ -1424,6 +1424,16 @@ fn build_audit_meta(
     })
 }
 
+pub(crate) fn source_acquisition_mode_for_plan(plan: &WitnessRebuildPlan) -> &'static str {
+    if plan.require_git_source {
+        return SOURCE_ACQUISITION_MODE_GIT;
+    }
+    if plan.require_independent_source {
+        return SOURCE_ACQUISITION_MODE_EXTERNAL_ARCHIVE;
+    }
+    SOURCE_ACQUISITION_MODE_COPIED
+}
+
 fn source_acquisition_audit(
     plan: &WitnessRebuildPlan,
     source_acquisition_error: Option<&str>,
@@ -1448,13 +1458,7 @@ fn source_acquisition_audit(
             error: source_acquisition_error.map(ToOwned::to_owned),
         });
     };
-    let mode = if plan.require_git_source {
-        SOURCE_ACQUISITION_MODE_GIT
-    } else if plan.require_independent_source {
-        SOURCE_ACQUISITION_MODE_EXTERNAL_ARCHIVE
-    } else {
-        SOURCE_ACQUISITION_MODE_COPIED
-    };
+    let mode = source_acquisition_mode_for_plan(plan);
     let fetched_path = if plan.require_git_source || plan.require_independent_source {
         plan.scratch_layout.source_acquisition_archive_path.display().to_string()
     } else {

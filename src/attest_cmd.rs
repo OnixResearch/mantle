@@ -29,6 +29,7 @@ use crate::release_attestation::CreatedPolicyFiles;
 use crate::release_attestation::CreatedWitnessAttestation;
 use crate::release_attestation::PolicyInitProfile;
 use crate::release_attestation::ReleaseVerificationOutput;
+use crate::release_attestation::WITNESS_SOURCE_ACQUISITION_MODE_MANUAL;
 use crate::release_attestation::create_policy_files;
 use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
@@ -240,6 +241,7 @@ fn cmd_witness_create(
         system,
         toolchain,
         host_class,
+        WITNESS_SOURCE_ACQUISITION_MODE_MANUAL,
         signing_key,
         state_dir,
     )?;

@@ -14,6 +14,8 @@ pub const WITNESS_ATTESTATION_SCHEMA: &str = "mantle-witness-attestation-v1";
 
 const MAX_BINARY_DIGEST_COUNT: u32 = 256;
 const MAX_ENV_FIELD_LEN: u32 = 256;
+pub const WITNESS_SOURCE_ACQUISITION_MODE_UNSPECIFIED: &str = "unspecified";
+pub const WITNESS_SOURCE_ACQUISITION_MODE_NOT_RECORDED: &str = "not-recorded";
 const ED25519_SIGNATURE_BYTES: usize = 64;
 
 const _: () = assert!(MAX_BINARY_DIGEST_COUNT >= 1, "binary digest limit must be positive");
@@ -203,6 +205,8 @@ pub struct WitnessAttestation {
     pub witness_identity: String,
     pub signature_suite: SignatureSuite,
     pub rebuilt_digests: Vec<BinaryDigest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_acquisition_mode: Option<String>,
     pub rebuild_environment_summary: RebuildEnvironmentSummary,
 }
 
@@ -219,8 +223,14 @@ impl WitnessAttestation {
             witness_identity,
             signature_suite: SignatureSuite::Ed25519DetachedV1,
             rebuilt_digests,
+            source_acquisition_mode: Some(WITNESS_SOURCE_ACQUISITION_MODE_UNSPECIFIED.to_string()),
             rebuild_environment_summary,
         }
+    }
+
+    pub fn with_source_acquisition_mode(mut self, mode: String) -> Self {
+        self.source_acquisition_mode = Some(mode);
+        self
     }
 }
 
@@ -246,6 +256,7 @@ pub fn canonical_witness_attestation(value: WitnessAttestation) -> Result<Witnes
         value: &value.rebuild_environment_summary.host_class,
     })?;
     let rebuilt_digests = normalize_binary_digests(value.rebuilt_digests)?;
+    let source_acquisition_mode = normalize_optional_string(value.source_acquisition_mode, "source_acquisition_mode")?;
 
     Ok(WitnessAttestation {
         schema: WITNESS_ATTESTATION_SCHEMA.to_string(),
@@ -253,6 +264,7 @@ pub fn canonical_witness_attestation(value: WitnessAttestation) -> Result<Witnes
         witness_identity: value.witness_identity,
         signature_suite: value.signature_suite,
         rebuilt_digests,
+        source_acquisition_mode,
         rebuild_environment_summary: value.rebuild_environment_summary,
     })
 }
@@ -295,9 +307,11 @@ pub struct AgreementWitnessClassification {
     pub witness_identity: String,
     pub signer_key_name: String,
     pub witness_digest_blake3: AttestationDigest,
+    pub release_attestation_digest_blake3: AttestationDigest,
     pub signature_valid: bool,
     pub digest_match: bool,
     pub independence_domain: String,
+    pub source_acquisition_mode: String,
     pub policy_counted: bool,
     pub classification_reason: WitnessClassificationReason,
     pub rebuilt_output_digests: Vec<BinaryDigest>,
@@ -445,6 +459,10 @@ fn normalize_agreement_witness(
             name: "independence_domain",
             value: &witness.independence_domain,
         })?;
+        validate_env_field(NamedField {
+            name: "source_acquisition_mode",
+            value: &witness.source_acquisition_mode,
+        })?;
     }
     if witness.classification_reason != WitnessClassificationReason::MalformedEnvironmentEvidence {
         validate_env_field(NamedField {
@@ -552,6 +570,17 @@ fn normalize_optional_string_set(
     values.sort();
     values.dedup();
     Ok(Some(values))
+}
+
+fn normalize_optional_string(value: Option<String>, field: &'static str) -> Result<Option<String>, Error> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    validate_env_field(NamedField {
+        name: field,
+        value: &value,
+    })?;
+    Ok(Some(value))
 }
 
 fn normalize_binary_digests(digests: Vec<BinaryDigest>) -> Result<Vec<BinaryDigest>, Error> {
@@ -847,6 +876,31 @@ mod tests {
     }
 
     #[test]
+    fn witness_accepts_legacy_payload_without_source_mode() {
+        let mut attestation = sample_witness();
+        attestation.source_acquisition_mode = None;
+
+        let bytes = witness_attestation_canonical_bytes(attestation).unwrap();
+        let json = core::str::from_utf8(&bytes).unwrap();
+
+        assert!(!json.contains("source_acquisition_mode"));
+        assert!(json.contains("rebuild_environment_summary"));
+    }
+
+    #[test]
+    fn witness_rejects_oversized_source_acquisition_mode() {
+        let mut attestation = sample_witness();
+        attestation.source_acquisition_mode = Some("x".repeat(257));
+
+        let err = witness_attestation_canonical_bytes(attestation).unwrap_err();
+        assert_eq!(err, Error::FieldTooLong {
+            field: "source_acquisition_mode".to_string(),
+            limit: 256,
+            actual: 257,
+        });
+    }
+
+    #[test]
     fn release_rejects_oversized_binary_digests() {
         let mut attestation = sample_release();
         attestation.binary_digests = (0..257)
@@ -1019,13 +1073,15 @@ mod tests {
         let identity_pos = json.find("\"witness_identity\"").unwrap();
         let suite_pos = json.find("\"signature_suite\"").unwrap();
         let rebuilt_pos = json.find("\"rebuilt_digests\"").unwrap();
+        let source_mode_pos = json.find("\"source_acquisition_mode\"").unwrap();
         let env_pos = json.find("\"rebuild_environment_summary\"").unwrap();
 
         assert!(schema_pos < release_ref_pos);
         assert!(release_ref_pos < identity_pos);
         assert!(identity_pos < suite_pos);
         assert!(suite_pos < rebuilt_pos);
-        assert!(rebuilt_pos < env_pos);
+        assert!(rebuilt_pos < source_mode_pos);
+        assert!(source_mode_pos < env_pos);
     }
 
     #[test]
@@ -1153,9 +1209,11 @@ mod tests {
             witness_identity: witness_identity.to_string(),
             signer_key_name: signer_key_name.to_string(),
             witness_digest_blake3: AttestationDigest::from_canonical_bytes(witness_identity.as_bytes().to_vec()),
+            release_attestation_digest_blake3: release_attestation_canonical_digest(sample_release()).unwrap(),
             signature_valid: classification_reason != WitnessClassificationReason::InvalidSignature,
             digest_match: classification_reason != WitnessClassificationReason::DigestMismatch,
             independence_domain: independence_domain.to_string(),
+            source_acquisition_mode: WITNESS_SOURCE_ACQUISITION_MODE_UNSPECIFIED.to_string(),
             policy_counted,
             classification_reason,
             rebuilt_output_digests: sample_release().binary_digests,

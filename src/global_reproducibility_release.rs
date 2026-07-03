@@ -34,6 +34,7 @@ const UNKNOWN_ARTIFACT_UNSUPPORTED_REASON: &str =
     "release artifact set is not present in the release evidence manifest";
 const UNRECOGNIZED_ARTIFACT_UNSUPPORTED_REASON: &str =
     "release artifact does not match a recognized strict self-hosting stage2 proof surface";
+const LEGACY_WITNESS_METADATA_NOT_RECORDED: &str = "not-recorded";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ReleaseSurfaceEvidenceCommandOutput {
@@ -112,10 +113,20 @@ struct FinalReleaseVerifySubset {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 struct FinalWitnessSubset {
     witness_identity: String,
+    #[serde(default = "legacy_witness_metadata_not_recorded")]
+    signer_key_name: String,
+    #[serde(default)]
+    release_attestation_digest_blake3: Option<String>,
     signature_valid: bool,
     digest_match: bool,
     independence_domain: String,
+    #[serde(default = "legacy_witness_metadata_not_recorded")]
+    source_acquisition_mode: String,
     policy_counted: bool,
+}
+
+fn legacy_witness_metadata_not_recorded() -> String {
+    LEGACY_WITNESS_METADATA_NOT_RECORDED.to_string()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -347,8 +358,13 @@ fn counted_witness_map(
         };
         counted.insert(witness.witness_identity.clone(), CountedWitness {
             identity: witness.witness_identity.clone(),
+            signer_key_name: witness.signer_key_name.clone(),
+            release_attestation_digest_blake3: witness.release_attestation_digest_blake3.clone(),
             operator_domain: witness.independence_domain.clone(),
             host_class: attestation.rebuild_environment_summary.host_class.clone(),
+            source_acquisition_mode: witness.source_acquisition_mode.clone(),
+            digest_match: witness.digest_match,
+            policy_counted: witness.policy_counted,
             rebuilt_digests: witness_digest_map(attestation)?,
         });
     }
@@ -358,8 +374,13 @@ fn counted_witness_map(
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CountedWitness {
     identity: String,
+    signer_key_name: String,
+    release_attestation_digest_blake3: Option<String>,
     operator_domain: String,
     host_class: String,
+    source_acquisition_mode: String,
+    digest_match: bool,
+    policy_counted: bool,
     rebuilt_digests: BTreeMap<String, String>,
 }
 
@@ -506,8 +527,13 @@ fn witnesses_for_surface(
         if witness.rebuilt_digests.values().any(|digest| digest == output_digest) {
             evidence.push(GlobalWitnessEvidence {
                 identity: witness.identity.clone(),
+                signer_key_name: witness.signer_key_name.clone(),
+                release_attestation_digest_blake3: witness.release_attestation_digest_blake3.clone(),
                 operator_domain: witness.operator_domain.clone(),
                 host_class: witness.host_class.clone(),
+                source_acquisition_mode: witness.source_acquisition_mode.clone(),
+                digest_match: witness.digest_match,
+                policy_counted: witness.policy_counted,
                 perturbation_axes: Vec::new(),
                 trust_status: GlobalWitnessTrustStatus::Valid,
                 output_digest_set_blake3: vec![output_digest.to_string()],
@@ -761,9 +787,12 @@ mod tests {
             final_verify: FinalReleaseVerifySubset {
                 independent_agreement_witnesses: vec![FinalWitnessSubset {
                     witness_identity: "aspen".to_string(),
+                    signer_key_name: "aspen-key".to_string(),
+                    release_attestation_digest_blake3: Some(digest(6)),
                     signature_valid: true,
                     digest_match: true,
                     independence_domain: "aspen-domain".to_string(),
+                    source_acquisition_mode: "copied-source".to_string(),
                     policy_counted: true,
                 }],
             },
@@ -985,9 +1014,12 @@ mod tests {
         json!({
             "independent_agreement_witnesses": [{
                 "witness_identity": "aspen",
+                "signer_key_name": "aspen-key",
+                "release_attestation_digest_blake3": digest(6),
                 "signature_valid": true,
                 "digest_match": true,
                 "independence_domain": "aspen-domain",
+                "source_acquisition_mode": "copied-source",
                 "policy_counted": true
             }]
         })

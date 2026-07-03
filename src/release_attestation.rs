@@ -22,6 +22,7 @@ use crunch_attestation::TechnicalClass;
 use crunch_attestation::ValidatedWitness;
 use crunch_attestation::VerificationDirectory;
 use crunch_attestation::VerificationMaterial;
+use crunch_attestation::WITNESS_SOURCE_ACQUISITION_MODE_NOT_RECORDED;
 use crunch_attestation::WitnessAttestation;
 use crunch_attestation::WitnessClassificationReason;
 use crunch_attestation::encode_detached_signature;
@@ -53,6 +54,7 @@ const INDEPENDENCE_FIELD_REBUILD_HOST_CLASS: &str = "rebuild_environment_summary
 const INDEPENDENT_AGREEMENT_CLASS: &str = "independent-rebuild-agreement";
 const AGREEMENT_REPORT_FILE_NAME: &str = "agreement-report.json";
 const MAX_AGREEMENT_REPORT_CANDIDATES: usize = 32;
+pub(crate) const WITNESS_SOURCE_ACQUISITION_MODE_MANUAL: &str = "manual-operator-supplied";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CreatedReleaseAttestation {
@@ -106,9 +108,11 @@ pub(crate) struct CreatedPolicyFiles {
 pub(crate) struct AgreementWitnessOutput {
     pub witness_identity: String,
     pub signer_key_name: String,
+    pub release_attestation_digest_blake3: String,
     pub signature_valid: bool,
     pub digest_match: bool,
     pub independence_domain: String,
+    pub source_acquisition_mode: String,
     pub policy_counted: bool,
     pub classification_reason: WitnessClassificationReason,
 }
@@ -125,6 +129,8 @@ pub(crate) struct ReleaseVerificationOutput {
     pub matching_witness_count: u32,
     pub independent_witness_identities: u32,
     pub revoked_witness_count: u32,
+    pub policy_independence_field: String,
+    pub policy_required_witness_count: u32,
     pub independent_agreement_status: IndependentAgreementStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub independent_agreement_class: Option<&'static str>,
@@ -173,6 +179,7 @@ pub(crate) fn create_witness_attestation(
     system: &str,
     toolchain: &str,
     host_class: &str,
+    source_acquisition_mode: &str,
     signing_key_path: Option<&Path>,
     state_dir: &Path,
 ) -> Result<CreatedWitnessAttestation, RunError> {
@@ -192,7 +199,8 @@ pub(crate) fn create_witness_attestation(
             toolchain: toolchain.to_string(),
             host_class: host_class.to_string(),
         },
-    );
+    )
+    .with_source_acquisition_mode(source_acquisition_mode.to_string());
     let canonical_bytes = canonical_witness_bytes(&attestation)?;
     let digest_hex = AttestationDigest::from_canonical_bytes(canonical_bytes.clone()).to_hex();
     let signature = sign_detached_message(&canonical_bytes, &keypair);
@@ -431,6 +439,8 @@ fn evaluate_release_verification(
         matching_witness_count: evaluation.matching_witness_count,
         independent_witness_identities: evaluation.independent_witness_identities,
         revoked_witness_count: evaluation.revoked_witness_count,
+        policy_independence_field: material.policy.independence_field.clone(),
+        policy_required_witness_count: material.policy.min_matching_witnesses,
         independent_agreement_status,
         independent_agreement_class,
         independent_agreement_report_digest,
@@ -602,14 +612,23 @@ fn classify_agreement_witness(
         witness_identity: witness.attestation.witness_identity.clone(),
         signer_key_name,
         witness_digest_blake3: witness_digest,
+        release_attestation_digest_blake3: witness.attestation.release_attestation_digest_blake3.clone(),
         signature_valid,
         digest_match,
         independence_domain,
+        source_acquisition_mode: witness_source_acquisition_mode(&witness.attestation),
         policy_counted,
         classification_reason: reason,
         rebuilt_output_digests: witness.attestation.rebuilt_digests.clone(),
         environment_summary: witness.attestation.rebuild_environment_summary.clone(),
     })
+}
+
+fn witness_source_acquisition_mode(witness: &WitnessAttestation) -> String {
+    witness
+        .source_acquisition_mode
+        .clone()
+        .unwrap_or_else(|| WITNESS_SOURCE_ACQUISITION_MODE_NOT_RECORDED.to_string())
 }
 
 fn classify_witness_signature(
@@ -695,9 +714,11 @@ fn agreement_witness_output(witness: &AgreementWitnessClassification) -> Agreeme
     AgreementWitnessOutput {
         witness_identity: witness.witness_identity.clone(),
         signer_key_name: witness.signer_key_name.clone(),
+        release_attestation_digest_blake3: witness.release_attestation_digest_blake3.to_hex(),
         signature_valid: witness.signature_valid,
         digest_match: witness.digest_match,
         independence_domain: witness.independence_domain.clone(),
+        source_acquisition_mode: witness.source_acquisition_mode.clone(),
         policy_counted: witness.policy_counted,
         classification_reason: witness.classification_reason,
     }

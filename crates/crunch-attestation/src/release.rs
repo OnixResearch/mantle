@@ -16,6 +16,8 @@ pub use crunch_attestation_core::SignatureSuite;
 pub use crunch_attestation_core::TechnicalClass;
 pub use crunch_attestation_core::TrustTier;
 pub use crunch_attestation_core::WITNESS_ATTESTATION_SCHEMA;
+pub use crunch_attestation_core::WITNESS_SOURCE_ACQUISITION_MODE_NOT_RECORDED;
+pub use crunch_attestation_core::WITNESS_SOURCE_ACQUISITION_MODE_UNSPECIFIED;
 pub use crunch_attestation_core::WitnessAttestation;
 pub use crunch_attestation_core::WitnessClassificationReason;
 pub use crunch_attestation_core::Workflow;

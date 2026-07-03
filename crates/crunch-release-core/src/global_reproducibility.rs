@@ -38,6 +38,7 @@ const NON_CLAIM_COMPILER_CORRECTNESS: &str = "not-compiler-correctness";
 const NON_CLAIM_DEPLOY_SUCCESS: &str = "not-deploy-success";
 const NON_CLAIM_PHYSICAL_TARGET_DETERMINISM: &str = "not-physical-target-determinism";
 const NON_CLAIM_GLOBAL_BLOCKED: &str = "global-reproducibility-blocked";
+const LEGACY_WITNESS_METADATA_NOT_RECORDED: &str = "not-recorded";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GlobalReproducibilityUniverse {
@@ -104,13 +105,31 @@ pub struct GlobalSurfaceEvidence {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GlobalWitnessEvidence {
     pub identity: String,
+    #[serde(default = "default_legacy_witness_metadata")]
+    pub signer_key_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_attestation_digest_blake3: Option<String>,
     pub operator_domain: String,
     pub host_class: String,
+    #[serde(default = "default_legacy_witness_metadata")]
+    pub source_acquisition_mode: String,
+    #[serde(default = "default_true")]
+    pub digest_match: bool,
+    #[serde(default = "default_true")]
+    pub policy_counted: bool,
     #[serde(default)]
     pub perturbation_axes: Vec<String>,
     pub trust_status: GlobalWitnessTrustStatus,
     #[serde(default)]
     pub output_digest_set_blake3: Vec<String>,
+}
+
+fn default_legacy_witness_metadata() -> String {
+    LEGACY_WITNESS_METADATA_NOT_RECORDED.to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -719,6 +738,14 @@ fn accept_valid_witness(
     axes: &mut BTreeSet<String>,
     blockers: &mut Vec<GlobalReproducibilityBlocker>,
 ) {
+    if !witness.digest_match {
+        counts.failed_digest_mismatched = counts.failed_digest_mismatched.saturating_add(1);
+        return;
+    }
+    if !witness.policy_counted {
+        counts.policy_insufficient = counts.policy_insufficient.saturating_add(1);
+        return;
+    }
     if !digest_sets_match(&witness.output_digest_set_blake3, &evidence.output_digest_set_blake3) {
         counts.failed_digest_mismatched = counts.failed_digest_mismatched.saturating_add(1);
         blockers.push(blocker(
@@ -963,8 +990,14 @@ fn validate_witnesses(witnesses: &[GlobalWitnessEvidence]) -> Result<(), Release
     let mut identities = BTreeSet::new();
     for witness in witnesses {
         validate_non_empty_string(&witness.identity, "witness.identity")?;
+        validate_non_empty_string(&witness.signer_key_name, "witness.signer_key_name")?;
+        validate_optional_digest(
+            &witness.release_attestation_digest_blake3,
+            "witness.release_attestation_digest_blake3",
+        )?;
         validate_non_empty_string(&witness.operator_domain, "witness.operator_domain")?;
         validate_non_empty_string(&witness.host_class, "witness.host_class")?;
+        validate_non_empty_string(&witness.source_acquisition_mode, "witness.source_acquisition_mode")?;
         validate_digest_set(&witness.output_digest_set_blake3, "witness.output_digest_set_blake3")?;
         validate_string_set(&witness.perturbation_axes, "witness.perturbation_axes")?;
         insert_unique(&mut identities, &witness.identity, "witness identity")?;
@@ -1202,8 +1235,13 @@ mod tests {
     fn sample_witness(identity: &str, domain: &str, digest_set: Vec<String>) -> GlobalWitnessEvidence {
         GlobalWitnessEvidence {
             identity: identity.to_string(),
+            signer_key_name: identity.to_string(),
+            release_attestation_digest_blake3: None,
             operator_domain: domain.to_string(),
             host_class: "nixos-25.05".to_string(),
+            source_acquisition_mode: "copied-source".to_string(),
+            digest_match: true,
+            policy_counted: true,
             perturbation_axes: vec!["PATH".to_string()],
             trust_status: GlobalWitnessTrustStatus::Valid,
             output_digest_set_blake3: digest_set,

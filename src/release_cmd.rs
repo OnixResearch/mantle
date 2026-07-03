@@ -41,6 +41,7 @@ use crate::witness_rebuild::default_witness_scratch_dir;
 use crate::witness_rebuild::plan_witness_rebuild;
 use crate::witness_rebuild::prepare_witness_rebuild_scratch;
 use crate::witness_rebuild::run_witness_rebuild_workflow;
+use crate::witness_rebuild::source_acquisition_mode_for_plan;
 use crate::witness_rebuild::validate_successful_rebuild;
 use crate::witness_rebuild::write_audit_meta;
 
@@ -1204,6 +1205,7 @@ fn cmd_release_witness_rebuild(
         &metadata.system,
         &metadata.toolchain,
         &metadata.host_class,
+        source_acquisition_mode_for_plan(&plan),
         signing_key.as_deref(),
         state_dir,
     )?;
