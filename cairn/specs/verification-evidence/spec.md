@@ -278,38 +278,6 @@ WHEN `mantle release create` packages a release source archive
 THEN the archive MUST exclude those paths before copying source material into a release bundle
 AND exclusion MUST apply even if a private runtime path such as `target/` or `.pi/` is force-tracked.
 
-### Requirement: Provider fixed-point replay normalizes local path identity [r[verification_evidence.provider_fixed_point_path_normalization]]
-
-Provider-bound release witness replay MUST compile provider fixed-point stages with deterministic source, execution-output, provider helper, and receipt-bound C compiler toolchain path identity so binary digest mismatches identify source, toolchain, or build output differences instead of publisher/witness scratch path differences.
-
-#### Scenario: deterministic path mode is receipt-visible
-
-GIVEN `mantle release witness-rebuild` runs a provider fixed-point proof for a provider-bound request
-WHEN the witness proof invokes native rust-plan execution
-THEN the rust-plan receipt MUST record deterministic release path mode
-AND rustc arguments MUST include stable remap prefixes for the source root and execution-output root.
-
-#### Scenario: provider helper paths are not baked into release binaries
-
-GIVEN the publisher and witness use equivalent source-built Rust provider closures at different filesystem paths
-WHEN provider fixed-point stages compile crates that read compile-time provider helper environment
-THEN the compile-time environment MUST use deterministic placeholder identity for provider helper paths
-AND the released binary MUST NOT depend on the publisher or witness provider scratch path.
-
-#### Scenario: native C compiler paths are remapped deterministically
-
-GIVEN the selected receipt-bound C compiler route points inside a local source-built toolchain root
-WHEN provider fixed-point stages compile native C or assembly inputs through build-script-driven toolchains
-THEN build-script child environments MUST add C prefix-map flags for the source root, execution-output root, and selected C compiler toolchain root
-AND the C compiler toolchain root remap MUST take precedence over broader source-root remaps in emitted debug/source identity.
-
-#### Scenario: build scripts still access real package roots
-
-GIVEN deterministic release path mode is enabled for provider fixed-point replay
-WHEN a build script runs during native topology execution
-THEN the build script process MUST still execute from the real package root and write to the real OUT_DIR
-AND deterministic path remapping MUST NOT replace filesystem paths that the build script needs for I/O.
-
 ### Requirement: Self-hosting witness replay normalizes bootstrap and generated path identity [r[verification_evidence.self_hosting_witness_replay_path_normalization]]
 
 Mantle release witness rebuilds that run the self-hosting proof workflow MUST normalize bootstrap tool paths, Cargo target paths, build-script output paths, and staged source paths before those paths can affect Cargo fingerprints, rustc diagnostics, generated-code source spans, or final release binary bytes. The witness MUST still compare every rebuilt published output by exact BLAKE3 digest and MUST fail closed before signing when normalization is incomplete or rebuilt bytes differ.
@@ -571,3 +539,42 @@ GIVEN release-derived surface evidence has been written
 WHEN an operator wants to claim global reproducibility
 THEN the operator MUST still run the global reproducibility evaluator to produce a `mantle-global-reproducibility-report-v1`
 AND helper output alone MUST NOT be described as an eligible global report.
+
+### Requirement: Provider fixed-point replay normalizes local path identity [r[verification_evidence.provider_fixed_point_path_normalization]]
+
+Provider-bound release witness replay MUST compile provider fixed-point stages with deterministic source, execution-output, provider helper, and receipt-bound C compiler toolchain path identity so binary digest mismatches identify source, toolchain, or build output differences instead of publisher/witness scratch path differences.
+
+#### Scenario: deterministic path mode is receipt-visible
+
+GIVEN `mantle release witness-rebuild` runs a provider fixed-point proof for a provider-bound request
+WHEN the witness proof invokes native rust-plan execution
+THEN the rust-plan receipt MUST record deterministic release path mode
+AND rustc arguments MUST include stable remap prefixes for the source root and execution-output root.
+
+#### Scenario: provider helper paths are not baked into release binaries
+
+GIVEN the publisher and witness use equivalent source-built Rust provider closures at different filesystem paths
+WHEN provider fixed-point stages compile crates that read compile-time provider helper environment
+THEN the compile-time environment MUST use deterministic placeholder identity for provider helper paths
+AND the released binary MUST NOT depend on the publisher or witness provider scratch path.
+
+#### Scenario: native C compiler paths are remapped deterministically
+
+GIVEN the selected receipt-bound C compiler route points inside a local source-built toolchain root
+WHEN provider fixed-point stages compile native C or assembly inputs through build-script-driven toolchains
+THEN build-script child environments MUST add C prefix-map flags for the source root, execution-output root, and selected C compiler toolchain root
+AND the C compiler toolchain root remap MUST take precedence over broader source-root remaps in emitted debug/source identity.
+
+#### Scenario: build scripts still access real package roots
+
+GIVEN deterministic release path mode is enabled for provider fixed-point replay
+WHEN a build script runs during native topology execution
+THEN the build script process MUST still execute from the real package root and write to the real OUT_DIR
+AND deterministic path remapping MUST NOT replace filesystem paths that the build script must open or create.
+
+#### Scenario: proof-owned metadata paths are bundle-local
+
+GIVEN a provider fixed-point proof writes `meta.json` or `preflight.json`
+WHEN the metadata names proof-owned stage directories, receipts, logs, status files, execution directories, or stage binaries
+THEN those paths MUST be relative to the proof bundle root
+AND source roots, provider/toolchain provenance paths, and other non-bundle evidence paths MUST remain explicit external paths rather than being rewritten as bundle-local artifacts.

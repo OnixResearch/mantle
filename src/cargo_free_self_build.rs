@@ -26,6 +26,7 @@ const NON_CLAIMS_FILE: &str = "non-claims.txt";
 const SMOKE_STDOUT_FILE: &str = "smoke-stdout.txt";
 const SMOKE_STDERR_FILE: &str = "smoke-stderr.txt";
 const EXECUTION_DIR: &str = "execution";
+const BUNDLE_ROOT_RELATIVE_PATH: &str = ".";
 const CARGO_SHIM_FILE: &str = "cargo-forbidden";
 const CARGO_SHIM_DIR: &str = "cargo-guard-bin";
 const CARGO_SHIM_NAME: &str = "cargo";
@@ -1716,7 +1717,7 @@ fn finish_fixed_point(
         status,
     );
     write_summary(&plan.meta_path, &summary)?;
-    print_fixed_point_summary(&summary, json_mode)?;
+    print_fixed_point_summary(&summary, json_mode, &plan.bundle_dir)?;
     if status == SUCCESS_STATUS {
         return Ok(());
     }
@@ -1737,10 +1738,10 @@ fn fixed_point_summary(
         schema: FIXED_POINT_SCHEMA,
         status: status.to_string(),
         root: plan.root.clone(),
-        bundle_dir: plan.bundle_dir.clone(),
+        bundle_dir: PathBuf::from(BUNDLE_ROOT_RELATIVE_PATH),
         fixed_point: status == SUCCESS_STATUS,
-        stage1: stage_summary(stage1),
-        stage2: stage2.map(stage_summary),
+        stage1: stage_summary(stage1, &plan.bundle_dir),
+        stage2: stage2.map(|stage| stage_summary(stage, &plan.bundle_dir)),
         rustc_compatibility: RustcCompatibilitySummary {
             requested_rustc: compatibility.requested_rustc.clone(),
             stage_rustc: compatibility.stage_rustc.clone(),
@@ -1755,21 +1756,21 @@ fn fixed_point_summary(
     }
 }
 
-fn stage_summary(stage: &FixedPointStageRun) -> FixedPointStageSummary {
+fn stage_summary(stage: &FixedPointStageRun, bundle_dir: &Path) -> FixedPointStageSummary {
     FixedPointStageSummary {
         name: stage.name,
-        dir: stage.dir.clone(),
-        execution_dir: stage.execution_dir.clone(),
-        receipt: stage.receipt_path.clone(),
-        stderr: stage.stderr_path.clone(),
-        status: stage.status_path.clone(),
+        dir: bundle_local_path(bundle_dir, &stage.dir),
+        execution_dir: bundle_local_path(bundle_dir, &stage.execution_dir),
+        receipt: bundle_local_path(bundle_dir, &stage.receipt_path),
+        stderr: bundle_local_path(bundle_dir, &stage.stderr_path),
+        status: bundle_local_path(bundle_dir, &stage.status_path),
         status_code: stage.status_code,
         execution_status: stage.execution_status.clone(),
         cargo_marker_absent: stage.cargo_marker_absent,
         success: stage.success,
         unit_count: stage.unit_count,
         failed_unit_count: stage.failed_unit_count,
-        binary: stage.binary.clone(),
+        binary: stage.binary.as_deref().map(|path| bundle_local_path(bundle_dir, path)),
         binary_blake3: stage.binary_blake3.clone(),
         smoke_status_code: stage.smoke_status_code,
         source_built_toolchain_closure_policy_digest_blake3: stage
@@ -1777,6 +1778,14 @@ fn stage_summary(stage: &FixedPointStageRun) -> FixedPointStageSummary {
             .clone(),
         selected_c_compiler: stage.selected_c_compiler.clone(),
         blocker: stage.blocker.clone(),
+    }
+}
+
+fn bundle_local_path(bundle_dir: &Path, path: &Path) -> PathBuf {
+    match path.strip_prefix(bundle_dir) {
+        Ok(relative) if relative.as_os_str().is_empty() => PathBuf::from(BUNDLE_ROOT_RELATIVE_PATH),
+        Ok(relative) => relative.to_path_buf(),
+        Err(_) => path.to_path_buf(),
     }
 }
 
@@ -1810,14 +1819,14 @@ fn fixed_point_error_message(summary: &FixedPointSummary) -> String {
         .unwrap_or_else(|| format!("Cargo-free fixed-point proof ended with status {}", summary.status))
 }
 
-fn print_fixed_point_summary(summary: &FixedPointSummary, json_mode: bool) -> Result<(), RunError> {
+fn print_fixed_point_summary(summary: &FixedPointSummary, json_mode: bool, bundle_dir: &Path) -> Result<(), RunError> {
     if json_mode {
         let rendered = serde_json::to_string(summary).map_err(|err| internal(format!("render summary: {err}")))?;
         println!("{rendered}");
         return Ok(());
     }
     println!("Cargo-free fixed-point: {}", summary.status);
-    println!("bundle: {}", summary.bundle_dir.display());
+    println!("bundle: {}", bundle_dir.display());
     if let Some(digest) = &summary.stage1.binary_blake3 {
         println!("stage1_binary_blake3: {digest}");
     }
@@ -2768,8 +2777,8 @@ fn write_fixed_point_preflight(
     let value = json!({
         "schema": plan.schema,
         "root": plan.root,
-        "bundle_dir": plan.bundle_dir,
-        "shared_execution_dir": plan.shared_execution_dir,
+        "bundle_dir": BUNDLE_ROOT_RELATIVE_PATH,
+        "shared_execution_dir": bundle_local_path(&plan.bundle_dir, &plan.shared_execution_dir),
         "rustc_compatibility": compatibility,
         "source_built_toolchain_closure": toolchain_closure,
         "rust_source_provider": rust_source_provider,
@@ -3084,6 +3093,85 @@ mod tests {
     }
 
     #[test]
+    fn fixed_point_summary_records_bundle_local_stage_paths() {
+        let root = Path::new("/repo/mantle");
+        let out_dir = Path::new("/tmp/mantle-fixed-point");
+        let rustc = Path::new("/toolchain/bin/rustc");
+        let plan = plan_fixed_point_paths(root, out_dir, rustc, &[]).unwrap();
+        let compatibility = RustcCompatibilitySummary {
+            requested_rustc: rustc.to_path_buf(),
+            stage_rustc: rustc.to_path_buf(),
+            normalization: NORMALIZATION_NONE,
+            wrapper: None,
+            wrapper_blake3: None,
+        };
+        let toolchain_closure = complete_enforced_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A);
+        let stage1 = fixed_point_stage_run_in_bundle(STAGE1_DIR, out_dir, FIXED_POINT_TEST_DIGEST_A);
+        let stage2 = fixed_point_stage_run_in_bundle(STAGE2_DIR, out_dir, FIXED_POINT_TEST_DIGEST_A);
+        let summary = fixed_point_summary(
+            &plan,
+            &compatibility,
+            &toolchain_closure,
+            &absent_rust_source_provider_binding(),
+            &stage1,
+            Some(&stage2),
+            SUCCESS_STATUS,
+        );
+
+        assert_eq!(summary.bundle_dir, PathBuf::from(BUNDLE_ROOT_RELATIVE_PATH));
+        assert_eq!(summary.stage1.dir, PathBuf::from(STAGE1_DIR));
+        assert_eq!(summary.stage1.execution_dir, PathBuf::from(EXECUTION_DIR));
+        let expected_stage1_binary = PathBuf::from(STAGE1_DIR).join(PRODUCED_MANTLE_FILE);
+        assert_eq!(summary.stage1.receipt, PathBuf::from(STAGE1_DIR).join(RECEIPT_FILE));
+        assert_eq!(summary.stage1.status, PathBuf::from(STAGE1_DIR).join(STATUS_FILE));
+        assert_eq!(summary.stage1.binary.as_ref(), Some(&expected_stage1_binary));
+        assert_eq!(summary.stage2.as_ref().unwrap().dir, PathBuf::from(STAGE2_DIR));
+    }
+
+    #[test]
+    fn bundle_local_path_keeps_external_paths_absolute() {
+        let bundle_dir = Path::new("/tmp/mantle-fixed-point");
+        let external_path = Path::new("/outside/toolchain/bin/rustc");
+        let local_path = bundle_dir.join(STAGE1_DIR).join(RECEIPT_FILE);
+
+        assert_eq!(bundle_local_path(bundle_dir, external_path), external_path);
+        assert_eq!(bundle_local_path(bundle_dir, &local_path), PathBuf::from(STAGE1_DIR).join(RECEIPT_FILE));
+    }
+
+    #[test]
+    fn fixed_point_preflight_records_bundle_local_execution_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("repo");
+        let out_dir = dir.path().join("proof");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&out_dir).unwrap();
+        let rustc = Path::new("/toolchain/bin/rustc");
+        let plan = plan_fixed_point_paths(&root, &out_dir, rustc, &[]).unwrap();
+        let compatibility = RustcCompatibilitySummary {
+            requested_rustc: rustc.to_path_buf(),
+            stage_rustc: rustc.to_path_buf(),
+            normalization: NORMALIZATION_NONE,
+            wrapper: None,
+            wrapper_blake3: None,
+        };
+        write_fixed_point_preflight(
+            &plan,
+            &compatibility,
+            &complete_enforced_test_toolchain_closure(FIXED_POINT_TEST_DIGEST_A),
+            &absent_rust_source_provider_binding(),
+        )
+        .unwrap();
+
+        let mut blockers = Vec::new();
+        let (preflight, _) = read_json_with_digest(&plan.preflight_path, "preflight", &mut blockers);
+        assert!(blockers.is_empty(), "blockers: {blockers:?}");
+        let preflight = preflight.unwrap();
+        assert_eq!(optional_str(&preflight, "/bundle_dir"), Some(BUNDLE_ROOT_RELATIVE_PATH));
+        assert_eq!(optional_str(&preflight, "/shared_execution_dir"), Some(EXECUTION_DIR));
+        assert_eq!(optional_str(&preflight, "/root"), Some(root.to_str().unwrap()));
+    }
+
+    #[test]
     fn provider_fixed_point_verifier_accepts_valid_bounded_bundle() {
         let evidence = valid_provider_fixed_point_evidence();
 
@@ -3291,6 +3379,33 @@ mod tests {
         assert!(message.contains("source-built Rust provider blocked"));
         assert!(message.contains("failed validation"));
         assert!(message.contains("not source-built"));
+    }
+
+    fn fixed_point_stage_run_in_bundle(
+        name: &'static str,
+        bundle_dir: &Path,
+        binary_digest: &str,
+    ) -> FixedPointStageRun {
+        FixedPointStageRun {
+            name,
+            dir: bundle_dir.join(name),
+            execution_dir: bundle_dir.join(EXECUTION_DIR),
+            receipt_path: bundle_dir.join(name).join(RECEIPT_FILE),
+            stderr_path: bundle_dir.join(name).join(STDERR_FILE),
+            status_path: bundle_dir.join(name).join(STATUS_FILE),
+            status_code: Some(SUCCESS_EXIT_CODE),
+            execution_status: SUCCESS_STATUS.to_string(),
+            cargo_marker_absent: true,
+            success: true,
+            unit_count: FIXED_POINT_TEST_UNIT_COUNT,
+            failed_unit_count: 0,
+            binary: Some(bundle_dir.join(name).join(PRODUCED_MANTLE_FILE)),
+            binary_blake3: Some(binary_digest.to_string()),
+            smoke_status_code: Some(SUCCESS_EXIT_CODE),
+            source_built_toolchain_closure_policy_digest_blake3: Some(FIXED_POINT_TEST_DIGEST_A.to_string()),
+            selected_c_compiler: None,
+            blocker: None,
+        }
     }
 
     fn fixed_point_stage_run(

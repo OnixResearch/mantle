@@ -236,6 +236,12 @@
 // helper tests, invalid-provider blocker tests, and provider proof copied-bundle
 // verifier tests in `src/cargo_free_self_build.rs`.
 //
+// r[impl verification_evidence.provider_fixed_point_path_normalization]
+// r[verify verification_evidence.provider_fixed_point_path_normalization]
+// Implemented by deterministic release path mode and provider fixed-point proof
+// metadata generation in `src/cargo_free_self_build.rs`; verified by focused
+// path-normalization, bundle-local metadata, and copied-bundle verifier tests.
+//
 // r[impl compiled-eval.cranelift-prototype-subset]
 // r[verify compiled-eval.cranelift-prototype-subset]
 // r[impl compiled-eval.cranelift-prototype-subset.default]
