@@ -12,13 +12,14 @@ use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::ImportDiagnostic;
 use crate::foreign_derivation_import::ImportReceipt;
 use crate::foreign_derivation_import::MantleForeignPlan;
-use crate::foreign_derivation_import::NixDerivationJsonClosure;
+use crate::foreign_derivation_import::NixDerivationJsonExport;
 use crate::foreign_derivation_import::NixProducerConfig;
 use crate::foreign_derivation_import::PackageIndex;
 use crate::foreign_derivation_import::TranslationPolicy;
 use crate::foreign_derivation_import::admit_translated_graph;
 use crate::foreign_derivation_import::foreign_import_non_claims;
 use crate::foreign_derivation_import::lower_nix_derivation_json_closure;
+use crate::foreign_derivation_import::normalize_nix_derivation_json_export;
 use crate::foreign_derivation_import::plan_mantle_foreign_import;
 use crate::foreign_derivation_import::translate_foreign_graph;
 
@@ -253,11 +254,15 @@ fn run_produce_nix(
     out_dir: &Path,
     json: bool,
 ) -> Result<(), RunError> {
-    let closure =
-        match read_json::<NixDerivationJsonClosure>(derivation_json_path, "derivation-json", PRODUCE_NIX_COMMAND)? {
-            Ok(closure) => closure,
+    let export =
+        match read_json::<NixDerivationJsonExport>(derivation_json_path, "derivation-json", PRODUCE_NIX_COMMAND)? {
+            Ok(export) => export,
             Err(report) => return emit_report(report, json),
         };
+    let closure = match normalize_nix_derivation_json_export(export) {
+        Ok(closure) => closure,
+        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_NIX_COMMAND, diagnostic), json),
+    };
     let config = NixProducerConfig {
         package_name: package.to_string(),
         system: system.to_string(),

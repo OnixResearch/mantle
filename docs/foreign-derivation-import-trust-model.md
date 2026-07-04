@@ -219,6 +219,12 @@ Claim-safe summary:
 > claim nixpkgs package correctness, local rebuild success, output trust,
 > bootstrap parity, reproducibility, or future producer availability.
 
+Current live export-to-plan evidence for this boundary is captured in
+`cairn/archive/2026-07-03-live-nixpkgs-foreign-import-proof/evidence/live-nixpkgs-hello/summary.md`.
+That bundle records host-Nix `nixpkgs#hello` derivation export, Mantle
+`produce-nix`, and no-Nix validate/plan consumption. Treat it as admitted/planned
+only until separate substitution or rebuild evidence exists.
+
 ## Claim-safe reporting checklist
 
 Before reporting a foreign import result, name the strongest current evidence

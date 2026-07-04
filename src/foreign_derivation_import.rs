@@ -44,16 +44,16 @@ const TRANSLATED_GRAPH_HASH_KIND: &str = "translated-graph";
 const SUBSTITUTION_POLICY_CLASSIFICATION: &str = "cache-hint-policy-data-store-admission-required";
 const OUTPUT_HASH_HEX_CHARS: usize = 32;
 const SOURCE_PAYLOAD_HASH_HEX_CHARS: usize = 32;
-const MAX_GRAPH_NODES: usize = 64;
+const MAX_GRAPH_NODES: usize = 2048;
 const MAX_GRAPH_EDGES: usize = 256;
 const MAX_PACKAGE_INDEX_ENTRIES: usize = 128;
-const MAX_FIELD_BYTES: usize = 4096;
-const MAX_SOURCE_PAYLOADS: usize = 64;
+const MAX_FIELD_BYTES: usize = 32768;
+const MAX_SOURCE_PAYLOADS: usize = 512;
 const MAX_MIRROR_CANDIDATES: usize = 16;
 const MAX_SANDBOX_CAPABILITIES: usize = 16;
 const MAX_CACHE_HINTS: usize = 16;
 const MAX_UNSUPPORTED_FEATURES: usize = 32;
-const MAX_HASH_DOMAIN_RECORDS: usize = 256;
+const MAX_HASH_DOMAIN_RECORDS: usize = 4096;
 const EMPTY_OUTPUT_COUNT: usize = 0;
 const EMPTY_COMMAND_INVOCATION_COUNT: usize = 0;
 const REQUIRED_HELLO_ROOT_COUNT: usize = 1;
@@ -281,7 +281,8 @@ pub(crate) struct NixDerivationJsonNode {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct NixDerivationJsonOutput {
-    pub(crate) path: String,
+    #[serde(default)]
+    pub(crate) path: Option<String>,
     #[serde(default)]
     pub(crate) hash: Option<String>,
     #[serde(rename = "hashAlgo", default)]
@@ -295,6 +296,41 @@ pub(crate) struct NixDerivationJsonInput {
 }
 
 pub(crate) type NixDerivationJsonClosure = BTreeMap<String, NixDerivationJsonNode>;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub(crate) enum NixDerivationJsonExport {
+    Versioned(NixDerivationJsonVersionedExport),
+    Legacy(NixDerivationJsonClosure),
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixDerivationJsonVersionedExport {
+    pub(crate) derivations: BTreeMap<String, NixDerivationJsonVersionedNode>,
+    pub(crate) version: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixDerivationJsonVersionedNode {
+    pub(crate) name: String,
+    pub(crate) system: String,
+    pub(crate) builder: String,
+    #[serde(default)]
+    pub(crate) args: Vec<String>,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+    pub(crate) outputs: BTreeMap<String, NixDerivationJsonOutput>,
+    #[serde(default)]
+    pub(crate) inputs: NixDerivationJsonVersionedInputs,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixDerivationJsonVersionedInputs {
+    #[serde(default)]
+    pub(crate) drvs: BTreeMap<String, NixDerivationJsonInput>,
+    #[serde(default)]
+    pub(crate) srcs: Vec<String>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct NixProducerConfig {
@@ -454,6 +490,15 @@ pub(crate) fn admit_translated_graph(
     Ok(())
 }
 
+pub(crate) fn normalize_nix_derivation_json_export(
+    export: NixDerivationJsonExport,
+) -> Result<NixDerivationJsonClosure, ImportDiagnostic> {
+    match export {
+        NixDerivationJsonExport::Legacy(closure) => Ok(closure),
+        NixDerivationJsonExport::Versioned(export) => normalize_versioned_nix_derivations(export),
+    }
+}
+
 pub(crate) fn lower_nix_derivation_json_closure(
     closure: &NixDerivationJsonClosure,
     config: &NixProducerConfig,
@@ -599,6 +644,126 @@ fn hello_fixture(
     (graph, index)
 }
 
+fn normalize_versioned_nix_derivations(
+    export: NixDerivationJsonVersionedExport,
+) -> Result<NixDerivationJsonClosure, ImportDiagnostic> {
+    if export.derivations.is_empty() || export.derivations.len() > MAX_GRAPH_NODES {
+        return Err(diagnostic(
+            "nix-derivation-count-out-of-range",
+            None,
+            "Nix derivation export size is outside supported limits",
+        ));
+    }
+    let mut closure = BTreeMap::new();
+    for (drv_key, node) in export.derivations {
+        let drv_path = normalize_nix_store_key(&drv_key)?;
+        let env = normalize_nix_env(node.env);
+        let outputs = normalize_nix_outputs(node.outputs, &env)?;
+        let normalized_node = NixDerivationJsonNode {
+            name: node.name,
+            system: node.system,
+            builder: normalize_nix_path_field(&node.builder)?,
+            args: node.args,
+            env,
+            outputs,
+            input_drvs: normalize_versioned_input_drvs(node.inputs.drvs)?,
+            input_srcs: normalize_nix_store_paths(node.inputs.srcs)?,
+        };
+        if closure.insert(drv_path, normalized_node).is_some() {
+            return Err(diagnostic(
+                "duplicate-nix-derivation-path",
+                None,
+                "versioned Nix derivation export contains duplicate derivation paths",
+            ));
+        }
+    }
+    Ok(closure)
+}
+
+fn normalize_versioned_input_drvs(
+    input_drvs: BTreeMap<String, NixDerivationJsonInput>,
+) -> Result<BTreeMap<String, NixDerivationJsonInput>, ImportDiagnostic> {
+    let mut normalized = BTreeMap::new();
+    for (input_drv, input) in input_drvs {
+        let drv_path = normalize_nix_store_key(&input_drv)?;
+        normalized.insert(drv_path, input);
+    }
+    Ok(normalized)
+}
+
+fn normalize_nix_outputs(
+    outputs: BTreeMap<String, NixDerivationJsonOutput>,
+    env: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, NixDerivationJsonOutput>, ImportDiagnostic> {
+    let mut normalized = BTreeMap::new();
+    for (output_name, mut output) in outputs {
+        let path = output
+            .path
+            .as_deref()
+            .or_else(|| env.get(&output_name).map(String::as_str))
+            .or_else(|| {
+                if output_name == OUT_OUTPUT_NAME {
+                    env.get(OUT_OUTPUT_NAME).map(String::as_str)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| diagnostic("missing-nix-output-path", None, "Nix output is missing a path"))?;
+        output.path = Some(normalize_nix_path_field(path)?);
+        normalized.insert(output_name, output);
+    }
+    Ok(normalized)
+}
+
+fn normalize_nix_store_paths(paths: Vec<String>) -> Result<Vec<String>, ImportDiagnostic> {
+    paths.into_iter().map(|path| normalize_nix_path_field(&path)).collect()
+}
+
+fn normalize_nix_env(env: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    env.into_iter().map(|(key, value)| (key, normalize_nix_embedded_store_paths(&value))).collect()
+}
+
+fn normalize_nix_embedded_store_paths(value: &str) -> String {
+    value
+        .split(':')
+        .map(|segment| {
+            if looks_like_store_basename(segment) {
+                format!("{NIX_STORE_PREFIX_WITH_SLASH}{segment}")
+            } else {
+                segment.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+fn normalize_nix_path_field(path: &str) -> Result<String, ImportDiagnostic> {
+    if path.starts_with(NIX_STORE_PREFIX_WITH_SLASH) {
+        validate_nix_store_path(path)?;
+        return Ok(path.to_string());
+    }
+    if looks_like_store_basename(path) {
+        let normalized = format!("{NIX_STORE_PREFIX_WITH_SLASH}{path}");
+        validate_nix_store_path(&normalized)?;
+        return Ok(normalized);
+    }
+    Ok(path.to_string())
+}
+
+fn normalize_nix_store_key(key: &str) -> Result<String, ImportDiagnostic> {
+    if key.starts_with(NIX_STORE_PREFIX_WITH_SLASH) {
+        validate_nix_derivation_path(key)?;
+        return Ok(key.to_string());
+    }
+    let normalized = format!("{NIX_STORE_PREFIX_WITH_SLASH}{key}");
+    validate_nix_derivation_path(&normalized)?;
+    Ok(normalized)
+}
+
+fn looks_like_store_basename(value: &str) -> bool {
+    value.len() > OUTPUT_HASH_HEX_CHARS && !value.contains('/') && value.contains('-')
+}
+
 fn validate_nix_producer_inputs(
     closure: &NixDerivationJsonClosure,
     config: &NixProducerConfig,
@@ -703,13 +868,21 @@ fn lower_nix_outputs(
     }
     let mut lowered = BTreeMap::new();
     for (name, output) in outputs {
-        validate_nix_store_path(&output.path)?;
+        let path = nix_output_path(output)?;
+        validate_nix_store_path(path)?;
         lowered.insert(name.clone(), OutputDeclaration {
-            path: output.path.clone(),
+            path: path.to_string(),
             hash: output.hash.clone(),
         });
     }
     Ok(lowered)
+}
+
+fn nix_output_path(output: &NixDerivationJsonOutput) -> Result<&str, ImportDiagnostic> {
+    output
+        .path
+        .as_deref()
+        .ok_or_else(|| diagnostic("missing-nix-output-path", None, "Nix output is missing a path"))
 }
 
 fn lower_nix_input_derivations(
@@ -810,7 +983,7 @@ fn nix_declared_references(
             let output = input_derivation.outputs.get(output_name).ok_or_else(|| {
                 diagnostic("dangling-nix-input-output", None, "Nix input output is absent from closure")
             })?;
-            references.push(output.path.clone());
+            references.push(nix_output_path(output)?.to_string());
         }
     }
     Ok(sorted_strings(references))
@@ -1493,6 +1666,26 @@ mod tests {
     }
 
     #[test]
+    fn versioned_nix_derivation_export_normalizes_relative_paths_and_fod_env_outputs() {
+        let export = NixDerivationJsonExport::Versioned(versioned_nix_export_with_fod_env_path(true));
+
+        let closure = normalize_nix_derivation_json_export(export).unwrap();
+        let source = closure.get(NIXPKGS_SOURCE_DRV).expect("source drv should normalize to absolute path");
+
+        assert_eq!(closure.len(), REQUIRED_HELLO_ROOT_COUNT);
+        assert_eq!(source.outputs[OUT_OUTPUT_NAME].path.as_deref(), Some(NIXPKGS_SOURCE_OUT));
+        assert_eq!(source.input_srcs.len(), 0);
+        assert!(source.builder.starts_with("builtin:"));
+    }
+
+    #[test]
+    fn versioned_nix_derivation_export_rejects_missing_output_path_without_env_fallback() {
+        let export = NixDerivationJsonExport::Versioned(versioned_nix_export_with_fod_env_path(false));
+
+        assert_error_class(normalize_nix_derivation_json_export(export), "missing-nix-output-path");
+    }
+
+    #[test]
     fn translation_rejects_unsupported_builtins_references_stale_receipts_indexes_and_features() {
         let policy = fixture_policy(&[GUIX_SOURCE_PREFIX]);
         let (graph, index) = guix_like_hello_fixture();
@@ -1609,10 +1802,43 @@ mod tests {
         closure
     }
 
+    fn versioned_nix_export_with_fod_env_path(include_env_out: bool) -> NixDerivationJsonVersionedExport {
+        let mut env = BTreeMap::from([
+            ("builder".to_string(), "builtin:fetchurl".to_string()),
+            ("name".to_string(), "hello-source".to_string()),
+            ("system".to_string(), "builtin".to_string()),
+        ]);
+        if include_env_out {
+            env.insert(OUT_OUTPUT_NAME.to_string(), NIXPKGS_SOURCE_OUT.to_string());
+        }
+        let source_key = NIXPKGS_SOURCE_DRV
+            .strip_prefix(NIX_STORE_PREFIX_WITH_SLASH)
+            .expect("fixture drv should have Nix store prefix")
+            .to_string();
+        let mut derivations = BTreeMap::new();
+        derivations.insert(source_key, NixDerivationJsonVersionedNode {
+            name: "hello-source".to_string(),
+            system: "builtin".to_string(),
+            builder: "builtin:fetchurl".to_string(),
+            args: Vec::new(),
+            env,
+            outputs: BTreeMap::from([(OUT_OUTPUT_NAME.to_string(), NixDerivationJsonOutput {
+                path: None,
+                hash: Some("sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=".to_string()),
+                hash_algo: None,
+            })]),
+            inputs: NixDerivationJsonVersionedInputs::default(),
+        });
+        NixDerivationJsonVersionedExport {
+            derivations,
+            version: 4,
+        }
+    }
+
     fn nixpkgs_source_derivation() -> NixDerivationJsonNode {
         let mut outputs = BTreeMap::new();
         outputs.insert(OUT_OUTPUT_NAME.to_string(), NixDerivationJsonOutput {
-            path: NIXPKGS_SOURCE_OUT.to_string(),
+            path: Some(NIXPKGS_SOURCE_OUT.to_string()),
             hash: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
             hash_algo: Some("r:sha256".to_string()),
         });
@@ -1631,7 +1857,7 @@ mod tests {
     fn nixpkgs_hello_derivation() -> NixDerivationJsonNode {
         let mut outputs = BTreeMap::new();
         outputs.insert(OUT_OUTPUT_NAME.to_string(), NixDerivationJsonOutput {
-            path: NIXPKGS_HELLO_OUT.to_string(),
+            path: Some(NIXPKGS_HELLO_OUT.to_string()),
             hash: None,
             hash_algo: None,
         });
