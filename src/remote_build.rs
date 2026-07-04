@@ -74,6 +74,7 @@ const REMOTE_TRANSFER_ARTIFACTS_PER_PATHINFO_OUTPUT: usize = 2;
 const MAX_REMOTE_WORKER_CONCURRENCY: u32 = 1_024;
 const MAX_REMOTE_LOG_CHUNKS: usize = 1_024;
 const MAX_REMOTE_LOG_BYTES: u64 = 1_048_576;
+const MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES: usize = 512;
 const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
 const REMOTE_CHILD_POLL_INTERVAL_MS: u64 = 10;
@@ -1053,14 +1054,65 @@ pub struct RemoteCoordinatorJobStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RemoteWorkerStatus {
+    pub endpoint_id: String,
+    pub systems: Vec<String>,
+    pub feature_labels: Vec<String>,
+    pub sandbox_modes: Vec<String>,
+    pub network_modes: Vec<String>,
+    pub concurrency: u32,
+    pub output_signing_key_count: u32,
+    pub resumable_job_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RemoteFailureStatus {
+    pub job_id: String,
+    pub phase: RemoteCoordinatorJobPhase,
+    pub lost_phase: Option<RemoteFailurePhase>,
+    pub retry_class: RemoteRetryClass,
+    pub short_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RemoteLogCursorStatus {
+    pub job_id: String,
+    pub start_cursor: u64,
+    pub next_cursor: u64,
+    pub retained_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RemoteCoordinatorStatusSnapshot {
     pub endpoint_id: String,
     pub configured_concurrency: u32,
     pub worker_count: u32,
+    pub workers: Vec<RemoteWorkerStatus>,
     pub queued_jobs: Vec<RemoteCoordinatorJobStatus>,
     pub active_jobs: Vec<RemoteCoordinatorJobStatus>,
     pub recent_jobs: Vec<RemoteCoordinatorJobStatus>,
+    pub recent_failures: Vec<RemoteFailureStatus>,
+    pub log_cursors: Vec<RemoteLogCursorStatus>,
     pub tickets: Vec<RemoteTicketView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RemoteBuildOutputObservability {
+    pub output_name: String,
+    pub logical_path: String,
+    pub artifact_attestation_path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RemoteBuildObservabilityReport {
+    pub selected_route: String,
+    pub rejected_route_reasons: Vec<String>,
+    pub endpoint_id: Option<String>,
+    pub upload_summary: RemoteInputUploadPrivacySummary,
+    pub transfer: RemoteTransferReport,
+    pub trust_basis: RemoteOutputTrustBasis,
+    pub outputs: Vec<RemoteBuildOutputObservability>,
+    pub non_claims: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1915,6 +1967,45 @@ fn increment_remote_input_upload_class_count(
     };
     *count = count.checked_add(1).ok_or_else(|| "remote-input-upload-class-count-overflow".to_string())?;
     Ok(())
+}
+
+pub fn remote_build_observability_report(
+    selected_route: &str,
+    rejected_route_reasons: &[String],
+    endpoint_id: Option<&str>,
+    upload_summary: RemoteInputUploadPrivacySummary,
+    admission: &RemoteOutputAdmissionReport,
+    import_report: &RemoteOutputImportReport,
+    non_claims: &[String],
+) -> Result<RemoteBuildObservabilityReport, String> {
+    if selected_route.is_empty() {
+        return Err("remote-observability-route-empty".to_string());
+    }
+    if admission.request_id != import_report.request_id {
+        return Err("remote-observability-request-id-mismatch".to_string());
+    }
+    let outputs = import_report
+        .outputs
+        .iter()
+        .map(|output| RemoteBuildOutputObservability {
+            output_name: output.name.clone(),
+            logical_path: output.logical_path.clone(),
+            artifact_attestation_path: Some(output.artifact_attestation_path.clone()),
+        })
+        .collect::<Vec<_>>();
+    if outputs.is_empty() {
+        return Err("remote-observability-output-empty".to_string());
+    }
+    Ok(RemoteBuildObservabilityReport {
+        selected_route: selected_route.to_string(),
+        rejected_route_reasons: rejected_route_reasons.iter().map(|reason| bounded_untrusted_text(reason)).collect(),
+        endpoint_id: endpoint_id.map(bounded_untrusted_text),
+        upload_summary,
+        transfer: import_report.transfer.clone(),
+        trust_basis: admission.trust_basis.clone(),
+        outputs,
+        non_claims: non_claims.iter().map(|claim| bounded_untrusted_text(claim)).collect(),
+    })
 }
 
 pub fn validate_remote_source_upload_record(
@@ -3268,18 +3359,96 @@ pub fn coordinator_status_snapshot(
     let mut queued_jobs = Vec::new();
     let mut active_jobs = Vec::new();
     let mut recent_jobs = Vec::new();
+    let mut recent_failures = Vec::new();
+    let mut log_cursors = Vec::new();
     for job in state.jobs.values() {
         push_status_job(&mut queued_jobs, &mut active_jobs, &mut recent_jobs, state, job)?;
+        push_status_failure(&mut recent_failures, job);
+        log_cursors.push(coordinator_log_cursor_status(state, job)?);
     }
     Ok(RemoteCoordinatorStatusSnapshot {
         endpoint_id: endpoint_id.to_string(),
         configured_concurrency,
         worker_count: bounded_runtime_count_u32(state.workers.len())?,
+        workers: state.workers.values().map(remote_worker_status).collect::<Result<Vec<_>, _>>()?,
         queued_jobs,
         active_jobs,
         recent_jobs,
+        recent_failures,
+        log_cursors,
         tickets: tickets.iter().map(redacted_ticket_view).collect(),
     })
+}
+
+fn remote_worker_status(worker: &RemoteWorkerRegistration) -> Result<RemoteWorkerStatus, String> {
+    Ok(RemoteWorkerStatus {
+        endpoint_id: worker.endpoint_id.clone(),
+        systems: bounded_string_list(&worker.systems),
+        feature_labels: bounded_string_list(&worker.feature_labels),
+        sandbox_modes: bounded_string_list(&worker.sandbox_modes),
+        network_modes: bounded_string_list(&worker.network_modes),
+        concurrency: worker.concurrency,
+        output_signing_key_count: bounded_runtime_count_u32(worker.output_signing_key_ids.len())?,
+        resumable_job_count: bounded_runtime_count_u32(worker.resumable_jobs.len())?,
+    })
+}
+
+fn bounded_string_list(values: &[String]) -> Vec<String> {
+    values.iter().take(MAX_REMOTE_STATUS_ITEMS).map(|value| bounded_untrusted_text(value)).collect()
+}
+
+fn push_status_failure(recent_failures: &mut Vec<RemoteFailureStatus>, job: &RemoteCoordinatorJobSummary) {
+    if job.phase != RemoteCoordinatorJobPhase::Lost && job.short_error.is_none() {
+        return;
+    }
+    recent_failures.push(RemoteFailureStatus {
+        job_id: job.job_id.clone(),
+        phase: job.phase,
+        lost_phase: job.lost_phase,
+        retry_class: RemoteRetryClass::Terminal,
+        short_error: job.short_error.as_deref().map(bounded_untrusted_text),
+    });
+}
+
+fn coordinator_log_cursor_status(
+    state: &RemoteCoordinatorState,
+    job: &RemoteCoordinatorJobSummary,
+) -> Result<RemoteLogCursorStatus, String> {
+    let retained = state.logs.get(&job.job_id).map(Vec::as_slice).unwrap_or(&[]);
+    Ok(RemoteLogCursorStatus {
+        job_id: job.job_id.clone(),
+        start_cursor: job.log_start_cursor,
+        next_cursor: job.log_next_cursor,
+        retained_bytes: remote_log_bytes(retained)?,
+    })
+}
+
+fn bounded_untrusted_text(value: &str) -> String {
+    if text_looks_secret_bearing(value) {
+        return SECRET_REDACTION.to_string();
+    }
+    let sanitized = value.chars().map(|ch| if ch.is_control() { '�' } else { ch }).collect::<String>();
+    if sanitized.len() <= MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES {
+        return sanitized;
+    }
+    let mut bounded = String::new();
+    for ch in sanitized.chars() {
+        if bounded.len().saturating_add(ch.len_utf8()) > MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES {
+            break;
+        }
+        bounded.push(ch);
+    }
+    bounded.push_str("<truncated>");
+    bounded
+}
+
+fn text_looks_secret_bearing(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    lower.contains("bearer ")
+        || lower.contains("token=")
+        || lower.contains("secret")
+        || lower.contains("private-key")
+        || lower.contains("/home/")
 }
 
 fn push_status_job(
@@ -3307,7 +3476,7 @@ fn coordinator_job_status(
         job_id: job.job_id.clone(),
         phase: job.phase,
         worker_endpoint_id: job.assigned_worker_endpoint_id.clone(),
-        short_error: job.short_error.clone(),
+        short_error: job.short_error.as_deref().map(bounded_untrusted_text),
         log_bytes_retained: remote_log_bytes(retained)?,
     })
 }
@@ -6857,10 +7026,130 @@ mod tests {
         let rendered = serde_json::to_string(&snapshot).expect("status serializes");
 
         assert_eq!(snapshot.worker_count, 1);
+        assert_eq!(snapshot.workers[0].output_signing_key_count, 1);
         assert_eq!(snapshot.queued_jobs.len(), 1);
+        assert_eq!(snapshot.log_cursors.len(), 1);
         assert!(snapshot.active_jobs.is_empty());
         assert_eq!(snapshot.tickets[0].secret, SECRET_REDACTION);
         assert!(!rendered.contains(&format!("\"secret\":\"{}\"", ticket.secret)));
+    }
+
+    #[test]
+    fn coordinator_status_bounds_failure_text_and_log_cursors() {
+        let request = fixture_coordinator_request();
+        let normalized_key = normalized_remote_build_key(&request).expect("request key");
+        let mut state = RemoteCoordinatorState::default();
+        state.jobs.insert("lost-job".to_string(), RemoteCoordinatorJobSummary {
+            job_id: "lost-job".to_string(),
+            normalized_build_key: normalized_key,
+            assigned_worker_endpoint_id: Some("worker-secret".to_string()),
+            phase: RemoteCoordinatorJobPhase::Lost,
+            live_output_claims: Vec::new(),
+            result_available: false,
+            lost_phase: Some(RemoteFailurePhase::TransportSetup),
+            log_start_cursor: 7,
+            log_next_cursor: 9,
+            short_error: Some(format!("diagnostic\u{0007}{}", "x".repeat(MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES))),
+        });
+        state.logs.insert("lost-job".to_string(), vec![RemoteCoordinatorLogChunk {
+            cursor: 8,
+            bytes: "log".to_string(),
+        }]);
+        let snapshot = coordinator_status_snapshot("coordinator-1", 1, &state, &[]).expect("status snapshot renders");
+        let rendered = serde_json::to_string(&snapshot).expect("status serializes");
+
+        assert_eq!(snapshot.recent_failures.len(), 1);
+        assert_eq!(snapshot.recent_failures[0].lost_phase, Some(RemoteFailurePhase::TransportSetup));
+        assert_eq!(snapshot.log_cursors[0].start_cursor, 7);
+        assert_eq!(snapshot.log_cursors[0].next_cursor, 9);
+        assert!(snapshot.recent_failures[0].short_error.as_ref().unwrap().contains("<truncated>"));
+        assert!(!rendered.contains('\u{0007}'));
+        assert_eq!(bounded_untrusted_text("authorization bearer SHOULD_NOT_LEAK"), SECRET_REDACTION);
+    }
+
+    #[test]
+    fn remote_build_observability_report_names_route_transfer_trust_and_attestation() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let response = fixture_builder_response(&client);
+        let admission =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect("remote output admits");
+        let import_report = RemoteOutputImportReport {
+            request_id: admission.request_id.clone(),
+            store_prefix: admission.store_prefix.clone(),
+            outputs: vec![RemoteImportedOutput {
+                name: "out".to_string(),
+                logical_path: "/mantle/store/imported-out".to_string(),
+                path_info_signing_key_id: "builder-key".to_string(),
+                artifact_attestation_digest_blake3: "a".repeat(BLAKE3_HEX_LENGTH_CHARS),
+                artifact_attestation_path: "/state/attestations/artifacts/imported.json".to_string(),
+            }],
+            transfer: admission.transfer.clone(),
+        };
+        const OBSERVABILITY_UPLOAD_BYTES: u64 = 7;
+        let upload_summary = RemoteInputUploadPrivacySummary {
+            store_objects: 1,
+            source_objects: 0,
+            proof_objects: 0,
+            secret_descriptor_objects: 0,
+            total_objects: 1,
+            total_bytes: OBSERVABILITY_UPLOAD_BYTES,
+        };
+        let report = remote_build_observability_report(
+            "p2p-remote-builder",
+            &["local-preflight-failed".to_string()],
+            Some("builder-1"),
+            upload_summary,
+            &admission,
+            &import_report,
+            &[REMOTE_SESSION_NON_CLAIM.to_string()],
+        )
+        .expect("observability report builds");
+
+        assert_eq!(report.selected_route, "p2p-remote-builder");
+        assert_eq!(report.endpoint_id.as_deref(), Some("builder-1"));
+        assert_eq!(report.transfer.mode, RemoteTransferMode::Delta);
+        assert_eq!(report.trust_basis.key_id, "builder-key");
+        assert_eq!(
+            report.outputs[0].artifact_attestation_path.as_deref(),
+            Some("/state/attestations/artifacts/imported.json")
+        );
+        assert!(report.non_claims.iter().any(|claim| claim.contains("protocol control flow only")));
+    }
+
+    #[test]
+    fn remote_build_observability_rejects_mismatched_import_claims() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let response = fixture_builder_response(&client);
+        let admission =
+            validate_remote_builder_response_output_import(&client.request, &client.trusted_output_keys, &response)
+                .expect("remote output admits");
+        let import_report = RemoteOutputImportReport {
+            request_id: "other-request".to_string(),
+            store_prefix: admission.store_prefix.clone(),
+            outputs: Vec::new(),
+            transfer: admission.transfer.clone(),
+        };
+        let upload_summary = RemoteInputUploadPrivacySummary {
+            store_objects: 0,
+            source_objects: 0,
+            proof_objects: 0,
+            secret_descriptor_objects: 0,
+            total_objects: 0,
+            total_bytes: 0,
+        };
+        let err = remote_build_observability_report(
+            "p2p-remote-builder",
+            &[],
+            None,
+            upload_summary,
+            &admission,
+            &import_report,
+            &[],
+        )
+        .expect_err("mismatched import report rejected");
+
+        assert_eq!(err, "remote-observability-request-id-mismatch");
     }
 
     #[test]
