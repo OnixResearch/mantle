@@ -166,6 +166,60 @@ Structured build reports surface the same operator facts in stable fields:
 That last block gives both the logical store path and the persisted sidecar
 path for the artifact attestation.
 
+## Offline build runbook
+
+Use this runbook when the target host must build from already collected source
+material without substitutes. It is command evidence, not a new proof class: the
+source bundle evidence proves declared source/input availability and identity
+only, and source-bundle route execution is future work until the separate route
+execution change lands.
+
+On a connected or source-rich host, export the source records required by the
+selected root:
+
+```bash
+mantle source bundle export --build-root ./package.ncl --import-path lib --to source-bundle.json
+mantle source bundle verify --from source-bundle.json
+```
+
+Copy `source-bundle.json` to the offline host, then import and pin it into the
+selected state directory:
+
+```bash
+mantle --state-dir ./offline-state source bundle import --from source-bundle.json --pin
+mantle --state-dir ./offline-state source bundle verify --from source-bundle.json --imported
+mantle --state-dir ./offline-state source bundle preflight --build-root ./package.ncl --import-path lib
+```
+
+Run the build with source preflight and substitute lookup disabled:
+
+```bash
+mantle --state-dir ./offline-state build --offline-source-preflight --no-substitute ./package.ncl
+mantle --json --state-dir ./offline-state build --offline-source-preflight --no-substitute ./package.ncl > build-report.json
+```
+
+Inspect these fields before making a status claim:
+
+- `ready_class`, `source_state_blake3`, and `next_actions[]` from source-bundle
+  preflight. Missing, stale, unsupported, untrusted, network-required, or
+  unpinned state names a bounded next action such as re-exporting, importing
+  with `--pin`, inspecting adapter metadata, or choosing an explicit non-offline
+  workflow.
+- `network_policy_reports[]` from build JSON. Offline builds should show only
+  declared fixed-output source boundaries or denied compatibility capabilities.
+- `cargo_build_evidence[]` for accepted `mantle.offlineCargoPackage` outputs and
+  `cargo_build_evidence_diagnostics[]` for malformed sidecars that must be
+  inspected or rebuilt before an offline Cargo evidence claim is made.
+- Route-plan output when `mantle build --plan` is used. Route eligibility is
+  advisory and does not prove output trust.
+
+Do not report source readiness, source import, route eligibility, or offline
+Cargo evidence as build success, output trust, Cargo-free execution, full Cargo
+compatibility, compiler correctness, release reproducibility, or bootstrap
+correctness. Current source-bundle preflight checks imported and pinned source
+state before build planning; it does not yet materialize missing fixed-output
+sources for the later sandbox build.
+
 ## Offline Cargo project-build lane
 
 Use `mantle build .#name` for the supported near-term Rust project workflow.

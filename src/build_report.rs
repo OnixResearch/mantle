@@ -15,6 +15,9 @@ use crate::build_log::DiagnosticPersistenceFailure;
 use crate::build_log::existing_log_file_path;
 use crate::frontend_artifact_spec::FrontendArtifactAdmissionAttestation;
 
+const OFFLINE_CARGO_EVIDENCE_NEXT_ACTION: &str =
+    "inspect share/mantle/offline-cargo-build.json and rebuild with mantle.offlineCargoPackage if the sidecar is stale";
+
 #[derive(Debug, Serialize)]
 pub struct BuildJsonReport {
     pub schema: &'static str,
@@ -29,6 +32,7 @@ pub struct BuildJsonReport {
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub frontend_artifact_attestations: Vec<FrontendArtifactAdmissionAttestation>,
     pub cargo_build_evidence: Vec<BuildJsonCargoBuildEvidence>,
+    pub cargo_build_evidence_diagnostics: Vec<BuildJsonCargoBuildEvidenceDiagnostic>,
     pub diagnostic_persistence_failures: Vec<DiagnosticPersistenceFailure>,
     pub counts: BuildJsonCounts,
     pub outcomes: Vec<BuildJsonOutcome>,
@@ -205,6 +209,16 @@ pub struct BuildJsonCargoBuildEvidence {
     pub non_claims: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct BuildJsonCargoBuildEvidenceDiagnostic {
+    pub label: String,
+    pub output_name: String,
+    pub evidence_path: String,
+    pub blocker_class: String,
+    pub message: String,
+    pub next_action: &'static str,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BuildJsonCargoSourceClosureEntry {
     pub role: String,
@@ -264,7 +278,7 @@ fn build_json_report(
 ) -> BuildJsonReport {
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
     let outcome_reports = build_outcome_reports(config, result, logs_dir);
-    let cargo_build_evidence = build_cargo_build_evidence_reports(&outcome_reports);
+    let (cargo_build_evidence, cargo_build_evidence_diagnostics) = build_cargo_build_evidence_reports(&outcome_reports);
     let failure_reports = build_failure_envelopes(result, &config.store_dir, logs_dir);
     let counts = build_counts(&outcome_reports, &failure_reports);
     let hermeticity_audit_events = result
@@ -301,6 +315,7 @@ fn build_json_report(
         native_dynamic_plans,
         frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
         cargo_build_evidence,
+        cargo_build_evidence_diagnostics,
         diagnostic_persistence_failures: diagnostic_persistence_failures.to_vec(),
         counts,
         outcomes: outcome_reports,
@@ -482,51 +497,99 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
     reports
 }
 
-fn build_cargo_build_evidence_reports(outcomes: &[BuildJsonOutcome]) -> Vec<BuildJsonCargoBuildEvidence> {
+fn build_cargo_build_evidence_reports(
+    outcomes: &[BuildJsonOutcome],
+) -> (Vec<BuildJsonCargoBuildEvidence>, Vec<BuildJsonCargoBuildEvidenceDiagnostic>) {
     let mut reports = Vec::new();
+    let mut diagnostics = Vec::new();
     for outcome in outcomes {
         for output in &outcome.outputs {
-            let Some(report) = cargo_build_evidence_for_output(outcome, output) else {
-                continue;
-            };
-            reports.push(report);
+            match cargo_build_evidence_for_output(outcome, output) {
+                CargoBuildEvidenceOutcome::Absent => {}
+                CargoBuildEvidenceOutcome::Valid(report) => reports.push(report),
+                CargoBuildEvidenceOutcome::Invalid(diagnostic) => diagnostics.push(diagnostic),
+            }
         }
     }
     reports.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
-    reports
+    diagnostics.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
+    (reports, diagnostics)
 }
 
-fn cargo_build_evidence_for_output(
-    outcome: &BuildJsonOutcome,
-    output: &BuildJsonOutput,
-) -> Option<BuildJsonCargoBuildEvidence> {
+fn cargo_build_evidence_for_output(outcome: &BuildJsonOutcome, output: &BuildJsonOutput) -> CargoBuildEvidenceOutcome {
     let evidence_path = Path::new(&output.path).join(crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_RELATIVE_PATH);
-    let evidence = read_offline_cargo_evidence(&evidence_path)?;
-    Some(BuildJsonCargoBuildEvidence {
-        label: outcome.label.clone(),
-        output_name: output.name.clone(),
-        claim_class: evidence.claim_class,
-        project_build_status: evidence.project_build_status,
-        evidence_path: evidence_path.display().to_string(),
-        source_closure: evidence.source_closure,
-        toolchain: evidence.toolchain,
-        non_claims: evidence.non_claims,
-    })
+    match read_offline_cargo_evidence(&evidence_path) {
+        OfflineCargoEvidenceRead::Missing => CargoBuildEvidenceOutcome::Absent,
+        OfflineCargoEvidenceRead::Valid(evidence) => CargoBuildEvidenceOutcome::Valid(BuildJsonCargoBuildEvidence {
+            label: outcome.label.clone(),
+            output_name: output.name.clone(),
+            claim_class: evidence.claim_class,
+            project_build_status: evidence.project_build_status,
+            evidence_path: evidence_path.display().to_string(),
+            source_closure: evidence.source_closure,
+            toolchain: evidence.toolchain,
+            non_claims: evidence.non_claims,
+        }),
+        OfflineCargoEvidenceRead::Invalid { blocker_class, message } => {
+            CargoBuildEvidenceOutcome::Invalid(BuildJsonCargoBuildEvidenceDiagnostic {
+                label: outcome.label.clone(),
+                output_name: output.name.clone(),
+                evidence_path: evidence_path.display().to_string(),
+                blocker_class,
+                message,
+                next_action: OFFLINE_CARGO_EVIDENCE_NEXT_ACTION,
+            })
+        }
+    }
 }
 
-fn read_offline_cargo_evidence(path: &Path) -> Option<OfflineCargoEvidenceFile> {
+fn read_offline_cargo_evidence(path: &Path) -> OfflineCargoEvidenceRead {
     if !path.is_file() {
-        return None;
+        return OfflineCargoEvidenceRead::Missing;
     }
-    let text = std::fs::read_to_string(path).ok()?;
-    let evidence: OfflineCargoEvidenceFile = serde_json::from_str(&text).ok()?;
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) => {
+            return OfflineCargoEvidenceRead::Invalid {
+                blocker_class: "offline-cargo-evidence-read-error".to_string(),
+                message: format!("offline Cargo evidence sidecar could not be read: {error}"),
+            };
+        }
+    };
+    let evidence: OfflineCargoEvidenceFile = match serde_json::from_str(&text) {
+        Ok(evidence) => evidence,
+        Err(error) => {
+            return OfflineCargoEvidenceRead::Invalid {
+                blocker_class: "malformed-offline-cargo-evidence".to_string(),
+                message: format!("offline Cargo evidence sidecar is not valid v1 JSON: {error}"),
+            };
+        }
+    };
     if evidence.schema != crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA {
-        return None;
+        return OfflineCargoEvidenceRead::Invalid {
+            blocker_class: "unsupported-offline-cargo-evidence-schema".to_string(),
+            message: format!("unsupported offline Cargo evidence schema {}", evidence.schema),
+        };
     }
     if evidence.claim_class != crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_CLASS {
-        return None;
+        return OfflineCargoEvidenceRead::Invalid {
+            blocker_class: "unexpected-offline-cargo-claim-class".to_string(),
+            message: format!("unexpected offline Cargo evidence claim class {}", evidence.claim_class),
+        };
     }
-    Some(evidence)
+    OfflineCargoEvidenceRead::Valid(evidence)
+}
+
+enum CargoBuildEvidenceOutcome {
+    Absent,
+    Valid(BuildJsonCargoBuildEvidence),
+    Invalid(BuildJsonCargoBuildEvidenceDiagnostic),
+}
+
+enum OfflineCargoEvidenceRead {
+    Missing,
+    Valid(OfflineCargoEvidenceFile),
+    Invalid { blocker_class: String, message: String },
 }
 
 fn success_log_file(logs_dir: &Path, outcome: &crunch_build::BuildOutcome) -> Option<String> {
@@ -973,30 +1036,65 @@ mod tests {
         );
         assert_eq!(report.cargo_build_evidence[0].evidence_path, evidence_path.display().to_string());
         assert!(report.cargo_build_evidence[0].non_claims.contains(&"not-full-cargo-compatibility".to_string()));
+        assert!(report.cargo_build_evidence_diagnostics.is_empty());
     }
 
     #[test]
-    fn build_json_report_ignores_malformed_offline_cargo_evidence_sidecar() {
+    fn build_json_report_omits_missing_offline_cargo_evidence_sidecar() {
+        let output_root = tempfile::tempdir().unwrap();
         let output = BuildJsonOutput {
             name: "out".to_string(),
-            path: tempfile::tempdir().unwrap().path().display().to_string(),
+            path: output_root.path().display().to_string(),
             artifact_attestation: BuildJsonAttestationReference {
                 logical_path: "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo".to_string(),
                 path: "attestation.json".to_string(),
             },
             substitution: None,
         };
-        let outcome = BuildJsonOutcome {
+        let outcome = build_json_outcome_with_output(output);
+
+        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome]);
+
+        assert!(reports.is_empty());
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn build_json_report_diagnoses_malformed_offline_cargo_evidence_sidecar() {
+        let output_root = tempfile::tempdir().unwrap();
+        let evidence_path = output_root.path().join(crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_RELATIVE_PATH);
+        std::fs::create_dir_all(evidence_path.parent().unwrap()).unwrap();
+        std::fs::write(&evidence_path, "not-json").unwrap();
+        let output = BuildJsonOutput {
+            name: "out".to_string(),
+            path: output_root.path().display().to_string(),
+            artifact_attestation: BuildJsonAttestationReference {
+                logical_path: "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo".to_string(),
+                path: "attestation.json".to_string(),
+            },
+            substitution: None,
+        };
+        let outcome = build_json_outcome_with_output(output);
+
+        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome]);
+
+        assert!(reports.is_empty());
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].label, "demo");
+        assert_eq!(diagnostics[0].output_name, "out");
+        assert_eq!(diagnostics[0].evidence_path, evidence_path.display().to_string());
+        assert_eq!(diagnostics[0].blocker_class, "malformed-offline-cargo-evidence");
+        assert_eq!(diagnostics[0].next_action, OFFLINE_CARGO_EVIDENCE_NEXT_ACTION);
+    }
+
+    fn build_json_outcome_with_output(output: BuildJsonOutput) -> BuildJsonOutcome {
+        BuildJsonOutcome {
             drv_key: "drv".to_string(),
             label: "demo".to_string(),
             cached: false,
             log_file: None,
             outputs: vec![output],
-        };
-
-        let reports = build_cargo_build_evidence_reports(&[outcome]);
-
-        assert!(reports.is_empty());
+        }
     }
 
     #[test]
@@ -1204,6 +1302,7 @@ mod tests {
                 "native_dynamic_plans": [],
                 "frontend_artifact_attestations": [],
                 "cargo_build_evidence": [],
+                "cargo_build_evidence_diagnostics": [],
                 "diagnostic_persistence_failures": [{
                     "operation": "write-build-log",
                     "artifact": "build-log",

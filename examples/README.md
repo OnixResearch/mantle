@@ -20,7 +20,7 @@ Start here. These examples are local, fast, and do not need generated seed mater
 
 ## Fetcher cookbook
 
-Real-network examples stay useful for operators, but deterministic validation uses generated offline fixtures in `tests/examples_build.rs` for each fetcher helper family.
+Real-network examples stay useful for operators, but deterministic validation uses generated offline fixtures in `tests/examples_build.rs` for each fetcher helper family. For disconnected rehearsal, pair a fetcher example with the offline build runbook: `mantle source bundle export --build-root examples/fetch-crate-crc64.ncl --import-path lib --to source-bundle.json`, `mantle source bundle import --from source-bundle.json --pin`, `mantle source bundle verify --from source-bundle.json --imported`, `mantle source bundle preflight --build-root examples/fetch-crate-crc64.ncl --import-path lib`, then `mantle build --offline-source-preflight --no-substitute examples/fetch-crate-crc64.ncl`. Inspect `ready_class`, `source_state_blake3`, `next_actions[]`, `network_policy_reports[]`, `cargo_build_evidence[]`, and `cargo_build_evidence_diagnostics[]`; the source bundle evidence proves declared source/input availability and identity only, and source-bundle route execution is future work.
 
 | File | Command | Expected output shape | Capability | Offline validation rail |
 |---|---|---|---|---|

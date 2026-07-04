@@ -16,6 +16,7 @@ were observed in the current run.
 | Cargo-free fixed point | `mantle self-build --cargo-free --fixed-point --strict-hermetic --out /tmp/mantle-cargo-free` | `/tmp/mantle-cargo-free/` | Mantle built the requested Mantle binary through the bounded native Rust topology and stage1/stage2 binary digests matched under strict proof admission. |
 | Nix-free demo bundle | `mantle --json nix-free-demo validate <summary.json>` | generated demo README plus machine summary | The recorded source-root Cargo-free fixed-point demo profile is claimable only when all validator diagnostics are absent. |
 | Foreign import receipt review | [`docs/foreign-derivation-import-trust-model.md`](foreign-derivation-import-trust-model.md) | import receipt, graph, index, and policy files | Admission evidence is claim-safe only when reported with receipt non-claims and without output-trust or build-success wording. |
+| Offline build runbook | [`docs/operator-workflows.md`](operator-workflows.md#offline-build-runbook) | source-bundle preflight report and build JSON report | The runbook can show source/input availability, network policy, route, and offline Cargo sidecar evidence; it is not build success or reproducibility proof by itself. |
 
 Run the fast prerequisite check before starting expensive self-build proof work:
 
@@ -46,6 +47,27 @@ Use that guide before claiming anything stronger than import admission. A receip
 alone does not claim build success, package correctness, bootstrap parity, output
 trust, reproducibility, or foreign-frontend availability; later Mantle
 realization and verification evidence must carry those claims.
+
+## Offline build runbook evidence
+
+Follow the command sequence in
+[`docs/operator-workflows.md#offline-build-runbook`](operator-workflows.md#offline-build-runbook):
+
+```bash
+mantle source bundle export --build-root ./package.ncl --import-path lib --to source-bundle.json
+mantle source bundle import --from source-bundle.json --pin
+mantle source bundle verify --from source-bundle.json --imported
+mantle source bundle preflight --build-root ./package.ncl --import-path lib
+mantle build --offline-source-preflight --no-substitute ./package.ncl
+```
+
+For proof-before-claim reporting, cite the source preflight `ready_class`,
+`source_state_blake3`, and `next_actions[]` plus build JSON
+`network_policy_reports[]`, `cargo_build_evidence[]`, and
+`cargo_build_evidence_diagnostics[]`. The source bundle evidence proves declared
+source/input availability and identity only, and source-bundle route execution is
+future work. If a report has next actions or diagnostics, describe the blocker
+and the next command instead of claiming success.
 
 ## Self-build proof
 

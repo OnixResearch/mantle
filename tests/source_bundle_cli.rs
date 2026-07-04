@@ -10,6 +10,9 @@ const SOURCE_BUNDLE_RECORDS_DIR: &str = "records";
 const READY_CLASS_NETWORK_REQUIRED: &str = "network-required";
 const READY_CLASS_STALE: &str = "stale";
 const READY_CLASS_UNPINNED: &str = "unpinned";
+const NEXT_ACTIONS_FIELD: &str = "next_actions";
+const NETWORK_REQUIRED_NEXT_ACTION: &str = "network-required-source";
+const UNPINNED_NEXT_ACTION: &str = "unpinned-source-state";
 const TEST_FIXED_OUTPUT_HASH: &str = "sha256-3jC9jts9aiU9fst7yGXpoRxcwMsB2CQ2EOnFjBhJ3CI=";
 const TEST_FETCH_NAME: &str = "source-fixture";
 const TEST_SOURCE_KIND: &str = "local-path";
@@ -272,6 +275,13 @@ fn source_bundle_cli_preflight_reports_unpinned_imported_state() {
         unpinned["unpinned_records"].as_array().expect("unpinned records").len(),
         EXPECTED_RECORD_COUNT as usize
     );
+    assert_eq!(unpinned[NEXT_ACTIONS_FIELD][0]["blocker_class"], UNPINNED_NEXT_ACTION);
+    assert!(
+        unpinned[NEXT_ACTIONS_FIELD][0]["command_hint"]
+            .as_str()
+            .expect("next-action command hint")
+            .contains("--pin")
+    );
 }
 
 #[test]
@@ -300,6 +310,13 @@ fn source_bundle_cli_preflight_reports_network_required_before_build() {
     assert_eq!(
         report["network_required_records"].as_array().expect("network-required records").len(),
         EXPECTED_RECORD_COUNT as usize
+    );
+    assert_eq!(report[NEXT_ACTIONS_FIELD][0]["blocker_class"], NETWORK_REQUIRED_NEXT_ACTION);
+    assert!(
+        report[NEXT_ACTIONS_FIELD][0]["command_hint"]
+            .as_str()
+            .expect("next-action command hint")
+            .contains("--offline-source-preflight")
     );
 }
 

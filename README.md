@@ -37,11 +37,12 @@ mantle --json build hello.ncl
 
 `mantle --json build` writes a stable `crunch-build-report-v1` JSON
 object to stdout. It includes per-root outcomes, cache hits, failure
-records, output paths, hermeticity audit data, `network_policy_reports`, and
-per-output `artifact_attestation` references (`logical_path` + sidecar `path`)
-so tests and operators can assert on structured data instead of scraping human
-text. The optional `log_file` fields are only present when the corresponding log
-was actually written to disk.
+records, output paths, hermeticity audit data, `network_policy_reports`,
+`cargo_build_evidence[]`, `cargo_build_evidence_diagnostics[]`, and per-output
+`artifact_attestation` references (`logical_path` + sidecar `path`) so tests and
+operators can assert on structured data instead of scraping human text. The
+optional `log_file` fields are only present when the corresponding log was
+actually written to disk.
 
 For successful cache hits, each output may also include a `substitution`
 object. `mode` is `delta` when mantle completed the hit through delta
@@ -1414,6 +1415,32 @@ The lockfile (`mantle.lock`) stores resolved revisions and NAR hashes.
 hashing) and updates both `mantle.lock` and `.mantle/inputs.ncl`
 (generated Nickel bindings).
 
+### Offline build runbook
+
+For disconnected or no-substitute builds, first prepare a source bundle on a
+connected/source-rich host, then import and pin it on the offline host before
+building:
+
+```bash
+mantle source bundle export --build-root ./package.ncl --import-path lib --to source-bundle.json
+mantle source bundle verify --from source-bundle.json
+mantle --state-dir ./offline-state source bundle import --from source-bundle.json --pin
+mantle --state-dir ./offline-state source bundle verify --from source-bundle.json --imported
+mantle --state-dir ./offline-state source bundle preflight --build-root ./package.ncl --import-path lib
+mantle --state-dir ./offline-state build --offline-source-preflight --no-substitute ./package.ncl
+mantle --json --state-dir ./offline-state build --offline-source-preflight --no-substitute ./package.ncl > build-report.json
+```
+
+Inspect `ready_class`, `source_state_blake3`, and `next_actions[]` from source
+preflight, plus `network_policy_reports[]`, `cargo_build_evidence[]`, and
+`cargo_build_evidence_diagnostics[]` in `build-report.json`. The source bundle
+evidence proves declared source/input availability and identity only;
+source-bundle route execution is future work. Do not treat source readiness,
+route eligibility, source import, or offline Cargo evidence as build success,
+output trust, Cargo-free execution, full Cargo compatibility, compiler
+correctness, release reproducibility, or bootstrap correctness without separate
+evidence.
+
 ### Offline Cargo package builds
 
 The near-term Rust project-build lane is sandboxed offline Cargo, not native
@@ -1471,6 +1498,7 @@ mantle doctor                    No-mutate preflight for build or self-build hos
 mantle build [file.ncl|.#name]   Evaluate and build
 mantle build --plan <target>     Preview cached/substitute/build/preflight-error
 mantle build --fix <file>        Build and rewrite FOD mismatches in source
+mantle source bundle <action>    Plan, export, import, verify, or preflight source/input bundles
 mantle eval <file.ncl>           Evaluate and print JSON
 mantle bootstrap [-o seed.ncl]   Generate a seed file (`--fetch` for Nix-free)
 mantle self-build                Rebuild mantle from source
@@ -1538,6 +1566,7 @@ fixed-point artifact that was actually proven.
 -j, --jobs <N>                   Max concurrent builds (default: CPU count, max 16)
 --fix                            Auto-fix FOD hash mismatches in .ncl source
 --plan                           Preview per-root action without building
+--offline-source-preflight       Require imported and pinned source state before build planning/execution
 -I, --import-path <path>         Additional Nickel import paths
 --substituters <url>             Binary cache URLs (default: https://cache.nixos.org)
 --no-substitute                  Disable binary cache substitution

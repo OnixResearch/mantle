@@ -18,6 +18,14 @@ pub const SOURCE_OFFLINE_PREFLIGHT_FORMAT: &str = "mantle-source-offline-preflig
 pub const SOURCE_BUNDLE_VERSION: u32 = 1;
 pub const SOURCE_BUNDLE_NON_CLAIM: &str =
     "source bundle evidence proves declared source/input availability and identity only";
+pub const SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
+pub const SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
+pub const SOURCE_NEXT_ACTION_PIN_IMPORTED: &str = "mantle source bundle import --from <bundle.json> --pin";
+pub const SOURCE_NEXT_ACTION_INSPECT_ADAPTER: &str =
+    "inspect source-bundle adapter metadata and use a supported offline source adapter";
+pub const SOURCE_NEXT_ACTION_TRUST_PROVENANCE: &str =
+    "import source state carrying trusted-provenance metadata, or rerun an explicit non-offline workflow";
+pub const SOURCE_NEXT_ACTION_DECLARE_SOURCE: &str = "export/import/pin the required source bundle, or rerun without --offline-source-preflight when live fetches are intended";
 pub const MAX_SOURCE_RECORDS: usize = 65_536;
 pub const MAX_SOURCE_FILES_PER_RECORD: usize = 262_144;
 pub const MAX_SOURCE_FILE_BYTES: u64 = 16_777_216;
@@ -192,8 +200,16 @@ pub struct SourceOfflinePreflightReport {
     pub untrusted_records: Vec<String>,
     pub network_required_records: Vec<String>,
     pub unpinned_records: Vec<String>,
+    pub next_actions: Vec<SourceOfflinePreflightNextAction>,
     pub records: Vec<SourceRecordSummary>,
     pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceOfflinePreflightNextAction {
+    pub blocker_class: &'static str,
+    pub command_hint: &'static str,
+    pub description: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1053,6 +1069,14 @@ fn classify_offline_preflight(
         &network_required_records,
         &unpinned_records,
     );
+    let next_actions = offline_preflight_next_actions(
+        &missing_records,
+        &stale_records,
+        &unsupported_records,
+        &untrusted_records,
+        &network_required_records,
+        &unpinned_records,
+    );
     Ok(SourceOfflinePreflightReport {
         format: SOURCE_OFFLINE_PREFLIGHT_FORMAT,
         manifest_blake3: Some(manifest.manifest_blake3.clone()),
@@ -1065,6 +1089,7 @@ fn classify_offline_preflight(
         untrusted_records,
         network_required_records,
         unpinned_records,
+        next_actions,
         records: summaries,
         non_claim: SOURCE_BUNDLE_NON_CLAIM,
     })
@@ -1083,6 +1108,7 @@ fn empty_offline_preflight_report() -> Result<SourceOfflinePreflightReport, RunE
         untrusted_records: Vec::new(),
         network_required_records: Vec::new(),
         unpinned_records: Vec::new(),
+        next_actions: Vec::new(),
         records: Vec::new(),
         non_claim: SOURCE_BUNDLE_NON_CLAIM,
     })
@@ -1115,6 +1141,77 @@ fn classify_offline_preflight_state(
         return SourceReadiness::Unpinned;
     }
     SourceReadiness::Ready
+}
+
+fn offline_preflight_next_actions(
+    missing: &[String],
+    stale: &[String],
+    unsupported: &[String],
+    untrusted: &[String],
+    network_required: &[String],
+    unpinned: &[String],
+) -> Vec<SourceOfflinePreflightNextAction> {
+    let mut actions = Vec::new();
+    push_next_action_if(
+        &mut actions,
+        !missing.is_empty(),
+        "missing-source-state",
+        SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN,
+        "export, transfer, import, and pin the source bundle for the selected root",
+    );
+    push_next_action_if(
+        &mut actions,
+        !stale.is_empty(),
+        "stale-source-state",
+        SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN,
+        "refresh stale source state from the current root inputs before retrying offline preflight",
+    );
+    push_next_action_if(
+        &mut actions,
+        !unsupported.is_empty(),
+        "unsupported-source-adapter",
+        SOURCE_NEXT_ACTION_INSPECT_ADAPTER,
+        "offline preflight rejects adapters outside the supported source-bundle surface",
+    );
+    push_next_action_if(
+        &mut actions,
+        !untrusted.is_empty(),
+        "untrusted-source-adapter",
+        SOURCE_NEXT_ACTION_TRUST_PROVENANCE,
+        "trusted-provenance metadata is required before source readiness can be accepted",
+    );
+    push_next_action_if(
+        &mut actions,
+        !network_required.is_empty(),
+        "network-required-source",
+        SOURCE_NEXT_ACTION_DECLARE_SOURCE,
+        "offline mode requires declared local source state instead of live fetches",
+    );
+    push_next_action_if(
+        &mut actions,
+        !unpinned.is_empty(),
+        "unpinned-source-state",
+        SOURCE_NEXT_ACTION_PIN_IMPORTED,
+        "pin imported source records before treating source readiness as current evidence",
+    );
+    actions
+}
+
+fn push_next_action_if(
+    actions: &mut Vec<SourceOfflinePreflightNextAction>,
+    enabled: bool,
+    blocker_class: &'static str,
+    command_hint: &'static str,
+    description: &'static str,
+) {
+    if !enabled {
+        return;
+    }
+    actions.push(SourceOfflinePreflightNextAction {
+        blocker_class,
+        command_hint,
+        description,
+    });
 }
 
 fn source_record_requires_network(expected: &SourceRecord, imported: Option<&SourceRecord>) -> bool {
@@ -1942,6 +2039,12 @@ pub fn print_offline_preflight_report(
         report.network_required_records.len(),
         report.unpinned_records.len()
     );
+    for action in &report.next_actions {
+        eprintln!(
+            "next_action blocker_class={} command_hint={} description={}",
+            action.blocker_class, action.command_hint, action.description
+        );
+    }
     for record in &report.records {
         println!(
             "SOURCE_PREFLIGHT_RECORD kind={:?} identity={} files={} payload_bytes={} blake3={}",
@@ -2546,6 +2649,7 @@ mod tests {
         assert!(report.missing_records.is_empty());
         assert!(report.network_required_records.is_empty());
         assert!(report.unpinned_records.is_empty());
+        assert!(report.next_actions.is_empty());
     }
 
     #[test]
@@ -2566,6 +2670,9 @@ mod tests {
         assert_eq!(report.ready_class, SourceReadiness::Missing);
         assert_eq!(report.missing_records.len(), 1);
         assert!(report.network_required_records.is_empty());
+        assert_eq!(report.next_actions.len(), 1);
+        assert_eq!(report.next_actions[0].blocker_class, "missing-source-state");
+        assert_eq!(report.next_actions[0].command_hint, SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN);
     }
 
     #[test]
@@ -2584,6 +2691,9 @@ mod tests {
         assert_eq!(report.ready_class, SourceReadiness::NetworkRequired);
         assert_eq!(report.network_required_records.len(), 1);
         assert!(report.missing_records.is_empty());
+        assert_eq!(report.next_actions.len(), 1);
+        assert_eq!(report.next_actions[0].blocker_class, "network-required-source");
+        assert_eq!(report.next_actions[0].command_hint, SOURCE_NEXT_ACTION_DECLARE_SOURCE);
     }
 
     #[test]
@@ -2602,6 +2712,9 @@ mod tests {
 
         assert_eq!(report.ready_class, SourceReadiness::Unpinned);
         assert_eq!(report.unpinned_records.len(), 1);
+        assert_eq!(report.next_actions.len(), 1);
+        assert_eq!(report.next_actions[0].blocker_class, "unpinned-source-state");
+        assert_eq!(report.next_actions[0].command_hint, SOURCE_NEXT_ACTION_PIN_IMPORTED);
     }
 
     #[test]
@@ -2619,6 +2732,12 @@ mod tests {
 
         assert_eq!(report.ready_class, SourceReadiness::Unsupported);
         assert_eq!(report.unsupported_records, vec!["unsupported-adapter".to_string()]);
+        assert!(
+            report.next_actions.iter().any(|action| action.blocker_class == "unsupported-source-adapter"
+                && action.command_hint == SOURCE_NEXT_ACTION_INSPECT_ADAPTER),
+            "next actions should include unsupported adapter remediation: {:#?}",
+            report.next_actions
+        );
     }
 
     #[test]
@@ -2637,6 +2756,9 @@ mod tests {
 
         assert_eq!(report.ready_class, SourceReadiness::Untrusted);
         assert_eq!(report.untrusted_records, vec!["untrusted-adapter".to_string()]);
+        assert_eq!(report.next_actions.len(), 1);
+        assert_eq!(report.next_actions[0].blocker_class, "untrusted-source-adapter");
+        assert_eq!(report.next_actions[0].command_hint, SOURCE_NEXT_ACTION_TRUST_PROVENANCE);
     }
 
     #[test]
@@ -2654,6 +2776,7 @@ mod tests {
         assert_eq!(report.ready_class, SourceReadiness::Ready);
         assert_eq!(report.record_count, 0);
         assert!(report.manifest_blake3.is_none());
+        assert!(report.next_actions.is_empty());
     }
 
     #[test]
