@@ -28,7 +28,7 @@ object_store = { version = "0.14.0", features = ["http"] }
 parking_lot = "0.12.3"
 petgraph = "0.6.5"
 pin-project-lite = "0.2.14"
-postcard = { version = "1", features = ["use-std"] }
+postcard = { version = "1", default-features = false, features = ["use-std"] }
 redb = { version = "3.1.1", features = ["logging"] }
 serde = { version = "1.0.209", features = ["derive"] }
 serde_bytes = "0.11"

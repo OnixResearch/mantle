@@ -8,7 +8,12 @@ Run dependency audit from repo root with the checked-in policy:
 SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo-deny check --config deny.toml
 ```
 
-Root policy lives in `deny.toml`. Default-policy or missing-policy output is not Mantle audit evidence.
+Root policy lives in `deny.toml`. Unconfigured cargo-deny output is not Mantle audit evidence.
+Validate audit transcripts before citing them:
+
+```sh
+cargo -Zscript scripts/check-dependency-audit-evidence.rs <evidence.md>
+```
 
 The policy governs four audit classes:
 
@@ -32,7 +37,7 @@ Current findings are classified into these buckets:
 
 Historical transcript: `openspec/changes/classify-dependency-audit-findings/evidence/cargo-deny-final.txt`
 
-Latest transcript: Cairn evidence for `refresh-dependency-security-audit` on 2026-07-03.
+Latest transcript: Cairn evidence for `resolve-dependency-audit-waivers` on 2026-07-03.
 
 | Finding | Crate(s) | Current classification | Current action |
 |---|---|---|---|
@@ -40,7 +45,7 @@ Latest transcript: Cairn evidence for `refresh-dependency-security-audit` on 202
 | RUSTSEC-2026-0104 | `rustls-webpki` | fixed | bumped lockfile to `rustls-webpki 0.103.13` |
 | RUSTSEC-2026-0194 / RUSTSEC-2026-0195 | `quick-xml` | upstream-blocked accepted waiver | latest `object_store 0.14.0` still caps `quick-xml` below the fixed 0.41 line |
 | RUSTSEC-2026-0173 | `proc-macro-error2` | upstream-blocked accepted waiver | path is `oci-spec` -> `getset`; latest `oci-spec 0.10.0` still depends on `getset` |
-| RUSTSEC-2023-0089 | `atomic-polyfill` | upstream-blocked accepted waiver | current path runs through `heapless` -> `postcard` |
+| RUSTSEC-2023-0089 | `atomic-polyfill` | fixed | disabled default `postcard` features in vendored snix crates so `heapless 0.7` / `atomic-polyfill` are no longer in `Cargo.lock` |
 | RUSTSEC-2024-0436 | `paste` | upstream-blocked accepted waiver | current path runs through `nickel-lang-core` |
 | RUSTSEC-2023-0056 | `vm-memory` | resolved/no longer encountered | stale waiver removed after current audit reported no matching advisory criteria |
 | RUSTSEC-2024-0002 | `vmm-sys-util` | resolved/no longer encountered | stale waiver removed after current audit reported no matching advisory criteria |
@@ -49,11 +54,10 @@ Latest transcript: Cairn evidence for `refresh-dependency-security-audit` on 202
 
 | Finding | Affected crate | Scope | Rationale | Review trigger |
 |---|---|---|---|---|
-| RUSTSEC-2023-0089 | `atomic-polyfill` | upstream-blocked transitive | enters through `heapless`/`postcard`; no repo-local patch-level upgrade removes it cleanly today | revisit when `heapless` or `postcard` moves to `portable-atomic` |
-| RUSTSEC-2024-0436 | `paste` | upstream-blocked transitive | enters through `nickel-lang-core`; removing it requires Nickel upstream or a larger carried fork | revisit when Nickel publishes a release that removes `paste` |
-| RUSTSEC-2026-0173 | `proc-macro-error2` | upstream-blocked transitive build-time proc macro | enters through `oci-spec` -> `getset`; latest checked `oci-spec 0.10.0` still uses `getset` | revisit when `oci-spec` removes `getset` or `getset` migrates away from `proc-macro-error2` |
-| RUSTSEC-2026-0194 | `quick-xml` | upstream-blocked transitive | enters through `object_store`; latest checked `object_store 0.14.0` still selects `quick-xml 0.40.1` below the fixed 0.41 line | revisit when `object_store` allows `quick-xml >= 0.41` |
-| RUSTSEC-2026-0195 | `quick-xml` | upstream-blocked transitive | same `object_store` cap as RUSTSEC-2026-0194 | revisit when `object_store` allows `quick-xml >= 0.41` |
+| RUSTSEC-2024-0436 | `paste` | upstream-blocked transitive | path is `crunch-eval` -> `nickel-lang-core 0.16.1` -> `paste`; removing it requires a Nickel upstream release or a carried Nickel core migration | revisit when Nickel publishes a paste-free core release or Mantle intentionally carries that migration |
+| RUSTSEC-2026-0173 | `proc-macro-error2` | upstream-blocked transitive build-time proc macro | path is `vendor/snix-build` -> `oci-spec 0.7.1` -> `getset 0.1.6` -> `proc-macro-error2`; latest checked `oci-spec 0.10.0` still uses `getset` | revisit when `oci-spec` removes `getset` or `getset` migrates away from `proc-macro-error2` |
+| RUSTSEC-2026-0194 | `quick-xml` | upstream-blocked transitive | path is `vendor/snix-castore` -> `object_store 0.14.0` -> `quick-xml 0.40.1`; `object_store 0.14.0` pins below the fixed 0.41 line | revisit when `object_store` allows `quick-xml >= 0.41` |
+| RUSTSEC-2026-0195 | `quick-xml` | upstream-blocked transitive | same `vendor/snix-castore` -> `object_store 0.14.0` -> `quick-xml 0.40.1` cap as RUSTSEC-2026-0194 | revisit when `object_store` allows `quick-xml >= 0.41` |
 
 ## Policy rules
 
