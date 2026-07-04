@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use data_encoding::HEXLOWER;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -44,6 +45,7 @@ const TRANSLATED_GRAPH_HASH_KIND: &str = "translated-graph";
 const SUBSTITUTION_POLICY_CLASSIFICATION: &str = "cache-hint-policy-data-store-admission-required";
 const OUTPUT_HASH_HEX_CHARS: usize = 32;
 const SOURCE_PAYLOAD_HASH_HEX_CHARS: usize = 32;
+const NIX_STORE_BASENAME_HASH_CHARS: usize = 32;
 const MAX_GRAPH_NODES: usize = 2048;
 const MAX_GRAPH_EDGES: usize = 256;
 const MAX_PACKAGE_INDEX_ENTRIES: usize = 128;
@@ -499,6 +501,31 @@ pub(crate) fn normalize_nix_derivation_json_export(
     }
 }
 
+pub(crate) fn normalize_nix_aterm_derivation_closure(
+    derivations: BTreeMap<String, nix_compat::derivation::Derivation>,
+) -> Result<NixDerivationJsonClosure, ImportDiagnostic> {
+    if derivations.is_empty() || derivations.len() > MAX_GRAPH_NODES {
+        return Err(diagnostic(
+            "nix-derivation-count-out-of-range",
+            None,
+            "Nix derivation closure size is outside supported limits",
+        ));
+    }
+    let mut closure = BTreeMap::new();
+    for (drv_key, derivation) in derivations {
+        let drv_path = normalize_nix_store_key(&drv_key)?;
+        let normalized_node = normalize_nix_aterm_derivation_node(&drv_path, derivation)?;
+        if closure.insert(drv_path, normalized_node).is_some() {
+            return Err(diagnostic(
+                "duplicate-nix-derivation-path",
+                None,
+                "Nix ATerm derivation closure contains duplicate derivation paths",
+            ));
+        }
+    }
+    Ok(closure)
+}
+
 pub(crate) fn lower_nix_derivation_json_closure(
     closure: &NixDerivationJsonClosure,
     config: &NixProducerConfig,
@@ -721,6 +748,95 @@ fn normalize_nix_store_paths(paths: Vec<String>) -> Result<Vec<String>, ImportDi
 
 fn normalize_nix_env(env: BTreeMap<String, String>) -> BTreeMap<String, String> {
     env.into_iter().map(|(key, value)| (key, normalize_nix_embedded_store_paths(&value))).collect()
+}
+
+fn normalize_nix_aterm_derivation_node(
+    drv_path: &str,
+    derivation: nix_compat::derivation::Derivation,
+) -> Result<NixDerivationJsonNode, ImportDiagnostic> {
+    let raw_env = nix_aterm_environment_to_strings(&derivation)?;
+    let env = normalize_nix_env(raw_env);
+    let name = env.get("name").cloned().unwrap_or_else(|| nix_derivation_name_from_path(drv_path));
+    let outputs = normalize_nix_outputs(nix_aterm_outputs_to_json(derivation.outputs), &env)?;
+    Ok(NixDerivationJsonNode {
+        name,
+        system: derivation.system,
+        builder: normalize_nix_path_field(&derivation.builder)?,
+        args: derivation.arguments,
+        env,
+        outputs,
+        input_drvs: nix_aterm_input_derivations_to_json(derivation.input_derivations),
+        input_srcs: nix_aterm_input_sources_to_json(derivation.input_sources),
+    })
+}
+
+fn nix_aterm_environment_to_strings(
+    derivation: &nix_compat::derivation::Derivation,
+) -> Result<BTreeMap<String, String>, ImportDiagnostic> {
+    let mut env = BTreeMap::new();
+    for (key, value) in &derivation.environment {
+        let value = std::str::from_utf8(value.as_ref()).map_err(|_| {
+            diagnostic("non-utf8-nix-derivation-env", None, "Nix derivation environment contains non-UTF-8 bytes")
+        })?;
+        env.insert(key.clone(), value.to_string());
+    }
+    Ok(env)
+}
+
+fn nix_aterm_outputs_to_json(
+    outputs: BTreeMap<String, nix_compat::derivation::Output>,
+) -> BTreeMap<String, NixDerivationJsonOutput> {
+    outputs
+        .into_iter()
+        .map(|(name, output)| {
+            let (hash, hash_algo) = nix_aterm_output_hash_fields(output.ca_hash.as_ref());
+            let path = output.path.map(|path| path.to_absolute_path());
+            (name, NixDerivationJsonOutput { path, hash, hash_algo })
+        })
+        .collect()
+}
+
+fn nix_aterm_output_hash_fields(hash: Option<&nix_compat::nixhash::CAHash>) -> (Option<String>, Option<String>) {
+    let Some(hash) = hash else {
+        return (None, None);
+    };
+    match hash {
+        nix_compat::nixhash::CAHash::Flat(digest) => {
+            (Some(HEXLOWER.encode(digest.digest_as_bytes())), Some(digest.algo().to_string()))
+        }
+        nix_compat::nixhash::CAHash::Nar(digest) => {
+            (Some(HEXLOWER.encode(digest.digest_as_bytes())), Some(format!("r:{}", digest.algo())))
+        }
+        nix_compat::nixhash::CAHash::Text(digest) => (Some(HEXLOWER.encode(digest.as_ref())), Some("text".to_string())),
+    }
+}
+
+fn nix_aterm_input_derivations_to_json(
+    input_drvs: BTreeMap<nix_compat::store_path::StorePath<String>, BTreeSet<String>>,
+) -> BTreeMap<String, NixDerivationJsonInput> {
+    input_drvs
+        .into_iter()
+        .map(|(drv_path, outputs)| {
+            (drv_path.to_absolute_path(), NixDerivationJsonInput {
+                outputs: outputs.into_iter().collect(),
+            })
+        })
+        .collect()
+}
+
+fn nix_aterm_input_sources_to_json(input_srcs: BTreeSet<nix_compat::store_path::StorePath<String>>) -> Vec<String> {
+    input_srcs.into_iter().map(|source| source.to_absolute_path()).collect()
+}
+
+fn nix_derivation_name_from_path(drv_path: &str) -> String {
+    let basename = drv_path.rsplit('/').next().unwrap_or(drv_path);
+    let component = basename.strip_suffix(NIX_DERIVATION_SUFFIX).unwrap_or(basename);
+    if component.len() > NIX_STORE_BASENAME_HASH_CHARS
+        && component.as_bytes().get(NIX_STORE_BASENAME_HASH_CHARS) == Some(&b'-')
+    {
+        return component[NIX_STORE_BASENAME_HASH_CHARS + 1..].to_string();
+    }
+    component.to_string()
 }
 
 fn normalize_nix_embedded_store_paths(value: &str) -> String {
@@ -1574,6 +1690,7 @@ mod tests {
     const OVERSIZED_FIELD_BYTES: usize = MAX_FIELD_BYTES + 1;
     const NIXPKGS_HELLO_DRV: &str = "/nix/store/22222222222222222222222222222222-hello.drv";
     const NIXPKGS_SOURCE_DRV: &str = "/nix/store/44444444444444444444444444444444-hello-source.drv";
+    const NIXPKGS_DERIVATION_COUNT: usize = 2;
     const NIXPKGS_HELLO_OUT: &str = "/nix/store/11111111111111111111111111111111-hello";
     const NIXPKGS_SOURCE_OUT: &str = "/nix/store/00000000000000000000000000000000-hello-source";
 
@@ -1641,6 +1758,29 @@ mod tests {
         assert_eq!(plan.substitution_audit[0].cache_url, CACHE_NIXOS_ORG_URL);
         assert!(plan.substitution_audit[0].store_admission_required);
         assert!(plan.forbidden_process_invocations.is_empty());
+    }
+
+    #[test]
+    fn nix_aterm_derivation_closure_lowering_preserves_graph_facts() {
+        let closure = normalize_nix_aterm_derivation_closure(nixpkgs_hello_aterm_closure()).unwrap();
+        let source = closure.get(NIXPKGS_SOURCE_DRV).expect("source drv should be present");
+        let hello = closure.get(NIXPKGS_HELLO_DRV).expect("hello drv should be present");
+        let artifacts = lower_nix_derivation_json_closure(&closure, &nixpkgs_producer_config()).unwrap();
+        let policy = nixpkgs_fixture_policy();
+
+        let (translated, receipt) =
+            translate_foreign_graph(&artifacts.graph, Some(&artifacts.package_index), &policy).unwrap();
+
+        assert_eq!(closure.len(), NIXPKGS_DERIVATION_COUNT);
+        assert_eq!(hello.input_drvs[NIXPKGS_SOURCE_DRV].outputs, vec![OUT_OUTPUT_NAME.to_string()]);
+        assert_eq!(
+            source.outputs[OUT_OUTPUT_NAME].hash.as_deref(),
+            Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(source.outputs[OUT_OUTPUT_NAME].hash_algo.as_deref(), Some("r:sha256"));
+        assert!(artifacts.graph.hash_domains.iter().any(|record| record.value == NIXPKGS_HELLO_DRV));
+        assert_eq!(translated.nodes.len(), NIXPKGS_DERIVATION_COUNT);
+        assert!(receipt.hash_domains.iter().any(|record| record.domain == MANTLE_RECEIPT_HASH_DOMAIN));
     }
 
     #[test]
@@ -1799,6 +1939,21 @@ mod tests {
         let mut closure = BTreeMap::new();
         closure.insert(NIXPKGS_SOURCE_DRV.to_string(), nixpkgs_source_derivation());
         closure.insert(NIXPKGS_HELLO_DRV.to_string(), nixpkgs_hello_derivation());
+        closure
+    }
+
+    fn nixpkgs_hello_aterm_closure() -> BTreeMap<String, nix_compat::derivation::Derivation> {
+        let mut closure = BTreeMap::new();
+        let source = nix_compat::derivation::Derivation::from_aterm_bytes(include_bytes!(
+            "../tests/fixtures/foreign-import/nixpkgs-hello-source.drv"
+        ))
+        .expect("source .drv should parse");
+        let hello = nix_compat::derivation::Derivation::from_aterm_bytes(include_bytes!(
+            "../tests/fixtures/foreign-import/nixpkgs-hello-root.drv"
+        ))
+        .expect("hello .drv should parse");
+        closure.insert(NIXPKGS_SOURCE_DRV.to_string(), source);
+        closure.insert(NIXPKGS_HELLO_DRV.to_string(), hello);
         closure
     }
 

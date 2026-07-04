@@ -12,6 +12,8 @@ const GUIX_INDEX: &str = "guix-hello.index.json";
 const NIX_GRAPH: &str = "nix-hello.graph.json";
 const NIX_INDEX: &str = "nix-hello.index.json";
 const NIXPKGS_DERIVATION_JSON: &str = "nixpkgs-hello.derivation-json.json";
+const NIXPKGS_ROOT_DRV_FILE: &str = "nixpkgs-hello-root.drv";
+const NIXPKGS_SOURCE_DRV_FILE: &str = "nixpkgs-hello-source.drv";
 const NIXPKGS_POLICY: &str = "nixpkgs-policy.json";
 const POLICY: &str = "policy.json";
 const GUIX_VALIDATE_SNAPSHOT: &str = "guix-hello.validate.snapshot.json";
@@ -26,8 +28,10 @@ const STALE_RECEIPT: &str = "stale-raw-graph-digest";
 const EMBEDDED_REWRITE: &str = "undeclared-embedded-source-rewrite";
 const UNTRUSTED_CACHE: &str = "untrusted-cache-hint";
 const SANDBOX_CAPABILITY: &str = "undeclared-sandbox-capability";
+const MALFORMED_NIX_DERIVATION: &str = "malformed-nix-derivation";
 const FAKE_PATH_DIR: &str = "fake-path";
 const NIXPKGS_HELLO_DRV: &str = "/nix/store/22222222222222222222222222222222-hello.drv";
+const NIXPKGS_SOURCE_DRV: &str = "/nix/store/44444444444444444444444444444444-hello-source.drv";
 const CACHE_NIXOS_ORG: &str = "https://cache.nixos.org";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
 
@@ -157,8 +161,97 @@ fn foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_withou
     let out_dir = temp.path().join("artifacts");
     fs::create_dir(&fake_path).expect("fake PATH should be created");
 
-    let produce = mantle_cmd()
+    let produce = produce_nixpkgs_json_artifacts(&fake_path, &out_dir);
+    let produce_report: Value = serde_json::from_slice(&produce.stdout).expect("stdout should be JSON");
+    let graph = out_dir.join("nixpkgs.graph.json");
+    let index = out_dir.join("nixpkgs.index.json");
+
+    assert_eq!(produce_report["accepted"], true);
+    assert!(graph.exists());
+    assert!(index.exists());
+    assert!(produce.stderr.is_empty());
+
+    let validate = run_validate_json(graph.clone(), index.clone(), fixture_path(NIXPKGS_POLICY));
+    let plan = run_plan_json(graph, index, fixture_path(NIXPKGS_POLICY));
+
+    assert_eq!(validate["accepted"], true);
+    assert!(validate["receipt"]["hash_domains"].as_array().unwrap().len() > 1);
+    assert_eq!(plan["accepted"], true);
+    assert_eq!(plan["plan"]["substitution_audit"][0]["cache_url"], CACHE_NIXOS_ORG);
+    assert_eq!(plan["plan"]["substitution_audit"][0]["store_admission_required"], true);
+    assert!(plan["plan"]["forbidden_process_invocations"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn foreign_import_cli_produces_nixpkgs_artifacts_from_drv_files_without_nix() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let fake_path = temp.path().join(FAKE_PATH_DIR);
+    let out_dir = temp.path().join("drv-artifacts");
+    fs::create_dir(&fake_path).expect("fake PATH should be created");
+
+    let produce = produce_nixpkgs_drv_artifacts(&fake_path, &out_dir);
+    let produce_report: Value = serde_json::from_slice(&produce.stdout).expect("stdout should be JSON");
+    let graph = out_dir.join("nixpkgs.graph.json");
+    let index = out_dir.join("nixpkgs.index.json");
+
+    assert_eq!(produce_report["accepted"], true);
+    assert!(graph.exists());
+    assert!(index.exists());
+    assert!(produce.stderr.is_empty());
+
+    let validate = run_validate_json(graph.clone(), index.clone(), fixture_path(NIXPKGS_POLICY));
+    let plan = run_plan_json(graph, index, fixture_path(NIXPKGS_POLICY));
+
+    assert_eq!(validate["accepted"], true);
+    assert!(validate["receipt"]["hash_domains"].as_array().unwrap().len() > 1);
+    assert_eq!(plan["accepted"], true);
+    assert_eq!(plan["plan"]["substitution_audit"][0]["cache_url"], CACHE_NIXOS_ORG);
+    assert!(plan["plan"]["forbidden_process_invocations"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn foreign_import_cli_rejects_malformed_drv_without_partial_artifacts() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let fake_path = temp.path().join(FAKE_PATH_DIR);
+    let out_dir = temp.path().join("malformed-artifacts");
+    let malformed_drv = temp.path().join("malformed.drv");
+    fs::create_dir(&fake_path).expect("fake PATH should be created");
+    fs::write(&malformed_drv, "not a derivation").expect("malformed drv should be written");
+
+    let drv_arg = format!("{NIXPKGS_HELLO_DRV}={}", path_str(&malformed_drv));
+    let output = mantle_cmd()
         .env("PATH", &fake_path)
+        .args([
+            "--json",
+            "foreign-import",
+            "produce-nix",
+            "--drv",
+            &drv_arg,
+            "--root-derivation",
+            NIXPKGS_HELLO_DRV,
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--producer-identity",
+            "nixpkgs:malformed-drv-fixture",
+            "--out-dir",
+            path_str(&out_dir),
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .clone();
+
+    assert_rejected_class(output.stdout, MALFORMED_NIX_DERIVATION);
+    assert!(output.stderr.is_empty());
+    assert!(!out_dir.join("nixpkgs.graph.json").exists());
+    assert!(!out_dir.join("nixpkgs.index.json").exists());
+}
+
+fn produce_nixpkgs_json_artifacts(fake_path: &Path, out_dir: &Path) -> std::process::Output {
+    mantle_cmd()
+        .env("PATH", fake_path)
         .args([
             "--json",
             "foreign-import",
@@ -180,30 +273,48 @@ fn foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_withou
             "--cache-trust-scope",
             TRUSTED_CACHE_SCOPE,
             "--out-dir",
-            path_str(&out_dir),
+            path_str(out_dir),
         ])
         .assert()
         .success()
         .get_output()
-        .clone();
-    let produce_report: Value = serde_json::from_slice(&produce.stdout).expect("stdout should be JSON");
-    let graph = out_dir.join("nixpkgs.graph.json");
-    let index = out_dir.join("nixpkgs.index.json");
+        .clone()
+}
 
-    assert_eq!(produce_report["accepted"], true);
-    assert!(graph.exists());
-    assert!(index.exists());
-    assert!(produce.stderr.is_empty());
-
-    let validate = run_validate_json(graph.clone(), index.clone(), fixture_path(NIXPKGS_POLICY));
-    let plan = run_plan_json(graph, index, fixture_path(NIXPKGS_POLICY));
-
-    assert_eq!(validate["accepted"], true);
-    assert!(validate["receipt"]["hash_domains"].as_array().unwrap().len() > 1);
-    assert_eq!(plan["accepted"], true);
-    assert_eq!(plan["plan"]["substitution_audit"][0]["cache_url"], CACHE_NIXOS_ORG);
-    assert_eq!(plan["plan"]["substitution_audit"][0]["store_admission_required"], true);
-    assert!(plan["plan"]["forbidden_process_invocations"].as_array().unwrap().is_empty());
+fn produce_nixpkgs_drv_artifacts(fake_path: &Path, out_dir: &Path) -> std::process::Output {
+    let root_drv = format!("{NIXPKGS_HELLO_DRV}={}", path_str(&fixture_path(NIXPKGS_ROOT_DRV_FILE)));
+    let source_drv = format!("{NIXPKGS_SOURCE_DRV}={}", path_str(&fixture_path(NIXPKGS_SOURCE_DRV_FILE)));
+    mantle_cmd()
+        .env("PATH", fake_path)
+        .args([
+            "--json",
+            "foreign-import",
+            "produce-nix",
+            "--drv",
+            &root_drv,
+            "--drv",
+            &source_drv,
+            "--root-derivation",
+            NIXPKGS_HELLO_DRV,
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--producer-identity",
+            "nixpkgs:hello-drv-fixture",
+            "--producer-revision",
+            "fixture-revision",
+            "--cache-url",
+            CACHE_NIXOS_ORG,
+            "--cache-trust-scope",
+            TRUSTED_CACHE_SCOPE,
+            "--out-dir",
+            path_str(out_dir),
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .clone()
 }
 
 fn run_validate_json(graph: PathBuf, index: PathBuf, policy: PathBuf) -> Value {

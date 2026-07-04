@@ -19,6 +19,7 @@ use crate::foreign_derivation_import::TranslationPolicy;
 use crate::foreign_derivation_import::admit_translated_graph;
 use crate::foreign_derivation_import::foreign_import_non_claims;
 use crate::foreign_derivation_import::lower_nix_derivation_json_closure;
+use crate::foreign_derivation_import::normalize_nix_aterm_derivation_closure;
 use crate::foreign_derivation_import::normalize_nix_derivation_json_export;
 use crate::foreign_derivation_import::plan_mantle_foreign_import;
 use crate::foreign_derivation_import::translate_foreign_graph;
@@ -38,6 +39,7 @@ const DEFAULT_PRODUCER_REVISION: &str = "unknown";
 const DEFAULT_CACHE_TRUST_SCOPE: &str = "trusted-binary-cache";
 const NIXPKGS_GRAPH_FILE: &str = "nixpkgs.graph.json";
 const NIXPKGS_INDEX_FILE: &str = "nixpkgs.index.json";
+const DRV_SPEC_SEPARATOR: char = '=';
 
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum ForeignImportAction {
@@ -84,13 +86,18 @@ pub(crate) enum ForeignImportAction {
         system: String,
     },
 
-    /// Lower concrete Nix derivation-JSON closure facts into foreign import artifacts
+    /// Lower concrete Nix derivation facts into foreign import artifacts
     ProduceNix {
         /// Path to `nix derivation show --recursive --json`-style closure JSON
         #[arg(long = "derivation-json")]
-        derivation_json: PathBuf,
+        derivation_json: Option<PathBuf>,
 
-        /// Concrete root `.drv` path inside the derivation JSON closure
+        /// Explicit logical `.drv` path to ATerm file mapping:
+        /// `/nix/store/...drv=/path/to/file.drv`
+        #[arg(long = "drv")]
+        drv_files: Vec<String>,
+
+        /// Concrete root `.drv` path inside the provided derivation closure
         #[arg(long = "root-derivation")]
         root_derivation: String,
 
@@ -165,6 +172,7 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
         } => run_plan(&graph, &package_index, &policy, &package, &system, json),
         ForeignImportAction::ProduceNix {
             derivation_json,
+            drv_files,
             root_derivation,
             package,
             system,
@@ -175,7 +183,8 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
             unsupported_metadata_classes,
             out_dir,
         } => run_produce_nix(
-            &derivation_json,
+            derivation_json.as_deref(),
+            &drv_files,
             &root_derivation,
             &package,
             &system,
@@ -242,7 +251,8 @@ fn run_plan(
 }
 
 fn run_produce_nix(
-    derivation_json_path: &Path,
+    derivation_json_path: Option<&Path>,
+    drv_file_specs: &[String],
     root_derivation: &str,
     package: &str,
     system: &str,
@@ -254,14 +264,9 @@ fn run_produce_nix(
     out_dir: &Path,
     json: bool,
 ) -> Result<(), RunError> {
-    let export =
-        match read_json::<NixDerivationJsonExport>(derivation_json_path, "derivation-json", PRODUCE_NIX_COMMAND)? {
-            Ok(export) => export,
-            Err(report) => return emit_report(report, json),
-        };
-    let closure = match normalize_nix_derivation_json_export(export) {
+    let closure = match read_nix_producer_closure(derivation_json_path, drv_file_specs)? {
         Ok(closure) => closure,
-        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_NIX_COMMAND, diagnostic), json),
+        Err(report) => return emit_report(report, json),
     };
     let config = NixProducerConfig {
         package_name: package.to_string(),
@@ -290,6 +295,108 @@ fn run_produce_nix(
     write_json_file(&graph_path, &artifacts.graph)?;
     write_json_file(&index_path, &artifacts.package_index)?;
     emit_report(producer_report(&graph_path, &index_path), json)
+}
+
+fn read_nix_producer_closure(
+    derivation_json_path: Option<&Path>,
+    drv_file_specs: &[String],
+) -> Result<Result<crate::foreign_derivation_import::NixDerivationJsonClosure, ForeignImportCliReport>, RunError> {
+    match (derivation_json_path, drv_file_specs.is_empty()) {
+        (Some(_), false) => Ok(Err(rejected_report(
+            PRODUCE_NIX_COMMAND,
+            diagnostic(
+                "nix-producer-input-mode-conflict",
+                None,
+                "provide either --derivation-json or --drv inputs, not both",
+            ),
+        ))),
+        (None, true) => Ok(Err(rejected_report(
+            PRODUCE_NIX_COMMAND,
+            diagnostic(
+                "missing-nix-producer-input",
+                None,
+                "provide --derivation-json or at least one --drv logical=file input",
+            ),
+        ))),
+        (Some(path), true) => read_nix_derivation_json_closure(path),
+        (None, false) => read_nix_aterm_drv_closure(drv_file_specs),
+    }
+}
+
+fn read_nix_derivation_json_closure(
+    derivation_json_path: &Path,
+) -> Result<Result<crate::foreign_derivation_import::NixDerivationJsonClosure, ForeignImportCliReport>, RunError> {
+    let export =
+        match read_json::<NixDerivationJsonExport>(derivation_json_path, "derivation-json", PRODUCE_NIX_COMMAND)? {
+            Ok(export) => export,
+            Err(report) => return Ok(Err(report)),
+        };
+    Ok(match normalize_nix_derivation_json_export(export) {
+        Ok(closure) => Ok(closure),
+        Err(diagnostic) => Err(rejected_report(PRODUCE_NIX_COMMAND, diagnostic)),
+    })
+}
+
+fn read_nix_aterm_drv_closure(
+    drv_file_specs: &[String],
+) -> Result<Result<crate::foreign_derivation_import::NixDerivationJsonClosure, ForeignImportCliReport>, RunError> {
+    let mut derivations = std::collections::BTreeMap::new();
+    for spec in drv_file_specs {
+        let (logical_path, file_path) = match parse_drv_file_spec(spec) {
+            Ok(pair) => pair,
+            Err(diagnostic) => return Ok(Err(rejected_report(PRODUCE_NIX_COMMAND, diagnostic))),
+        };
+        let bytes = match fs::read(&file_path) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                return Ok(Err(rejected_report(
+                    PRODUCE_NIX_COMMAND,
+                    diagnostic(
+                        "unreadable-nix-derivation-file",
+                        None,
+                        &format!("reading {}: {error}", file_path.display()),
+                    ),
+                )));
+            }
+        };
+        let derivation = match nix_compat::derivation::Derivation::from_aterm_bytes(&bytes) {
+            Ok(derivation) => derivation,
+            Err(error) => {
+                return Ok(Err(rejected_report(
+                    PRODUCE_NIX_COMMAND,
+                    diagnostic("malformed-nix-derivation", None, &format!("{logical_path}: {error:?}")),
+                )));
+            }
+        };
+        if derivations.insert(logical_path, derivation).is_some() {
+            return Ok(Err(rejected_report(
+                PRODUCE_NIX_COMMAND,
+                diagnostic("duplicate-nix-derivation-path", None, "duplicate --drv logical derivation path"),
+            )));
+        }
+    }
+    Ok(match normalize_nix_aterm_derivation_closure(derivations) {
+        Ok(closure) => Ok(closure),
+        Err(diagnostic) => Err(rejected_report(PRODUCE_NIX_COMMAND, diagnostic)),
+    })
+}
+
+fn parse_drv_file_spec(spec: &str) -> Result<(String, PathBuf), ImportDiagnostic> {
+    let Some((logical_path, file_path)) = spec.split_once(DRV_SPEC_SEPARATOR) else {
+        return Err(diagnostic(
+            "malformed-nix-derivation-input",
+            None,
+            "--drv must be formatted as /nix/store/name.drv=/path/to/file.drv",
+        ));
+    };
+    if logical_path.is_empty() || file_path.is_empty() {
+        return Err(diagnostic(
+            "malformed-nix-derivation-input",
+            None,
+            "--drv logical path and file path must both be non-empty",
+        ));
+    }
+    Ok((logical_path.to_string(), PathBuf::from(file_path)))
 }
 
 fn validate_inputs(

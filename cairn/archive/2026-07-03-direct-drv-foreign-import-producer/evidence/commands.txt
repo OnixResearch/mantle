@@ -1,0 +1,42 @@
+# Direct `.drv` foreign import producer evidence
+
+Date: 2026-07-03
+
+## Baseline
+
+- `pueue_log id=30` before edits: `nix develop -c cargo test -p mantle --bin mantle foreign_derivation_import::` passed with `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 1137 filtered out; finished in 0.00s`.
+
+## Implementation validation
+
+- `pueue_run` task 23: `nix develop -c cargo fmt -p mantle --check` completed successfully.
+- `pueue_run` task 24: `nix develop -c cargo test -p mantle --bin mantle foreign_derivation_import::` passed with `test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1137 filtered out; finished in 0.00s`.
+- `pueue_run` task 25: `nix develop -c cargo test -p mantle --test foreign_import_cli` passed with `test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s`.
+- `pueue_run` task 26: `git diff --check` completed successfully.
+- `pueue_run` task 29: `nix run path:/home/brittonr/git/cairn#cairn -- validate --root .` returned `valid: true`, `issues: []`, `changes: 1`, `specs_validated: 17`.
+- `pueue_run` task 32: `nix run path:/home/brittonr/git/cairn#cairn -- gate proposal direct-drv-foreign-import-producer --root .` returned `stage: proposal`, `valid: true`, `verdict: PASS`, `issues: []`.
+- `pueue_run` task 35: `nix run path:/home/brittonr/git/cairn#cairn -- gate design direct-drv-foreign-import-producer --root .` returned `stage: design`, `valid: true`, `verdict: PASS`, `issues: []`.
+- `pueue_run` task 36: `nix run path:/home/brittonr/git/cairn#cairn -- gate tasks direct-drv-foreign-import-producer --root .` returned `stage: tasks`, `valid: true`, `verdict: PASS`, `issues: []`.
+- `pueue_run` task 42 after checking off `tasks.md`: `nix run path:/home/brittonr/git/cairn#cairn -- validate --root . && nix run path:/home/brittonr/git/cairn#cairn -- gate tasks direct-drv-foreign-import-producer --root .` returned final `stage: tasks`, `valid: true`, `verdict: PASS`, `issues: []`.
+
+## Scope notes
+
+- The positive CLI test uses a fake `PATH` and explicit `--drv /nix/store/...drv=<fixture>` mappings.
+- The negative CLI test feeds a malformed `.drv` file and asserts `malformed-nix-derivation` plus no emitted graph/index artifacts.
+- This evidence proves only direct `.drv` artifact production, validation, and planning. It does not prove substitution, rebuild compatibility, output trust, package correctness, reproducibility, or Nixpkgs source evaluation.
+
+## Post-archive validation
+
+Command: `nix run path:/home/brittonr/git/cairn#cairn -- validate --root .`
+
+```text
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 16,
+  "valid": true
+}
+```
