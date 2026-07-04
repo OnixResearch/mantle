@@ -10,6 +10,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 const REALIZATION_KEY_SCHEMA: &str = "crunch-realization-key-v1";
+const MAX_READY_REMOTE_GOALS: usize = 4096;
+const REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION: &str = "request-validation";
+const REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH: &str = "remote-dispatch";
 
 /// Stable provider-neutral key for a derivation realization request.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -383,6 +386,186 @@ where S: snix_build::buildservice::BuildService + Send + Sync
     ) -> std::io::Result<snix_build::buildservice::BuildResult> {
         self.service.do_build(request).await
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteBuildFallbackPolicy {
+    Never,
+    OnRemoteFailure,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum RemoteBuildServiceDispatchError {
+    #[error("remote build service {phase} failed: {reason}")]
+    Phase { phase: &'static str, reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteFailureDecision {
+    ReturnFailure(RemoteBuildServiceDispatchError),
+    FallbackToLocal { phase: &'static str, reason: String },
+}
+
+pub fn validate_remote_build_service_request(
+    request: &snix_build::buildservice::BuildRequest,
+) -> Result<(), RemoteBuildServiceDispatchError> {
+    if request.command_args.is_empty() {
+        return Err(RemoteBuildServiceDispatchError::Phase {
+            phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
+            reason: "remote-build-service-raw-eval-request".to_string(),
+        });
+    }
+    if request.outputs.is_empty() {
+        return Err(RemoteBuildServiceDispatchError::Phase {
+            phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
+            reason: "remote-build-service-outputs-empty".to_string(),
+        });
+    }
+    Ok(())
+}
+
+pub fn classify_remote_build_service_failure(
+    policy: RemoteBuildFallbackPolicy,
+    phase: &'static str,
+    reason: impl Into<String>,
+) -> RemoteFailureDecision {
+    let reason = reason.into();
+    match policy {
+        RemoteBuildFallbackPolicy::Never => {
+            RemoteFailureDecision::ReturnFailure(RemoteBuildServiceDispatchError::Phase { phase, reason })
+        }
+        RemoteBuildFallbackPolicy::OnRemoteFailure => RemoteFailureDecision::FallbackToLocal { phase, reason },
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteGoalAttachment {
+    StartRemote {
+        goal_key: String,
+        realization_key: RealizationKey,
+    },
+    AttachToExisting {
+        goal_key: String,
+        realization_key: RealizationKey,
+        owner_goal_key: String,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RemoteScheduleError {
+    #[error("too many ready remote goals; maximum is {max}")]
+    TooManyReadyGoals { max: usize },
+    #[error(transparent)]
+    Key(#[from] RealizationKeyError),
+}
+
+pub fn plan_remote_goal_attachments<D>(
+    deriver: &D,
+    ready: &[ReadyDerivationGoal],
+    active_remote_jobs: &BTreeMap<RealizationKey, String>,
+) -> Result<Vec<RemoteGoalAttachment>, RemoteScheduleError>
+where
+    D: RealizationKeyDeriver,
+{
+    if ready.len() > MAX_READY_REMOTE_GOALS {
+        return Err(RemoteScheduleError::TooManyReadyGoals {
+            max: MAX_READY_REMOTE_GOALS,
+        });
+    }
+    let mut owners = active_remote_jobs.clone();
+    let mut attachments = Vec::with_capacity(ready.len());
+    for goal in ready {
+        let realization_key = deriver.derive_key(&goal.request)?;
+        if let Some(owner_goal_key) = owners.get(&realization_key) {
+            attachments.push(RemoteGoalAttachment::AttachToExisting {
+                goal_key: goal.goal_key.clone(),
+                realization_key,
+                owner_goal_key: owner_goal_key.clone(),
+            });
+        } else {
+            owners.insert(realization_key.clone(), goal.goal_key.clone());
+            attachments.push(RemoteGoalAttachment::StartRemote {
+                goal_key: goal.goal_key.clone(),
+                realization_key,
+            });
+        }
+    }
+    Ok(attachments)
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteBuildServiceAdapter<R> {
+    remote: R,
+}
+
+impl<R> RemoteBuildServiceAdapter<R> {
+    pub fn new(remote: R) -> Self {
+        Self { remote }
+    }
+}
+
+#[async_trait::async_trait]
+impl<R> snix_build::buildservice::BuildService for RemoteBuildServiceAdapter<R>
+where R: DerivationRealizer
+{
+    async fn do_build(
+        &self,
+        request: snix_build::buildservice::BuildRequest,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        validate_remote_build_service_request(&request).map_err(remote_dispatch_io_error)?;
+        self.remote.realize(request).await.map_err(|source| {
+            remote_dispatch_io_error(RemoteBuildServiceDispatchError::Phase {
+                phase: REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH,
+                reason: source.to_string(),
+            })
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteFirstBuildService<R, L> {
+    remote: R,
+    local: L,
+    fallback_policy: RemoteBuildFallbackPolicy,
+}
+
+impl<R, L> RemoteFirstBuildService<R, L> {
+    pub fn new(remote: R, local: L, fallback_policy: RemoteBuildFallbackPolicy) -> Self {
+        Self {
+            remote,
+            local,
+            fallback_policy,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl<R, L> snix_build::buildservice::BuildService for RemoteFirstBuildService<R, L>
+where
+    R: DerivationRealizer,
+    L: snix_build::buildservice::BuildService,
+{
+    async fn do_build(
+        &self,
+        request: snix_build::buildservice::BuildRequest,
+    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        validate_remote_build_service_request(&request).map_err(remote_dispatch_io_error)?;
+        match self.remote.realize(request.clone()).await {
+            Ok(result) => Ok(result),
+            Err(source) => match classify_remote_build_service_failure(
+                self.fallback_policy,
+                REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH,
+                source.to_string(),
+            ) {
+                RemoteFailureDecision::ReturnFailure(error) => Err(remote_dispatch_io_error(error)),
+                RemoteFailureDecision::FallbackToLocal { .. } => self.local.do_build(request).await,
+            },
+        }
+    }
+}
+
+fn remote_dispatch_io_error(error: RemoteBuildServiceDispatchError) -> std::io::Error {
+    std::io::Error::other(error.to_string())
 }
 
 pub const HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION: &str = "mantle-hash-negotiated-remote-realization-v1";
@@ -853,8 +1036,11 @@ where F: Fn(&'a T) -> &'a str {
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_ne;
+    use snix_build::buildservice::BuildService;
 
     use super::*;
+
+    const TEST_PROFILE_VERSION: u32 = 1;
 
     fn base_request() -> RealizationKeyRequest {
         RealizationKeyRequest {
@@ -913,6 +1099,26 @@ mod tests {
 
     fn key(request: &RealizationKeyRequest) -> RealizationKey {
         DefaultRealizationKeyDeriver.derive_key(request).unwrap()
+    }
+
+    fn concrete_build_request() -> snix_build::buildservice::BuildRequest {
+        snix_build::buildservice::BuildRequest {
+            command_args: vec!["/bin/build".to_string(), "arg".to_string()],
+            outputs: vec![std::path::PathBuf::from("mantle/store/example-out")],
+            ..Default::default()
+        }
+    }
+
+    fn build_result(log: &str) -> snix_build::buildservice::BuildResult {
+        snix_build::buildservice::BuildResult {
+            outputs: vec![snix_build::buildservice::BuildOutput {
+                node: snix_castore::Node::Symlink {
+                    target: log.try_into().unwrap(),
+                },
+                output_needles: std::collections::BTreeSet::new(),
+            }],
+            log: Some(log.to_string()),
+        }
     }
 
     fn verified_artifact() -> VerifiedRealizationArtifact {
@@ -1322,6 +1528,170 @@ mod tests {
     #[test]
     fn remote_allowed_policy_allows_remote_realizer() {
         assert_eq!(RemoteAllowedRealizationPolicy.plan_for(&base_request()), RealizationPlan::AllowRemote);
+    }
+
+    #[test]
+    fn remote_goal_attachments_start_once_and_attach_duplicate_key() {
+        let ready = vec![
+            ReadyDerivationGoal {
+                goal_key: "root-a".to_string(),
+                request: base_request(),
+            },
+            ReadyDerivationGoal {
+                goal_key: "root-b".to_string(),
+                request: base_request(),
+            },
+        ];
+        let attachments = plan_remote_goal_attachments(&DefaultRealizationKeyDeriver, &ready, &BTreeMap::new())
+            .expect("remote goal attachment plans");
+
+        assert_eq!(attachments.len(), ready.len());
+        assert!(
+            matches!(attachments[0], RemoteGoalAttachment::StartRemote { ref goal_key, .. } if goal_key == "root-a")
+        );
+        assert!(matches!(
+            attachments[1],
+            RemoteGoalAttachment::AttachToExisting { ref goal_key, ref owner_goal_key, .. }
+                if goal_key == "root-b" && owner_goal_key == "root-a"
+        ));
+    }
+
+    #[test]
+    fn remote_goal_attachments_reject_unbounded_ready_sets() {
+        let ready = vec![
+            ReadyDerivationGoal {
+                goal_key: "root".to_string(),
+                request: base_request(),
+            };
+            MAX_READY_REMOTE_GOALS.saturating_add(1)
+        ];
+        let err = plan_remote_goal_attachments(&DefaultRealizationKeyDeriver, &ready, &BTreeMap::new())
+            .expect_err("unbounded remote ready set rejected");
+
+        assert!(matches!(err, RemoteScheduleError::TooManyReadyGoals {
+            max: MAX_READY_REMOTE_GOALS
+        }));
+    }
+
+    #[test]
+    fn remote_build_service_adapter_dispatches_concrete_ready_goal() {
+        #[derive(Clone)]
+        struct RecordingRemoteRealizer(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+        #[async_trait::async_trait]
+        impl DerivationRealizer for RecordingRemoteRealizer {
+            fn profile(&self) -> RealizerProfileFacts {
+                RealizerProfileFacts {
+                    name: "remote".to_string(),
+                    version: TEST_PROFILE_VERSION,
+                    capabilities: vec!["remote-build".to_string()],
+                    parameters: BTreeMap::new(),
+                }
+            }
+
+            async fn realize(
+                &self,
+                request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                validate_remote_build_service_request(&request).unwrap();
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(build_result("remote"))
+            }
+        }
+
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let service = RemoteBuildServiceAdapter::new(RecordingRemoteRealizer(calls.clone()));
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let result = rt.block_on(service.do_build(concrete_build_request())).unwrap();
+
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(result.outputs.len(), 1);
+        assert_eq!(result.log.as_deref(), Some("remote"));
+    }
+
+    #[test]
+    fn remote_build_service_rejects_raw_or_incomplete_requests() {
+        let mut raw = concrete_build_request();
+        raw.command_args.clear();
+        let err = validate_remote_build_service_request(&raw).expect_err("raw frontend request rejected");
+        assert!(matches!(
+            err,
+            RemoteBuildServiceDispatchError::Phase {
+                phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
+                reason
+            } if reason == "remote-build-service-raw-eval-request"
+        ));
+
+        let mut incomplete = concrete_build_request();
+        incomplete.outputs.clear();
+        let err = validate_remote_build_service_request(&incomplete).expect_err("output-less request rejected");
+        assert!(matches!(
+            err,
+            RemoteBuildServiceDispatchError::Phase {
+                phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
+                reason
+            } if reason == "remote-build-service-outputs-empty"
+        ));
+    }
+
+    #[test]
+    fn remote_first_fallback_requires_explicit_policy() {
+        #[derive(Clone)]
+        struct FailingRemote;
+
+        #[async_trait::async_trait]
+        impl DerivationRealizer for FailingRemote {
+            fn profile(&self) -> RealizerProfileFacts {
+                RealizerProfileFacts {
+                    name: "remote".to_string(),
+                    version: TEST_PROFILE_VERSION,
+                    capabilities: vec!["remote-build".to_string()],
+                    parameters: BTreeMap::new(),
+                }
+            }
+
+            async fn realize(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                Err(std::io::Error::other("remote denied"))
+            }
+        }
+
+        #[derive(Clone)]
+        struct CountingLocal(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+        #[async_trait::async_trait]
+        impl snix_build::buildservice::BuildService for CountingLocal {
+            async fn do_build(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(build_result("local"))
+            }
+        }
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let denied_local_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let denied = RemoteFirstBuildService::new(
+            FailingRemote,
+            CountingLocal(denied_local_calls.clone()),
+            RemoteBuildFallbackPolicy::Never,
+        );
+        let err = rt.block_on(denied.do_build(concrete_build_request())).unwrap_err();
+        assert!(err.to_string().contains(REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH));
+        assert_eq!(denied_local_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+        let allowed_local_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let allowed = RemoteFirstBuildService::new(
+            FailingRemote,
+            CountingLocal(allowed_local_calls.clone()),
+            RemoteBuildFallbackPolicy::OnRemoteFailure,
+        );
+        let result = rt.block_on(allowed.do_build(concrete_build_request())).unwrap();
+        assert_eq!(allowed_local_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(result.log.as_deref(), Some("local"));
     }
 
     #[test]
