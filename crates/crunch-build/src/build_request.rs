@@ -24,6 +24,8 @@ use snix_castore::Node;
 use crate::HermeticityAuditEvent;
 use crate::HermeticityAuditKind;
 use crate::HermeticityMode;
+use crate::network_policy::CompatibilityNetworkPolicy;
+use crate::network_policy::plan_network_policy;
 use crate::registry::DerivationRegistry;
 
 /// Environment variables that crunch sets in every sandbox build,
@@ -75,6 +77,7 @@ pub struct NormalizedBuildEnvironment {
 pub struct BuildRequestEnvelope {
     pub build_request: BuildRequest,
     pub audit_events: Vec<HermeticityAuditEvent>,
+    pub network_policy_report: crate::BuildNetworkPolicyReport,
 }
 
 pub fn derivation_to_build_request(
@@ -84,10 +87,18 @@ pub fn derivation_to_build_request(
     hermeticity_mode: HermeticityMode,
 ) -> Result<BuildRequestEnvelope, crate::Error> {
     let normalized = normalize_build_environment(derivation, store_dir, hermeticity_mode)?;
-    let build_request = build_request_from_environment(derivation, inputs, store_dir, normalized.environment_vars)?;
+    let network_policy = plan_network_policy(derivation, CompatibilityNetworkPolicy::DenyAll)?;
+    let build_request = build_request_from_environment(
+        derivation,
+        inputs,
+        store_dir,
+        normalized.environment_vars,
+        network_policy.allow_network,
+    )?;
     Ok(BuildRequestEnvelope {
         build_request,
         audit_events: normalized.audit_events,
+        network_policy_report: network_policy.report,
     })
 }
 
@@ -116,6 +127,7 @@ pub(crate) fn build_request_from_environment(
     inputs: &BTreeMap<StorePath<String>, Node>,
     store_dir: &str,
     environment_vars: BTreeMap<String, Vec<u8>>,
+    allow_network: bool,
 ) -> Result<BuildRequest, crate::Error> {
     // Tiger Style: assert preconditions.
     debug_assert!(!derivation.builder.is_empty(), "builder must not be empty");
@@ -124,7 +136,7 @@ pub(crate) fn build_request_from_environment(
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
 
     let command_args = build_command_args(derivation);
-    let constraints = build_constraints(derivation);
+    let constraints = build_constraints(derivation, allow_network);
     let refscan_needles = build_refscan_needles(derivation, inputs);
 
     // Tiger Style: assert command_args has at least the builder.
@@ -229,13 +241,12 @@ fn format_env_value(value: &[u8]) -> String {
 }
 
 /// Build sandbox constraints from derivation properties.
-fn build_constraints(derivation: &Derivation) -> HashSet<BuildConstraints> {
+fn build_constraints(derivation: &Derivation, allow_network: bool) -> HashSet<BuildConstraints> {
     let mut constraints = HashSet::from([
         BuildConstraints::System(derivation.system.clone()),
         BuildConstraints::ProvideBinSh,
     ]);
-    let is_fod = derivation.outputs.len() == 1 && derivation.outputs.get("out").is_some_and(|o| o.is_fixed());
-    if is_fod {
+    if allow_network {
         constraints.insert(BuildConstraints::NetworkAccess);
     }
     constraints
@@ -551,6 +562,47 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_build_request_denies_network_by_default() {
+        let drv = test_derivation();
+        let envelope =
+            derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical).unwrap();
+
+        assert!(!envelope.build_request.constraints.contains(&BuildConstraints::NetworkAccess));
+        assert_eq!(envelope.network_policy_report.action_name, "test");
+        assert_eq!(envelope.network_policy_report.mode, crate::network_policy::NETWORK_MODE_OFFLINE);
+        assert_eq!(envelope.network_policy_report.result, crate::network_policy::NETWORK_RESULT_DENIED);
+    }
+
+    #[test]
+    fn declared_network_capability_is_rejected_before_build_request() {
+        let mut drv = test_derivation();
+        drv.environment.insert(
+            crate::network_policy::ENV_NETWORK_CAPABILITY.to_string(),
+            crate::network_policy::NETWORK_CAPABILITY_BUILD_TIME.into(),
+        );
+        drv.environment.insert(
+            crate::network_policy::ENV_NETWORK_POLICY_BASIS.to_string(),
+            "compat-policy:legacy-upstream".into(),
+        );
+        drv.environment
+            .insert(crate::network_policy::ENV_NETWORK_AUDIT_CLASS.to_string(), "legacy-network-build".into());
+
+        let err =
+            derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Strict).unwrap_err();
+
+        assert!(matches!(err, crate::Error::NetworkPolicyDenied { .. }));
+        assert!(err.to_string().contains("network policy denied for test"));
+        assert!(err.to_string().contains("ordinary derivation network access is denied by default"));
+        let crate::Error::NetworkPolicyDenied { report, .. } = err else {
+            unreachable!("matches! above proved the error variant");
+        };
+        assert_eq!(report.result, crate::network_policy::NETWORK_RESULT_BLOCKED);
+        assert_eq!(report.capability.as_deref(), Some(crate::network_policy::NETWORK_CAPABILITY_BUILD_TIME));
+        assert_eq!(report.policy_basis.as_deref(), Some("compat-policy:legacy-upstream"));
+        assert_eq!(report.audit_class.as_deref(), Some("legacy-network-build"));
+    }
+
+    #[test]
     fn build_request_outputs_are_relative() {
         let drv = test_derivation();
         let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
@@ -861,14 +913,24 @@ mod tests {
 
     #[test]
     fn fetcher_build_request_has_builtin_builder() {
-        let drv = make_fetcher_drv("https://example.com/foo.tar.gz", None);
-        let req = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
-            .unwrap()
-            .build_request;
+        use nix_compat::nixhash::CAHash;
+        use nix_compat::nixhash::NixHash;
+
+        const FETCH_HASH_BYTE: u8 = 0xBB;
+
+        let drv = make_fetcher_drv(
+            "https://example.com/foo.tar.gz",
+            Some(CAHash::Flat(NixHash::Sha256([FETCH_HASH_BYTE; 32]))),
+        );
+        let envelope =
+            derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical).unwrap();
+        let req = envelope.build_request;
 
         assert_eq!(req.command_args[0], "builtin:fetchurl");
         // Fetcher derivations have no arguments.
         assert_eq!(req.command_args.len(), 1);
+        assert!(req.constraints.contains(&BuildConstraints::NetworkAccess));
+        assert_eq!(envelope.network_policy_report.mode, crate::network_policy::NETWORK_MODE_FIXED_OUTPUT_FETCHER);
     }
 
     #[test]
@@ -941,6 +1003,21 @@ mod tests {
             !crate::fetch_build_service::is_fetch_request(&req),
             "BuildRequest from a normal derivation must NOT be recognized as a fetch request"
         );
+    }
+
+    #[test]
+    fn custom_fixed_output_builder_does_not_gain_network_access() {
+        use nix_compat::nixhash::CAHash;
+        use nix_compat::nixhash::NixHash;
+
+        let mut drv = test_derivation();
+        drv.outputs.get_mut("out").unwrap().ca_hash = Some(CAHash::Flat(NixHash::Sha256([0xBB; 32])));
+        let envelope =
+            derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical).unwrap();
+
+        assert!(!envelope.build_request.constraints.contains(&BuildConstraints::NetworkAccess));
+        assert_eq!(envelope.network_policy_report.mode, crate::network_policy::NETWORK_MODE_OFFLINE);
+        assert!(envelope.network_policy_report.fixed_output.is_none());
     }
 
     #[test]

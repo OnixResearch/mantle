@@ -405,6 +405,17 @@ async fn pipeline_reports_fod_mismatch_without_aborting_other_roots() {
     assert_eq!(result.outcomes.len(), 1, "successful roots: {:?}", result.outcomes);
     assert_eq!(result.failed.len(), 1, "failed roots: {:?}", result.failed);
     assert_eq!(result.fod_mismatches.len(), 1, "FOD mismatches: {:?}", result.fod_mismatches);
+    let good_policy = result
+        .network_policy_reports
+        .iter()
+        .find(|report| report.action_name == "good-src")
+        .expect("good fixed-output fetcher policy report");
+    assert_eq!(good_policy.mode, crunch_build::NETWORK_MODE_FIXED_OUTPUT_FETCHER);
+    assert_eq!(good_policy.result, crunch_build::NETWORK_RESULT_ALLOWED);
+    let fixed_output = good_policy.fixed_output.as_ref().expect("fixed-output declaration");
+    assert_eq!(fixed_output.url.as_deref(), Some(format!("file://{}", good_src.display()).as_str()));
+    assert_eq!(fixed_output.mode.as_deref(), Some("flat"));
+    assert_eq!(fixed_output.retry_policy, crunch_build::NETWORK_RETRY_POLICY_BOUNDED_TRANSIENT_FETCH);
 
     let mismatch = &result.fod_mismatches[0];
     assert_eq!(mismatch.name, "bad-src");
@@ -421,6 +432,50 @@ async fn pipeline_reports_fod_mismatch_without_aborting_other_roots() {
         PathBuf::from(good_output.store_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()));
     assert!(good_path.exists(), "good fetch should land on disk: {}", good_path.display());
     assert_eq!(std::fs::read(&good_path).unwrap(), good_content);
+}
+
+#[tokio::test]
+async fn pipeline_blocks_declared_build_time_network_capability_before_dispatch() {
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work.path().join("network-capability.ncl");
+
+    std::fs::write(
+        &ncl_file,
+        r#"let crunch = import "lib.ncl" in
+{
+  blocked = {
+    name = "ordinary-network-attempt",
+    builder = "/bin/sh",
+    args = ["-c", "echo should-not-run > $out"],
+    outputs = ["out"],
+    env = {
+      "__mantle_network_capability" = "build-time-network",
+      "__mantle_network_policy_basis" = "compat-policy:legacy-upstream",
+      "__mantle_network_audit_class" = "legacy-network-build",
+    },
+  } | crunch.Derivation,
+}
+"#,
+    )
+    .unwrap();
+
+    let config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    let result = build(&config).await.unwrap();
+
+    assert!(result.outcomes.is_empty(), "denied build must not produce outcomes");
+    assert_eq!(result.failed.len(), 1, "expected one denied build failure");
+    assert!(result.failed[0].error.contains("network policy denied for ordinary-network-attempt"));
+    assert!(result.failed[0].error.contains("ordinary derivation network access is denied by default"));
+    assert_eq!(result.network_policy_reports.len(), 1, "blocked policy report should be surfaced");
+    let report = &result.network_policy_reports[0];
+    assert_eq!(report.action_name, "ordinary-network-attempt");
+    assert_eq!(report.mode, crunch_build::NETWORK_MODE_COMPATIBILITY_CAPABILITY);
+    assert_eq!(report.result, crunch_build::NETWORK_RESULT_BLOCKED);
+    assert_eq!(report.capability.as_deref(), Some("build-time-network"));
+    assert_eq!(report.policy_basis.as_deref(), Some("compat-policy:legacy-upstream"));
+    assert_eq!(report.audit_class.as_deref(), Some("legacy-network-build"));
 }
 
 #[tokio::test]

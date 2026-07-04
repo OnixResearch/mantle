@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+pub use crunch_build::BuildNetworkPolicyReport;
 use crunch_build::BuildOutcome;
 use crunch_build::Builder;
 use crunch_build::DerivationRegistry;
@@ -12,6 +13,7 @@ use crunch_build::DispatchBuildService;
 use crunch_build::EvalMessage;
 use crunch_build::FailedGoal;
 use crunch_build::FetchBuildService;
+pub use crunch_build::FixedOutputNetworkDeclaration;
 pub use crunch_build::HermeticityAuditEvent;
 pub use crunch_build::HermeticityAuditKind;
 pub use crunch_build::HermeticityMode;
@@ -57,6 +59,7 @@ pub struct PipelineResult {
     pub root_labels: HashMap<String, String>,
     pub hermeticity_mode: HermeticityMode,
     pub hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+    pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
 }
 
@@ -214,6 +217,7 @@ async fn build_linux(
     let eval_stream = eval_stream?;
     let mut hermeticity_audit_events = hermeticity_audit_events;
     hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
+    let network_policy_reports = builder.take_network_policy_reports();
     if let Some(eval_failure) = &eval_stream.eval_failure {
         worker_result.failed.push(FailedGoal {
             drv_key: eval_failure_key(&eval_failure.label),
@@ -232,6 +236,7 @@ async fn build_linux(
         failed: worker_result.failed,
         hermeticity_mode: config.hermeticity_mode,
         hermeticity_audit_events,
+        network_policy_reports,
         native_dynamic_plans: worker_result.native_dynamic_plans,
     })
 }
@@ -434,6 +439,7 @@ fn build_preflight_failure(
         root_labels: build_root_labels(&root_drv_paths, &config.store_dir),
         hermeticity_mode: config.hermeticity_mode,
         hermeticity_audit_events: Vec::new(),
+        network_policy_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
     })
 }

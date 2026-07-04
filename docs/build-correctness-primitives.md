@@ -24,6 +24,16 @@ roles, tags, options, providers, or Nickel contracts.
   refs, sandbox and network policy, reference-scan evidence, producer identity,
   signatures, execution status, and build-or-reuse reason.
 
+## Network policy
+
+Ordinary derivation actions are offline by default. Mantle only grants network
+access to declared fixed-output fetcher actions whose URL, hash mode, expected
+digest, and bounded retry policy are part of the action boundary. A foreign or
+compatibility action that requests build-time network access must use an explicit
+sandbox capability with action name, capability, policy basis, and audit class;
+policy-denied or undeclared exceptions fail closed before strong evidence is
+emitted.
+
 ## Reuse policy
 
 Reuse or substitution can satisfy a strong claim only when the candidate receipt

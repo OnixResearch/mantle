@@ -37,11 +37,11 @@ mantle --json build hello.ncl
 
 `mantle --json build` writes a stable `crunch-build-report-v1` JSON
 object to stdout. It includes per-root outcomes, cache hits, failure
-records, output paths, hermeticity audit data, and per-output
-`artifact_attestation` references (`logical_path` + sidecar `path`) so
-tests and operators can assert on structured data instead of scraping
-human text. The optional `log_file` fields are only present when the
-corresponding log was actually written to disk.
+records, output paths, hermeticity audit data, `network_policy_reports`, and
+per-output `artifact_attestation` references (`logical_path` + sidecar `path`)
+so tests and operators can assert on structured data instead of scraping human
+text. The optional `log_file` fields are only present when the corresponding log
+was actually written to disk.
 
 For successful cache hits, each output may also include a `substitution`
 object. `mode` is `delta` when mantle completed the hit through delta
@@ -146,7 +146,12 @@ or compatibility work that intentionally permits ambient host dependencies;
 `--impure` is mutually exclusive with `--strict-hermetic`. Human and JSON
 reports both surface `hermeticity_mode` and any
 `hermeticity_audit_events` recorded during the run, including the typed
-`impure-mode-selected` event for impure runs.
+`impure-mode-selected` event for impure runs. Ordinary derivation builds also
+run offline by default: network access is admitted only for declared
+fixed-output fetchers (`fetchurl`, `fetchTarball`, `fetchGit`) or for a future
+scoped compatibility capability that names its action, policy basis, and audit
+class. Denied compatibility requests appear as blocked `network_policy_reports`
+and do not produce strong build-correctness evidence.
 
 ## Operator workflows
 
@@ -373,7 +378,10 @@ highlights the largest regressions or wins. See
 
 ## Fetchers
 
-Download files, tarballs, and git repos as fixed-output derivations:
+Download files, tarballs, and git repos as fixed-output derivations. These are
+the normal network boundary: the fetcher action records URL, hash mode, expected
+digest, and retry policy, and downstream ordinary builds consume only the
+verified store output with network disabled by default.
 
 ```nickel
 let mantle = import "lib.ncl" in

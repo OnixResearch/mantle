@@ -40,6 +40,14 @@ pub enum Error {
         derivation_value: String,
     },
 
+    #[error("network policy denied for {action_name}: {diagnostic}")]
+    NetworkPolicyDenied {
+        action_name: String,
+        capability: Option<String>,
+        diagnostic: String,
+        report: Box<crate::BuildNetworkPolicyReport>,
+    },
+
     #[error("sandbox error: {0}")]
     Sandbox(#[from] std::io::Error),
 
@@ -51,6 +59,17 @@ pub enum Error {
 
     #[error("fetcher error: {0}")]
     Fetcher(#[from] crate::fetcher::FetchError),
+}
+
+impl From<crate::NetworkPolicyDenied> for Error {
+    fn from(value: crate::NetworkPolicyDenied) -> Self {
+        Self::NetworkPolicyDenied {
+            action_name: value.action_name,
+            capability: value.capability,
+            diagnostic: value.diagnostic,
+            report: Box::new(value.report),
+        }
+    }
 }
 
 #[cfg(test)]

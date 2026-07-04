@@ -24,6 +24,7 @@ pub struct BuildJsonReport {
     pub store_dir: String,
     pub hermeticity_mode: String,
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
+    pub network_policy_reports: Vec<BuildJsonNetworkPolicyReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub frontend_artifact_attestations: Vec<FrontendArtifactAdmissionAttestation>,
     pub cargo_build_evidence: Vec<BuildJsonCargoBuildEvidence>,
@@ -46,6 +47,26 @@ pub struct BuildJsonCounts {
 pub struct BuildJsonHermeticityAuditEvent {
     pub kind: String,
     pub detail: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonNetworkPolicyReport {
+    pub action_name: String,
+    pub mode: String,
+    pub result: String,
+    pub capability: Option<String>,
+    pub policy_basis: Option<String>,
+    pub audit_class: Option<String>,
+    pub fixed_output: Option<BuildJsonFixedOutputNetworkDeclaration>,
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonFixedOutputNetworkDeclaration {
+    pub url: Option<String>,
+    pub hash: Option<String>,
+    pub mode: Option<String>,
+    pub retry_policy: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -192,6 +213,7 @@ fn build_json_report(
             actual_sri: mismatch.actual_sri.clone(),
         })
         .collect();
+    let network_policy_reports = build_network_policy_reports(result);
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
 
     BuildJsonReport {
@@ -202,6 +224,7 @@ fn build_json_report(
         store_dir: config.store_dir.clone(),
         hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
         hermeticity_audit_events,
+        network_policy_reports,
         native_dynamic_plans,
         frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
         cargo_build_evidence,
@@ -211,6 +234,28 @@ fn build_json_report(
         failed: failure_reports,
         fod_mismatches,
     }
+}
+
+fn build_network_policy_reports(result: &PipelineResult) -> Vec<BuildJsonNetworkPolicyReport> {
+    result
+        .network_policy_reports
+        .iter()
+        .map(|row| BuildJsonNetworkPolicyReport {
+            action_name: row.action_name.clone(),
+            mode: row.mode.clone(),
+            result: row.result.clone(),
+            capability: row.capability.clone(),
+            policy_basis: row.policy_basis.clone(),
+            audit_class: row.audit_class.clone(),
+            fixed_output: row.fixed_output.as_ref().map(|fixed| BuildJsonFixedOutputNetworkDeclaration {
+                url: fixed.url.clone(),
+                hash: fixed.hash.clone(),
+                mode: fixed.mode.clone(),
+                retry_policy: fixed.retry_policy.clone(),
+            }),
+            diagnostic: row.diagnostic.clone(),
+        })
+        .collect()
 }
 
 fn build_native_dynamic_plan_reports(result: &PipelineResult, store_dir: &str) -> Vec<BuildJsonNativeDynamicPlan> {
@@ -458,6 +503,7 @@ mod tests {
             root_labels: HashMap::from([(drv_key.clone(), "demo".to_string())]),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
         };
 
@@ -513,6 +559,7 @@ mod tests {
             root_labels: HashMap::from([(drv_key.clone(), "demo".to_string())]),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
         };
 
@@ -585,6 +632,16 @@ mod tests {
                 crunch_pipeline::HermeticityAuditKind::HostToolFallback,
                 "using external bwrap",
             )],
+            network_policy_reports: vec![crunch_pipeline::BuildNetworkPolicyReport {
+                action_name: "demo".to_string(),
+                mode: "offline".to_string(),
+                result: "denied".to_string(),
+                capability: None,
+                policy_basis: Some("ordinary derivation network access is denied by default".to_string()),
+                audit_class: None,
+                fixed_output: None,
+                diagnostic: None,
+            }],
             native_dynamic_plans: vec![crunch_build::NativeDynamicPlanReport {
                 mode: "native".to_string(),
                 producer_key: drv_key_for(&config.store_dir, &drv_path),
@@ -604,6 +661,10 @@ mod tests {
         assert_eq!(report.hermeticity_mode, "practical");
         assert_eq!(report.hermeticity_audit_events.len(), 1);
         assert_eq!(report.hermeticity_audit_events[0].kind, "host-tool-fallback");
+        assert_eq!(report.network_policy_reports.len(), 1);
+        assert_eq!(report.network_policy_reports[0].action_name, "demo");
+        assert_eq!(report.network_policy_reports[0].mode, "offline");
+        assert_eq!(report.network_policy_reports[0].result, "denied");
         assert_eq!(report.native_dynamic_plans.len(), 1);
         assert_eq!(report.native_dynamic_plans[0].mode, "native");
         assert_eq!(report.native_dynamic_plans[0].output_name, "plan");
@@ -710,6 +771,7 @@ mod tests {
             root_labels: HashMap::from([(drv_key_for(&config.store_dir, &drv_path), "demo".to_string())]),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
         };
 
@@ -791,6 +853,7 @@ mod tests {
             root_labels: HashMap::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
         };
         let spec_hash = blake3::hash(SPEC_MATERIAL).to_hex().to_string();
@@ -922,6 +985,7 @@ mod tests {
                 crunch_pipeline::HermeticityAuditKind::ImpureModeSelected,
                 "explicit --impure mode permits ambient host dependencies",
             )],
+            network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
         };
 
@@ -946,6 +1010,7 @@ mod tests {
                     "kind": "impure-mode-selected",
                     "detail": "explicit --impure mode permits ambient host dependencies",
                 }],
+                "network_policy_reports": [],
                 "native_dynamic_plans": [],
                 "frontend_artifact_attestations": [],
                 "cargo_build_evidence": [],

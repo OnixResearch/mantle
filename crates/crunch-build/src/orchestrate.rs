@@ -25,6 +25,7 @@ use snix_store::pathinfoservice::PathInfoService;
 use tracing::debug;
 use tracing::info;
 
+use crate::BuildNetworkPolicyReport;
 use crate::Error;
 use crate::HermeticityAuditEvent;
 use crate::HermeticityMode;
@@ -160,6 +161,7 @@ pub struct Builder<BServ> {
     verbose: bool,
     hermeticity_mode: HermeticityMode,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+    network_policy_reports: Vec<BuildNetworkPolicyReport>,
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
     root_retention_source: Option<GcRootSource>,
 }
@@ -210,6 +212,7 @@ where BServ: BuildService + 'static
             verbose,
             hermeticity_mode: HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            network_policy_reports: Vec::new(),
             source_closure_cache: HashMap::new(),
             root_retention_source: None,
         }
@@ -257,6 +260,7 @@ where BServ: BuildService + 'static
             verbose,
             hermeticity_mode: HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            network_policy_reports: Vec::new(),
             source_closure_cache: HashMap::new(),
             root_retention_source: None,
         }
@@ -285,6 +289,10 @@ where BServ: BuildService + 'static
 
     pub fn take_hermeticity_audit_events(&mut self) -> Vec<HermeticityAuditEvent> {
         std::mem::take(&mut self.hermeticity_audit_events)
+    }
+
+    pub fn take_network_policy_reports(&mut self) -> Vec<BuildNetworkPolicyReport> {
+        std::mem::take(&mut self.network_policy_reports)
     }
 
     /// Read the full content of a blob from castore.
@@ -415,13 +423,22 @@ where BServ: BuildService + 'static
         let sandbox_inputs = self.collect_sandbox_inputs(derivation_ref, known_paths, &all_source_paths).await?;
 
         // 5. Create build request.
-        let request_envelope = derivation_to_build_request(
+        let request_envelope = match derivation_to_build_request(
             derivation_ref,
             &sandbox_inputs,
             self.store.store_dir(),
             self.hermeticity_mode,
-        )?;
+        ) {
+            Ok(envelope) => envelope,
+            Err(error) => {
+                if let Error::NetworkPolicyDenied { report, .. } = &error {
+                    self.network_policy_reports.push((**report).clone());
+                }
+                return Err(error);
+            }
+        };
         self.hermeticity_audit_events.extend(request_envelope.audit_events.iter().cloned());
+        self.network_policy_reports.push(request_envelope.network_policy_report.clone());
         let build_request = request_envelope.build_request;
         let refscan_needles = build_request.refscan_needles.clone();
 
@@ -3477,6 +3494,14 @@ mod tests {
         assert!(path_info.nar_size > 0, "PathInfo must have non-zero NAR size");
         // The CA field must match the declared flat hash.
         assert!(path_info.ca.is_some(), "PathInfo must have CA field for FOD output",);
+        let reports = builder.take_network_policy_reports();
+        assert_eq!(reports.len(), 1, "fetcher build should report one network-policy boundary");
+        assert_eq!(reports[0].action_name, "fetch-hash-match");
+        assert_eq!(reports[0].mode, crate::NETWORK_MODE_FIXED_OUTPUT_FETCHER);
+        assert_eq!(reports[0].result, crate::NETWORK_RESULT_ALLOWED);
+        let fixed_output = reports[0].fixed_output.as_ref().expect("fixed-output network declaration");
+        assert_eq!(fixed_output.url.as_deref(), Some(url.as_str()));
+        assert_eq!(fixed_output.retry_policy, crate::NETWORK_RETRY_POLICY_BOUNDED_TRANSIENT_FETCH);
     }
 
     #[tokio::test]
