@@ -4426,6 +4426,7 @@ fn run_self_build_command(
             targets,
             toolchain_closure,
             rust_source_provider,
+            hermeticity_mode: select_hermeticity_mode(strict_hermetic, impure)?,
             json: ctx.json,
         };
         if fixed_point {
@@ -4478,7 +4479,7 @@ fn validate_cargo_free_legacy_self_build_args(
     signing_key: Option<&Path>,
     trusted_public_keys: &[String],
     trust_unsigned: bool,
-    strict_hermetic: bool,
+    _strict_hermetic: bool,
     impure: bool,
     source_root: Option<&Path>,
     no_host_tools: bool,
@@ -4493,7 +4494,6 @@ fn validate_cargo_free_legacy_self_build_args(
         || signing_key.is_some()
         || !trusted_public_keys.is_empty()
         || trust_unsigned
-        || strict_hermetic
         || impure
         || source_root.is_some()
         || no_host_tools
@@ -5970,6 +5970,44 @@ let Plan = {
         let rendered = err.to_string();
         assert!(rendered.contains("--cargo-free"));
         assert!(rendered.contains("required"));
+    }
+
+    #[test]
+    fn cargo_free_fixed_point_accepts_strict_hermetic_mode() {
+        let args = Args::parse_from([
+            "mantle",
+            "self-build",
+            "--cargo-free",
+            "--fixed-point",
+            "--strict-hermetic",
+            "--out",
+            "/tmp/mantle-fixed-point",
+        ]);
+
+        assert!(matches!(args.command, Command::SelfBuild {
+            cargo_free: true,
+            fixed_point: true,
+            strict_hermetic: true,
+            impure: false,
+            ..
+        }));
+    }
+
+    #[test]
+    fn cargo_free_fixed_point_rejects_impure_mode() {
+        let args = Args::parse_from([
+            "mantle",
+            "self-build",
+            "--cargo-free",
+            "--fixed-point",
+            "--impure",
+            "--out",
+            "/tmp/mantle-fixed-point",
+        ]);
+        let ctx = build_run_context(&args);
+        let err = run_self_build_from_command(&ctx, &args.command).unwrap_err();
+
+        assert!(err.to_string().contains("cannot be combined with legacy stage0/store self-build options"));
     }
 
     #[test]

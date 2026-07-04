@@ -1044,6 +1044,7 @@ mod tests {
             "root": "/repo/mantle",
             "bundle_dir": bundle_dir,
             "fixed_point": true,
+            "hermeticity_mode": crunch_release_core::STRICT_HERMETICITY_MODE,
             "stage1": provider_stage_json("stage1", binary_digest, policy_digest),
             "stage2": provider_stage_json("stage2", binary_digest, policy_digest),
             "source_built_toolchain_closure": {

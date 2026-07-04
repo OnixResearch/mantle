@@ -32,7 +32,7 @@ const REQUIRED_COMMANDS: &[&str] = &[
     "./scripts/prove-self-hosting.sh",
     "./scripts/prove-self-hosting.sh --non-nix-host",
     "./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>",
-    "mantle self-build --cargo-free --out /tmp/mantle-cargo-free",
+    "mantle self-build --cargo-free --fixed-point --strict-hermetic --out /tmp/mantle-cargo-free",
     "mantle --json nix-free-demo validate <summary.json>",
     "mantle nix-free-demo readme <summary.json>",
     "mantle --json nix-free-demo generate --out <dir> ...",
@@ -49,6 +49,7 @@ const REQUIRED_README_FRAGMENTS: &[&str] = &[
     "./scripts/prove-self-hosting.sh --non-nix-host",
     "./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>",
     "mantle self-build --cargo-free --out /tmp/mantle-cargo-free",
+    "mantle self-build --cargo-free --fixed-point --strict-hermetic --out /tmp/mantle-cargo-free",
     "mantle --json nix-free-demo validate <summary.json>",
     "mantle nix-free-demo readme <summary.json>",
     "mantle nix-free-demo generate --out <dir> --proof-status <status>",
@@ -80,6 +81,8 @@ const REQUIRED_CARGO_FREE_PATHS: &[&str] = &[
     "stage2/receipt.json",
     "stage1/smoke-stdout.txt",
     "stage2/smoke-stdout.txt",
+    "hermeticity_mode",
+    "proof_eligibility",
 ];
 
 const REQUIRED_CURRENT_EVIDENCE_FRAGMENTS: &[&str] = &[
@@ -90,7 +93,7 @@ const REQUIRED_CURRENT_EVIDENCE_FRAGMENTS: &[&str] = &[
     "ca00cd5866b0128434f95a0e0cf63ff2e5cc947eb90b60206cb9078bfe44215d",
     "f35cc306c76d14a44599ce438f420ea9bcfbc6a843d9a9a64f5edb5915e2ef6d",
     "964dc130610257aadedbc27a24284a58560fb01086c6686f2f5839af753a0ffd",
-    "bounded Cargo-free fixed-point success claim only",
+    "bounded Cargo-free fixed-point diagnostic success claim only",
 ];
 
 const REQUIRED_DEMO_FIELDS: &[&str] = &[
@@ -263,7 +266,7 @@ fn run_self_test() -> Result<(), String> {
     assert_rejected(
         "stale cargo-free command",
         guide.replace(
-            "mantle self-build --cargo-free --out /tmp/mantle-cargo-free",
+            "mantle self-build --cargo-free --fixed-point --strict-hermetic --out /tmp/mantle-cargo-free",
             "mantle self-build --cargo-free --fixed-point",
         ),
         &readme,

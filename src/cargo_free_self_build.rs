@@ -120,6 +120,7 @@ pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) targets: &'a [String],
     pub(crate) toolchain_closure: Option<&'a Path>,
     pub(crate) rust_source_provider: Option<&'a Path>,
+    pub(crate) hermeticity_mode: crunch_pipeline::HermeticityMode,
     pub(crate) json: bool,
 }
 
@@ -312,6 +313,8 @@ struct FixedPointSummary {
     root: PathBuf,
     bundle_dir: PathBuf,
     fixed_point: bool,
+    hermeticity_mode: String,
+    proof_eligibility: crunch_release_core::StrictProofEligibilityReport,
     stage1: FixedPointStageSummary,
     stage2: Option<FixedPointStageSummary>,
     rustc_compatibility: RustcCompatibilitySummary,
@@ -425,6 +428,7 @@ struct SelfBuildSummary {
     unit_count: u64,
     failed_unit_count: u64,
     smoke_status_code: Option<i32>,
+    hermeticity_mode: String,
     blocker: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
@@ -472,7 +476,7 @@ fn validate_provider_fixed_point_proof_evidence(
         return provider_fixed_point_result(evidence, None, None, None, blockers);
     };
     validate_fixed_point_meta(meta, &mut blockers);
-    validate_fixed_point_proof_audit(meta, &mut blockers);
+    validate_fixed_point_proof_eligibility(meta, &mut blockers);
     validate_fixed_point_preflight(meta, evidence.preflight.as_ref(), &mut blockers);
     validate_fixed_point_non_claims(meta, evidence.non_claims_text.as_deref(), &mut blockers);
     let closure_policy_digest = fixed_point_closure_policy_digest(meta, &mut blockers);
@@ -583,17 +587,72 @@ fn validate_fixed_point_meta(meta: &Value, blockers: &mut Vec<String>) {
     }
 }
 
-fn validate_fixed_point_proof_audit(meta: &Value, blockers: &mut Vec<String>) {
-    let event_classes = fixed_point_proof_audit_events(meta);
-    let report = crunch_release_core::strict_proof_audit_gate(
-        PROVIDER_PROOF_AUDIT_WORKFLOW.to_string(),
-        PROVIDER_PROOF_AUDIT_CLAIM.to_string(),
-        event_classes,
-    );
+fn validate_fixed_point_proof_eligibility(meta: &Value, blockers: &mut Vec<String>) {
+    let report = fixed_point_proof_eligibility_report_from_meta(meta);
     if report.strict_claim_satisfied {
         return;
     }
-    blockers.extend(crunch_release_core::proof_audit_gate_blocking_reasons(report));
+    blockers.extend(crunch_release_core::proof_eligibility_blocking_reasons(report));
+}
+
+fn fixed_point_proof_eligibility_report_from_meta(meta: &Value) -> crunch_release_core::StrictProofEligibilityReport {
+    crunch_release_core::strict_proof_eligibility_gate(crunch_release_core::StrictProofEligibilityInput {
+        workflow: PROVIDER_PROOF_AUDIT_WORKFLOW.to_string(),
+        requested_claim: PROVIDER_PROOF_AUDIT_CLAIM.to_string(),
+        hermeticity_mode: optional_str(meta, "/hermeticity_mode").unwrap_or_default().to_string(),
+        hermeticity_audit_events: fixed_point_proof_audit_events(meta),
+        closure_status: fixed_point_closure_fact_status_from_meta(meta),
+        protected_environment_status: fixed_point_protected_environment_status_from_meta(meta),
+        host_tool_status: fixed_point_host_tool_status_from_meta(meta),
+    })
+}
+
+fn fixed_point_closure_fact_status_from_meta(meta: &Value) -> crunch_release_core::ProofFactStatus {
+    let status = optional_str(meta, "/source_built_toolchain_closure/status");
+    let claim = meta.pointer("/source_built_toolchain_closure/claim").and_then(Value::as_bool);
+    let policy = optional_str(meta, "/source_built_toolchain_closure/policy_digest_blake3");
+    let member_count = optional_u64(meta, "/source_built_toolchain_closure/member_count");
+    let source_built_count = optional_u64(meta, "/source_built_toolchain_closure/source_built_member_count");
+    let seed_exception_count = optional_u64(meta, "/source_built_toolchain_closure/seed_exception_count");
+    let complete_counts = matches!((member_count, source_built_count), (Some(member_count), Some(source_built_count)) if member_count > 0 && member_count == source_built_count);
+    if status == Some(ENFORCED_SOURCE_BUILT_STATUS)
+        && claim == Some(true)
+        && policy.is_some()
+        && complete_counts
+        && seed_exception_count == Some(0)
+    {
+        return crunch_release_core::ProofFactStatus::Satisfied;
+    }
+    if status.is_none() || claim.is_none() || policy.is_none() || member_count.is_none() || source_built_count.is_none()
+    {
+        return crunch_release_core::ProofFactStatus::Missing;
+    }
+    crunch_release_core::ProofFactStatus::Degraded
+}
+
+fn fixed_point_protected_environment_status_from_meta(meta: &Value) -> crunch_release_core::ProofFactStatus {
+    proof_fact_status_label(meta, "/protected_environment_status")
+        .unwrap_or(crunch_release_core::ProofFactStatus::Satisfied)
+}
+
+fn fixed_point_host_tool_status_from_meta(meta: &Value) -> crunch_release_core::ProofFactStatus {
+    let status = optional_str(meta, "/rust_source_provider/status");
+    if status == Some(RUST_SOURCE_PROVIDER_STATUS_VALIDATED) {
+        return crunch_release_core::ProofFactStatus::Satisfied;
+    }
+    if status.is_none() {
+        return crunch_release_core::ProofFactStatus::Missing;
+    }
+    crunch_release_core::ProofFactStatus::Degraded
+}
+
+fn proof_fact_status_label(meta: &Value, pointer: &str) -> Option<crunch_release_core::ProofFactStatus> {
+    match optional_str(meta, pointer)? {
+        "satisfied" => Some(crunch_release_core::ProofFactStatus::Satisfied),
+        "missing" => Some(crunch_release_core::ProofFactStatus::Missing),
+        "degraded" | "leaked" | "undeclared" => Some(crunch_release_core::ProofFactStatus::Degraded),
+        _ => Some(crunch_release_core::ProofFactStatus::Degraded),
+    }
 }
 
 fn fixed_point_proof_audit_events(meta: &Value) -> Vec<String> {
@@ -965,7 +1024,14 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     if child.blocker.is_some() && produced.is_none() {
         write_blocked_smoke_outputs(&paths, child.blocker.as_deref())?;
     }
-    let summary = summarize(&paths, &child, produced.as_ref(), execution_toolchain.status, loaded_rust_provider.status);
+    let summary = summarize(
+        &paths,
+        &child,
+        produced.as_ref(),
+        execution_toolchain.status,
+        loaded_rust_provider.status,
+        options.hermeticity_mode,
+    );
     write_summary(&paths.meta_path, &summary)?;
     print_summary(&summary, options.json)?;
 
@@ -1009,6 +1075,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
             &compatibility.summary,
             &toolchain_status,
             &loaded_rust_provider.status,
+            options.hermeticity_mode,
             stage1,
             None,
             BLOCKED_STATUS,
@@ -1022,6 +1089,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
             &compatibility.summary,
             &toolchain_status,
             &loaded_rust_provider.status,
+            options.hermeticity_mode,
             stage1,
             None,
             BLOCKED_STATUS,
@@ -1040,6 +1108,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
             &compatibility.summary,
             &toolchain_status,
             &loaded_rust_provider.status,
+            options.hermeticity_mode,
             stage1,
             Some(stage2),
             BLOCKED_STATUS,
@@ -1052,6 +1121,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         &compatibility.summary,
         &toolchain_status,
         &loaded_rust_provider.status,
+        options.hermeticity_mode,
         stage1,
         Some(stage2),
         status,
@@ -1992,6 +2062,7 @@ fn finish_fixed_point(
     compatibility: &RustcCompatibilitySummary,
     toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     rust_source_provider: &RustSourceProviderBindingStatus,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
     stage1: FixedPointStageRun,
     stage2: Option<FixedPointStageRun>,
     status: &str,
@@ -2001,6 +2072,7 @@ fn finish_fixed_point(
         compatibility,
         toolchain_closure,
         rust_source_provider,
+        hermeticity_mode,
         &stage1,
         stage2.as_ref(),
         status,
@@ -2018,6 +2090,7 @@ fn fixed_point_summary(
     compatibility: &RustcCompatibilitySummary,
     toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     rust_source_provider: &RustSourceProviderBindingStatus,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
     stage1: &FixedPointStageRun,
     stage2: Option<&FixedPointStageRun>,
     status: &str,
@@ -2029,6 +2102,12 @@ fn fixed_point_summary(
         root: plan.root.clone(),
         bundle_dir: PathBuf::from(BUNDLE_ROOT_RELATIVE_PATH),
         fixed_point: status == SUCCESS_STATUS,
+        hermeticity_mode: hermeticity_mode.as_str().to_string(),
+        proof_eligibility: fixed_point_proof_eligibility_report(
+            hermeticity_mode,
+            toolchain_closure,
+            rust_source_provider,
+        ),
         stage1: stage_summary(stage1, &plan.bundle_dir),
         stage2: stage2.map(|stage| stage_summary(stage, &plan.bundle_dir)),
         rustc_compatibility: RustcCompatibilitySummary {
@@ -2044,6 +2123,53 @@ fn fixed_point_summary(
         blocker_diagnostic: fixed_point_blocker_diagnostic(stage1, stage2),
         non_claims,
     }
+}
+
+fn fixed_point_proof_eligibility_report(
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
+    toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+    rust_source_provider: &RustSourceProviderBindingStatus,
+) -> crunch_release_core::StrictProofEligibilityReport {
+    crunch_release_core::strict_proof_eligibility_gate(crunch_release_core::StrictProofEligibilityInput {
+        workflow: PROVIDER_PROOF_AUDIT_WORKFLOW.to_string(),
+        requested_claim: PROVIDER_PROOF_AUDIT_CLAIM.to_string(),
+        hermeticity_mode: hermeticity_mode.as_str().to_string(),
+        hermeticity_audit_events: Vec::new(),
+        closure_status: fixed_point_closure_fact_status(toolchain_closure),
+        protected_environment_status: crunch_release_core::ProofFactStatus::Satisfied,
+        host_tool_status: fixed_point_host_tool_fact_status(rust_source_provider),
+    })
+}
+
+fn fixed_point_closure_fact_status(
+    toolchain_closure: &crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
+) -> crunch_release_core::ProofFactStatus {
+    let complete_counts = matches!(
+        (toolchain_closure.member_count, toolchain_closure.source_built_member_count),
+        (Some(member_count), Some(source_built_count)) if member_count > 0 && member_count == source_built_count
+    );
+    let no_seed_exceptions = toolchain_closure.seed_exception_count == Some(0);
+    if toolchain_closure.claim
+        && toolchain_closure.status == ENFORCED_SOURCE_BUILT_STATUS
+        && toolchain_closure.policy_digest_blake3.is_some()
+        && complete_counts
+        && no_seed_exceptions
+    {
+        return crunch_release_core::ProofFactStatus::Satisfied;
+    }
+    if toolchain_closure.policy_digest_blake3.is_none() || toolchain_closure.member_count.is_none() {
+        return crunch_release_core::ProofFactStatus::Missing;
+    }
+    crunch_release_core::ProofFactStatus::Degraded
+}
+
+fn fixed_point_host_tool_fact_status(
+    rust_source_provider: &RustSourceProviderBindingStatus,
+) -> crunch_release_core::ProofFactStatus {
+    if rust_source_provider.status == RUST_SOURCE_PROVIDER_STATUS_VALIDATED {
+        return crunch_release_core::ProofFactStatus::Satisfied;
+    }
+    crunch_release_core::ProofFactStatus::Degraded
 }
 
 fn stage_summary(stage: &FixedPointStageRun, bundle_dir: &Path) -> FixedPointStageSummary {
@@ -2135,6 +2261,11 @@ fn print_fixed_point_summary(summary: &FixedPointSummary, json_mode: bool, bundl
         if let Some(digest) = &stage2.binary_blake3 {
             println!("stage2_binary_blake3: {digest}");
         }
+    }
+    println!("hermeticity_mode: {}", summary.hermeticity_mode);
+    println!("strict_proof_admission: {}", summary.proof_eligibility.admitted);
+    if !summary.proof_eligibility.blocked_classes.is_empty() {
+        println!("strict_proof_blocked_classes: {}", summary.proof_eligibility.blocked_classes.join(","));
     }
     Ok(())
 }
@@ -2230,6 +2361,7 @@ fn summarize(
     produced: Option<&ProducedBinary>,
     toolchain_closure: crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus,
     rust_source_provider: RustSourceProviderBindingStatus,
+    hermeticity_mode: crunch_pipeline::HermeticityMode,
 ) -> SelfBuildSummary {
     let receipt = child.receipt.as_ref();
     let non_claims = self_build_non_claims(&toolchain_closure);
@@ -2255,6 +2387,7 @@ fn summarize(
         unit_count: receipt.map(unit_count).unwrap_or_default(),
         failed_unit_count: receipt.map(failed_unit_count).unwrap_or_default(),
         smoke_status_code: produced.and_then(|value| value.smoke_status_code),
+        hermeticity_mode: hermeticity_mode.as_str().to_string(),
         blocker: child.blocker.clone(),
         blocker_diagnostic: child.blocker_diagnostic.clone(),
         source_built_toolchain_closure: toolchain_closure,
@@ -3548,6 +3681,7 @@ mod tests {
             &compatibility,
             &toolchain_closure,
             &rust_source_provider,
+            crunch_pipeline::HermeticityMode::Strict,
             &stage1,
             Some(&stage2),
             SUCCESS_STATUS,
@@ -3611,6 +3745,7 @@ mod tests {
             &compatibility,
             &toolchain_closure,
             &absent_rust_source_provider_binding(),
+            crunch_pipeline::HermeticityMode::Strict,
             &stage1,
             Some(&stage2),
             SUCCESS_STATUS,
@@ -3707,6 +3842,45 @@ mod tests {
             "{:?}",
             result.blockers
         );
+    }
+
+    #[test]
+    fn provider_fixed_point_verifier_rejects_non_strict_hermeticity_modes() {
+        for mode in [
+            crunch_release_core::PRACTICAL_HERMETICITY_MODE,
+            crunch_release_core::IMPURE_HERMETICITY_MODE,
+            "",
+        ] {
+            let mut evidence = valid_provider_fixed_point_evidence();
+            if mode.is_empty() {
+                evidence.meta.as_mut().unwrap().as_object_mut().unwrap().remove("hermeticity_mode");
+            } else {
+                evidence.meta.as_mut().unwrap()["hermeticity_mode"] = Value::String(mode.to_string());
+            }
+
+            let result = validate_provider_fixed_point_proof_evidence(evidence);
+
+            assert!(!result.valid, "{mode}");
+            assert!(
+                result.blockers.iter().any(|blocker| blocker.contains("hermeticity-mode")),
+                "{mode}: {:?}",
+                result.blockers
+            );
+        }
+    }
+
+    #[test]
+    fn provider_fixed_point_verifier_rejects_protected_env_and_host_tool_degradation() {
+        let mut evidence = valid_provider_fixed_point_evidence();
+        evidence.meta.as_mut().unwrap()["protected_environment_status"] = Value::String("leaked".to_string());
+        *evidence.meta.as_mut().unwrap().pointer_mut("/rust_source_provider/status").unwrap() =
+            Value::String(RUST_SOURCE_PROVIDER_STATUS_ABSENT.to_string());
+
+        let result = validate_provider_fixed_point_proof_evidence(evidence);
+
+        assert!(!result.valid);
+        assert!(result.blockers.iter().any(|blocker| blocker.contains("protected-environment")));
+        assert!(result.blockers.iter().any(|blocker| blocker.contains("host-tool-inventory")));
     }
 
     #[test]
@@ -4029,6 +4203,7 @@ mod tests {
             "root": "/repo/mantle",
             "bundle_dir": proof_dir,
             "fixed_point": true,
+            "hermeticity_mode": crunch_release_core::STRICT_HERMETICITY_MODE,
             "stage1": stage1,
             "stage2": stage2,
             "rustc_compatibility": {
@@ -4155,6 +4330,7 @@ mod tests {
             &compatibility,
             &toolchain_closure,
             &rust_source_provider,
+            crunch_pipeline::HermeticityMode::Strict,
             &stage1,
             Some(&stage2),
             SUCCESS_STATUS,

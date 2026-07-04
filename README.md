@@ -825,12 +825,13 @@ pinned fetched artifacts, mantle-built outputs, and host-convenience probes.
   `rust-plan --no-cargo-oracle --execute-topology`, writes the binary plus
   receipt evidence under `--out`, and fails if the Cargo guard is invoked. Keep
   `--out` outside the source root so evidence does not change native source
-  digests. The rust-plan receipt labels this as `cargo-free-bounded-topology`
-  when supported, `blocked-unsupported-surface` when native planning stops at an
+  digests. Use `mantle self-build --cargo-free --fixed-point --strict-hermetic --out /tmp/mantle-cargo-free`
+  when the output is intended for proof admission rather than local diagnostics.
+  The rust-plan receipt labels this as `cargo-free-bounded-topology` when
+  supported, `blocked-unsupported-surface` when native planning stops at an
   unsupported surface, and always `not-default-project-build`. Current refreshed
-  evidence is blocked by `vendor-checksum-mismatch` for declared vendor source
-  material; see `docs/operator-proof-guide.md` before reporting any Cargo-free
-  fixed-point status.
+  evidence is diagnostic unless it records strict proof admission; see
+  `docs/operator-proof-guide.md` before reporting any Cargo-free fixed-point status.
 - **Not yet proven**: this first build still relies on host tooling and the
   reduced seed provider, while Cargo-free topology mode is bounded Rust topology
   evidence rather than compiler correctness, release reproducibility, bootstrap

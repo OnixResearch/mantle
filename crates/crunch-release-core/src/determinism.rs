@@ -36,8 +36,8 @@ const REQUIRED_PERTURBATIONS: &[&str] = &[
     "umask",
     "env-noise",
 ];
-const DETERMINISTIC_PROOF_AUDIT_WORKFLOW: &str = "deterministic-release";
-const DETERMINISTIC_PROOF_AUDIT_CLAIM: &str = "deterministic-release";
+const DETERMINISTIC_PROOF_WORKFLOW: &str = "deterministic-release";
+const DETERMINISTIC_PROOF_CLAIM: &str = "deterministic-release";
 const SUPPORTED_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1:";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -582,13 +582,7 @@ fn classify_deterministic_build_proof(
         reasons.extend(effect_reasons);
         return (DeterministicBuildProofVerdict::MissingEvidence, reasons);
     }
-    if receipt.hermeticity_mode == "impure" {
-        reasons.push("impure hermeticity mode".to_string());
-        return (DeterministicBuildProofVerdict::ImpureMode, reasons);
-    }
-    if receipt.hermeticity_mode != "strict" {
-        reasons.push(format!("non-strict hermeticity mode {}", receipt.hermeticity_mode));
-    }
+    reasons.extend(strict_proof_eligibility_reasons(receipt));
     if receipt.runs.len() < REQUIRED_RUN_COUNT {
         reasons.push("fewer than two clean proof runs".to_string());
     }
@@ -619,8 +613,10 @@ fn classify_deterministic_build_proof(
             ));
         }
     }
-    reasons.extend(proof_audit_gate_reasons(receipt));
     if !reasons.is_empty() {
+        if receipt.hermeticity_mode == crate::proof_eligibility::IMPURE_HERMETICITY_MODE {
+            return (DeterministicBuildProofVerdict::ImpureMode, reasons);
+        }
         if reasons.iter().any(|reason| {
             reason.contains("reused derivation-under-test output store identity")
                 || reason.contains("reused derivation-under-test output root identity")
@@ -639,18 +635,24 @@ fn classify_deterministic_build_proof(
     }
 }
 
-fn proof_audit_gate_reasons(receipt: &DeterministicBuildProofReceipt) -> Vec<String> {
+fn strict_proof_eligibility_reasons(receipt: &DeterministicBuildProofReceipt) -> Vec<String> {
     let event_classes =
         receipt.runs.iter().flat_map(|run| run.hermeticity_audit_events.iter().cloned()).collect::<Vec<_>>();
-    let report = crate::proof_audit::strict_proof_audit_gate(
-        DETERMINISTIC_PROOF_AUDIT_WORKFLOW.to_string(),
-        DETERMINISTIC_PROOF_AUDIT_CLAIM.to_string(),
-        event_classes,
+    let report = crate::proof_eligibility::strict_proof_eligibility_gate(
+        crate::proof_eligibility::StrictProofEligibilityInput {
+            workflow: DETERMINISTIC_PROOF_WORKFLOW.to_string(),
+            requested_claim: DETERMINISTIC_PROOF_CLAIM.to_string(),
+            hermeticity_mode: receipt.hermeticity_mode.clone(),
+            hermeticity_audit_events: event_classes,
+            closure_status: crate::proof_eligibility::ProofFactStatus::Satisfied,
+            protected_environment_status: crate::proof_eligibility::ProofFactStatus::Satisfied,
+            host_tool_status: crate::proof_eligibility::ProofFactStatus::Satisfied,
+        },
     );
     if report.strict_claim_satisfied {
         return Vec::new();
     }
-    crate::proof_audit::proof_audit_gate_blocking_reasons(report)
+    crate::proof_eligibility::proof_eligibility_blocking_reasons(report)
 }
 
 fn reused_output_store_path_reasons(runs: &[DeterministicBuildRunReceipt]) -> Vec<String> {
@@ -837,7 +839,6 @@ mod tests {
         }
     }
 
-    #[test]
     #[test]
     fn deterministic_receipt_blocks_unknown_audit_events_closed_by_default() {
         let mut receipt = receipt();

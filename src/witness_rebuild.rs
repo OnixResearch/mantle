@@ -2314,6 +2314,7 @@ mod tests {
             "root": "/repo/mantle",
             "bundle_dir": provider_proof_dir,
             "fixed_point": true,
+            "hermeticity_mode": crunch_release_core::STRICT_HERMETICITY_MODE,
             "stage1": provider_stage_summary_json(provider_proof_dir, "stage1", &stage1_binary, &binary_digest, &policy_digest),
             "stage2": provider_stage_summary_json(provider_proof_dir, "stage2", &stage2_binary, &binary_digest, &policy_digest),
             "rustc_compatibility": {

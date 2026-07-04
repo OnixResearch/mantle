@@ -13,7 +13,7 @@ were observed in the current run.
 | Self-build fixed point | `./scripts/prove-self-hosting.sh` | `target/self-hosting-proof/run-.../` | The checked-out Mantle can rebuild a byte-identical stage2 Mantle from the staged source under the selected proof mode. |
 | Non-Nix-host self-build | `./scripts/prove-self-hosting.sh --non-nix-host` | `target/self-hosting-proof/run-.../` | The fixed-point proof also ran with Nix commands scrubbed from the proof-runner `PATH`. |
 | Host-tool-free stage0 boundary | `./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>` | `target/self-hosting-proof/run-.../protected-exec-audit.json` | The protected stage0 boundary used declared seed executables under protected exec supervision. |
-| Cargo-free fixed point | `mantle self-build --cargo-free --out /tmp/mantle-cargo-free` | `/tmp/mantle-cargo-free/` | Mantle built the requested Mantle binary through the bounded native Rust topology and stage1/stage2 binary digests matched. |
+| Cargo-free fixed point | `mantle self-build --cargo-free --fixed-point --strict-hermetic --out /tmp/mantle-cargo-free` | `/tmp/mantle-cargo-free/` | Mantle built the requested Mantle binary through the bounded native Rust topology and stage1/stage2 binary digests matched under strict proof admission. |
 | Nix-free demo bundle | `mantle --json nix-free-demo validate <summary.json>` | generated demo README plus machine summary | The recorded source-root Cargo-free fixed-point demo profile is claimable only when all validator diagnostics are absent. |
 | Foreign import receipt review | [`docs/foreign-derivation-import-trust-model.md`](foreign-derivation-import-trust-model.md) | import receipt, graph, index, and policy files | Admission evidence is claim-safe only when reported with receipt non-claims and without output-trust or build-success wording. |
 
@@ -110,11 +110,13 @@ result:
   relevant docs changed after the bundle was produced, mark the bundle stale and
   rerun or narrow the claim to the old tree.
 
-Proof-mode admission is closed by default for hermeticity audit events. Clean
-strict evidence records the event-set digest and policy basis; unapproved event
-classes appear as deterministic blockers with the policy basis, and approved
-exceptions must name the event class, affected proof class, and narrower claim
-instead of satisfying the stricter proof class.
+Proof-mode admission is closed by default for both selected hermeticity mode and
+hermeticity audit events. Clean strict evidence records the selected
+`hermeticity_mode`, strict proof eligibility verdict, event-set digest, and
+policy basis; practical or impure mode, missing closure facts, protected-env
+leaks, undeclared host-tool facts, and unapproved event classes appear as
+deterministic blockers. Approved exceptions must name the event class, affected
+proof class, and narrower claim instead of satisfying the stricter proof class.
 
 The self-build proof does not prove compiler correctness, does not prove full
 Cargo compatibility, does not prove release reproducibility, does not prove
@@ -126,7 +128,7 @@ The Cargo-free fixed-point lane is the bounded native Rust topology path. Keep
 `--out` outside the source root so proof artifacts do not perturb source digests.
 
 ```bash
-mantle self-build --cargo-free --out /tmp/mantle-cargo-free
+mantle self-build --cargo-free --fixed-point --strict-hermetic --out /tmp/mantle-cargo-free
 ```
 
 When using the standalone script rail directly, keep the same evidence boundary
@@ -139,8 +141,8 @@ nix develop -c cargo -Zscript scripts/prove-cargo-free-fixed-point.rs --check --
 Inspect these output files in the selected output directory:
 
 - `meta.json` — `mantle-cargo-free-fixed-point-proof-v1` schema, status,
-  `fixed_point`, stage summaries, source-built toolchain closure status,
-  blocker, and `non_claims`.
+  `fixed_point`, `hermeticity_mode`, strict `proof_eligibility`, stage
+  summaries, source-built toolchain closure status, blocker, and `non_claims`.
 - `preflight.json` — selected root, toolchain and policy facts before stage
   execution.
 - `non-claims.txt` — human-readable claim exclusions.
@@ -149,10 +151,12 @@ Inspect these output files in the selected output directory:
 - `stage1/stderr.txt`, `stage2/stderr.txt`, `stage1/smoke-stdout.txt`, and
   `stage2/smoke-stdout.txt` — execution diagnostics and smoke output.
 
-A successful Cargo-free fixed-point report requires `status = "success"`,
-`fixed_point = true`, matching stage binary BLAKE3 digests, no blocker, and
-bounded non-claims. A blocked report with `status = "blocked"` is still useful
-frontier evidence, but it is not a Nix-free fixed-point success claim.
+A successful proof-admissible Cargo-free fixed-point report requires
+`status = "success"`, `fixed_point = true`, `hermeticity_mode = "strict"`,
+`proof_eligibility.admitted = true`, matching stage binary BLAKE3 digests, no
+blocker, and bounded non-claims. A practical-mode or blocked report with
+`status = "blocked"` is still useful frontier evidence, but it is diagnostic
+only and is not a Nix-free or release proof success claim.
 
 ### Current refreshed evidence (2026-07-03)
 
@@ -170,9 +174,7 @@ bundle supersedes it:
 - Cargo guard: `cargo_marker_absent = true` for both stages.
 - Non-claims: `not-crunch-bootstrap`, `not-release-reproducibility`, `not-source-built-toolchain-closure`, and `not-full-cargo-compatibility`.
 
-This evidence is a bounded Cargo-free fixed-point success claim only. It is not
-a Mantle bootstrap, release reproducibility, source-built toolchain closure, or
-full Cargo compatibility claim.
+This evidence predates strict proof-mode admission metadata and is a bounded Cargo-free fixed-point diagnostic success claim only. It is not strict proof admission, Mantle bootstrap, release reproducibility, source-built toolchain closure, or full Cargo compatibility evidence.
 
 This lane does not prove compiler correctness, does not prove full Cargo
 compatibility, does not prove release reproducibility, does not prove deploy
