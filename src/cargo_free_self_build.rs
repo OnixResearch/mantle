@@ -98,6 +98,9 @@ const ENFORCED_SOURCE_BUILT_STATUS: &str = "enforced-source-built";
 const NOT_CRUNCH_BOOTSTRAP_NON_CLAIM: &str = "not-crunch-bootstrap";
 const NOT_RELEASE_REPRODUCIBILITY_NON_CLAIM: &str = "not-release-reproducibility";
 const NOT_FULL_CARGO_COMPATIBILITY_NON_CLAIM: &str = "not-full-cargo-compatibility";
+const PROVIDER_PROOF_AUDIT_WORKFLOW: &str = "self-hosting";
+const PROVIDER_PROOF_AUDIT_CLAIM: &str = "self-hosting";
+const HERMETICITY_AUDIT_EVENTS_FIELD: &str = "hermeticity_audit_events";
 const SOURCE_DIGEST_VALUE_FIELD: &str = "value";
 const SUCCESS_EXIT_CODE: i32 = 0;
 const FALLBACK_ERROR_EXIT_CODE: i32 = 1;
@@ -469,6 +472,7 @@ fn validate_provider_fixed_point_proof_evidence(
         return provider_fixed_point_result(evidence, None, None, None, blockers);
     };
     validate_fixed_point_meta(meta, &mut blockers);
+    validate_fixed_point_proof_audit(meta, &mut blockers);
     validate_fixed_point_preflight(meta, evidence.preflight.as_ref(), &mut blockers);
     validate_fixed_point_non_claims(meta, evidence.non_claims_text.as_deref(), &mut blockers);
     let closure_policy_digest = fixed_point_closure_policy_digest(meta, &mut blockers);
@@ -577,6 +581,40 @@ fn validate_fixed_point_meta(meta: &Value, blockers: &mut Vec<String>) {
         )),
         _ => blockers.push("source-built closure member counts are missing".to_string()),
     }
+}
+
+fn validate_fixed_point_proof_audit(meta: &Value, blockers: &mut Vec<String>) {
+    let event_classes = fixed_point_proof_audit_events(meta);
+    let report = crunch_release_core::strict_proof_audit_gate(
+        PROVIDER_PROOF_AUDIT_WORKFLOW.to_string(),
+        PROVIDER_PROOF_AUDIT_CLAIM.to_string(),
+        event_classes,
+    );
+    if report.strict_claim_satisfied {
+        return;
+    }
+    blockers.extend(crunch_release_core::proof_audit_gate_blocking_reasons(report));
+}
+
+fn fixed_point_proof_audit_events(meta: &Value) -> Vec<String> {
+    let mut events = Vec::new();
+    collect_audit_events_from_object(meta, &mut events);
+    if let Some(stage1) = meta.get(STAGE1_DIR) {
+        collect_audit_events_from_object(stage1, &mut events);
+    }
+    if let Some(stage2) = meta.get(STAGE2_DIR) {
+        collect_audit_events_from_object(stage2, &mut events);
+    }
+    events.sort();
+    events.dedup();
+    events
+}
+
+fn collect_audit_events_from_object(value: &Value, events: &mut Vec<String>) {
+    let Some(array) = value.get(HERMETICITY_AUDIT_EVENTS_FIELD).and_then(Value::as_array) else {
+        return;
+    };
+    events.extend(array.iter().filter_map(Value::as_str).map(ToOwned::to_owned));
 }
 
 fn validate_fixed_point_preflight(meta: &Value, preflight: Option<&Value>, blockers: &mut Vec<String>) {
@@ -3646,6 +3684,40 @@ mod tests {
         assert!(result.blockers.is_empty());
         assert!(result.non_claims.iter().any(|claim| claim == NOT_RELEASE_REPRODUCIBILITY_NON_CLAIM));
         assert!(result.non_claims.iter().any(|claim| claim == NOT_FULL_CARGO_COMPATIBILITY_NON_CLAIM));
+    }
+
+    #[test]
+    fn provider_fixed_point_verifier_rejects_unapproved_proof_audit_event() {
+        let mut evidence = valid_provider_fixed_point_evidence();
+        evidence.meta.as_mut().unwrap()[HERMETICITY_AUDIT_EVENTS_FIELD] = json!(["future-benign-event"]);
+
+        let result = validate_provider_fixed_point_proof_evidence(evidence);
+
+        assert!(!result.valid);
+        assert!(
+            result.blockers.iter().any(|blocker| blocker.contains("future-benign-event")),
+            "{:?}",
+            result.blockers
+        );
+        assert!(
+            result
+                .blockers
+                .iter()
+                .any(|blocker| blocker.contains(crunch_release_core::STRICT_PROOF_POLICY_BASIS)),
+            "{:?}",
+            result.blockers
+        );
+    }
+
+    #[test]
+    fn provider_fixed_point_verifier_accepts_informational_proof_audit_events() {
+        let mut evidence = valid_provider_fixed_point_evidence();
+        evidence.meta.as_mut().unwrap()[STAGE1_DIR][HERMETICITY_AUDIT_EVENTS_FIELD] =
+            json!(["store-read", "output-write"]);
+
+        let result = validate_provider_fixed_point_proof_evidence(evidence);
+
+        assert!(result.valid, "{:?}", result.blockers);
     }
 
     #[test]

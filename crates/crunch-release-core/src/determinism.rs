@@ -36,7 +36,8 @@ const REQUIRED_PERTURBATIONS: &[&str] = &[
     "umask",
     "env-noise",
 ];
-const PROOF_BLOCKING_AUDIT_EVENTS: &[&str] = &["host-tool-fallback", "host-state-leak", "impure-mode-selected"];
+const DETERMINISTIC_PROOF_AUDIT_WORKFLOW: &str = "deterministic-release";
+const DETERMINISTIC_PROOF_AUDIT_CLAIM: &str = "deterministic-release";
 const SUPPORTED_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1:";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -617,12 +618,8 @@ fn classify_deterministic_build_proof(
                 run.run_id, run.sandbox_profile_identity
             ));
         }
-        for event in &run.hermeticity_audit_events {
-            if PROOF_BLOCKING_AUDIT_EVENTS.iter().any(|blocking| blocking == event) {
-                reasons.push(format!("proof-blocking audit event {event}"));
-            }
-        }
     }
+    reasons.extend(proof_audit_gate_reasons(receipt));
     if !reasons.is_empty() {
         if reasons.iter().any(|reason| {
             reason.contains("reused derivation-under-test output store identity")
@@ -640,6 +637,20 @@ fn classify_deterministic_build_proof(
     } else {
         (DeterministicBuildProofVerdict::Mismatch, vec!["BLAKE3 output digest set mismatch".to_string()])
     }
+}
+
+fn proof_audit_gate_reasons(receipt: &DeterministicBuildProofReceipt) -> Vec<String> {
+    let event_classes =
+        receipt.runs.iter().flat_map(|run| run.hermeticity_audit_events.iter().cloned()).collect::<Vec<_>>();
+    let report = crate::proof_audit::strict_proof_audit_gate(
+        DETERMINISTIC_PROOF_AUDIT_WORKFLOW.to_string(),
+        DETERMINISTIC_PROOF_AUDIT_CLAIM.to_string(),
+        event_classes,
+    );
+    if report.strict_claim_satisfied {
+        return Vec::new();
+    }
+    crate::proof_audit::proof_audit_gate_blocking_reasons(report)
 }
 
 fn reused_output_store_path_reasons(runs: &[DeterministicBuildRunReceipt]) -> Vec<String> {
@@ -824,6 +835,50 @@ mod tests {
                 "{event}: {reasons:?}"
             );
         }
+    }
+
+    #[test]
+    #[test]
+    fn deterministic_receipt_blocks_unknown_audit_events_closed_by_default() {
+        let mut receipt = receipt();
+        receipt.runs[0].hermeticity_audit_events.push("future-benign-event".to_string());
+        let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+
+        assert_eq!(verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert!(reasons.iter().any(|reason| reason.contains("future-benign-event")), "{reasons:?}");
+        assert!(
+            reasons.iter().any(|reason| reason.contains(crate::proof_audit::STRICT_PROOF_POLICY_BASIS)),
+            "{reasons:?}"
+        );
+    }
+
+    #[test]
+    fn deterministic_receipt_blocks_degraded_audit_even_when_effect_is_declared() {
+        let mut receipt = receipt();
+        receipt.declared_effects.push(BuildEffect::HostTool);
+        receipt.runs[0].observed_effects = Some(vec![
+            BuildEffect::ReadStore,
+            BuildEffect::WriteOutput,
+            BuildEffect::Environment,
+            BuildEffect::HostTool,
+        ]);
+        receipt.runs[0].hermeticity_audit_events.push("host-tool-fallback".to_string());
+        let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+
+        assert_eq!(verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert!(reasons.iter().any(|reason| reason.contains("host-tool-fallback")), "{reasons:?}");
+        assert!(reasons.iter().all(|reason| !reason.contains("undeclared observed build effect")), "{reasons:?}");
+    }
+
+    #[test]
+    fn deterministic_receipt_accepts_policy_informational_audit_events() {
+        let mut receipt = receipt();
+        receipt.runs[0].hermeticity_audit_events.push("store-read".to_string());
+        receipt.runs[0].hermeticity_audit_events.push("output-write".to_string());
+        let (verdict, reasons) = classify_deterministic_build_proof(&receipt);
+
+        assert_eq!(verdict, DeterministicBuildProofVerdict::SelfRebuildMatch);
+        assert!(reasons.is_empty(), "{reasons:?}");
     }
 
     #[test]

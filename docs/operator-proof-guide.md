@@ -110,6 +110,12 @@ result:
   relevant docs changed after the bundle was produced, mark the bundle stale and
   rerun or narrow the claim to the old tree.
 
+Proof-mode admission is closed by default for hermeticity audit events. Clean
+strict evidence records the event-set digest and policy basis; unapproved event
+classes appear as deterministic blockers with the policy basis, and approved
+exceptions must name the event class, affected proof class, and narrower claim
+instead of satisfying the stricter proof class.
+
 The self-build proof does not prove compiler correctness, does not prove full
 Cargo compatibility, does not prove release reproducibility, does not prove
 deploy success, and does not prove general Nix replacement completeness.
