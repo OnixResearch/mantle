@@ -11,6 +11,11 @@ pub const ENV_REJECTION_LOCALE: &str = "locale-override";
 pub const ENV_REJECTION_TEMP_ROOT: &str = "temp-root-override";
 pub const ENV_REJECTION_SEARCH_PATH: &str = "receipt-bound-path";
 pub const SEARCH_PATH_DIGEST_ALGORITHM: &str = "blake3";
+pub const DETERMINISM_NORMALIZATION_DIGEST_ALGORITHM: &str = "blake3";
+pub const DETERMINISM_NORMALIZATION_SCHEMA: &str = "mantle-determinism-normalization-policy-v1";
+pub const DETERMINISM_ENFORCEMENT_ENFORCED: &str = "enforced";
+pub const DETERMINISM_ENFORCEMENT_UNSUPPORTED: &str = "unsupported";
+pub const DETERMINISM_DIVERGENCE_DIVERGED: &str = "diverged";
 pub const SEARCH_PATH_ENTRY_DECLARED_TOOL: &str = "declared-tool-ref";
 pub const SEARCH_PATH_ENTRY_ALIAS: &str = "alias-view";
 pub const SEARCH_PATH_ENTRY_HOST_INVENTORY: &str = "host-inventory-record";
@@ -18,6 +23,9 @@ const DENIED_ENV_DIAGNOSTIC: &str = "strict build environment rejects denied var
 const SEARCH_PATH_SCHEMA: &str = "mantle-search-path-plan-v1";
 const SEARCH_PATH_VARIABLE: &str = "PATH";
 const MAX_SEARCH_PATH_ENTRIES: usize = 256;
+const MAX_DETERMINISM_CONTROLS: usize = 32;
+const HEX_CHARS_PER_BYTE: usize = 2;
+const BLAKE3_HEX_CHARS: usize = blake3::OUT_LEN * HEX_CHARS_PER_BYTE;
 const ENV_NAME: &str = "name";
 const UNKNOWN_ACTION_NAME: &str = "<unnamed>";
 const DYNAMIC_LINKER_KEYS: [&str; 3] = ["LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT"];
@@ -43,6 +51,7 @@ pub struct BuildEnvironmentReport {
     pub variable_count: u32,
     pub rejections: Vec<BuildEnvironmentRejection>,
     pub search_path: Option<BuildSearchPathReport>,
+    pub determinism: Option<BuildDeterminismNormalizationReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +101,48 @@ pub struct SearchPathEntryDeclaration {
 pub struct SearchPathPlanRequest {
     pub entries: Vec<SearchPathEntryDeclaration>,
     pub ambient_entries: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildDeterminismNormalizationReport {
+    pub policy_digest_blake3: String,
+    pub controls: Vec<BuildDeterminismControl>,
+    pub unsupported_controls: Vec<String>,
+    pub divergence: Option<BuildOutputDivergenceDiagnostic>,
+    pub strong_claim_blocked: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub struct BuildDeterminismControl {
+    pub surface: String,
+    pub policy: String,
+    pub value: String,
+    pub enforcement: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildOutputDivergenceDiagnostic {
+    pub status: String,
+    pub surface: String,
+    pub left_digest_blake3: String,
+    pub right_digest_blake3: String,
+    pub diagnostic: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DeterminismNormalizationRequest {
+    pub controls: Vec<BuildDeterminismControl>,
+    pub unsupported_controls: Vec<String>,
+    pub divergence: Option<BuildOutputDivergenceDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeterminismNormalizationError {
+    TooManyControls { count: usize, max: usize },
+    EmptyControlField { field: String },
+    DuplicateControl { surface: String },
+    InvalidUnsupportedControl { control: String },
+    InvalidDivergence { diagnostic: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,6 +215,49 @@ pub fn plan_receipt_bound_search_path(
     })
 }
 
+pub fn plan_determinism_normalization(
+    request: DeterminismNormalizationRequest,
+) -> Result<BuildDeterminismNormalizationReport, DeterminismNormalizationError> {
+    validate_determinism_request_size(&request)?;
+    let mut controls = request.controls;
+    controls.sort();
+    validate_determinism_controls(&controls)?;
+    let unsupported_controls = sorted_unique_unsupported_controls(request.unsupported_controls)?;
+    if let Some(divergence) = &request.divergence {
+        validate_output_divergence(divergence)?;
+    }
+    let strong_claim_blocked = !unsupported_controls.is_empty()
+        || request
+            .divergence
+            .as_ref()
+            .is_some_and(|divergence| divergence.status == DETERMINISM_DIVERGENCE_DIVERGED);
+    let policy_digest_blake3 = determinism_policy_digest_blake3(&controls, &unsupported_controls);
+    Ok(BuildDeterminismNormalizationReport {
+        policy_digest_blake3,
+        controls,
+        unsupported_controls,
+        divergence: request.divergence,
+        strong_claim_blocked,
+    })
+}
+
+pub fn output_divergence_diagnostic(
+    surface: String,
+    left_digest_blake3: String,
+    right_digest_blake3: String,
+) -> Option<BuildOutputDivergenceDiagnostic> {
+    if left_digest_blake3 == right_digest_blake3 {
+        return None;
+    }
+    Some(BuildOutputDivergenceDiagnostic {
+        status: DETERMINISM_DIVERGENCE_DIVERGED.to_string(),
+        surface: surface.clone(),
+        left_digest_blake3,
+        right_digest_blake3,
+        diagnostic: format!("deterministic-output-divergence:{surface}"),
+    })
+}
+
 pub fn denied_search_path_variable(
     action_name: String,
     accepted_variable_count: usize,
@@ -188,6 +282,116 @@ pub fn denied_search_path_variable(
         rejection,
         report,
     }
+}
+
+fn validate_determinism_request_size(
+    request: &DeterminismNormalizationRequest,
+) -> Result<(), DeterminismNormalizationError> {
+    let count = request.controls.len().saturating_add(request.unsupported_controls.len());
+    if count > MAX_DETERMINISM_CONTROLS {
+        return Err(DeterminismNormalizationError::TooManyControls {
+            count,
+            max: MAX_DETERMINISM_CONTROLS,
+        });
+    }
+    Ok(())
+}
+
+fn validate_determinism_controls(controls: &[BuildDeterminismControl]) -> Result<(), DeterminismNormalizationError> {
+    let mut seen = BTreeMap::new();
+    for control in controls {
+        validate_determinism_control(control)?;
+        if seen.insert(control.surface.clone(), control.policy.clone()).is_some() {
+            return Err(DeterminismNormalizationError::DuplicateControl {
+                surface: control.surface.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_determinism_control(control: &BuildDeterminismControl) -> Result<(), DeterminismNormalizationError> {
+    for (field, value) in [
+        ("surface", &control.surface),
+        ("policy", &control.policy),
+        ("value", &control.value),
+        ("enforcement", &control.enforcement),
+    ] {
+        if value.trim().is_empty() {
+            return Err(DeterminismNormalizationError::EmptyControlField {
+                field: field.to_string(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn sorted_unique_unsupported_controls(mut controls: Vec<String>) -> Result<Vec<String>, DeterminismNormalizationError> {
+    for control in &controls {
+        if control.trim().is_empty() {
+            return Err(DeterminismNormalizationError::InvalidUnsupportedControl {
+                control: control.clone(),
+            });
+        }
+    }
+    controls.sort();
+    controls.dedup();
+    Ok(controls)
+}
+
+fn validate_output_divergence(
+    divergence: &BuildOutputDivergenceDiagnostic,
+) -> Result<(), DeterminismNormalizationError> {
+    for (field, value) in [
+        ("status", &divergence.status),
+        ("surface", &divergence.surface),
+        ("left_digest_blake3", &divergence.left_digest_blake3),
+        ("right_digest_blake3", &divergence.right_digest_blake3),
+        ("diagnostic", &divergence.diagnostic),
+    ] {
+        if value.trim().is_empty() {
+            return Err(DeterminismNormalizationError::InvalidDivergence {
+                diagnostic: format!("{field} must not be empty"),
+            });
+        }
+    }
+    if divergence.status != DETERMINISM_DIVERGENCE_DIVERGED {
+        return Err(DeterminismNormalizationError::InvalidDivergence {
+            diagnostic: format!("unsupported divergence status {}", divergence.status),
+        });
+    }
+    for (field, digest) in [
+        ("left_digest_blake3", &divergence.left_digest_blake3),
+        ("right_digest_blake3", &divergence.right_digest_blake3),
+    ] {
+        if !is_lowercase_blake3_hex(digest) {
+            return Err(DeterminismNormalizationError::InvalidDivergence {
+                diagnostic: format!("{field} must be lowercase BLAKE3 hex"),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn is_lowercase_blake3_hex(value: &str) -> bool {
+    value.len() == BLAKE3_HEX_CHARS && value.chars().all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase())
+}
+
+#[derive(Debug, Serialize)]
+struct CanonicalDeterminismPolicy<'a> {
+    schema: &'static str,
+    controls: &'a [BuildDeterminismControl],
+    unsupported_controls: &'a [String],
+}
+
+fn determinism_policy_digest_blake3(controls: &[BuildDeterminismControl], unsupported_controls: &[String]) -> String {
+    let canonical = CanonicalDeterminismPolicy {
+        schema: DETERMINISM_NORMALIZATION_SCHEMA,
+        controls,
+        unsupported_controls,
+    };
+    let bytes = serde_json::to_vec(&canonical).expect("canonical determinism policy serialization should not fail");
+    blake3::hash(&bytes).to_hex().to_string()
 }
 
 fn validate_search_path_request_size(request: &SearchPathPlanRequest) -> Result<(), SearchPathPlanError> {
@@ -278,6 +482,20 @@ fn search_path_digest_blake3(
     blake3::hash(&bytes).to_hex().to_string()
 }
 
+impl std::fmt::Display for DeterminismNormalizationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooManyControls { count, max } => write!(f, "determinism-control-count-exceeds-{max}: {count}"),
+            Self::EmptyControlField { field } => write!(f, "determinism-control-field-empty:{field}"),
+            Self::DuplicateControl { surface } => write!(f, "determinism-control-duplicate:{surface}"),
+            Self::InvalidUnsupportedControl { control } => {
+                write!(f, "determinism-unsupported-control-invalid:{control}")
+            }
+            Self::InvalidDivergence { diagnostic } => write!(f, "determinism-divergence-invalid:{diagnostic}"),
+        }
+    }
+}
+
 impl std::fmt::Display for SearchPathPlanError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -304,6 +522,7 @@ pub fn success_report(action_name: String, environment_vars: &BTreeMap<String, V
         variable_count: bounded_variable_count(environment_vars.len()),
         rejections: Vec::new(),
         search_path: None,
+        determinism: None,
     }
 }
 
@@ -320,6 +539,7 @@ pub fn denied_report(
         variable_count: bounded_variable_count(accepted_variable_count),
         rejections: vec![rejection],
         search_path: None,
+        determinism: None,
     }
 }
 
@@ -519,4 +739,68 @@ mod tests {
             matches!(alias_drift, SearchPathPlanError::AliasTargetDrift { alias_path } if alias_path == "/build/aliases")
         );
     }
+
+    #[test]
+    fn determinism_normalization_plan_records_stable_policy_digest() {
+        const CONTROL_COUNT: usize = 2;
+        const HEX_CHARS_PER_BYTE: usize = 2;
+
+        let request = DeterminismNormalizationRequest {
+            controls: vec![
+                BuildDeterminismControl {
+                    surface: "timezone".to_string(),
+                    policy: "fixed-env".to_string(),
+                    value: "TZ=UTC".to_string(),
+                    enforcement: DETERMINISM_ENFORCEMENT_ENFORCED.to_string(),
+                },
+                BuildDeterminismControl {
+                    surface: "time".to_string(),
+                    policy: "source-date-epoch".to_string(),
+                    value: "SOURCE_DATE_EPOCH=1".to_string(),
+                    enforcement: DETERMINISM_ENFORCEMENT_ENFORCED.to_string(),
+                },
+            ],
+            unsupported_controls: Vec::new(),
+            divergence: None,
+        };
+        let first = plan_determinism_normalization(request.clone()).expect("determinism policy");
+        let repeated = plan_determinism_normalization(request).expect("repeat determinism policy");
+
+        assert_eq!(first.controls.len(), CONTROL_COUNT);
+        assert_eq!(first.policy_digest_blake3, repeated.policy_digest_blake3);
+        assert_eq!(first.policy_digest_blake3.len(), blake3::OUT_LEN * HEX_CHARS_PER_BYTE);
+        assert!(!first.strong_claim_blocked);
+        assert!(first.unsupported_controls.is_empty());
+    }
+
+    #[test]
+    fn determinism_normalization_plan_blocks_unsupported_controls_and_divergence() {
+        let divergence =
+            output_divergence_diagnostic("out".to_string(), DIGEST_LEFT.to_string(), DIGEST_RIGHT.to_string())
+                .expect("different output digests diverge");
+        let report = plan_determinism_normalization(DeterminismNormalizationRequest {
+            controls: vec![BuildDeterminismControl {
+                surface: "umask".to_string(),
+                policy: "fixed".to_string(),
+                value: "0022".to_string(),
+                enforcement: DETERMINISM_ENFORCEMENT_UNSUPPORTED.to_string(),
+            }],
+            unsupported_controls: vec!["umask".to_string()],
+            divergence: Some(divergence),
+        })
+        .expect("blocked determinism policy report");
+
+        assert!(report.strong_claim_blocked);
+        assert_eq!(report.unsupported_controls, vec!["umask".to_string()]);
+        assert_eq!(
+            report.divergence.as_ref().map(|value| value.status.as_str()),
+            Some(DETERMINISM_DIVERGENCE_DIVERGED)
+        );
+        assert!(
+            output_divergence_diagnostic("out".to_string(), DIGEST_LEFT.to_string(), DIGEST_LEFT.to_string()).is_none()
+        );
+    }
+
+    const DIGEST_LEFT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const DIGEST_RIGHT: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 }

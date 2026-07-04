@@ -36,6 +36,18 @@ const REQUIRED_PERTURBATIONS: &[&str] = &[
     "umask",
     "env-noise",
 ];
+const REQUIRED_NORMALIZATION_CONTROLS: &[&str] = &[
+    "time",
+    "timezone",
+    "locale",
+    "temp-roots",
+    "host-user-metadata",
+    "umask",
+    "modeled-randomness",
+    "order-sensitive-output-processing",
+];
+const NORMALIZATION_CONTROL_PREFIX: &str = "normalization:";
+const UNSUPPORTED_NORMALIZATION_PREFIX: &str = "normalization-unsupported:";
 const DETERMINISTIC_PROOF_WORKFLOW: &str = "deterministic-release";
 const DETERMINISTIC_PROOF_CLAIM: &str = "deterministic-release";
 const SUPPORTED_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1:";
@@ -591,6 +603,7 @@ fn classify_deterministic_build_proof(
             reasons.push(format!("missing ambient host perturbation {required}"));
         }
     }
+    reasons.extend(normalization_policy_reasons(&receipt.normalized_execution_envelope));
     if receipt.physical_store_isolation != "fresh-store-per-run"
         && receipt.physical_store_isolation != "clean-namespace-per-run"
     {
@@ -631,8 +644,45 @@ fn classify_deterministic_build_proof(
     if digest_sets_match(&receipt.runs) {
         (DeterministicBuildProofVerdict::SelfRebuildMatch, Vec::new())
     } else {
-        (DeterministicBuildProofVerdict::Mismatch, vec!["BLAKE3 output digest set mismatch".to_string()])
+        (DeterministicBuildProofVerdict::Mismatch, output_divergence_reasons(&receipt.runs))
     }
+}
+
+fn normalization_policy_reasons(envelope: &[String]) -> Vec<String> {
+    let mut reasons = Vec::new();
+    for entry in envelope {
+        if let Some(control) = entry.strip_prefix(UNSUPPORTED_NORMALIZATION_PREFIX) {
+            reasons.push(format!("unsupported determinism normalization control {control}"));
+        }
+    }
+    for required in REQUIRED_NORMALIZATION_CONTROLS {
+        if !envelope_has_normalization_control(envelope, required) {
+            reasons.push(format!("missing determinism normalization control {required}"));
+        }
+    }
+    reasons
+}
+
+fn envelope_has_normalization_control(envelope: &[String], control: &str) -> bool {
+    let exact = format!("{NORMALIZATION_CONTROL_PREFIX}{control}");
+    let assigned = format!("{NORMALIZATION_CONTROL_PREFIX}{control}=");
+    envelope.iter().any(|entry| entry == &exact || entry.starts_with(&assigned))
+}
+
+fn output_divergence_reasons(runs: &[DeterministicBuildRunReceipt]) -> Vec<String> {
+    let mut iter = runs.iter().map(canonical_run_digest_map);
+    let Some(first) = iter.next() else {
+        return vec!["deterministic output divergence:no-runs".to_string()];
+    };
+    for other in iter {
+        let names = first.keys().chain(other.keys()).cloned().collect::<BTreeSet<_>>();
+        for name in names {
+            if first.get(&name) != other.get(&name) {
+                return vec![format!("deterministic output divergence:{name}")];
+            }
+        }
+    }
+    vec!["BLAKE3 output digest set mismatch".to_string()]
 }
 
 fn strict_proof_eligibility_reasons(receipt: &DeterministicBuildProofReceipt) -> Vec<String> {
@@ -734,6 +784,16 @@ mod tests {
         REQUIRED_PERTURBATIONS.iter().map(|value| value.to_string()).collect()
     }
 
+    fn normalization_envelope() -> Vec<String> {
+        let mut envelope = vec!["sandbox=bwrap".to_string(), "network=none".to_string()];
+        envelope.extend(
+            REQUIRED_NORMALIZATION_CONTROLS
+                .iter()
+                .map(|control| format!("{NORMALIZATION_CONTROL_PREFIX}{control}=enforced")),
+        );
+        envelope
+    }
+
     fn receipt() -> DeterministicBuildProofReceipt {
         DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
             proof_unit: DeterministicProofUnit {
@@ -753,7 +813,7 @@ mod tests {
             effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
             declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
             observed_effects: None,
-            normalized_execution_envelope: vec!["sandbox=bwrap".to_string(), "network=none".to_string()],
+            normalized_execution_envelope: normalization_envelope(),
             ambient_host_perturbations: perturbations(),
             sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
             runs: vec![run("run-b", "case-b", 1), run("run-a", "case-a", 1)],
@@ -904,7 +964,7 @@ mod tests {
                 effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
                 declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
                 observed_effects: None,
-                normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
+                normalized_execution_envelope: normalization_envelope(),
                 ambient_host_perturbations: perturbations(),
                 sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
                 runs: Vec::new(),
@@ -912,7 +972,29 @@ mod tests {
         });
         assert_eq!(receipt.verdict, DeterministicBuildProofVerdict::Mismatch);
         receipt.blocking_reasons.sort();
-        assert!(receipt.blocking_reasons.contains(&"BLAKE3 output digest set mismatch".to_string()));
+        assert!(receipt.blocking_reasons.contains(&"deterministic output divergence:out".to_string()));
+    }
+
+    #[test]
+    fn deterministic_receipt_blocks_missing_or_unsupported_normalization_controls() {
+        let mut missing = receipt();
+        let missing_umask_prefix = format!("{NORMALIZATION_CONTROL_PREFIX}umask=");
+        missing.normalized_execution_envelope.retain(|entry| !entry.starts_with(&missing_umask_prefix));
+        let (missing_verdict, missing_reasons) = classify_deterministic_build_proof(&missing);
+        assert_eq!(missing_verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert!(missing_reasons.iter().any(|reason| reason == "missing determinism normalization control umask"));
+
+        let mut unsupported = receipt();
+        unsupported
+            .normalized_execution_envelope
+            .push(format!("{UNSUPPORTED_NORMALIZATION_PREFIX}modeled-randomness=executor-lacks-control"));
+        let (unsupported_verdict, unsupported_reasons) = classify_deterministic_build_proof(&unsupported);
+        assert_eq!(unsupported_verdict, DeterministicBuildProofVerdict::MissingEvidence);
+        assert!(
+            unsupported_reasons
+                .iter()
+                .any(|reason| reason.contains("unsupported determinism normalization control modeled-randomness"))
+        );
     }
 
     #[test]
@@ -952,7 +1034,7 @@ mod tests {
                 effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
                 declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
                 observed_effects: None,
-                normalized_execution_envelope: vec!["sandbox=bwrap".to_string()],
+                normalized_execution_envelope: normalization_envelope(),
                 ambient_host_perturbations: perturbations(),
                 sandbox_profile_identities: vec!["mantle-proof-sandbox-v1:demo".to_string()],
                 runs: Vec::new(),

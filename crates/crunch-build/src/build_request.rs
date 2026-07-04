@@ -39,6 +39,21 @@ const PATH_ENTRY_SEPARATOR: char = ':';
 const STORE_PATH_HASH_CHARS: usize = 32;
 const STORE_COMPONENT_NAME_SEPARATOR_CHARS: usize = 1;
 const MIN_STORE_COMPONENT_CHARS: usize = STORE_PATH_HASH_CHARS + STORE_COMPONENT_NAME_SEPARATOR_CHARS;
+const STRICT_DETERMINISM_CONTROL_COUNT: usize = 8;
+const DETERMINISM_POLICY_FIXED_ENV: &str = "fixed-env";
+const DETERMINISM_POLICY_FIXED_EXECUTOR: &str = "fixed-executor";
+const DETERMINISM_POLICY_MODELED: &str = "modeled";
+const DETERMINISM_SURFACE_TIME: &str = "time";
+const DETERMINISM_SURFACE_TIMEZONE: &str = "timezone";
+const DETERMINISM_SURFACE_LOCALE: &str = "locale";
+const DETERMINISM_SURFACE_TEMP_ROOTS: &str = "temp-roots";
+const DETERMINISM_SURFACE_HOST_USER: &str = "host-user-metadata";
+const DETERMINISM_SURFACE_UMASK: &str = "umask";
+const DETERMINISM_SURFACE_RANDOMNESS: &str = "modeled-randomness";
+const DETERMINISM_SURFACE_ORDERING: &str = "order-sensitive-output-processing";
+const STRICT_UMASK_VALUE: &str = "0022";
+const STRICT_RANDOMNESS_VALUE: &str = "no-modeled-random-seed";
+const STRICT_ORDERING_VALUE: &str = "lexicographic-output-processing";
 const SANDBOX_ENV_VARS: [(&str, &str); 19] = [
     ("HOME", "/homeless-shelter"),
     ("LANG", "C"),
@@ -129,8 +144,10 @@ pub fn normalize_build_environment(
 
     let action_name = environment_policy::action_name_from_environment(&derivation.environment);
     let search_path = strict_search_path_report(&environment_vars, store_dir, hermeticity_mode)?;
+    let determinism = strict_determinism_report(&environment_vars, hermeticity_mode)?;
     let mut report = environment_policy::success_report(action_name, &environment_vars);
     report.search_path = search_path;
+    report.determinism = determinism;
 
     Ok(NormalizedBuildEnvironment {
         environment_vars,
@@ -305,6 +322,99 @@ fn strict_search_path_report(
     let report = receipt_bound_search_path_from_value(path_value, store_dir)
         .map_err(|err| crate::Error::Store(err.to_string()))?;
     Ok(Some(report))
+}
+
+fn strict_determinism_report(
+    environment_vars: &BTreeMap<String, Vec<u8>>,
+    hermeticity_mode: HermeticityMode,
+) -> Result<Option<environment_policy::BuildDeterminismNormalizationReport>, crate::Error> {
+    if !hermeticity_mode.is_strict() {
+        return Ok(None);
+    }
+    let controls = strict_determinism_controls(environment_vars)?;
+    let report =
+        environment_policy::plan_determinism_normalization(environment_policy::DeterminismNormalizationRequest {
+            controls,
+            unsupported_controls: Vec::new(),
+            divergence: None,
+        })
+        .map_err(|err| crate::Error::Store(err.to_string()))?;
+    Ok(Some(report))
+}
+
+fn strict_determinism_controls(
+    environment_vars: &BTreeMap<String, Vec<u8>>,
+) -> Result<Vec<environment_policy::BuildDeterminismControl>, crate::Error> {
+    let mut controls = Vec::with_capacity(STRICT_DETERMINISM_CONTROL_COUNT);
+    controls.push(determinism_control(
+        DETERMINISM_SURFACE_TIME,
+        DETERMINISM_POLICY_FIXED_ENV,
+        format!("SOURCE_DATE_EPOCH={}", env_value(environment_vars, "SOURCE_DATE_EPOCH")?),
+    ));
+    controls.push(determinism_control(
+        DETERMINISM_SURFACE_TIMEZONE,
+        DETERMINISM_POLICY_FIXED_ENV,
+        format!("TZ={}", env_value(environment_vars, "TZ")?),
+    ));
+    controls.push(determinism_control(
+        DETERMINISM_SURFACE_LOCALE,
+        DETERMINISM_POLICY_FIXED_ENV,
+        format!("LANG={};LC_ALL={}", env_value(environment_vars, "LANG")?, env_value(environment_vars, "LC_ALL")?),
+    ));
+    controls.push(determinism_control(
+        DETERMINISM_SURFACE_TEMP_ROOTS,
+        DETERMINISM_POLICY_FIXED_ENV,
+        format!(
+            "TEMP={};TEMPDIR={};TMP={};TMPDIR={}",
+            env_value(environment_vars, "TEMP")?,
+            env_value(environment_vars, "TEMPDIR")?,
+            env_value(environment_vars, "TMP")?,
+            env_value(environment_vars, "TMPDIR")?
+        ),
+    ));
+    controls.push(determinism_control(
+        DETERMINISM_SURFACE_HOST_USER,
+        DETERMINISM_POLICY_FIXED_ENV,
+        format!(
+            "HOME={};LOGNAME={};USER={}",
+            env_value(environment_vars, "HOME")?,
+            env_value(environment_vars, "LOGNAME")?,
+            env_value(environment_vars, "USER")?
+        ),
+    ));
+    controls.push(determinism_control(
+        DETERMINISM_SURFACE_UMASK,
+        DETERMINISM_POLICY_FIXED_EXECUTOR,
+        STRICT_UMASK_VALUE.to_string(),
+    ));
+    controls.push(determinism_control(
+        DETERMINISM_SURFACE_RANDOMNESS,
+        DETERMINISM_POLICY_MODELED,
+        STRICT_RANDOMNESS_VALUE.to_string(),
+    ));
+    controls.push(determinism_control(
+        DETERMINISM_SURFACE_ORDERING,
+        DETERMINISM_POLICY_MODELED,
+        STRICT_ORDERING_VALUE.to_string(),
+    ));
+    debug_assert_eq!(controls.len(), STRICT_DETERMINISM_CONTROL_COUNT);
+    Ok(controls)
+}
+
+fn determinism_control(surface: &str, policy: &str, value: String) -> environment_policy::BuildDeterminismControl {
+    environment_policy::BuildDeterminismControl {
+        surface: surface.to_string(),
+        policy: policy.to_string(),
+        value,
+        enforcement: environment_policy::DETERMINISM_ENFORCEMENT_ENFORCED.to_string(),
+    }
+}
+
+fn env_value(environment_vars: &BTreeMap<String, Vec<u8>>, key: &str) -> Result<String, crate::Error> {
+    let value = environment_vars
+        .get(key)
+        .ok_or_else(|| crate::Error::Store(format!("strict determinism normalization missing {key}")))?;
+    Ok(format_env_value(value))
 }
 
 fn receipt_bound_search_path_from_value(
@@ -708,6 +818,29 @@ mod tests {
         assert_eq!(first.report.variable_count, u32::try_from(first.environment_vars.len()).unwrap());
         assert!(first.report.rejections.is_empty());
         assert!(first.report.search_path.as_ref().is_some_and(|search_path| search_path.entries.is_empty()));
+        let determinism = first.report.determinism.as_ref().expect("strict determinism report");
+        assert_eq!(determinism.controls.len(), STRICT_DETERMINISM_CONTROL_COUNT);
+        assert!(!determinism.strong_claim_blocked);
+        assert!(determinism.unsupported_controls.is_empty());
+        assert!(determinism.controls.iter().any(|control| control.surface == DETERMINISM_SURFACE_UMASK));
+        assert!(determinism.controls.iter().any(|control| control.surface == DETERMINISM_SURFACE_ORDERING));
+    }
+
+    #[test]
+    fn strict_mode_determinism_policy_changes_with_declared_time_override() {
+        let default = normalize_env_map(&[("CC", "cc")], HermeticityMode::Strict).unwrap();
+        let overridden =
+            normalize_env_map(&[("CC", "cc"), ("SOURCE_DATE_EPOCH", "12345")], HermeticityMode::Strict).unwrap();
+        let default_determinism = default.report.determinism.expect("default determinism report");
+        let overridden_determinism = overridden.report.determinism.expect("overridden determinism report");
+
+        assert_ne!(default_determinism.policy_digest_blake3, overridden_determinism.policy_digest_blake3);
+        assert!(!overridden_determinism.strong_claim_blocked);
+        assert!(
+            overridden_determinism.controls.iter().any(
+                |control| control.surface == DETERMINISM_SURFACE_TIME && control.value == "SOURCE_DATE_EPOCH=12345"
+            )
+        );
     }
 
     #[test]

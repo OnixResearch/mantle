@@ -9,8 +9,9 @@ roles, tags, options, providers, or Nickel contracts.
 
 - `mantle-action-spec-v1` declares action kind, platform, toolchain object refs,
   input object refs, argument and environment digests, output declarations,
-  sandbox policy, network policy, expected reference policy, optional frontend
-  spec refs, and optional Nickel evaluation provenance.
+  sandbox policy, network policy, determinism normalization policy, expected
+  reference policy, optional frontend spec refs, and optional Nickel evaluation
+  provenance.
 - `mantle-nickel-eval-receipt-v1` binds a `.ncl` root source ref, transitive
   import/source refs, import-path policy, evaluator identity, export/build-IR
   shape, and output digest.
@@ -39,6 +40,15 @@ reference, an alias view with a real tool ref, or an accepted host-tool inventor
 record. The build environment report records the ordered search-path digest,
 alias map, and real tool refs; ambient or unclassified entries fail before
 execution.
+
+## Determinism normalization
+
+Strict build and proof evidence binds a determinism normalization policy for
+modeled nondeterministic surfaces: time (`SOURCE_DATE_EPOCH`), timezone, locale,
+temporary roots, host/user metadata, executor umask, modeled randomness, and
+order-sensitive output processing. Unsupported controls and cross-run output
+divergence are reported as blockers for strong deterministic/release claims
+instead of being folded into a successful receipt.
 
 ## Network policy
 

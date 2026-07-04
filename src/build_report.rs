@@ -59,6 +59,8 @@ pub struct BuildJsonEnvironmentReport {
     pub rejections: Vec<BuildJsonEnvironmentRejection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_path: Option<BuildJsonSearchPathReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub determinism: Option<BuildJsonDeterminismNormalizationReport>,
 }
 
 #[derive(Debug, Serialize)]
@@ -89,6 +91,33 @@ pub struct BuildJsonSearchPathEntry {
 pub struct BuildJsonSearchPathAlias {
     pub alias_path: String,
     pub real_tool_ref: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonDeterminismNormalizationReport {
+    pub digest_algorithm: String,
+    pub policy_digest_blake3: String,
+    pub controls: Vec<BuildJsonDeterminismControl>,
+    pub unsupported_controls: Vec<String>,
+    pub divergence: Option<BuildJsonOutputDivergenceDiagnostic>,
+    pub strong_claim_blocked: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonDeterminismControl {
+    pub surface: String,
+    pub policy: String,
+    pub value: String,
+    pub enforcement: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonOutputDivergenceDiagnostic {
+    pub status: String,
+    pub surface: String,
+    pub left_digest_blake3: String,
+    pub right_digest_blake3: String,
+    pub diagnostic: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -320,6 +349,29 @@ fn build_environment_reports(result: &PipelineResult) -> Vec<BuildJsonEnvironmen
                     })
                     .collect(),
                 real_tool_refs: search_path.real_tool_refs.clone(),
+            }),
+            determinism: row.determinism.as_ref().map(|determinism| BuildJsonDeterminismNormalizationReport {
+                digest_algorithm: crunch_pipeline::DETERMINISM_NORMALIZATION_DIGEST_ALGORITHM.to_string(),
+                policy_digest_blake3: determinism.policy_digest_blake3.clone(),
+                controls: determinism
+                    .controls
+                    .iter()
+                    .map(|control| BuildJsonDeterminismControl {
+                        surface: control.surface.clone(),
+                        policy: control.policy.clone(),
+                        value: control.value.clone(),
+                        enforcement: control.enforcement.clone(),
+                    })
+                    .collect(),
+                unsupported_controls: determinism.unsupported_controls.clone(),
+                divergence: determinism.divergence.as_ref().map(|divergence| BuildJsonOutputDivergenceDiagnostic {
+                    status: divergence.status.clone(),
+                    surface: divergence.surface.clone(),
+                    left_digest_blake3: divergence.left_digest_blake3.clone(),
+                    right_digest_blake3: divergence.right_digest_blake3.clone(),
+                    diagnostic: divergence.diagnostic.clone(),
+                }),
+                strong_claim_blocked: determinism.strong_claim_blocked,
             }),
         })
         .collect()
@@ -738,6 +790,18 @@ mod tests {
                     aliases: Vec::new(),
                     real_tool_refs: vec!["/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-tool".to_string()],
                 }),
+                determinism: Some(crunch_pipeline::BuildDeterminismNormalizationReport {
+                    policy_digest_blake3: "determinism-digest".to_string(),
+                    controls: vec![crunch_pipeline::BuildDeterminismControl {
+                        surface: "time".to_string(),
+                        policy: "fixed-env".to_string(),
+                        value: "SOURCE_DATE_EPOCH=1".to_string(),
+                        enforcement: "enforced".to_string(),
+                    }],
+                    unsupported_controls: Vec::new(),
+                    divergence: None,
+                    strong_claim_blocked: false,
+                }),
             }],
             network_policy_reports: vec![crunch_pipeline::BuildNetworkPolicyReport {
                 action_name: "demo".to_string(),
@@ -778,6 +842,11 @@ mod tests {
         assert_eq!(search_path.digest_blake3.as_deref(), Some("path-digest"));
         assert_eq!(search_path.entries[0].kind, "declared-tool-ref");
         assert_eq!(search_path.real_tool_refs, vec!["/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-tool".to_string()]);
+        let determinism = report.build_environment_reports[0].determinism.as_ref().expect("determinism report");
+        assert_eq!(determinism.digest_algorithm, "blake3");
+        assert_eq!(determinism.policy_digest_blake3, "determinism-digest");
+        assert_eq!(determinism.controls[0].surface, "time");
+        assert!(!determinism.strong_claim_blocked);
         assert_eq!(report.network_policy_reports.len(), 1);
         assert_eq!(report.network_policy_reports[0].action_name, "demo");
         assert_eq!(report.network_policy_reports[0].mode, "offline");

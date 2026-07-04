@@ -75,6 +75,7 @@ pub(crate) struct MantleActionSpecInput {
     pub(crate) input_object_refs: Vec<String>,
     pub(crate) args_digest_blake3: String,
     pub(crate) env_digest_blake3: String,
+    pub(crate) determinism_policy_digest_blake3: Option<String>,
     pub(crate) output_declarations: Vec<OutputDeclaration>,
     pub(crate) sandbox_policy: SandboxPolicy,
     pub(crate) network_policy: NetworkPolicy,
@@ -93,6 +94,7 @@ pub(crate) struct MantleActionSpec {
     pub(crate) input_object_refs: Vec<String>,
     pub(crate) args_digest_blake3: String,
     pub(crate) env_digest_blake3: String,
+    pub(crate) determinism_policy_digest_blake3: Option<String>,
     pub(crate) output_declarations: Vec<OutputDeclaration>,
     pub(crate) sandbox_policy: SandboxPolicy,
     pub(crate) network_policy: NetworkPolicy,
@@ -225,6 +227,7 @@ pub(crate) struct MantleActionReceiptInput {
     pub(crate) sandbox_report_ref: String,
     pub(crate) sandbox_policy: SandboxPolicy,
     pub(crate) network_policy: NetworkPolicy,
+    pub(crate) determinism_policy_digest_blake3: Option<String>,
     pub(crate) network_policy_result: String,
     pub(crate) producer_identity: String,
     pub(crate) signature_refs: Vec<String>,
@@ -246,6 +249,7 @@ pub(crate) struct MantleActionReceipt {
     pub(crate) sandbox_report_ref: String,
     pub(crate) sandbox_policy: SandboxPolicy,
     pub(crate) network_policy: NetworkPolicy,
+    pub(crate) determinism_policy_digest_blake3: Option<String>,
     pub(crate) network_policy_result: String,
     pub(crate) producer_identity: String,
     pub(crate) signature_refs: Vec<String>,
@@ -280,6 +284,9 @@ pub(crate) fn canonical_action_spec(input: MantleActionSpecInput) -> Result<Mant
     validate_ref_list("input_object_refs", &input.input_object_refs)?;
     validate_digest("args_digest_blake3", &input.args_digest_blake3)?;
     validate_digest("env_digest_blake3", &input.env_digest_blake3)?;
+    if let Some(digest) = &input.determinism_policy_digest_blake3 {
+        validate_digest("determinism_policy_digest_blake3", digest)?;
+    }
     let output_declarations = sorted_unique_structs(input.output_declarations.clone());
     let hashable = action_hashable(&input, &output_declarations);
     let action_ref = prefixed_digest(ACTION_REF_PREFIX, &hashable)?;
@@ -292,6 +299,7 @@ pub(crate) fn canonical_action_spec(input: MantleActionSpecInput) -> Result<Mant
         input_object_refs: sorted_unique_strings(input.input_object_refs),
         args_digest_blake3: input.args_digest_blake3,
         env_digest_blake3: input.env_digest_blake3,
+        determinism_policy_digest_blake3: input.determinism_policy_digest_blake3,
         output_declarations,
         sandbox_policy: normalize_sandbox_policy(input.sandbox_policy),
         network_policy: normalize_network_policy(input.network_policy),
@@ -310,6 +318,7 @@ fn action_hashable(input: &MantleActionSpecInput, output_declarations: &[OutputD
         "input_object_refs": sorted_unique_strings(input.input_object_refs.clone()),
         "args_digest_blake3": input.args_digest_blake3,
         "env_digest_blake3": input.env_digest_blake3,
+        "determinism_policy_digest_blake3": input.determinism_policy_digest_blake3,
         "output_declarations": output_declarations,
         "sandbox_policy": normalize_sandbox_policy(input.sandbox_policy.clone()),
         "network_policy": normalize_network_policy(input.network_policy.clone()),
@@ -569,6 +578,9 @@ pub(crate) fn action_receipt(input: MantleActionReceiptInput) -> Result<MantleAc
     validate_ref_list("toolchain_refs", &input.toolchain_refs)?;
     validate_ref_list("produced_object_refs", &input.produced_object_refs)?;
     validate_required("producer_identity", &input.producer_identity)?;
+    if let Some(digest) = &input.determinism_policy_digest_blake3 {
+        validate_digest("determinism_policy_digest_blake3", digest)?;
+    }
     let hashable = action_receipt_hashable(&input);
     let receipt_ref = prefixed_digest(ACTION_RECEIPT_REF_PREFIX, &hashable)?;
     Ok(MantleActionReceipt {
@@ -583,6 +595,7 @@ pub(crate) fn action_receipt(input: MantleActionReceiptInput) -> Result<MantleAc
         sandbox_report_ref: input.sandbox_report_ref,
         sandbox_policy: normalize_sandbox_policy(input.sandbox_policy),
         network_policy: normalize_network_policy(input.network_policy),
+        determinism_policy_digest_blake3: input.determinism_policy_digest_blake3,
         network_policy_result: input.network_policy_result,
         producer_identity: input.producer_identity,
         signature_refs: sorted_unique_strings(input.signature_refs),
@@ -606,6 +619,7 @@ fn action_receipt_hashable(input: &MantleActionReceiptInput) -> serde_json::Valu
         "sandbox_report_ref": input.sandbox_report_ref,
         "sandbox_policy": normalize_sandbox_policy(input.sandbox_policy.clone()),
         "network_policy": normalize_network_policy(input.network_policy.clone()),
+        "determinism_policy_digest_blake3": input.determinism_policy_digest_blake3,
         "network_policy_result": input.network_policy_result,
         "producer_identity": input.producer_identity,
         "signature_refs": sorted_unique_strings(input.signature_refs.clone()),
@@ -797,6 +811,7 @@ mod tests {
             input_object_refs: vec![object_ref("input-b"), object_ref("input-a")],
             args_digest_blake3: DIGEST_A.to_string(),
             env_digest_blake3: DIGEST_B.to_string(),
+            determinism_policy_digest_blake3: Some(DIGEST_C.to_string()),
             output_declarations: vec![OutputDeclaration {
                 name: "out".to_string(),
                 kind: FILE_OBJECT_KIND.to_string(),
@@ -835,6 +850,7 @@ mod tests {
             sandbox_report_ref: sandbox_ref("sandbox"),
             sandbox_policy: sandbox_policy(),
             network_policy: network_policy(),
+            determinism_policy_digest_blake3: Some(DIGEST_C.to_string()),
             network_policy_result: NETWORK_RESULT_DENIED.to_string(),
             producer_identity: PRODUCER_LOCAL.to_string(),
             signature_refs: vec![
@@ -859,6 +875,7 @@ mod tests {
 
         assert_eq!(left.action_ref, right.action_ref);
         assert_eq!(left.toolchain_refs.len(), 2);
+        assert_eq!(left.determinism_policy_digest_blake3.as_deref(), Some(DIGEST_C));
         assert!(left.action_ref.starts_with(ACTION_REF_PREFIX));
         assert!(!left.action_ref.contains("/tmp"));
     }
@@ -872,6 +889,20 @@ mod tests {
 
         assert_ne!(baseline.action_ref, changed.action_ref);
         assert!(changed.input_object_refs.iter().any(|item| item == &object_ref("new-input")));
+    }
+
+    #[test]
+    fn build_correctness_action_spec_binds_determinism_policy_digest() {
+        let baseline = canonical_action_spec(action_input()).unwrap();
+        let mut changed = action_input();
+        changed.determinism_policy_digest_blake3 = Some(DIGEST_A.to_string());
+        let changed = canonical_action_spec(changed).unwrap();
+        let mut invalid = action_input();
+        invalid.determinism_policy_digest_blake3 = Some("not-a-digest".to_string());
+
+        assert_ne!(baseline.action_ref, changed.action_ref);
+        assert_eq!(baseline.determinism_policy_digest_blake3.as_deref(), Some(DIGEST_C));
+        assert!(canonical_action_spec(invalid).unwrap_err().contains("determinism_policy_digest_blake3"));
     }
 
     #[test]
@@ -1069,6 +1100,7 @@ mod tests {
         assert_eq!(receipt.receipt_ref, repeated.receipt_ref);
         assert!(receipt.receipt_ref.starts_with(ACTION_RECEIPT_REF_PREFIX));
         assert!(rendered.contains(STRONG_CLAIM));
+        assert_eq!(receipt.determinism_policy_digest_blake3.as_deref(), Some(DIGEST_C));
         assert!(receipt.non_claims.iter().any(|claim| claim == NON_CLAIM_COMPILER_CORRECTNESS));
         assert!(receipt.non_claims.iter().any(|claim| claim == NON_CLAIM_FRONTEND_MODULE_CORRECTNESS));
     }

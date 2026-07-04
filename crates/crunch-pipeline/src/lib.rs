@@ -6,14 +6,18 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 pub use crunch_build::BUILD_ENVIRONMENT_DIGEST_ALGORITHM;
+pub use crunch_build::BuildDeterminismControl;
+pub use crunch_build::BuildDeterminismNormalizationReport;
 pub use crunch_build::BuildEnvironmentRejection;
 pub use crunch_build::BuildEnvironmentReport;
 pub use crunch_build::BuildNetworkPolicyReport;
 use crunch_build::BuildOutcome;
+pub use crunch_build::BuildOutputDivergenceDiagnostic;
 pub use crunch_build::BuildSearchPathAlias;
 pub use crunch_build::BuildSearchPathEntry;
 pub use crunch_build::BuildSearchPathReport;
 use crunch_build::Builder;
+pub use crunch_build::DETERMINISM_NORMALIZATION_DIGEST_ALGORITHM;
 use crunch_build::DerivationRegistry;
 use crunch_build::DispatchBuildService;
 use crunch_build::EvalMessage;
