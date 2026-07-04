@@ -78,6 +78,8 @@ const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
 const REMOTE_CHILD_POLL_INTERVAL_MS: u64 = 10;
 const SSH_STDIO_FIXED_ARG_COUNT: usize = 2;
+const REMOTE_UPLOAD_PROOF_PREFIX: &str = "proof:";
+const REMOTE_UPLOAD_SECRET_DESCRIPTOR_PREFIX: &str = "secret-descriptor:";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -444,6 +446,55 @@ pub struct RemoteInputUploadArtifact {
     pub digest_blake3: String,
     pub size_bytes: u64,
     pub payload: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteInputUploadClass {
+    Store,
+    Source,
+    Proof,
+    SecretDescriptor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteInputUploadPrivacyPolicy {
+    pub allowed_classes: BTreeSet<RemoteInputUploadClass>,
+    pub max_objects: usize,
+    pub max_bytes: u64,
+}
+
+impl Default for RemoteInputUploadPrivacyPolicy {
+    fn default() -> Self {
+        Self {
+            allowed_classes: BTreeSet::from([
+                RemoteInputUploadClass::Store,
+                RemoteInputUploadClass::Source,
+                RemoteInputUploadClass::Proof,
+            ]),
+            max_objects: MAX_REMOTE_INPUT_REFS,
+            max_bytes: MAX_REMOTE_UPLOAD_BYTES,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteInputUploadPrivacySummary {
+    pub store_objects: u32,
+    pub source_objects: u32,
+    pub proof_objects: u32,
+    pub secret_descriptor_objects: u32,
+    pub total_objects: u32,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteSourceUploadReadiness {
+    pub identity: String,
+    pub source_kind: String,
+    pub ready_class: String,
+    pub content_blake3: String,
+    pub store_prefix: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1745,6 +1796,12 @@ fn attach_remote_input_upload_artifacts(
                 &request.source_input_refs,
                 &upload.artifacts,
             )?;
+            let _summary = plan_remote_input_upload_privacy_summary(
+                &upload.refs,
+                &request.source_input_refs,
+                &upload.artifacts,
+                &RemoteInputUploadPrivacyPolicy::default(),
+            )?;
             return Ok(());
         }
     }
@@ -1799,6 +1856,100 @@ fn remote_input_upload_byte_count(
             .ok_or_else(|| "remote-input-upload-byte-count-overflow".to_string())?;
     }
     Ok(total)
+}
+
+pub fn plan_remote_input_upload_privacy_summary(
+    uploaded_refs: &[String],
+    source_input_refs: &[String],
+    artifacts: &[RemoteInputUploadArtifact],
+    policy: &RemoteInputUploadPrivacyPolicy,
+) -> Result<RemoteInputUploadPrivacySummary, String> {
+    if uploaded_refs.len() > policy.max_objects {
+        return Err("remote-input-upload-object-count-exceeded".to_string());
+    }
+    let total_objects = bounded_runtime_count_u32(uploaded_refs.len())?;
+    let total_bytes = remote_input_upload_byte_count(uploaded_refs, artifacts)?;
+    if total_bytes > policy.max_bytes {
+        return Err("remote-input-upload-byte-quota-exceeded".to_string());
+    }
+    let mut summary = RemoteInputUploadPrivacySummary {
+        store_objects: 0,
+        source_objects: 0,
+        proof_objects: 0,
+        secret_descriptor_objects: 0,
+        total_objects,
+        total_bytes,
+    };
+    for input_ref in uploaded_refs {
+        let upload_class = classify_remote_input_upload_ref(input_ref, source_input_refs);
+        if !policy.allowed_classes.contains(&upload_class) {
+            return Err("remote-input-upload-class-disallowed".to_string());
+        }
+        increment_remote_input_upload_class_count(&mut summary, upload_class)?;
+    }
+    Ok(summary)
+}
+
+fn classify_remote_input_upload_ref(input_ref: &str, source_input_refs: &[String]) -> RemoteInputUploadClass {
+    if source_input_refs.iter().any(|source_ref| source_ref == input_ref) {
+        return RemoteInputUploadClass::Source;
+    }
+    if input_ref.starts_with(REMOTE_UPLOAD_PROOF_PREFIX) {
+        return RemoteInputUploadClass::Proof;
+    }
+    if input_ref.starts_with(REMOTE_UPLOAD_SECRET_DESCRIPTOR_PREFIX) {
+        return RemoteInputUploadClass::SecretDescriptor;
+    }
+    RemoteInputUploadClass::Store
+}
+
+fn increment_remote_input_upload_class_count(
+    summary: &mut RemoteInputUploadPrivacySummary,
+    upload_class: RemoteInputUploadClass,
+) -> Result<(), String> {
+    let count = match upload_class {
+        RemoteInputUploadClass::Store => &mut summary.store_objects,
+        RemoteInputUploadClass::Source => &mut summary.source_objects,
+        RemoteInputUploadClass::Proof => &mut summary.proof_objects,
+        RemoteInputUploadClass::SecretDescriptor => &mut summary.secret_descriptor_objects,
+    };
+    *count = count.checked_add(1).ok_or_else(|| "remote-input-upload-class-count-overflow".to_string())?;
+    Ok(())
+}
+
+pub fn validate_remote_source_upload_record(
+    record: &crate::source_bundle::SourceRecord,
+    store_prefix: &str,
+    logical_store_path: &str,
+    declared_content_blake3: Option<&str>,
+) -> Result<RemoteSourceUploadReadiness, String> {
+    if record.kind != crate::source_bundle::SourceRecordKind::ToolchainSourceRoot {
+        return Err("remote-input-source-kind-unsupported".to_string());
+    }
+    let Some(record_store_prefix) = record.store_prefix.as_deref() else {
+        return Err("remote-input-source-store-prefix-missing".to_string());
+    };
+    if record_store_prefix != store_prefix {
+        return Err("remote-input-source-store-prefix-mismatch".to_string());
+    }
+    if record.metadata.get("store_path").map(String::as_str) != Some(logical_store_path) {
+        return Err("remote-input-source-identity-mismatch".to_string());
+    }
+    if record.files.is_empty() || record.content_blake3.is_empty() {
+        return Err("remote-input-source-readiness-missing".to_string());
+    }
+    if let Some(expected) = declared_content_blake3
+        && expected != record.content_blake3
+    {
+        return Err("remote-input-source-digest-stale".to_string());
+    }
+    Ok(RemoteSourceUploadReadiness {
+        identity: record.identity.clone(),
+        source_kind: "toolchain-source-root".to_string(),
+        ready_class: "verified-imported-source-state".to_string(),
+        content_blake3: record.content_blake3.clone(),
+        store_prefix: record_store_prefix.to_string(),
+    })
 }
 
 fn remote_input_ref_host_path(
@@ -5998,6 +6149,121 @@ mod tests {
         let record_path = records_dir.join(format!("{}.json", record.content_blake3));
         let record_json = serde_json::to_vec_pretty(record).unwrap();
         std::fs::write(record_path, record_json).unwrap();
+    }
+
+    fn source_upload_artifact(request_id: &str, input_ref: &str, payload: &[u8]) -> RemoteInputUploadArtifact {
+        RemoteInputUploadArtifact {
+            request_id: request_id.to_string(),
+            input_ref: input_ref.to_string(),
+            artifact_kind: RemoteInputUploadArtifactKind::Nar,
+            digest_blake3: blake3::hash(payload).to_hex().to_string(),
+            size_bytes: u64::try_from(payload.len()).unwrap(),
+            payload: payload.to_vec(),
+        }
+    }
+
+    fn ready_source_record(source_ref: &str) -> crate::source_bundle::SourceRecord {
+        let mut record = source_state_toolchain_record(source_ref);
+        record.payload_bytes = 1;
+        record.content_blake3 = blake3::hash(b"ready-source").to_hex().to_string();
+        record.files = vec![crate::source_bundle::SourceFileEntry {
+            path: "bin/tool".to_string(),
+            file_type: crate::source_bundle::SourceFileType::Regular,
+            executable: true,
+            size: 1,
+            content_hex: None,
+            symlink_target: None,
+            blake3: blake3::hash(b"x").to_hex().to_string(),
+        }];
+        record
+    }
+
+    #[test]
+    fn source_upload_privacy_summary_counts_classes_before_transfer() {
+        let source_ref = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source".to_string();
+        let store_ref = "/mantle/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-store".to_string();
+        let proof_ref = format!("{REMOTE_UPLOAD_PROOF_PREFIX}self-hosting-proof");
+        let uploaded_refs = vec![store_ref, source_ref.clone(), proof_ref];
+        let artifact = source_upload_artifact("request-1", &source_ref, b"source-payload");
+        let summary = plan_remote_input_upload_privacy_summary(
+            &uploaded_refs,
+            std::slice::from_ref(&source_ref),
+            std::slice::from_ref(&artifact),
+            &RemoteInputUploadPrivacyPolicy::default(),
+        )
+        .expect("privacy summary plans");
+        let expected_bytes = remote_input_upload_byte_count(&uploaded_refs, std::slice::from_ref(&artifact)).unwrap();
+
+        assert_eq!(summary.store_objects, 1);
+        assert_eq!(summary.source_objects, 1);
+        assert_eq!(summary.proof_objects, 1);
+        assert_eq!(summary.total_objects, u32::try_from(uploaded_refs.len()).unwrap());
+        assert_eq!(summary.total_bytes, expected_bytes);
+    }
+
+    #[test]
+    fn source_upload_privacy_policy_rejects_secret_class_and_quota() {
+        let secret_ref = format!("{REMOTE_UPLOAD_SECRET_DESCRIPTOR_PREFIX}signing-key");
+        let secret_err = plan_remote_input_upload_privacy_summary(
+            std::slice::from_ref(&secret_ref),
+            &[],
+            &[],
+            &RemoteInputUploadPrivacyPolicy::default(),
+        )
+        .expect_err("secret descriptor class is disallowed by default");
+        assert_eq!(secret_err, "remote-input-upload-class-disallowed");
+
+        let source_ref = "/mantle/store/cccccccccccccccccccccccccccccccc-source".to_string();
+        let artifact = source_upload_artifact("request-1", &source_ref, b"source-payload");
+        let quota_policy = RemoteInputUploadPrivacyPolicy {
+            allowed_classes: RemoteInputUploadPrivacyPolicy::default().allowed_classes,
+            max_objects: MAX_REMOTE_INPUT_REFS,
+            max_bytes: 1,
+        };
+        let quota_err = plan_remote_input_upload_privacy_summary(
+            std::slice::from_ref(&source_ref),
+            std::slice::from_ref(&source_ref),
+            std::slice::from_ref(&artifact),
+            &quota_policy,
+        )
+        .expect_err("source upload byte quota is enforced before transfer");
+        assert_eq!(quota_err, "remote-input-upload-byte-quota-exceeded");
+    }
+
+    #[test]
+    fn source_upload_readiness_rejects_stale_or_unsupported_records() {
+        let source_ref = "/mantle/store/dddddddddddddddddddddddddddddddd-source";
+        let record = ready_source_record(source_ref);
+        let readiness =
+            validate_remote_source_upload_record(&record, "/mantle/store", source_ref, Some(&record.content_blake3))
+                .expect("ready imported source is accepted");
+        assert_eq!(readiness.ready_class, "verified-imported-source-state");
+        assert_eq!(readiness.store_prefix, "/mantle/store");
+
+        let stale = validate_remote_source_upload_record(&record, "/mantle/store", source_ref, Some("stale-digest"))
+            .expect_err("stale source digest rejected");
+        assert_eq!(stale, "remote-input-source-digest-stale");
+
+        let mut unsupported = record;
+        unsupported.kind = crate::source_bundle::SourceRecordKind::LocalPath;
+        let unsupported_err = validate_remote_source_upload_record(&unsupported, "/mantle/store", source_ref, None)
+            .expect_err("unsupported source kind rejected");
+        assert_eq!(unsupported_err, "remote-input-source-kind-unsupported");
+    }
+
+    #[tokio::test]
+    async fn source_input_upload_without_store_or_source_state_fails_without_network_fetch() {
+        let client_temp = tempfile::tempdir().unwrap();
+        let client_store = remote_import_store(client_temp.path()).await;
+        let source_ref = importable_store_path().to_absolute_path_with_prefix("/mantle/store");
+        let mut client = fixture_loopback_client(vec![source_ref.clone()], vec!["builder-key".to_string()]);
+        client.request.input_refs = vec![source_ref.clone()];
+        client.request.source_input_refs = vec![source_ref];
+        let err = plan_remote_input_upload_artifacts_from_store(&client_store, &client.request)
+            .await
+            .expect_err("missing source state fails closed");
+
+        assert_eq!(err, "remote-input-source-path-missing");
     }
 
     #[tokio::test]
