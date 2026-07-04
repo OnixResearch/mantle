@@ -1,0 +1,13 @@
+{
+  "schema": "crunch-doctor-report-v2",
+  "command": "doctor",
+  "profile": "build",
+  "ok": true,
+  "checks": [
+    {
+      "id": "bwrap",
+      "status": "ok",
+      "summary": "bwrap visible"
+    }
+  ]
+}

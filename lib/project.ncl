@@ -139,6 +139,49 @@ let PatchDef = {
   trust | InputTrustPolicy | optional,
 } in
 
+let ShellProfile = {
+  build_inputs | Array String | default = [],
+  env | { _ | String } | default = {},
+  path_entries | Array String | default = [],
+  hook | String | optional,
+  derivation | Dyn | optional,
+} in
+
+let ShellProfiles = {
+  _ | ShellProfile,
+} in
+
+let GeneratedFileMaterialization = std.contract.from_validator (fun value =>
+  if value == "copy" || value == "symlink" then
+    'Ok
+  else
+    'Error { message = "generated file materialization must be copy or symlink" }
+) in
+
+let GeneratedFileContent = std.contract.from_validator (fun value =>
+  if std.is_record value then
+    if std.record.has_field "type" value then
+      if value.type == "inline" || value.type == "nickel-export" then 'Ok
+      else 'Error { message = "generated file content type must be inline or nickel-export" }
+    else
+      'Error { message = "generated file content must have a type field" }
+  else
+    'Error { message = "generated file content must be a record" }
+) in
+
+let GeneratedFileContract = {
+  identity | String,
+  required_json_fields | Array String | default = [],
+} in
+
+let GeneratedFile = {
+  name | String,
+  target | String,
+  content | GeneratedFileContent,
+  materialization | GeneratedFileMaterialization | default = "copy",
+  contract | GeneratedFileContract | optional,
+} in
+
 # The top-level project manifest contract.
 {
   ProjectManifest = {
@@ -146,6 +189,8 @@ let PatchDef = {
     inputs | Array ManifestInput | default = [],
     patches | Array PatchDef | default = [],
     retention | InputRetentionPolicy | default = { mode = "untracked" },
+    shells | ShellProfiles | default = {},
+    files | Array GeneratedFile | default = [],
   },
 
   # Re-export sub-contracts for external use.
@@ -158,4 +203,9 @@ let PatchDef = {
   FreshnessProbe = FreshnessProbe,
   InputTrustPolicy = InputTrustPolicy,
   PatchDef = PatchDef,
+  ShellProfile = ShellProfile,
+  ShellProfiles = ShellProfiles,
+  GeneratedFile = GeneratedFile,
+  GeneratedFileContent = GeneratedFileContent,
+  GeneratedFileContract = GeneratedFileContract,
 }

@@ -220,24 +220,48 @@ _proj.{path}"#
         ProjectTarget::DefaultShell => {
             format!(
                 r#"let _proj = import "{root_path}" in
-let _shell_name = if std.record.has_field "default" _proj
+let _has_profiles = std.record.has_field "shells" _proj in
+let _explicit_shell_name = if std.record.has_field "default" _proj
   then (if std.record.has_field "shell" _proj.default then _proj.default.shell else null)
-  else null
-in
-if _shell_name != null then
-  _proj.devShells."%{{_shell_name}}"
+  else null in
+let _profile_name = if _explicit_shell_name != null then
+  _explicit_shell_name
+else if _has_profiles && std.record.has_field "dev" _proj.shells then
+  "dev"
+else if _has_profiles && std.record.has_field "default" _proj.shells then
+  "default"
 else
-  let _shells = std.record.to_array _proj.devShells in
-  if std.array.length _shells == 1 then
-    (std.array.first _shells).value
-  else if std.array.length _shells == 0 then
-    std.fail_with "no devShells defined in crunch.ncl"
+  null in
+let _profile_value = if _profile_name != null && _has_profiles && std.record.has_field _profile_name _proj.shells then
+  _proj.shells."%{{_profile_name}}"
+else
+  null
+in
+if _profile_value != null then
+  if std.record.has_field "derivation" _profile_value then _profile_value.derivation else _profile_value
+else
+  let _shell_name = _explicit_shell_name in
+  if _shell_name != null then
+    _proj.devShells."%{{_shell_name}}"
   else
-    std.fail_with "multiple devShells defined; set default.shell or use `crunch develop .#name`""#
+    let _shells = std.record.to_array _proj.devShells in
+    if std.array.length _shells == 1 then
+      (std.array.first _shells).value
+    else if std.array.length _shells == 0 then
+      std.fail_with "no shells or devShells defined in mantle project"
+    else
+      std.fail_with "multiple shell profiles defined; set default.shell or use `mantle shell .#name`""#
             )
         }
         ProjectTarget::NamedShell(name) => {
-            format!(r#"(import "{root_path}").devShells."{name}""#)
+            format!(
+                r#"let _proj = import "{root_path}" in
+if std.record.has_field "shells" _proj && std.record.has_field "{name}" _proj.shells then
+  let _profile = _proj.shells."{name}" in
+  if std.record.has_field "derivation" _profile then _profile.derivation else _profile
+else
+  _proj.devShells."{name}""#
+            )
         }
     }
 }
@@ -319,6 +343,36 @@ mod tests {
     fn generate_extraction_all_checks() {
         let expr = generate_extraction_expr(Path::new("crunch.ncl"), &ProjectTarget::AllChecks);
         assert!(expr.contains(".checks"));
+    }
+
+    #[test]
+    fn generate_default_shell_prefers_named_profiles_before_legacy_dev_shells() {
+        let expr = generate_extraction_expr(Path::new("mantle-project.ncl"), &ProjectTarget::DefaultShell);
+
+        assert!(expr.contains(r#"std.record.has_field "shells" _proj"#));
+        assert!(expr.contains(r#"std.record.has_field "dev" _proj.shells"#));
+        assert!(expr.contains("_profile_value.derivation"));
+        assert!(expr.contains("_proj.devShells"));
+    }
+
+    #[test]
+    fn generate_named_shell_uses_profile_derivation_fallback() {
+        let expr =
+            generate_extraction_expr(Path::new("mantle-project.ncl"), &ProjectTarget::NamedShell("build".into()));
+
+        assert!(expr.contains(r#"std.record.has_field "shells" _proj"#));
+        assert!(expr.contains(r#"std.record.has_field "build" _proj.shells"#));
+        assert!(expr.contains("_profile.derivation"));
+        assert!(expr.contains(r#"_proj.devShells."build""#));
+    }
+
+    #[test]
+    fn package_default_extraction_does_not_depend_on_shell_profiles() {
+        let expr = generate_extraction_expr(Path::new("mantle-project.ncl"), &ProjectTarget::Default);
+
+        assert!(!expr.contains("devShells"));
+        assert!(!expr.contains("shells"));
+        assert!(expr.contains("_proj.packages"));
     }
 
     #[test]

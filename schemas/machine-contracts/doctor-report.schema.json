@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/operator-diagnostics/doctor-report-v1",
+  "title": "Mantle doctor report",
+  "type": "object",
+  "required": ["schema", "command", "profile", "ok", "checks"],
+  "properties": {
+    "schema": { "const": "crunch-doctor-report-v1" },
+    "command": { "const": "doctor" },
+    "profile": { "enum": ["build", "self-build"] },
+    "ok": { "type": "boolean" },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "summary"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["ok", "failed"] },
+          "summary": { "type": "string", "minLength": 1 },
+          "detail": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

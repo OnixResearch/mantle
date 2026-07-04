@@ -16,6 +16,7 @@ mod build_report;
 mod cargo_free_self_build;
 mod cargo_import;
 mod errors;
+mod filegen_cmd;
 mod fix;
 mod foreign_derivation_import;
 mod foreign_import_cmd;
@@ -26,6 +27,7 @@ mod global_reproducibility_cmd;
 mod global_reproducibility_release;
 mod log_cmd;
 mod native_toolchain_closure;
+mod nickel_export;
 mod nix_free_demo_bundle;
 mod nix_free_demo_cmd;
 #[allow(dead_code)]
@@ -245,6 +247,12 @@ enum Command {
         action: ImportAction,
     },
 
+    /// Plan or explicitly apply project-declared generated files
+    Filegen {
+        #[command(subcommand)]
+        action: FilegenCommandAction,
+    },
+
     /// Show a semantic build graph rooted at an output/proof/source identity or alias
     Graph {
         /// Identity or alias to use as the graph root
@@ -314,6 +322,36 @@ enum Command {
         /// Additional import paths for Nickel
         #[arg(long = "import-path", short = 'I')]
         import_paths: Vec<PathBuf>,
+    },
+
+    /// Export declared Nickel data to a deterministic external JSON payload and receipt
+    Export {
+        /// Root Nickel source file to evaluate
+        file: PathBuf,
+
+        /// Declared dependency source file; repeatable
+        #[arg(long = "dep")]
+        deps: Vec<PathBuf>,
+
+        /// Safe relative import paths for Nickel
+        #[arg(long = "import-path", short = 'I')]
+        import_paths: Vec<PathBuf>,
+
+        /// Export format (currently json)
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// Write the evaluated payload to a file instead of stdout
+        #[arg(long)]
+        out: Option<PathBuf>,
+
+        /// Evaluator identity recorded in the receipt
+        #[arg(long = "evaluator-id", default_value_t = nickel_export::default_evaluator_id())]
+        evaluator_id: String,
+
+        /// Evaluator version recorded in the receipt
+        #[arg(long = "evaluator-version", default_value = env!("CARGO_PKG_VERSION"))]
+        evaluator_version: String,
     },
 
     /// Generate bootstrap seeds or validate bootstrap runtime evidence
@@ -728,6 +766,31 @@ enum Command {
         /// Arguments to pass to the executable (after --)
         #[arg(last = true)]
         run_args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum FilegenCommandAction {
+    /// Render a no-mutate generated-file plan
+    Plan {
+        /// Project manifest to inspect
+        #[arg(long, default_value_os_t = filegen_cmd::default_manifest_path())]
+        manifest: PathBuf,
+
+        /// Write the reviewed plan JSON to this path
+        #[arg(long = "plan-out")]
+        plan_out: Option<PathBuf>,
+    },
+
+    /// Apply a reviewed generated-file plan after drift checks
+    Apply {
+        /// Project manifest to inspect
+        #[arg(long, default_value_os_t = filegen_cmd::default_manifest_path())]
+        manifest: PathBuf,
+
+        /// Reviewed plan JSON produced by `mantle filegen plan --plan-out`
+        #[arg(long)]
+        plan: PathBuf,
     },
 }
 
@@ -2110,6 +2173,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::Build { .. } => "build",
         Command::Doctor { .. } => "doctor",
         Command::Import { .. } => "import",
+        Command::Filegen { action } => filegen_command_label(action),
         Command::Graph { .. } => "graph",
         Command::Why { .. } => "why",
         Command::Dependents { .. } => "dependents",
@@ -2119,6 +2183,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::NixFreeDemo { .. } => "nix-free-demo",
         Command::ForeignImport { .. } => "foreign-import",
         Command::Eval { .. } => "eval",
+        Command::Export { .. } => "export",
         Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
         Command::Log { .. } => "log",
         Command::Store { action } => store_command_label(action),
@@ -2139,6 +2204,13 @@ fn command_label(command: &Command) -> &'static str {
         Command::Shell { .. } => "shell",
         Command::Develop { .. } => "develop",
         Command::Run { .. } => "run",
+    }
+}
+
+fn filegen_command_label(action: &FilegenCommandAction) -> &'static str {
+    match action {
+        FilegenCommandAction::Plan { .. } => "filegen.plan",
+        FilegenCommandAction::Apply { .. } => "filegen.apply",
     }
 }
 
@@ -2414,6 +2486,24 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::NixFreeDemo { action } => nix_free_demo_cmd::cmd_nix_free_demo(action.clone(), ctx.json),
         Command::ForeignImport { action } => foreign_import_cmd::cmd_foreign_import(action.clone(), ctx.json),
         Command::Eval { file, import_paths } => run_eval(file, import_paths),
+        Command::Export {
+            file,
+            deps,
+            import_paths,
+            format,
+            out,
+            evaluator_id,
+            evaluator_version,
+        } => run_nickel_export_command(
+            ctx,
+            file,
+            deps,
+            import_paths,
+            format,
+            out.as_deref(),
+            evaluator_id,
+            evaluator_version,
+        ),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
         Command::Release { action } => run_release_command(ctx, action.clone()),
@@ -2439,6 +2529,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         }
         Command::Attest { action } => run_attest_command(ctx, action.clone()),
         Command::Import { action } => run_import_command(ctx, action.clone()),
+        Command::Filegen { action } => run_filegen_command(ctx, action.clone()),
         Command::Init
         | Command::Check { .. }
         | Command::Show
@@ -2450,6 +2541,28 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
+    }
+}
+
+fn run_filegen_command(ctx: &RunContext, action: FilegenCommandAction) -> Result<(), RunError> {
+    let root = current_dir_or_error()?;
+    match action {
+        FilegenCommandAction::Plan { manifest, plan_out } => {
+            filegen_cmd::cmd_filegen_plan(filegen_cmd::FilegenPlanOptions {
+                root: &root,
+                manifest: &manifest,
+                plan_out: plan_out.as_deref(),
+                json: ctx.json,
+            })
+        }
+        FilegenCommandAction::Apply { manifest, plan } => {
+            filegen_cmd::cmd_filegen_apply(filegen_cmd::FilegenApplyOptions {
+                root: &root,
+                manifest: &manifest,
+                reviewed_plan: &plan,
+                json: ctx.json,
+            })
+        }
     }
 }
 
@@ -2842,6 +2955,30 @@ fn run_eval(file: &Path, import_paths: &[PathBuf]) -> Result<(), RunError> {
     let json = crunch_eval::evaluate_to_json(file, &import_paths).map_err(|e| RunError::Eval(format!("{e}")))?;
     println!("{json}");
     Ok(())
+}
+
+fn run_nickel_export_command(
+    ctx: &RunContext,
+    file: &Path,
+    deps: &[PathBuf],
+    import_paths: &[PathBuf],
+    format: &str,
+    out: Option<&Path>,
+    evaluator_id: &str,
+    evaluator_version: &str,
+) -> Result<(), RunError> {
+    let root = current_dir_or_error()?;
+    nickel_export::cmd_nickel_export(nickel_export::NickelExportOptions {
+        root: &root,
+        file,
+        deps,
+        import_paths,
+        format,
+        out,
+        evaluator_id,
+        evaluator_version,
+        json: ctx.json,
+    })
 }
 
 fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {

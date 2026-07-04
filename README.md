@@ -162,9 +162,15 @@ Short examples:
 ```bash
 # Shells and package execution from the compatibility-named crunch.ncl package root
 mantle shell --command env
+mantle shell dev --command env
 mantle develop            # deprecated alias for shell
 mantle run .#hello -- --help
 mantle run ./tool.ncl --bin tool -- --version
+
+# Declared Nickel export and generated-file handoff workflows
+mantle export config.ncl --format json --out generated/config.json
+mantle filegen plan --plan-out target/filegen-plan.json
+mantle filegen apply --plan target/filegen-plan.json
 
 # Attestation and release evidence entry points
 mantle attest show /nix/store/<hash>-hello
@@ -199,7 +205,27 @@ with:
 nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs
 nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs
 nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self-test
+nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --self-test
 ```
+
+Named shell profiles may be declared under `shells`. Mantle resolves
+`mantle shell` to an explicit default, then `dev`, then `default`, and profile
+values may either be shell derivations directly or records with a `derivation`
+field plus profile metadata. Shell activation is non-mutating convenience
+evidence only: it does not refresh locks, regenerate files, change package build
+identity, start services, or prove release reproducibility.
+
+Generated files are declared under `files` and materialized only through
+`mantle filegen apply` after a reviewed `mantle filegen plan`. The plan/apply
+rail records BLAKE3 content identity, rejects target escapes and unmanaged
+conflicts, and treats typed-content validation as a bounded generated-content
+claim rather than deployability or build proof.
+
+`mantle export` is the explicit Nickel export primitive. It evaluates declared
+relative Nickel sources/import paths to JSON, can write an explicit `--out`, and
+emits a deterministic receipt binding source/dependency digests, evaluator
+identity, output digest, and bounded non-claims.
 
 ## Validation tiers
 
@@ -1551,3 +1577,6 @@ fixed-point artifact that was actually proven.
 - [adeci/drv-thru](https://github.com/adeci/drv-thru) — P2P Nix build tickets and signed-output import model used as remote-builder prior art; Mantle adaptations should replace Nix-specific plumbing with Mantle CAS, PathInfo, attestation, and substitution semantics.
 - [Mic92/tribuchet](https://github.com/Mic92/tribuchet) — remote-build hub/worker scheduling prior art for worker-dialed registration, capability queues, request dedupe, missing-input negotiation, signed output return, bounded log replay, and restart/reload survival; Mantle adaptations should keep those architecture ideas while replacing Nix external-builders, nix-daemon imports, scratch-path assumptions, and `/nix/store` pinning with Mantle-native CAS, PathInfo, attestation, and store-prefix contracts.
 - [Nixtamal](https://nixtamal.toast.al/) — Nix input pinning tool used as project-input workflow prior art for custom freshness checks, mirrors, declarative patches, per-input hash algorithms, non-Git VCS sources, and future lockfile import/trust ideas.
+- [nickel-lang/rules_nickel](https://github.com/nickel-lang/rules_nickel) — declared Nickel export action and evaluator toolchain prior art; Mantle adaptations should keep source closures, safe import paths, export formats, and evaluator identity while avoiding Bazel-specific repository/toolchain machinery in core.
+- [nickel-lang/organist](https://github.com/nickel-lang/organist) — Nickel-managed project workflow prior art for typed generated files and named shell profiles; Mantle adaptations should keep explicit plan/apply mutation boundaries and avoid adopting service lifecycle management into core.
+- [nickel-lang/json-schema-to-nickel](https://github.com/nickel-lang/json-schema-to-nickel) — JSON Schema to Nickel contract generation prior art for machine-report schema validation; Mantle adaptations should use generated contracts as checked development/release rails with positive and negative fixtures.
