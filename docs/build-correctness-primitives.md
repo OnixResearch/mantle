@@ -24,6 +24,15 @@ roles, tags, options, providers, or Nickel contracts.
   refs, sandbox and network policy, reference-scan evidence, producer identity,
   signatures, execution status, and build-or-reuse reason.
 
+## Environment policy
+
+Strict build actions construct their child environment from declared entries and
+reviewed deterministic defaults. Mantle binds a BLAKE3 digest of the normalized
+key/value set into build evidence. Denied dynamic-linker controls,
+compiler-wrapper variables, proxy settings, token-like names, locale overrides,
+and temp-root overrides fail closed in strict mode; diagnostics report the class
+and variable name without copying secret values.
+
 ## Network policy
 
 Ordinary derivation actions are offline by default. Mantle only grants network

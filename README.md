@@ -151,7 +151,10 @@ run offline by default: network access is admitted only for declared
 fixed-output fetchers (`fetchurl`, `fetchTarball`, `fetchGit`) or for a future
 scoped compatibility capability that names its action, policy basis, and audit
 class. Denied compatibility requests appear as blocked `network_policy_reports`
-and do not produce strong build-correctness evidence.
+and do not produce strong build-correctness evidence. Strict builds also bind a
+BLAKE3 digest of the normalized child environment in `build_environment_reports`;
+denied dynamic-linker, compiler-wrapper, proxy, token-like, locale, or temp-root
+variables are reported by class with secret values redacted.
 
 ## Operator workflows
 

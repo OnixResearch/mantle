@@ -48,6 +48,15 @@ pub enum Error {
         report: Box<crate::BuildNetworkPolicyReport>,
     },
 
+    #[error("build environment denied for {action_name}: {variable} ({class}): {diagnostic}")]
+    DeniedEnvironmentVariable {
+        action_name: String,
+        variable: String,
+        class: String,
+        diagnostic: String,
+        report: Box<crate::BuildEnvironmentReport>,
+    },
+
     #[error("sandbox error: {0}")]
     Sandbox(#[from] std::io::Error),
 

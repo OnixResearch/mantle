@@ -479,6 +479,52 @@ async fn pipeline_blocks_declared_build_time_network_capability_before_dispatch(
 }
 
 #[tokio::test]
+async fn pipeline_rejects_denied_strict_environment_before_dispatch() {
+    const SECRET_VALUE: &str = "super-secret-token";
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let ncl_file = work.path().join("strict-env-denied.ncl");
+
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+{{
+  blocked = {{
+    name = "strict-env-poison",
+    builder = "/bin/sh",
+    args = ["-c", "echo should-not-run > $out"],
+    outputs = ["out"],
+    env = {{ CARGO_REGISTRY_TOKEN = "{}" }},
+  }} | crunch.Derivation,
+}}
+"#,
+            SECRET_VALUE
+        ),
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.hermeticity_mode = crunch_pipeline::HermeticityMode::Strict;
+    let result = build(&config).await.unwrap();
+
+    assert!(result.outcomes.is_empty(), "denied env build must not produce outcomes");
+    assert_eq!(result.failed.len(), 1, "expected one denied env failure");
+    assert!(result.failed[0].error.contains("build environment denied for strict-env-poison"));
+    assert!(!result.failed[0].error.contains(SECRET_VALUE));
+    assert_eq!(result.build_environment_reports.len(), 1, "blocked env report should be surfaced");
+    let report = &result.build_environment_reports[0];
+    assert_eq!(report.action_name, "strict-env-poison");
+    assert!(report.digest_blake3.is_none());
+    assert_eq!(report.rejections.len(), 1);
+    assert_eq!(report.rejections[0].variable, "CARGO_REGISTRY_TOKEN");
+    assert_eq!(report.rejections[0].class, crunch_build::ENV_REJECTION_SECRET);
+    assert!(report.rejections[0].redacted);
+}
+
+#[tokio::test]
 async fn pipeline_preserves_label_to_output_association_under_parallel_root_streaming() {
     if !can_build() {
         eprintln!("skipping: bwrap or /nix/store not available");

@@ -155,6 +155,7 @@ Structured build reports surface the same operator facts in stable fields:
 
 - `hermeticity_mode`
 - `hermeticity_audit_events[]`
+- `build_environment_reports[]` — normalized strict child-environment BLAKE3 digest plus redacted denied-variable summaries
 - `network_policy_reports[]` — ordinary builds are offline by default, fixed-output fetchers record their declared source boundary, and denied compatibility capabilities are blocked before strong evidence is emitted
 - `effect_policy_version` (`mantle-build-effects-v1` for deterministic proof receipts)
 - `declared_effects[]` and `observed_effects[]`; deterministic release verification

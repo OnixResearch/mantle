@@ -161,6 +161,7 @@ pub struct Builder<BServ> {
     verbose: bool,
     hermeticity_mode: HermeticityMode,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+    build_environment_reports: Vec<crate::BuildEnvironmentReport>,
     network_policy_reports: Vec<BuildNetworkPolicyReport>,
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
     root_retention_source: Option<GcRootSource>,
@@ -212,6 +213,7 @@ where BServ: BuildService + 'static
             verbose,
             hermeticity_mode: HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             source_closure_cache: HashMap::new(),
             root_retention_source: None,
@@ -260,6 +262,7 @@ where BServ: BuildService + 'static
             verbose,
             hermeticity_mode: HermeticityMode::Practical,
             hermeticity_audit_events: Vec::new(),
+            build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             source_closure_cache: HashMap::new(),
             root_retention_source: None,
@@ -289,6 +292,10 @@ where BServ: BuildService + 'static
 
     pub fn take_hermeticity_audit_events(&mut self) -> Vec<HermeticityAuditEvent> {
         std::mem::take(&mut self.hermeticity_audit_events)
+    }
+
+    pub fn take_build_environment_reports(&mut self) -> Vec<crate::BuildEnvironmentReport> {
+        std::mem::take(&mut self.build_environment_reports)
     }
 
     pub fn take_network_policy_reports(&mut self) -> Vec<BuildNetworkPolicyReport> {
@@ -431,13 +438,20 @@ where BServ: BuildService + 'static
         ) {
             Ok(envelope) => envelope,
             Err(error) => {
-                if let Error::NetworkPolicyDenied { report, .. } = &error {
-                    self.network_policy_reports.push((**report).clone());
+                match &error {
+                    Error::NetworkPolicyDenied { report, .. } => {
+                        self.network_policy_reports.push((**report).clone());
+                    }
+                    Error::DeniedEnvironmentVariable { report, .. } => {
+                        self.build_environment_reports.push((**report).clone());
+                    }
+                    _ => {}
                 }
                 return Err(error);
             }
         };
         self.hermeticity_audit_events.extend(request_envelope.audit_events.iter().cloned());
+        self.build_environment_reports.push(request_envelope.build_environment_report.clone());
         self.network_policy_reports.push(request_envelope.network_policy_report.clone());
         let build_request = request_envelope.build_request;
         let refscan_needles = build_request.refscan_needles.clone();

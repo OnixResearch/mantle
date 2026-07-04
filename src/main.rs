@@ -3484,6 +3484,7 @@ fn remote_client_build_json_report(
         "store_dir": &report.store_prefix,
         "hermeticity_mode": REMOTE_BUILD_HERMETICITY_MODE,
         "hermeticity_audit_events": [],
+        "build_environment_reports": [],
         "network_policy_reports": [],
         "native_dynamic_plans": [],
         "frontend_artifact_attestations": [],

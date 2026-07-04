@@ -21,9 +21,11 @@ use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::EnvVar;
 use snix_castore::Node;
 
+use crate::BuildEnvironmentReport;
 use crate::HermeticityAuditEvent;
 use crate::HermeticityAuditKind;
 use crate::HermeticityMode;
+use crate::environment_policy;
 use crate::network_policy::CompatibilityNetworkPolicy;
 use crate::network_policy::plan_network_policy;
 use crate::registry::DerivationRegistry;
@@ -70,6 +72,7 @@ const _: () = assert!(!SANDBOX_ENV_VARS.is_empty());
 pub struct NormalizedBuildEnvironment {
     pub environment_vars: BTreeMap<String, Vec<u8>>,
     pub audit_events: Vec<HermeticityAuditEvent>,
+    pub report: BuildEnvironmentReport,
 }
 
 #[derive(Debug)]
@@ -77,6 +80,7 @@ pub struct NormalizedBuildEnvironment {
 pub struct BuildRequestEnvelope {
     pub build_request: BuildRequest,
     pub audit_events: Vec<HermeticityAuditEvent>,
+    pub build_environment_report: BuildEnvironmentReport,
     pub network_policy_report: crate::BuildNetworkPolicyReport,
 }
 
@@ -98,6 +102,7 @@ pub fn derivation_to_build_request(
     Ok(BuildRequestEnvelope {
         build_request,
         audit_events: normalized.audit_events,
+        build_environment_report: normalized.report,
         network_policy_report: network_policy.report,
     })
 }
@@ -116,9 +121,13 @@ pub fn normalize_build_environment(
     let audit_events = overlay_derivation_environment(derivation, hermeticity_mode, &mut environment_vars)?;
     debug_assert!(!environment_vars.is_empty(), "environment must include sandbox vars");
 
+    let action_name = environment_policy::action_name_from_environment(&derivation.environment);
+    let report = environment_policy::success_report(action_name, &environment_vars);
+
     Ok(NormalizedBuildEnvironment {
         environment_vars,
         audit_events,
+        report,
     })
 }
 
@@ -201,6 +210,7 @@ fn overlay_derivation_environment(
     assert!(!environment_vars.is_empty(), "sandbox env must be pre-populated");
     let mut audit_events = Vec::with_capacity(derivation.environment.len());
     for (key, value) in &derivation.environment {
+        reject_denied_strict_environment_key(derivation, hermeticity_mode, environment_vars.len(), key)?;
         let replaced = replace_placeholders_bstr(value, &derivation.outputs);
         if let Some(sandbox_value) = environment_vars.get(key)
             && sandbox_value.as_slice() != <BString as AsRef<[u8]>>::as_ref(&replaced)
@@ -222,6 +232,28 @@ fn overlay_derivation_environment(
         environment_vars.insert(key.clone(), Vec::from(replaced));
     }
     Ok(audit_events)
+}
+
+fn reject_denied_strict_environment_key(
+    derivation: &Derivation,
+    hermeticity_mode: HermeticityMode,
+    accepted_variable_count: usize,
+    key: &str,
+) -> Result<(), crate::Error> {
+    if !hermeticity_mode.is_strict() {
+        return Ok(());
+    }
+    let action_name = environment_policy::action_name_from_environment(&derivation.environment);
+    if let Some(denied) = environment_policy::denied_environment_variable(action_name, accepted_variable_count, key) {
+        return Err(crate::Error::DeniedEnvironmentVariable {
+            action_name: denied.action_name,
+            variable: denied.rejection.variable,
+            class: denied.rejection.class,
+            diagnostic: denied.rejection.diagnostic,
+            report: Box::new(denied.report),
+        });
+    }
+    Ok(())
 }
 
 fn is_protected_sandbox_env_key(key: &str) -> bool {
@@ -548,6 +580,43 @@ mod tests {
 
         assert_eq!(source_date_epoch.as_slice(), OVERRIDE_SOURCE_DATE_EPOCH.as_bytes());
         assert!(normalized.audit_events.is_empty());
+    }
+
+    #[test]
+    fn strict_mode_reports_stable_environment_digest() {
+        const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+
+        let first = normalize_env_map(&[("CC", "cc")], HermeticityMode::Strict).unwrap();
+        let second = normalize_env_map(&[("CC", "cc")], HermeticityMode::Strict).unwrap();
+
+        assert_eq!(first.report.action_name, "test");
+        assert_eq!(first.report.digest_blake3, second.report.digest_blake3);
+        assert_eq!(first.report.digest_blake3.as_ref().unwrap().len(), BLAKE3_HEX_LENGTH_CHARS);
+        assert_eq!(first.report.variable_count, u32::try_from(first.environment_vars.len()).unwrap());
+        assert!(first.report.rejections.is_empty());
+    }
+
+    #[test]
+    fn strict_mode_rejects_secret_environment_variable_with_redacted_report() {
+        const SECRET_VALUE: &str = "super-secret-token";
+
+        let err = normalize_env_map(&[("CARGO_REGISTRY_TOKEN", SECRET_VALUE)], HermeticityMode::Strict).unwrap_err();
+
+        let crate::Error::DeniedEnvironmentVariable {
+            variable,
+            class,
+            report,
+            ..
+        } = err
+        else {
+            unreachable!("strict secret env must produce denied environment error");
+        };
+        assert_eq!(variable, "CARGO_REGISTRY_TOKEN");
+        assert_eq!(class, crate::environment_policy::ENV_REJECTION_SECRET);
+        assert_eq!(report.rejections.len(), 1);
+        assert_eq!(report.rejections[0].variable, "CARGO_REGISTRY_TOKEN");
+        assert!(report.rejections[0].redacted);
+        assert!(!report.rejections[0].diagnostic.contains(SECRET_VALUE));
     }
 
     #[test]
