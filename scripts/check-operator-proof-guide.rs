@@ -84,12 +84,13 @@ const REQUIRED_CARGO_FREE_PATHS: &[&str] = &[
 
 const REQUIRED_CURRENT_EVIDENCE_FRAGMENTS: &[&str] = &[
     "Current refreshed evidence (2026-07-03)",
-    "/tmp/mantle-cargo-free-fixed-point-classifier2-20260703T203015Z",
-    "blocker_diagnostic",
-    "vendor-checksum-mismatch",
-    "registry+https://github.com/rust-lang/crates.io-index#astral-tokio-tar@0.6.3",
-    "stage1 blocked before binary",
-    "not a Nix-free fixed-point success claim",
+    "/tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z",
+    "status = \"success\"",
+    "fixed_point = true",
+    "ca00cd5866b0128434f95a0e0cf63ff2e5cc947eb90b60206cb9078bfe44215d",
+    "f35cc306c76d14a44599ce438f420ea9bcfbc6a843d9a9a64f5edb5915e2ef6d",
+    "964dc130610257aadedbc27a24284a58560fb01086c6686f2f5839af753a0ffd",
+    "bounded Cargo-free fixed-point success claim only",
 ];
 
 const REQUIRED_DEMO_FIELDS: &[&str] = &[
@@ -274,8 +275,11 @@ fn run_self_test() -> Result<(), String> {
     )?;
     assert_rejected("missing cargo-free bundle path", guide.replace("stage1/receipt.json", "stage1/old-receipt.json"), &readme)?;
     assert_rejected(
-        "stale current blocker",
-        guide.replace("vendor-checksum-mismatch", "cargo-free-bounded-topology"),
+        "stale current evidence",
+        guide.replace(
+            "/tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z",
+            "/tmp/mantle-cargo-free-fixed-point-stale",
+        ),
         &readme,
     )?;
     let overbroad = format!("{guide}\nThis guide proves compiler correctness.\n");

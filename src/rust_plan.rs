@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -20,6 +21,12 @@ const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json
 const DEFAULT_CARGO_PROFILE: &str = "dev";
 const DEFAULT_RUST_EDITION: &str = "2015";
 const PATH_SOURCE_DIGEST_ALGORITHM: &str = "blake3-tree-v1";
+const CARGO_VENDOR_CHECKSUM_FILE_NAME: &str = ".cargo-checksum.json";
+const CARGO_VENDOR_FILE_DIGEST_ALGORITHM: &str = "sha256";
+const CARGO_VENDOR_PACKAGE_DIGEST_ALGORITHM: &str = "cargo-package-sha256";
+const VENDOR_CHECKSUM_PLANNING_PATH: &str =
+    "native_registry_source_planning.bind_declared_vendor_source.validate_vendor_checksum";
+const VENDOR_CHECKSUM_READ_BUFFER_KIBIBYTES: usize = 8;
 const PATH_SOURCE_DIGEST_SKIP_ANYWHERE: &[&str] = &[".agent", ".git", ".jj", ".pi", "target"];
 const PATH_SOURCE_DIGEST_SKIP_AT_ROOT: &[&str] = &["cairn"];
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
@@ -108,7 +115,9 @@ const RUSTC_REMAP_PATH_PREFIX_FLAG: &str = "--remap-path-prefix";
 const RUSTC_REMAP_SEPARATOR: char = '=';
 const RUSTC_METADATA_HEX_CHARS: usize = 16;
 const BLAKE3_HEX_CHARS: usize = 64;
+const CARGO_SHA256_HEX_CHARS: usize = BLAKE3_HEX_CHARS;
 const BYTES_PER_KIBIBYTE: usize = 1024;
+const CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES: usize = VENDOR_CHECKSUM_READ_BUFFER_KIBIBYTES * BYTES_PER_KIBIBYTE;
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES: usize = 16;
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES: usize = RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES * BYTES_PER_KIBIBYTE;
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS: u32 = 4096;
@@ -349,6 +358,18 @@ pub(crate) struct NativeRegistrySourceBlocker {
     pub(crate) package_id: Option<String>,
     pub(crate) class: String,
     pub(crate) message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) planning_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) checksum_manifest_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) digest_algorithm: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) digest_subject: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) expected_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) actual_digest: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -2769,12 +2790,19 @@ fn bind_declared_vendor_source(
     ))
 }
 
+#[derive(Debug, Deserialize)]
+struct CargoVendorChecksumManifest {
+    package: Option<String>,
+    #[serde(default)]
+    files: BTreeMap<String, String>,
+}
+
 fn validate_vendor_checksum(
     package: &CargoPackage,
     source_root: &Path,
     expected_checksum: &str,
 ) -> Result<(), NativeRegistrySourceBlocker> {
-    let checksum_path = source_root.join(".cargo-checksum.json");
+    let checksum_path = source_root.join(CARGO_VENDOR_CHECKSUM_FILE_NAME);
     let text = fs::read_to_string(&checksum_path).map_err(|err| {
         native_registry_blocker(
             Some(package.id.clone()),
@@ -2782,14 +2810,14 @@ fn validate_vendor_checksum(
             &format!("reading vendor checksum manifest {}: {err}", checksum_path.display()),
         )
     })?;
-    let value: Value = serde_json::from_str(&text).map_err(|err| {
+    let manifest: CargoVendorChecksumManifest = serde_json::from_str(&text).map_err(|err| {
         native_registry_blocker(
             Some(package.id.clone()),
             "invalid-vendor-checksum-manifest",
             &format!("parsing vendor checksum manifest {}: {err}", checksum_path.display()),
         )
     })?;
-    let actual = value.get("package").and_then(Value::as_str).ok_or_else(|| {
+    let actual = manifest.package.as_deref().ok_or_else(|| {
         native_registry_blocker(
             Some(package.id.clone()),
             "missing-vendor-package-checksum",
@@ -2797,13 +2825,184 @@ fn validate_vendor_checksum(
         )
     })?;
     if actual != expected_checksum {
-        return Err(native_registry_blocker(
+        return Err(native_registry_checksum_evidence_blocker(
             Some(package.id.clone()),
             "vendor-checksum-mismatch",
             "vendor package checksum does not match Cargo.lock checksum material",
+            &checksum_path,
+            CARGO_VENDOR_PACKAGE_DIGEST_ALGORITHM,
+            "package",
+            Some(expected_checksum),
+            Some(actual),
+        ));
+    }
+    validate_vendor_checksum_files(package, source_root, &checksum_path, &manifest.files)
+}
+
+fn validate_vendor_checksum_files(
+    package: &CargoPackage,
+    source_root: &Path,
+    checksum_path: &Path,
+    files: &BTreeMap<String, String>,
+) -> Result<(), NativeRegistrySourceBlocker> {
+    if files.is_empty() {
+        return Err(native_registry_checksum_evidence_blocker(
+            Some(package.id.clone()),
+            "missing-vendor-file-checksums",
+            "vendor checksum manifest lacks file checksum material",
+            checksum_path,
+            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            "files",
+            None,
+            None,
+        ));
+    }
+    for (relative_path, expected_digest) in files {
+        validate_vendor_checksum_file(package, source_root, checksum_path, relative_path, expected_digest)?;
+    }
+    validate_vendor_checksum_no_extra_files(package, source_root, checksum_path, files)
+}
+
+fn validate_vendor_checksum_file(
+    package: &CargoPackage,
+    source_root: &Path,
+    checksum_path: &Path,
+    relative_path: &str,
+    expected_digest: &str,
+) -> Result<(), NativeRegistrySourceBlocker> {
+    if !is_lowercase_sha256_hex(expected_digest) {
+        return Err(native_registry_checksum_evidence_blocker(
+            Some(package.id.clone()),
+            "invalid-vendor-file-checksum",
+            "vendor file checksum is not lowercase SHA-256 hex",
+            checksum_path,
+            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            relative_path,
+            Some(expected_digest),
+            None,
+        ));
+    }
+    let file_path = vendor_checksum_entry_path(package, source_root, checksum_path, relative_path, expected_digest)?;
+    if !file_path.is_file() {
+        return Err(native_registry_checksum_evidence_blocker(
+            Some(package.id.clone()),
+            "missing-vendor-file-material",
+            "vendor checksum manifest names a file that is not present",
+            checksum_path,
+            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            relative_path,
+            Some(expected_digest),
+            None,
+        ));
+    }
+    let actual_digest = cargo_sha256_file_hex(&file_path)
+        .map_err(|message| native_registry_blocker(Some(package.id.clone()), "vendor-file-unreadable", &message))?;
+    if actual_digest != expected_digest {
+        return Err(native_registry_checksum_evidence_blocker(
+            Some(package.id.clone()),
+            "vendor-file-checksum-mismatch",
+            "vendor file checksum does not match Cargo checksum metadata",
+            checksum_path,
+            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            relative_path,
+            Some(expected_digest),
+            Some(&actual_digest),
         ));
     }
     Ok(())
+}
+
+fn validate_vendor_checksum_no_extra_files(
+    package: &CargoPackage,
+    source_root: &Path,
+    checksum_path: &Path,
+    files: &BTreeMap<String, String>,
+) -> Result<(), NativeRegistrySourceBlocker> {
+    let mut actual_files = Vec::new();
+    collect_source_files(source_root, &mut actual_files)
+        .map_err(|message| native_registry_blocker(Some(package.id.clone()), "vendor-source-unreadable", &message))?;
+    for file in actual_files {
+        let relative = file.strip_prefix(source_root).map_err(|err| {
+            native_registry_blocker(
+                Some(package.id.clone()),
+                "vendor-source-unreadable",
+                &format!("normalizing vendor source file {}: {err}", file.display()),
+            )
+        })?;
+        let relative_text = normalize_path_string(relative);
+        if relative_text == CARGO_VENDOR_CHECKSUM_FILE_NAME || files.contains_key(&relative_text) {
+            continue;
+        }
+        let actual_digest = cargo_sha256_file_hex(&file).ok();
+        return Err(native_registry_checksum_evidence_blocker(
+            Some(package.id.clone()),
+            "vendor-file-not-in-checksum-manifest",
+            "vendor source contains a file not recorded in Cargo checksum metadata",
+            checksum_path,
+            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            &relative_text,
+            None,
+            actual_digest.as_deref(),
+        ));
+    }
+    Ok(())
+}
+
+fn vendor_checksum_entry_path(
+    package: &CargoPackage,
+    source_root: &Path,
+    checksum_path: &Path,
+    relative_path: &str,
+    expected_digest: &str,
+) -> Result<PathBuf, NativeRegistrySourceBlocker> {
+    let relative = Path::new(relative_path);
+    if !vendor_checksum_relative_path_is_safe(relative) {
+        return Err(native_registry_checksum_evidence_blocker(
+            Some(package.id.clone()),
+            "invalid-vendor-file-checksum-path",
+            "vendor checksum manifest contains an unsafe relative file path",
+            checksum_path,
+            CARGO_VENDOR_FILE_DIGEST_ALGORITHM,
+            relative_path,
+            Some(expected_digest),
+            None,
+        ));
+    }
+    Ok(source_root.join(relative))
+}
+
+fn vendor_checksum_relative_path_is_safe(relative: &Path) -> bool {
+    let mut seen_component = false;
+    for component in relative.components() {
+        match component {
+            std::path::Component::Normal(_) => seen_component = true,
+            _ => return false,
+        }
+    }
+    seen_component
+}
+
+fn cargo_sha256_file_hex(path: &Path) -> Result<String, String> {
+    let mut file =
+        fs::File::open(path).map_err(|err| format!("opening vendor source file {}: {err}", path.display()))?;
+    let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
+    let mut buffer = [0_u8; CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES];
+    loop {
+        let read_bytes = file
+            .read(&mut buffer)
+            .map_err(|err| format!("reading vendor source file {}: {err}", path.display()))?;
+        if read_bytes == 0 {
+            break;
+        }
+        <sha2::Sha256 as sha2::Digest>::update(&mut hasher, &buffer[..read_bytes]);
+    }
+    let digest = <sha2::Sha256 as sha2::Digest>::finalize(hasher);
+    Ok(data_encoding::HEXLOWER.encode(&digest))
+}
+
+fn is_lowercase_sha256_hex(value: &str) -> bool {
+    value.len() == CARGO_SHA256_HEX_CHARS
+        && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn summarize_native_git_source_planning(
@@ -3005,7 +3204,33 @@ fn native_registry_blocker(package_id: Option<String>, class: &str, message: &st
         package_id,
         class: class.to_string(),
         message: message.to_string(),
+        planning_path: None,
+        checksum_manifest_path: None,
+        digest_algorithm: None,
+        digest_subject: None,
+        expected_digest: None,
+        actual_digest: None,
     }
+}
+
+fn native_registry_checksum_evidence_blocker(
+    package_id: Option<String>,
+    class: &str,
+    message: &str,
+    checksum_manifest_path: &Path,
+    digest_algorithm: &str,
+    digest_subject: &str,
+    expected_digest: Option<&str>,
+    actual_digest: Option<&str>,
+) -> NativeRegistrySourceBlocker {
+    let mut blocker = native_registry_blocker(package_id, class, message);
+    blocker.planning_path = Some(VENDOR_CHECKSUM_PLANNING_PATH.to_string());
+    blocker.checksum_manifest_path = Some(normalize_path_string(checksum_manifest_path));
+    blocker.digest_algorithm = Some(digest_algorithm.to_string());
+    blocker.digest_subject = Some(digest_subject.to_string());
+    blocker.expected_digest = expected_digest.map(ToOwned::to_owned);
+    blocker.actual_digest = actual_digest.map(ToOwned::to_owned);
+    blocker
 }
 
 fn native_git_blocker(package_id: Option<String>, class: &str, message: &str) -> NativeGitSourceBlocker {
@@ -14666,6 +14891,53 @@ mod tests {
         }
     }
 
+    fn write_test_vendor_checksum_manifest(source_root: &Path, package_checksum: &str, relative_paths: &[&str]) {
+        let mut files = BTreeMap::new();
+        for relative_path in relative_paths {
+            let digest = cargo_sha256_file_hex(&source_root.join(relative_path)).unwrap();
+            files.insert((*relative_path).to_string(), digest);
+        }
+        let manifest = serde_json::json!({
+            "package": package_checksum,
+            "files": files,
+        });
+        let text = serde_json::to_string(&manifest).unwrap();
+        std::fs::write(source_root.join(CARGO_VENDOR_CHECKSUM_FILE_NAME), text).unwrap();
+    }
+
+    fn write_test_no_cargo_registry_source_workspace(
+        root: &Path,
+        lock_checksum: &str,
+        vendor_package_checksum: &str,
+    ) -> PathBuf {
+        let app_dir = root.join("app");
+        let dep_dir = root.join("vendor-deps/dep-crate-0.1.0");
+        std::fs::create_dir_all(app_dir.join("src")).unwrap();
+        std::fs::create_dir_all(dep_dir.join("src")).unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = [\"app\"]\n").unwrap();
+        std::fs::write(
+            app_dir.join("Cargo.toml"),
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ndep-crate = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(app_dir.join("src/lib.rs"), "pub fn app() -> u32 { dep_crate::dep() }\n").unwrap();
+        std::fs::write(
+            dep_dir.join("Cargo.toml"),
+            "[package]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(dep_dir.join("src/lib.rs"), "pub fn dep() -> u32 { 7 }\n").unwrap();
+        write_test_vendor_checksum_manifest(&dep_dir, vendor_package_checksum, &["Cargo.toml", "src/lib.rs"]);
+        std::fs::write(
+            root.join("Cargo.lock"),
+            format!(
+                "# This file is automatically @generated by Cargo.\nversion = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\ndependencies = [\n \"dep-crate\",\n]\n\n[[package]]\nname = \"dep-crate\"\nversion = \"0.1.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{lock_checksum}\"\n",
+            ),
+        )
+        .unwrap();
+        dep_dir
+    }
+
     fn test_cargo_package_env(name: &str, version: &str) -> BTreeMap<String, String> {
         let package = NativeManifestPackage {
             name: name.to_string(),
@@ -19646,8 +19918,7 @@ unix_dep = { path = "../unix-dep" }
         .unwrap();
         std::fs::write(dep_dir.join("src/lib.rs"), "pub fn dep() -> u32 { 7 }\n").unwrap();
         let checksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        std::fs::write(dep_dir.join(".cargo-checksum.json"), format!(r#"{{"package":"{checksum}","files":{{}}}}"#))
-            .unwrap();
+        write_test_vendor_checksum_manifest(&dep_dir, checksum, &["Cargo.toml", "src/lib.rs"]);
         std::fs::write(
             dir.path().join(".cargo/config.toml"),
             "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor\"\n",
@@ -19749,8 +20020,7 @@ unix_dep = { path = "../unix-dep" }
         )
         .unwrap();
         std::fs::write(dep_dir.join("src/lib.rs"), "pub fn dep() -> u32 { 7 }\n").unwrap();
-        std::fs::write(dep_dir.join(".cargo-checksum.json"), format!(r#"{{"package":"{DEP_CHECKSUM}","files":{{}}}}"#))
-            .unwrap();
+        write_test_vendor_checksum_manifest(&dep_dir, DEP_CHECKSUM, &["Cargo.toml", "src/lib.rs"]);
         std::fs::write(
             dir.path().join("Cargo.lock"),
             format!(
@@ -19782,6 +20052,79 @@ unix_dep = { path = "../unix-dep" }
         );
         assert!(receipt.native_unit_graph_planning.ready, "{:#?}", receipt.native_unit_graph_planning.blockers);
         assert!(receipt.unit_derivation_graph.ready, "{:#?}", receipt.unit_derivation_graph.blockers);
+    }
+
+    #[test]
+    fn no_cargo_capture_reports_vendor_package_checksum_drift_with_digest_evidence() {
+        let dir = TempDir::new().unwrap();
+        let dep_dir = write_test_no_cargo_registry_source_workspace(dir.path(), TEST_DIGEST_A, TEST_DIGEST_B);
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            no_cargo_oracle: true,
+            ..options(dir.path())
+        };
+
+        let receipt = capture_rust_plan(&plan_options).unwrap();
+
+        assert!(dep_dir.join(CARGO_VENDOR_CHECKSUM_FILE_NAME).is_file());
+        assert!(receipt.cargo_mode.no_cargo_oracle);
+        assert!(!receipt.native_registry_source_planning.ready);
+        let blocker = receipt
+            .native_registry_source_planning
+            .blockers
+            .iter()
+            .find(|blocker| blocker.class == "vendor-checksum-mismatch")
+            .unwrap();
+        assert_eq!(
+            blocker.package_id.as_deref(),
+            Some("registry+https://github.com/rust-lang/crates.io-index#dep-crate@0.1.0")
+        );
+        assert_eq!(blocker.planning_path.as_deref(), Some(VENDOR_CHECKSUM_PLANNING_PATH));
+        assert_eq!(blocker.digest_algorithm.as_deref(), Some(CARGO_VENDOR_PACKAGE_DIGEST_ALGORITHM));
+        assert_eq!(blocker.digest_subject.as_deref(), Some("package"));
+        assert_eq!(blocker.expected_digest.as_deref(), Some(TEST_DIGEST_A));
+        assert_eq!(blocker.actual_digest.as_deref(), Some(TEST_DIGEST_B));
+        assert!(
+            blocker
+                .checksum_manifest_path
+                .as_deref()
+                .is_some_and(|path| path.ends_with(CARGO_VENDOR_CHECKSUM_FILE_NAME))
+        );
+        assert!(!receipt.unit_derivation_graph.ready);
+    }
+
+    #[test]
+    fn no_cargo_capture_reports_vendor_file_checksum_drift_with_digest_evidence() {
+        let dir = TempDir::new().unwrap();
+        let dep_dir = write_test_no_cargo_registry_source_workspace(dir.path(), TEST_DIGEST_A, TEST_DIGEST_A);
+        let dep_source = dep_dir.join("src/lib.rs");
+        let original_digest = cargo_sha256_file_hex(&dep_source).unwrap();
+        std::fs::write(&dep_source, "pub fn dep() -> u32 { 8 }\n").unwrap();
+        let changed_digest = cargo_sha256_file_hex(&dep_source).unwrap();
+        let plan_options = RustPlanOptions {
+            features: Vec::new(),
+            no_default_features: false,
+            no_cargo_oracle: true,
+            ..options(dir.path())
+        };
+
+        let receipt = capture_rust_plan(&plan_options).unwrap();
+
+        assert_ne!(original_digest, changed_digest);
+        assert!(!receipt.native_registry_source_planning.ready);
+        let blocker = receipt
+            .native_registry_source_planning
+            .blockers
+            .iter()
+            .find(|blocker| blocker.class == "vendor-file-checksum-mismatch")
+            .unwrap();
+        assert_eq!(blocker.planning_path.as_deref(), Some(VENDOR_CHECKSUM_PLANNING_PATH));
+        assert_eq!(blocker.digest_algorithm.as_deref(), Some(CARGO_VENDOR_FILE_DIGEST_ALGORITHM));
+        assert_eq!(blocker.digest_subject.as_deref(), Some("src/lib.rs"));
+        assert_eq!(blocker.expected_digest.as_deref(), Some(original_digest.as_str()));
+        assert_eq!(blocker.actual_digest.as_deref(), Some(changed_digest.as_str()));
+        assert!(!receipt.unit_derivation_graph.ready);
     }
 
     #[test]
@@ -19987,8 +20330,7 @@ unix_dep = { path = "../unix-dep" }
         .unwrap();
         std::fs::write(dep_dir.join("src/lib.rs"), "pub fn dep() -> u32 { 7 }\n").unwrap();
         let checksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        std::fs::write(dep_dir.join(".cargo-checksum.json"), format!(r#"{{"package":"{checksum}","files":{{}}}}"#))
-            .unwrap();
+        write_test_vendor_checksum_manifest(&dep_dir, checksum, &["Cargo.toml", "src/lib.rs"]);
         std::fs::write(
             dir.path().join(".cargo/config.toml"),
             "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor\"\n",
@@ -20444,8 +20786,7 @@ unix_dep = { path = "../unix-dep" }
         .unwrap();
         std::fs::write(dep_dir.join("src/main.rs"), "fn main() {}\n").unwrap();
         let checksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        std::fs::write(dep_dir.join(".cargo-checksum.json"), format!(r#"{{"package":"{checksum}","files":{{}}}}"#))
-            .unwrap();
+        write_test_vendor_checksum_manifest(&dep_dir, checksum, &["Cargo.toml", "src/main.rs"]);
         std::fs::write(
             dir.path().join(".cargo/config.toml"),
             "[source.crates-io]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor\"\n",

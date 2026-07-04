@@ -59,7 +59,7 @@ The ordinary self-build proof needs these prerequisite categories:
 - `git` for the checked-in proof helper and current tracked-source inventory.
 - A static sandbox shell, normally a `busybox-static` binary, selected through
   `SNIX_BUILD_SANDBOX_SHELL` or discovered by the helper.
-- The checked-in source tree, `vendor-deps/`, and `.cargo/vendor-config.toml`.
+- The checked-in source tree, checkout-local `vendor-deps/`, and `.cargo/vendor-config.toml`.
 - Around 4 GiB of writable scratch space under
   `target/self-hosting-proof/work/` or `CRUNCH_PROOF_SCRATCH_DIR`.
 
@@ -150,19 +150,23 @@ frontier evidence, but it is not a Nix-free fixed-point success claim.
 
 ### Current refreshed evidence (2026-07-03)
 
-The current inspected Cargo-free fixed-point evidence is blocked, not successful.
-Use this as the current status until a newer same-tree bundle supersedes it:
+The current inspected Cargo-free fixed-point evidence succeeds for the bounded
+Cargo-free proof mode. Use this as the current status until a newer same-tree
+bundle supersedes it:
 
-- Command: `mantle self-build --cargo-free --fixed-point --out /tmp/mantle-cargo-free-fixed-point-classifier2-20260703T203015Z --rustc /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc`
-- Output bundle: `/tmp/mantle-cargo-free-fixed-point-classifier2-20260703T203015Z`
-- Verdict: `status = "blocked"`, `fixed_point = false`; stage1 blocked before binary, so no stage binary BLAKE3 digests were produced.
-- Machine field: `blocker_diagnostic`.
-- Blocker class: `vendor-checksum-mismatch` nested under `/rust_plan/native_registry_source_planning/blockers/0`.
-- Blocked package: `registry+https://github.com/rust-lang/crates.io-index#astral-tokio-tar@0.6.3`.
-- Receipt digests: topology receipt `11d5c390fe79fbc1227079c4275baefeceb2d941cc0d0985c2f6c973fc8a2660`, rust-plan receipt `1bdc412bce65980d883057db2b67a2a947d08cb1ed1f21591260998b9f0e3768`, native registry source digest `ba666c4b9c177ab3e64fe2b8818ed56e5fe0ed1b5577b3375fb6019ff6e76214`.
-- Next action: refresh or repair checked-in `vendor-deps/` / declared source material against `Cargo.lock`, then rerun the fixed-point proof.
+- Command: `mantle --json self-build --cargo-free --fixed-point --out /tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z --rustc /home/brittonr/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --target x86_64-unknown-linux-gnu`
+- Output bundle: `/tmp/mantle-cargo-free-fixed-point-vendor-repair-20260703T204500Z`
+- Verdict: `status = "success"`, `fixed_point = true`; stage1 and stage2 both reported `execution_status = "success"`.
+- Stage binary BLAKE3: stage1 and stage2 both produced `ca00cd5866b0128434f95a0e0cf63ff2e5cc947eb90b60206cb9078bfe44215d`.
+- Per-stage topology units: 687 executed, 0 failed.
+- Rust-plan receipt hash: `f35cc306c76d14a44599ce438f420ea9bcfbc6a843d9a9a64f5edb5915e2ef6d` for both stages.
+- Native registry source digest: `964dc130610257aadedbc27a24284a58560fb01086c6686f2f5839af753a0ffd`; native registry source planning was ready with zero blockers.
+- Cargo guard: `cargo_marker_absent = true` for both stages.
+- Non-claims: `not-crunch-bootstrap`, `not-release-reproducibility`, `not-source-built-toolchain-closure`, and `not-full-cargo-compatibility`.
 
-This evidence is not a Nix-free fixed-point success claim.
+This evidence is a bounded Cargo-free fixed-point success claim only. It is not
+a Mantle bootstrap, release reproducibility, source-built toolchain closure, or
+full Cargo compatibility claim.
 
 This lane does not prove compiler correctness, does not prove full Cargo
 compatibility, does not prove release reproducibility, does not prove deploy
