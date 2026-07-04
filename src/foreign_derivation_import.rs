@@ -526,6 +526,28 @@ pub(crate) fn normalize_nix_aterm_derivation_closure(
     Ok(closure)
 }
 
+pub(crate) fn select_nix_derivation_json_closure(
+    closure: &NixDerivationJsonClosure,
+    root_derivation: &str,
+) -> Result<NixDerivationJsonClosure, ImportDiagnostic> {
+    validate_nix_derivation_path(root_derivation)?;
+    if closure.is_empty() || closure.len() > MAX_GRAPH_NODES {
+        return Err(diagnostic(
+            "nix-derivation-count-out-of-range",
+            None,
+            "Nix derivation closure size is outside supported limits",
+        ));
+    }
+    if !closure.contains_key(root_derivation) {
+        return Err(diagnostic(
+            "missing-nix-root-derivation",
+            None,
+            "selected root derivation is absent from the concrete Nix closure",
+        ));
+    }
+    select_reachable_nix_derivations(closure, root_derivation)
+}
+
 pub(crate) fn lower_nix_derivation_json_closure(
     closure: &NixDerivationJsonClosure,
     config: &NixProducerConfig,
@@ -748,6 +770,32 @@ fn normalize_nix_store_paths(paths: Vec<String>) -> Result<Vec<String>, ImportDi
 
 fn normalize_nix_env(env: BTreeMap<String, String>) -> BTreeMap<String, String> {
     env.into_iter().map(|(key, value)| (key, normalize_nix_embedded_store_paths(&value))).collect()
+}
+
+fn select_reachable_nix_derivations(
+    closure: &NixDerivationJsonClosure,
+    root_derivation: &str,
+) -> Result<NixDerivationJsonClosure, ImportDiagnostic> {
+    let mut selected = BTreeMap::new();
+    let mut seen = BTreeSet::new();
+    let mut pending = vec![root_derivation.to_string()];
+    while let Some(drv_path) = pending.pop() {
+        if !seen.insert(drv_path.clone()) {
+            continue;
+        }
+        let derivation = closure.get(&drv_path).ok_or_else(|| {
+            diagnostic(
+                "missing-nix-input-derivation",
+                None,
+                &format!("reachable Nix input derivation is absent from bundle: {drv_path}"),
+            )
+        })?;
+        for input_drv in derivation.input_drvs.keys() {
+            pending.push(input_drv.clone());
+        }
+        selected.insert(drv_path, derivation.clone());
+    }
+    Ok(selected)
 }
 
 fn normalize_nix_aterm_derivation_node(
@@ -1781,6 +1829,27 @@ mod tests {
         assert!(artifacts.graph.hash_domains.iter().any(|record| record.value == NIXPKGS_HELLO_DRV));
         assert_eq!(translated.nodes.len(), NIXPKGS_DERIVATION_COUNT);
         assert!(receipt.hash_domains.iter().any(|record| record.domain == MANTLE_RECEIPT_HASH_DOMAIN));
+    }
+
+    #[test]
+    fn nix_closure_selection_filters_unreachable_and_requires_inputs() {
+        let mut closure = nixpkgs_hello_closure();
+        let unrelated_drv = "/nix/store/66666666666666666666666666666666-unrelated.drv";
+        closure.insert(unrelated_drv.to_string(), nixpkgs_source_derivation());
+
+        let selected = select_nix_derivation_json_closure(&closure, NIXPKGS_HELLO_DRV).unwrap();
+
+        assert_eq!(selected.len(), NIXPKGS_DERIVATION_COUNT);
+        assert!(selected.contains_key(NIXPKGS_HELLO_DRV));
+        assert!(selected.contains_key(NIXPKGS_SOURCE_DRV));
+        assert!(!selected.contains_key(unrelated_drv));
+
+        let mut missing = nixpkgs_hello_closure();
+        missing.remove(NIXPKGS_SOURCE_DRV);
+        assert_error_class(
+            select_nix_derivation_json_closure(&missing, NIXPKGS_HELLO_DRV),
+            "missing-nix-input-derivation",
+        );
     }
 
     #[test]

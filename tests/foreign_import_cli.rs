@@ -32,6 +32,8 @@ const MALFORMED_NIX_DERIVATION: &str = "malformed-nix-derivation";
 const FAKE_PATH_DIR: &str = "fake-path";
 const NIXPKGS_HELLO_DRV: &str = "/nix/store/22222222222222222222222222222222-hello.drv";
 const NIXPKGS_SOURCE_DRV: &str = "/nix/store/44444444444444444444444444444444-hello-source.drv";
+const NIXPKGS_UNRELATED_DRV: &str = "/nix/store/66666666666666666666666666666666-unrelated.drv";
+const NIXPKGS_REACHABLE_DRV_COUNT: usize = 2;
 const CACHE_NIXOS_ORG: &str = "https://cache.nixos.org";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
 
@@ -210,6 +212,83 @@ fn foreign_import_cli_produces_nixpkgs_artifacts_from_drv_files_without_nix() {
 }
 
 #[test]
+fn foreign_import_cli_produces_nixpkgs_artifacts_from_drv_dir_without_nix() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let fake_path = temp.path().join(FAKE_PATH_DIR);
+    let drv_dir = temp.path().join("drv-dir");
+    let out_dir = temp.path().join("drv-dir-artifacts");
+    fs::create_dir(&fake_path).expect("fake PATH should be created");
+    write_drv_dir_fixture(&drv_dir, true);
+
+    let produce = produce_nixpkgs_drv_dir_artifacts(&fake_path, &drv_dir, &out_dir);
+    let produce_report: Value = serde_json::from_slice(&produce.stdout).expect("stdout should be JSON");
+    let graph = out_dir.join("nixpkgs.graph.json");
+    let index = out_dir.join("nixpkgs.index.json");
+
+    assert_eq!(produce_report["accepted"], true);
+    assert!(graph.exists());
+    assert!(index.exists());
+    assert!(produce.stderr.is_empty());
+
+    let graph_json = json_file(&graph);
+    assert_eq!(graph_json["nodes"].as_array().unwrap().len(), NIXPKGS_REACHABLE_DRV_COUNT);
+    assert!(
+        !graph_json["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|node| { node["original_derivation"] == Value::String(NIXPKGS_UNRELATED_DRV.to_string()) })
+    );
+
+    let validate = run_validate_json(graph.clone(), index.clone(), fixture_path(NIXPKGS_POLICY));
+    let plan = run_plan_json(graph, index, fixture_path(NIXPKGS_POLICY));
+
+    assert_eq!(validate["accepted"], true);
+    assert_eq!(plan["accepted"], true);
+    assert_eq!(plan["plan"]["substitution_audit"][0]["cache_url"], CACHE_NIXOS_ORG);
+    assert!(plan["plan"]["forbidden_process_invocations"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn foreign_import_cli_rejects_drv_dir_missing_reachable_input_without_partial_artifacts() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let fake_path = temp.path().join(FAKE_PATH_DIR);
+    let drv_dir = temp.path().join("missing-input-drv-dir");
+    let out_dir = temp.path().join("missing-input-artifacts");
+    fs::create_dir(&fake_path).expect("fake PATH should be created");
+    write_drv_dir_fixture(&drv_dir, false);
+
+    let output = mantle_cmd()
+        .env("PATH", &fake_path)
+        .args([
+            "--json",
+            "foreign-import",
+            "produce-nix",
+            "--drv-dir",
+            path_str(&drv_dir),
+            "--root-derivation",
+            NIXPKGS_HELLO_DRV,
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--producer-identity",
+            "nixpkgs:missing-input-drv-dir-fixture",
+            "--out-dir",
+            path_str(&out_dir),
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .clone();
+
+    assert_rejected_class(output.stdout, "missing-nix-input-derivation");
+    assert!(output.stderr.is_empty());
+    assert!(!out_dir.join("nixpkgs.graph.json").exists());
+    assert!(!out_dir.join("nixpkgs.index.json").exists());
+}
+
+#[test]
 fn foreign_import_cli_rejects_malformed_drv_without_partial_artifacts() {
     let temp = TempDir::new().expect("tempdir should be created");
     let fake_path = temp.path().join(FAKE_PATH_DIR);
@@ -315,6 +394,57 @@ fn produce_nixpkgs_drv_artifacts(fake_path: &Path, out_dir: &Path) -> std::proce
         .success()
         .get_output()
         .clone()
+}
+
+fn produce_nixpkgs_drv_dir_artifacts(fake_path: &Path, drv_dir: &Path, out_dir: &Path) -> std::process::Output {
+    mantle_cmd()
+        .env("PATH", fake_path)
+        .args([
+            "--json",
+            "foreign-import",
+            "produce-nix",
+            "--drv-dir",
+            path_str(drv_dir),
+            "--root-derivation",
+            NIXPKGS_HELLO_DRV,
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--producer-identity",
+            "nixpkgs:hello-drv-dir-fixture",
+            "--producer-revision",
+            "fixture-revision",
+            "--cache-url",
+            CACHE_NIXOS_ORG,
+            "--cache-trust-scope",
+            TRUSTED_CACHE_SCOPE,
+            "--out-dir",
+            path_str(out_dir),
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .clone()
+}
+
+fn write_drv_dir_fixture(drv_dir: &Path, include_source: bool) {
+    fs::create_dir(drv_dir).expect("drv dir should be created");
+    copy_drv_fixture(drv_dir, NIXPKGS_HELLO_DRV, NIXPKGS_ROOT_DRV_FILE);
+    copy_drv_fixture(drv_dir, NIXPKGS_UNRELATED_DRV, NIXPKGS_SOURCE_DRV_FILE);
+    if include_source {
+        copy_drv_fixture(drv_dir, NIXPKGS_SOURCE_DRV, NIXPKGS_SOURCE_DRV_FILE);
+    }
+}
+
+fn copy_drv_fixture(drv_dir: &Path, logical_path: &str, fixture_name: &str) {
+    let basename = logical_path.rsplit('/').next().expect("logical drv path should have basename");
+    fs::copy(fixture_path(fixture_name), drv_dir.join(basename)).expect("drv fixture should copy");
+}
+
+fn json_file(path: &Path) -> Value {
+    let contents = fs::read_to_string(path).expect("JSON file should be readable");
+    serde_json::from_str(&contents).expect("JSON file should parse")
 }
 
 fn run_validate_json(graph: PathBuf, index: PathBuf, policy: PathBuf) -> Value {
