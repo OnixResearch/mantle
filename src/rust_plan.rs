@@ -170,6 +170,15 @@ const RUST_PLAN_CLASS_CARGO_ORACLE_EVIDENCE: &str = "cargo-oracle-evidence";
 const RUST_PLAN_CLASS_CARGO_FREE_BOUNDED_TOPOLOGY: &str = "cargo-free-bounded-topology";
 const RUST_PLAN_CLASS_BLOCKED_UNSUPPORTED_SURFACE: &str = "blocked-unsupported-surface";
 const RUST_PLAN_STATUS_NOT_DEFAULT_PROJECT_BUILD: &str = "not-default-project-build";
+const RUST_COMPATIBILITY_MATRIX_ID: &str = "representative-rust-compatibility-v1";
+const RUST_COMPATIBILITY_MATRIX_PATH: &str = "examples/rust_compatibility_surface_matrix.ncl";
+const RUST_COMPATIBILITY_SURFACE_BASIC_PATH_WORKSPACE: &str = "path-workspace-basic";
+const RUST_COMPATIBILITY_SURFACE_LOCAL_PATH_DEPENDENCY: &str = "local-path-dependency";
+const RUST_COMPATIBILITY_SURFACE_WORKSPACE_INHERITANCE: &str = "workspace-inheritance";
+const RUST_COMPATIBILITY_SURFACE_SOURCE_CLOSURE_DIGEST: &str = "source-closure-digest";
+const RUST_COMPATIBILITY_SURFACE_UNIT_GRAPH_FACTS: &str = "unit-graph-facts";
+const RUST_COMPATIBILITY_SURFACE_BLOCKED_UNSUPPORTED: &str = "blocked-unsupported-surface";
+const RUST_COMPATIBILITY_SURFACE_CARGO_ORACLE: &str = "cargo-oracle-reference";
 const RUST_PLAN_COMMON_NON_CLAIMS: &[&str] = &[
     "not-full-cargo-compatibility",
     "not-compiler-correctness",
@@ -218,7 +227,19 @@ pub(crate) struct RustPlanCargoModeSummary {
     pub(crate) no_cargo_oracle: bool,
     pub(crate) compatibility_class: String,
     pub(crate) project_build_status: String,
+    pub(crate) compatibility_surface_matrix: RustPlanCompatibilitySurfaceMatrixSummary,
     pub(crate) blockers: Vec<String>,
+    pub(crate) non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct RustPlanCompatibilitySurfaceMatrixSummary {
+    pub(crate) matrix_id: String,
+    pub(crate) matrix_path: String,
+    pub(crate) evidence_class: String,
+    pub(crate) status: String,
+    pub(crate) surface_ids: Vec<String>,
+    pub(crate) blocker_classes: Vec<String>,
     pub(crate) non_claims: Vec<String>,
 }
 
@@ -1429,9 +1450,65 @@ fn rust_plan_cargo_mode(no_cargo_oracle: bool, blockers: Vec<String>) -> RustPla
         no_cargo_oracle,
         compatibility_class: compatibility_class.to_string(),
         project_build_status: RUST_PLAN_STATUS_NOT_DEFAULT_PROJECT_BUILD.to_string(),
+        compatibility_surface_matrix: rust_plan_surface_matrix(
+            no_cargo_oracle,
+            compatibility_class,
+            &blockers,
+            &non_claims,
+        ),
         blockers,
         non_claims,
     }
+}
+
+fn rust_plan_surface_matrix(
+    no_cargo_oracle: bool,
+    compatibility_class: &str,
+    blockers: &[String],
+    non_claims: &[String],
+) -> RustPlanCompatibilitySurfaceMatrixSummary {
+    let status = rust_plan_surface_matrix_status(no_cargo_oracle, blockers);
+    let mut surface_ids = rust_plan_surface_ids(no_cargo_oracle, blockers);
+    surface_ids.sort();
+    surface_ids.dedup();
+    let mut blocker_classes = blockers.to_vec();
+    blocker_classes.sort();
+    blocker_classes.dedup();
+    RustPlanCompatibilitySurfaceMatrixSummary {
+        matrix_id: RUST_COMPATIBILITY_MATRIX_ID.to_string(),
+        matrix_path: RUST_COMPATIBILITY_MATRIX_PATH.to_string(),
+        evidence_class: compatibility_class.to_string(),
+        status: status.to_string(),
+        surface_ids,
+        blocker_classes,
+        non_claims: non_claims.to_vec(),
+    }
+}
+
+fn rust_plan_surface_matrix_status(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {
+    if !no_cargo_oracle {
+        return "oracle";
+    }
+    if blockers.is_empty() {
+        return "supported";
+    }
+    "blocked"
+}
+
+fn rust_plan_surface_ids(no_cargo_oracle: bool, blockers: &[String]) -> Vec<String> {
+    if !no_cargo_oracle {
+        return vec![RUST_COMPATIBILITY_SURFACE_CARGO_ORACLE.to_string()];
+    }
+    if !blockers.is_empty() {
+        return vec![RUST_COMPATIBILITY_SURFACE_BLOCKED_UNSUPPORTED.to_string()];
+    }
+    vec![
+        RUST_COMPATIBILITY_SURFACE_BASIC_PATH_WORKSPACE.to_string(),
+        RUST_COMPATIBILITY_SURFACE_LOCAL_PATH_DEPENDENCY.to_string(),
+        RUST_COMPATIBILITY_SURFACE_WORKSPACE_INHERITANCE.to_string(),
+        RUST_COMPATIBILITY_SURFACE_SOURCE_CLOSURE_DIGEST.to_string(),
+        RUST_COMPATIBILITY_SURFACE_UNIT_GRAPH_FACTS.to_string(),
+    ]
 }
 
 fn rust_plan_compatibility_class(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {

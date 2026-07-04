@@ -51,12 +51,16 @@ Project examples show selector syntax after package composition. See `examples/p
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#hello` | named package store path with `bin/hello` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#goodbye` | named package store path with `bin/goodbye` | generated seed |
 | `examples/project/crunch.ncl` | `cd examples/project && mantle build .#checks.test-hello` | check output with `result` text `ok` | generated seed |
-| `examples/rust_compatibility_rail.rs` | `cargo test -p mantle --test rust_compatibility_rail` | generated representative Rust compatibility rail; sandboxed offline Cargo smoke plus rust-plan bounded success/blocker receipt | fast + bwrap |
+| `examples/rust_compatibility_rail.rs` + `examples/rust_compatibility_surface_matrix.ncl` | `cargo test -p mantle --test rust_compatibility_rail` | generated representative Rust compatibility rail surface matrix; sandboxed offline Cargo smoke plus rust-plan bounded success/blocker receipt | fast + bwrap |
 
 The representative Rust compatibility rail is lane-scoped evidence, not proof of
 full Cargo compatibility, compiler correctness, release reproducibility, or
-bootstrap correctness. The offline rail reports `cargo-inside-mantle-sandbox`;
-the native rail reports either `cargo-free-bounded-topology` or a deterministic
+bootstrap correctness. `examples/rust_compatibility_surface_matrix.ncl` is the
+source-controlled surface matrix: it names supported offline Cargo surfaces,
+native `cargo-free-bounded-topology` path-workspace support, blocked surfaces
+such as vendored git and native-link metadata, stable blocker classes, and
+non-claims. The offline rail reports `cargo-inside-mantle-sandbox`; the native
+rail reports either `cargo-free-bounded-topology` or a deterministic
 `blocked-unsupported-surface` receipt.
 
 ## Trust/provenance

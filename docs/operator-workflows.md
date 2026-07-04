@@ -241,13 +241,17 @@ registry source material. Missing source material fails closed before a result i
 accepted; the helper and import scaffold do not search ambient Cargo caches,
 target directories, or network sources.
 
-The representative Rust compatibility rail (`examples/rust_compatibility_rail.rs`
-and `tests/rust_compatibility_rail.rs`) is the maintained status fixture for
-practical Rust project claims. It covers a binary, local library, vendored
-registry source, proc macro, and build script metadata. Its offline Cargo result
-is `cargo-inside-mantle-sandbox`; its rust-plan result is either bounded native
-success or a deterministic unsupported-surface blocker. It is not proof of full
-Cargo compatibility.
+The representative Rust compatibility rail (`examples/rust_compatibility_rail.rs`,
+`examples/rust_compatibility_surface_matrix.ncl`, and
+`tests/rust_compatibility_rail.rs`) is the maintained surface matrix for
+practical Rust project claims. It covers a binary, local library, feature
+activation, target-specific dependency declaration, workspace inheritance,
+sibling binary package, vendored registry source, proc macro, and build script
+metadata. Its offline Cargo result is `cargo-inside-mantle-sandbox`; its
+rust-plan result is either `cargo-free-bounded-topology` for the supported
+path-workspace subset or a deterministic `blocked-unsupported-surface` blocker
+for blocked surfaces such as vendored git, pkg-config, rustc-link metadata, or
+native C compilation. It is not proof of full Cargo compatibility.
 
 Structured JSON reports include `cargo_build_evidence[]` when the output
 contains `share/mantle/offline-cargo-build.json`. The claim class is
