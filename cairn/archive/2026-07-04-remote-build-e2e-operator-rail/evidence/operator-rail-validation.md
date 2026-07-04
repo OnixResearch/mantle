@@ -92,3 +92,25 @@ After marking V2 checked, `pueue task 70` reran validate plus the tasks gate. Fi
 "valid": true,
 "verdict": "PASS"
 ```
+
+## Archive sync note
+
+`cairn archive --execute` moved the change into `cairn/archive/2026-07-04-remote-build-e2e-operator-rail/`, but the ADDED requirement was not present in `cairn/specs/remote-builds/spec.md` immediately afterward. The requirement was manually copied into the accepted spec before post-archive validation.
+
+`pueue task 82` post-archive validation and accepted-spec check:
+
+```text
+Command: nix run path:/home/brittonr/git/cairn#cairn -- validate --root . && grep -n 'remote_builds.operator_e2e_rail' cairn/specs/remote-builds/spec.md
+
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 16,
+  "valid": true
+}
+426:r[remote_builds.operator_e2e_rail] Mantle MUST provide a deterministic operator-facing remote-build e2e validation rail that composes route planning, framed handshake, source/input sync, remote execution, signed output admission, and bounded observability without depending on ambient network services or hidden global state. The rail MUST produce or assert machine-readable evidence for the selected route, handshake phase, upload summary, execution phase, transfer/admission phase, signer or trust basis, artifact-attestation reference, log/status bounds, redaction, and explicit non-claims.
+```
