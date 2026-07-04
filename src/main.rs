@@ -3089,20 +3089,22 @@ fn run_build_command(
     let substituter_url = (!no_substitute).then_some(substituters);
     let hermeticity_mode = select_hermeticity_mode(strict_hermetic, impure)?;
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
-    let remote_selection = remote_build_selection(
-        remote_builder,
-        remote_ticket,
-        remote_builder_program,
-        remote_builder_args,
-        trusted_builder_keys,
-        remote_build_time_secs,
-        ctx,
-    )?;
+    let remote_plan_facts = remote_plan_facts_for_cli(remote_builder, remote_ticket, trusted_builder_keys)?;
+    let remote_selection = if plan {
+        None
+    } else {
+        remote_build_selection(
+            remote_builder,
+            remote_ticket,
+            remote_builder_program,
+            remote_builder_args,
+            trusted_builder_keys,
+            remote_build_time_secs,
+            ctx,
+        )?
+    };
     if remote_selection.is_some() && fix {
         return Err(RunError::Internal("remote build dispatch does not support --fix yet".to_string()));
-    }
-    if remote_selection.is_some() && plan {
-        return Err(RunError::Internal("remote build dispatch does not support --plan yet".to_string()));
     }
     let target = project_build::parse_build_target(file.map(PathBuf::as_path));
     match target {
@@ -3138,6 +3140,7 @@ fn run_build_command(
                     signing_key_path: signing_key,
                     trusted_public_keys: parsed_trusted.as_deref(),
                     trust_unsigned,
+                    remote_builder: remote_plan_facts.as_ref(),
                     output_mode: ctx.output_mode(),
                 });
             }
@@ -3194,6 +3197,7 @@ fn run_build_command(
                     signing_key,
                     parsed_trusted.as_deref(),
                     trust_unsigned,
+                    remote_plan_facts.as_ref(),
                     ctx.output_mode(),
                 );
             }
@@ -3219,6 +3223,24 @@ fn run_build_command(
 
 struct RemoteBuildSelection {
     options: remote_build::RemoteClientBuildOptions,
+}
+
+fn remote_plan_facts_for_cli(
+    builder: Option<&str>,
+    ticket: Option<&str>,
+    trusted_builder_keys: &[String],
+) -> Result<Option<realization_routing::RemoteBuilderPlanFacts>, RunError> {
+    let trusted_output_key_count = u32::try_from(trusted_builder_keys.len()).map_err(|_| {
+        RunError::Internal(format!(
+            "trusted remote builder key count does not fit in u32: {}",
+            trusted_builder_keys.len()
+        ))
+    })?;
+    Ok(realization_routing::RemoteBuilderPlanFacts::cli_configured(
+        builder,
+        ticket.is_some(),
+        trusted_output_key_count,
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4634,6 +4656,7 @@ fn build_plan_from_expr(
     signing_key_path: Option<&std::path::Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
+    remote_builder: Option<&realization_routing::RemoteBuilderPlanFacts>,
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
     let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
@@ -4650,6 +4673,7 @@ fn build_plan_from_expr(
         signing_key_path,
         trusted_public_keys,
         trust_unsigned,
+        remote_builder,
         output_mode,
     })
 }
@@ -5246,6 +5270,22 @@ mod tests {
         assert_eq!(builder_program.as_deref(), Some(Path::new("/bin/remote-builder")));
         assert_eq!(builder_args, vec!["serve".to_string()]);
         assert_eq!(trusted_builder_keys, vec!["builder-key".to_string()]);
+    }
+
+    #[test]
+    fn build_plan_remote_facts_are_pure_and_redacted() {
+        let facts =
+            remote_plan_facts_for_cli(Some("builder-1"), Some("ticket-1:super-secret"), &["builder-key".to_string()])
+                .expect("remote plan facts construct")
+                .expect("remote plan facts present");
+        let candidate = realization_routing::remote_builder_candidate_from_facts(&facts);
+        let detail = candidate.detail.as_deref().unwrap_or_default();
+
+        assert_eq!(candidate.route, realization_routing::RouteClass::P2pRemoteBuilder);
+        assert_eq!(candidate.reason_code, "builder-capability-and-output-trust-match");
+        assert!(detail.contains("endpoint=builder-1"));
+        assert!(!detail.contains("super-secret"));
+        assert!(!detail.contains("ticket-1"));
     }
 
     #[test]

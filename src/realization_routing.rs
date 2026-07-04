@@ -13,6 +13,8 @@ const MAX_DETAIL_BYTES: usize = 256;
 const MAX_UPLOAD_CLASSES: usize = 4;
 const MAX_UPLOAD_OBJECTS: u32 = 65_536;
 const MAX_UPLOAD_BYTES: u64 = 1_099_511_627_776;
+const REMOTE_CAPABILITY_DEFAULT: &str = "stdio-default";
+const REMOTE_PLAN_NON_CLAIM: &str = "route-eligibility-only";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -228,6 +230,11 @@ impl RouteCandidateFacts {
         self
     }
 
+    pub fn with_owned_detail(mut self, detail: Option<String>) -> Self {
+        self.detail = detail.map(|value| truncate_detail(&value));
+        self
+    }
+
     pub fn requiring_network(mut self) -> Self {
         self.requires_network = true;
         self
@@ -244,6 +251,87 @@ impl RouteCandidateFacts {
         self.upload_summary = Some(summary);
         self
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RemoteBuilderPlanFacts {
+    pub endpoint_id: String,
+    pub builder_configured: bool,
+    pub ticket_configured: bool,
+    pub concrete_inputs: bool,
+    pub capabilities_match: bool,
+    pub source_inputs_ready: bool,
+    pub upload_summary: UploadSummary,
+    pub trusted_output_key_count: u32,
+}
+
+impl RemoteBuilderPlanFacts {
+    pub fn cli_configured(
+        endpoint_id: Option<&str>,
+        ticket_configured: bool,
+        trusted_output_key_count: u32,
+    ) -> Option<Self> {
+        if endpoint_id.is_none() && !ticket_configured && trusted_output_key_count == 0 {
+            return None;
+        }
+        let builder_configured = endpoint_id.is_some();
+        let endpoint_id = endpoint_id.unwrap_or("unconfigured").to_string();
+        Some(Self {
+            endpoint_id,
+            builder_configured,
+            ticket_configured,
+            concrete_inputs: true,
+            capabilities_match: true,
+            source_inputs_ready: true,
+            upload_summary: UploadSummary::try_new(Vec::new(), 0, 0).expect("empty remote upload summary is bounded"),
+            trusted_output_key_count,
+        })
+    }
+
+    fn redacted_detail(&self) -> String {
+        format!(
+            "endpoint={}; capabilities={}; upload_objects={}; upload_bytes={}; output_trust_keys={}; non_claim={}",
+            self.endpoint_id,
+            REMOTE_CAPABILITY_DEFAULT,
+            self.upload_summary.object_count,
+            self.upload_summary.byte_count,
+            self.trusted_output_key_count,
+            REMOTE_PLAN_NON_CLAIM,
+        )
+    }
+}
+
+pub fn remote_builder_candidate_from_facts(facts: &RemoteBuilderPlanFacts) -> RouteCandidateFacts {
+    let detail = Some(facts.redacted_detail());
+    if !facts.builder_configured {
+        return RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "remote-builder-not-configured")
+            .with_owned_detail(detail);
+    }
+    if !facts.ticket_configured {
+        return RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "remote-ticket-missing")
+            .with_owned_detail(detail);
+    }
+    if !facts.concrete_inputs {
+        return RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "concrete-inputs-missing")
+            .with_owned_detail(detail);
+    }
+    if !facts.capabilities_match {
+        return RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "builder-capability-mismatch")
+            .with_owned_detail(detail);
+    }
+    if !facts.source_inputs_ready {
+        return RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "source-readiness-missing")
+            .with_owned_detail(detail);
+    }
+    if facts.trusted_output_key_count == 0 {
+        return RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "output-trust-missing")
+            .with_owned_detail(detail);
+    }
+    RouteCandidateFacts::eligible(RouteClass::P2pRemoteBuilder, "builder-capability-and-output-trust-match")
+        .requiring_network()
+        .practical_only()
+        .with_upload_summary(facts.upload_summary.clone())
+        .with_owned_detail(detail)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -279,6 +367,8 @@ pub struct RoutePlanReport {
     pub schema: &'static str,
     pub selected_route: RouteClass,
     pub selected_reason_code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_detail: Option<String>,
     pub policy: RoutePolicyReport,
     pub tie_breaker: &'static str,
     pub rejected_routes: Vec<RouteRejection>,
@@ -327,6 +417,7 @@ pub fn plan_realization_route(input: RoutePlannerInput) -> RoutePlanReport {
         schema: ROUTE_REPORT_SCHEMA,
         selected_route: selected.route,
         selected_reason_code: selected.reason_code.to_string(),
+        selected_detail: selected.detail,
         policy: RoutePolicyReport {
             network: input.policy.network,
             requested_claim_strength: input.policy.requested_claim_strength,
@@ -377,6 +468,14 @@ fn classify_candidate(candidate: &RouteCandidateFacts, policy: RoutePolicy) -> C
 }
 
 pub fn route_plan_for_existing_build_action(action: &str, detail: Option<&str>) -> RoutePlanReport {
+    route_plan_for_build_action_with_remote(action, detail, None)
+}
+
+pub fn route_plan_for_build_action_with_remote(
+    action: &str,
+    detail: Option<&str>,
+    remote_builder: Option<&RemoteBuilderPlanFacts>,
+) -> RoutePlanReport {
     let detail = detail.map(truncate_detail);
     let mut candidates = Vec::with_capacity(MAX_ROUTE_CANDIDATES);
     match action {
@@ -413,7 +512,7 @@ pub fn route_plan_for_existing_build_action(action: &str, detail: Option<&str>) 
             candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
             candidates
                 .push(RouteCandidateFacts::rejected(RouteClass::SourceBundle, "source-inputs-present-or-fetchable"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "not-configured"));
+            push_remote_candidate(&mut candidates, remote_builder);
             candidates.push(RouteCandidateFacts::eligible(RouteClass::LocalBuild, "local-preflight-ok"));
         }
         "preflight-error" => {
@@ -421,7 +520,7 @@ pub fn route_plan_for_existing_build_action(action: &str, detail: Option<&str>) 
             candidates.push(RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "trusted-substitute-missing"));
             candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
             candidates.push(RouteCandidateFacts::rejected(RouteClass::SourceBundle, "unknown-source-readiness"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "not-configured"));
+            push_remote_candidate(&mut candidates, remote_builder);
             candidates.push(
                 RouteCandidateFacts::rejected(RouteClass::LocalBuild, "local-preflight-failed")
                     .with_detail(detail.as_deref()),
@@ -434,6 +533,14 @@ pub fn route_plan_for_existing_build_action(action: &str, detail: Option<&str>) 
         _ => unreachable!("unknown build plan action"),
     }
     plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), candidates))
+}
+
+fn push_remote_candidate(candidates: &mut Vec<RouteCandidateFacts>, remote_builder: Option<&RemoteBuilderPlanFacts>) {
+    let candidate = match remote_builder {
+        Some(facts) => remote_builder_candidate_from_facts(facts),
+        None => RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "not-configured"),
+    };
+    candidates.push(candidate);
 }
 
 fn truncate_detail(input: &str) -> String {
@@ -649,6 +756,53 @@ mod tests {
         assert_eq!(upload.object_count, 12);
         assert_eq!(upload.byte_count, 8_192);
         assert!(upload.classes.contains(&UploadClass::Source));
+    }
+
+    #[test]
+    fn cli_remote_builder_plan_facts_select_remote_route_without_secrets() {
+        let facts =
+            RemoteBuilderPlanFacts::cli_configured(Some("builder-1"), true, 1).expect("remote facts configured");
+        let report = route_plan_for_build_action_with_remote("build", Some("out=build"), Some(&facts));
+        let json = serde_json::to_string(&report).expect("route report serializes");
+
+        assert_eq!(report.selected_route, RouteClass::P2pRemoteBuilder);
+        assert_eq!(report.selected_reason_code, "builder-capability-and-output-trust-match");
+        assert!(report.selected_detail.as_deref().unwrap_or_default().contains("endpoint=builder-1"));
+        assert!(report.upload_summary.is_some());
+        assert!(!json.contains("secret"));
+        assert!(!json.contains("ticket"));
+    }
+
+    #[test]
+    fn cli_remote_builder_plan_rejects_missing_output_trust_before_local_build() {
+        let facts =
+            RemoteBuilderPlanFacts::cli_configured(Some("builder-1"), true, 0).expect("remote facts configured");
+        let report = route_plan_for_build_action_with_remote("build", Some("out=build"), Some(&facts));
+
+        assert_eq!(report.selected_route, RouteClass::LocalBuild);
+        assert!(report.rejected_routes.iter().any(|route| {
+            route.route == RouteClass::P2pRemoteBuilder && route.reason_code == "output-trust-missing"
+        }));
+    }
+
+    #[test]
+    fn remote_builder_plan_facts_reject_missing_input_capability_and_source_readiness() {
+        let mut missing_inputs =
+            RemoteBuilderPlanFacts::cli_configured(Some("builder-1"), true, 1).expect("remote facts configured");
+        missing_inputs.concrete_inputs = false;
+        let mut capability_mismatch = missing_inputs.clone();
+        capability_mismatch.concrete_inputs = true;
+        capability_mismatch.capabilities_match = false;
+        let mut source_missing = capability_mismatch.clone();
+        source_missing.capabilities_match = true;
+        source_missing.source_inputs_ready = false;
+
+        assert_eq!(remote_builder_candidate_from_facts(&missing_inputs).reason_code, "concrete-inputs-missing");
+        assert_eq!(
+            remote_builder_candidate_from_facts(&capability_mismatch).reason_code,
+            "builder-capability-mismatch"
+        );
+        assert_eq!(remote_builder_candidate_from_facts(&source_missing).reason_code, "source-readiness-missing");
     }
 
     #[test]

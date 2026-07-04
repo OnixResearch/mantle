@@ -88,6 +88,9 @@ impl BuildPlanReport {
                 entry.route_plan.selected_route.as_str(),
                 entry.route_plan.selected_reason_code
             ));
+            if let Some(detail) = &entry.route_plan.selected_detail {
+                out.push_str(&format!("  route-detail: {detail}\n"));
+            }
             if !entry.route_plan.rejected_routes.is_empty() {
                 let rejected = entry
                     .route_plan
@@ -124,6 +127,7 @@ pub struct BuildPlanConfig<'a> {
     pub signing_key_path: Option<&'a Path>,
     pub trusted_public_keys: Option<&'a [VerifyingKey]>,
     pub trust_unsigned: bool,
+    pub remote_builder: Option<&'a crate::realization_routing::RemoteBuilderPlanFacts>,
     pub output_mode: BuildOutputMode,
 }
 
@@ -165,7 +169,15 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
 
     let mut entries = Vec::with_capacity(roots.len());
     for root in roots {
-        let action = plan_root_action(&plan_store, &trust, &doctor_report, preflight_error.as_deref(), &root).await?;
+        let action = plan_root_action(
+            &plan_store,
+            &trust,
+            &doctor_report,
+            preflight_error.as_deref(),
+            config.remote_builder,
+            &root,
+        )
+        .await?;
         entries.push(action);
     }
     entries.sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_key.cmp(&right.drv_key)));
@@ -229,21 +241,22 @@ async fn plan_root_action(
     trust: &PlanTrust,
     doctor_report: &crate::operator_diagnostics::PreflightReport,
     preflight_error: Option<&str>,
+    remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
     root: &PlannedRoot,
 ) -> Result<BuildPlanEntry, RunError> {
     if let Some(detail) = preflight_error {
-        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::PreflightError, Some(detail.to_string())));
+        return Ok(root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail.to_string()), remote_builder));
     }
 
     let cache_status = plan_store.classify_cache(root, trust).await?;
     if cache_status.all_local {
-        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Cached, cache_status.detail));
+        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Cached, cache_status.detail, remote_builder));
     }
     if cache_status.any_remote && !cache_status.any_build {
-        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Substitute, cache_status.detail));
+        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Substitute, cache_status.detail, remote_builder));
     }
     if doctor_report.ok {
-        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Build, cache_status.detail));
+        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Build, cache_status.detail, remote_builder));
     }
 
     let failing_checks: Vec<&str> = doctor_report
@@ -253,7 +266,7 @@ async fn plan_root_action(
         .map(|check| check.id)
         .collect();
     let detail = format!("local build blocked by preflight checks: {}", failing_checks.join(", "));
-    Ok(root.plan_entry(&plan_store.store_dir, PlanAction::PreflightError, Some(detail)))
+    Ok(root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder))
 }
 
 struct PlannedRoot {
@@ -263,9 +276,18 @@ struct PlannedRoot {
 }
 
 impl PlannedRoot {
-    fn plan_entry(&self, store_dir: &str, action: PlanAction, detail: Option<String>) -> BuildPlanEntry {
-        let route_plan =
-            crate::realization_routing::route_plan_for_existing_build_action(action.as_str(), detail.as_deref());
+    fn plan_entry(
+        &self,
+        store_dir: &str,
+        action: PlanAction,
+        detail: Option<String>,
+        remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
+    ) -> BuildPlanEntry {
+        let route_plan = crate::realization_routing::route_plan_for_build_action_with_remote(
+            action.as_str(),
+            detail.as_deref(),
+            remote_builder,
+        );
         BuildPlanEntry {
             drv_key: self.drv_path.to_absolute_path_with_prefix(store_dir),
             label: self.label.clone(),
@@ -273,6 +295,19 @@ impl PlannedRoot {
             route_plan,
             detail,
         }
+    }
+
+    fn remote_aware_preflight_entry(
+        &self,
+        store_dir: &str,
+        detail: Option<String>,
+        remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
+    ) -> BuildPlanEntry {
+        let mut entry = self.plan_entry(store_dir, PlanAction::PreflightError, detail, remote_builder);
+        if entry.route_plan.selected_route == crate::realization_routing::RouteClass::P2pRemoteBuilder {
+            entry.action = PlanAction::Build;
+        }
+        entry
     }
 }
 
