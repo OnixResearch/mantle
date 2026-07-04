@@ -81,6 +81,13 @@ const REMOTE_CHILD_POLL_INTERVAL_MS: u64 = 10;
 const SSH_STDIO_FIXED_ARG_COUNT: usize = 2;
 const REMOTE_UPLOAD_PROOF_PREFIX: &str = "proof:";
 const REMOTE_UPLOAD_SECRET_DESCRIPTOR_PREFIX: &str = "secret-descriptor:";
+const REMOTE_OPERATOR_E2E_RAIL_SCHEMA: &str = "mantle-remote-build-operator-e2e-rail-v1";
+const REMOTE_OPERATOR_E2E_RAIL_NON_CLAIM: &str = "remote-build e2e rail proves deterministic fixture composition only; it does not prove production P2P deployment, release reproducibility, or general package-manager compatibility";
+const REMOTE_E2E_ROUTE_PLANNED_PHASE: &str = "route-planned";
+const REMOTE_E2E_HANDSHAKE_COMPLETE_PHASE: &str = "handshake-complete";
+const REMOTE_E2E_INPUT_SYNC_COMPLETE_PHASE: &str = "input-sync-complete";
+const REMOTE_E2E_EXECUTION_COMPLETE_PHASE: &str = "remote-execution-complete";
+const REMOTE_E2E_OUTPUT_ADMISSION_COMPLETE_PHASE: &str = "output-admission-complete";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -1117,6 +1124,31 @@ pub struct RemoteBuildObservabilityReport {
     pub non_claims: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RemoteOperatorE2eRailPhases {
+    pub route: String,
+    pub handshake: String,
+    pub input_sync: String,
+    pub execution: String,
+    pub output_admission: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RemoteOperatorE2eRailReport {
+    pub schema: &'static str,
+    pub selected_route: String,
+    pub selected_reason_code: String,
+    pub endpoint_id: Option<String>,
+    pub phases: RemoteOperatorE2eRailPhases,
+    pub upload_summary: RemoteInputUploadPrivacySummary,
+    pub transfer: RemoteTransferReport,
+    pub trust_basis: RemoteOutputTrustBasis,
+    pub artifact_attestation_paths: Vec<String>,
+    pub status: RemoteCoordinatorStatusSnapshot,
+    pub build_report: RemoteBuildObservabilityReport,
+    pub non_claims: Vec<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteReconnectDecision {
     SameSession,
@@ -2008,6 +2040,105 @@ pub fn remote_build_observability_report(
         outputs,
         non_claims: non_claims.iter().map(|claim| bounded_untrusted_text(claim)).collect(),
     })
+}
+
+pub fn remote_operator_e2e_rail_report(
+    route_plan: &crate::realization_routing::RoutePlanReport,
+    transcript: &RemoteStdioTranscript,
+    upload_summary: RemoteInputUploadPrivacySummary,
+    admission: &RemoteOutputAdmissionReport,
+    import_report: &RemoteOutputImportReport,
+    status: RemoteCoordinatorStatusSnapshot,
+    non_claims: &[String],
+) -> Result<RemoteOperatorE2eRailReport, String> {
+    if route_plan.selected_route != crate::realization_routing::RouteClass::P2pRemoteBuilder {
+        return Err("remote-e2e-route-not-remote-builder".to_string());
+    }
+    validate_remote_operator_e2e_frames(&transcript.frames)?;
+    validate_remote_operator_e2e_status(&status)?;
+    let selected_route = route_plan.selected_route.as_str().to_string();
+    let rejected_route_reasons =
+        route_plan.rejected_routes.iter().map(|rejection| rejection.reason_code.clone()).collect::<Vec<_>>();
+    let rail_non_claims = remote_operator_e2e_non_claims(route_plan.non_claim, non_claims);
+    let build_report = remote_build_observability_report(
+        &selected_route,
+        &rejected_route_reasons,
+        Some(&status.endpoint_id),
+        upload_summary.clone(),
+        admission,
+        import_report,
+        &rail_non_claims,
+    )?;
+    let artifact_attestation_paths = import_report
+        .outputs
+        .iter()
+        .map(|output| output.artifact_attestation_path.clone())
+        .collect::<Vec<_>>();
+    if artifact_attestation_paths.is_empty() {
+        return Err("remote-e2e-artifact-attestation-empty".to_string());
+    }
+    Ok(RemoteOperatorE2eRailReport {
+        schema: REMOTE_OPERATOR_E2E_RAIL_SCHEMA,
+        selected_route,
+        selected_reason_code: route_plan.selected_reason_code.clone(),
+        endpoint_id: Some(status.endpoint_id.clone()),
+        phases: RemoteOperatorE2eRailPhases {
+            route: REMOTE_E2E_ROUTE_PLANNED_PHASE.to_string(),
+            handshake: REMOTE_E2E_HANDSHAKE_COMPLETE_PHASE.to_string(),
+            input_sync: REMOTE_E2E_INPUT_SYNC_COMPLETE_PHASE.to_string(),
+            execution: REMOTE_E2E_EXECUTION_COMPLETE_PHASE.to_string(),
+            output_admission: REMOTE_E2E_OUTPUT_ADMISSION_COMPLETE_PHASE.to_string(),
+        },
+        upload_summary,
+        transfer: import_report.transfer.clone(),
+        trust_basis: admission.trust_basis.clone(),
+        artifact_attestation_paths,
+        status,
+        build_report,
+        non_claims: rail_non_claims,
+    })
+}
+
+fn validate_remote_operator_e2e_frames(frames: &[RemoteFrame]) -> Result<(), String> {
+    require_remote_e2e_frame(frames, RemoteFrameKind::AuthOk, "remote-e2e-handshake-frame-missing")?;
+    require_remote_e2e_frame(frames, RemoteFrameKind::MissingInputs, "remote-e2e-input-sync-frame-missing")?;
+    require_remote_e2e_frame(frames, RemoteFrameKind::BuildStarted, "remote-e2e-build-started-frame-missing")?;
+    require_remote_e2e_frame(frames, RemoteFrameKind::BuildFinished, "remote-e2e-build-finished-frame-missing")?;
+    require_remote_e2e_frame(frames, RemoteFrameKind::OutputTransferDone, "remote-e2e-output-transfer-frame-missing")?;
+    require_remote_e2e_frame(frames, RemoteFrameKind::Done, "remote-e2e-done-frame-missing")?;
+    Ok(())
+}
+
+fn require_remote_e2e_frame(
+    frames: &[RemoteFrame],
+    required: RemoteFrameKind,
+    error: &'static str,
+) -> Result<(), String> {
+    if frames.iter().any(|frame| frame.kind() == required) {
+        return Ok(());
+    }
+    Err(error.to_string())
+}
+
+fn validate_remote_operator_e2e_status(status: &RemoteCoordinatorStatusSnapshot) -> Result<(), String> {
+    if status.endpoint_id.is_empty() {
+        return Err("remote-e2e-status-endpoint-empty".to_string());
+    }
+    if status.worker_count == 0 {
+        return Err("remote-e2e-status-worker-empty".to_string());
+    }
+    if status.tickets.iter().any(|ticket| ticket.secret != SECRET_REDACTION) {
+        return Err("remote-e2e-status-ticket-secret-unredacted".to_string());
+    }
+    Ok(())
+}
+
+fn remote_operator_e2e_non_claims(route_non_claim: &str, non_claims: &[String]) -> Vec<String> {
+    let mut combined = Vec::with_capacity(non_claims.len().saturating_add(2));
+    combined.push(bounded_untrusted_text(route_non_claim));
+    combined.push(REMOTE_OPERATOR_E2E_RAIL_NON_CLAIM.to_string());
+    combined.extend(non_claims.iter().map(|claim| bounded_untrusted_text(claim)));
+    combined
 }
 
 pub fn validate_remote_source_upload_record(
@@ -5453,6 +5584,8 @@ mod tests {
     const IMPORT_NAR_SHA256_FILL_BYTE: u8 = 7;
     const IMPORT_NAR_SIZE_BYTES: u64 = 1;
     const CORRUPTED_TRANSFER_PAYLOAD_BYTE: u8 = b'X';
+    const OPERATOR_RAIL_LOG_START_CURSOR: u64 = 1;
+    const OPERATOR_RAIL_LOG_NEXT_CURSOR: u64 = 2;
 
     #[test]
     fn compatible_hello_reaches_authorization() {
@@ -7204,6 +7337,140 @@ mod tests {
         assert_eq!(err, "remote-observability-request-id-mismatch");
     }
 
+    #[tokio::test]
+    async fn operator_remote_build_e2e_rail_composes_route_stdio_input_admission_and_reports() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = remote_import_store(temp.path()).await;
+        let builder = fixture_loopback_builder();
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let route_plan = fixture_remote_operator_route_plan(&client);
+        let executor = PathInfoRemoteExecutor {
+            path_info: importable_pathinfo(),
+            artifact_attestation_digest_blake3: None,
+            nar_payload: None,
+        };
+        let mut state = RemoteTicketState::default();
+        state.tickets.insert("ticket-1".to_string(), fixture_ticket());
+        let request_frames = encode_frame_stream(&remote_client_request_frames(&client));
+        let response = plan_stdio_remote_once_from_state_with_executor(
+            std::io::Cursor::new(request_frames),
+            &builder,
+            &mut state,
+            client.transfer_capabilities,
+            &executor,
+        )
+        .expect("operator rail remote response plans");
+        let mut stdout = Vec::new();
+        write_remote_response_frames(&mut stdout, &response).expect("response frames serialize");
+        let child_output = RemoteStdioChildOutput {
+            stdout,
+            stderr: b"remote fixture log\n".to_vec(),
+            status_success: true,
+        };
+        let transcript = validate_stdio_child_output(&child_output).expect("stdio transcript validates");
+        let admission = validate_remote_builder_frames_output_import(
+            &client.request,
+            &client.trusted_output_keys,
+            &transcript.frames,
+        )
+        .expect("operator rail remote output admits");
+        let import_report = import_admitted_remote_outputs(
+            &mut store,
+            &client.request,
+            &admission,
+            true,
+            Some(crunch_store::GcRootSource::Build),
+        )
+        .await
+        .expect("operator rail remote output imports");
+        let upload_summary = plan_remote_input_upload_privacy_summary(
+            &client.uploaded_input_refs,
+            &client.request.source_input_refs,
+            &[],
+            &RemoteInputUploadPrivacyPolicy::default(),
+        )
+        .expect("operator rail upload summary plans");
+        let status = fixture_remote_operator_status(&client);
+        let report = remote_operator_e2e_rail_report(
+            &route_plan,
+            &transcript,
+            upload_summary,
+            &admission,
+            &import_report,
+            status,
+            &[REMOTE_SESSION_NON_CLAIM.to_string()],
+        )
+        .expect("operator rail report builds");
+        let rendered = serde_json::to_string(&report).expect("operator rail report serializes");
+
+        assert_eq!(report.schema, REMOTE_OPERATOR_E2E_RAIL_SCHEMA);
+        assert_eq!(report.selected_route, "p2p-remote-builder");
+        assert_eq!(report.selected_reason_code, "builder-capability-and-output-trust-match");
+        assert_eq!(report.phases.handshake, REMOTE_E2E_HANDSHAKE_COMPLETE_PHASE);
+        assert_eq!(report.phases.execution, REMOTE_E2E_EXECUTION_COMPLETE_PHASE);
+        assert_eq!(report.upload_summary.store_objects, 1);
+        assert_eq!(report.transfer.mode, RemoteTransferMode::Delta);
+        assert_eq!(report.trust_basis.key_id, "builder-key");
+        assert_eq!(report.artifact_attestation_paths.len(), 1);
+        assert_eq!(report.status.worker_count, 1);
+        assert_eq!(report.build_report.outputs.len(), 1);
+        assert!(report.non_claims.iter().any(|claim| claim.contains("fixture composition only")));
+        assert!(rendered.contains("remote-execution-complete"));
+        assert!(!rendered.contains("secret-1"));
+        assert!(!rendered.contains("private-key"));
+    }
+
+    #[test]
+    fn operator_remote_build_e2e_rail_rejects_cross_seam_failures() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["other-key".to_string()]);
+        let response = fixture_builder_response(&client);
+        let child_output = RemoteStdioChildOutput {
+            stdout: encode_frame_stream(&response.response_frames),
+            stderr: Vec::new(),
+            status_success: true,
+        };
+        let untrusted =
+            validate_stdio_child_exchange_output(&client.request, &client.trusted_output_keys, &child_output)
+                .expect_err("missing output trust fails before import");
+        assert_eq!(untrusted.phase, RemoteFailurePhase::OutputImport);
+        assert_eq!(untrusted.reason, "untrusted-output-key");
+
+        let route = fixture_remote_operator_route_plan_without_output_trust(&client);
+        assert_eq!(route.selected_route, crate::realization_routing::RouteClass::PreflightError);
+        assert!(route.rejected_routes.iter().any(|rejection| rejection.reason_code == "output-trust-missing"));
+
+        let polluted = validate_stdio_child_output(&RemoteStdioChildOutput {
+            stdout: b"human stdout should fail framing\n".to_vec(),
+            stderr: Vec::new(),
+            status_success: true,
+        })
+        .expect_err("unframed stdout fails protocol validation");
+        assert_eq!(polluted.phase, RemoteFailurePhase::RequestValidation);
+
+        let source_ref = "/mantle/store/dddddddddddddddddddddddddddddddd-source";
+        let record = ready_source_record(source_ref);
+        let stale = validate_remote_source_upload_record(&record, "/mantle/store", source_ref, Some("stale-digest"))
+            .expect_err("stale source state is rejected");
+        assert_eq!(stale, "remote-input-source-digest-stale");
+
+        let secret_ref = format!("{REMOTE_UPLOAD_SECRET_DESCRIPTOR_PREFIX}signing-key");
+        let privacy = plan_remote_input_upload_privacy_summary(
+            std::slice::from_ref(&secret_ref),
+            &[],
+            &[],
+            &RemoteInputUploadPrivacyPolicy::default(),
+        )
+        .expect_err("secret descriptor upload is rejected");
+        assert_eq!(privacy, "remote-input-upload-class-disallowed");
+
+        let fallback = crunch_build::distributed::classify_remote_build_service_failure(
+            crunch_build::distributed::RemoteBuildFallbackPolicy::Never,
+            RemoteFailurePhase::OutputImport.as_status_label(),
+            "untrusted-output-key",
+        );
+        assert!(matches!(fallback, crunch_build::distributed::RemoteFailureDecision::ReturnFailure(_)));
+    }
+
     #[test]
     fn coordinator_lost_restart_state_reports_phase_and_session_guards_backoff() {
         let request = fixture_coordinator_request();
@@ -7838,6 +8105,111 @@ mod tests {
     fn fixture_coordinator_request() -> RemoteCoordinatorBuildRequest {
         RemoteCoordinatorBuildRequest {
             request: fixture_request(),
+            required_system: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
+            required_features: vec!["kvm".to_string()],
+            required_sandbox_mode: "bwrap".to_string(),
+            required_network_mode: "off".to_string(),
+            trusted_output_keys: vec!["builder-key".to_string()],
+            live_output_claims: vec!["claim-out".to_string()],
+            wait_for_worker: false,
+        }
+    }
+
+    fn fixture_remote_operator_route_plan(
+        client: &RemoteLoopbackClient,
+    ) -> crate::realization_routing::RoutePlanReport {
+        fixture_remote_operator_route_plan_with_trust(client, true)
+    }
+
+    fn fixture_remote_operator_route_plan_without_output_trust(
+        client: &RemoteLoopbackClient,
+    ) -> crate::realization_routing::RoutePlanReport {
+        fixture_remote_operator_route_plan_with_trust(client, false)
+    }
+
+    fn fixture_remote_operator_route_plan_with_trust(
+        client: &RemoteLoopbackClient,
+        has_output_trust: bool,
+    ) -> crate::realization_routing::RoutePlanReport {
+        let upload_objects = u32::try_from(client.uploaded_input_refs.len()).expect("fixture upload count fits");
+        let upload_summary = crate::realization_routing::UploadSummary::try_new(
+            vec![crate::realization_routing::UploadClass::StoreObject],
+            upload_objects,
+            client.request.upload_bytes,
+        )
+        .expect("operator route upload summary is bounded");
+        let trusted_output_key_count = if has_output_trust { 1 } else { 0 };
+        let remote_facts = crate::realization_routing::RemoteBuilderPlanFacts {
+            endpoint_id: "builder-1".to_string(),
+            builder_configured: true,
+            ticket_configured: true,
+            concrete_inputs: true,
+            capabilities_match: true,
+            source_inputs_ready: true,
+            upload_summary,
+            trusted_output_key_count,
+        };
+        crate::realization_routing::plan_realization_route(crate::realization_routing::RoutePlannerInput::new(
+            crate::realization_routing::RoutePolicy {
+                network: crate::realization_routing::NetworkPolicy::Online,
+                requested_claim_strength: crate::realization_routing::ClaimStrength::Practical,
+                upload_policy: crate::realization_routing::UploadPolicy::allow_sources_and_store_objects(),
+            },
+            vec![
+                crate::realization_routing::RouteCandidateFacts::rejected(
+                    crate::realization_routing::RouteClass::CachedLocal,
+                    "local-output-missing",
+                ),
+                crate::realization_routing::RouteCandidateFacts::rejected(
+                    crate::realization_routing::RouteClass::TrustedSubstitute,
+                    "trusted-substitute-missing",
+                ),
+                crate::realization_routing::RouteCandidateFacts::rejected(
+                    crate::realization_routing::RouteClass::ArchiveImport,
+                    "not-configured",
+                ),
+                crate::realization_routing::RouteCandidateFacts::rejected(
+                    crate::realization_routing::RouteClass::SourceBundle,
+                    "source-inputs-present-or-fetchable",
+                ),
+                crate::realization_routing::remote_builder_candidate_from_facts(&remote_facts),
+                crate::realization_routing::RouteCandidateFacts::rejected(
+                    crate::realization_routing::RouteClass::LocalBuild,
+                    "operator-rail-selects-remote",
+                ),
+                crate::realization_routing::RouteCandidateFacts::eligible(
+                    crate::realization_routing::RouteClass::PreflightError,
+                    "no-route-eligible",
+                ),
+            ],
+        ))
+    }
+
+    fn fixture_remote_operator_status(client: &RemoteLoopbackClient) -> RemoteCoordinatorStatusSnapshot {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("operator rail worker registers");
+        let request = fixture_remote_operator_coordinator_request(client);
+        let decision = admit_coordinator_dispatch(&mut state, &request).expect("operator rail dispatch admits");
+        let job_id = match decision {
+            RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } => job_id,
+            _ => panic!("operator rail request should dispatch"),
+        };
+        let job = state.jobs.get_mut(&job_id).expect("operator rail job exists");
+        job.phase = RemoteCoordinatorJobPhase::Finished;
+        job.result_available = true;
+        job.log_start_cursor = OPERATOR_RAIL_LOG_START_CURSOR;
+        job.log_next_cursor = OPERATOR_RAIL_LOG_NEXT_CURSOR;
+        state.logs.insert(job_id, vec![RemoteCoordinatorLogChunk {
+            cursor: OPERATOR_RAIL_LOG_START_CURSOR,
+            bytes: "remote fixture log".to_string(),
+        }]);
+        coordinator_status_snapshot("builder-1", DEFAULT_REMOTE_CONCURRENCY, &state, &[fixture_ticket()])
+            .expect("operator rail status renders")
+    }
+
+    fn fixture_remote_operator_coordinator_request(client: &RemoteLoopbackClient) -> RemoteCoordinatorBuildRequest {
+        RemoteCoordinatorBuildRequest {
+            request: client.request.clone(),
             required_system: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
             required_features: vec!["kvm".to_string()],
             required_sandbox_mode: "bwrap".to_string(),
