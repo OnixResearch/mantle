@@ -7,6 +7,13 @@ let Digest = {
   hex | String,
   interoperability_reason | Optional String,
 } in
+let VersionEvidence = {
+  command | Array String,
+  byte_limit | Number,
+  output_digest | Digest,
+  output_sample | String,
+  exit_code | Number,
+} in
 let ExecutableSeed = {
   schema_version | String,
   id | String,
@@ -14,6 +21,7 @@ let ExecutableSeed = {
   phase | String,
   executable_path | String,
   digest | Digest,
+  version_evidence | Optional VersionEvidence,
   provenance_category | String,
   provenance | String,
   allowed_reason | String,

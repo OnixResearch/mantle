@@ -537,6 +537,11 @@ mod linux {
                     hex: digest_hex,
                     interoperability_reason: None,
                 },
+                version_evidence: Some(crate::protected_exec::bounded_version_evidence(
+                    vec![path.display().to_string(), "--version".to_string()],
+                    format!("{id} seccomp-test-version\n"),
+                    0,
+                )),
                 provenance_category: "test-fixture".to_string(),
                 provenance: "seccomp unit test".to_string(),
                 allowed_reason: format!("allow {id}"),

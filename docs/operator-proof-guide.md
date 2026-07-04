@@ -94,13 +94,15 @@ result:
   stage2 command output and diagnostics.
 - `stage0-prerequisites/inventory.md` — copied prerequisite inventory.
 - `protected-exec-audit.json` — no-host-tools protected execution audit when the
-  protected mode is used.
+  protected mode is used, including declared seed roles and bounded version
+  evidence digests.
 
 ### Reporting outcomes
 
 - **Success:** report the proof mode, bundle path, `manifest.json` digest when
   available, stage1/stage2 digest equality, and whether the non-Nix-host or
-  no-host-tools boundary was used.
+  no-host-tools boundary was used. For no-host-tools runs, include the accepted
+  stage0 inventory digest from the proof lines or protected-exec audit.
 - **Blocked:** report the exact failing command, bundle or diagnostics path,
   blocker text, and next action. Blocked evidence is not proof success.
 - **Failed:** report the command, exit status, saved stdout/stderr paths, and

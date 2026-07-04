@@ -269,6 +269,8 @@ struct ProofSeedArtifactRecord {
     path: String,
     digest_algorithm: String,
     digest_hex: String,
+    version_evidence_digest_hex: Option<String>,
+    version_evidence_sample: Option<String>,
     provenance_category: String,
     provenance: String,
     owner: String,
@@ -282,6 +284,7 @@ struct ProofReportManifest {
     staged_source: String,
     bwrap_source: String,
     fallback_events: Vec<String>,
+    stage0_inventory_digest_blake3: Option<String>,
     protected_transition: Option<ProofProtectedTransition>,
     protected_seccomp_events: Vec<ProtectedSeccompAuditEvent>,
     busybox_path: Option<String>,
@@ -1229,6 +1232,9 @@ fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
         .unwrap_or_else(|| panic!("{} missing bwrap-source proof line.\n{}", stage.stage_name, stage_context(stage),));
     let output_binary = extract_proof_field(&stage.stderr, "output-binary")
         .unwrap_or_else(|| panic!("{} missing output-binary proof line.\n{}", stage.stage_name, stage_context(stage),));
+    let stage0_inventory_digest_blake3 = extract_proof_field(&stage.stderr, "stage0-inventory-digest")
+        .filter(|digest| *digest != "none")
+        .map(str::to_string);
     let fallback_events_raw = extract_proof_fields(&stage.stderr, "fallback-event");
     assert!(
         !fallback_events_raw.is_empty(),
@@ -1248,6 +1254,7 @@ fn parse_stage_report(stage: &StageEvidence) -> ProofReportManifest {
         staged_source: staged_source.to_string(),
         bwrap_source: bwrap_source.to_string(),
         fallback_events,
+        stage0_inventory_digest_blake3,
         protected_transition: parse_protected_transition(stage),
         protected_seccomp_events: parse_protected_seccomp_events(stage),
         busybox_path: extract_optional_path_field(&stage.stderr, "busybox-path").map(|path| path.display().to_string()),
@@ -1459,6 +1466,11 @@ fn seed_artifacts_from_inventory(inventory: &Stage0Inventory) -> Vec<ProofSeedAr
             path: entry.executable_path.display().to_string(),
             digest_algorithm: entry.digest.algorithm.clone(),
             digest_hex: entry.digest.hex.clone(),
+            version_evidence_digest_hex: entry
+                .version_evidence
+                .as_ref()
+                .map(|evidence| evidence.output_digest.hex.clone()),
+            version_evidence_sample: entry.version_evidence.as_ref().map(|evidence| evidence.output_sample.clone()),
             provenance_category: entry.provenance_category.clone(),
             provenance: entry.provenance.clone(),
             owner: entry.owner.clone(),
@@ -1514,13 +1526,14 @@ fn render_proof_bundle_summary(manifest: &ProofBundleManifest, protected_audit: 
     out.push_str(&format!("declared_seed_artifacts: {}\n", declared_seed_artifacts.len()));
     for artifact in &declared_seed_artifacts {
         out.push_str(&format!(
-            "declared_seed_artifact: id={} role={} phase={} path={} digest={}:{} provenance_category={} provenance={} owner={} required={}\n",
+            "declared_seed_artifact: id={} role={} phase={} path={} digest={}:{} version_digest={} provenance_category={} provenance={} owner={} required={}\n",
             artifact.id,
             artifact.role,
             artifact.phase,
             artifact.path,
             artifact.digest_algorithm,
             artifact.digest_hex,
+            artifact.version_evidence_digest_hex.as_deref().unwrap_or("missing"),
             artifact.provenance_category,
             artifact.provenance,
             artifact.owner,
@@ -1742,6 +1755,7 @@ fn write_sample_stage0_inventory(path: &Path, sandbox_entry: &Path, sandbox_shel
 
 fn sample_inventory_entry(id: &str, role: &str, path: &Path) -> ExecutableSeedEntry {
     let digest_hex = blake3::hash(&std::fs::read(path).unwrap()).to_hex().to_string();
+    let version_sample = format!("{id} self-hosting-fixture-version\n");
     ExecutableSeedEntry {
         schema_version: "host-tool-free-stage0-v1".to_string(),
         id: id.to_string(),
@@ -1753,6 +1767,11 @@ fn sample_inventory_entry(id: &str, role: &str, path: &Path) -> ExecutableSeedEn
             hex: digest_hex,
             interoperability_reason: None,
         },
+        version_evidence: Some(mantle::protected_exec::bounded_version_evidence(
+            vec![path.display().to_string(), "--version".to_string()],
+            version_sample,
+            0,
+        )),
         provenance_category: "test-fixture".to_string(),
         provenance: "proof bundle fixture".to_string(),
         allowed_reason: format!("allow {id}"),

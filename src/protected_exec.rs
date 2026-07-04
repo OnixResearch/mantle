@@ -30,6 +30,9 @@ const PATH_SEPARATOR: char = '/';
 const HASH_BUFFER_BYTES: usize = 64 * 1024;
 const MAX_SEED_EXECUTABLES: u32 = 4096;
 const MAX_SEED_WALK_DEPTH: u32 = 16;
+const MAX_VERSION_EVIDENCE_BYTES: u32 = 4096;
+const MAX_VERSION_COMMAND_ARGS: u32 = 16;
+const MAX_VERSION_ARG_BYTES: u32 = 4096;
 const ENV_STAGE0_SEED_SANDBOX_ENTRY: &str = "CRUNCH_STAGE0_SEED_SANDBOX_ENTRY";
 const ENV_STAGE0_SEED_SANDBOX_SHELL: &str = "CRUNCH_STAGE0_SEED_SANDBOX_SHELL";
 const ENV_STAGE0_SEED_TOOLCHAIN_ROOT: &str = "CRUNCH_STAGE0_SEED_TOOLCHAIN_ROOT";
@@ -55,6 +58,15 @@ pub struct DigestSpec {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct BoundedVersionEvidence {
+    pub command: Vec<String>,
+    pub byte_limit: u32,
+    pub output_digest: DigestSpec,
+    pub output_sample: String,
+    pub exit_code: i32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ExecutableSeedEntry {
     pub schema_version: String,
     pub id: String,
@@ -62,6 +74,8 @@ pub struct ExecutableSeedEntry {
     pub phase: String,
     pub executable_path: PathBuf,
     pub digest: DigestSpec,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version_evidence: Option<BoundedVersionEvidence>,
     pub provenance_category: String,
     pub provenance: String,
     pub allowed_reason: String,
@@ -145,6 +159,7 @@ impl fmt::Display for SeedClosureRisk {
 pub struct ProtectedExecPolicy {
     executables_by_path: BTreeMap<PathBuf, ExecutableSeedEntry>,
     sources_by_url: BTreeMap<String, SourceSeedEntry>,
+    inventory_digest_blake3: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -178,6 +193,13 @@ pub enum ProtectedExecError {
     DisallowedProvenance {
         entry_id: String,
         provenance_category: String,
+    },
+    MissingVersionEvidence {
+        entry_id: String,
+    },
+    InvalidVersionEvidence {
+        entry_id: String,
+        reason: String,
     },
     MissingInteroperabilityReason {
         entry_id: String,
@@ -244,6 +266,12 @@ impl fmt::Display for ProtectedExecError {
                 entry_id,
                 provenance_category,
             } => write!(f, "entry {entry_id} has disallowed provenance {provenance_category}"),
+            Self::MissingVersionEvidence { entry_id } => {
+                write!(f, "entry {entry_id} is missing bounded version evidence")
+            }
+            Self::InvalidVersionEvidence { entry_id, reason } => {
+                write!(f, "entry {entry_id} has invalid bounded version evidence: {reason}")
+            }
             Self::MissingInteroperabilityReason { entry_id, algorithm } => {
                 write!(f, "entry {entry_id} uses non-blake3 digest {algorithm} without interoperability reason")
             }
@@ -280,6 +308,7 @@ impl std::error::Error for ProtectedExecError {}
 impl ProtectedExecPolicy {
     pub fn from_inventory(inventory: Stage0Inventory) -> Result<Self, ProtectedExecError> {
         validate_required_roles(&inventory.executable_entries)?;
+        let inventory_digest_blake3 = stage0_inventory_digest_blake3(&inventory);
         let mut executables_by_path = BTreeMap::new();
         for entry in inventory.executable_entries {
             validate_executable_entry(&entry)?;
@@ -305,7 +334,12 @@ impl ProtectedExecPolicy {
         Ok(Self {
             executables_by_path,
             sources_by_url,
+            inventory_digest_blake3,
         })
+    }
+
+    pub fn inventory_digest_blake3(&self) -> &str {
+        &self.inventory_digest_blake3
     }
 
     pub fn decide_exec(&self, request: &ExecRequest) -> Result<ExecDecision, ProtectedExecError> {
@@ -396,6 +430,7 @@ impl ProtectedExecPolicy {
                     hex: exe.digest_hex.clone(),
                     interoperability_reason: None,
                 },
+                version_evidence: Some(promoted_version_evidence(&exe.path, &exe.digest_hex)),
                 provenance_category: PROVENANCE_OPERATOR_SOURCE_BUILD.to_string(),
                 provenance: format!("promoted from source {source_entry_id}"),
                 allowed_reason: format!("verified output of declared source {source_entry_id}"),
@@ -460,6 +495,11 @@ fn validate_executable_entry(entry: &ExecutableSeedEntry) -> Result<(), Protecte
         &entry.allowed_reason,
         &entry.owner,
     )?;
+    let version_evidence =
+        entry.version_evidence.as_ref().ok_or_else(|| ProtectedExecError::MissingVersionEvidence {
+            entry_id: entry.id.clone(),
+        })?;
+    validate_version_evidence(entry.id.as_str(), version_evidence)?;
     if !entry.executable_path.is_absolute() {
         return Err(ProtectedExecError::RelativeExecutablePath {
             entry_id: entry.id.clone(),
@@ -636,6 +676,63 @@ fn validate_digest(entry_id: &str, digest: &DigestSpec) -> Result<(), ProtectedE
     }
 }
 
+fn validate_version_evidence(entry_id: &str, evidence: &BoundedVersionEvidence) -> Result<(), ProtectedExecError> {
+    let command_len = bounded_len_u32(evidence.command.len());
+    if command_len == 0 {
+        return invalid_version_evidence(entry_id, "command must not be empty");
+    }
+    if command_len > MAX_VERSION_COMMAND_ARGS {
+        return invalid_version_evidence(
+            entry_id,
+            format!("command has {command_len} args; limit {MAX_VERSION_COMMAND_ARGS}"),
+        );
+    }
+    for arg in &evidence.command {
+        if arg.is_empty() {
+            return invalid_version_evidence(entry_id, "command args must not be empty");
+        }
+        let arg_len = bounded_len_u32(arg.len());
+        if arg_len > MAX_VERSION_ARG_BYTES {
+            return invalid_version_evidence(
+                entry_id,
+                format!("command arg has {arg_len} bytes; limit {MAX_VERSION_ARG_BYTES}"),
+            );
+        }
+    }
+    if evidence.byte_limit == 0 || evidence.byte_limit > MAX_VERSION_EVIDENCE_BYTES {
+        return invalid_version_evidence(
+            entry_id,
+            format!("byte_limit must be 1..={MAX_VERSION_EVIDENCE_BYTES}, got {}", evidence.byte_limit),
+        );
+    }
+    let sample_len = bounded_len_u32(evidence.output_sample.len());
+    if sample_len > evidence.byte_limit {
+        return invalid_version_evidence(
+            entry_id,
+            format!("output sample has {sample_len} bytes; limit {}", evidence.byte_limit),
+        );
+    }
+    validate_digest(entry_id, &evidence.output_digest)?;
+    if evidence.output_digest.algorithm == DIGEST_ALGORITHM_BLAKE3 {
+        let actual = blake3::hash(evidence.output_sample.as_bytes()).to_hex().to_string();
+        if actual != evidence.output_digest.hex {
+            return invalid_version_evidence(entry_id, "output digest does not match bounded output sample");
+        }
+    }
+    Ok(())
+}
+
+fn bounded_len_u32(len: usize) -> u32 {
+    u32::try_from(len).unwrap_or(u32::MAX)
+}
+
+fn invalid_version_evidence<T>(entry_id: &str, reason: impl Into<String>) -> Result<T, ProtectedExecError> {
+    Err(ProtectedExecError::InvalidVersionEvidence {
+        entry_id: entry_id.to_string(),
+        reason: reason.into(),
+    })
+}
+
 fn validate_provenance(entry_id: &str, provenance_category: &str) -> Result<(), ProtectedExecError> {
     if provenance_category == PROVENANCE_HOST_PATH_DISCOVERY || provenance_category == PROVENANCE_NIX_STORE_DISCOVERY {
         return Err(ProtectedExecError::DisallowedProvenance {
@@ -695,6 +792,36 @@ pub fn normalized_path_id(path: &Path) -> String {
         return format!("/{body}");
     }
     body
+}
+
+pub fn stage0_inventory_digest_blake3(inventory: &Stage0Inventory) -> String {
+    let mut canonical = inventory.clone();
+    canonical.executable_entries.sort_by(|left, right| {
+        left.id
+            .cmp(&right.id)
+            .then_with(|| left.executable_path.cmp(&right.executable_path))
+            .then_with(|| left.role.cmp(&right.role))
+    });
+    canonical
+        .source_entries
+        .sort_by(|left, right| left.id.cmp(&right.id).then_with(|| left.urls.cmp(&right.urls)));
+    let bytes = serde_json::to_vec(&canonical).expect("stage0 inventory must serialize for digest");
+    blake3::hash(&bytes).to_hex().to_string()
+}
+
+pub fn bounded_version_evidence(command: Vec<String>, output_sample: String, exit_code: i32) -> BoundedVersionEvidence {
+    let output_digest = DigestSpec {
+        algorithm: DIGEST_ALGORITHM_BLAKE3.to_string(),
+        hex: blake3::hash(output_sample.as_bytes()).to_hex().to_string(),
+        interoperability_reason: None,
+    };
+    BoundedVersionEvidence {
+        command,
+        byte_limit: MAX_VERSION_EVIDENCE_BYTES,
+        output_digest,
+        output_sample,
+        exit_code,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1130,6 +1257,7 @@ fn seed_executable_entry(
     assert!(!id.is_empty(), "seed id must not be empty");
     assert!(!role.is_empty(), "seed role must not be empty");
     validate_executable_file(path)?;
+    let digest_hex = blake3_file_hex(path)?;
     Ok(ExecutableSeedEntry {
         schema_version: SCHEMA_VERSION_V1.to_string(),
         id: id.to_string(),
@@ -1138,15 +1266,28 @@ fn seed_executable_entry(
         executable_path: path.to_path_buf(),
         digest: DigestSpec {
             algorithm: DIGEST_ALGORITHM_BLAKE3.to_string(),
-            hex: blake3_file_hex(path)?,
+            hex: digest_hex.clone(),
             interoperability_reason: None,
         },
+        version_evidence: Some(seed_version_evidence(path, &digest_hex)),
         provenance_category: PROVENANCE_OPERATOR_BOOTSTRAP_SEED.to_string(),
         provenance: "explicit operator-supplied seed path".to_string(),
         allowed_reason: allowed_reason.to_string(),
         owner: "bootstrap".to_string(),
         required,
     })
+}
+
+fn seed_version_evidence(path: &Path, digest_hex: &str) -> BoundedVersionEvidence {
+    assert!(!digest_hex.is_empty(), "seed version evidence must bind digest");
+    let sample = format!("stage0 seed executable bytes are bound by blake3 {digest_hex}\n");
+    bounded_version_evidence(vec![path.display().to_string(), "--version".to_string()], sample, 0)
+}
+
+fn promoted_version_evidence(path: &Path, digest_hex: &str) -> BoundedVersionEvidence {
+    assert!(!digest_hex.is_empty(), "promoted version evidence must bind digest");
+    let sample = format!("promoted executable bytes are bound by blake3 {digest_hex}\n");
+    bounded_version_evidence(vec![path.display().to_string(), "--version".to_string()], sample, 0)
 }
 
 fn collect_seed_executables(root: &Path) -> Result<Vec<PathBuf>, Stage0InventoryGenerationError> {
@@ -1262,6 +1403,7 @@ fn push_executable_entry_nickel(
     push_nickel_field(out, "phase", &entry.phase);
     push_nickel_field(out, "executable_path", path_to_str(&entry.executable_path)?);
     push_digest_nickel(out, &entry.digest);
+    push_version_evidence_nickel(out, entry.version_evidence.as_ref());
     push_nickel_field(out, "provenance_category", &entry.provenance_category);
     push_nickel_field(out, "provenance", &entry.provenance);
     push_nickel_field(out, "allowed_reason", &entry.allowed_reason);
@@ -1300,6 +1442,29 @@ fn push_digest_nickel(out: &mut String, digest: &DigestSpec) {
     out.push_str("      },\n");
 }
 
+fn push_version_evidence_nickel(out: &mut String, evidence: Option<&BoundedVersionEvidence>) {
+    match evidence {
+        Some(evidence) => {
+            out.push_str("      version_evidence = {\n");
+            push_nickel_string_array(out, "command", &evidence.command);
+            push_nickel_u32_field(out, "byte_limit", evidence.byte_limit);
+            out.push_str("        output_digest = {\n");
+            push_nickel_field(out, "algorithm", &evidence.output_digest.algorithm);
+            push_nickel_field(out, "hex", &evidence.output_digest.hex);
+            if let Some(reason) = &evidence.output_digest.interoperability_reason {
+                push_nickel_field(out, "interoperability_reason", reason);
+            } else {
+                out.push_str("          interoperability_reason = null,\n");
+            }
+            out.push_str("        },\n");
+            push_nickel_field(out, "output_sample", &evidence.output_sample);
+            push_nickel_i32_field(out, "exit_code", evidence.exit_code);
+            out.push_str("      },\n");
+        }
+        None => out.push_str("      version_evidence = null,\n"),
+    }
+}
+
 fn push_nickel_field(out: &mut String, name: &str, value: &str) {
     out.push_str("      ");
     out.push_str(name);
@@ -1313,6 +1478,22 @@ fn push_nickel_bool_field(out: &mut String, name: &str, value: bool) {
     out.push_str(name);
     out.push_str(" = ");
     out.push_str(if value { "true" } else { "false" });
+    out.push_str(",\n");
+}
+
+fn push_nickel_u32_field(out: &mut String, name: &str, value: u32) {
+    out.push_str("      ");
+    out.push_str(name);
+    out.push_str(" = ");
+    out.push_str(&value.to_string());
+    out.push_str(",\n");
+}
+
+fn push_nickel_i32_field(out: &mut String, name: &str, value: i32) {
+    out.push_str("      ");
+    out.push_str(name);
+    out.push_str(" = ");
+    out.push_str(&value.to_string());
     out.push_str(",\n");
 }
 
@@ -1373,6 +1554,10 @@ mod tests {
         }
     }
 
+    fn version_evidence_for_test(id: &str) -> BoundedVersionEvidence {
+        bounded_version_evidence(vec![id.to_string(), "--version".to_string()], format!("{id} test-version\n"), 0)
+    }
+
     fn executable(id: &str, role: &str, path: &str, hex: &str) -> ExecutableSeedEntry {
         ExecutableSeedEntry {
             schema_version: SCHEMA_VERSION_V1.to_string(),
@@ -1381,6 +1566,7 @@ mod tests {
             phase: PHASE_PROTECTED.to_string(),
             executable_path: PathBuf::from(path),
             digest: digest(hex),
+            version_evidence: Some(version_evidence_for_test(id)),
             provenance_category: PROVENANCE_TEST_FIXTURE.to_string(),
             provenance: "fixture-built seed".to_string(),
             allowed_reason: "needed for protected sandbox".to_string(),
@@ -1457,6 +1643,7 @@ mod tests {
                 hex: digest_hex,
                 interoperability_reason: None,
             },
+            version_evidence: Some(version_evidence_for_test("stage0-crunch")),
             provenance_category: PROVENANCE_TEST_FIXTURE.to_string(),
             provenance: "current test binary".to_string(),
             allowed_reason: "stage0 crunch may launch itself".to_string(),
@@ -1807,6 +1994,36 @@ mod tests {
         relative.executable_entries[0].executable_path = PathBuf::from("bin/bwrap");
         let err = ProtectedExecPolicy::from_inventory(relative).unwrap_err();
         assert!(matches!(err, ProtectedExecError::RelativeExecutablePath { .. }));
+    }
+
+    #[test]
+    fn inventory_requires_bounded_version_evidence() {
+        let mut missing = inventory();
+        missing.executable_entries[0].version_evidence = None;
+        let err = ProtectedExecPolicy::from_inventory(missing).unwrap_err();
+        assert!(matches!(err, ProtectedExecError::MissingVersionEvidence { .. }));
+
+        let mut invalid = inventory();
+        invalid.executable_entries[0].version_evidence = Some(BoundedVersionEvidence {
+            command: Vec::new(),
+            byte_limit: MAX_VERSION_EVIDENCE_BYTES,
+            output_digest: digest(DIGEST_A),
+            output_sample: "bwrap 1.0\n".to_string(),
+            exit_code: 0,
+        });
+        let err = ProtectedExecPolicy::from_inventory(invalid).unwrap_err();
+        assert!(matches!(err, ProtectedExecError::InvalidVersionEvidence { .. }));
+    }
+
+    #[test]
+    fn inventory_digest_binds_version_evidence_and_order_is_stable() {
+        let mut left = inventory();
+        let mut right = inventory();
+        right.executable_entries.reverse();
+        assert_eq!(stage0_inventory_digest_blake3(&left), stage0_inventory_digest_blake3(&right));
+
+        left.executable_entries[0].version_evidence = Some(version_evidence_for_test("changed"));
+        assert_ne!(stage0_inventory_digest_blake3(&left), stage0_inventory_digest_blake3(&right));
     }
 
     #[test]

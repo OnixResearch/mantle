@@ -918,9 +918,10 @@ fallbacks fail loudly.
 Use `./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>`
 for the host-tool-free stage0 proof mode. The inventory is a concrete Nickel
 file matching `bootstrap/stage0-inventory.ncl`; it must predeclare absolute
-operator-supplied seed artifacts with BLAKE3 digests. Required executable seed
-roles are `sandbox-entry` and `sandbox-shell`; additional allowed seed roles are
-`bootstrap-toolchain-tool` and `bootstrap-build-tool`. In this mode the helper
+operator-supplied seed artifacts with BLAKE3 digests, bounded version evidence,
+and provenance notes. Required executable seed roles are `sandbox-entry` and
+`sandbox-shell`; additional allowed seed roles are `bootstrap-toolchain-tool` and
+`bootstrap-build-tool`. In this mode the helper
 captures an absolute Cargo path before proof PATH poisoning, then removes
 `git`, `tar`, `cp`, `sh`, `cargo`, `bwrap`, and Nix commands from the proof
 PATH used by stage0. The stage0 `self-build` command passes `--no-host-tools
@@ -1006,9 +1007,9 @@ Each proof bundle contains:
 - `stage0-prerequisites/inventory.md` — copied stage0 trust inventory used by
   the proof bundle
 - `protected-exec-audit.json` — machine-readable protected execution audit with
-  no-host-tools mode, optional stage0 inventory digest, blocked host command
-  set, fallback markers, mantle-built sandbox transition records, and final
-  result
+  no-host-tools mode, optional stage0 inventory digest, declared seed roles,
+  bounded version-evidence digests, blocked host command set, fallback markers,
+  mantle-built sandbox transition records, and final result
 
 The proof does demonstrate a fixed point: stage1 and stage2 must match
 byte-for-byte, and the stage0 and stage2 mantle-built `busybox` and `bwrap`

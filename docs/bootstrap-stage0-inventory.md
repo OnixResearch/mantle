@@ -51,10 +51,12 @@ forbidden host helper names fail closed before execution.
 The concrete no-host-tools inventory is a Nickel file using the schema in
 `bootstrap/stage0-inventory.ncl`. The checked-in file is the typed empty schema;
 real proof runs pass a generated or operator-supplied concrete inventory with
-absolute paths and digests. `executable_entries` and `source_entries` share these
-fields: `schema_version`, `id`, `role`, `phase`, `digest`,
-`provenance_category`, `provenance`, `allowed_reason`, `owner`, and `required`.
-Executable entries add `executable_path`; source entries add `urls` and
+absolute paths, BLAKE3 digests, and bounded version-evidence records.
+`executable_entries` and `source_entries` share these fields: `schema_version`,
+`id`, `role`, `phase`, `digest`, `provenance_category`, `provenance`,
+`allowed_reason`, `owner`, and `required`. Executable entries add
+`executable_path` plus `version_evidence` (`command`, `byte_limit`,
+`output_digest`, `output_sample`, and `exit_code`); source entries add `urls` and
 `extraction_rules`. Mantle-owned fingerprints use `digest.algorithm = "blake3"`.
 Non-BLAKE3 hashes are accepted only for interoperability and require an explicit
 `interoperability_reason`.
@@ -124,8 +126,10 @@ What the checked-in self-hosting proof demonstrates today:
 - in `--no-host-tools` mode, stage0 receives `--no-host-tools
   --stage0-inventory <file>`, common host helpers (`git`, `tar`, `cp`, `sh`,
   `cargo`, `bwrap`, and Nix commands) are absent from the proof PATH, the
-  declared `sandbox-entry` and `sandbox-shell` seeds are digest-checked, and the
-  seccomp supervisor denies undeclared child exec attempts before execution
+  accepted inventory digest is emitted in proof lines, the declared
+  `sandbox-entry` and `sandbox-shell` seeds are digest-checked with bounded
+  version evidence, and the seccomp supervisor denies undeclared child exec
+  attempts before execution
 - successful proof bundles copy this inventory, durable stage1/stage2 binary
   artifacts, and the resolved stage0 prerequisite paths they used
 - successful proof bundles also write `protected-exec-audit.json` with the

@@ -2938,6 +2938,7 @@ fn run_stage0_inventory_command(ctx: &RunContext, output: &Path) -> Result<(), R
     };
     let inventory = protected_exec::write_generated_stage0_inventory_from_env(&output_path)
         .map_err(|err| RunError::Build(format!("generating stage0 inventory from explicit seed paths: {err}")))?;
+    let inventory_digest_blake3 = protected_exec::stage0_inventory_digest_blake3(&inventory);
     let risks = protected_exec::seed_closure_risk_report(&inventory);
     if ctx.json {
         let risk_json = risks
@@ -2953,6 +2954,7 @@ fn run_stage0_inventory_command(ctx: &RunContext, output: &Path) -> Result<(), R
         let rendered = serde_json::json!({
             "schema": "crunch-stage0-inventory-preflight-v1",
             "inventory_path": output_path,
+            "inventory_digest_blake3": inventory_digest_blake3,
             "executable_entries": inventory.executable_entries.len(),
             "source_entries": inventory.source_entries.len(),
             "closure_risks": risk_json,
@@ -2962,6 +2964,7 @@ fn run_stage0_inventory_command(ctx: &RunContext, output: &Path) -> Result<(), R
         return Ok(());
     }
     println!("stage0 inventory written: {}", output_path.display());
+    println!("stage0 inventory digest: {inventory_digest_blake3}");
     println!("seed input policy: explicit CRUNCH_STAGE0_SEED_* paths only; no PATH or /nix/store discovery");
     println!("executable seed entries: {}", inventory.executable_entries.len());
     println!("source seed entries: {}", inventory.source_entries.len());
@@ -3729,12 +3732,19 @@ fn decode_blake3_hex(value: &str) -> Result<[u8; blake3::OUT_LEN], RunError> {
     Ok(bytes)
 }
 
-fn load_stage0_inventory_policy(path: &Path) -> Result<protected_exec::ProtectedExecPolicy, RunError> {
+struct LoadedStage0InventoryPolicy {
+    policy: protected_exec::ProtectedExecPolicy,
+    digest_blake3: String,
+}
+
+fn load_stage0_inventory_policy(path: &Path) -> Result<LoadedStage0InventoryPolicy, RunError> {
     let import_paths: Vec<OsString> = Vec::new();
     let inventory: protected_exec::Stage0Inventory = crunch_eval::evaluate_and_deserialize(path, &import_paths)
         .map_err(|e| RunError::Eval(format!("loading stage0 inventory {}: {e}", path.display())))?;
-    protected_exec::ProtectedExecPolicy::from_inventory(inventory)
-        .map_err(|e| RunError::Internal(format!("validating stage0 inventory {}: {e}", path.display())))
+    let policy = protected_exec::ProtectedExecPolicy::from_inventory(inventory)
+        .map_err(|e| RunError::Internal(format!("validating stage0 inventory {}: {e}", path.display())))?;
+    let digest_blake3 = policy.inventory_digest_blake3().to_string();
+    Ok(LoadedStage0InventoryPolicy { policy, digest_blake3 })
 }
 
 fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
@@ -4468,7 +4478,7 @@ fn run_self_build_command(
         )));
     }
     validate_stage0_inventory_args(no_host_tools, stage0_inventory)?;
-    let stage0_policy = stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
+    let loaded_stage0_policy = stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
 
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
     self_build::cmd_self_build(
@@ -4484,7 +4494,8 @@ fn run_self_build_command(
         trust_unsigned,
         hermeticity_mode,
         source_store_path,
-        stage0_policy.as_ref(),
+        loaded_stage0_policy.as_ref().map(|loaded| &loaded.policy),
+        loaded_stage0_policy.as_ref().map(|loaded| loaded.digest_blake3.clone()),
         bootstrap_bwrap_path,
         bootstrap_busybox_path,
         bootstrap_source_root::BootstrapProviderMode::LegacyFetch,

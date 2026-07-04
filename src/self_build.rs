@@ -276,6 +276,8 @@ pub struct SelfBuildReport {
     pub bwrap_source: BwrapSource,
     /// Host-fallback events observed earlier in the stage.
     pub fallback_events: Vec<SelfBuildFallbackEvent>,
+    /// BLAKE3 digest of the accepted stage0 host-tool inventory, when one was supplied.
+    pub stage0_inventory_digest_blake3: Option<String>,
     /// Protected-phase transition to mantle-built sandbox tools.
     pub protected_transition: Option<ProtectedPhaseTransition>,
     /// Actual protected exec events observed by the stage0 seccomp supervisor.
@@ -335,6 +337,10 @@ impl SelfBuildReport {
             for event in &self.fallback_events {
                 out.push_str(&format!("{PROOF_PREFIX} fallback-event={}\n", event));
             }
+        }
+        match &self.stage0_inventory_digest_blake3 {
+            Some(digest) => out.push_str(&format!("{PROOF_PREFIX} stage0-inventory-digest={digest}\n")),
+            None => out.push_str(&format!("{PROOF_PREFIX} stage0-inventory-digest=none\n")),
         }
         match &self.protected_transition {
             Some(transition) => transition.format_proof_lines(&mut out),
@@ -409,6 +415,7 @@ impl SelfBuildReport {
         let mut staged_source: Option<PathBuf> = None;
         let mut bwrap_source: Option<BwrapSource> = None;
         let mut fallback_events: Vec<SelfBuildFallbackEvent> = Vec::new();
+        let mut stage0_inventory_digest_blake3: Option<String> = None;
         let mut protected_transition: Option<Option<ProtectedPhaseTransition>> = None;
         let mut transition_marker_seen = false;
         let mut transition_bwrap_path: Option<PathBuf> = None;
@@ -459,6 +466,10 @@ impl SelfBuildReport {
                 if val != "none" {
                     let event = SelfBuildFallbackEvent::parse(val)?;
                     fallback_events.push(event);
+                }
+            } else if let Some(val) = rest.strip_prefix("stage0-inventory-digest=") {
+                if val != "none" {
+                    stage0_inventory_digest_blake3 = Some(val.to_string());
                 }
             } else if let Some(val) = rest.strip_prefix("protected-transition=") {
                 if val == "none" {
@@ -544,6 +555,7 @@ impl SelfBuildReport {
             staged_source: staged_source?,
             bwrap_source: bwrap_source?,
             fallback_events,
+            stage0_inventory_digest_blake3,
             protected_transition: protected_transition.unwrap_or(None),
             protected_seccomp_events,
             busybox_path: busybox_path?,
@@ -2847,6 +2859,7 @@ pub fn cmd_self_build(
     hermeticity_mode: crunch_pipeline::HermeticityMode,
     source_store_path: Option<&Path>,
     stage0_policy: Option<&ProtectedExecPolicy>,
+    stage0_inventory_digest_blake3: Option<String>,
     bootstrap_bwrap_path: Option<&Path>,
     bootstrap_busybox_path: Option<&Path>,
     provider_mode: crate::bootstrap_source_root::BootstrapProviderMode,
@@ -2913,6 +2926,7 @@ pub fn cmd_self_build(
         staged_source: shared.staged_source,
         bwrap_source: tools.bwrap_source,
         fallback_events: setup.fallback_events,
+        stage0_inventory_digest_blake3,
         protected_transition: Some(tools.protected_transition),
         protected_seccomp_events,
         busybox_path: tools.busybox_path,
@@ -2998,6 +3012,11 @@ mod tests {
             phase: "protected".to_string(),
             executable_path: path.to_path_buf(),
             digest: test_seed_digest(path),
+            version_evidence: Some(crate::protected_exec::bounded_version_evidence(
+                vec![path.display().to_string(), "--version".to_string()],
+                format!("{id} unit-test-version\n"),
+                0,
+            )),
             provenance_category: "test-fixture".to_string(),
             provenance: "unit test seed".to_string(),
             allowed_reason: format!("allow {id}"),
@@ -4291,6 +4310,7 @@ mod tests {
             staged_source: PathBuf::from("/store/src"),
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/aaa-bwrap/bin")),
             fallback_events: Vec::new(),
+            stage0_inventory_digest_blake3: Some("d".repeat(64)),
             protected_transition: Some(transition.clone()),
             protected_seccomp_events: vec![seccomp_event.clone()],
             busybox_path: Some(PathBuf::from("/store/bbb-busybox/bin/busybox")),
@@ -4348,6 +4368,7 @@ mod tests {
             staged_source: PathBuf::from("/store/src"),
             bwrap_source: BwrapSource::DeclaredSeed(PathBuf::from("/seed/bin/bwrap")),
             fallback_events: Vec::new(),
+            stage0_inventory_digest_blake3: Some("e".repeat(64)),
             protected_transition: None,
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/seed/bin/busybox")),
@@ -4380,6 +4401,7 @@ mod tests {
                 SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from("/run/wrappers/bin/bwrap")),
                 SelfBuildFallbackEvent::SourceHostDiscovery(PathBuf::from("/work/crunch")),
             ],
+            stage0_inventory_digest_blake3: None,
             protected_transition: None,
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/tmp/store/xyz-busybox/bin/busybox")),
@@ -4415,6 +4437,7 @@ mod tests {
             fallback_events: vec![SelfBuildFallbackEvent::BwrapHostFallback(PathBuf::from(
                 "/usr/bin/bwrap",
             ))],
+            stage0_inventory_digest_blake3: None,
             protected_transition: None,
             protected_seccomp_events: Vec::new(),
             busybox_path: None,
@@ -4464,6 +4487,7 @@ mod tests {
             staged_source: PathBuf::from("/store/src"),
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/bwrap/bin")),
             fallback_events: Vec::new(),
+            stage0_inventory_digest_blake3: None,
             protected_transition: None,
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
@@ -4545,6 +4569,7 @@ mod tests {
             staged_source: PathBuf::from("/store/src"),
             bwrap_source: BwrapSource::CrunchBuilt(PathBuf::from("/store/bwrap/bin")),
             fallback_events: Vec::new(),
+            stage0_inventory_digest_blake3: None,
             protected_transition: Some(sample_protected_transition()),
             protected_seccomp_events: Vec::new(),
             busybox_path: Some(PathBuf::from("/store/busybox/bin/busybox")),
