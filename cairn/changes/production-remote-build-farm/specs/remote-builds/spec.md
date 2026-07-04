@@ -27,6 +27,33 @@ WHEN the scheduler evaluates remote dispatch
 THEN Mantle MUST reject the remote route before marking the goal complete
 AND it MUST preserve a phase-classified failure or explicit local fallback decision.
 
+### Requirement: Production build farms are CI-neutral
+
+r[remote_builds.production_ci_build_separation] Mantle MUST keep CI/jobset/pipeline orchestration separate from production remote build realization. CI systems, release tools, and other frontends MAY submit concrete Mantle build requests and consume status, cache, transfer, receipt, and report APIs, but scheduler, coordinator, cache identity, transfer admission, and output-trust decisions MUST NOT depend on CI-owned concepts such as jobsets, pipeline graphs, webhooks, branch policy, pull-request policy, checkout discovery, or frontend evaluation scheduling.
+
+#### Scenario: external CI submits concrete build requests
+
+GIVEN an external CI system has already chosen a revision, job, pipeline stage, or release candidate to build
+AND it submits a concrete Mantle derivation/action request with declared inputs, policy, and output trust roots
+WHEN Mantle plans remote realization
+THEN Mantle MAY realize the concrete request through the remote build farm
+AND CI labels MUST remain report metadata instead of route keys, cache identities, transfer authorities, or output-trust proof.
+
+#### Scenario: CI scheduling fields are rejected at the build boundary
+
+GIVEN a request asks the remote build farm to interpret jobsets, webhook payloads, branch filters, pull-request policy, checkout discovery, or frontend evaluation scheduling
+WHEN Mantle validates the request for scheduler or coordinator admission
+THEN Mantle MUST reject those CI-owned fields before dispatch
+AND diagnostics MUST direct callers to submit concrete build inputs instead.
+
+#### Scenario: CI success cannot prove build correctness
+
+GIVEN an external CI system reports a job as successful
+AND the corresponding remote output lacks verified PathInfo, content refs, or required attestation evidence
+WHEN Mantle evaluates cache, transfer, or output admission
+THEN Mantle MUST reject the output as unverified
+AND it MUST NOT treat CI success as a substitute for build output trust.
+
 ### Requirement: Production output trust is cryptographic
 
 r[remote_builds.production_cryptographic_output_trust] Mantle MUST admit production remote outputs only after cryptographic verification of returned PathInfo signatures and required attestation evidence against configured trust roots. Builder tickets, worker registration, SSH authentication, coordinator assignment, key names without matching material, or successful transport authentication MUST NOT be sufficient to import or persist remote outputs.
