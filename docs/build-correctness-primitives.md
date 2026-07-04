@@ -33,6 +33,13 @@ compiler-wrapper variables, proxy settings, token-like names, locale overrides,
 and temp-root overrides fail closed in strict mode; diagnostics report the class
 and variable name without copying secret values.
 
+Strict executable search paths are receipt-bound separately from the rest of the
+environment. Each accepted `PATH` entry must classify as a declared store tool
+reference, an alias view with a real tool ref, or an accepted host-tool inventory
+record. The build environment report records the ordered search-path digest,
+alias map, and real tool refs; ambient or unclassified entries fail before
+execution.
+
 ## Network policy
 
 Ordinary derivation actions are offline by default. Mantle only grants network

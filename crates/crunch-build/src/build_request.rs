@@ -33,6 +33,12 @@ use crate::registry::DerivationRegistry;
 /// Environment variables that crunch sets in every sandbox build,
 /// matching Nix's sandbox conventions for compatibility with build
 /// scripts that expect them.
+const SANDBOX_PATH_NOT_SET: &str = "/path-not-set";
+const PATH_VARIABLE: &str = "PATH";
+const PATH_ENTRY_SEPARATOR: char = ':';
+const STORE_PATH_HASH_CHARS: usize = 32;
+const STORE_COMPONENT_NAME_SEPARATOR_CHARS: usize = 1;
+const MIN_STORE_COMPONENT_CHARS: usize = STORE_PATH_HASH_CHARS + STORE_COMPONENT_NAME_SEPARATOR_CHARS;
 const SANDBOX_ENV_VARS: [(&str, &str); 19] = [
     ("HOME", "/homeless-shelter"),
     ("LANG", "C"),
@@ -42,7 +48,7 @@ const SANDBOX_ENV_VARS: [(&str, &str); 19] = [
     ("NIX_BUILD_TOP", "/build"),
     ("NIX_LOG_FD", "2"),
     ("NIX_STORE", "/nix/store"),
-    ("PATH", "/path-not-set"),
+    ("PATH", SANDBOX_PATH_NOT_SET),
     ("PWD", "/build"),
     ("SHELL", "/bin/sh"),
     ("SOURCE_DATE_EPOCH", "1"),
@@ -118,11 +124,13 @@ pub fn normalize_build_environment(
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
 
     let mut environment_vars = default_sandbox_environment(store_dir);
-    let audit_events = overlay_derivation_environment(derivation, hermeticity_mode, &mut environment_vars)?;
+    let audit_events = overlay_derivation_environment(derivation, store_dir, hermeticity_mode, &mut environment_vars)?;
     debug_assert!(!environment_vars.is_empty(), "environment must include sandbox vars");
 
     let action_name = environment_policy::action_name_from_environment(&derivation.environment);
-    let report = environment_policy::success_report(action_name, &environment_vars);
+    let search_path = strict_search_path_report(&environment_vars, store_dir, hermeticity_mode)?;
+    let mut report = environment_policy::success_report(action_name, &environment_vars);
+    report.search_path = search_path;
 
     Ok(NormalizedBuildEnvironment {
         environment_vars,
@@ -203,6 +211,7 @@ fn default_sandbox_environment(store_dir: &str) -> BTreeMap<String, Vec<u8>> {
 
 fn overlay_derivation_environment(
     derivation: &Derivation,
+    store_dir: &str,
     hermeticity_mode: HermeticityMode,
     environment_vars: &mut BTreeMap<String, Vec<u8>>,
 ) -> Result<Vec<HermeticityAuditEvent>, crate::Error> {
@@ -218,16 +227,20 @@ fn overlay_derivation_environment(
         {
             let sandbox_value = sandbox_value.clone();
             if hermeticity_mode.is_strict() {
-                return Err(crate::Error::UnsafeEnvOverride {
-                    key: key.clone(),
-                    sandbox_value: format_env_value(&sandbox_value),
-                    derivation_value: format_env_value(replaced.as_ref()),
-                });
+                validate_strict_protected_override(
+                    derivation,
+                    store_dir,
+                    environment_vars.len(),
+                    key,
+                    &sandbox_value,
+                    replaced.as_ref(),
+                )?;
+            } else {
+                audit_events.push(HermeticityAuditEvent::new(
+                    HermeticityAuditKind::EnvironmentOverride,
+                    format_environment_override_detail(key, &sandbox_value, replaced.as_ref()),
+                ));
             }
-            audit_events.push(HermeticityAuditEvent::new(
-                HermeticityAuditKind::EnvironmentOverride,
-                format_environment_override_detail(key, &sandbox_value, replaced.as_ref()),
-            ));
         }
         environment_vars.insert(key.clone(), Vec::from(replaced));
     }
@@ -243,17 +256,117 @@ fn reject_denied_strict_environment_key(
     if !hermeticity_mode.is_strict() {
         return Ok(());
     }
+    if key == PATH_VARIABLE {
+        return Ok(());
+    }
     let action_name = environment_policy::action_name_from_environment(&derivation.environment);
     if let Some(denied) = environment_policy::denied_environment_variable(action_name, accepted_variable_count, key) {
-        return Err(crate::Error::DeniedEnvironmentVariable {
-            action_name: denied.action_name,
-            variable: denied.rejection.variable,
-            class: denied.rejection.class,
-            diagnostic: denied.rejection.diagnostic,
-            report: Box::new(denied.report),
-        });
+        return Err(denied_environment_error(denied));
     }
     Ok(())
+}
+
+fn validate_strict_protected_override(
+    derivation: &Derivation,
+    store_dir: &str,
+    accepted_variable_count: usize,
+    key: &str,
+    sandbox_value: &[u8],
+    value: &[u8],
+) -> Result<(), crate::Error> {
+    if key != PATH_VARIABLE {
+        return Err(crate::Error::UnsafeEnvOverride {
+            key: key.to_string(),
+            sandbox_value: format_env_value(sandbox_value),
+            derivation_value: format_env_value(value),
+        });
+    }
+    let value = std::str::from_utf8(value).map_err(|_| {
+        search_path_denied_error(derivation, accepted_variable_count, "receipt-bound-path-non-utf8".to_string())
+    })?;
+    receipt_bound_search_path_from_value(value, store_dir)
+        .map_err(|err| search_path_denied_error(derivation, accepted_variable_count, err.to_string()))?;
+    Ok(())
+}
+
+fn strict_search_path_report(
+    environment_vars: &BTreeMap<String, Vec<u8>>,
+    store_dir: &str,
+    hermeticity_mode: HermeticityMode,
+) -> Result<Option<environment_policy::BuildSearchPathReport>, crate::Error> {
+    if !hermeticity_mode.is_strict() {
+        return Ok(None);
+    }
+    let path_value = environment_vars
+        .get(PATH_VARIABLE)
+        .ok_or_else(|| crate::Error::Store("strict search path missing PATH".to_string()))?;
+    let path_value = std::str::from_utf8(path_value)
+        .map_err(|_| crate::Error::Store("strict search path contains non-UTF-8 bytes".to_string()))?;
+    let report = receipt_bound_search_path_from_value(path_value, store_dir)
+        .map_err(|err| crate::Error::Store(err.to_string()))?;
+    Ok(Some(report))
+}
+
+fn receipt_bound_search_path_from_value(
+    value: &str,
+    store_dir: &str,
+) -> Result<environment_policy::BuildSearchPathReport, environment_policy::SearchPathPlanError> {
+    if value == SANDBOX_PATH_NOT_SET {
+        return environment_policy::plan_receipt_bound_search_path(environment_policy::SearchPathPlanRequest::default());
+    }
+    let mut entries = Vec::new();
+    let mut ambient_entries = Vec::new();
+    for entry in value.split(PATH_ENTRY_SEPARATOR) {
+        match declared_tool_path_entry(entry, store_dir) {
+            Some(real_tool_ref) => entries.push(environment_policy::SearchPathEntryDeclaration {
+                path: entry.to_string(),
+                kind: environment_policy::SEARCH_PATH_ENTRY_DECLARED_TOOL.to_string(),
+                real_tool_ref,
+            }),
+            None => ambient_entries.push(entry.to_string()),
+        }
+    }
+    environment_policy::plan_receipt_bound_search_path(environment_policy::SearchPathPlanRequest {
+        entries,
+        ambient_entries,
+    })
+}
+
+fn declared_tool_path_entry(entry: &str, store_dir: &str) -> Option<String> {
+    if entry.is_empty() || has_non_normal_path_segment(entry) {
+        return None;
+    }
+    let store_prefix = format!("{store_dir}/");
+    let rest = entry.strip_prefix(&store_prefix)?;
+    let component = rest.split('/').next()?;
+    if component.len() < MIN_STORE_COMPONENT_CHARS {
+        return None;
+    }
+    Some(format!("{store_prefix}{component}"))
+}
+
+fn has_non_normal_path_segment(path: &str) -> bool {
+    path.split('/').skip(1).any(|segment| segment.is_empty() || segment == "." || segment == "..")
+}
+
+fn search_path_denied_error(
+    derivation: &Derivation,
+    accepted_variable_count: usize,
+    diagnostic: String,
+) -> crate::Error {
+    let action_name = environment_policy::action_name_from_environment(&derivation.environment);
+    let denied = environment_policy::denied_search_path_variable(action_name, accepted_variable_count, diagnostic);
+    denied_environment_error(denied)
+}
+
+fn denied_environment_error(denied: environment_policy::DeniedEnvironmentVariable) -> crate::Error {
+    crate::Error::DeniedEnvironmentVariable {
+        action_name: denied.action_name,
+        variable: denied.rejection.variable,
+        class: denied.rejection.class,
+        diagnostic: denied.rejection.diagnostic,
+        report: Box::new(denied.report),
+    }
 }
 
 fn is_protected_sandbox_env_key(key: &str) -> bool {
@@ -594,6 +707,50 @@ mod tests {
         assert_eq!(first.report.digest_blake3.as_ref().unwrap().len(), BLAKE3_HEX_LENGTH_CHARS);
         assert_eq!(first.report.variable_count, u32::try_from(first.environment_vars.len()).unwrap());
         assert!(first.report.rejections.is_empty());
+        assert!(first.report.search_path.as_ref().is_some_and(|search_path| search_path.entries.is_empty()));
+    }
+
+    #[test]
+    fn strict_mode_accepts_declared_store_path_and_reports_tool_refs() {
+        const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
+        const EXPECTED_SEARCH_PATH_ENTRIES: usize = 1;
+
+        let tool_root = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-tool";
+        let tool_bin = format!("{tool_root}/bin");
+        let normalized = normalize_env_map(&[("PATH", tool_bin.as_str())], HermeticityMode::Strict).unwrap();
+        let path_value = normalized.environment_vars.get(PATH_VARIABLE).expect("PATH is present");
+        let search_path = normalized.report.search_path.as_ref().expect("strict search path report");
+
+        assert_eq!(path_value.as_slice(), tool_bin.as_bytes());
+        assert_eq!(search_path.entries.len(), EXPECTED_SEARCH_PATH_ENTRIES);
+        assert_eq!(search_path.entries[0].path, tool_bin);
+        assert_eq!(search_path.entries[0].real_tool_ref, tool_root);
+        assert_eq!(search_path.real_tool_refs, vec![tool_root.to_string()]);
+        assert!(search_path.digest_blake3.as_deref().is_some_and(|digest| digest.len() == BLAKE3_HEX_LENGTH_CHARS));
+        assert!(normalized.audit_events.is_empty());
+    }
+
+    #[test]
+    fn strict_mode_rejects_ambient_path_poisoning_with_receipt_bound_report() {
+        let err = normalize_env_map(&[("PATH", "/tmp/poison/bin")], HermeticityMode::Strict).unwrap_err();
+
+        let crate::Error::DeniedEnvironmentVariable {
+            variable,
+            class,
+            report,
+            ..
+        } = err
+        else {
+            unreachable!("strict ambient PATH must produce denied environment error");
+        };
+        assert_eq!(variable, PATH_VARIABLE);
+        assert_eq!(class, crate::environment_policy::ENV_REJECTION_SEARCH_PATH);
+        assert_eq!(report.rejections.len(), 1);
+        assert_eq!(report.rejections[0].variable, PATH_VARIABLE);
+        assert!(report.rejections[0].diagnostic.contains("receipt-bound-path-ambient-entry"));
+        let search_path = report.search_path.expect("blocked path report");
+        assert!(search_path.digest_blake3.is_none());
+        assert!(search_path.entries.is_empty());
     }
 
     #[test]

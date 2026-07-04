@@ -57,6 +57,8 @@ pub struct BuildJsonEnvironmentReport {
     pub digest_blake3: Option<String>,
     pub variable_count: u32,
     pub rejections: Vec<BuildJsonEnvironmentRejection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_path: Option<BuildJsonSearchPathReport>,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,6 +67,28 @@ pub struct BuildJsonEnvironmentRejection {
     pub class: String,
     pub diagnostic: String,
     pub redacted: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonSearchPathReport {
+    pub digest_algorithm: String,
+    pub digest_blake3: Option<String>,
+    pub entries: Vec<BuildJsonSearchPathEntry>,
+    pub aliases: Vec<BuildJsonSearchPathAlias>,
+    pub real_tool_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonSearchPathEntry {
+    pub path: String,
+    pub kind: String,
+    pub real_tool_ref: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonSearchPathAlias {
+    pub alias_path: String,
+    pub real_tool_ref: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -275,6 +299,28 @@ fn build_environment_reports(result: &PipelineResult) -> Vec<BuildJsonEnvironmen
                     redacted: rejection.redacted,
                 })
                 .collect(),
+            search_path: row.search_path.as_ref().map(|search_path| BuildJsonSearchPathReport {
+                digest_algorithm: crunch_pipeline::SEARCH_PATH_DIGEST_ALGORITHM.to_string(),
+                digest_blake3: search_path.digest_blake3.clone(),
+                entries: search_path
+                    .entries
+                    .iter()
+                    .map(|entry| BuildJsonSearchPathEntry {
+                        path: entry.path.clone(),
+                        kind: entry.kind.clone(),
+                        real_tool_ref: entry.real_tool_ref.clone(),
+                    })
+                    .collect(),
+                aliases: search_path
+                    .aliases
+                    .iter()
+                    .map(|alias| BuildJsonSearchPathAlias {
+                        alias_path: alias.alias_path.clone(),
+                        real_tool_ref: alias.real_tool_ref.clone(),
+                    })
+                    .collect(),
+                real_tool_refs: search_path.real_tool_refs.clone(),
+            }),
         })
         .collect()
 }
@@ -682,6 +728,16 @@ mod tests {
                 digest_blake3: Some("env-digest".to_string()),
                 variable_count: 3,
                 rejections: Vec::new(),
+                search_path: Some(crunch_pipeline::BuildSearchPathReport {
+                    digest_blake3: Some("path-digest".to_string()),
+                    entries: vec![crunch_pipeline::BuildSearchPathEntry {
+                        path: "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-tool/bin".to_string(),
+                        kind: "declared-tool-ref".to_string(),
+                        real_tool_ref: "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-tool".to_string(),
+                    }],
+                    aliases: Vec::new(),
+                    real_tool_refs: vec!["/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-tool".to_string()],
+                }),
             }],
             network_policy_reports: vec![crunch_pipeline::BuildNetworkPolicyReport {
                 action_name: "demo".to_string(),
@@ -717,6 +773,11 @@ mod tests {
         assert_eq!(report.build_environment_reports[0].digest_blake3.as_deref(), Some("env-digest"));
         assert_eq!(report.build_environment_reports[0].variable_count, 3);
         assert!(report.build_environment_reports[0].rejections.is_empty());
+        let search_path = report.build_environment_reports[0].search_path.as_ref().expect("search path report");
+        assert_eq!(search_path.digest_algorithm, "blake3");
+        assert_eq!(search_path.digest_blake3.as_deref(), Some("path-digest"));
+        assert_eq!(search_path.entries[0].kind, "declared-tool-ref");
+        assert_eq!(search_path.real_tool_refs, vec!["/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-tool".to_string()]);
         assert_eq!(report.network_policy_reports.len(), 1);
         assert_eq!(report.network_policy_reports[0].action_name, "demo");
         assert_eq!(report.network_policy_reports[0].mode, "offline");
