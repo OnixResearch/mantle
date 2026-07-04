@@ -10,6 +10,9 @@ use std::process::Command;
 use std::process::Stdio;
 use std::task::Context;
 use std::task::Poll;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 
 use nix_compat::store_path::StorePath;
 use serde::Deserialize;
@@ -46,6 +49,7 @@ pub const MAX_REMOTE_BUILD_TIME_SECS: u64 = 86_400;
 pub const DEFAULT_TICKET_TTL_SECS: u64 = 3_600;
 pub const DEFAULT_TICKET_USES: u32 = 1;
 pub const DEFAULT_TICKET_BUILD_TIME_SECS: u64 = 3_600;
+pub const DEFAULT_REMOTE_STDIO_TIMEOUT_SECS: u64 = DEFAULT_TICKET_BUILD_TIME_SECS;
 pub const DEFAULT_TICKET_UPLOAD_BYTES: u64 = 1_073_741_824;
 pub const DEFAULT_REMOTE_CONCURRENCY: u32 = 1;
 pub const MAX_TICKET_DISPLAY_NAME_BYTES: usize = 128;
@@ -72,6 +76,8 @@ const MAX_REMOTE_LOG_CHUNKS: usize = 1_024;
 const MAX_REMOTE_LOG_BYTES: u64 = 1_048_576;
 const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
+const REMOTE_CHILD_POLL_INTERVAL_MS: u64 = 10;
+const SSH_STDIO_FIXED_ARG_COUNT: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteHello {
@@ -742,9 +748,11 @@ pub struct RemoteStdioExchangeReport {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteStdioCommand {
+    pub binding: RemoteTransportBinding,
     pub program: PathBuf,
     pub args: Vec<String>,
     pub input_frames: Vec<RemoteFrame>,
+    pub timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -758,6 +766,42 @@ pub struct RemoteStdioBuilderCommand {
     pub endpoint_id: String,
     pub program: PathBuf,
     pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteSshStdioPlanRequest {
+    pub endpoint_id: String,
+    pub ssh_program: PathBuf,
+    pub destination: String,
+    pub remote_program: String,
+    pub remote_args: Vec<String>,
+}
+
+pub fn plan_ssh_stdio_builder_command(request: RemoteSshStdioPlanRequest) -> Result<RemoteStdioBuilderCommand, String> {
+    if request.endpoint_id.is_empty() {
+        return Err("ssh-stdio-endpoint-empty".to_string());
+    }
+    if request.ssh_program.as_os_str().is_empty() {
+        return Err("ssh-stdio-program-empty".to_string());
+    }
+    if request.destination.is_empty() {
+        return Err("ssh-stdio-destination-empty".to_string());
+    }
+    if request.remote_program.is_empty() {
+        return Err("ssh-stdio-remote-program-empty".to_string());
+    }
+    if request.remote_args.len() > MAX_REMOTE_EXECUTOR_ARGS {
+        return Err(format!("ssh-stdio-remote-arg-count-exceeds-{MAX_REMOTE_EXECUTOR_ARGS}"));
+    }
+    let mut args = Vec::with_capacity(request.remote_args.len().saturating_add(SSH_STDIO_FIXED_ARG_COUNT));
+    args.push(request.destination);
+    args.push(request.remote_program);
+    args.extend(request.remote_args);
+    Ok(RemoteStdioBuilderCommand {
+        endpoint_id: request.endpoint_id,
+        program: request.ssh_program,
+        args,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3237,6 +3281,13 @@ pub fn decode_remote_frame_stream(encoded: &[u8]) -> Result<Vec<RemoteFrame>, St
 pub fn validate_stdio_child_output(
     output: &RemoteStdioChildOutput,
 ) -> Result<RemoteStdioTranscript, RemoteFailureClassification> {
+    validate_stdio_child_output_for_binding(output, RemoteTransportBinding::Stdio)
+}
+
+pub fn validate_stdio_child_output_for_binding(
+    output: &RemoteStdioChildOutput,
+    binding: RemoteTransportBinding,
+) -> Result<RemoteStdioTranscript, RemoteFailureClassification> {
     if !output.status_success {
         return Err(remote_failure(
             RemoteFailurePhase::TransportSetup,
@@ -3247,7 +3298,7 @@ pub fn validate_stdio_child_output(
     let frames = decode_remote_frame_stream(&output.stdout)
         .map_err(|reason| remote_failure(RemoteFailurePhase::RequestValidation, RemoteRetryClass::Terminal, reason))?;
     Ok(RemoteStdioTranscript {
-        binding: RemoteTransportBinding::Stdio,
+        binding,
         frames,
         stderr_summary: bounded_stderr_summary(&output.stderr),
     })
@@ -3270,6 +3321,12 @@ pub fn validate_stdio_child_exchange_output(
 }
 
 pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdioTranscript, RunError> {
+    if command.timeout_secs == 0 || command.timeout_secs > MAX_REMOTE_BUILD_TIME_SECS {
+        return Err(RunError::Internal(format!(
+            "stdio remote child timeout out of bounds: {} seconds",
+            command.timeout_secs
+        )));
+    }
     let mut child = Command::new(&command.program)
         .args(&command.args)
         .stdin(Stdio::piped())
@@ -3284,15 +3341,13 @@ pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdi
             write_remote_frame(&mut stdin, frame).map_err(RunError::Internal)?;
         }
     }
-    let output = child.wait_with_output().map_err(|err| {
-        RunError::Internal(format!("waiting for stdio remote child {}: {err}", command.program.display()))
-    })?;
+    let output = wait_for_stdio_child_output(child, command.timeout_secs, &command.program)?;
     let child_output = RemoteStdioChildOutput {
         stdout: output.stdout,
         stderr: output.stderr,
         status_success: output.status.success(),
     };
-    validate_stdio_child_output(&child_output).map_err(|failure| {
+    validate_stdio_child_output_for_binding(&child_output, command.binding).map_err(|failure| {
         RunError::Internal(format!(
             "stdio remote child failed phase={:?} retry={:?}: {}; stderr={}",
             failure.phase,
@@ -3301,6 +3356,36 @@ pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdi
             bounded_stderr_summary(&child_output.stderr)
         ))
     })
+}
+
+fn wait_for_stdio_child_output(
+    mut child: std::process::Child,
+    timeout_secs: u64,
+    program: &Path,
+) -> Result<std::process::Output, RunError> {
+    let deadline = Instant::now()
+        .checked_add(Duration::from_secs(timeout_secs))
+        .ok_or_else(|| RunError::Internal("stdio remote child timeout overflow".to_string()))?;
+    loop {
+        if child
+            .try_wait()
+            .map_err(|err| RunError::Internal(format!("polling stdio remote child {}: {err}", program.display())))?
+            .is_some()
+        {
+            return child.wait_with_output().map_err(|err| {
+                RunError::Internal(format!("collecting stdio remote child {} output: {err}", program.display()))
+            });
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(RunError::Internal(format!(
+                "stdio remote child timed out after {timeout_secs} seconds phase={:?}",
+                RemoteFailurePhase::TransportSetup
+            )));
+        }
+        thread::sleep(Duration::from_millis(REMOTE_CHILD_POLL_INTERVAL_MS));
+    }
 }
 
 pub fn remote_client_request_frames(client: &RemoteLoopbackClient) -> Vec<RemoteFrame> {
@@ -3346,13 +3431,30 @@ pub fn plan_remote_stdio_client_dispatch(
     input: RemoteClientDerivationInput,
     options: &RemoteClientBuildOptions,
 ) -> Result<RemoteClientDispatchPlan, String> {
+    plan_remote_client_dispatch_for_binding(input, options, RemoteTransportBinding::Stdio)
+}
+
+pub fn plan_remote_ssh_stdio_client_dispatch(
+    input: RemoteClientDerivationInput,
+    options: &RemoteClientBuildOptions,
+) -> Result<RemoteClientDispatchPlan, String> {
+    plan_remote_client_dispatch_for_binding(input, options, RemoteTransportBinding::SshStdio)
+}
+
+fn plan_remote_client_dispatch_for_binding(
+    input: RemoteClientDerivationInput,
+    options: &RemoteClientBuildOptions,
+    binding: RemoteTransportBinding,
+) -> Result<RemoteClientDispatchPlan, String> {
     validate_remote_client_options(options)?;
     let request = concrete_remote_derivation_request(&input, options)?;
     let client = remote_loopback_client_for_request(request, options);
     let command = RemoteStdioCommand {
+        binding,
         program: options.builder.program.clone(),
         args: options.builder.args.clone(),
         input_frames: remote_client_request_frames(&client),
+        timeout_secs: options.build_time_limit_secs,
     };
     Ok(RemoteClientDispatchPlan {
         label: input.label,
@@ -4933,7 +5035,7 @@ fn remote_serve_metadata_json(endpoint_id: &str, status: &str) -> serde_json::Va
             RemoteTransportBinding::P2p.as_str(),
         ],
         "status": status,
-        "diagnostic": "remote serve metadata is stable; stdio-once is a framed fixture seam and production P2P listener/build executor dispatch remain gated"
+        "diagnostic": "remote serve metadata is stable; stdio-once is a supported framed stdio binding; ssh-stdio reuses the same frame contract; production P2P listener dispatch remains gated"
     })
 }
 
@@ -5320,8 +5422,10 @@ mod tests {
         let plan = plan_remote_stdio_client_dispatch(input, &options).expect("client dispatch plans");
 
         assert_eq!(plan.label, "root");
+        assert_eq!(plan.command.binding, RemoteTransportBinding::Stdio);
         assert_eq!(plan.command.program, PathBuf::from("/bin/mantle-remote"));
         assert_eq!(plan.command.args, vec!["serve".to_string()]);
+        assert_eq!(plan.command.timeout_secs, DEFAULT_TICKET_BUILD_TIME_SECS);
         assert_eq!(plan.command.input_frames.len(), REMOTE_CLIENT_DISPATCH_FRAME_COUNT);
         assert_eq!(plan.client.hello.endpoint_id, "builder-1");
         assert_eq!(plan.client.trusted_output_keys, vec!["builder-key".to_string()]);
@@ -5357,6 +5461,68 @@ mod tests {
         let err = plan_remote_stdio_client_dispatch(input, &options).expect_err("trusted keys required");
 
         assert_eq!(err, "remote-client-trusted-output-keys-empty");
+    }
+
+    #[test]
+    fn ssh_stdio_command_planner_uses_explicit_argv() {
+        let builder = plan_ssh_stdio_builder_command(RemoteSshStdioPlanRequest {
+            endpoint_id: "builder-ssh".to_string(),
+            ssh_program: PathBuf::from("ssh"),
+            destination: "builder.example".to_string(),
+            remote_program: "/opt/mantle/bin/mantle".to_string(),
+            remote_args: vec![
+                "remote".to_string(),
+                "serve".to_string(),
+                "--binding".to_string(),
+                "stdio-once".to_string(),
+            ],
+        })
+        .expect("ssh stdio command plans");
+
+        assert_eq!(builder.endpoint_id, "builder-ssh");
+        assert_eq!(builder.program, PathBuf::from("ssh"));
+        assert_eq!(builder.args[0], "builder.example");
+        assert_eq!(builder.args[1], "/opt/mantle/bin/mantle");
+        assert!(builder.args.iter().any(|arg| arg == "stdio-once"));
+    }
+
+    #[test]
+    fn ssh_stdio_client_dispatch_reuses_stdio_frame_state_machine() {
+        let input = fixture_remote_client_derivation_input();
+        let mut options = fixture_remote_client_options();
+        options.builder = plan_ssh_stdio_builder_command(RemoteSshStdioPlanRequest {
+            endpoint_id: "builder-ssh".to_string(),
+            ssh_program: PathBuf::from("ssh"),
+            destination: "builder.example".to_string(),
+            remote_program: "/opt/mantle/bin/mantle".to_string(),
+            remote_args: vec!["remote".to_string(), "serve".to_string()],
+        })
+        .expect("ssh stdio command plans");
+        let plan = plan_remote_ssh_stdio_client_dispatch(input, &options).expect("ssh stdio dispatch plans");
+
+        assert_eq!(plan.command.binding, RemoteTransportBinding::SshStdio);
+        assert_eq!(plan.command.program, PathBuf::from("ssh"));
+        assert_eq!(plan.command.input_frames.len(), REMOTE_CLIENT_DISPATCH_FRAME_COUNT);
+        assert!(matches!(plan.command.input_frames.first(), Some(RemoteFrame::Hello { .. })));
+        assert!(matches!(plan.command.input_frames.last(), Some(RemoteFrame::InputUpload { .. })));
+    }
+
+    #[test]
+    fn stdio_child_timeout_is_phase_classified() {
+        const TIMEOUT_TEST_SECS: u64 = 1;
+        const SLEEP_TEST_SECS: u64 = 2;
+        let command = RemoteStdioCommand {
+            binding: RemoteTransportBinding::Stdio,
+            program: PathBuf::from("/bin/sh"),
+            args: vec!["-c".to_string(), format!("sleep {SLEEP_TEST_SECS}")],
+            input_frames: Vec::new(),
+            timeout_secs: TIMEOUT_TEST_SECS,
+        };
+        let err = run_stdio_remote_child(&command).expect_err("sleeping child times out");
+        let rendered = err.to_string();
+
+        assert!(rendered.contains("timed out"));
+        assert!(rendered.contains("TransportSetup"));
     }
 
     #[test]
@@ -5723,9 +5889,11 @@ mod tests {
         client.input_manifest.input_refs = vec![source_ref.clone()];
         client.input_manifest.closure_refs = vec![source_ref.clone()];
         let mut command = RemoteStdioCommand {
+            binding: RemoteTransportBinding::Stdio,
             program: PathBuf::from("unused"),
             args: Vec::new(),
             input_frames: remote_client_request_frames(&client),
+            timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
         };
 
         populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
@@ -5774,9 +5942,11 @@ mod tests {
         client.input_manifest.input_refs = vec![source_ref.clone()];
         client.input_manifest.closure_refs = vec![source_ref.clone()];
         let mut command = RemoteStdioCommand {
+            binding: RemoteTransportBinding::Stdio,
             program: PathBuf::from("unused"),
             args: Vec::new(),
             input_frames: remote_client_request_frames(&client),
+            timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
         };
 
         populate_remote_input_upload_artifacts_from_store_or_source_state(
@@ -5845,9 +6015,11 @@ mod tests {
         client.request.input_refs = vec![source_ref.clone()];
         client.request.source_input_refs = vec![source_ref.clone()];
         let mut command = RemoteStdioCommand {
+            binding: RemoteTransportBinding::Stdio,
             program: PathBuf::from("unused"),
             args: Vec::new(),
             input_frames: remote_client_request_frames(&client),
+            timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
         };
         populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
             .await
