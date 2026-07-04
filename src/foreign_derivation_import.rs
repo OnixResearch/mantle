@@ -11,6 +11,8 @@ const PACKAGE_INDEX_SCHEMA: &str = "foreign-package-index-v1";
 const IMPORT_RECEIPT_SCHEMA: &str = "foreign-derivation-import-receipt-v1";
 const MANTLE_ADAPTER_SCHEMA: &str = "mantle-foreign-derivation-adapter-plan-v1";
 const DIGEST_ALGORITHM: &str = "blake3";
+const SHA256_ALGORITHM: &str = "sha256";
+const NIX_STORE_PATH_SHA256_ALGORITHM: &str = "nix-store-path-sha256";
 const RECOMPUTE_BLAKE3_MODE: &str = "recompute-blake3-v1";
 const SOURCE_REF_FIELD: &str = "source-ref";
 const OUT_OUTPUT_NAME: &str = "out";
@@ -19,12 +21,29 @@ const HELLO_SYSTEM: &str = "x86_64-linux";
 const DEFAULT_TARGET_PREFIX: &str = "/mantle/store";
 const GUIX_SOURCE_PREFIX: &str = "/gnu/store";
 const NIX_SOURCE_PREFIX: &str = "/nix/store";
+const NIX_STORE_PREFIX_WITH_SLASH: &str = "/nix/store/";
+const NIX_DERIVATION_SUFFIX: &str = ".drv";
 const UNKNOWN_FOREIGN_PREFIX: &str = "/foreign/store";
 const GUIX_HELLO_NODE_ID: &str = "guix:hello";
 const NIX_HELLO_NODE_ID: &str = "nix:hello";
+const NIXPKGS_PRODUCER_KIND: &str = "nixpkgs";
+const NIX_DERIVATION_BUILTIN: &str = "nix.derivation";
+const FIXED_OUTPUT_FETCH_BUILTIN: &str = "fixed-output-fetch";
+const NIX_INPUT_SOURCE_KIND: &str = "nix-input-source";
+const NIX_NODE_ID_PREFIX: &str = "nix:";
+const NIX_SOURCE_PAYLOAD_ID_PREFIX: &str = "nix-source:";
 const CHMOD_SETUID_CAPABILITY: &str = "chmod-setuid";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
+const CACHE_NIXOS_ORG_URL: &str = "https://cache.nixos.org";
+const NIX_COMPATIBLE_HASH_DOMAIN: &str = "nix-compatible";
+const MANTLE_RECEIPT_HASH_DOMAIN: &str = "mantle-receipt";
+const DERIVATION_STORE_PATH_HASH_KIND: &str = "derivation-store-path";
+const RAW_GRAPH_HASH_KIND: &str = "raw-graph";
+const TRANSLATION_POLICY_HASH_KIND: &str = "translation-policy";
+const TRANSLATED_GRAPH_HASH_KIND: &str = "translated-graph";
+const SUBSTITUTION_POLICY_CLASSIFICATION: &str = "cache-hint-policy-data-store-admission-required";
 const OUTPUT_HASH_HEX_CHARS: usize = 32;
+const SOURCE_PAYLOAD_HASH_HEX_CHARS: usize = 32;
 const MAX_GRAPH_NODES: usize = 64;
 const MAX_GRAPH_EDGES: usize = 256;
 const MAX_PACKAGE_INDEX_ENTRIES: usize = 128;
@@ -34,6 +53,7 @@ const MAX_MIRROR_CANDIDATES: usize = 16;
 const MAX_SANDBOX_CAPABILITIES: usize = 16;
 const MAX_CACHE_HINTS: usize = 16;
 const MAX_UNSUPPORTED_FEATURES: usize = 32;
+const MAX_HASH_DOMAIN_RECORDS: usize = 256;
 const EMPTY_OUTPUT_COUNT: usize = 0;
 const EMPTY_COMMAND_INVOCATION_COUNT: usize = 0;
 const REQUIRED_HELLO_ROOT_COUNT: usize = 1;
@@ -49,6 +69,8 @@ pub(crate) struct ForeignDerivationGraph {
     pub(crate) source_payloads: Vec<SourcePayload>,
     pub(crate) unsupported_features: Vec<UnsupportedFeature>,
     pub(crate) frontend_metadata: Vec<FrontendMetadata>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) hash_domains: Vec<HashDomainRecord>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -126,6 +148,14 @@ pub(crate) struct FrontendMetadata {
     pub(crate) message: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct HashDomainRecord {
+    pub(crate) domain: String,
+    pub(crate) kind: String,
+    pub(crate) algorithm: String,
+    pub(crate) value: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct CacheHint {
     pub(crate) cache_url: String,
@@ -192,6 +222,8 @@ pub(crate) struct ImportReceipt {
     pub(crate) package_index_digest: Option<String>,
     pub(crate) fetch_cache_policy_digest: String,
     pub(crate) sandbox_policy_digest: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) hash_domains: Vec<HashDomainRecord>,
     pub(crate) diagnostics: Vec<ImportDiagnostic>,
     pub(crate) non_claims: Vec<String>,
 }
@@ -202,6 +234,8 @@ pub(crate) struct MantleForeignPlan {
     pub(crate) roots: Vec<MantleForeignRoot>,
     pub(crate) source_payloads: Vec<SourcePayload>,
     pub(crate) sandbox_audit: Vec<SandboxAuditEvent>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) substitution_audit: Vec<SubstitutionAuditEvent>,
     pub(crate) forbidden_process_invocations: Vec<String>,
     pub(crate) non_claims: Vec<String>,
 }
@@ -218,6 +252,65 @@ pub(crate) struct SandboxAuditEvent {
     pub(crate) node_id: String,
     pub(crate) capability: String,
     pub(crate) classification: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct SubstitutionAuditEvent {
+    pub(crate) node_id: String,
+    pub(crate) cache_url: String,
+    pub(crate) trust_scope: String,
+    pub(crate) classification: String,
+    pub(crate) store_admission_required: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixDerivationJsonNode {
+    pub(crate) name: String,
+    pub(crate) system: String,
+    pub(crate) builder: String,
+    #[serde(default)]
+    pub(crate) args: Vec<String>,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+    pub(crate) outputs: BTreeMap<String, NixDerivationJsonOutput>,
+    #[serde(rename = "inputDrvs", default)]
+    pub(crate) input_drvs: BTreeMap<String, NixDerivationJsonInput>,
+    #[serde(rename = "inputSrcs", default)]
+    pub(crate) input_srcs: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixDerivationJsonOutput {
+    pub(crate) path: String,
+    #[serde(default)]
+    pub(crate) hash: Option<String>,
+    #[serde(rename = "hashAlgo", default)]
+    pub(crate) hash_algo: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NixDerivationJsonInput {
+    #[serde(default)]
+    pub(crate) outputs: Vec<String>,
+}
+
+pub(crate) type NixDerivationJsonClosure = BTreeMap<String, NixDerivationJsonNode>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NixProducerConfig {
+    pub(crate) package_name: String,
+    pub(crate) system: String,
+    pub(crate) root_derivation: String,
+    pub(crate) producer_identity: String,
+    pub(crate) producer_revision: String,
+    pub(crate) cache_hints: Vec<CacheHint>,
+    pub(crate) unsupported_metadata_classes: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NixProducerArtifacts {
+    pub(crate) graph: ForeignDerivationGraph,
+    pub(crate) package_index: PackageIndex,
 }
 
 pub(crate) fn translate_foreign_graph(
@@ -271,6 +364,19 @@ pub(crate) fn plan_mantle_foreign_import(
             })
         })
         .collect::<Vec<_>>();
+    let substitution_audit = translated_graph
+        .nodes
+        .iter()
+        .flat_map(|node| {
+            node.cache_hints.iter().map(|hint| SubstitutionAuditEvent {
+                node_id: node.node_id.clone(),
+                cache_url: hint.cache_url.clone(),
+                trust_scope: hint.trust_scope.clone(),
+                classification: SUBSTITUTION_POLICY_CLASSIFICATION.to_string(),
+                store_admission_required: true,
+            })
+        })
+        .collect::<Vec<_>>();
     debug_assert_eq!(EMPTY_COMMAND_INVOCATION_COUNT, 0);
     Ok(MantleForeignPlan {
         schema: MANTLE_ADAPTER_SCHEMA.to_string(),
@@ -281,6 +387,7 @@ pub(crate) fn plan_mantle_foreign_import(
         }],
         source_payloads: translated_graph.source_payloads.clone(),
         sandbox_audit,
+        substitution_audit,
         forbidden_process_invocations: Vec::new(),
         non_claims: foreign_import_non_claims(),
     })
@@ -337,7 +444,73 @@ pub(crate) fn admit_translated_graph(
             "receipt translated graph digest does not match current translation",
         ));
     }
+    if expected.hash_domains != receipt.hash_domains {
+        return Err(diagnostic(
+            "stale-hash-domain-summary",
+            None,
+            "receipt hash-domain summary does not match current graph and policy",
+        ));
+    }
     Ok(())
+}
+
+pub(crate) fn lower_nix_derivation_json_closure(
+    closure: &NixDerivationJsonClosure,
+    config: &NixProducerConfig,
+) -> Result<NixProducerArtifacts, ImportDiagnostic> {
+    validate_nix_producer_inputs(closure, config)?;
+    let path_to_node_id = nix_node_id_map(closure)?;
+    let root_node_id = path_to_node_id.get(&config.root_derivation).cloned().ok_or_else(|| {
+        diagnostic(
+            "missing-nix-root-derivation",
+            None,
+            "selected root derivation is absent from the concrete Nix closure",
+        )
+    })?;
+    let mut source_payloads = BTreeMap::new();
+    let mut nodes = Vec::with_capacity(closure.len());
+    for (drv_path, derivation) in closure {
+        let is_root = drv_path == &config.root_derivation;
+        let node = lower_nix_derivation_node(
+            drv_path,
+            derivation,
+            &path_to_node_id,
+            closure,
+            is_root,
+            &config.cache_hints,
+            &mut source_payloads,
+        )?;
+        nodes.push(node);
+    }
+    let graph = ForeignDerivationGraph {
+        schema: GRAPH_SCHEMA.to_string(),
+        producer: ProducerSummary {
+            kind: NIXPKGS_PRODUCER_KIND.to_string(),
+            identity: config.producer_identity.clone(),
+            revision: config.producer_revision.clone(),
+        },
+        source_store_prefixes: vec![NIX_SOURCE_PREFIX.to_string()],
+        target_store_prefix: None,
+        root_derivation_ids: vec![root_node_id.clone()],
+        nodes,
+        source_payloads: source_payloads.into_values().collect(),
+        unsupported_features: Vec::new(),
+        frontend_metadata: Vec::new(),
+        hash_domains: nix_hash_domain_records(closure),
+    };
+    let package_index = PackageIndex {
+        schema: PACKAGE_INDEX_SCHEMA.to_string(),
+        entries: vec![PackageIndexEntry {
+            name: config.package_name.clone(),
+            system: config.system.clone(),
+            root_derivation_id: root_node_id,
+            aliases: Vec::new(),
+            provenance_ref: config.producer_identity.clone(),
+            metadata_digest: nix_package_metadata_digest(config),
+            unsupported_metadata_classes: sorted_strings(config.unsupported_metadata_classes.clone()),
+        }],
+    };
+    Ok(NixProducerArtifacts { graph, package_index })
 }
 
 pub(crate) fn guix_like_hello_fixture() -> (ForeignDerivationGraph, PackageIndex) {
@@ -394,7 +567,7 @@ fn hello_fixture(
                 digest: blake3_hex("hello-source"),
                 recursive: true,
             }),
-            builtin: "fixed-output-fetch".to_string(),
+            builtin: FIXED_OUTPUT_FETCH_BUILTIN.to_string(),
             declared_references: vec![store_source.clone()],
             sandbox_capabilities: Vec::new(),
             unsupported_features: Vec::new(),
@@ -409,6 +582,7 @@ fn hello_fixture(
         }],
         unsupported_features: Vec::new(),
         frontend_metadata: Vec::new(),
+        hash_domains: Vec::new(),
     };
     let index = PackageIndex {
         schema: PACKAGE_INDEX_SCHEMA.to_string(),
@@ -423,6 +597,280 @@ fn hello_fixture(
         }],
     };
     (graph, index)
+}
+
+fn validate_nix_producer_inputs(
+    closure: &NixDerivationJsonClosure,
+    config: &NixProducerConfig,
+) -> Result<(), ImportDiagnostic> {
+    if closure.is_empty() || closure.len() > MAX_GRAPH_NODES {
+        return Err(diagnostic(
+            "nix-derivation-count-out-of-range",
+            None,
+            "Nix derivation closure size is outside supported limits",
+        ));
+    }
+    require_field_limit(&config.package_name, None, "nix-package-name")?;
+    require_field_limit(&config.system, None, "nix-system")?;
+    require_field_limit(&config.root_derivation, None, "nix-root-derivation")?;
+    require_field_limit(&config.producer_identity, None, "nix-producer-identity")?;
+    require_field_limit(&config.producer_revision, None, "nix-producer-revision")?;
+    validate_nix_derivation_path(&config.root_derivation)?;
+    if config.cache_hints.len() > MAX_CACHE_HINTS {
+        return Err(diagnostic("cache-hint-limit-exceeded", None, "Nix producer config declares too many cache hints"));
+    }
+    for hint in &config.cache_hints {
+        require_field_limit(&hint.cache_url, None, "nix-cache-url")?;
+        require_field_limit(&hint.trust_scope, None, "nix-cache-trust-scope")?;
+        if hint.trust_scope.is_empty() {
+            return Err(diagnostic("missing-cache-trust-scope", None, "cache hint is missing a trust scope"));
+        }
+    }
+    for drv_path in closure.keys() {
+        validate_nix_derivation_path(drv_path)?;
+    }
+    if !closure.contains_key(&config.root_derivation) {
+        return Err(diagnostic(
+            "missing-nix-root-derivation",
+            None,
+            "selected root derivation is absent from the concrete Nix closure",
+        ));
+    }
+    Ok(())
+}
+
+fn nix_node_id_map(closure: &NixDerivationJsonClosure) -> Result<BTreeMap<String, String>, ImportDiagnostic> {
+    let mut path_to_node_id = BTreeMap::new();
+    let mut node_ids = BTreeSet::new();
+    for drv_path in closure.keys() {
+        let node_id = nix_node_id(drv_path)?;
+        if !node_ids.insert(node_id.clone()) {
+            return Err(diagnostic("duplicate-nix-node-id", None, "Nix derivation paths produce duplicate node IDs"));
+        }
+        path_to_node_id.insert(drv_path.clone(), node_id);
+    }
+    Ok(path_to_node_id)
+}
+
+fn lower_nix_derivation_node(
+    drv_path: &str,
+    derivation: &NixDerivationJsonNode,
+    path_to_node_id: &BTreeMap<String, String>,
+    closure: &NixDerivationJsonClosure,
+    is_root: bool,
+    root_cache_hints: &[CacheHint],
+    source_payloads: &mut BTreeMap<String, SourcePayload>,
+) -> Result<ForeignDerivationNode, ImportDiagnostic> {
+    let node_id = path_to_node_id
+        .get(drv_path)
+        .cloned()
+        .ok_or_else(|| diagnostic("missing-nix-node-id", None, "Nix derivation path was not assigned a node ID"))?;
+    let outputs = lower_nix_outputs(&derivation.outputs)?;
+    let fixed_output = nix_fixed_output_metadata(&derivation.outputs)?;
+    let input_derivations = lower_nix_input_derivations(&derivation.input_drvs, path_to_node_id)?;
+    let source_refs = lower_nix_source_refs(&derivation.input_srcs, source_payloads)?;
+    let declared_references = nix_declared_references(&derivation.input_drvs, &derivation.input_srcs, closure)?;
+    let cache_hints = if is_root { root_cache_hints.to_vec() } else { Vec::new() };
+    Ok(ForeignDerivationNode {
+        node_id,
+        original_derivation: drv_path.to_string(),
+        name: derivation.name.clone(),
+        system: derivation.system.clone(),
+        builder: derivation.builder.clone(),
+        args: derivation.args.clone(),
+        env: derivation.env.clone(),
+        outputs,
+        input_derivations,
+        source_refs,
+        fixed_output: fixed_output.clone(),
+        builtin: if fixed_output.is_some() {
+            FIXED_OUTPUT_FETCH_BUILTIN.to_string()
+        } else {
+            NIX_DERIVATION_BUILTIN.to_string()
+        },
+        declared_references,
+        sandbox_capabilities: Vec::new(),
+        unsupported_features: Vec::new(),
+        cache_hints,
+    })
+}
+
+fn lower_nix_outputs(
+    outputs: &BTreeMap<String, NixDerivationJsonOutput>,
+) -> Result<BTreeMap<String, OutputDeclaration>, ImportDiagnostic> {
+    if outputs.is_empty() {
+        return Err(diagnostic("missing-output-declaration", None, "Nix derivation has no outputs"));
+    }
+    let mut lowered = BTreeMap::new();
+    for (name, output) in outputs {
+        validate_nix_store_path(&output.path)?;
+        lowered.insert(name.clone(), OutputDeclaration {
+            path: output.path.clone(),
+            hash: output.hash.clone(),
+        });
+    }
+    Ok(lowered)
+}
+
+fn lower_nix_input_derivations(
+    input_drvs: &BTreeMap<String, NixDerivationJsonInput>,
+    path_to_node_id: &BTreeMap<String, String>,
+) -> Result<Vec<InputDerivationEdge>, ImportDiagnostic> {
+    let mut edges = Vec::new();
+    for (input_drv, input) in input_drvs {
+        let input_node_id = path_to_node_id.get(input_drv).ok_or_else(|| {
+            diagnostic("dangling-nix-input-derivation", None, "Nix input derivation is absent from closure")
+        })?;
+        if input.outputs.is_empty() {
+            return Err(diagnostic("missing-nix-input-output", None, "Nix input derivation has no output names"));
+        }
+        for output_name in sorted_strings(input.outputs.clone()) {
+            edges.push(InputDerivationEdge {
+                node_id: input_node_id.clone(),
+                output_name,
+            });
+        }
+    }
+    edges.sort();
+    Ok(edges)
+}
+
+fn lower_nix_source_refs(
+    input_srcs: &[String],
+    source_payloads: &mut BTreeMap<String, SourcePayload>,
+) -> Result<Vec<SourceRef>, ImportDiagnostic> {
+    let mut refs = Vec::new();
+    for input_src in sorted_strings(input_srcs.to_vec()) {
+        validate_nix_store_path(&input_src)?;
+        let payload_id = nix_source_payload_id(&input_src);
+        source_payloads.entry(payload_id.clone()).or_insert_with(|| SourcePayload {
+            payload_id: payload_id.clone(),
+            kind: NIX_INPUT_SOURCE_KIND.to_string(),
+            content_ref: input_src.clone(),
+            embedded_text: None,
+            mirrors: Vec::new(),
+        });
+        refs.push(SourceRef {
+            payload_id,
+            field: SOURCE_REF_FIELD.to_string(),
+        });
+    }
+    refs.sort();
+    Ok(refs)
+}
+
+fn nix_fixed_output_metadata(
+    outputs: &BTreeMap<String, NixDerivationJsonOutput>,
+) -> Result<Option<FixedOutputMetadata>, ImportDiagnostic> {
+    let mut metadata: Option<FixedOutputMetadata> = None;
+    for output in outputs.values() {
+        let Some(digest) = output.hash.as_ref() else {
+            continue;
+        };
+        let hash_algo = output.hash_algo.as_deref().unwrap_or(SHA256_ALGORITHM);
+        let (algorithm, recursive) = parse_nix_hash_algorithm(hash_algo);
+        let candidate = FixedOutputMetadata {
+            algorithm,
+            digest: digest.clone(),
+            recursive,
+        };
+        if let Some(existing) = metadata.as_ref() {
+            if existing != &candidate {
+                return Err(diagnostic(
+                    "conflicting-fixed-output-hashes",
+                    None,
+                    "Nix derivation outputs declare conflicting fixed-output hashes",
+                ));
+            }
+        } else {
+            metadata = Some(candidate);
+        }
+    }
+    Ok(metadata)
+}
+
+fn parse_nix_hash_algorithm(hash_algo: &str) -> (String, bool) {
+    if let Some(stripped) = hash_algo.strip_prefix("r:") {
+        return (stripped.to_string(), true);
+    }
+    (hash_algo.to_string(), false)
+}
+
+fn nix_declared_references(
+    input_drvs: &BTreeMap<String, NixDerivationJsonInput>,
+    input_srcs: &[String],
+    closure: &NixDerivationJsonClosure,
+) -> Result<Vec<String>, ImportDiagnostic> {
+    let mut references = input_srcs.to_vec();
+    for (input_drv, input) in input_drvs {
+        let input_derivation = closure.get(input_drv).ok_or_else(|| {
+            diagnostic("dangling-nix-input-derivation", None, "Nix input derivation is absent from closure")
+        })?;
+        for output_name in &input.outputs {
+            let output = input_derivation.outputs.get(output_name).ok_or_else(|| {
+                diagnostic("dangling-nix-input-output", None, "Nix input output is absent from closure")
+            })?;
+            references.push(output.path.clone());
+        }
+    }
+    Ok(sorted_strings(references))
+}
+
+fn nix_node_id(drv_path: &str) -> Result<String, ImportDiagnostic> {
+    let component = drv_path
+        .rsplit('/')
+        .next()
+        .filter(|component| !component.is_empty())
+        .ok_or_else(|| diagnostic("invalid-nix-derivation-path", None, "Nix derivation path has no basename"))?;
+    Ok(format!("{NIX_NODE_ID_PREFIX}{component}"))
+}
+
+fn nix_source_payload_id(input_src: &str) -> String {
+    let digest = blake3_hex(input_src);
+    let short_digest = &digest[..SOURCE_PAYLOAD_HASH_HEX_CHARS];
+    format!("{NIX_SOURCE_PAYLOAD_ID_PREFIX}{short_digest}")
+}
+
+fn validate_nix_derivation_path(path: &str) -> Result<(), ImportDiagnostic> {
+    validate_nix_store_path(path)?;
+    if !path.ends_with(NIX_DERIVATION_SUFFIX) {
+        return Err(diagnostic("invalid-nix-derivation-path", None, "Nix derivation path must end in .drv"));
+    }
+    Ok(())
+}
+
+fn validate_nix_store_path(path: &str) -> Result<(), ImportDiagnostic> {
+    require_field_limit(path, None, "nix-store-path")?;
+    if !path.starts_with(NIX_STORE_PREFIX_WITH_SLASH) {
+        return Err(diagnostic("invalid-nix-store-path", None, "Nix path must be under /nix/store"));
+    }
+    Ok(())
+}
+
+fn nix_hash_domain_records(closure: &NixDerivationJsonClosure) -> Vec<HashDomainRecord> {
+    let mut records = closure
+        .keys()
+        .map(|drv_path| HashDomainRecord {
+            domain: NIX_COMPATIBLE_HASH_DOMAIN.to_string(),
+            kind: DERIVATION_STORE_PATH_HASH_KIND.to_string(),
+            algorithm: NIX_STORE_PATH_SHA256_ALGORITHM.to_string(),
+            value: drv_path.clone(),
+        })
+        .collect::<Vec<_>>();
+    records.sort();
+    records.dedup();
+    records
+}
+
+fn nix_package_metadata_digest(config: &NixProducerConfig) -> String {
+    blake3_hex(&format!(
+        "nixpkgs:{}:{}:{}:{}:{:?}",
+        config.package_name,
+        config.system,
+        config.root_derivation,
+        config.producer_identity,
+        sorted_strings(config.unsupported_metadata_classes.clone())
+    ))
 }
 
 fn translate_node(
@@ -601,10 +1049,56 @@ fn validate_graph(graph: &ForeignDerivationGraph) -> Result<(), ImportDiagnostic
             "frontend metadata was not lowered into graph or package-index data",
         ));
     }
+    validate_hash_domains(graph)?;
     validate_unique_ids(graph)?;
     validate_roots(graph)?;
     validate_source_refs(graph)?;
     validate_field_limits(graph)?;
+    Ok(())
+}
+
+fn validate_hash_domains(graph: &ForeignDerivationGraph) -> Result<(), ImportDiagnostic> {
+    if graph.hash_domains.len() > MAX_HASH_DOMAIN_RECORDS {
+        return Err(diagnostic(
+            "hash-domain-limit-exceeded",
+            None,
+            "foreign graph declares too many hash-domain records",
+        ));
+    }
+    let mut has_nix_identity = false;
+    for record in &graph.hash_domains {
+        require_field_limit(&record.domain, None, "hash-domain")?;
+        require_field_limit(&record.kind, None, "hash-kind")?;
+        require_field_limit(&record.algorithm, None, "hash-algorithm")?;
+        require_field_limit(&record.value, None, "hash-value")?;
+        match record.domain.as_str() {
+            NIX_COMPATIBLE_HASH_DOMAIN => {
+                has_nix_identity = true;
+                if record.algorithm == DIGEST_ALGORITHM {
+                    return Err(diagnostic(
+                        "hash-domain-mismatch",
+                        None,
+                        "BLAKE3 receipt digest cannot be used as a Nix-compatible identity",
+                    ));
+                }
+            }
+            MANTLE_RECEIPT_HASH_DOMAIN => {
+                if record.algorithm != DIGEST_ALGORITHM {
+                    return Err(diagnostic("hash-domain-mismatch", None, "Mantle receipt identity must use BLAKE3"));
+                }
+            }
+            _ => {
+                return Err(diagnostic("unknown-hash-domain", None, "hash-domain record declares an unknown domain"));
+            }
+        }
+    }
+    if graph.producer.kind == NIXPKGS_PRODUCER_KIND && !has_nix_identity {
+        return Err(diagnostic(
+            "missing-nix-compatible-identity",
+            None,
+            "nixpkgs producer graph is missing Nix-compatible derivation identity records",
+        ));
+    }
     Ok(())
 }
 
@@ -771,6 +1265,8 @@ fn import_receipt(
     let translation_policy_digest = canonical_digest(policy)?;
     let translated_graph_digest = canonical_digest(translated_graph)?;
     let package_index_digest = package_index.map(canonical_digest).transpose()?;
+    let hash_domains =
+        receipt_hash_domains(graph, &raw_graph_digest, &translation_policy_digest, &translated_graph_digest);
     Ok(ImportReceipt {
         schema: IMPORT_RECEIPT_SCHEMA.to_string(),
         producer_identity: graph.producer.identity.clone(),
@@ -780,9 +1276,43 @@ fn import_receipt(
         package_index_digest,
         fetch_cache_policy_digest: blake3_hex(&format!("cache:{:?}", policy.trusted_cache_scopes)),
         sandbox_policy_digest: blake3_hex(&format!("sandbox:{:?}", policy.allowed_sandbox_capabilities)),
+        hash_domains,
         diagnostics: translated_graph.diagnostics.clone(),
         non_claims: foreign_import_non_claims(),
     })
+}
+
+fn receipt_hash_domains(
+    graph: &ForeignDerivationGraph,
+    raw_graph_digest: &str,
+    translation_policy_digest: &str,
+    translated_graph_digest: &str,
+) -> Vec<HashDomainRecord> {
+    if graph.hash_domains.is_empty() {
+        return Vec::new();
+    }
+    let mut records = graph.hash_domains.clone();
+    records.push(HashDomainRecord {
+        domain: MANTLE_RECEIPT_HASH_DOMAIN.to_string(),
+        kind: RAW_GRAPH_HASH_KIND.to_string(),
+        algorithm: DIGEST_ALGORITHM.to_string(),
+        value: raw_graph_digest.to_string(),
+    });
+    records.push(HashDomainRecord {
+        domain: MANTLE_RECEIPT_HASH_DOMAIN.to_string(),
+        kind: TRANSLATION_POLICY_HASH_KIND.to_string(),
+        algorithm: DIGEST_ALGORITHM.to_string(),
+        value: translation_policy_digest.to_string(),
+    });
+    records.push(HashDomainRecord {
+        domain: MANTLE_RECEIPT_HASH_DOMAIN.to_string(),
+        kind: TRANSLATED_GRAPH_HASH_KIND.to_string(),
+        algorithm: DIGEST_ALGORITHM.to_string(),
+        value: translated_graph_digest.to_string(),
+    });
+    records.sort();
+    records.dedup();
+    records
 }
 
 fn rewrite_value(
@@ -869,6 +1399,10 @@ mod tests {
     const INVALID_BUILTIN: &str = "unsupported:magic";
     const OVERLAY_METADATA_CLASS: &str = "nix-overlay-order";
     const OVERSIZED_FIELD_BYTES: usize = MAX_FIELD_BYTES + 1;
+    const NIXPKGS_HELLO_DRV: &str = "/nix/store/22222222222222222222222222222222-hello.drv";
+    const NIXPKGS_SOURCE_DRV: &str = "/nix/store/44444444444444444444444444444444-hello-source.drv";
+    const NIXPKGS_HELLO_OUT: &str = "/nix/store/11111111111111111111111111111111-hello";
+    const NIXPKGS_SOURCE_OUT: &str = "/nix/store/00000000000000000000000000000000-hello-source";
 
     #[test]
     fn translates_guix_and_nix_hello_fixtures_deterministically() {
@@ -910,6 +1444,52 @@ mod tests {
         assert!(plan.forbidden_process_invocations.is_empty());
         assert!(!plan.non_claims.is_empty());
         assert!(!plan.non_claims.iter().any(|claim| claim == "build-success"));
+    }
+
+    #[test]
+    fn nixpkgs_derivation_json_lowering_preserves_identities_and_substitution_policy() {
+        let closure = nixpkgs_hello_closure();
+        let config = nixpkgs_producer_config();
+        let artifacts = lower_nix_derivation_json_closure(&closure, &config).unwrap();
+        let policy = nixpkgs_fixture_policy();
+
+        let (translated, receipt) =
+            translate_foreign_graph(&artifacts.graph, Some(&artifacts.package_index), &policy).unwrap();
+        let plan = plan_mantle_foreign_import(&translated, &artifacts.package_index, HELLO_PACKAGE_NAME, HELLO_SYSTEM)
+            .unwrap();
+
+        assert_eq!(artifacts.graph.producer.kind, NIXPKGS_PRODUCER_KIND);
+        assert_eq!(artifacts.graph.root_derivation_ids.len(), REQUIRED_HELLO_ROOT_COUNT);
+        assert!(artifacts.graph.hash_domains.iter().any(|record| record.domain == NIX_COMPATIBLE_HASH_DOMAIN));
+        assert!(receipt.hash_domains.iter().any(|record| record.domain == MANTLE_RECEIPT_HASH_DOMAIN));
+        assert!(receipt.raw_graph_digest.len() > OUTPUT_HASH_HEX_CHARS);
+        assert_eq!(plan.roots[0].package_name, HELLO_PACKAGE_NAME);
+        assert_eq!(plan.substitution_audit.len(), REQUIRED_HELLO_ROOT_COUNT);
+        assert_eq!(plan.substitution_audit[0].cache_url, CACHE_NIXOS_ORG_URL);
+        assert!(plan.substitution_audit[0].store_admission_required);
+        assert!(plan.forbidden_process_invocations.is_empty());
+    }
+
+    #[test]
+    fn nixpkgs_hash_domain_and_frontend_metadata_fail_closed() {
+        let closure = nixpkgs_hello_closure();
+        let mut artifacts = lower_nix_derivation_json_closure(&closure, &nixpkgs_producer_config()).unwrap();
+        let policy = nixpkgs_fixture_policy();
+
+        artifacts.graph.hash_domains[0].algorithm = DIGEST_ALGORITHM.to_string();
+        assert_error_class(
+            translate_foreign_graph(&artifacts.graph, Some(&artifacts.package_index), &policy),
+            "hash-domain-mismatch",
+        );
+
+        let mut unsupported = lower_nix_derivation_json_closure(&closure, &nixpkgs_producer_config()).unwrap();
+        unsupported.package_index.entries[0]
+            .unsupported_metadata_classes
+            .push(OVERLAY_METADATA_CLASS.to_string());
+        assert_error_class(
+            translate_foreign_graph(&unsupported.graph, Some(&unsupported.package_index), &policy),
+            "unsupported-package-index-metadata",
+        );
     }
 
     #[test]
@@ -1022,9 +1602,85 @@ mod tests {
         assert!(!embedded.contains(GUIX_SOURCE_PREFIX));
     }
 
+    fn nixpkgs_hello_closure() -> NixDerivationJsonClosure {
+        let mut closure = BTreeMap::new();
+        closure.insert(NIXPKGS_SOURCE_DRV.to_string(), nixpkgs_source_derivation());
+        closure.insert(NIXPKGS_HELLO_DRV.to_string(), nixpkgs_hello_derivation());
+        closure
+    }
+
+    fn nixpkgs_source_derivation() -> NixDerivationJsonNode {
+        let mut outputs = BTreeMap::new();
+        outputs.insert(OUT_OUTPUT_NAME.to_string(), NixDerivationJsonOutput {
+            path: NIXPKGS_SOURCE_OUT.to_string(),
+            hash: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
+            hash_algo: Some("r:sha256".to_string()),
+        });
+        NixDerivationJsonNode {
+            name: "hello-source".to_string(),
+            system: HELLO_SYSTEM.to_string(),
+            builder: "/nix/store/55555555555555555555555555555555-builtin-fetchurl".to_string(),
+            args: Vec::new(),
+            env: BTreeMap::new(),
+            outputs,
+            input_drvs: BTreeMap::new(),
+            input_srcs: Vec::new(),
+        }
+    }
+
+    fn nixpkgs_hello_derivation() -> NixDerivationJsonNode {
+        let mut outputs = BTreeMap::new();
+        outputs.insert(OUT_OUTPUT_NAME.to_string(), NixDerivationJsonOutput {
+            path: NIXPKGS_HELLO_OUT.to_string(),
+            hash: None,
+            hash_algo: None,
+        });
+        let mut input_drvs = BTreeMap::new();
+        input_drvs.insert(NIXPKGS_SOURCE_DRV.to_string(), NixDerivationJsonInput {
+            outputs: vec![OUT_OUTPUT_NAME.to_string()],
+        });
+        NixDerivationJsonNode {
+            name: HELLO_PACKAGE_NAME.to_string(),
+            system: HELLO_SYSTEM.to_string(),
+            builder: "/nix/store/33333333333333333333333333333333-bash/bin/bash".to_string(),
+            args: vec!["-c".to_string(), "cp $src $out".to_string()],
+            env: BTreeMap::from([
+                ("out".to_string(), NIXPKGS_HELLO_OUT.to_string()),
+                ("src".to_string(), NIXPKGS_SOURCE_OUT.to_string()),
+            ]),
+            outputs,
+            input_drvs,
+            input_srcs: Vec::new(),
+        }
+    }
+
+    fn nixpkgs_producer_config() -> NixProducerConfig {
+        NixProducerConfig {
+            package_name: HELLO_PACKAGE_NAME.to_string(),
+            system: HELLO_SYSTEM.to_string(),
+            root_derivation: NIXPKGS_HELLO_DRV.to_string(),
+            producer_identity: "nixpkgs:hello-fixture".to_string(),
+            producer_revision: "fixture-revision".to_string(),
+            cache_hints: vec![CacheHint {
+                cache_url: CACHE_NIXOS_ORG_URL.to_string(),
+                trust_scope: TRUSTED_CACHE_SCOPE.to_string(),
+            }],
+            unsupported_metadata_classes: Vec::new(),
+        }
+    }
+
+    fn nixpkgs_fixture_policy() -> TranslationPolicy {
+        let mut policy = fixture_policy(&[NIX_SOURCE_PREFIX]);
+        policy
+            .builtin_mappings
+            .insert(NIX_DERIVATION_BUILTIN.to_string(), "mantle.foreign.nix.derivation".to_string());
+        policy.trusted_cache_scopes.insert(TRUSTED_CACHE_SCOPE.to_string());
+        policy
+    }
+
     fn fixture_policy(source_prefixes: &[&str]) -> TranslationPolicy {
         let mut builtin_mappings = BTreeMap::new();
-        builtin_mappings.insert("fixed-output-fetch".to_string(), "mantle.fetch".to_string());
+        builtin_mappings.insert(FIXED_OUTPUT_FETCH_BUILTIN.to_string(), "mantle.fetch".to_string());
         TranslationPolicy {
             source_prefixes: source_prefixes.iter().map(|prefix| (*prefix).to_string()).collect(),
             target_prefix: DEFAULT_TARGET_PREFIX.to_string(),

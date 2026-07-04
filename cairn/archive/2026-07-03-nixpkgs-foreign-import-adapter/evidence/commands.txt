@@ -1,0 +1,7 @@
+# Focused implementation and documentation checks for nixpkgs-foreign-import-adapter.
+nix develop -c cargo test -p mantle --bin mantle foreign_derivation_import::
+nix develop -c cargo test -p mantle --test foreign_import_cli
+nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs
+nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self-test
+nix develop -c cargo fmt --check -p mantle
+git diff --check

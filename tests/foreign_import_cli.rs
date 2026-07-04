@@ -11,6 +11,8 @@ const GUIX_GRAPH: &str = "guix-hello.graph.json";
 const GUIX_INDEX: &str = "guix-hello.index.json";
 const NIX_GRAPH: &str = "nix-hello.graph.json";
 const NIX_INDEX: &str = "nix-hello.index.json";
+const NIXPKGS_DERIVATION_JSON: &str = "nixpkgs-hello.derivation-json.json";
+const NIXPKGS_POLICY: &str = "nixpkgs-policy.json";
 const POLICY: &str = "policy.json";
 const GUIX_VALIDATE_SNAPSHOT: &str = "guix-hello.validate.snapshot.json";
 const GUIX_PLAN_SNAPSHOT: &str = "guix-hello.plan.snapshot.json";
@@ -25,6 +27,9 @@ const EMBEDDED_REWRITE: &str = "undeclared-embedded-source-rewrite";
 const UNTRUSTED_CACHE: &str = "untrusted-cache-hint";
 const SANDBOX_CAPABILITY: &str = "undeclared-sandbox-capability";
 const FAKE_PATH_DIR: &str = "fake-path";
+const NIXPKGS_HELLO_DRV: &str = "/nix/store/22222222222222222222222222222222-hello.drv";
+const CACHE_NIXOS_ORG: &str = "https://cache.nixos.org";
+const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
 
 struct FixtureCase {
     graph: &'static str,
@@ -143,6 +148,62 @@ fn foreign_import_cli_does_not_require_foreign_frontend_commands() {
     assert_eq!(report["accepted"], true);
     assert!(report["plan"]["forbidden_process_invocations"].as_array().unwrap().is_empty());
     assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_without_nix() {
+    let temp = TempDir::new().expect("tempdir should be created");
+    let fake_path = temp.path().join(FAKE_PATH_DIR);
+    let out_dir = temp.path().join("artifacts");
+    fs::create_dir(&fake_path).expect("fake PATH should be created");
+
+    let produce = mantle_cmd()
+        .env("PATH", &fake_path)
+        .args([
+            "--json",
+            "foreign-import",
+            "produce-nix",
+            "--derivation-json",
+            path_str(&fixture_path(NIXPKGS_DERIVATION_JSON)),
+            "--root-derivation",
+            NIXPKGS_HELLO_DRV,
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--producer-identity",
+            "nixpkgs:hello-fixture",
+            "--producer-revision",
+            "fixture-revision",
+            "--cache-url",
+            CACHE_NIXOS_ORG,
+            "--cache-trust-scope",
+            TRUSTED_CACHE_SCOPE,
+            "--out-dir",
+            path_str(&out_dir),
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let produce_report: Value = serde_json::from_slice(&produce.stdout).expect("stdout should be JSON");
+    let graph = out_dir.join("nixpkgs.graph.json");
+    let index = out_dir.join("nixpkgs.index.json");
+
+    assert_eq!(produce_report["accepted"], true);
+    assert!(graph.exists());
+    assert!(index.exists());
+    assert!(produce.stderr.is_empty());
+
+    let validate = run_validate_json(graph.clone(), index.clone(), fixture_path(NIXPKGS_POLICY));
+    let plan = run_plan_json(graph, index, fixture_path(NIXPKGS_POLICY));
+
+    assert_eq!(validate["accepted"], true);
+    assert!(validate["receipt"]["hash_domains"].as_array().unwrap().len() > 1);
+    assert_eq!(plan["accepted"], true);
+    assert_eq!(plan["plan"]["substitution_audit"][0]["cache_url"], CACHE_NIXOS_ORG);
+    assert_eq!(plan["plan"]["substitution_audit"][0]["store_admission_required"], true);
+    assert!(plan["plan"]["forbidden_process_invocations"].as_array().unwrap().is_empty());
 }
 
 fn run_validate_json(graph: PathBuf, index: PathBuf, policy: PathBuf) -> Value {

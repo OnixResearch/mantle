@@ -1445,10 +1445,12 @@ mantle nix-free-demo readme <summary.json>
                                  Render the derived demo-bundle README
 mantle nix-free-demo generate --out <dir> --proof-status <status> ...
                                  Assemble a deterministic demo bundle from explicit evidence inputs
+mantle foreign-import produce-nix --derivation-json <closure.json> --root-derivation <path.drv> --out-dir <dir>
+                                 Lower concrete Nixpkgs derivation facts into graph/index artifacts without making nixpkgs a consumption ABI
 mantle foreign-import validate --graph <graph.json> --package-index <index.json> --policy <policy.json>
                                  Validate lowered foreign import artifacts without live Guix/Nix frontends
 mantle foreign-import plan --graph <graph.json> --package-index <index.json> --policy <policy.json> --package hello
-                                 Emit a receipt-bound adapter plan with explicit non-claims
+                                 Emit a receipt-bound adapter plan with explicit non-claims and no output-trust claim
 
 # Store, logs, attestations, release evidence
 mantle store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state

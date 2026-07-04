@@ -48,6 +48,8 @@ A foreign import receipt binds the reviewable import inputs:
 - raw graph BLAKE3 digest;
 - translation policy BLAKE3 digest;
 - translated graph BLAKE3 digest;
+- explicit Nix-compatible hash-domain records when a Nixpkgs producer emits `.drv`, store-path, NAR, NARInfo, or cache identities;
+- Mantle BLAKE3 receipt-domain records for graph, policy, and translated-artifact identities when hash domains are present;
 - package-index digest when a package index is present;
 - fetch/cache policy digest;
 - sandbox compatibility policy; and
@@ -96,6 +98,19 @@ was admitted under different rules, even when the raw graph digest is unchanged.
 Review policy digests before comparing two receipts. Do not treat unrecorded
 operator preferences, frontend defaults, or environment variables as part of the
 foreign import identity.
+
+### Hash domains
+
+Nixpkgs producer artifacts keep Nix-compatible identities separate from Mantle
+receipt identities. `.drv` paths, Nix store paths, NAR hashes, NARInfo metadata,
+and binary-cache lookup facts stay in the Nix-compatible hash domain required by
+those formats. Raw graph digests, policy digests, translated artifact digests,
+and import receipts stay in Mantle's BLAKE3 receipt domain.
+
+A Nix-compatible identity must not be replaced with a Mantle BLAKE3 derivation or
+receipt digest. A Mantle receipt identity must not be replaced with a Nix
+SHA-256-compatible digest. If either domain is supplied in the wrong place,
+validation must fail closed before planning or substitution.
 
 ### Source verification
 
@@ -178,6 +193,32 @@ Claim-safe summary:
 > Trusted output claims require later Mantle realization and verification
 > evidence.
 
+## Nixpkgs producer adapter levels
+
+A Nixpkgs `hello` graph is claim-safe only when its level is named explicitly:
+
+1. A producer adapter may use host Nix, flake output lookup, overlays, or a future
+   `snix-eval` backend before artifact emission. That producer shell writes only
+   concrete `foreign-derivation-graph-v1`, `foreign-package-index-v1`, and
+   receipt inputs for later consumption.
+2. Mantle consumption validates and plans from those lowered artifacts only. It
+   does not evaluate nixpkgs, flakes, overlays, package-set replacement logic,
+   `nix`, `nix-store`, or `snix-eval` while consuming the artifact.
+3. Substitution-first planning may carry `cache.nixos.org` or another binary
+   cache as trust-scoped policy data, but every output still needs normal Mantle
+   PathInfo signature, NAR hash, store-prefix, and artifact-attestation admission
+   before output trust is reported.
+4. Local rebuild compatibility is a separate level and is not proven by an
+   admitted or planned Nixpkgs import receipt.
+
+Claim-safe summary:
+
+> The Nixpkgs `hello` graph was admitted from concrete derivation artifacts and
+> receipt-bound policy. This strongest proven state is admitted or planned unless
+> later substitution, rebuild, or verification evidence is cited. It does not
+> claim nixpkgs package correctness, local rebuild success, output trust,
+> bootstrap parity, reproducibility, or future producer availability.
+
 ## Claim-safe reporting checklist
 
 Before reporting a foreign import result, name the strongest current evidence
@@ -185,8 +226,10 @@ class and keep missing layers explicit:
 
 - **Admitted:** receipt and policy digests are valid; no realization claim.
 - **Planned:** accepted import data produced a Mantle plan; no output trust claim.
-- **Realized:** Mantle built or substituted an output; cite build report and
-  store/attestation evidence.
+- **Substituted:** Mantle accepted a cached output through store policy; no package
+  correctness or reproducibility claim.
+- **Rebuilt:** Mantle built an output locally; cite build report and sandbox
+  compatibility evidence.
 - **Verified:** output signatures, hashes, attestations, and any requested
   release or witness policy were checked in the current run.
 - **Blocked:** report the deterministic diagnostic and next action; blocked

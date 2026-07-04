@@ -7,26 +7,36 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::errors::RunError;
+use crate::foreign_derivation_import::CacheHint;
 use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::ImportDiagnostic;
 use crate::foreign_derivation_import::ImportReceipt;
 use crate::foreign_derivation_import::MantleForeignPlan;
+use crate::foreign_derivation_import::NixDerivationJsonClosure;
+use crate::foreign_derivation_import::NixProducerConfig;
 use crate::foreign_derivation_import::PackageIndex;
 use crate::foreign_derivation_import::TranslationPolicy;
 use crate::foreign_derivation_import::admit_translated_graph;
 use crate::foreign_derivation_import::foreign_import_non_claims;
+use crate::foreign_derivation_import::lower_nix_derivation_json_closure;
 use crate::foreign_derivation_import::plan_mantle_foreign_import;
 use crate::foreign_derivation_import::translate_foreign_graph;
 
 const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
 const VALIDATE_COMMAND: &str = "validate";
 const PLAN_COMMAND: &str = "plan";
+const PRODUCE_NIX_COMMAND: &str = "produce-nix";
 const ACCEPTED_VERDICT: &str = "accepted";
 const REJECTED_VERDICT: &str = "rejected";
 const FAILURE_EXIT_CODE: u8 = 1;
 const JSON_SERIALIZATION_CONTEXT: &str = "serializing foreign import CLI report";
+const JSON_ARTIFACT_SERIALIZATION_CONTEXT: &str = "serializing foreign import producer artifact";
 const DEFAULT_PACKAGE_NAME: &str = "hello";
 const DEFAULT_SYSTEM: &str = "x86_64-linux";
+const DEFAULT_PRODUCER_REVISION: &str = "unknown";
+const DEFAULT_CACHE_TRUST_SCOPE: &str = "trusted-binary-cache";
+const NIXPKGS_GRAPH_FILE: &str = "nixpkgs.graph.json";
+const NIXPKGS_INDEX_FILE: &str = "nixpkgs.index.json";
 
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum ForeignImportAction {
@@ -72,6 +82,49 @@ pub(crate) enum ForeignImportAction {
         #[arg(long, default_value = DEFAULT_SYSTEM)]
         system: String,
     },
+
+    /// Lower concrete Nix derivation-JSON closure facts into foreign import artifacts
+    ProduceNix {
+        /// Path to `nix derivation show --recursive --json`-style closure JSON
+        #[arg(long = "derivation-json")]
+        derivation_json: PathBuf,
+
+        /// Concrete root `.drv` path inside the derivation JSON closure
+        #[arg(long = "root-derivation")]
+        root_derivation: String,
+
+        /// Package name to write into `foreign-package-index-v1`
+        #[arg(long, default_value = DEFAULT_PACKAGE_NAME)]
+        package: String,
+
+        /// Package system to write into `foreign-package-index-v1`
+        #[arg(long, default_value = DEFAULT_SYSTEM)]
+        system: String,
+
+        /// Producer identity or selected nixpkgs attribute provenance
+        #[arg(long = "producer-identity")]
+        producer_identity: String,
+
+        /// Producer revision, lock identity, or provenance revision when known
+        #[arg(long = "producer-revision", default_value = DEFAULT_PRODUCER_REVISION)]
+        producer_revision: String,
+
+        /// Binary cache hint URL to record as policy data on the selected root
+        #[arg(long = "cache-url")]
+        cache_urls: Vec<String>,
+
+        /// Trust scope label associated with every `--cache-url` hint
+        #[arg(long = "cache-trust-scope", default_value = DEFAULT_CACHE_TRUST_SCOPE)]
+        cache_trust_scope: String,
+
+        /// Unsupported frontend metadata class to carry in the package index
+        #[arg(long = "unsupported-metadata-class")]
+        unsupported_metadata_classes: Vec<String>,
+
+        /// Directory where graph and package-index JSON artifacts are written
+        #[arg(long = "out-dir")]
+        out_dir: PathBuf,
+    },
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -83,7 +136,15 @@ struct ForeignImportCliReport {
     diagnostics: Vec<ImportDiagnostic>,
     receipt: Option<ImportReceipt>,
     plan: Option<MantleForeignPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    producer_artifacts: Option<ProducerArtifactReport>,
     non_claims: Vec<String>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+struct ProducerArtifactReport {
+    graph_path: String,
+    package_index_path: String,
 }
 
 pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Result<(), RunError> {
@@ -101,6 +162,30 @@ pub(crate) fn cmd_foreign_import(action: ForeignImportAction, json: bool) -> Res
             package,
             system,
         } => run_plan(&graph, &package_index, &policy, &package, &system, json),
+        ForeignImportAction::ProduceNix {
+            derivation_json,
+            root_derivation,
+            package,
+            system,
+            producer_identity,
+            producer_revision,
+            cache_urls,
+            cache_trust_scope,
+            unsupported_metadata_classes,
+            out_dir,
+        } => run_produce_nix(
+            &derivation_json,
+            &root_derivation,
+            &package,
+            &system,
+            &producer_identity,
+            &producer_revision,
+            &cache_urls,
+            &cache_trust_scope,
+            &unsupported_metadata_classes,
+            &out_dir,
+            json,
+        ),
     }
 }
 
@@ -153,6 +238,53 @@ fn run_plan(
     };
     let report = plan_inputs(graph, index, policy, package, system);
     emit_report(report, json)
+}
+
+fn run_produce_nix(
+    derivation_json_path: &Path,
+    root_derivation: &str,
+    package: &str,
+    system: &str,
+    producer_identity: &str,
+    producer_revision: &str,
+    cache_urls: &[String],
+    cache_trust_scope: &str,
+    unsupported_metadata_classes: &[String],
+    out_dir: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    let closure =
+        match read_json::<NixDerivationJsonClosure>(derivation_json_path, "derivation-json", PRODUCE_NIX_COMMAND)? {
+            Ok(closure) => closure,
+            Err(report) => return emit_report(report, json),
+        };
+    let config = NixProducerConfig {
+        package_name: package.to_string(),
+        system: system.to_string(),
+        root_derivation: root_derivation.to_string(),
+        producer_identity: producer_identity.to_string(),
+        producer_revision: producer_revision.to_string(),
+        cache_hints: cache_urls
+            .iter()
+            .map(|cache_url| CacheHint {
+                cache_url: cache_url.clone(),
+                trust_scope: cache_trust_scope.to_string(),
+            })
+            .collect(),
+        unsupported_metadata_classes: unsupported_metadata_classes.to_vec(),
+    };
+    let artifacts = match lower_nix_derivation_json_closure(&closure, &config) {
+        Ok(artifacts) => artifacts,
+        Err(diagnostic) => return emit_report(rejected_report(PRODUCE_NIX_COMMAND, diagnostic), json),
+    };
+    fs::create_dir_all(out_dir).map_err(|error| {
+        RunError::Internal(format!("creating foreign import artifact directory {}: {error}", out_dir.display()))
+    })?;
+    let graph_path = out_dir.join(NIXPKGS_GRAPH_FILE);
+    let index_path = out_dir.join(NIXPKGS_INDEX_FILE);
+    write_json_file(&graph_path, &artifacts.graph)?;
+    write_json_file(&index_path, &artifacts.package_index)?;
+    emit_report(producer_report(&graph_path, &index_path), json)
 }
 
 fn validate_inputs(
@@ -240,6 +372,24 @@ fn accepted_report(
         diagnostics: Vec::new(),
         receipt,
         plan,
+        producer_artifacts: None,
+        non_claims: foreign_import_non_claims(),
+    }
+}
+
+fn producer_report(graph_path: &Path, index_path: &Path) -> ForeignImportCliReport {
+    ForeignImportCliReport {
+        schema: CLI_REPORT_SCHEMA.to_string(),
+        command: PRODUCE_NIX_COMMAND.to_string(),
+        verdict: ACCEPTED_VERDICT.to_string(),
+        accepted: true,
+        diagnostics: Vec::new(),
+        receipt: None,
+        plan: None,
+        producer_artifacts: Some(ProducerArtifactReport {
+            graph_path: graph_path.display().to_string(),
+            package_index_path: index_path.display().to_string(),
+        }),
         non_claims: foreign_import_non_claims(),
     }
 }
@@ -253,6 +403,7 @@ fn rejected_report(command: &str, diagnostic: ImportDiagnostic) -> ForeignImport
         diagnostics: vec![diagnostic],
         receipt: None,
         plan: None,
+        producer_artifacts: None,
         non_claims: foreign_import_non_claims(),
     }
 }
@@ -275,6 +426,13 @@ fn serialize_report(report: &ForeignImportCliReport) -> Result<String, RunError>
         .map_err(|error| RunError::Internal(format!("{JSON_SERIALIZATION_CONTEXT}: {error}")))
 }
 
+fn write_json_file<T: Serialize>(path: &Path, value: &T) -> Result<(), RunError> {
+    let contents = serde_json::to_string_pretty(value)
+        .map_err(|error| RunError::Internal(format!("{JSON_ARTIFACT_SERIALIZATION_CONTEXT}: {error}")))?;
+    fs::write(path, contents)
+        .map_err(|error| RunError::Internal(format!("writing foreign import artifact {}: {error}", path.display())))
+}
+
 fn human_report(report: &ForeignImportCliReport) -> String {
     let mut lines = Vec::new();
     lines.push(format!("foreign import {}: {}", report.command, report.verdict));
@@ -285,6 +443,11 @@ fn human_report(report: &ForeignImportCliReport) -> String {
         for diagnostic in &report.diagnostics {
             lines.push(format!("- {}: {}", diagnostic.class, diagnostic.message));
         }
+    }
+    if let Some(artifacts) = report.producer_artifacts.as_ref() {
+        lines.push("producer artifacts:".to_string());
+        lines.push(format!("- graph: {}", artifacts.graph_path));
+        lines.push(format!("- package-index: {}", artifacts.package_index_path));
     }
     lines.push("non-claims:".to_string());
     for non_claim in &report.non_claims {

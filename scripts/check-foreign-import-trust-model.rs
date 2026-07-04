@@ -24,12 +24,14 @@ const REQUIRED_GUIDE_SECTIONS: &[&str] = &[
     "## Trust boundaries",
     "### Graph provenance",
     "### Policy digests",
+    "### Hash domains",
     "### Source verification",
     "### Cache and substitution trust",
     "### Sandbox capabilities",
     "### Realization and output verification",
     "## Guix-like hello import",
     "## Nix-like hello import",
+    "## Nixpkgs producer adapter levels",
     "## Claim-safe reporting checklist",
 ];
 
@@ -39,6 +41,8 @@ const REQUIRED_BOUNDARY_TERMS: &[&str] = &[
     "translation policy BLAKE3 digest",
     "fetch/cache policy digest",
     "sandbox compatibility policy",
+    "Nix-compatible hash domain",
+    "BLAKE3 receipt domain",
     "source descriptors",
     "PathInfo signature",
     "NAR hash",
@@ -56,12 +60,15 @@ const REQUIRED_NON_CLAIMS: &[&str] = &[
     "Receipt existence is not proof of correctness",
     "cache hints remain subject to store/substitution trust policy",
     "does not bypass output admission or signature verification",
+    "local rebuild compatibility is a separate level",
 ];
 
 const REQUIRED_EXAMPLES: &[&str] = &[
     "Guix-like `hello` graph was admitted",
     "Nix-like `hello` graph was admitted",
+    "Nixpkgs `hello` graph was admitted",
     "does not evaluate Nix expressions, flakes, overlays, or module-layer package selection",
+    "Substitution-first planning may carry `cache.nixos.org`",
     "without Guix at consumption time",
 ];
 
@@ -79,6 +86,8 @@ const FORBIDDEN_OVERCLAIMS: &[&str] = &[
     "receipt proves reproducibility",
     "receipt bypasses signature verification",
     "admission proves correctness",
+    "nixpkgs import proves rebuild compatibility",
+    "substitution-first proves package correctness",
 ];
 
 fn main() -> ExitCode {

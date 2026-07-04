@@ -1,0 +1,43 @@
+{
+  "/nix/store/22222222222222222222222222222222-hello.drv": {
+    "name": "hello",
+    "system": "x86_64-linux",
+    "builder": "/nix/store/33333333333333333333333333333333-bash/bin/bash",
+    "args": [
+      "-c",
+      "cp $src $out"
+    ],
+    "env": {
+      "out": "/nix/store/11111111111111111111111111111111-hello",
+      "src": "/nix/store/00000000000000000000000000000000-hello-source"
+    },
+    "outputs": {
+      "out": {
+        "path": "/nix/store/11111111111111111111111111111111-hello",
+        "hash": null
+      }
+    },
+    "inputDrvs": {
+      "/nix/store/44444444444444444444444444444444-hello-source.drv": {
+        "outputs": ["out"]
+      }
+    },
+    "inputSrcs": []
+  },
+  "/nix/store/44444444444444444444444444444444-hello-source.drv": {
+    "name": "hello-source",
+    "system": "x86_64-linux",
+    "builder": "/nix/store/55555555555555555555555555555555-builtin-fetchurl",
+    "args": [],
+    "env": {},
+    "outputs": {
+      "out": {
+        "path": "/nix/store/00000000000000000000000000000000-hello-source",
+        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "hashAlgo": "r:sha256"
+      }
+    },
+    "inputDrvs": {},
+    "inputSrcs": []
+  }
+}
