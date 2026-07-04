@@ -1451,18 +1451,33 @@ seed toolchain, and musl inputs, then build it with `mantle build .#name` or run
 it with `mantle run .#name`.
 
 `mantle import cargo --plan` reads supported Cargo workspace facts and prints a
-reviewable scaffold plan without writing files. `mantle import cargo --apply`
+reviewable scaffold plan without writing files. It accepts registry or git
+dependencies only when pre-existing vendored source material is declared through
+`.cargo/config.toml` / `.cargo/config`, bound to `Cargo.lock`, and verified
+against Cargo `.cargo-checksum.json` metadata. `mantle import cargo --apply`
 only writes the bounded files named by that plan (`mantle-project.ncl` and
-`.mantle/inputs.ncl` today) when no blockers remain. Unsupported registry/git
-sources, missing lockfiles, ambiguous packages/binaries, malformed names, and
-conflicting existing files block the apply path instead of generating partial
-project files.
+`.mantle/inputs.ncl` today) when no blockers remain; accepted vendor material is
+passed explicitly as `vendor_src` / `vendor_name` to `mantle.offlineCargoPackage`.
+Missing vendored packages, stale checksums, missing lockfiles, ambiguous
+packages/binaries, malformed names, unsupported source replacement, ambient-only
+Cargo caches, and conflicting existing files block the apply path instead of
+generating partial project files. Import never runs `cargo vendor`, fetches
+registry/git material, or claims network vendoring, Cargo-free execution, or full
+Cargo compatibility.
 
 The representative Rust compatibility rail lives in
-`examples/rust_compatibility_rail.rs` and `tests/rust_compatibility_rail.rs`.
-It generates a workspace with a binary, local library, vendored registry source,
-proc macro, and build script metadata. Passing that rail is evidence for that
-fixture and lane only; it is not proof of full Cargo compatibility.
+`examples/rust_compatibility_rail.rs`, `examples/rust_compatibility_surface_matrix.ncl`,
+and `tests/rust_compatibility_rail.rs`. The surface matrix is the source of
+truth for supported lanes, blocked surfaces, stable blocker classes, and
+non-claims. It covers a generated workspace with a binary, local library,
+feature activation, target-specific dependency declaration, workspace metadata
+inheritance, a sibling binary package, vendored registry material, proc macro,
+and build script metadata. The offline lane reports
+`cargo-inside-mantle-sandbox`; the native `rust-plan --no-cargo-oracle` lane
+reports `cargo-free-bounded-topology` for the path-workspace subset or
+`blocked-unsupported-surface` for unsupported surfaces such as vendored git or
+native-link metadata. Passing that rail is evidence for that matrix entry and
+lane only; it is not proof of full Cargo compatibility.
 
 The helper writes `share/mantle/offline-cargo-build.json` into the output and
 JSON build reports surface that sidecar under `cargo_build_evidence[]` when the

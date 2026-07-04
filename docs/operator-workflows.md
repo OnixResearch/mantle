@@ -230,16 +230,22 @@ and `CARGO_TARGET_DIR`.
 
 For existing Cargo workspaces, use `mantle import cargo --plan` first. The plan
 prints deterministic file operations, content digests, selected package/binary
-facts, source input placeholders, and blockers without mutating files. Use
-`mantle import cargo --apply` only after reviewing that plan; apply writes only
-the accepted Mantle-owned files and fails before writing if conflicts or
-unsupported Cargo surfaces remain.
+facts, source input placeholders, accepted vendored-source facts, and blockers
+without mutating files. It accepts registry or git dependencies only when
+pre-existing vendored source material is declared through `.cargo/config.toml` /
+`.cargo/config`, bound to `Cargo.lock`, and verified against Cargo
+`.cargo-checksum.json` metadata. Use `mantle import cargo --apply` only after
+reviewing that plan; apply writes only the accepted Mantle-owned files and fails
+before writing if conflicts, missing vendored packages, stale checksums,
+unsupported source replacement, or unsupported Cargo surfaces remain.
 
 Required inputs are explicit: package source, lockfile identity in the source,
 bootstrap Rust toolchain, seed C toolchain, musl runtime, and optional vendored
-registry source material. Missing source material fails closed before a result is
-accepted; the helper and import scaffold do not search ambient Cargo caches,
-target directories, or network sources.
+registry/git source material passed as `vendor_src` / `vendor_name`. Missing
+source material fails closed before a result is accepted; the helper and import
+scaffold do not search ambient Cargo caches, target directories, or network
+sources, and they never run `cargo vendor` or claim network vendoring,
+Cargo-free execution, compiler correctness, or full Cargo compatibility.
 
 The representative Rust compatibility rail (`examples/rust_compatibility_rail.rs`,
 `examples/rust_compatibility_surface_matrix.ncl`, and
