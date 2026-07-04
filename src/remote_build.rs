@@ -951,6 +951,7 @@ pub struct RemoteWorkerRegistration {
     pub feature_labels: Vec<String>,
     pub sandbox_modes: Vec<String>,
     pub network_modes: Vec<String>,
+    pub logical_store_prefixes: Vec<String>,
     pub concurrency: u32,
     pub output_signing_key_ids: Vec<String>,
     pub resumable_jobs: Vec<RemoteWorkerResumeSummary>,
@@ -1060,6 +1061,7 @@ pub struct RemoteWorkerStatus {
     pub feature_labels: Vec<String>,
     pub sandbox_modes: Vec<String>,
     pub network_modes: Vec<String>,
+    pub logical_store_prefixes: Vec<String>,
     pub concurrency: u32,
     pub output_signing_key_count: u32,
     pub resumable_job_count: u32,
@@ -2891,6 +2893,11 @@ pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> 
         MAX_REMOTE_CAPABILITIES,
     )?;
     validate_non_empty_bounded_unique_strings(
+        "remote-worker-store-prefix",
+        &registration.logical_store_prefixes,
+        MAX_REMOTE_CAPABILITIES,
+    )?;
+    validate_non_empty_bounded_unique_strings(
         "remote-worker-signing-key",
         &registration.output_signing_key_ids,
         MAX_REMOTE_CAPABILITIES,
@@ -3228,6 +3235,7 @@ fn worker_satisfies_request(
     require_all_members("feature", &worker.feature_labels, &request.required_features)?;
     require_member("sandbox", &worker.sandbox_modes, &request.required_sandbox_mode)?;
     require_member("network", &worker.network_modes, &request.required_network_mode)?;
+    require_member("store-prefix", &worker.logical_store_prefixes, &request.request.store_prefix)?;
     if !worker.output_signing_key_ids.iter().any(|key| request.trusted_output_keys.contains(key)) {
         return Err("output-trust-mismatch".to_string());
     }
@@ -3387,6 +3395,7 @@ fn remote_worker_status(worker: &RemoteWorkerRegistration) -> Result<RemoteWorke
         feature_labels: bounded_string_list(&worker.feature_labels),
         sandbox_modes: bounded_string_list(&worker.sandbox_modes),
         network_modes: bounded_string_list(&worker.network_modes),
+        logical_store_prefixes: bounded_string_list(&worker.logical_store_prefixes),
         concurrency: worker.concurrency,
         output_signing_key_count: bounded_runtime_count_u32(worker.output_signing_key_ids.len())?,
         resumable_job_count: bounded_runtime_count_u32(worker.resumable_jobs.len())?,
@@ -6986,6 +6995,49 @@ mod tests {
     }
 
     #[test]
+    fn coordinator_rejects_capability_store_prefix_resource_and_upload_mismatches() {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+
+        let mut feature_mismatch = fixture_coordinator_request();
+        feature_mismatch.required_features = vec!["gpu".to_string()];
+        let feature_decision = plan_coordinator_dispatch(&state, &feature_mismatch).expect("feature mismatch plans");
+        assert!(
+            matches!(feature_decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "remote-worker-feature-mismatch")
+        );
+
+        let mut prefix_state = RemoteCoordinatorState::default();
+        let mut prefix_worker = fixture_worker_registration();
+        prefix_worker.logical_store_prefixes = vec!["/nix/store".to_string()];
+        apply_worker_registration(&mut prefix_state, prefix_worker).expect("prefix worker registers");
+        let store_prefix_mismatch = fixture_coordinator_request();
+        let store_decision =
+            plan_coordinator_dispatch(&prefix_state, &store_prefix_mismatch).expect("store mismatch plans");
+        assert!(
+            matches!(store_decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "remote-worker-store-prefix-mismatch")
+        );
+
+        let first = fixture_coordinator_request();
+        admit_coordinator_dispatch(&mut state, &first).expect("first request dispatches");
+        let mut second = fixture_coordinator_request();
+        second.request.payload = RemoteConcreteBuildPayload::Action {
+            action_id: "action-2".to_string(),
+            spec_json: fixture_action_spec_json("action-2"),
+        };
+        second.live_output_claims = vec!["claim-second".to_string()];
+        let resource_decision = plan_coordinator_dispatch(&state, &second).expect("resource mismatch plans");
+        assert!(
+            matches!(resource_decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "worker-concurrency-limit")
+        );
+
+        let mut oversized_upload = fixture_coordinator_request();
+        oversized_upload.request.upload_bytes = MAX_REMOTE_UPLOAD_BYTES.saturating_add(1);
+        let upload_error =
+            validate_coordinator_build_request(&oversized_upload).expect_err("oversized upload rejected");
+        assert_eq!(upload_error, "remote-coordinator-upload-byte-limit-exceeded");
+    }
+
+    #[test]
     fn coordinator_log_replay_stays_bounded_for_slow_subscribers() {
         let existing = vec![
             RemoteCoordinatorLogChunk {
@@ -7776,6 +7828,7 @@ mod tests {
             feature_labels: vec!["kvm".to_string()],
             sandbox_modes: vec!["bwrap".to_string()],
             network_modes: vec!["off".to_string()],
+            logical_store_prefixes: vec!["/mantle/store".to_string()],
             concurrency: 1,
             output_signing_key_ids: vec!["builder-key".to_string()],
             resumable_jobs: Vec::new(),
