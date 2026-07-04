@@ -685,10 +685,18 @@ pub struct RemoteBuilderFrameResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteOutputTrustBasis {
+    pub key_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_material_digest_blake3: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteOutputAdmissionReport {
     pub request_id: String,
     pub output_digest_blake3: String,
     pub builder_signing_key_id: String,
+    pub trust_basis: RemoteOutputTrustBasis,
     pub store_prefix: String,
     pub outputs: Vec<RemoteProducedOutput>,
     pub transfer_artifacts: Vec<RemoteOutputTransferArtifact>,
@@ -808,7 +816,10 @@ pub enum ProtocolDecision {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OutputTrustDecision {
-    Accept { key_id: String },
+    Accept {
+        key_id: String,
+        trust_basis: RemoteOutputTrustBasis,
+    },
     Reject(String),
 }
 
@@ -2507,12 +2518,68 @@ pub fn decide_output_trust(
     if !store_prefix_matches {
         return OutputTrustDecision::Reject("store-prefix-mismatch".to_string());
     }
-    if trusted_key_ids.iter().any(|trusted| trusted == signing_key_id) {
-        return OutputTrustDecision::Accept {
-            key_id: signing_key_id.to_string(),
-        };
+    let signer = parse_output_key_ref(signing_key_id);
+    let mut same_name_material_required = false;
+    let mut same_name_different_material = false;
+    for trusted_key_id in trusted_key_ids {
+        let trusted = parse_output_key_ref(trusted_key_id);
+        if trusted.name != signer.name {
+            continue;
+        }
+        match (&signer.key_material_digest_blake3, &trusted.key_material_digest_blake3) {
+            (Some(signer_digest), Some(trusted_digest)) if signer_digest == trusted_digest => {
+                return OutputTrustDecision::Accept {
+                    key_id: signing_key_id.to_string(),
+                    trust_basis: signer.trust_basis(signing_key_id),
+                };
+            }
+            (Some(_), Some(_)) => same_name_different_material = true,
+            (None, Some(_)) => same_name_material_required = true,
+            (_, None) => {
+                return OutputTrustDecision::Accept {
+                    key_id: signing_key_id.to_string(),
+                    trust_basis: signer.trust_basis(signing_key_id),
+                };
+            }
+        }
+    }
+    if same_name_material_required {
+        return OutputTrustDecision::Reject("output-key-material-missing".to_string());
+    }
+    if same_name_different_material {
+        return OutputTrustDecision::Reject("same-name-different-output-key".to_string());
     }
     OutputTrustDecision::Reject("untrusted-output-key".to_string())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OutputKeyRef {
+    name: String,
+    key_material_digest_blake3: Option<String>,
+}
+
+impl OutputKeyRef {
+    fn trust_basis(&self, key_id: &str) -> RemoteOutputTrustBasis {
+        RemoteOutputTrustBasis {
+            key_id: key_id.to_string(),
+            key_material_digest_blake3: self.key_material_digest_blake3.clone(),
+        }
+    }
+}
+
+fn parse_output_key_ref(value: &str) -> OutputKeyRef {
+    if let Some((name, material)) = value.split_once(':') {
+        if !name.is_empty() && !material.is_empty() {
+            return OutputKeyRef {
+                name: name.to_string(),
+                key_material_digest_blake3: Some(blake3::hash(material.as_bytes()).to_hex().to_string()),
+            };
+        }
+    }
+    OutputKeyRef {
+        name: value.to_string(),
+        key_material_digest_blake3: None,
+    }
 }
 
 pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> Result<(), String> {
@@ -3788,10 +3855,11 @@ pub fn validate_remote_output_admission(
         return Err("remote-transfer-builder-key-mismatch".to_string());
     }
     match decide_output_trust(&result.builder_signing_key_id, trusted_output_keys, true) {
-        OutputTrustDecision::Accept { key_id } => Ok(RemoteOutputAdmissionReport {
+        OutputTrustDecision::Accept { key_id, trust_basis } => Ok(RemoteOutputAdmissionReport {
             request_id: request.request_id.clone(),
             output_digest_blake3: result.output_digest_blake3.clone(),
             builder_signing_key_id: key_id,
+            trust_basis,
             store_prefix: result.store_prefix.clone(),
             outputs: result.outputs.clone(),
             transfer_artifacts: transfer_artifacts.to_vec(),
@@ -4280,7 +4348,7 @@ fn expect_output_trust(builder: &RemoteLoopbackBuilder, client: &RemoteLoopbackC
         &client.trusted_output_keys,
         builder.store_prefix == client.request.store_prefix,
     ) {
-        OutputTrustDecision::Accept { key_id } => Ok(key_id),
+        OutputTrustDecision::Accept { key_id, .. } => Ok(key_id),
         OutputTrustDecision::Reject(reason) => Err(reason),
     }
 }
@@ -5025,6 +5093,23 @@ mod tests {
     }
 
     #[test]
+    fn ticket_authorization_rejects_revoked_and_expired_tickets() {
+        let mut revoked = fixture_ticket();
+        revoked.revoked = true;
+        let mut expired = fixture_ticket();
+        expired.expires_unix_s = 2;
+        let auth = TicketAuthRequest {
+            ticket_id: revoked.id.clone(),
+            secret: revoked.secret.clone(),
+            client_endpoint: Some("client-a".to_string()),
+            now_unix_s: 2,
+        };
+
+        assert_eq!(authorize_ticket(&revoked, &auth), TicketDecision::Reject("ticket-revoked".to_string()));
+        assert_eq!(authorize_ticket(&expired, &auth), TicketDecision::Reject("ticket-expired".to_string()));
+    }
+
+    #[test]
     fn concrete_request_requires_executable_payload_and_expected_outputs() {
         let ticket = fixture_ticket();
         let mut empty_payload = fixture_request();
@@ -5301,6 +5386,31 @@ mod tests {
         assert!(matches!(
             decide_output_trust("builder-key", &trusted, false),
             OutputTrustDecision::Reject(reason) if reason == "store-prefix-mismatch"
+        ));
+    }
+
+    #[test]
+    fn output_trust_uses_key_material_digest_when_available() {
+        let trusted = vec!["builder-key:public-material-a".to_string()];
+        let decision = decide_output_trust("builder-key:public-material-a", &trusted, true);
+
+        let OutputTrustDecision::Accept { trust_basis, .. } = decision else {
+            panic!("matching key material should admit output");
+        };
+        assert_eq!(trust_basis.key_id, "builder-key:public-material-a");
+        assert_eq!(trust_basis.key_material_digest_blake3.as_deref().map(str::len), Some(BLAKE3_HEX_LENGTH_CHARS));
+    }
+
+    #[test]
+    fn output_trust_rejects_same_name_different_key_material() {
+        let trusted = vec!["builder-key:public-material-a".to_string()];
+        assert!(matches!(
+            decide_output_trust("builder-key:public-material-b", &trusted, true),
+            OutputTrustDecision::Reject(reason) if reason == "same-name-different-output-key"
+        ));
+        assert!(matches!(
+            decide_output_trust("builder-key", &trusted, true),
+            OutputTrustDecision::Reject(reason) if reason == "output-key-material-missing"
         ));
     }
 
@@ -6559,6 +6669,10 @@ mod tests {
             request_id: "r1".to_string(),
             output_digest_blake3: remote_produced_outputs_content_digest(std::slice::from_ref(&output)),
             builder_signing_key_id: "builder-key".to_string(),
+            trust_basis: RemoteOutputTrustBasis {
+                key_id: "builder-key".to_string(),
+                key_material_digest_blake3: None,
+            },
             store_prefix: "/mantle/store".to_string(),
             outputs: vec![output],
             transfer_artifacts,
