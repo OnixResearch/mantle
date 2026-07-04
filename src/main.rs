@@ -1453,6 +1453,25 @@ pub enum ReleaseGauntletAction {
         #[arg(long)]
         report_path: Option<PathBuf>,
     },
+
+    /// Evaluate the strict hermeticity regression suite plan and fixture evidence
+    StrictHermeticityRegression {
+        /// Stable run identifier for this suite execution
+        #[arg(long)]
+        run_id: String,
+
+        /// Suite plan JSON
+        #[arg(long)]
+        plan: PathBuf,
+
+        /// Case evidence JSON object or array; repeat for multiple files
+        #[arg(long = "evidence", required = true)]
+        evidence: Vec<PathBuf>,
+
+        /// Output path for the canonical suite report
+        #[arg(long)]
+        report_path: Option<PathBuf>,
+    },
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
@@ -1463,6 +1482,7 @@ pub enum GauntletReportKind {
     NixMantleComparison,
     ReleaseRepeatability,
     Continuous,
+    StrictHermeticityRegression,
 }
 
 impl GauntletReportKind {
@@ -1474,6 +1494,7 @@ impl GauntletReportKind {
             Self::NixMantleComparison => "nix-mantle-comparison",
             Self::ReleaseRepeatability => "release-repeatability",
             Self::Continuous => "continuous",
+            Self::StrictHermeticityRegression => "strict-hermeticity-regression",
         }
     }
 }
@@ -5784,6 +5805,29 @@ let Plan = {
                 },
             }
         }));
+    }
+
+    #[test]
+    fn release_gauntlet_accepts_strict_hermeticity_regression_inputs() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "gauntlet",
+            "strict-hermeticity-regression",
+            "--run-id",
+            "run-a",
+            "--plan",
+            "/tmp/plan.json",
+            "--evidence",
+            "/tmp/evidence.json",
+            "--report-path",
+            "/tmp/report.json",
+        ]);
+        assert!(matches!(args.command, Command::Release {
+            action: ReleaseAction::Gauntlet {
+                action: ReleaseGauntletAction::StrictHermeticityRegression { evidence, .. },
+            }
+        } if evidence.len() == EXPECTED_RUN_OUTCOME_COUNT));
     }
 
     #[test]

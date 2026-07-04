@@ -15,14 +15,15 @@ existing release/global admission gates consume those digests and blockers.
 - `mantle-substitution-cache-attack-gauntlet-report-v1`
 - `mantle-nix-mantle-comparison-corpus-report-v1`
 - `mantle-release-repeatability-matrix-report-v1`
+- `mantle-strict-hermeticity-regression-suite-report-v1`
 - `mantle-continuous-reproducibility-gauntlet-report-v1`
 
 Each report keeps a functional-core classification boundary: inputs are plain
 owned data, outputs are canonical reports, and side effects stay in the CLI shell.
 Strict-mode failures, stale evidence, unsupported axes, mismatched digests,
 undeclared protected execution, reused fresh-store cells, malicious cache
-acceptance, and non-equivalent Nix/Mantle cases become explicit blockers or
-non-claims.
+acceptance, non-equivalent Nix/Mantle cases, and strict hermeticity regression
+fixture drift become explicit blockers or non-claims.
 
 ## CLI entry points
 
@@ -34,6 +35,28 @@ mantle release gauntlet canonicalize \
   path/to/report.json \
   --output target/gauntlets/repeatability.json
 ```
+
+Evaluate the maintained strict hermeticity regression suite from its declared
+plan and fixture evidence:
+
+```bash
+mantle release gauntlet strict-hermeticity-regression \
+  --run-id strict-hermeticity-2026-07-04 \
+  --plan target/gauntlets/strict-hermeticity-plan.json \
+  --evidence target/gauntlets/strict-hermeticity-evidence.json \
+  --report-path target/gauntlets/strict-hermeticity-report.json
+```
+
+The plan schema is `mantle-strict-hermeticity-regression-suite-plan-v1`. It lists
+each fixture, perturbation axis, strict mode, expected verdict, required blocker
+or audit class, unsupported-host non-claim, and optional expected output digest.
+The required axes are `clean-strict`, `environment-poisoning`, `path-poisoning`,
+`undeclared-host-execution`, `network-access`, `missing-closure-facts`,
+`umask-drift`, `temp-root-dependence`, and `nondeterministic-output`. The suite
+report binds the BLAKE3 digest of the canonical plan. The clean fixture must
+record matching first/repeated output digests; poisoned fixtures must be blocked
+or rejected with the required blocker/audit class. Unsupported host axes are
+non-claims and never count as passing coverage.
 
 Aggregate current track evidence into a continuous gauntlet report:
 
