@@ -3242,6 +3242,92 @@ mod tests {
         assert_eq!(stored.attestation.facts.logical_path, output_path.to_absolute_path());
     }
 
+    #[tokio::test]
+    async fn persistent_output_calls_configured_publisher() {
+        // V9: a configured publisher is called after successful output admission.
+        // r[verify remote_builds.production_verified_publication]
+        use std::sync::Arc;
+        use crate::RecordingPublisher;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let publisher = Arc::new(RecordingPublisher::new());
+        let mut handle = test_handle(state_dir.path());
+        handle.publishers.push(publisher.clone());
+
+        let output_path = test_output("published-output", 99);
+        handle
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
+                path_info: signed_pathinfo(output_path.clone()),
+                final_node: Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(publisher.call_count(), 1, "publisher should be called once");
+        assert!(publisher.calls()[0].contains("published-output"), "publisher should receive the output path");
+    }
+
+    #[tokio::test]
+    async fn persistent_output_does_not_fail_on_publisher_error() {
+        // V10: a publisher error is logged as a warning but does not
+        // retroactively fail the build admission.
+        // r[verify remote_builds.production_verified_publication]
+        use std::sync::Arc;
+        use crate::RecordingPublisher;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let publisher = Arc::new(RecordingPublisher::new());
+        publisher.fail_next();
+        let mut handle = test_handle(state_dir.path());
+        handle.publishers.push(publisher.clone());
+
+        let output_path = test_output("failed-publish-output", 100);
+        let result = handle
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
+                path_info: signed_pathinfo(output_path.clone()),
+                final_node: Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
+            .await;
+
+        assert!(result.is_ok(), "admission should succeed even if publisher fails");
+        assert_eq!(publisher.call_count(), 0, "publisher failure should not count as a call");
+    }
+
+    #[tokio::test]
+    async fn noop_publisher_is_default_and_skips_all_outputs() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("default-no-publish", 101);
+        let result = handle
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
+                path_info: signed_pathinfo(output_path.clone()),
+                final_node: Node::Symlink {
+                    target: SymlinkTarget::try_from("target").unwrap(),
+                },
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
+            .await;
+        assert!(result.is_ok(), "admission with default noop publisher should succeed");
+    }
+
     #[test]
     fn delta_capability_url_preserves_cache_subpath_without_trailing_slash() {
         let cache_url = Url::parse("https://cache.example.test/binary-cache").unwrap();

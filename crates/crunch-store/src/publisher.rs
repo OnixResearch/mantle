@@ -9,6 +9,7 @@
 
 use std::fmt;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use async_trait::async_trait;
 use snix_store::path_info::PathInfo;
@@ -37,6 +38,48 @@ pub struct NoopPublisher;
 #[async_trait]
 impl Publisher for NoopPublisher {
     async fn publish(&self, _path_info: &PathInfo) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// A publisher that records every PathInfo it receives and optionally
+/// fails on request. Used for testing publication hooks.
+#[derive(Debug)]
+pub struct RecordingPublisher {
+    calls: Mutex<Vec<String>>,
+    fail_on_next: Mutex<bool>,
+}
+
+impl RecordingPublisher {
+    pub fn new() -> Self {
+        Self {
+            calls: Mutex::new(Vec::new()),
+            fail_on_next: Mutex::new(false),
+        }
+    }
+
+    pub fn fail_next(&self) {
+        *self.fail_on_next.lock().unwrap() = true;
+    }
+
+    pub fn calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+
+    pub fn call_count(&self) -> usize {
+        self.calls.lock().unwrap().len()
+    }
+}
+
+#[async_trait]
+impl Publisher for RecordingPublisher {
+    async fn publish(&self, path_info: &PathInfo) -> Result<(), String> {
+        let store_path = path_info.store_path.to_string();
+        if *self.fail_on_next.lock().unwrap() {
+            *self.fail_on_next.lock().unwrap() = false;
+            return Err(format!("simulated publication failure for {store_path}"));
+        }
+        self.calls.lock().unwrap().push(store_path);
         Ok(())
     }
 }

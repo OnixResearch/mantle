@@ -95,6 +95,8 @@ pub use handle::StoreHandleServices;
 pub use mutation_lock::StoreMutationGuard;
 pub use publisher::Publisher;
 pub use publisher::NoopPublisher;
+#[cfg(test)]
+pub use publisher::RecordingPublisher;
 pub use policy::StoreFallbackMode;
 pub use pull::PullOptions;
 pub use pull::PullReport;
