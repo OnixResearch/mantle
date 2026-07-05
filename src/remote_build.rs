@@ -1218,6 +1218,12 @@ pub fn authorize_ticket(ticket: &RemoteTicket, request: &TicketAuthRequest) -> T
 
 pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &RemoteTicket) -> Result<(), String> {
     plan_remote_executable_request(request)?;
+    // Reject raw frontend eval requests — CI systems must submit
+    // concrete build requests, not eval scheduling fields.
+    // r[impl remote_builds.production_ci_build_separation]
+    if request.contains_raw_frontend_eval {
+        return Err("contains-raw-frontend-eval".to_string());
+    }
     if request.input_refs.len() > MAX_REMOTE_INPUT_REFS {
         return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
     }
@@ -5667,6 +5673,36 @@ mod tests {
         assert!(validate_concrete_request(&request, &ticket).is_err());
         redeem_after_queue(&mut ticket, false).unwrap();
         assert_eq!(ticket.uses_remaining, 1);
+    }
+
+    #[test]
+    fn ci_boundary_concrete_request_passes_validation_without_frontend_eval() {
+        // V12: a concrete build request from an external CI system passes
+        // validation when it contains a valid derivation payload.
+        // r[verify remote_builds.production_ci_build_separation]
+        let mut ticket = fixture_ticket();
+        let request = ConcreteBuildRequest {
+            request_id: "ci-job-42".to_string(),
+            contains_raw_frontend_eval: false,
+            ..fixture_request()
+        };
+        validate_concrete_request(&request, &ticket).unwrap();
+    }
+
+    #[test]
+    fn ci_boundary_rejects_frontend_eval_before_coordinator_admission() {
+        // V12: a request with CI-owned frontend eval fields is rejected
+        // before it reaches the coordinator.
+        // r[verify remote_builds.production_ci_build_separation]
+        let ticket = fixture_ticket();
+        let request = ConcreteBuildRequest {
+            request_id: "eval-request".to_string(),
+            contains_raw_frontend_eval: true,
+            ..fixture_request()
+        };
+        let err = validate_concrete_request(&request, &ticket).unwrap_err();
+        assert!(err.contains("contains-raw-frontend-eval") || err.contains("raw-frontend-evaluation-rejected"),
+            "expected frontend eval rejection, got: {err}");
     }
 
     #[test]
