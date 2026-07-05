@@ -11,16 +11,42 @@ mod attestation;
 mod audit;
 mod ca_mapping;
 mod closure;
+mod completeness;
 mod error;
 mod export;
 mod gc;
 mod handle;
+pub mod metadata_cache;
 mod mutation_lock;
 mod policy;
 mod pull;
 mod push;
 mod query;
 mod roots;
+
+pub use completeness::{
+    CompletenessMarkerStore,
+    GLOBAL_COMPLETENESS_MARKERS,
+    recursive_castore_completeness,
+};
+
+pub use metadata_cache::{
+    AdmissionSummary,
+    AdvisoryMetadataCache,
+    MetadataCacheEntry,
+    MetadataCacheKey,
+    MetadataClass,
+    MetadataSchemaVersion,
+    MetadataValidity,
+    RefreshPolicy,
+    build_metadata_cache_key,
+    check_metadata_validity,
+    metadata_ttl_for_class,
+    new_metadata_entry,
+    DEFAULT_METADATA_TTL_SECS,
+    MAX_METADATA_CACHE_ENTRIES,
+    NEGATIVE_MISS_TTL_SECS,
+};
 
 pub use archive::ARCHIVE_COMPATIBILITY;
 pub use archive::ARCHIVE_FORMAT_NAME;

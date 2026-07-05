@@ -173,6 +173,16 @@ pub struct BuildJsonOutput {
     pub artifact_attestation: BuildJsonAttestationReference,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub substitution: Option<BuildJsonSubstitution>,
+    /// Cache admission details for this output.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_admission: Option<BuildJsonCacheAdmission>,
+}
+
+/// Cache admission details for a single output.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct BuildJsonCacheAdmission {
+    /// Stable kebab-case reason code.
+    pub reason: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -511,6 +521,7 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
                             reused_bytes: report.reused_bytes,
                             fallback_reason: report.fallback_reason.clone(),
                         }),
+                        cache_admission: None,
                     }
                 })
                 .collect();
@@ -903,7 +914,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
-            substituter_url: None,
+            substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
             trusted_keys: Vec::new(),
@@ -966,7 +977,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
-            substituter_url: None,
+            substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
             trusted_keys: Vec::new(),
@@ -1014,7 +1025,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
-            substituter_url: None,
+            substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
             trusted_keys: Vec::new(),
@@ -1179,7 +1190,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: MIN_MAX_JOBS,
-            substituter_url: None,
+            substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
             trusted_keys: Vec::new(),
@@ -1362,6 +1373,7 @@ mod tests {
                 path: "attestation.json".to_string(),
             },
             substitution: None,
+            cache_admission: None,
         };
         let outcome = build_json_outcome_with_output(output);
 
@@ -1463,6 +1475,7 @@ mod tests {
                 path: "attestation.json".to_string(),
             },
             substitution: None,
+            cache_admission: None,
         };
         let outcome = build_json_outcome_with_output(output);
 
@@ -1485,6 +1498,7 @@ mod tests {
                 path: "attestation.json".to_string(),
             },
             substitution: None,
+            cache_admission: None,
         };
         let outcome = build_json_outcome_with_output(output);
 
@@ -1508,6 +1522,7 @@ mod tests {
                 path: "attestation.json".to_string(),
             },
             substitution: None,
+            cache_admission: None,
         };
         let outcome = build_json_outcome_with_output(output);
 
@@ -1559,7 +1574,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: MIN_MAX_JOBS,
-            substituter_url: None,
+            substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
             trusted_keys: Vec::new(),
@@ -1655,7 +1670,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
-            substituter_url: None,
+            substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Impure,
             keypair: signing_key,
             trusted_keys: Vec::new(),

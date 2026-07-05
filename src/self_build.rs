@@ -2275,10 +2275,10 @@ fn build_crunch_binary(
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
-        substituter_url: if no_substitute {
-            None
+        substituter_urls: if no_substitute {
+            Vec::new()
         } else {
-            Some("https://cache.nixos.org".to_string())
+            vec!["https://cache.nixos.org".to_string()]
         },
         hermeticity_mode,
         keypair,
@@ -2329,10 +2329,10 @@ fn build_bootstrap_tool(
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
-        substituter_url: if no_substitute {
-            None
+        substituter_urls: if no_substitute {
+            Vec::new()
         } else {
-            Some("https://cache.nixos.org".to_string())
+            vec!["https://cache.nixos.org".to_string()]
         },
         hermeticity_mode,
         keypair: keypair.clone(),

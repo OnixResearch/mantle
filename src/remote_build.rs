@@ -1665,7 +1665,7 @@ async fn execute_remote_local_build_linux(
     let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: executor.state_dir.clone(),
         output_dir: executor.output_dir.clone(),
-        remote_cache_url: None,
+        remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: executor.store_prefix.clone(),
     })
@@ -7696,7 +7696,7 @@ mod tests {
         crunch_store::StoreHandle::open(crunch_store::StoreConfig {
             state_dir: root.join("state"),
             output_dir: root.join("store"),
-            remote_cache_url: None,
+            remote_cache_urls: Vec::new(),
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: "/mantle/store".to_string(),
         })

@@ -183,7 +183,19 @@ pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
     }
 }
 
+/// Split a comma-separated substituters string into individual URLs.
+///
+/// Whitespace around each URL is trimmed. Empty entries are skipped.
+pub fn split_substituter_urls(input: &str) -> Vec<String> {
+    input
+        .split(',')
+        .map(|part| part.trim().to_string())
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
 /// Check whether two candidates share the same identity but different trust material.
+
 pub fn candidates_have_trust_conflict(a: &CacheCandidate, b: &CacheCandidate) -> bool {
     a.cache_identity == b.cache_identity && a.trust_policy_digest != b.trust_policy_digest
 }
@@ -232,6 +244,42 @@ impl std::fmt::Display for CacheCandidateError {
 }
 
 impl std::error::Error for CacheCandidateError {}
+
+// ── Advisory Metadata Cache (I3) ─────────────────────────────────────────
+// Pure core types live in crunch-store. Re-export for callers of
+// cache_substitution.
+
+pub use crunch_store::metadata_cache::{
+    AdmissionSummary,
+    MetadataCacheEntry,
+    MetadataCacheKey,
+    MetadataClass,
+    MetadataSchemaVersion,
+    MetadataValidity,
+    RefreshPolicy,
+    build_metadata_cache_key,
+    check_metadata_validity,
+    metadata_ttl_for_class,
+    new_metadata_entry,
+    DEFAULT_METADATA_TTL_SECS,
+    MAX_METADATA_CACHE_ENTRIES,
+    NEGATIVE_MISS_TTL_SECS,
+};
+
+/// Convenience wrapper: build a [`MetadataCacheKey`] from a [`CacheCandidate`].
+pub fn build_metadata_cache_key_from_candidate(
+    candidate: &CacheCandidate,
+    output_digest: &str,
+    metadata_class: MetadataClass,
+) -> MetadataCacheKey {
+    build_metadata_cache_key(
+        &candidate.cache_identity,
+        &candidate.trust_policy_digest,
+        &candidate.store_prefix,
+        output_digest,
+        metadata_class,
+    )
+}
 
 #[cfg(test)]
 mod tests {
@@ -391,6 +439,32 @@ mod tests {
         assert_eq!(CacheAdmissionReason::DuplicateIdentityTrustMismatch.as_str(), "duplicate-identity-trust-mismatch");
     }
 
+    // ── split_substituter_urls ────────────────────────────────────
+
+    #[test]
+    fn split_substituter_urls_splits_commas_and_trims() {
+        let urls = split_substituter_urls("https://a.example.com, https://b.example.com");
+        assert_eq!(urls, vec!["https://a.example.com", "https://b.example.com"]);
+    }
+
+    #[test]
+    fn split_substituter_urls_skips_empty_entries() {
+        let urls = split_substituter_urls("https://a.example.com,,");
+        assert_eq!(urls, vec!["https://a.example.com"]);
+    }
+
+    #[test]
+    fn split_substituter_urls_returns_single() {
+        let urls = split_substituter_urls("https://cache.nixos.org");
+        assert_eq!(urls, vec!["https://cache.nixos.org"]);
+    }
+
+    #[test]
+    fn split_substituter_urls_returns_empty_for_empty_input() {
+        assert!(split_substituter_urls("").is_empty());
+        assert!(split_substituter_urls(",,").is_empty());
+    }
+
     // ── CacheAdmissionEvent ────────────────────────────────────────
 
     #[test]
@@ -403,5 +477,163 @@ mod tests {
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"reason\":\"untrusted-signature\""));
         assert!(json.contains("\"fallback\":false"));
+    }
+
+    // ── Metadata cache (I3) ───────────────────────────────────────
+
+    fn meta_candidate() -> CacheCandidate {
+        CacheCandidate {
+            cache_identity: "https://cache.example.com".to_string(),
+            priority: 0,
+            trust_policy_digest: VALID_DIGEST.to_string(),
+            store_prefix: STORE_PREFIX.to_string(),
+            requires_network: true,
+        }
+    }
+
+    #[test]
+    fn metadata_class_as_str_is_stable() {
+        assert_eq!(MetadataClass::Narinfo.as_str(), "narinfo");
+        assert_eq!(MetadataClass::NegativeMiss.as_str(), "negative-miss");
+        assert_eq!(MetadataClass::CachePreflight.as_str(), "cache-preflight");
+        assert_eq!(MetadataClass::DeltaCapability.as_str(), "delta-capability");
+    }
+
+    #[test]
+    fn metadata_schema_version_current_is_one() {
+        assert_eq!(MetadataSchemaVersion::CURRENT, MetadataSchemaVersion(1));
+    }
+
+    #[test]
+    fn build_metadata_cache_key_includes_all_dimensions() {
+        let candidate = meta_candidate();
+        let key = build_metadata_cache_key_from_candidate(&candidate, "abc123", MetadataClass::Narinfo);
+        assert_eq!(key.cache_identity, "https://cache.example.com");
+        assert_eq!(key.trust_policy_digest, VALID_DIGEST);
+        assert_eq!(key.store_prefix, STORE_PREFIX);
+        assert_eq!(key.output_digest, "abc123");
+        assert_eq!(key.metadata_class, MetadataClass::Narinfo);
+        assert_eq!(key.schema_version, MetadataSchemaVersion(1));
+    }
+
+    #[test]
+    fn metadata_ttl_negative_miss_is_shorter() {
+        assert_eq!(metadata_ttl_for_class(MetadataClass::NegativeMiss), NEGATIVE_MISS_TTL_SECS);
+        assert_eq!(metadata_ttl_for_class(MetadataClass::Narinfo), DEFAULT_METADATA_TTL_SECS);
+        assert!(NEGATIVE_MISS_TTL_SECS < DEFAULT_METADATA_TTL_SECS);
+    }
+
+    #[test]
+    fn new_metadata_entry_sets_expiry_from_ttl() {
+        let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "digest", MetadataClass::Narinfo);
+        let entry = new_metadata_entry(key.clone(), 1000, "probe ok".to_string());
+        assert_eq!(entry.created_at_secs, 1000);
+        assert_eq!(entry.expires_at_secs, 1000 + DEFAULT_METADATA_TTL_SECS);
+        assert_eq!(entry.detail, "probe ok");
+        assert_eq!(entry.key.output_digest, "digest");
+    }
+
+    #[test]
+    fn check_metadata_validity_returns_fresh_for_matching_entry() {
+        let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
+        let entry = new_metadata_entry(key.clone(), 1000, String::new());
+        let validity = check_metadata_validity(&entry, &key, 1000 + DEFAULT_METADATA_TTL_SECS - 1, RefreshPolicy::Normal);
+        assert_eq!(validity, MetadataValidity::Fresh);
+        assert!(validity.is_reusable());
+    }
+
+    #[test]
+    fn check_metadata_validity_expired_when_past_expiry() {
+        let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
+        let entry = new_metadata_entry(key.clone(), 1000, String::new());
+        let validity = check_metadata_validity(&entry, &key, 1000 + DEFAULT_METADATA_TTL_SECS + 1, RefreshPolicy::Normal);
+        assert_eq!(validity, MetadataValidity::Expired);
+        assert!(!validity.is_reusable());
+    }
+
+    #[test]
+    fn check_metadata_validity_force_refresh_bypasses_fresh_entry() {
+        let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
+        let entry = new_metadata_entry(key.clone(), 1000, String::new());
+        let validity = check_metadata_validity(&entry, &key, 1000, RefreshPolicy::ForceRefresh);
+        assert_eq!(validity, MetadataValidity::ExplicitRefresh);
+        assert!(!validity.is_reusable());
+    }
+
+    #[test]
+    fn check_metadata_validity_detects_schema_mismatch() {
+        let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
+        let mut entry = new_metadata_entry(key.clone(), 1000, String::new());
+        entry.key.schema_version = MetadataSchemaVersion(999);
+        let validity = check_metadata_validity(&entry, &key, 1000, RefreshPolicy::Normal);
+        assert_eq!(validity, MetadataValidity::SchemaMismatch);
+    }
+
+    #[test]
+    fn check_metadata_validity_detects_trust_policy_mismatch() {
+        let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
+        let mut entry = new_metadata_entry(key.clone(), 1000, String::new());
+        entry.key.trust_policy_digest = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        let validity = check_metadata_validity(&entry, &key, 1000, RefreshPolicy::Normal);
+        assert_eq!(validity, MetadataValidity::TrustPolicyMismatch);
+    }
+
+    #[test]
+    fn check_metadata_validity_detects_store_prefix_mismatch() {
+        let mut key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
+        let entry = new_metadata_entry(key.clone(), 1000, String::new());
+        key.store_prefix = "/different/store".to_string();
+        let validity = check_metadata_validity(&entry, &key, 1000, RefreshPolicy::Normal);
+        assert_eq!(validity, MetadataValidity::StorePrefixMismatch);
+    }
+
+    #[test]
+    fn check_metadata_validity_detects_identity_mismatch() {
+        let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
+        let mut entry = new_metadata_entry(key.clone(), 1000, String::new());
+        entry.key.cache_identity = "https://other.cache".to_string();
+        let validity = check_metadata_validity(&entry, &key, 1000, RefreshPolicy::Normal);
+        assert_eq!(validity, MetadataValidity::CacheIdentityMismatch);
+    }
+
+    #[test]
+    fn check_metadata_validity_detects_output_digest_mismatch() {
+        let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
+        let mut entry = new_metadata_entry(key.clone(), 1000, String::new());
+        entry.key.output_digest = "wrong-digest".to_string();
+        let validity = check_metadata_validity(&entry, &key, 1000, RefreshPolicy::Normal);
+        assert_eq!(validity, MetadataValidity::OutputDigestMismatch);
+    }
+
+    #[test]
+    fn admission_summary_from_reason_does_not_claim_metadata_reuse() {
+        let summary = AdmissionSummary::from_reason("miss");
+        assert_eq!(summary.reason, "miss");
+        assert!(!summary.metadata_reused);
+        assert!(summary.metadata_validity.is_none());
+    }
+
+    #[test]
+    fn admission_summary_with_reused_metadata_records_validity() {
+        let summary = AdmissionSummary::with_reused_metadata(
+            "remote-hit",
+            MetadataValidity::Fresh,
+        );
+        assert_eq!(summary.reason, "remote-hit");
+        assert!(summary.metadata_reused);
+        assert_eq!(summary.metadata_validity, Some(MetadataValidity::Fresh));
+    }
+
+    #[test]
+    fn metadata_validity_as_str_is_stable() {
+        assert_eq!(MetadataValidity::Fresh.as_str(), "fresh");
+        assert_eq!(MetadataValidity::Expired.as_str(), "expired");
+        assert_eq!(MetadataValidity::ExplicitRefresh.as_str(), "explicit-refresh");
+        assert_eq!(MetadataValidity::Missing.as_str(), "missing");
+        assert_eq!(MetadataValidity::SchemaMismatch.as_str(), "schema-mismatch");
+        assert_eq!(MetadataValidity::TrustPolicyMismatch.as_str(), "trust-policy-mismatch");
+        assert_eq!(MetadataValidity::StorePrefixMismatch.as_str(), "store-prefix-mismatch");
+        assert_eq!(MetadataValidity::CacheIdentityMismatch.as_str(), "cache-identity-mismatch");
+        assert_eq!(MetadataValidity::OutputDigestMismatch.as_str(), "output-digest-mismatch");
     }
 }

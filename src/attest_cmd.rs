@@ -495,7 +495,7 @@ async fn open_store(output_dir: &Path, state_dir: &Path, store_dir: &str) -> Res
     let config = StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
-        remote_cache_url: None,
+        remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_dir.to_string(),
     };

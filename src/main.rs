@@ -3133,7 +3133,11 @@ fn run_build_command(
     remote_build_time_secs: u64,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
-    let substituter_url = (!no_substitute).then_some(substituters);
+    let substituter_urls: Vec<String> = if no_substitute {
+        Vec::new()
+    } else {
+        cache_substitution::split_substituter_urls(substituters)
+    };
     let hermeticity_mode = select_hermeticity_mode(strict_hermetic, impure)?;
     let parsed_trusted = parse_trusted_keys(trusted_public_keys)?;
     let remote_plan_facts = remote_plan_facts_for_cli(remote_builder, remote_ticket, trusted_builder_keys)?;
@@ -3193,7 +3197,7 @@ fn run_build_command(
                     output_dir: &ctx.store,
                     state_dir: &ctx.resolved_state_dir,
                     store_dir: &ctx.store_prefix,
-                    substituter_url,
+                    substituter_urls: &substituter_urls,
                     signing_key_path: signing_key,
                     trusted_public_keys: parsed_trusted.as_deref(),
                     trust_unsigned,
@@ -3212,7 +3216,7 @@ fn run_build_command(
                     ctx.verbose,
                     fix,
                     max_jobs,
-                    substituter_url,
+                    &substituter_urls,
                     signing_key,
                     parsed_trusted.as_deref(),
                     trust_unsigned,
@@ -3230,7 +3234,7 @@ fn run_build_command(
                 ctx.verbose,
                 fix,
                 max_jobs,
-                substituter_url,
+                &substituter_urls,
                 signing_key,
                 parsed_trusted.as_deref(),
                 trust_unsigned,
@@ -3277,7 +3281,7 @@ fn run_build_command(
                     &ctx.store,
                     &ctx.resolved_state_dir,
                     &ctx.store_prefix,
-                    substituter_url,
+                    &substituter_urls,
                     signing_key,
                     parsed_trusted.as_deref(),
                     trust_unsigned,
@@ -3295,7 +3299,7 @@ fn run_build_command(
                 ctx.verbose,
                 fix,
                 max_jobs,
-                substituter_url,
+                &substituter_urls,
                 signing_key,
                 parsed_trusted.as_deref(),
                 trust_unsigned,
@@ -3499,7 +3503,7 @@ async fn run_remote_build_dispatches_async(
     let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
-        remote_cache_url: None,
+        remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_prefix.to_string(),
     })
@@ -4726,7 +4730,7 @@ fn build_from_expr(
     verbose: bool,
     fix: bool,
     max_jobs: u32,
-    substituter_url: Option<&str>,
+    substituter_urls: &[String],
     signing_key_path: Option<&std::path::Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
@@ -4749,7 +4753,7 @@ fn build_from_expr(
         verbose,
         fix,
         max_jobs,
-        substituter_url,
+        substituter_urls,
         signing_key_path,
         trusted_public_keys,
         trust_unsigned,
@@ -4766,7 +4770,7 @@ fn build_plan_from_expr(
     output_dir: &std::path::Path,
     state_dir: &std::path::Path,
     store_dir: &str,
-    substituter_url: Option<&str>,
+    substituter_urls: &[String],
     signing_key_path: Option<&std::path::Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
@@ -4784,7 +4788,7 @@ fn build_plan_from_expr(
         output_dir,
         state_dir,
         store_dir,
-        substituter_url,
+        substituter_urls,
         signing_key_path,
         trusted_public_keys,
         trust_unsigned,
@@ -4804,7 +4808,7 @@ fn build_from_expr_raw(
     store_dir: &str,
     verbose: bool,
     max_jobs: u32,
-    substituter_url: Option<&str>,
+    substituter_urls: &[String],
     signing_key_path: Option<&std::path::Path>,
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
@@ -4828,7 +4832,7 @@ fn build_from_expr_raw(
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
-        substituter_url: substituter_url.map(str::to_owned),
+        substituter_urls: substituter_urls.to_vec(),
         hermeticity_mode,
         keypair,
         trusted_keys,
@@ -5033,10 +5037,10 @@ fn build_project_expr(
     signing_key_path: Option<&Path>,
     trust_unsigned: bool,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
-    let sub_url = if no_substitute {
-        None
+    let sub_urls: Vec<String> = if no_substitute {
+        Vec::new()
     } else {
-        Some("https://cache.nixos.org".to_string())
+        vec!["https://cache.nixos.org".to_string()]
     };
     let mut full_import_paths = build_import_paths(&[])?;
     full_import_paths.extend(resolved_import_paths);
@@ -5048,7 +5052,7 @@ fn build_project_expr(
         store_dir,
         verbose,
         max_jobs,
-        sub_url.as_deref(),
+        &sub_urls,
         signing_key_path,
         None, // trusted keys — project commands don't accept custom keys yet
         trust_unsigned,
@@ -5069,10 +5073,10 @@ fn build_file_raw(
     signing_key_path: Option<&Path>,
     trust_unsigned: bool,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
-    let sub_url = if no_substitute {
-        None
+    let sub_urls: Vec<String> = if no_substitute {
+        Vec::new()
     } else {
-        Some("https://cache.nixos.org".to_string())
+        vec!["https://cache.nixos.org".to_string()]
     };
     let import_paths = build_import_paths(import_paths)?;
     let keypair = build_cmd::load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
@@ -5087,7 +5091,7 @@ fn build_file_raw(
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
-        substituter_url: sub_url,
+        substituter_urls: sub_urls,
         hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
         keypair,
         trusted_keys,

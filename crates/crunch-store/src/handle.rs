@@ -42,7 +42,9 @@ use crate::Error;
 use crate::GcReport;
 use crate::GcRootRecord;
 use crate::GcRootSource;
+use crate::CompletenessMarkerStore;
 use crate::StoreAuditEvent;
+use crate::completeness::recursive_castore_completeness;
 use crate::StoreAuditKind;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
@@ -63,8 +65,9 @@ pub struct StoreConfig {
     /// outputs are exported on disk. Defaults to the store_dir.
     pub output_dir: PathBuf,
 
-    /// Optional remote binary cache URL (e.g., "https://cache.nixos.org").
-    pub remote_cache_url: Option<String>,
+    /// Ordered list of remote binary cache URLs (e.g., "https://cache.nixos.org").
+    /// Uses the first URL for existing single-cache dispatch. Empty = no remote substitution.
+    pub remote_cache_urls: Vec<String>,
 
     /// How strictly store-layer fallbacks are handled.
     pub fallback_mode: StoreFallbackMode,
@@ -326,7 +329,7 @@ pub struct StoreHandle {
     directory_service: Arc<dyn DirectoryService>,
     pathinfo_service: Arc<dyn PathInfoService>,
     remote_pathinfo: Option<Arc<dyn PathInfoService>>,
-    remote_cache_url: Option<Url>,
+    remote_cache_urls: Vec<Url>,
     remote_trusted_public_keys: Vec<VerifyingKey>,
     remote_delta_capability: Option<RemoteDeltaCapability>,
     remote_delta_http_client: Option<reqwest::Client>,
@@ -366,14 +369,14 @@ impl StoreHandle {
         let (pathinfo_service, mut startup_audit_events) =
             open_pathinfo_service(state_dir, config.fallback_mode).await?;
 
-        let (remote_pathinfo, remote_cache_url, remote_trusted_public_keys) = match config.remote_cache_url {
+        let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
             Some(ref url_str) => match Url::parse(url_str) {
                 Ok(parsed_url) => match build_remote_pathinfo(url_str, blob_service.clone(), directory_service.clone())
                 {
                     Ok(svc) => match parse_remote_trusted_public_keys(url_str) {
                         Ok(trusted_public_keys) => {
                             info!(url = %url_str, "binary cache substitution enabled");
-                            (Some(svc), Some(parsed_url), trusted_public_keys)
+                            (Some(svc), vec![parsed_url], trusted_public_keys)
                         }
                         Err(err) => {
                             tracing::warn!(
@@ -381,7 +384,7 @@ impl StoreHandle {
                                 err = %err,
                                 "failed to parse remote cache trust policy, substitution disabled"
                             );
-                            (None, None, Vec::new())
+                            (None, Vec::new(), Vec::new())
                         }
                     },
                     Err(e) => {
@@ -390,7 +393,7 @@ impl StoreHandle {
                             err = %e,
                             "failed to configure remote cache, substitution disabled"
                         );
-                        (None, None, Vec::new())
+                        (None, Vec::new(), Vec::new())
                     }
                 },
                 Err(e) => {
@@ -399,10 +402,10 @@ impl StoreHandle {
                         err = %e,
                         "failed to parse remote cache URL, substitution disabled"
                     );
-                    (None, None, Vec::new())
+                    (None, Vec::new(), Vec::new())
                 }
             },
-            None => (None, None, Vec::new()),
+            None => (None, Vec::new(), Vec::new()),
         };
 
         let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir).to_string();
@@ -426,7 +429,7 @@ impl StoreHandle {
             directory_service,
             pathinfo_service,
             remote_pathinfo,
-            remote_cache_url,
+            remote_cache_urls,
             remote_trusted_public_keys,
             remote_delta_capability: None,
             remote_delta_http_client: None,
@@ -454,7 +457,7 @@ impl StoreHandle {
             directory_service: services.directory_service,
             pathinfo_service: services.pathinfo_service,
             remote_pathinfo: services.remote_pathinfo,
-            remote_cache_url: None,
+            remote_cache_urls: Vec::new(),
             remote_trusted_public_keys: Vec::new(),
             remote_delta_capability: None,
             remote_delta_http_client: None,
@@ -591,6 +594,17 @@ impl StoreHandle {
                 .map_err(|e| Error::DirectoryService(format!("existence check: {e}"))),
             Node::Symlink { .. } => Ok(true),
         }
+    }
+
+    /// Recursive castore completeness check (r[impl cache_substitution.castore_completeness]).
+    ///
+    /// Returns `true` if the full tree rooted at `node` is present in
+    /// local castore storage.  Checks all child blobs/directories
+    /// recursively (bounded by `MAX_RECURSIVE_NODES` and `MAX_DEPTH`).
+    /// Uses an in-memory completeness marker so repeat checks of the
+    /// same finalized node skip redundant probing.
+    pub async fn castore_has_complete_content(&self, node: &Node) -> Result<bool, Error> {
+        recursive_castore_completeness(&*self.blob_service, &*self.directory_service, node).await
     }
 
     /// Read the full content of a file blob from castore.
@@ -781,7 +795,7 @@ impl StoreHandle {
             return;
         }
 
-        let Some(cache_url) = self.remote_cache_url.clone() else {
+        let Some(cache_url) = self.remote_cache_urls.first().cloned() else {
             self.remote_delta_capability = Some(RemoteDeltaCapability::Unsupported);
             return;
         };
@@ -1297,7 +1311,7 @@ impl StoreHandle {
         is_root: bool,
         root_source: Option<GcRootSource>,
     ) -> DeltaAttemptResult {
-        let Some(cache_url) = self.remote_cache_url.clone() else {
+        let Some(cache_url) = self.remote_cache_urls.first().cloned() else {
             return DeltaAttemptResult::Fallback {
                 reason: "cache_url_missing".to_string(),
             };
@@ -2971,7 +2985,7 @@ mod tests {
             stream_body,
             stream_path,
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let first_output = test_output("delta-probe-first", 20);
         let second_output = test_output("delta-probe-second", 21);
@@ -3054,7 +3068,7 @@ mod tests {
             stream_body,
             stream_path,
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let substituted =
             handle.try_substitute_remote(*output_path.digest(), &output_path, "out", true, None).await.unwrap();
@@ -3147,7 +3161,7 @@ mod tests {
             stream_body,
             stream_path,
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let substituted =
             handle.try_substitute_remote(*output_path.digest(), &output_path, "out", true, None).await.unwrap();
@@ -3265,7 +3279,7 @@ mod tests {
             stream_body,
             stream_path,
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let substituted = handle
             .try_substitute_remote(
@@ -3321,7 +3335,7 @@ mod tests {
             let mut seeded_remote = StoreHandle::open(StoreConfig {
                 state_dir: remote_state_dir.path().to_path_buf(),
                 output_dir: remote_output_dir.path().to_path_buf(),
-                remote_cache_url: None,
+                remote_cache_urls: Vec::new(),
                 fallback_mode: StoreFallbackMode::Practical,
                 store_dir: "/nix/store".to_string(),
             })
@@ -3359,7 +3373,7 @@ mod tests {
         let persisted_remote = StoreHandle::open(StoreConfig {
             state_dir: remote_state_dir.path().to_path_buf(),
             output_dir: remote_output_dir.path().to_path_buf(),
-            remote_cache_url: None,
+            remote_cache_urls: Vec::new(),
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
         })
@@ -3447,7 +3461,7 @@ mod tests {
         let mut handle = StoreHandle::open(StoreConfig {
             state_dir: receiver_state_dir.path().to_path_buf(),
             output_dir: receiver_output_dir.path().to_path_buf(),
-            remote_cache_url: Some(remote_cache_url),
+            remote_cache_urls: vec![remote_cache_url],
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
         })
@@ -3537,7 +3551,7 @@ mod tests {
             stream_body,
             stream_path,
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let substituted = handle
             .try_substitute_remote(*output_path.digest(), &output_path, "out", true, None)
@@ -3658,7 +3672,7 @@ mod tests {
             stream_body,
             stream_path,
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let substituted = handle
             .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
@@ -3750,7 +3764,7 @@ mod tests {
             stream_body,
             stream_path,
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let substituted = handle
             .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
@@ -3802,7 +3816,7 @@ mod tests {
             stream_body: "not-json\n".to_string(),
             stream_path,
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let output_path = test_output("stream-malformed", 29);
         remote.put(signed_pathinfo(output_path.clone())).await.unwrap();
@@ -3840,7 +3854,7 @@ mod tests {
             stream_body: "stream-ok".to_string(),
             stream_path: "/delta/stream".to_string(),
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let output_path = test_output("legacy-cache-hit", 22);
         remote.put(signed_pathinfo(output_path.clone())).await.unwrap();
@@ -3877,7 +3891,7 @@ mod tests {
             stream_body: "stream-ok".to_string(),
             stream_path: "/delta/stream".to_string(),
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let output_path = test_output("probe-error-hit", 23);
         remote.put(signed_pathinfo(output_path.clone())).await.unwrap();
@@ -3914,7 +3928,7 @@ mod tests {
             stream_body: "stream-ok".to_string(),
             stream_path: "/delta/stream".to_string(),
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let output_path = test_output("probe-invalid-json-hit", 26);
         remote.put(signed_pathinfo(output_path.clone())).await.unwrap();
@@ -3966,7 +3980,7 @@ mod tests {
             stream_body: "stream-ok".to_string(),
             stream_path: "/delta/stream".to_string(),
         });
-        handle.remote_cache_url = Some(base_url.clone());
+        handle.remote_cache_urls = vec![base_url.clone()];
 
         let output_path = test_output("cross-authority-hit", 25);
         remote.put(signed_pathinfo(output_path.clone())).await.unwrap();
@@ -4068,7 +4082,7 @@ mod tests {
             stream_body,
             stream_path,
         });
-        delta_handle.remote_cache_url = Some(base_url.clone());
+        delta_handle.remote_cache_urls = vec![base_url.clone()];
 
         let delta_substituted = delta_handle
             .try_substitute_remote(*output_path.digest(), &output_path, "out", true, Some(GcRootSource::Bootstrap))

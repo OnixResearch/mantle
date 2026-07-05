@@ -285,7 +285,7 @@ mod tests {
         StoreHandle::open(StoreConfig {
             state_dir,
             output_dir,
-            remote_cache_url: None,
+            remote_cache_urls: Vec::new(),
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
         })
@@ -478,7 +478,7 @@ mod tests {
         StoreHandle::open(StoreConfig {
             state_dir,
             output_dir,
-            remote_cache_url: None,
+            remote_cache_urls: Vec::new(),
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
         })

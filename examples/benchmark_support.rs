@@ -1548,7 +1548,7 @@ async fn open_benchmark_store(
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
-        remote_cache_url: None,
+        remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_prefix.to_string(),
     })

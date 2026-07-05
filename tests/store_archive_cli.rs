@@ -36,7 +36,7 @@ async fn open_store(output_dir: &Path, state_dir: &Path) -> StoreHandle {
     StoreHandle::open(StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
-        remote_cache_url: None,
+        remote_cache_urls: Vec::new(),
         fallback_mode: StoreFallbackMode::Practical,
         store_dir: TEST_STORE_PREFIX.to_string(),
     })

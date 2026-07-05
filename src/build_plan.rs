@@ -29,6 +29,7 @@ use snix_store::pathinfoservice::RedbPathInfoService;
 use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
 use crate::build_cmd::BuildOutputMode;
+use crate::build_report::BuildJsonCacheAdmission;
 use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::errors::RunError;
 use crate::operator_diagnostics::DoctorProfile;
@@ -65,6 +66,8 @@ pub struct BuildPlanEntry {
     pub route_plan: crate::realization_routing::RoutePlanReport,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_admission: Option<BuildJsonCacheAdmission>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -123,7 +126,7 @@ pub struct BuildPlanConfig<'a> {
     pub output_dir: &'a Path,
     pub state_dir: &'a Path,
     pub store_dir: &'a str,
-    pub substituter_url: Option<&'a str>,
+    pub substituter_urls: &'a [String],
     pub signing_key_path: Option<&'a Path>,
     pub trusted_public_keys: Option<&'a [VerifyingKey]>,
     pub trust_unsigned: bool,
@@ -164,7 +167,7 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
         store_dir: config.output_dir,
         state_dir: config.state_dir,
     });
-    let plan_store = PlanStore::open(config.state_dir, config.store_dir, config.substituter_url).await?;
+    let plan_store = PlanStore::open(config.state_dir, config.store_dir, config.substituter_urls).await?;
     let trust =
         PlanTrust::load(config.signing_key_path, config.trusted_public_keys, config.state_dir, config.trust_unsigned)?;
 
@@ -323,6 +326,7 @@ impl PlannedRoot {
             action,
             route_plan,
             detail,
+            cache_admission: None,
         }
     }
 
@@ -382,11 +386,11 @@ struct PlanStore {
 }
 
 impl PlanStore {
-    async fn open(state_dir: &Path, store_dir: &str, substituter_url: Option<&str>) -> Result<Self, RunError> {
+    async fn open(state_dir: &Path, store_dir: &str, substituter_urls: &[String]) -> Result<Self, RunError> {
         let blob_service = open_blob_service(state_dir)?;
         let directory_service = open_directory_service(state_dir).await?;
         let local_pathinfo = open_pathinfo_service(state_dir).await?;
-        let remote_pathinfo = match substituter_url {
+        let remote_pathinfo = match substituter_urls.first() {
             Some(url) => Some(open_remote_pathinfo(url, blob_service.clone(), directory_service.clone())?),
             None => None,
         };
