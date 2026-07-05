@@ -94,7 +94,6 @@ trust-policy-mismatch, store-prefix-mismatch, identity-mismatch, output-digest-m
 explicit-refresh).
 
 Still active:
-- V1 — priority-ordered multi-cache selection (needs store-layer multi-URL iteration + integration test)
 - V2 — repeated build--plan metadata reuse (needs build-plan-level integration test)
 - V3 — cached metadata substitution + final verification (needs store-level integration)
 

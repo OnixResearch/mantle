@@ -10,7 +10,7 @@
 
 ## Verification
 
-- [ ] [serial] V1 Positive: two configured substituters with equivalent valid hits choose the configured-priority cache deterministically, independent of response order. r[cache_substitution.ordered_substituters]
+- [x] [serial] V1 Positive: two configured substituters with equivalent valid hits choose the configured-priority cache deterministically, independent of response order. r[cache_substitution.ordered_substituters]
 - [ ] [serial] V2 Positive: repeated `build --plan` for the same remote-missing and remote-present paths reuses advisory metadata and records that reuse in the report without mutating accepted PathInfo. r[cache_substitution.remote_metadata_cache] r[cache_substitution.structured_admission_diagnostics]
 - [ ] [serial] V3 Positive: a valid remote substitution still passes final signature, prefix, content, castore, and attestation acceptance when its discovery came from cached metadata. r[cache_substitution.remote_metadata_cache]
 - [x] [serial] V4 Negative: malformed URLs, duplicate cache identities with different trust material, untrusted signatures, store-prefix mismatches, fixed-output remote hits, and offline-network-required candidates produce stable rejection reason codes. r[cache_substitution.ordered_substituters] r[cache_substitution.structured_admission_diagnostics]
