@@ -7,7 +7,6 @@ use std::sync::Mutex;
 use std::sync::LazyLock;
 
 use snix_castore::B3Digest;
-use snix_castore::Directory;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
@@ -132,6 +131,7 @@ mod tests {
     use snix_castore::Node;
     use snix_castore::PathComponent;
     use snix_castore::SymlinkTarget;
+    use snix_castore::Directory;
     use snix_castore::blobservice::BlobService;
     use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::DirectoryPutter;

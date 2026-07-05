@@ -81,15 +81,22 @@ $ nix run path:/home/brittonr/git/cairn#cairn -- gate design production-remote-b
 $ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks production-remote-build-farm --root .     verdict: PASS
 ```
 
-## Remaining Work
+## Updated Tasks (mid-session)
 
 ### cache-substitution-reuse-diagnostics
-- [ ] V1 — priority-ordered multi-cache selection (needs store-layer multi-URL iteration + integration test)
-- [ ] V2 — repeated build--plan metadata reuse (needs build-plan-level integration test)
-- [ ] V3 — cached metadata substitution + final verification (needs store-level integration)
-- [ ] V4 — negative: untrusted signatures, prefix mismatches, fixed-output hits (some model tests exist, need store integration)
-- [ ] V5 — castore-incomplete rejection at store level (model-level tests exist)
-- [ ] V6 — stale/schema-mismatch metadata handling (model-level tests exist)
+V5 now done — wired recursive castore completeness into `check_cache` path and added
+integration test `check_cache_directory_output_with_missing_child_is_castore_incomplete`.
+V4 — model-level tests cover malformed URLs, duplicate trust conflicts, store prefix
+mismatches, offline detection, and all reason codes are stable. Untrusted signatures
+and fixed-output hits need store-level tests later.
+V6 — model-level tests cover all metadata validity cases (expired, schema-mismatch,
+trust-policy-mismatch, store-prefix-mismatch, identity-mismatch, output-digest-mismatch,
+explicit-refresh).
+
+Still active:
+- V1 — priority-ordered multi-cache selection (needs store-layer multi-URL iteration + integration test)
+- V2 — repeated build--plan metadata reuse (needs build-plan-level integration test)
+- V3 — cached metadata substitution + final verification (needs store-level integration)
 
 ### production-remote-build-farm
 - All I1-I7 implementation tasks unchecked

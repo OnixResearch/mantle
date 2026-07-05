@@ -42,7 +42,6 @@ use crate::Error;
 use crate::GcReport;
 use crate::GcRootRecord;
 use crate::GcRootSource;
-use crate::CompletenessMarkerStore;
 use crate::StoreAuditEvent;
 use crate::completeness::recursive_castore_completeness;
 use crate::StoreAuditKind;
@@ -745,7 +744,17 @@ impl StoreHandle {
 
             match stored {
                 Some(path_info) => {
-                    if self.castore_has_content(&path_info.node).await? {
+                    // Directory outputs require recursive castore completeness
+                    // (child blobs and subdirectories must be present). File and
+                    // symlink outputs only need root-node existence.
+                    // r[impl cache_substitution.castore_completeness]
+                    let has_content = match &path_info.node {
+                        Node::Directory { .. } => {
+                            self.castore_has_complete_content(&path_info.node).await?
+                        }
+                        _ => self.castore_has_content(&path_info.node).await?,
+                    };
+                    if has_content {
                         persist_artifact_attestation(&self.state_dir, &self.store_dir, &path_info, output_name, None)
                             .await?;
                         self.output_nodes.insert(output_path.clone(), path_info.node.clone());
@@ -759,7 +768,7 @@ impl StoreHandle {
                     } else {
                         tracing::warn!(
                             path = %output_path,
-                            "PathInfo exists but castore content missing, rebuilding"
+                            "PathInfo exists but castore content missing or incomplete, rebuilding"
                         );
                         return Ok(None);
                     }
@@ -2658,6 +2667,156 @@ mod tests {
 
         assert_eq!(reused, Some(expected_node.clone()));
         assert_eq!(handle.output_nodes.get(&output_path), Some(&expected_node));
+    }
+
+    #[tokio::test]
+    async fn check_cache_directory_output_with_missing_child_is_castore_incomplete() {
+        // V5: a directory output whose root exists but whose child blob
+        // is missing from castore is rejected as a cache miss.
+        // r[verify cache_substitution.castore_completeness]
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+
+        // Create a file blob.
+        let mut writer = handle.blob_service.open_write().await;
+        tokio::io::AsyncWriteExt::write_all(&mut writer, b"child-content").await.unwrap();
+        let blob_digest = writer.close().await.unwrap();
+
+        // Create a directory with that blob as a child.
+        let child_name = snix_castore::PathComponent::try_from("child.txt").unwrap();
+        let mut dir = snix_castore::Directory::new();
+        dir.add(child_name, Node::File {
+            digest: blob_digest,
+            size: 13,
+            executable: false,
+        }).unwrap();
+        let dir_digest = dir.digest();
+        let dir_size = dir.size();
+
+        // Put the directory node in castore.
+        handle.directory_service.put(dir).await.unwrap();
+
+        // Create a PathInfo pointing to the directory root.
+        let output_path = test_output("complete-check", 42);
+        let path_info = PathInfo {
+            store_path: output_path.clone(),
+            node: Node::Directory {
+                digest: dir_digest,
+                size: dir_size,
+            },
+            references: vec![],
+            nar_size: 100,
+            nar_sha256: [10u8; 32],
+            signatures: vec![test_signature()],
+            deriver: None,
+            ca: None,
+        };
+        handle.pathinfo_service.put(path_info.clone()).await.unwrap();
+
+        // Derivation with expected output path.
+        let drv_path = test_output("complete-check.drv", 41);
+        let mut outputs = std::collections::BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: Some(output_path.clone()),
+            ca_hash: None,
+        });
+        let derivation = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: std::collections::BTreeMap::new(),
+            input_derivations: std::collections::BTreeMap::new(),
+            input_sources: std::collections::BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        // Phase 1: directory exists but child blob is NOT in blob service.
+        // The root directory WAS put, but the child blob was not.
+        // Wait - we need to remove the blob from the blob service to
+        // simulate the incomplete case. But MemoryBlobService has no
+        // remove. Instead, don't put the blob in the first place:
+        // the blob_digest exists but there's no entry for it.
+
+        // Actually, we DID write the blob above. To test incomplete,
+        // use a different blob_digest that was never written.
+
+        // Rebuild with a missing-blob directory:
+        let missing_blob = snix_castore::B3Digest::from(blake3::hash(b"never-written").as_bytes());
+        let mut missing_dir = snix_castore::Directory::new();
+        missing_dir.add(
+            snix_castore::PathComponent::try_from("missing.txt").unwrap(),
+            Node::File {
+                digest: missing_blob,
+                size: 0,
+                executable: false,
+            },
+        ).unwrap();
+        let missing_dir_digest = missing_dir.digest();
+        let missing_dir_size = missing_dir.size();
+        handle.directory_service.put(missing_dir).await.unwrap();
+
+        let missing_output_path = test_output("missing-child", 43);
+        let missing_path_info = PathInfo {
+            store_path: missing_output_path.clone(),
+            node: Node::Directory {
+                digest: missing_dir_digest,
+                size: missing_dir_size,
+            },
+            references: vec![],
+            nar_size: 50,
+            nar_sha256: [11u8; 32],
+            signatures: vec![test_signature()],
+            deriver: None,
+            ca: None,
+        };
+        handle.pathinfo_service.put(missing_path_info.clone()).await.unwrap();
+
+        let mut missing_outputs = std::collections::BTreeMap::new();
+        missing_outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: Some(missing_output_path.clone()),
+            ca_hash: None,
+        });
+        let missing_derivation = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: std::collections::BTreeMap::new(),
+            input_derivations: std::collections::BTreeMap::new(),
+            input_sources: std::collections::BTreeSet::new(),
+            outputs: missing_outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let drv_path_missing = test_output("missing-child.drv", 44);
+
+        // Missing child blob → cache miss.
+        {
+            let cached = handle
+                .check_cache(&drv_path_missing, &missing_derivation, false, None)
+                .await
+                .unwrap();
+            assert!(
+                cached.is_none(),
+                "directory with missing child blob should NOT be a cache hit"
+            );
+        }
+
+        // Now put the missing blob → cache hit.
+        {
+            let mut writer = handle.blob_service.open_write().await;
+            tokio::io::AsyncWriteExt::write_all(&mut writer, b"never-written").await.unwrap();
+            writer.close().await.unwrap();
+        }
+
+        {
+            let cached = handle
+                .check_cache(&drv_path_missing, &missing_derivation, false, None)
+                .await
+                .unwrap();
+            assert!(
+                cached.is_some(),
+                "directory with all children present should be a cache hit"
+            );
+        }
     }
 
     #[tokio::test]
