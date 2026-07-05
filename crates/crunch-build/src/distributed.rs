@@ -1193,6 +1193,7 @@ mod tests {
                 mode: crunch_store::OutputSubstitutionMode::Full,
                 transferred_bytes: 0,
                 reused_bytes: 0,
+                metadata_reused: false,
                 fallback_reason: None,
             })]),
         )

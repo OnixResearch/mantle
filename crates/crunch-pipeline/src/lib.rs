@@ -51,7 +51,8 @@ pub struct BuildConfig {
     pub store_dir: String,
     pub verbose: bool,
     pub max_jobs: u32,
-    pub substituter_url: Option<String>,
+    /// Ordered list of substituter URLs. Empty = no remote substitution.
+    pub substituter_urls: Vec<String>,
     pub hermeticity_mode: HermeticityMode,
     /// Signing keypair — every build output gets signed.
     pub keypair: KeyPair,
@@ -146,7 +147,7 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     let store = match crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: config.state_dir.clone(),
         output_dir: config.output_dir.clone(),
-        remote_cache_url: config.substituter_url.clone(),
+        remote_cache_urls: config.substituter_urls.clone(),
         fallback_mode: store_fallback_mode(config.hermeticity_mode),
         store_dir: config.store_dir.clone(),
     })

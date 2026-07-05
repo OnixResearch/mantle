@@ -701,7 +701,7 @@ mod tests {
         StoreHandle::open(StoreConfig {
             state_dir: state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
-            remote_cache_url: None,
+            remote_cache_urls: Vec::new(),
             fallback_mode: crate::StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
         })

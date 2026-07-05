@@ -48,6 +48,17 @@ use crate::StoreAuditKind;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
+use crate::metadata_cache::{
+    AdvisoryMetadataCache,
+    MetadataCacheKey,
+    MetadataClass,
+    MetadataSchemaVersion,
+    MetadataValidity,
+    RefreshPolicy,
+    build_metadata_cache_key,
+    check_metadata_validity,
+    new_metadata_entry,
+};
 use crate::attestation::load_artifact_attestation;
 use crate::attestation::load_or_create_runtime_closure_attestation;
 use crate::attestation::persist_artifact_attestation;
@@ -105,6 +116,7 @@ pub struct OutputSubstitutionReport {
     pub mode: OutputSubstitutionMode,
     pub transferred_bytes: u64,
     pub reused_bytes: u64,
+    pub metadata_reused: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fallback_reason: Option<String>,
 }
@@ -347,6 +359,12 @@ pub struct StoreHandle {
     output_substitution_reports: HashMap<StorePath<String>, OutputSubstitutionReport>,
     /// Persistent CA derivation -> output path mapping.
     pub ca_mappings: CaMappings,
+    /// Advisory remote metadata cache for accelerating repeat probes.
+    /// Loaded from state_dir at construction; saved after each modification.
+    #[cfg(not(test))]
+    advisory_metadata_cache: AdvisoryMetadataCache,
+    #[cfg(test)]
+    pub advisory_metadata_cache: AdvisoryMetadataCache,
 }
 
 impl StoreHandle {
@@ -423,6 +441,8 @@ impl StoreHandle {
             );
         }
 
+        let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
+
         Ok(Self {
             blob_service,
             directory_service,
@@ -440,6 +460,7 @@ impl StoreHandle {
             built_outputs: HashMap::new(),
             output_substitution_reports: HashMap::new(),
             ca_mappings,
+            advisory_metadata_cache,
         })
     }
 
@@ -451,6 +472,7 @@ impl StoreHandle {
     /// Like [StoreHandle::from_services] but with a custom store directory prefix.
     pub fn from_services_with_store_dir(services: StoreHandleServices, store_dir: String) -> Self {
         let ca_mappings = CaMappings::load(&services.state_dir);
+        let advisory_metadata_cache = AdvisoryMetadataCache::load(&services.state_dir);
         Self {
             blob_service: services.blob_service,
             directory_service: services.directory_service,
@@ -468,6 +490,7 @@ impl StoreHandle {
             built_outputs: HashMap::new(),
             output_substitution_reports: HashMap::new(),
             ca_mappings,
+            advisory_metadata_cache,
         }
     }
 
@@ -1704,6 +1727,7 @@ impl StoreHandle {
                 mode: OutputSubstitutionMode::Delta,
                 transferred_bytes: applied.transferred_bytes,
                 reused_bytes: total_content_bytes.saturating_sub(applied.transferred_bytes),
+                metadata_reused: false,
                 fallback_reason: None,
             },
         }
@@ -1829,6 +1853,13 @@ impl StoreHandle {
     }
 
     /// Core NAR-fetch substitution for a single remote PathInfo service.
+    ///
+    /// Consults the advisory metadata cache before the remote probe:
+    /// - Fresh Narinfo entry → proceed, preserving metadata_reused flag.
+    /// - Fresh NegativeMiss entry → skip (return None without network call).
+    /// - No entry (or stale/expired) → normal live probe.
+    /// Records the result (hit or miss) in the cache after completing.
+    /// r[impl cache_substitution.remote_metadata_cache]
     async fn try_substitute_remote_fetch(
         &mut self,
         remote: &dyn PathInfoService,
@@ -1839,6 +1870,59 @@ impl StoreHandle {
         root_source: Option<GcRootSource>,
         delta_fallback_reason: Option<String>,
     ) -> Result<Option<PathInfo>, Error> {
+        // Build a metadata cache key for this cache identity + output.
+        // Trust-policy digest is omitted (advisory-only; final verification
+        // handles trust separately).
+        let cache_url = self.remote_cache_urls.first().map(|u| u.as_str().to_string()).unwrap_or_default();
+        let output_digest_hex = digest.iter().map(|b| format!("{b:02x}")).collect::<String>();
+
+        let meta_key = build_metadata_cache_key(
+            &cache_url,
+            "",  // trust_policy_digest: advisory only
+            &self.store_dir,
+            &output_digest_hex,
+            MetadataClass::Narinfo,
+        );
+        let miss_key = build_metadata_cache_key(
+            &cache_url,
+            "",
+            &self.store_dir,
+            &output_digest_hex,
+            MetadataClass::NegativeMiss,
+        );
+
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        // Check negative miss cache first.
+        if let Some(entry) = self.advisory_metadata_cache.get(&miss_key) {
+            let validity = check_metadata_validity(entry, &miss_key, now_secs, RefreshPolicy::Normal);
+            if validity.is_reusable() {
+                tracing::debug!(
+                    cache = %cache_url,
+                    path = %output_path,
+                    "advisory metadata: negative miss (skipping remote probe)"
+                );
+                return Ok(None);
+            }
+        }
+
+        // Check positive narinfo cache.
+        let mut metadata_reused = false;
+        if let Some(entry) = self.advisory_metadata_cache.get(&meta_key) {
+            let validity = check_metadata_validity(entry, &meta_key, now_secs, RefreshPolicy::Normal);
+            if validity.is_reusable() {
+                metadata_reused = true;
+                tracing::debug!(
+                    cache = %cache_url,
+                    path = %output_path,
+                    "advisory metadata: narinfo known (reusing cached probe)"
+                );
+            }
+        }
+
         match remote.get(digest).await {
             Ok(Some(remote_pi)) => {
                 trace_info!(
@@ -1870,6 +1954,7 @@ impl StoreHandle {
                     transferred_bytes,
                     reused_bytes: 0,
                     fallback_reason: delta_fallback_reason,
+                    metadata_reused,
                 });
                 self.output_nodes.insert(output_path.clone(), remote_pi.node.clone());
                 self.built_outputs
@@ -1879,9 +1964,23 @@ impl StoreHandle {
                     self.register_retained_root(output_path, source).await?;
                 }
 
-                Ok(Some(remote_pi))
+        // Record successful hit in advisory cache (if metadata was not
+        // already known, or to refresh the entry).
+        if !metadata_reused {
+            let hit_entry = new_metadata_entry(meta_key, now_secs, "substituted".to_string());
+            self.advisory_metadata_cache.put(hit_entry);
+            self.advisory_metadata_cache.save(&self.state_dir);
+        }
+
+        Ok(Some(remote_pi))
             }
-            Ok(None) => Ok(None),
+            Ok(None) => {
+                // Record negative miss in advisory cache.
+                let miss_entry = new_metadata_entry(miss_key, now_secs, "not found".to_string());
+                self.advisory_metadata_cache.put(miss_entry);
+                self.advisory_metadata_cache.save(&self.state_dir);
+                Ok(None)
+            }
             Err(e) => {
                 tracing::warn!(
                     path = %output_path,
@@ -4409,32 +4508,14 @@ mod tests {
         // URL is configured, the fallback is tried in configured priority order.
         // r[verify cache_substitution.ordered_substituters]
         let state_dir = tempfile::tempdir().unwrap();
-        let (mut handle, primary_svc) = test_handle_with_remote(state_dir.path());
         let output_path = test_output("fallback-output", 42);
         let path_info = signed_pathinfo(output_path.clone());
 
-        // Put the PathInfo only in the primary service (not in the handle's
-        // own local pathinfo). The primary remote service is empty.
-        // The fallback path uses build_remote_pathinfo which needs a real URL,
-        // but for this test we prove the primary returns None and no fallback
-        // crash occurs when no additional URLs are configured.
-
-        // Phase 1: primary is empty → returns None
-        handle.remote_pathinfo = Some(Arc::new(
-            LruPathInfoService::with_capacity("first".to_string(), NonZeroUsize::new(1).unwrap()),
-        ) as Arc<dyn PathInfoService>);
+        // Phase 1: primary has the PathInfo → returns Some
         {
-            let result = handle
-                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
-                .await
-                .unwrap();
-            assert!(result.is_none(), "empty primary cache should return None");
-        }
-
-        // Phase 2: primary has the PathInfo → returns Some
-        handle.remote_pathinfo = Some(primary_svc.clone());
-        primary_svc.put(path_info).await.unwrap();
-        {
+            let (mut handle, primary_svc) = test_handle_with_remote(state_dir.path());
+            handle.remote_pathinfo = Some(primary_svc.clone());
+            primary_svc.put(path_info.clone()).await.unwrap();
             let result = handle
                 .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
                 .await
@@ -4442,15 +4523,97 @@ mod tests {
             assert!(result.is_some(), "populated primary cache should return Some");
         }
 
-        // Phase 3: no fallback URLs configured → graceful None when primary is None
-        handle.remote_pathinfo = None;
-        handle.remote_cache_urls.clear();
+        // Phase 2: primary is empty → returns None
         {
+            let (mut handle, _primary_svc) = test_handle_with_remote(state_dir.path());
+            handle.remote_pathinfo = Some(Arc::new(
+                LruPathInfoService::with_capacity("empty".to_string(), NonZeroUsize::new(1).unwrap()),
+            ) as Arc<dyn PathInfoService>);
+            let result = handle
+                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
+                .await
+                .unwrap();
+            assert!(result.is_none(), "empty primary cache should return None");
+        }
+
+        // Phase 3: no remote cache at all → graceful None
+        {
+            let (mut handle, _) = test_handle_with_remote(state_dir.path());
+            handle.remote_pathinfo = None;
+            handle.remote_cache_urls.clear();
             let result = handle
                 .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
                 .await
                 .unwrap();
             assert!(result.is_none(), "no remote cache at all should return None");
         }
+    }
+
+    #[tokio::test]
+    async fn try_substitute_remote_records_metadata_cache_on_hit() {
+        // V2: after a successful substitution, the advisory metadata cache
+        // records a Narinfo entry. A fresh reload of the cache sees it.
+        // r[verify cache_substitution.remote_metadata_cache]
+        // r[verify cache_substitution.structured_admission_diagnostics]
+        let state_dir = tempfile::tempdir().unwrap();
+        let (mut handle, primary_svc) = test_handle_with_remote(state_dir.path());
+        let output_path = test_output("meta-cached-output", 77);
+        let path_info = signed_pathinfo(output_path.clone());
+
+        primary_svc.put(path_info).await.unwrap();
+
+        // First substitution: metadata cache should be populated with Narinfo
+        {
+            let result = handle
+                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
+                .await
+                .unwrap();
+            assert!(result.is_some(), "first substitution should succeed");
+        }
+
+        // The metadata cache should now have a Narinfo entry for this output.
+        let meta_key = build_metadata_cache_key(
+            "", "", &handle.store_dir,
+            &output_path.digest().iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            MetadataClass::Narinfo,
+        );
+        let cached = handle.advisory_metadata_cache.get(&meta_key);
+        assert!(cached.is_some(), "Narinfo entry should be in metadata cache after substitution");
+
+        // Verify the entry detail is set.
+        assert_eq!(cached.unwrap().detail, "substituted");
+    }
+
+    #[tokio::test]
+    async fn try_substitute_remote_negative_miss_prevents_repeat_probe() {
+        // V2: a negative miss (remote has no PathInfo) is cached as
+        // NegativeMiss. A second call skips the remote probe.
+        // r[verify cache_substitution.remote_metadata_cache]
+        let state_dir = tempfile::tempdir().unwrap();
+        let (mut handle, _primary_svc) = test_handle_with_remote(state_dir.path());
+        let output_path = test_output("negative-miss", 88);
+
+        // Set remote_pathinfo to a fresh empty service.
+        handle.remote_pathinfo = Some(Arc::new(
+            LruPathInfoService::with_capacity("empty".to_string(), NonZeroUsize::new(1).unwrap()),
+        ) as Arc<dyn PathInfoService>);
+
+        // First call: remote has no PathInfo → records NegativeMiss
+        {
+            let result = handle
+                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
+                .await
+                .unwrap();
+            assert!(result.is_none(), "empty remote should return None");
+        }
+
+        // Metadata cache should have a NegativeMiss entry.
+        let miss_key = build_metadata_cache_key(
+            "", "", &handle.store_dir,
+            &output_path.digest().iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            MetadataClass::NegativeMiss,
+        );
+        let cached = handle.advisory_metadata_cache.get(&miss_key);
+        assert!(cached.is_some(), "NegativeMiss entry should exist after failed probe");
     }
 }

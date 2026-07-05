@@ -4678,6 +4678,7 @@ fn remote_transfer_to_store_report(transfer: &RemoteTransferReport) -> crunch_st
         mode: remote_transfer_mode_to_store_mode(transfer.mode),
         transferred_bytes: transfer.transferred_bytes,
         reused_bytes: transfer.reused_bytes,
+        metadata_reused: false,
         fallback_reason: transfer.fallback_reason.clone(),
     }
 }

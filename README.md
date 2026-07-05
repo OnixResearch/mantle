@@ -110,6 +110,78 @@ Planned action labels:
   (for example missing output store dir, missing `bwrap`, or missing sandbox
   shell)
 
+### Cache substitution diagnostics
+
+Mantle models remote binary caches as a bounded ordered set of **cache
+candidates** (not a single URL). The `--substituters` flag accepts a
+comma-separated list. Each entry becomes a candidate with deterministic
+priority matching configuration order:
+
+```bash
+mantle build --substituters "https://cache.example.com,https://backup.example.com" hello.ncl
+```
+
+Per-output cache admission diagnostics are available in both plan and
+build report output. JSON output includes a `cache_admission` block:
+
+```json
+{
+  "cache_admission": {
+    "reason": "local-hit"
+  }
+}
+```
+
+Stable reason codes: `local-hit`, `remote-hit`, `miss`,
+`untrusted-signature`, `store-prefix-mismatch`, `fixed-output-remote-hit`,
+`offline-network-required`, `local-castore-incomplete`, and
+`duplicate-identity-trust-mismatch`.
+
+The `cache_admission` field is omitted when no admission data is available,
+preserving compatibility with existing consumers.
+
+### Remote metadata cache
+
+Remote cache metadata is cached under the state directory in
+`advisory-meta-cache.json`. Cached metadata is advisory only — it can
+accelerate planning but never admits an output without final PathInfo
+signature, content hash, castore completeness, and attestation
+verification. Features: TTL-based expiry (15 minutes for narinfo, 5
+minutes for negative misses), schema versioning, trust-policy isolation,
+explicit refresh via `--no-substitute` or `force-refresh`, and bounded
+capacity (10,000 entries).
+
+### Castore completeness
+
+Before reporting a local cache hit, Mantle verifies the full castore
+tree is present (not just the root node). Directory outputs require
+recursive checking of child blobs and subdirectories. The check uses an
+iterative stack-based traversal bounded to 100,000 nodes and 128 depth
+levels, with global in-memory completeness markers that skip redundant
+probing for verified directory nodes. Symlinks are always complete.
+Incomplete trees return `local-castore-incomplete` instead of silently
+falling through to a remote lookup or rebuild.
+
+### Cache hit reporting
+
+For successful cache hits, each output may include a `substitution`
+block:
+
+```json
+{
+  "substitution": {
+    "mode": "delta",
+    "transferred_bytes": 12,
+    "reused_bytes": 34
+  }
+}
+```
+
+`mode` is `delta` when mantle completed the hit through delta reuse and
+`full` when it completed through ordinary full-artifact fetch.
+`fallback_reason` only appears when mantle started delta negotiation but
+finished through full fetch.
+
 Recommended operator workflow:
 
 1. Run `mantle doctor` for the intended workflow profile.
