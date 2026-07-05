@@ -55,6 +55,7 @@ pub const DEFAULT_REMOTE_CONCURRENCY: u32 = 1;
 pub const MAX_TICKET_DISPLAY_NAME_BYTES: usize = 128;
 const TICKET_STATE_DIR: &str = "remote-builders";
 const TICKET_STATE_FILE: &str = "tickets.json";
+const COORDINATOR_STATE_FILE: &str = "remote-coordinator-state.json";
 const SECRET_REDACTION: &str = "<redacted>";
 const TEMP_FILE_EXTENSION: &str = "tmp";
 const REMOTE_FRAME_HEADER_BYTES: usize = std::mem::size_of::<u32>();
@@ -996,6 +997,9 @@ pub struct RemoteCoordinatorState {
     pub jobs: BTreeMap<String, RemoteCoordinatorJobSummary>,
     pub live_output_claims: BTreeMap<String, String>,
     pub logs: BTreeMap<String, Vec<RemoteCoordinatorLogChunk>>,
+    /// When set, mutations auto-save to this directory for durability.
+    #[serde(skip)]
+    pub state_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3256,6 +3260,11 @@ pub fn admit_coordinator_dispatch(
         }
         state.jobs.insert(job_id.clone(), summary);
     }
+    // Auto-save after mutation for durability.
+    if let Some(ref sd) = state.state_dir {
+        let _ = save_coordinator_state(sd, state)
+            .map_err(|e| tracing::warn!("coordinator state save failed: {e}"));
+    }
     Ok(decision)
 }
 
@@ -5349,6 +5358,35 @@ pub fn save_ticket_state(state_dir: &Path, state: &RemoteTicketState) -> Result<
         .map_err(|err| RunError::Internal(format!("committing remote ticket state {}: {err}", path.display())))
 }
 
+fn coordinator_state_path(state_dir: &Path) -> PathBuf {
+    state_dir.join(COORDINATOR_STATE_FILE)
+}
+
+pub fn load_coordinator_state(state_dir: &Path) -> Result<RemoteCoordinatorState, RunError> {
+    let path = coordinator_state_path(state_dir);
+    if !path.exists() {
+        return Ok(RemoteCoordinatorState::default());
+    }
+    let bytes = fs::read(&path)
+        .map_err(|err| RunError::Internal(format!("reading coordinator state {}: {err}", path.display())))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|err| RunError::Internal(format!("parsing coordinator state {}: {err}", path.display())))
+}
+
+pub fn save_coordinator_state(state_dir: &Path, state: &RemoteCoordinatorState) -> Result<(), RunError> {
+    let path = coordinator_state_path(state_dir);
+    let parent = path.parent().expect("coordinator state path has parent");
+    fs::create_dir_all(parent)
+        .map_err(|err| RunError::Internal(format!("creating coordinator state dir {}: {err}", parent.display())))?;
+    let rendered = serde_json::to_string_pretty(state)
+        .map_err(|err| RunError::Internal(format!("serializing coordinator state: {err}")))?;
+    let tmp = path.with_extension(TEMP_FILE_EXTENSION);
+    fs::write(&tmp, format!("{rendered}\n"))
+        .map_err(|err| RunError::Internal(format!("writing coordinator state temp {}: {err}", tmp.display())))?;
+    fs::rename(&tmp, &path)
+        .map_err(|err| RunError::Internal(format!("committing coordinator state {}: {err}", path.display())))
+}
+
 fn validate_ticket_limits(
     display_name: &str,
     ttl_secs: u64,
@@ -5508,7 +5546,7 @@ fn cmd_remote_status(
 ) -> Result<(), RunError> {
     let ticket_state = load_ticket_state(state_dir)?;
     let tickets = ticket_state.tickets.values().cloned().collect::<Vec<_>>();
-    let coordinator_state = RemoteCoordinatorState::default();
+    let coordinator_state = load_coordinator_state(state_dir)?;
     let snapshot = coordinator_status_snapshot(&endpoint_id, concurrency, &coordinator_state, &tickets)
         .map_err(RunError::Internal)?;
     print_json_or_human(&snapshot, json_output)
