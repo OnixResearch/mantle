@@ -128,6 +128,7 @@ pub struct BuildPlanConfig<'a> {
     pub trusted_public_keys: Option<&'a [VerifyingKey]>,
     pub trust_unsigned: bool,
     pub remote_builder: Option<&'a crate::realization_routing::RemoteBuilderPlanFacts>,
+    pub source_preflight: Option<&'a crate::source_bundle::SourceOfflinePreflightReport>,
     pub output_mode: BuildOutputMode,
 }
 
@@ -175,6 +176,7 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
             &doctor_report,
             preflight_error.as_deref(),
             config.remote_builder,
+            config.source_preflight,
             &root,
         )
         .await?;
@@ -242,21 +244,45 @@ async fn plan_root_action(
     doctor_report: &crate::operator_diagnostics::PreflightReport,
     preflight_error: Option<&str>,
     remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
+    source_preflight: Option<&crate::source_bundle::SourceOfflinePreflightReport>,
     root: &PlannedRoot,
 ) -> Result<BuildPlanEntry, RunError> {
     if let Some(detail) = preflight_error {
-        return Ok(root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail.to_string()), remote_builder));
+        return Ok(root.remote_aware_preflight_entry(
+            &plan_store.store_dir,
+            Some(detail.to_string()),
+            remote_builder,
+            source_preflight,
+        ));
     }
 
     let cache_status = plan_store.classify_cache(root, trust).await?;
     if cache_status.all_local {
-        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Cached, cache_status.detail, remote_builder));
+        return Ok(root.plan_entry(
+            &plan_store.store_dir,
+            PlanAction::Cached,
+            cache_status.detail,
+            remote_builder,
+            source_preflight,
+        ));
     }
-    if cache_status.any_remote && !cache_status.any_build {
-        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Substitute, cache_status.detail, remote_builder));
+    if cache_status.any_remote && !cache_status.any_build && source_preflight.is_none() {
+        return Ok(root.plan_entry(
+            &plan_store.store_dir,
+            PlanAction::Substitute,
+            cache_status.detail,
+            remote_builder,
+            source_preflight,
+        ));
     }
     if doctor_report.ok {
-        return Ok(root.plan_entry(&plan_store.store_dir, PlanAction::Build, cache_status.detail, remote_builder));
+        return Ok(root.plan_entry(
+            &plan_store.store_dir,
+            PlanAction::Build,
+            cache_status.detail,
+            remote_builder,
+            source_preflight,
+        ));
     }
 
     let failing_checks: Vec<&str> = doctor_report
@@ -266,7 +292,7 @@ async fn plan_root_action(
         .map(|check| check.id)
         .collect();
     let detail = format!("local build blocked by preflight checks: {}", failing_checks.join(", "));
-    Ok(root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder))
+    Ok(root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder, source_preflight))
 }
 
 struct PlannedRoot {
@@ -282,11 +308,14 @@ impl PlannedRoot {
         action: PlanAction,
         detail: Option<String>,
         remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
+        source_preflight: Option<&crate::source_bundle::SourceOfflinePreflightReport>,
     ) -> BuildPlanEntry {
-        let route_plan = crate::realization_routing::route_plan_for_build_action_with_remote(
+        let source_facts = source_preflight.map(source_bundle_route_facts);
+        let route_plan = crate::realization_routing::route_plan_for_build_action_with_remote_and_source(
             action.as_str(),
             detail.as_deref(),
             remote_builder,
+            source_facts.as_ref(),
         );
         BuildPlanEntry {
             drv_key: self.drv_path.to_absolute_path_with_prefix(store_dir),
@@ -302,12 +331,44 @@ impl PlannedRoot {
         store_dir: &str,
         detail: Option<String>,
         remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
+        source_preflight: Option<&crate::source_bundle::SourceOfflinePreflightReport>,
     ) -> BuildPlanEntry {
-        let mut entry = self.plan_entry(store_dir, PlanAction::PreflightError, detail, remote_builder);
+        let mut entry =
+            self.plan_entry(store_dir, PlanAction::PreflightError, detail, remote_builder, source_preflight);
         if entry.route_plan.selected_route == crate::realization_routing::RouteClass::P2pRemoteBuilder {
             entry.action = PlanAction::Build;
         }
         entry
+    }
+}
+
+fn source_bundle_route_facts(
+    report: &crate::source_bundle::SourceOfflinePreflightReport,
+) -> crate::realization_routing::SourceBundleRouteFacts {
+    let required = report.record_count > 0;
+    let ready = required && report.ready_class == crate::source_bundle::SourceReadiness::Ready;
+    crate::realization_routing::SourceBundleRouteFacts {
+        required,
+        ready,
+        reason_code: source_readiness_reason_code(report.ready_class),
+        detail: Some(format!(
+            "source_state_blake3={}; records={}; non_claim={}",
+            report.source_state_blake3,
+            report.record_count,
+            crate::source_bundle::SOURCE_BUNDLE_NON_CLAIM
+        )),
+    }
+}
+
+fn source_readiness_reason_code(readiness: crate::source_bundle::SourceReadiness) -> &'static str {
+    match readiness {
+        crate::source_bundle::SourceReadiness::Ready => "declared-source-bundle-ready",
+        crate::source_bundle::SourceReadiness::Missing => "missing-source-state",
+        crate::source_bundle::SourceReadiness::Stale => "stale-source-state",
+        crate::source_bundle::SourceReadiness::Unsupported => "unsupported-source-adapter",
+        crate::source_bundle::SourceReadiness::Untrusted => "untrusted-source-adapter",
+        crate::source_bundle::SourceReadiness::NetworkRequired => "network-required-source",
+        crate::source_bundle::SourceReadiness::Unpinned => "unpinned-source-state",
     }
 }
 

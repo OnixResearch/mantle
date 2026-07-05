@@ -68,6 +68,8 @@ pub use environment_policy::plan_determinism_normalization;
 pub use error::Error;
 pub use fetch_build_service::FETCH_BUILDER;
 pub use fetch_build_service::FetchBuildService;
+pub use fetch_build_service::FetchSourceOverride;
+pub use fetch_build_service::FetchSourceOverrideKind;
 pub use fetch_build_service::is_fetch_request;
 pub use fetcher::Fetch;
 pub use fetcher::FetchError;

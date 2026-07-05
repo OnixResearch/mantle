@@ -89,7 +89,6 @@ const UNIX_EXECUTE_BITS: u32 = 0o111;
 
 use build_cmd::BuildOutputMode;
 use build_cmd::build_import_paths;
-use build_cmd::cmd_build;
 use build_cmd::state_dir;
 use clap::Parser;
 use clap::Subcommand;
@@ -3110,7 +3109,7 @@ fn run_build_command(
     match target {
         project_build::BuildTarget::File(path) => {
             let import_paths = build_import_paths(import_paths)?;
-            run_offline_source_preflight_if_requested(
+            let source_preflight = run_offline_source_preflight_if_requested(
                 offline_source_preflight,
                 &path,
                 &import_paths,
@@ -3118,6 +3117,16 @@ fn run_build_command(
                 &ctx.store_prefix,
                 ctx.output_mode(),
             )?;
+            let source_fetch_plan = if offline_source_preflight && !plan && remote_selection.is_none() {
+                Some(source_bundle::source_fetch_override_plan_for_file(
+                    &path,
+                    &import_paths,
+                    &ctx.resolved_state_dir,
+                    &ctx.store_prefix,
+                )?)
+            } else {
+                None
+            };
             if let Some(remote_selection) = &remote_selection {
                 return run_remote_build_file_command(
                     remote_selection,
@@ -3141,10 +3150,30 @@ fn run_build_command(
                     trusted_public_keys: parsed_trusted.as_deref(),
                     trust_unsigned,
                     remote_builder: remote_plan_facts.as_ref(),
+                    source_preflight: source_preflight.as_ref(),
                     output_mode: ctx.output_mode(),
                 });
             }
-            cmd_build(
+            if let Some(source_fetch_plan) = source_fetch_plan.as_ref() {
+                return build_cmd::cmd_build_with_source_fetch_overrides(
+                    &path,
+                    &import_paths,
+                    &ctx.store,
+                    &ctx.resolved_state_dir,
+                    &ctx.store_prefix,
+                    ctx.verbose,
+                    fix,
+                    max_jobs,
+                    substituter_url,
+                    signing_key,
+                    parsed_trusted.as_deref(),
+                    trust_unsigned,
+                    hermeticity_mode,
+                    ctx.output_mode(),
+                    source_fetch_plan.overrides.clone(),
+                );
+            }
+            build_cmd::cmd_build(
                 &path,
                 &import_paths,
                 &ctx.store,
@@ -3167,13 +3196,20 @@ fn run_build_command(
             let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
             let mut full_import_paths = build_import_paths(&[])?;
             full_import_paths.extend(resolved.import_paths);
-            run_offline_source_preflight_for_expr_if_requested(
+            let source_preflight = run_offline_source_preflight_for_expr_if_requested(
                 offline_source_preflight,
                 &expr,
                 &full_import_paths,
                 &ctx.resolved_state_dir,
                 &ctx.store_prefix,
                 ctx.output_mode(),
+            )?;
+            let source_fetch_plan = source_fetch_override_plan_for_expr_if_requested(
+                offline_source_preflight && !plan && remote_selection.is_none(),
+                &expr,
+                &full_import_paths,
+                &ctx.resolved_state_dir,
+                &ctx.store_prefix,
             )?;
             if let Some(remote_selection) = &remote_selection {
                 return run_remote_build_expr_command(
@@ -3198,6 +3234,7 @@ fn run_build_command(
                     parsed_trusted.as_deref(),
                     trust_unsigned,
                     remote_plan_facts.as_ref(),
+                    source_preflight.as_ref(),
                     ctx.output_mode(),
                 );
             }
@@ -3216,6 +3253,7 @@ fn run_build_command(
                 trust_unsigned,
                 hermeticity_mode,
                 ctx.output_mode(),
+                source_fetch_plan.as_ref().map(|plan| plan.overrides.clone()).unwrap_or_default(),
             )
         }
     }
@@ -3591,13 +3629,13 @@ fn run_offline_source_preflight_if_requested(
     state_dir: &Path,
     store_prefix: &str,
     output_mode: BuildOutputMode,
-) -> Result<(), RunError> {
+) -> Result<Option<source_bundle::SourceOfflinePreflightReport>, RunError> {
     if !enabled {
-        return Ok(());
+        return Ok(None);
     }
     let report = source_bundle::offline_preflight_for_file(file, import_paths, state_dir, store_prefix)?;
     if source_bundle::source_offline_preflight_is_ready(&report) {
-        return Ok(());
+        return Ok(Some(report));
     }
     source_bundle::print_offline_preflight_report(&report, output_mode == BuildOutputMode::Json)?;
     Err(RunError::Reported(1))
@@ -3610,14 +3648,30 @@ fn run_offline_source_preflight_for_expr_if_requested(
     state_dir: &Path,
     store_prefix: &str,
     output_mode: BuildOutputMode,
-) -> Result<(), RunError> {
+) -> Result<Option<source_bundle::SourceOfflinePreflightReport>, RunError> {
     if !enabled {
-        return Ok(());
+        return Ok(None);
     }
     let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
         .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
     std::fs::write(tmp.path(), expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
     run_offline_source_preflight_if_requested(true, tmp.path(), import_paths, state_dir, store_prefix, output_mode)
+}
+
+fn source_fetch_override_plan_for_expr_if_requested(
+    enabled: bool,
+    expr: &str,
+    import_paths: &[std::ffi::OsString],
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<Option<source_bundle::SourceFetchOverridePlan>, RunError> {
+    if !enabled {
+        return Ok(None);
+    }
+    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
+        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
+    std::fs::write(tmp.path(), expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+    source_bundle::source_fetch_override_plan_for_file(tmp.path(), import_paths, state_dir, store_prefix).map(Some)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4620,6 +4674,7 @@ fn build_from_expr(
     trust_unsigned: bool,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
     output_mode: BuildOutputMode,
+    source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
 ) -> Result<(), RunError> {
     debug_assert!(max_jobs > 0, "max_jobs must be positive");
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute");
@@ -4627,7 +4682,7 @@ fn build_from_expr(
         .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
     std::fs::write(tmp.path(), expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
 
-    cmd_build(
+    build_cmd::cmd_build_with_source_fetch_overrides(
         tmp.path(),
         import_paths,
         output_dir,
@@ -4642,6 +4697,7 @@ fn build_from_expr(
         trust_unsigned,
         hermeticity_mode,
         output_mode,
+        source_fetch_overrides,
     )
 }
 
@@ -4657,6 +4713,7 @@ fn build_plan_from_expr(
     trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
     remote_builder: Option<&realization_routing::RemoteBuilderPlanFacts>,
+    source_preflight: Option<&source_bundle::SourceOfflinePreflightReport>,
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
     let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
@@ -4674,6 +4731,7 @@ fn build_plan_from_expr(
         trusted_public_keys,
         trust_unsigned,
         remote_builder,
+        source_preflight,
         output_mode,
     })
 }
@@ -4718,6 +4776,7 @@ fn build_from_expr_raw(
         trusted_keys,
         trust_unsigned,
         root_retention_source: None,
+        source_fetch_overrides: Vec::new(),
     };
 
     build_cmd::run_build(&config)
@@ -4976,6 +5035,7 @@ fn build_file_raw(
         trusted_keys,
         trust_unsigned,
         root_retention_source: None,
+        source_fetch_overrides: Vec::new(),
     };
 
     build_cmd::run_build(&config)

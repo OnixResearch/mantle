@@ -55,6 +55,43 @@ pub fn cmd_build(
     hermeticity_mode: HermeticityMode,
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
+    cmd_build_with_source_fetch_overrides(
+        file,
+        import_paths,
+        output_dir,
+        state_dir,
+        store_dir,
+        verbose,
+        fix,
+        max_jobs,
+        substituter_url,
+        signing_key_path,
+        trusted_public_keys,
+        trust_unsigned,
+        hermeticity_mode,
+        output_mode,
+        Vec::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn cmd_build_with_source_fetch_overrides(
+    file: &Path,
+    import_paths: &[OsString],
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    verbose: bool,
+    fix: bool,
+    max_jobs: u32,
+    substituter_url: Option<&str>,
+    signing_key_path: Option<&Path>,
+    trusted_public_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+    trust_unsigned: bool,
+    hermeticity_mode: HermeticityMode,
+    output_mode: BuildOutputMode,
+    source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
+) -> Result<(), RunError> {
     let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, output_mode.is_human())?;
     let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
     let trusted_keys = signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
@@ -73,6 +110,7 @@ pub fn cmd_build(
         trusted_keys,
         trust_unsigned,
         root_retention_source: Some(GcRootSource::Build),
+        source_fetch_overrides,
     };
 
     let result = run_build(&config)?;

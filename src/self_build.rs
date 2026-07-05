@@ -2285,6 +2285,7 @@ fn build_crunch_binary(
         trusted_keys,
         trust_unsigned,
         root_retention_source: Some(crunch_store::GcRootSource::SelfBuild),
+        source_fetch_overrides: Vec::new(),
     };
 
     let result = run_build(&config)?;
@@ -2338,6 +2339,7 @@ fn build_bootstrap_tool(
         trusted_keys: trusted_keys.to_vec(),
         trust_unsigned,
         root_retention_source: None,
+        source_fetch_overrides: Vec::new(),
     };
 
     let result = run_build(&config)?;

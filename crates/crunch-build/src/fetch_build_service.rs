@@ -8,7 +8,10 @@
 //! disk — those stay in the shared `finish_build` path.
 
 use std::collections::BTreeSet;
+use std::fs;
 use std::io;
+use std::path::Path;
+use std::path::PathBuf;
 
 use async_trait::async_trait;
 use snix_build::buildservice::BuildOutput;
@@ -26,6 +29,11 @@ use crate::fetcher::{self};
 
 /// The builder string that identifies builtin fetcher derivations.
 pub const FETCH_BUILDER: &str = "builtin:fetchurl";
+
+const MAX_SOURCE_OVERRIDES: usize = 65_536;
+const MAX_OVERRIDE_COPY_ENTRIES: usize = 262_144;
+#[cfg(unix)]
+const UNIX_EXECUTABLE_FILE_MODE: u32 = 0o755;
 
 /// Returns `true` if this `BuildRequest` targets the builtin fetcher.
 pub fn is_fetch_request(request: &BuildRequest) -> bool {
@@ -48,6 +56,37 @@ enum FetchKind {
     Executable { url: Url },
     /// Clone a git repo at a specific revision.
     Git { url: String, rev: String },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FetchSourceOverrideKind {
+    File,
+    Tarball,
+    Executable,
+    Git,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FetchSourceOverride {
+    pub url: String,
+    pub kind: FetchSourceOverrideKind,
+    pub rev: Option<String>,
+    pub payload_path: PathBuf,
+    pub source_state_blake3: String,
+}
+
+impl FetchSourceOverride {
+    fn matches(&self, fetch: &FetchKind) -> bool {
+        match (self.kind, fetch) {
+            (FetchSourceOverrideKind::File, FetchKind::File { url }) => self.url == url.as_str(),
+            (FetchSourceOverrideKind::Tarball, FetchKind::Tarball { url }) => self.url == url.as_str(),
+            (FetchSourceOverrideKind::Executable, FetchKind::Executable { url }) => self.url == url.as_str(),
+            (FetchSourceOverrideKind::Git, FetchKind::Git { url, rev }) => {
+                self.url == *url && self.rev.as_deref() == Some(rev.as_str())
+            }
+            _ => false,
+        }
+    }
 }
 
 /// Parse fetch parameters from a `BuildRequest`.
@@ -120,7 +159,7 @@ fn execute_fetch(kind: &FetchKind, out_path: &str) -> Result<(), FetchError> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(out_path, std::fs::Permissions::from_mode(0o755))?;
+                std::fs::set_permissions(out_path, std::fs::Permissions::from_mode(UNIX_EXECUTABLE_FILE_MODE))?;
             }
         }
         FetchKind::Git { url, rev } => {
@@ -133,6 +172,111 @@ fn execute_fetch(kind: &FetchKind, out_path: &str) -> Result<(), FetchError> {
     // Tiger Style: post-condition.
     debug_assert!(std::path::Path::new(out_path).exists(), "fetch must produce output at {out_path}");
 
+    Ok(())
+}
+
+fn source_override_for_kind<'a>(
+    kind: &FetchKind,
+    source_overrides: &'a [FetchSourceOverride],
+) -> Option<&'a FetchSourceOverride> {
+    debug_assert!(source_overrides.len() <= MAX_SOURCE_OVERRIDES, "source override list must be bounded");
+    source_overrides.iter().find(|source_override| source_override.matches(kind))
+}
+
+fn materialize_source_override(source_override: &FetchSourceOverride, out_path: &Path) -> Result<(), FetchError> {
+    debug_assert!(!source_override.url.is_empty(), "source override URL must not be empty");
+    debug_assert!(!source_override.source_state_blake3.is_empty(), "source state digest must not be empty");
+    copy_override_payload(&source_override.payload_path, out_path)?;
+    if source_override.kind == FetchSourceOverrideKind::Executable {
+        set_executable_mode(out_path)?;
+    }
+    Ok(())
+}
+
+fn copy_override_payload(source: &Path, target: &Path) -> Result<(), FetchError> {
+    let metadata = fs::symlink_metadata(source)?;
+    if metadata.is_dir() {
+        return copy_override_dir(source, target);
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    copy_override_leaf(source, target, &metadata)
+}
+
+fn copy_override_dir(source: &Path, target: &Path) -> Result<(), FetchError> {
+    let mut stack = vec![(source.to_path_buf(), target.to_path_buf())];
+    let mut copied_entries = 0usize;
+    while let Some((source_dir, target_dir)) = stack.pop() {
+        copied_entries = copied_entries
+            .checked_add(1)
+            .ok_or_else(|| FetchError::Io(io::Error::other("source override copy entry count overflow")))?;
+        if copied_entries > MAX_OVERRIDE_COPY_ENTRIES {
+            return Err(FetchError::Io(io::Error::other(format!(
+                "source override copy exceeds {MAX_OVERRIDE_COPY_ENTRIES} entries"
+            ))));
+        }
+        fs::create_dir_all(&target_dir)?;
+        let mut entries = fs::read_dir(&source_dir)?.collect::<Result<Vec<_>, _>>()?;
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let source_path = entry.path();
+            let target_path = target_dir.join(entry.file_name());
+            let metadata = fs::symlink_metadata(&source_path)?;
+            if metadata.is_dir() {
+                stack.push((source_path, target_path));
+            } else {
+                copy_override_leaf(&source_path, &target_path, &metadata)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn copy_override_leaf(source: &Path, target: &Path, metadata: &fs::Metadata) -> Result<(), FetchError> {
+    if metadata.file_type().is_symlink() {
+        copy_override_symlink(source, target)?;
+        return Ok(());
+    }
+    if !metadata.is_file() {
+        return Err(FetchError::Io(io::Error::other(format!(
+            "source override payload contains unsupported file kind at {}",
+            source.display()
+        ))));
+    }
+    fs::copy(source, target)?;
+    fs::set_permissions(target, metadata.permissions())?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn copy_override_symlink(source: &Path, target: &Path) -> Result<(), FetchError> {
+    use std::os::unix::fs::symlink;
+    let link_target = fs::read_link(source)?;
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    symlink(link_target, target)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn copy_override_symlink(source: &Path, _target: &Path) -> Result<(), FetchError> {
+    Err(FetchError::Io(io::Error::other(format!(
+        "source override symlink cannot be materialized on this platform: {}",
+        source.display()
+    ))))
+}
+
+#[cfg(unix)]
+fn set_executable_mode(path: &Path) -> Result<(), FetchError> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(UNIX_EXECUTABLE_FILE_MODE))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_executable_mode(_path: &Path) -> Result<(), FetchError> {
     Ok(())
 }
 
@@ -151,6 +295,7 @@ fn execute_fetch(kind: &FetchKind, out_path: &str) -> Result<(), FetchError> {
 pub struct FetchBuildService<BS, DS> {
     blob_service: BS,
     directory_service: DS,
+    source_overrides: Vec<FetchSourceOverride>,
 }
 
 impl<BS, DS> FetchBuildService<BS, DS> {
@@ -158,7 +303,14 @@ impl<BS, DS> FetchBuildService<BS, DS> {
         Self {
             blob_service,
             directory_service,
+            source_overrides: Vec::new(),
         }
+    }
+
+    pub fn with_source_overrides(mut self, source_overrides: Vec<FetchSourceOverride>) -> Self {
+        assert!(source_overrides.len() <= MAX_SOURCE_OVERRIDES, "source override list exceeds fixed bound");
+        self.source_overrides = source_overrides;
+        self
     }
 }
 
@@ -179,12 +331,21 @@ where
         let out_path = tmp.path().join("output");
         let out_str = out_path.to_str().ok_or_else(|| io::Error::other("temp path not valid UTF-8"))?.to_string();
 
-        // Blocking download on a dedicated thread.
-        let kind_clone = kind.clone();
-        tokio::task::spawn_blocking(move || execute_fetch(&kind_clone, &out_str))
-            .await
-            .map_err(|e| io::Error::other(format!("fetch spawn_blocking: {e}")))?
-            .map_err(io::Error::other)?;
+        if let Some(source_override) = source_override_for_kind(&kind, &self.source_overrides) {
+            info!(
+                url = %source_override.url,
+                source_state_blake3 = %source_override.source_state_blake3,
+                "materializing fetcher input from source state"
+            );
+            materialize_source_override(source_override, &out_path).map_err(io::Error::other)?;
+        } else {
+            // Blocking download on a dedicated thread.
+            let kind_clone = kind.clone();
+            tokio::task::spawn_blocking(move || execute_fetch(&kind_clone, &out_str))
+                .await
+                .map_err(|e| io::Error::other(format!("fetch spawn_blocking: {e}")))?
+                .map_err(io::Error::other)?;
+        }
 
         // Verify output was produced.
         if !out_path.exists() {
@@ -367,13 +528,14 @@ mod tests {
 
     #[tokio::test]
     async fn do_build_fetches_local_file() {
+        const LOCAL_PAYLOAD: &[u8] = b"hello fetch service";
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
         let svc = FetchBuildService::new(bs, ds);
 
         // Write a local file to serve via file:// URL.
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(tmp.path(), b"hello fetch service").unwrap();
+        std::fs::write(tmp.path(), LOCAL_PAYLOAD).unwrap();
         let url = format!("file://{}", tmp.path().display());
 
         let req = fetch_request(vec![env("url", &url)]);
@@ -383,8 +545,59 @@ mod tests {
         assert!(matches!(result.outputs[0].node, Node::File { .. }));
         assert!(result.outputs[0].output_needles.is_empty());
         if let Node::File { size, .. } = &result.outputs[0].node {
-            assert_eq!(*size, 19); // "hello fetch service" = 19 bytes
+            assert_eq!(*size, u64::try_from(LOCAL_PAYLOAD.len()).unwrap());
         }
+    }
+
+    #[tokio::test]
+    async fn do_build_uses_matching_source_override_without_network() {
+        const OFFLINE_PAYLOAD: &[u8] = b"offline payload";
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let payload = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(payload.path(), OFFLINE_PAYLOAD).unwrap();
+        let source_override = FetchSourceOverride {
+            url: "https://example.invalid/source.txt".to_string(),
+            kind: FetchSourceOverrideKind::File,
+            rev: None,
+            payload_path: payload.path().to_path_buf(),
+            source_state_blake3: blake3::hash(b"test-source-state").to_hex().to_string(),
+        };
+        let svc = FetchBuildService::new(bs, ds).with_source_overrides(vec![source_override]);
+
+        let req = fetch_request(vec![env("url", "https://example.invalid/source.txt")]);
+        let result = svc.do_build(req).await.unwrap();
+
+        assert_eq!(result.outputs.len(), 1);
+        assert!(matches!(result.outputs[0].node, Node::File { .. }));
+        assert!(result.outputs[0].output_needles.is_empty());
+        if let Node::File { size, .. } = &result.outputs[0].node {
+            assert_eq!(*size, u64::try_from(OFFLINE_PAYLOAD.len()).unwrap());
+        }
+    }
+
+    #[test]
+    fn source_override_requires_matching_git_revision() {
+        const REQUESTED_REV: &str = "1111111111111111111111111111111111111111";
+        const OTHER_REV: &str = "2222222222222222222222222222222222222222";
+        let source_override = FetchSourceOverride {
+            url: "https://example.invalid/repo.git".to_string(),
+            kind: FetchSourceOverrideKind::Git,
+            rev: Some(REQUESTED_REV.to_string()),
+            payload_path: PathBuf::from("/tmp/source-state"),
+            source_state_blake3: blake3::hash(b"test-source-state").to_hex().to_string(),
+        };
+        let matching = FetchKind::Git {
+            url: "https://example.invalid/repo.git".to_string(),
+            rev: REQUESTED_REV.to_string(),
+        };
+        let wrong_rev = FetchKind::Git {
+            url: "https://example.invalid/repo.git".to_string(),
+            rev: OTHER_REV.to_string(),
+        };
+
+        assert!(source_override.matches(&matching));
+        assert!(!source_override.matches(&wrong_rev));
     }
 
     #[tokio::test]

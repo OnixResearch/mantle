@@ -265,6 +265,14 @@ pub struct RemoteBuilderPlanFacts {
     pub trusted_output_key_count: u32,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceBundleRouteFacts {
+    pub required: bool,
+    pub ready: bool,
+    pub reason_code: &'static str,
+    pub detail: Option<String>,
+}
+
 impl RemoteBuilderPlanFacts {
     pub fn cli_configured(
         endpoint_id: Option<&str>,
@@ -299,6 +307,26 @@ impl RemoteBuilderPlanFacts {
             REMOTE_PLAN_NON_CLAIM,
         )
     }
+}
+
+// r[impl realization_routing.source_bundle_route_execution]
+pub fn source_bundle_candidate_from_facts(facts: Option<&SourceBundleRouteFacts>) -> RouteCandidateFacts {
+    let Some(facts) = facts else {
+        return RouteCandidateFacts::rejected(RouteClass::SourceBundle, "source-inputs-present-or-fetchable");
+    };
+    if !facts.required {
+        return RouteCandidateFacts::rejected(RouteClass::SourceBundle, "no-declared-source-inputs")
+            .with_owned_detail(facts.detail.clone());
+    }
+    if facts.ready {
+        return RouteCandidateFacts::eligible(RouteClass::SourceBundle, "declared-source-bundle-ready")
+            .with_owned_detail(facts.detail.clone());
+    }
+    RouteCandidateFacts::rejected(RouteClass::SourceBundle, facts.reason_code).with_owned_detail(facts.detail.clone())
+}
+
+fn source_bundle_blocks_local_build(facts: Option<&SourceBundleRouteFacts>) -> bool {
+    facts.is_some_and(|facts| facts.required && !facts.ready)
 }
 
 pub fn remote_builder_candidate_from_facts(facts: &RemoteBuilderPlanFacts) -> RouteCandidateFacts {
@@ -476,6 +504,15 @@ pub fn route_plan_for_build_action_with_remote(
     detail: Option<&str>,
     remote_builder: Option<&RemoteBuilderPlanFacts>,
 ) -> RoutePlanReport {
+    route_plan_for_build_action_with_remote_and_source(action, detail, remote_builder, None)
+}
+
+pub fn route_plan_for_build_action_with_remote_and_source(
+    action: &str,
+    detail: Option<&str>,
+    remote_builder: Option<&RemoteBuilderPlanFacts>,
+    source_bundle: Option<&SourceBundleRouteFacts>,
+) -> RoutePlanReport {
     let detail = detail.map(truncate_detail);
     let mut candidates = Vec::with_capacity(MAX_ROUTE_CANDIDATES);
     match action {
@@ -498,10 +535,15 @@ pub fn route_plan_for_build_action_with_remote(
                     .requiring_network(),
             );
             candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::SourceBundle, "not-needed-substitute-hit"));
+            candidates.push(source_bundle_candidate_from_facts(source_bundle));
             candidates.push(RouteCandidateFacts::rejected(RouteClass::P2pRemoteBuilder, "not-configured"));
-            candidates
-                .push(RouteCandidateFacts::rejected(RouteClass::LocalBuild, "not-selected-higher-priority-route"));
+            if source_bundle_blocks_local_build(source_bundle) {
+                candidates
+                    .push(RouteCandidateFacts::rejected(RouteClass::LocalBuild, "offline-source-readiness-incomplete"));
+            } else {
+                candidates
+                    .push(RouteCandidateFacts::rejected(RouteClass::LocalBuild, "not-selected-higher-priority-route"));
+            }
         }
         "build" => {
             candidates.push(
@@ -510,16 +552,20 @@ pub fn route_plan_for_build_action_with_remote(
             );
             candidates.push(RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "trusted-substitute-missing"));
             candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
-            candidates
-                .push(RouteCandidateFacts::rejected(RouteClass::SourceBundle, "source-inputs-present-or-fetchable"));
+            candidates.push(source_bundle_candidate_from_facts(source_bundle));
             push_remote_candidate(&mut candidates, remote_builder);
-            candidates.push(RouteCandidateFacts::eligible(RouteClass::LocalBuild, "local-preflight-ok"));
+            if source_bundle_blocks_local_build(source_bundle) {
+                candidates
+                    .push(RouteCandidateFacts::rejected(RouteClass::LocalBuild, "offline-source-readiness-incomplete"));
+            } else {
+                candidates.push(RouteCandidateFacts::eligible(RouteClass::LocalBuild, "local-preflight-ok"));
+            }
         }
         "preflight-error" => {
             candidates.push(RouteCandidateFacts::rejected(RouteClass::CachedLocal, "local-output-missing"));
             candidates.push(RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "trusted-substitute-missing"));
             candidates.push(RouteCandidateFacts::rejected(RouteClass::ArchiveImport, "not-configured"));
-            candidates.push(RouteCandidateFacts::rejected(RouteClass::SourceBundle, "unknown-source-readiness"));
+            candidates.push(source_bundle_candidate_from_facts(source_bundle));
             push_remote_candidate(&mut candidates, remote_builder);
             candidates.push(
                 RouteCandidateFacts::rejected(RouteClass::LocalBuild, "local-preflight-failed")
@@ -532,7 +578,16 @@ pub fn route_plan_for_build_action_with_remote(
         }
         _ => unreachable!("unknown build plan action"),
     }
-    plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), candidates))
+    let policy = route_policy_for_source_bundle(source_bundle);
+    plan_realization_route(RoutePlannerInput::new(policy, candidates))
+}
+
+fn route_policy_for_source_bundle(source_bundle: Option<&SourceBundleRouteFacts>) -> RoutePolicy {
+    let mut policy = RoutePolicy::practical_online();
+    if source_bundle.is_some() {
+        policy.network = NetworkPolicy::Offline;
+    }
+    policy
 }
 
 fn push_remote_candidate(candidates: &mut Vec<RouteCandidateFacts>, remote_builder: Option<&RemoteBuilderPlanFacts>) {
@@ -721,6 +776,65 @@ mod tests {
 
         assert_eq!(report.selected_route, RouteClass::SourceBundle);
         assert_eq!(report.rejected_routes.len(), 3);
+    }
+
+    // r[verify realization_routing.source_bundle_route_execution]
+    #[test]
+    fn offline_ready_source_bundle_facts_select_input_realization_route() {
+        let source_facts = SourceBundleRouteFacts {
+            required: true,
+            ready: true,
+            reason_code: "declared-source-bundle-ready",
+            detail: Some("source_state_blake3=abc123; non_claim=input-realization-only".to_string()),
+        };
+        let remote =
+            RemoteBuilderPlanFacts::cli_configured(Some("builder-1"), true, 1).expect("remote facts configured");
+
+        let report = route_plan_for_build_action_with_remote_and_source(
+            "build",
+            Some("out=build"),
+            Some(&remote),
+            Some(&source_facts),
+        );
+
+        assert_eq!(report.policy.network, NetworkPolicy::Offline);
+        assert_eq!(report.selected_route, RouteClass::SourceBundle);
+        assert_eq!(report.selected_reason_code, "declared-source-bundle-ready");
+        assert!(report.selected_detail.as_deref().unwrap_or_default().contains("source_state_blake3"));
+    }
+
+    // r[verify realization_routing.source_bundle_route_execution]
+    #[test]
+    fn offline_incomplete_source_bundle_facts_reject_network_and_local_fetch_routes() {
+        let source_facts = SourceBundleRouteFacts {
+            required: true,
+            ready: false,
+            reason_code: "missing-source-state",
+            detail: Some("record=fixed-url-demo".to_string()),
+        };
+        let remote =
+            RemoteBuilderPlanFacts::cli_configured(Some("builder-1"), true, 1).expect("remote facts configured");
+
+        let report = route_plan_for_build_action_with_remote_and_source(
+            "build",
+            Some("out=build"),
+            Some(&remote),
+            Some(&source_facts),
+        );
+
+        assert_eq!(report.policy.network, NetworkPolicy::Offline);
+        assert_eq!(report.selected_route, RouteClass::PreflightError);
+        assert!(
+            report.rejected_routes.iter().any(|route| {
+                route.route == RouteClass::SourceBundle && route.reason_code == "missing-source-state"
+            })
+        );
+        assert!(report.rejected_routes.iter().any(|route| {
+            route.route == RouteClass::P2pRemoteBuilder && route.reason_code == "offline-network-required"
+        }));
+        assert!(report.rejected_routes.iter().any(|route| {
+            route.route == RouteClass::LocalBuild && route.reason_code == "offline-source-readiness-incomplete"
+        }));
     }
 
     #[test]

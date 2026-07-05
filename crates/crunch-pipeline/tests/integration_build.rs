@@ -64,6 +64,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         trusted_keys,
         trust_unsigned: false,
         root_retention_source: None,
+        source_fetch_overrides: Vec::new(),
     }
 }
 
@@ -432,6 +433,60 @@ async fn pipeline_reports_fod_mismatch_without_aborting_other_roots() {
         PathBuf::from(good_output.store_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()));
     assert!(good_path.exists(), "good fetch should land on disk: {}", good_path.display());
     assert_eq!(std::fs::read(&good_path).unwrap(), good_content);
+}
+
+// r[verify source_transports.source_bundle_realizes_fetcher_inputs]
+#[tokio::test]
+async fn pipeline_uses_source_fetch_override_for_remote_fixed_output_fetcher() {
+    if !can_build() {
+        eprintln!("skipping: bwrap or /nix/store not available");
+        return;
+    }
+
+    const OVERRIDE_PAYLOAD: &[u8] = b"offline override payload";
+    const REMOTE_OVERRIDE_URL: &str = "https://example.invalid/offline-source.txt";
+    const SOURCE_STATE_HEX: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+
+    let work = tempfile::tempdir().unwrap();
+    let output_dir = tempfile::tempdir().unwrap();
+    let state_dir = tempfile::tempdir().unwrap();
+    let payload_file = work.path().join("payload.txt");
+    let ncl_file = work.path().join("offline-fetch.ncl");
+
+    std::fs::write(&payload_file, OVERRIDE_PAYLOAD).unwrap();
+    std::fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "lib.ncl" in
+crunch.fetchurl {{
+  name = "offline-src",
+  url = "{REMOTE_OVERRIDE_URL}",
+  hash = "{}",
+}}"#,
+            sha256_sri(OVERRIDE_PAYLOAD),
+        ),
+    )
+    .unwrap();
+
+    let mut config = build_config(ncl_file, output_dir.path(), state_dir.path());
+    config.source_fetch_overrides = vec![crunch_build::FetchSourceOverride {
+        url: REMOTE_OVERRIDE_URL.to_string(),
+        kind: crunch_build::FetchSourceOverrideKind::File,
+        rev: None,
+        payload_path: payload_file,
+        source_state_blake3: SOURCE_STATE_HEX.to_string(),
+    }];
+
+    let result = build(&config).await.unwrap();
+
+    assert!(result.failed.is_empty(), "source override build failed: {:?}", result.failed);
+    assert!(result.fod_mismatches.is_empty(), "unexpected FOD mismatch: {:?}", result.fod_mismatches);
+    assert_eq!(result.outcomes.len(), 1);
+    let output = result.outcomes[0].outputs.get("out").expect("override build should produce out");
+    let output_path =
+        PathBuf::from(output.store_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()));
+    assert!(output_path.exists(), "override output should be exported: {}", output_path.display());
+    assert_eq!(std::fs::read(&output_path).unwrap(), OVERRIDE_PAYLOAD);
 }
 
 #[tokio::test]

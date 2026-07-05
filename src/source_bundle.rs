@@ -212,6 +212,38 @@ pub struct SourceOfflinePreflightNextAction {
     pub description: &'static str,
 }
 
+#[derive(Debug)]
+pub struct SourceFetchOverridePlan {
+    pub report: SourceOfflinePreflightReport,
+    pub overrides: Vec<crunch_build::FetchSourceOverride>,
+    _scratch_dirs: Vec<tempfile::TempDir>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceFetchBlocker {
+    MissingSourceState,
+    StaleSourceState,
+    UnsupportedSourceAdapter,
+    UntrustedSourceAdapter,
+    NetworkRequiredSource,
+    UnpinnedSourceState,
+    MissingMaterializedPayload,
+}
+
+impl SourceFetchBlocker {
+    pub fn reason_code(self) -> &'static str {
+        match self {
+            Self::MissingSourceState => "missing-source-state",
+            Self::StaleSourceState => "stale-source-state",
+            Self::UnsupportedSourceAdapter => "unsupported-source-adapter",
+            Self::UntrustedSourceAdapter => "untrusted-source-adapter",
+            Self::NetworkRequiredSource => "network-required-source",
+            Self::UnpinnedSourceState => "unpinned-source-state",
+            Self::MissingMaterializedPayload => "missing-materialized-payload",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceRecordSummary {
     pub kind: SourceRecordKind,
@@ -519,6 +551,50 @@ pub fn offline_preflight_for_manifest(
 
 pub fn source_offline_preflight_is_ready(report: &SourceOfflinePreflightReport) -> bool {
     report.ready_class == SourceReadiness::Ready
+}
+
+pub fn source_fetch_override_plan_for_file(
+    file: &Path,
+    import_paths: &[OsString],
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<SourceFetchOverridePlan, RunError> {
+    let roots = evaluate_build_root_with_import_paths(file, import_paths)?;
+    source_fetch_override_plan_for_derivations(&roots, state_dir, store_prefix)
+}
+
+// r[impl source_transports.source_bundle_realizes_fetcher_inputs]
+pub fn source_fetch_override_plan_for_derivations(
+    roots: &[(String, crunch_glue::CrunchDerivation)],
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<SourceFetchOverridePlan, RunError> {
+    let records = collect_build_source_records(roots, store_prefix)?;
+    if records.is_empty() {
+        return Ok(SourceFetchOverridePlan {
+            report: empty_offline_preflight_report()?,
+            overrides: Vec::new(),
+            _scratch_dirs: Vec::new(),
+        });
+    }
+    let manifest = assemble_source_bundle(records, store_prefix)?;
+    let imported_records = read_imported_source_records(state_dir)?;
+    let pinned_records = read_pinned_source_records(state_dir)?;
+    let report = classify_offline_preflight(&manifest, &imported_records, &pinned_records)?;
+    if !source_offline_preflight_is_ready(&report) {
+        return Err(RunError::Internal(format!("offline source preflight is not ready: {:?}", report.ready_class)));
+    }
+    let (overrides, scratch_dirs) = source_fetch_overrides_for_manifest(
+        &manifest,
+        &imported_records,
+        &pinned_records,
+        &report.source_state_blake3,
+    )?;
+    Ok(SourceFetchOverridePlan {
+        report,
+        overrides,
+        _scratch_dirs: scratch_dirs,
+    })
 }
 
 fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<SourceRecord, RunError> {
@@ -1403,6 +1479,152 @@ fn sorted_json_paths(dir: &Path, label: &str) -> Result<Vec<PathBuf>, RunError> 
         Err(err) if err.kind() == ErrorKind::NotFound => Ok(Vec::new()),
         Err(err) => Err(RunError::Internal(format!("reading {label} dir {}: {err}", dir.display()))),
     }
+}
+
+fn source_fetch_overrides_for_manifest(
+    manifest: &SourceBundleManifest,
+    imported_records: &[SourceRecord],
+    pinned_records: &[SourceRecord],
+    source_state_blake3: &str,
+) -> Result<(Vec<crunch_build::FetchSourceOverride>, Vec<tempfile::TempDir>), RunError> {
+    let mut overrides = Vec::new();
+    let mut scratch_dirs = Vec::new();
+    for expected in &manifest.records {
+        if !source_record_is_fetcher_input(expected) {
+            continue;
+        }
+        let imported = imported_source_record_satisfies_fetcher_input(expected, imported_records, pinned_records)
+            .map_err(|blocker| RunError::Internal(format!("{} for {}", blocker.reason_code(), expected.identity)))?;
+        let (source_override, scratch_dir) = source_fetch_override_for_record(imported, source_state_blake3)?;
+        overrides.push(source_override);
+        scratch_dirs.push(scratch_dir);
+    }
+    Ok((overrides, scratch_dirs))
+}
+
+fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
+    matches!(record.kind, SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot)
+}
+
+fn imported_source_record_satisfies_fetcher_input<'a>(
+    expected: &SourceRecord,
+    imported_records: &'a [SourceRecord],
+    pinned_records: &[SourceRecord],
+) -> Result<&'a SourceRecord, SourceFetchBlocker> {
+    if adapter_declares_unsupported(expected) {
+        return Err(SourceFetchBlocker::UnsupportedSourceAdapter);
+    }
+    if adapter_declares_untrusted(expected) {
+        return Err(SourceFetchBlocker::UntrustedSourceAdapter);
+    }
+    let imported = find_matching_source_record(expected, imported_records);
+    if source_record_requires_network(expected, imported) {
+        return Err(SourceFetchBlocker::NetworkRequiredSource);
+    }
+    let Some(imported) = imported else {
+        return Err(SourceFetchBlocker::MissingSourceState);
+    };
+    if source_record_is_stale_for_preflight(expected, imported) {
+        return Err(SourceFetchBlocker::StaleSourceState);
+    }
+    if !source_record_is_pinned(expected, imported, pinned_records) {
+        return Err(SourceFetchBlocker::UnpinnedSourceState);
+    }
+    if imported.files.is_empty() {
+        return Err(SourceFetchBlocker::MissingMaterializedPayload);
+    }
+    Ok(imported)
+}
+
+fn source_fetch_override_for_record(
+    record: &SourceRecord,
+    source_state_blake3: &str,
+) -> Result<(crunch_build::FetchSourceOverride, tempfile::TempDir), RunError> {
+    validate_source_record(record)?;
+    let kind = source_fetch_override_kind(record)?;
+    let url = record
+        .metadata
+        .get(RECORD_METADATA_URL_KEY)
+        .ok_or_else(|| RunError::Internal(format!("source record {} is missing url metadata", record.identity)))?
+        .clone();
+    let rev = if kind == crunch_build::FetchSourceOverrideKind::Git {
+        Some(
+            record
+                .metadata
+                .get(FETCH_ENV_REV_KEY)
+                .ok_or_else(|| {
+                    RunError::Internal(format!("VCS source record {} is missing revision", record.identity))
+                })?
+                .clone(),
+        )
+    } else {
+        None
+    };
+    let scratch_dir = tempfile::Builder::new()
+        .prefix("mantle-source-fetch-")
+        .tempdir()
+        .map_err(|err| RunError::Internal(format!("creating source fetch scratch dir: {err}")))?;
+    let payload_path = scratch_dir.path().join("payload");
+    materialize_source_record_for_fetch_override(record, kind, &payload_path)?;
+    Ok((
+        crunch_build::FetchSourceOverride {
+            url,
+            kind,
+            rev,
+            payload_path,
+            source_state_blake3: source_state_blake3.to_string(),
+        },
+        scratch_dir,
+    ))
+}
+
+fn source_fetch_override_kind(record: &SourceRecord) -> Result<crunch_build::FetchSourceOverrideKind, RunError> {
+    match record.kind {
+        SourceRecordKind::VcsSnapshot => Ok(crunch_build::FetchSourceOverrideKind::Git),
+        SourceRecordKind::FixedUrl => {
+            if record.metadata.get(FETCH_ENV_UNPACK_KEY).map(String::as_str) == Some("1") {
+                return Ok(crunch_build::FetchSourceOverrideKind::Tarball);
+            }
+            if record.metadata.get(FETCH_ENV_EXECUTABLE_KEY).map(String::as_str) == Some("1") {
+                return Ok(crunch_build::FetchSourceOverrideKind::Executable);
+            }
+            Ok(crunch_build::FetchSourceOverrideKind::File)
+        }
+        _ => Err(RunError::Internal(format!("source record {} is not a fixed fetcher input", record.identity))),
+    }
+}
+
+fn materialize_source_record_for_fetch_override(
+    record: &SourceRecord,
+    kind: crunch_build::FetchSourceOverrideKind,
+    payload_path: &Path,
+) -> Result<(), RunError> {
+    match kind {
+        crunch_build::FetchSourceOverrideKind::File | crunch_build::FetchSourceOverrideKind::Executable => {
+            materialize_flat_fetch_record_payload(record, payload_path)
+        }
+        crunch_build::FetchSourceOverrideKind::Tarball | crunch_build::FetchSourceOverrideKind::Git => {
+            materialize_source_record_payload(record, payload_path)
+        }
+    }
+}
+
+fn materialize_flat_fetch_record_payload(record: &SourceRecord, payload_path: &Path) -> Result<(), RunError> {
+    validate_source_record(record)?;
+    if record.files.len() != 1 {
+        return Err(RunError::Internal(format!(
+            "flat source record {} must contain exactly one file payload",
+            record.identity
+        )));
+    }
+    let file = &record.files[0];
+    if file.file_type != SourceFileType::Regular {
+        return Err(RunError::Internal(format!(
+            "flat source record {} must contain a regular file payload",
+            record.identity
+        )));
+    }
+    materialize_regular_file_entry(file, payload_path)
 }
 
 fn materialize_export_records(
@@ -2715,6 +2937,123 @@ mod tests {
         assert_eq!(report.next_actions.len(), 1);
         assert_eq!(report.next_actions[0].blocker_class, "unpinned-source-state");
         assert_eq!(report.next_actions[0].command_hint, SOURCE_NEXT_ACTION_PIN_IMPORTED);
+    }
+
+    // r[verify source_transports.source_bundle_realizes_fetcher_inputs]
+    #[test]
+    fn source_fetch_override_plan_materializes_pinned_file_fetcher_payload() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let fetcher = fixed_fetcher("file-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root.clone())];
+        let exported = export_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&exported, &state_dir, true).unwrap();
+
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+
+        assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(plan.overrides.len(), 1);
+        assert_eq!(plan.overrides[0].kind, crunch_build::FetchSourceOverrideKind::File);
+        assert_eq!(plan.overrides[0].url, file_url(&payload));
+        assert_eq!(fs::read(&plan.overrides[0].payload_path).unwrap(), b"payload");
+        assert!(plan.overrides[0].source_state_blake3.len() == BLAKE3_HEX_BYTES);
+    }
+
+    #[test]
+    fn source_fetch_override_plan_rejects_unpinned_imported_fetcher_payload() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let fetcher = fixed_fetcher("file-src", &file_url(&payload));
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(fetcher))]);
+        let roots = [("default".to_string(), root.clone())];
+        let exported = export_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&exported, &state_dir, false).unwrap();
+
+        let err = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap_err();
+
+        assert!(err.to_string().contains("offline source preflight is not ready"));
+        assert!(err.to_string().contains("Unpinned"));
+    }
+
+    // r[verify source_transports.source_bundle_realizes_fetcher_inputs]
+    #[test]
+    fn source_fetch_override_plan_materializes_tarball_and_vcs_payloads() {
+        let temp = tempfile::tempdir().unwrap();
+        let tar_payload = temp.path().join("tar-payload");
+        let vcs_payload = temp.path().join("vcs-payload");
+        write_fixture(&tar_payload);
+        write_fixture(&vcs_payload);
+        let mut tarball = fixed_fetcher("tar-src", "https://example.invalid/source.tar.gz");
+        tarball.env.insert(FETCH_ENV_UNPACK_KEY.to_string(), "1".to_string());
+        let mut vcs = fixed_fetcher("repo-src", "https://example.invalid/repo.git");
+        vcs.env.insert(FETCH_ENV_TYPE_KEY.to_string(), FETCH_ENV_TYPE_GIT.to_string());
+        vcs.env
+            .insert(FETCH_ENV_REV_KEY.to_string(), "0123456789abcdef0123456789abcdef01234567".to_string());
+        let root = root_derivation(vec![
+            crunch_glue::Input::Derivation(Box::new(tarball)),
+            crunch_glue::Input::Derivation(Box::new(vcs)),
+        ]);
+        let roots = [("default".to_string(), root.clone())];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let tar_record = planned.records.iter().find(|record| record.kind == SourceRecordKind::FixedUrl).unwrap();
+        let vcs_record = planned.records.iter().find(|record| record.kind == SourceRecordKind::VcsSnapshot).unwrap();
+        let imported = vec![
+            materialized_record_from_payload(tar_record, &tar_payload, false),
+            materialized_record_from_payload(vcs_record, &vcs_payload, true),
+        ];
+        let state_dir = temp.path().join("state");
+        let source_state_manifest = assemble_source_bundle(imported, "/mantle/store").unwrap();
+        import_source_bundle(&source_state_manifest, &state_dir, true).unwrap();
+
+        let plan = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap();
+
+        assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(plan.overrides.len(), 2);
+        let tar_override = plan
+            .overrides
+            .iter()
+            .find(|source_override| source_override.kind == crunch_build::FetchSourceOverrideKind::Tarball)
+            .unwrap();
+        let vcs_override = plan
+            .overrides
+            .iter()
+            .find(|source_override| source_override.kind == crunch_build::FetchSourceOverrideKind::Git)
+            .unwrap();
+        assert!(tar_override.payload_path.join("src/main.txt").exists());
+        assert!(vcs_override.payload_path.join("src/main.txt").exists());
+        assert_eq!(vcs_override.rev.as_deref(), Some("0123456789abcdef0123456789abcdef01234567"));
+    }
+
+    #[test]
+    fn source_fetch_override_plan_rejects_wrong_vcs_revision_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        let vcs_payload = temp.path().join("vcs-payload");
+        write_fixture(&vcs_payload);
+        let expected_revision = "0123456789abcdef0123456789abcdef01234567";
+        let wrong_revision = "89abcdef0123456789abcdef0123456789abcdef";
+        let mut vcs = fixed_fetcher("repo-src", "https://example.invalid/repo.git");
+        vcs.env.insert(FETCH_ENV_TYPE_KEY.to_string(), FETCH_ENV_TYPE_GIT.to_string());
+        vcs.env.insert(FETCH_ENV_REV_KEY.to_string(), expected_revision.to_string());
+        let root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(vcs))]);
+        let roots = [("default".to_string(), root.clone())];
+        let planned = plan_source_bundle_from_derivations(&roots, &[], "/mantle/store").unwrap();
+        let mut wrong_record = materialized_record_from_payload(&planned.records[0], &vcs_payload, true);
+        wrong_record.metadata.insert(FETCH_ENV_REV_KEY.to_string(), wrong_revision.to_string());
+        wrong_record.content_blake3 =
+            digest_source_record_content(&wrong_record.kind, &wrong_record.metadata, &wrong_record.files).unwrap();
+        let state_dir = temp.path().join("state");
+        let source_state_manifest = assemble_source_bundle(vec![wrong_record], "/mantle/store").unwrap();
+        import_source_bundle(&source_state_manifest, &state_dir, true).unwrap();
+
+        let err = source_fetch_override_plan_for_derivations(&roots, &state_dir, "/mantle/store").unwrap_err();
+
+        assert!(err.to_string().contains("offline source preflight is not ready"));
+        assert!(err.to_string().contains("Stale"));
     }
 
     #[test]

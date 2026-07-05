@@ -171,8 +171,9 @@ path for the artifact attestation.
 Use this runbook when the target host must build from already collected source
 material without substitutes. It is command evidence, not a new proof class: the
 source bundle evidence proves declared source/input availability and identity
-only, and source-bundle route execution is future work until the separate route
-execution change lands.
+only. When `--offline-source-preflight` is ready, Mantle can materialize matching
+fixed-output fetcher inputs from imported and pinned source state before the
+ordinary local build consumes them.
 
 On a connected or source-rich host, export the source records required by the
 selected root:
@@ -210,15 +211,17 @@ Inspect these fields before making a status claim:
 - `cargo_build_evidence[]` for accepted `mantle.offlineCargoPackage` outputs and
   `cargo_build_evidence_diagnostics[]` for malformed sidecars that must be
   inspected or rebuilt before an offline Cargo evidence claim is made.
-- Route-plan output when `mantle build --plan` is used. Route eligibility is
-  advisory and does not prove output trust.
+- Route-plan output when `mantle build --plan` is used. A selected or eligible
+  `source-bundle` route means only that source/input realization can use the
+  named source-state digest. It is separate from `cached` local output reuse,
+  remote `substitute` output reuse, and final output trust.
 
-Do not report source readiness, source import, route eligibility, or offline
-Cargo evidence as build success, output trust, Cargo-free execution, full Cargo
-compatibility, compiler correctness, release reproducibility, or bootstrap
-correctness. Current source-bundle preflight checks imported and pinned source
-state before build planning; it does not yet materialize missing fixed-output
-sources for the later sandbox build.
+Do not report source readiness, source import, route eligibility, source-bundle
+input realization, or offline Cargo evidence as build success, output trust,
+Cargo-free execution, full Cargo compatibility, compiler correctness, release
+reproducibility, or bootstrap correctness. Fixed-output verification still runs
+on materialized source-bundle inputs; final outputs need separate build/cache and
+attestation evidence.
 
 ## Offline Cargo project-build lane
 

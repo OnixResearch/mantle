@@ -23,6 +23,7 @@ use crunch_build::DispatchBuildService;
 use crunch_build::EvalMessage;
 use crunch_build::FailedGoal;
 use crunch_build::FetchBuildService;
+use crunch_build::FetchSourceOverride;
 pub use crunch_build::FixedOutputNetworkDeclaration;
 pub use crunch_build::HermeticityAuditEvent;
 pub use crunch_build::HermeticityAuditKind;
@@ -60,6 +61,8 @@ pub struct BuildConfig {
     pub trust_unsigned: bool,
     /// Optional retained-root source for successful top-level outputs.
     pub root_retention_source: Option<GcRootSource>,
+    /// Optional local source-state payloads that can satisfy fixed-output fetchers.
+    pub source_fetch_overrides: Vec<FetchSourceOverride>,
 }
 
 #[derive(Debug)]
@@ -191,7 +194,8 @@ async fn build_linux(
     std::fs::create_dir_all(&workdir).map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
 
     let bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
-    let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone());
+    let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone())
+        .with_source_overrides(config.source_fetch_overrides.clone());
     let build_service = DispatchBuildService::new(fetch_service, bwrap_service);
     let mut builder = Builder::with_state_dir(
         blob_service,
