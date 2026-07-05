@@ -223,6 +223,60 @@ reproducibility, or bootstrap correctness. Fixed-output verification still runs
 on materialized source-bundle inputs; final outputs need separate build/cache and
 attestation evidence.
 
+## Offline bootstrap source-bundle profile
+
+Use `mantle source bundle bootstrap-profile` to enumerate and verify every
+source/input record a bootstrap or self-build workflow needs before it starts.
+This is input-availability evidence, not bootstrap proof: the profile proves
+provider archive identity, provider metadata, bootstrap source archives, Mantle
+source tree identity, vendored Cargo inputs, and proof inputs are locally
+available and identity-matched. It does not prove provider trust removal,
+compiler correctness, or self-build success.
+
+On a connected host, build the profile and export it:
+
+```bash
+mantle source bundle bootstrap-profile \
+  --mode self-build-proof \
+  --provider-archive ./provider-archive \
+  --provider-manifest ./provider.json \
+  --bootstrap-source ./bootstrap-src \
+  --mantle-source ./mantle-src \
+  --vendor-deps ./vendor-deps \
+  --toolchain-source-root ./toolchain \
+  --proof-input ./proof-input \
+  --to bootstrap-source-bundle.json
+```
+
+Copy `bootstrap-source-bundle.json` to the offline host, then import, pin, and
+preflight it:
+
+```bash
+mantle --state-dir ./offline-state source bundle import --from bootstrap-source-bundle.json --pin
+mantle --state-dir ./offline-state source bundle bootstrap-profile \
+  --mode self-build-proof \
+  --provider-archive ./provider-archive \
+  --provider-manifest ./provider.json \
+  --bootstrap-source ./bootstrap-src \
+  --mantle-source ./mantle-src \
+  --vendor-deps ./vendor-deps \
+  --toolchain-source-root ./toolchain \
+  --proof-input ./proof-input \
+  --preflight
+```
+
+Run legacy fetch-mode bootstrap with offline source preflight so the provider
+tarball is materialized from source state instead of fetched live:
+
+```bash
+mantle --state-dir ./offline-state bootstrap --fetch --offline-source-preflight --output seed.ncl
+```
+
+Do not report bootstrap source-bundle readiness as provider trust removal,
+compiler correctness, self-build success, release reproducibility, or full
+bootstrap correctness. Those claims still require the existing proof commands
+and evidence gates.
+
 ## Offline Cargo project-build lane
 
 Use `mantle build .#name` for the supported near-term Rust project workflow.

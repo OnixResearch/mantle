@@ -727,6 +727,7 @@ async fn fetch_raw_seed(
     store_dir: &Path,
     is_verbose: bool,
     display_prefix: &str,
+    source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
 ) -> Result<String, RunError> {
     use snix_castore::directoryservice::RedbDirectoryService;
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
@@ -756,7 +757,8 @@ async fn fetch_raw_seed(
     .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
 
     let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
-    let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
+    let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone())
+        .with_source_overrides(source_fetch_overrides);
 
     let (bootstrap_keypair, _bootstrap_key_line) = crunch_build::generate_keypair();
     let bootstrap_trusted = crunch_build::build_trusted_keys(&bootstrap_keypair, None);
@@ -805,6 +807,12 @@ async fn fetch_raw_seed(
     Ok(raw_display_path)
 }
 
+/// Return the pinned raw seed provider URL without fetching it.
+pub fn fetch_seed_provider_raw_url() -> Result<String, RunError> {
+    let provider = load_fetch_seed_provider()?;
+    Ok(provider.provider.raw.url)
+}
+
 /// Download the shared bootstrap seed provider, persist it, and generate seed.ncl.
 ///
 /// This is the `crunch bootstrap --fetch` implementation. It evaluates the
@@ -812,7 +820,12 @@ async fn fetch_raw_seed(
 /// normal fixed-output pipeline, reduces that raw tree on the host into the
 /// normalized provider shape, and writes a small generated `seed.ncl` that
 /// points at the resulting store path.
-pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, is_verbose: bool) -> Result<(), RunError> {
+pub async fn bootstrap_fetch(
+    store_dir: &Path,
+    output: &Path,
+    is_verbose: bool,
+    source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
+) -> Result<(), RunError> {
     debug_assert!(store_dir.is_absolute());
     debug_assert!(!output.as_os_str().is_empty());
     let provider = load_fetch_seed_provider()?;
@@ -831,7 +844,8 @@ pub async fn bootstrap_fetch(store_dir: &Path, output: &Path, is_verbose: bool) 
     }
 
     // 2-3. Set up services, build the raw tarball, and extract its output path.
-    let raw_display_path = fetch_raw_seed(&drv_path, &cache, store_dir, is_verbose, display_prefix).await?;
+    let raw_display_path =
+        fetch_raw_seed(&drv_path, &cache, store_dir, is_verbose, display_prefix, source_fetch_overrides).await?;
 
     // 4. Reduce the raw tree on the host into the normalized provider layout.
     let (logical_path, physical_path, reduced_cached) =

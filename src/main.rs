@@ -376,6 +376,10 @@ enum Command {
         #[arg(long)]
         stagex_lineage: Option<PathBuf>,
 
+        /// Require imported/pinned bootstrap source state before fetch-mode source acquisition.
+        #[arg(long)]
+        offline_source_preflight: bool,
+
         /// Packages to include (nixpkgs attribute names, ignored with --fetch)
         #[arg(default_values_t = [
             "bash".to_string(),
@@ -1991,6 +1995,48 @@ pub enum SourceBundleAction {
         #[arg(long)]
         to: std::path::PathBuf,
     },
+    /// Build a named bootstrap source-bundle profile from local inputs
+    BootstrapProfile {
+        /// Profile mode: legacy-seed, source-root, or self-build-proof
+        #[arg(long, default_value = "legacy-seed")]
+        mode: String,
+
+        /// Provider archive payload path
+        #[arg(long = "provider-archive")]
+        provider_archive: std::path::PathBuf,
+
+        /// Provider manifest JSON path
+        #[arg(long = "provider-manifest")]
+        provider_manifest: std::path::PathBuf,
+
+        /// Bootstrap source archive/root payload; repeat for multiple inputs
+        #[arg(long = "bootstrap-source")]
+        bootstrap_sources: Vec<std::path::PathBuf>,
+
+        /// Mantle source tree for self-build proof mode
+        #[arg(long = "mantle-source")]
+        mantle_source: Option<std::path::PathBuf>,
+
+        /// Vendored Cargo input directory for self-build proof mode
+        #[arg(long = "vendor-deps")]
+        vendor_deps: Option<std::path::PathBuf>,
+
+        /// Toolchain/source-root record for source-root or proof modes
+        #[arg(long = "toolchain-source-root")]
+        toolchain_source_root: Option<std::path::PathBuf>,
+
+        /// Proof input payload; repeat for multiple proof inputs
+        #[arg(long = "proof-input")]
+        proof_inputs: Vec<std::path::PathBuf>,
+
+        /// Bundle output path. If omitted, print the profile plan report.
+        #[arg(long)]
+        to: Option<std::path::PathBuf>,
+
+        /// Compare the generated profile with imported/pinned source state
+        #[arg(long)]
+        preflight: bool,
+    },
     /// List a source bundle without mutating state
     List {
         /// Bundle input path
@@ -2287,6 +2333,7 @@ fn source_bundle_command_label(action: &SourceBundleAction) -> &'static str {
     match action {
         SourceBundleAction::Plan { .. } => "source.bundle.plan",
         SourceBundleAction::Export { .. } => "source.bundle.export",
+        SourceBundleAction::BootstrapProfile { .. } => "source.bundle.bootstrap-profile",
         SourceBundleAction::List { .. } => "source.bundle.list",
         SourceBundleAction::Import { .. } => "source.bundle.import",
         SourceBundleAction::Verify { .. } => "source.bundle.verify",
@@ -3833,12 +3880,21 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
             fetch,
             source_root,
             stagex_lineage,
+            offline_source_preflight,
             packages,
         } => {
             if let Some(action) = action {
                 return run_bootstrap_action(ctx, action);
             }
-            run_bootstrap_command(ctx, output, *fetch, source_root.as_deref(), stagex_lineage.as_deref(), packages)
+            run_bootstrap_command(
+                ctx,
+                output,
+                *fetch,
+                source_root.as_deref(),
+                stagex_lineage.as_deref(),
+                *offline_source_preflight,
+                packages,
+            )
         }
         _ => unreachable!("bootstrap helper called with non-bootstrap command"),
     }
@@ -4011,13 +4067,14 @@ fn run_bootstrap_command(
     fetch: bool,
     source_root: Option<&Path>,
     stagex_lineage: Option<&Path>,
+    offline_source_preflight: bool,
     packages: &[String],
 ) -> Result<(), RunError> {
     match bootstrap_source_root::select_bootstrap_provider(fetch, source_root, stagex_lineage)
         .map_err(|err| RunError::Internal(err.to_string()))?
     {
         bootstrap_source_root::BootstrapProviderMode::LegacyFetch => {
-            cmd_bootstrap_fetch(output, &ctx.store, ctx.verbose)
+            cmd_bootstrap_fetch(output, &ctx.store, ctx.verbose, offline_source_preflight)
         }
         bootstrap_source_root::BootstrapProviderMode::SourceRoot => {
             let manifest_path = source_root.expect("source-root mode must carry manifest path");
@@ -5094,7 +5151,12 @@ fn cmd_run(
     exec_run(&out_path, bin, run_args)
 }
 
-fn cmd_bootstrap_fetch(output: &std::path::Path, store_dir: &std::path::Path, verbose: bool) -> Result<(), RunError> {
+fn cmd_bootstrap_fetch(
+    output: &std::path::Path,
+    store_dir: &std::path::Path,
+    verbose: bool,
+    offline_source_preflight: bool,
+) -> Result<(), RunError> {
     if !store_dir.exists() {
         return Err(RunError::Internal(format!(
             "store directory {} does not exist.\nCreate it with: sudo mkdir -p {0} && sudo chown $USER {0}",
@@ -5102,9 +5164,22 @@ fn cmd_bootstrap_fetch(output: &std::path::Path, store_dir: &std::path::Path, ve
         )));
     }
 
+    let source_fetch_overrides = if offline_source_preflight {
+        let state_dir = build_cmd::state_dir();
+        let provider_url = bootstrap::fetch_seed_provider_raw_url()?;
+        let plan = source_bundle::bootstrap_legacy_seed_fetch_override_plan(&state_dir, &provider_url)?;
+        eprintln!(
+            "  offline bootstrap source profile ready: records={} source_state_blake3={}",
+            plan.report.record_count, plan.report.source_state_blake3
+        );
+        plan.overrides
+    } else {
+        Vec::new()
+    };
+
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
 
-    rt.block_on(async { bootstrap::bootstrap_fetch(store_dir, output, verbose).await })
+    rt.block_on(async { bootstrap::bootstrap_fetch(store_dir, output, verbose, source_fetch_overrides).await })
 }
 
 fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), RunError> {
@@ -5569,6 +5644,51 @@ mod tests {
         };
         assert!(smoke);
         assert_eq!(smoke_evidence_dir, Some(PathBuf::from("/tmp/mantle-rust-provider-smoke-evidence")));
+    }
+
+    #[test]
+    fn bootstrap_offline_source_preflight_flag_parses() {
+        let args = Args::parse_from(["mantle", "bootstrap", "--fetch", "--offline-source-preflight"]);
+
+        let Command::Bootstrap {
+            fetch,
+            offline_source_preflight,
+            ..
+        } = args.command
+        else {
+            panic!("expected bootstrap command");
+        };
+        assert!(fetch);
+        assert!(offline_source_preflight);
+    }
+
+    #[test]
+    fn source_bundle_bootstrap_profile_subcommand_parses() {
+        let args = Args::parse_from([
+            "mantle",
+            "source",
+            "bundle",
+            "bootstrap-profile",
+            "--mode",
+            "legacy-seed",
+            "--provider-archive",
+            "/tmp/provider",
+            "--provider-manifest",
+            "/tmp/provider.json",
+            "--bootstrap-source",
+            "/tmp/src",
+        ]);
+
+        let Command::Source {
+            action:
+                SourceAction::Bundle {
+                    action: SourceBundleAction::BootstrapProfile { mode, .. },
+                },
+        } = args.command
+        else {
+            panic!("expected source bundle bootstrap-profile");
+        };
+        assert_eq!(mode, "legacy-seed");
     }
 
     #[test]

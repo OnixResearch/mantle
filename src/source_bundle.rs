@@ -15,9 +15,12 @@ use crate::errors::RunError;
 
 pub const SOURCE_BUNDLE_FORMAT: &str = "mantle-source-bundle-v1";
 pub const SOURCE_OFFLINE_PREFLIGHT_FORMAT: &str = "mantle-source-offline-preflight-v1";
+pub const BOOTSTRAP_SOURCE_PROFILE_FORMAT: &str = "mantle-bootstrap-source-profile-v1";
 pub const SOURCE_BUNDLE_VERSION: u32 = 1;
 pub const SOURCE_BUNDLE_NON_CLAIM: &str =
     "source bundle evidence proves declared source/input availability and identity only";
+pub const BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM: &str =
+    "bootstrap source profile proves source/input availability and identity only";
 pub const SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_PIN_IMPORTED: &str = "mantle source bundle import --from <bundle.json> --pin";
@@ -79,6 +82,21 @@ const RECORD_METADATA_NAME_KEY: &str = "name";
 const RECORD_METADATA_SOURCE_KIND_KEY: &str = "source_kind";
 const RECORD_METADATA_STORE_PATH_KEY: &str = "store_path";
 const RECORD_METADATA_URL_KEY: &str = "url";
+const RECORD_METADATA_PROFILE_MODE_KEY: &str = "bootstrap_profile_mode";
+const RECORD_METADATA_PROFILE_CLASS_KEY: &str = "bootstrap_profile_class";
+const RECORD_METADATA_PROVIDER_KIND_KEY: &str = "provider_kind";
+const RECORD_METADATA_PROVIDER_SCHEMA_KEY: &str = "provider_schema_version";
+
+const BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED: &str = "musl.cc-native-reduced-v1";
+const BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT: &str = "source-root-v1";
+const BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE: &str = "provider-archive";
+const BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST: &str = "provider-manifest";
+const BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE: &str = "bootstrap-source";
+const BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE: &str = "mantle-source";
+const BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS: &str = "vendored-cargo-inputs";
+const BOOTSTRAP_PROFILE_CLASS_TOOLCHAIN_SOURCE_ROOT: &str = "toolchain-source-root";
+const BOOTSTRAP_PROFILE_CLASS_PROOF_INPUT: &str = "proof-input";
+const BOOTSTRAP_PROFILE_INDEX_WIDTH: usize = 4;
 
 const RECORD_SPEC_SEPARATOR: char = ':';
 const SOURCE_STATE_DIR: &str = "source-bundles";
@@ -219,6 +237,72 @@ pub struct SourceFetchOverridePlan {
     _scratch_dirs: Vec<tempfile::TempDir>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BootstrapSourceBundleMode {
+    LegacySeed,
+    SourceRoot,
+    SelfBuildProof,
+}
+
+impl BootstrapSourceBundleMode {
+    pub fn parse(value: &str) -> Result<Self, RunError> {
+        match value {
+            "legacy-seed" => Ok(Self::LegacySeed),
+            "source-root" => Ok(Self::SourceRoot),
+            "self-build-proof" => Ok(Self::SelfBuildProof),
+            other => Err(RunError::Internal(format!("unsupported bootstrap source profile mode '{other}'"))),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::LegacySeed => "legacy-seed",
+            Self::SourceRoot => "source-root",
+            Self::SelfBuildProof => "self-build-proof",
+        }
+    }
+
+    fn expected_provider_kind(self) -> &'static str {
+        match self {
+            Self::LegacySeed | Self::SelfBuildProof => BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
+            Self::SourceRoot => BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT,
+        }
+    }
+
+    fn requires_self_build_inputs(self) -> bool {
+        matches!(self, Self::SelfBuildProof)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BootstrapSourceBundleProfileInput {
+    pub mode: BootstrapSourceBundleMode,
+    pub provider_archive: PathBuf,
+    pub provider_manifest: PathBuf,
+    pub bootstrap_sources: Vec<PathBuf>,
+    pub mantle_source: Option<PathBuf>,
+    pub vendor_deps: Option<PathBuf>,
+    pub toolchain_source_root: Option<PathBuf>,
+    pub proof_inputs: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BootstrapSourceBundleProfileReport {
+    pub format: &'static str,
+    pub mode: BootstrapSourceBundleMode,
+    pub manifest_blake3: String,
+    pub required_record_count: u32,
+    pub provider_kind: String,
+    pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BootstrapProviderProfileMetadata {
+    provider_kind: String,
+    schema_version: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceFetchBlocker {
     MissingSourceState,
@@ -319,6 +403,119 @@ pub fn plan_source_bundle_from_derivations(
     let mut records = canonicalize_source_specs(specs, store_prefix)?;
     records.extend(collect_build_source_records(roots, store_prefix)?);
     assemble_source_bundle(records, store_prefix)
+}
+
+// r[impl bootstrap_inventory.offline_bootstrap_source_bundles]
+pub fn plan_bootstrap_source_bundle_profile(
+    input: &BootstrapSourceBundleProfileInput,
+    store_prefix: &str,
+) -> Result<SourceBundleManifest, RunError> {
+    validate_bootstrap_profile_input(input, store_prefix)?;
+    let provider_metadata = read_bootstrap_provider_profile_metadata(&input.provider_manifest)?;
+    validate_bootstrap_provider_kind(input.mode, &provider_metadata.provider_kind)?;
+    let mut records = Vec::new();
+    records.push(bootstrap_profile_record(
+        SourceRecordKind::BootstrapArchive,
+        "bootstrap-provider-archive".to_string(),
+        &input.provider_archive,
+        input.mode,
+        BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE,
+        None,
+        store_prefix,
+    )?);
+    records.push(bootstrap_profile_record(
+        SourceRecordKind::ProviderManifest,
+        "bootstrap-provider-manifest".to_string(),
+        &input.provider_manifest,
+        input.mode,
+        BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST,
+        Some(&provider_metadata),
+        store_prefix,
+    )?);
+    for (index, path) in input.bootstrap_sources.iter().enumerate() {
+        records.push(bootstrap_profile_record(
+            SourceRecordKind::BootstrapArchive,
+            bootstrap_indexed_identity(BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE, index)?,
+            path,
+            input.mode,
+            BOOTSTRAP_PROFILE_CLASS_BOOTSTRAP_SOURCE,
+            None,
+            store_prefix,
+        )?);
+    }
+    if let Some(path) = &input.mantle_source {
+        records.push(bootstrap_profile_record(
+            SourceRecordKind::LocalPath,
+            "mantle-source-tree".to_string(),
+            path,
+            input.mode,
+            BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE,
+            None,
+            store_prefix,
+        )?);
+    }
+    if let Some(path) = &input.vendor_deps {
+        records.push(bootstrap_profile_record(
+            SourceRecordKind::PackageMirror,
+            "vendored-cargo-inputs".to_string(),
+            path,
+            input.mode,
+            BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS,
+            None,
+            store_prefix,
+        )?);
+    }
+    if let Some(path) = &input.toolchain_source_root {
+        records.push(bootstrap_profile_record(
+            SourceRecordKind::ToolchainSourceRoot,
+            "bootstrap-toolchain-source-root".to_string(),
+            path,
+            input.mode,
+            BOOTSTRAP_PROFILE_CLASS_TOOLCHAIN_SOURCE_ROOT,
+            None,
+            store_prefix,
+        )?);
+    }
+    for (index, path) in input.proof_inputs.iter().enumerate() {
+        records.push(bootstrap_profile_record(
+            SourceRecordKind::ProofInput,
+            bootstrap_indexed_identity(BOOTSTRAP_PROFILE_CLASS_PROOF_INPUT, index)?,
+            path,
+            input.mode,
+            BOOTSTRAP_PROFILE_CLASS_PROOF_INPUT,
+            None,
+            store_prefix,
+        )?);
+    }
+    assemble_source_bundle(records, store_prefix)
+}
+
+pub fn bootstrap_source_bundle_profile_report(
+    manifest: &SourceBundleManifest,
+    mode: BootstrapSourceBundleMode,
+) -> Result<BootstrapSourceBundleProfileReport, RunError> {
+    validate_manifest(manifest)?;
+    let provider = manifest
+        .records
+        .iter()
+        .find(|record| {
+            record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                == Some(BOOTSTRAP_PROFILE_CLASS_PROVIDER_MANIFEST)
+        })
+        .ok_or_else(|| RunError::Internal("bootstrap profile missing provider manifest record".to_string()))?;
+    let provider_kind = provider
+        .metadata
+        .get(RECORD_METADATA_PROVIDER_KIND_KEY)
+        .ok_or_else(|| RunError::Internal("bootstrap profile provider manifest missing provider kind".to_string()))?
+        .clone();
+    Ok(BootstrapSourceBundleProfileReport {
+        format: BOOTSTRAP_SOURCE_PROFILE_FORMAT,
+        mode,
+        manifest_blake3: manifest.manifest_blake3.clone(),
+        required_record_count: checked_u32(manifest.records.len(), "bootstrap profile record count")?,
+        provider_kind,
+        non_claim: BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM,
+    })
 }
 
 #[cfg(test)]
@@ -564,6 +761,63 @@ pub fn source_fetch_override_plan_for_file(
 }
 
 // r[impl source_transports.source_bundle_realizes_fetcher_inputs]
+pub fn bootstrap_legacy_seed_fetch_override_plan(
+    state_dir: &Path,
+    provider_raw_url: &str,
+) -> Result<SourceFetchOverridePlan, RunError> {
+    if provider_raw_url.is_empty() {
+        return Err(RunError::Internal("bootstrap provider raw URL must not be empty".to_string()));
+    }
+    let imported_records = read_imported_source_records(state_dir)?;
+    let pinned_records = read_pinned_source_records(state_dir)?;
+    let record = imported_records
+        .iter()
+        .find(|record| bootstrap_provider_archive_record_matches(record, BootstrapSourceBundleMode::LegacySeed))
+        .ok_or_else(|| RunError::Internal("missing bootstrap provider archive source state".to_string()))?;
+    if !source_record_is_pinned(record, record, &pinned_records) {
+        return Err(RunError::Internal("unpinned bootstrap provider archive source state".to_string()));
+    }
+    if record.files.is_empty() {
+        return Err(RunError::Internal(
+            "bootstrap provider archive source state has no materialized payload".to_string(),
+        ));
+    }
+    let source_state_blake3 = digest_offline_preflight_state(None, std::slice::from_ref(record))?;
+    let scratch_dir = tempfile::Builder::new()
+        .prefix("mantle-bootstrap-source-fetch-")
+        .tempdir()
+        .map_err(|err| RunError::Internal(format!("creating bootstrap source fetch scratch dir: {err}")))?;
+    let payload_path = scratch_dir.path().join("payload");
+    materialize_source_record_payload(record, &payload_path)?;
+    let report = SourceOfflinePreflightReport {
+        format: SOURCE_OFFLINE_PREFLIGHT_FORMAT,
+        manifest_blake3: None,
+        source_state_blake3: source_state_blake3.clone(),
+        ready_class: SourceReadiness::Ready,
+        record_count: 1,
+        missing_records: Vec::new(),
+        stale_records: Vec::new(),
+        unsupported_records: Vec::new(),
+        untrusted_records: Vec::new(),
+        network_required_records: Vec::new(),
+        unpinned_records: Vec::new(),
+        next_actions: Vec::new(),
+        records: vec![summary_for_record(record)?],
+        non_claim: SOURCE_BUNDLE_NON_CLAIM,
+    };
+    Ok(SourceFetchOverridePlan {
+        report,
+        overrides: vec![crunch_build::FetchSourceOverride {
+            url: provider_raw_url.to_string(),
+            kind: crunch_build::FetchSourceOverrideKind::Tarball,
+            rev: None,
+            payload_path,
+            source_state_blake3,
+        }],
+        _scratch_dirs: vec![scratch_dir],
+    })
+}
+
 pub fn source_fetch_override_plan_for_derivations(
     roots: &[(String, crunch_glue::CrunchDerivation)],
     state_dir: &Path,
@@ -598,19 +852,153 @@ pub fn source_fetch_override_plan_for_derivations(
 }
 
 fn canonicalize_source_spec(spec: &SourceSpec, store_prefix: &str) -> Result<SourceRecord, RunError> {
-    let (files, total_bytes) = canonicalize_payload_entries(&spec.path, false)?;
-    validate_adapter_metadata(spec.adapter.as_ref())?;
-    let content_blake3 = digest_source_record_content(&spec.kind, &BTreeMap::new(), &files)?;
+    source_record_from_path(
+        spec.kind.clone(),
+        spec.identity.clone(),
+        &spec.path,
+        store_prefix,
+        BTreeMap::new(),
+        spec.adapter.clone(),
+        false,
+    )
+}
+
+fn source_record_from_path(
+    kind: SourceRecordKind,
+    identity: String,
+    path: &Path,
+    store_prefix: &str,
+    metadata: BTreeMap<String, String>,
+    adapter: Option<SourceAdapterMetadata>,
+    skip_git_dir: bool,
+) -> Result<SourceRecord, RunError> {
+    validate_identity(&identity)?;
+    validate_adapter_metadata(adapter.as_ref())?;
+    let (files, total_bytes) = canonicalize_payload_entries(path, skip_git_dir)?;
+    let content_blake3 = digest_source_record_content(&kind, &metadata, &files)?;
     Ok(SourceRecord {
-        kind: spec.kind.clone(),
-        identity: spec.identity.clone(),
-        store_prefix: record_store_prefix(&spec.kind, store_prefix),
-        adapter: spec.adapter.clone(),
-        metadata: BTreeMap::new(),
+        store_prefix: record_store_prefix(&kind, store_prefix),
+        kind,
+        identity,
+        adapter,
+        metadata,
         payload_bytes: total_bytes,
         content_blake3,
         files,
     })
+}
+
+fn validate_bootstrap_profile_input(
+    input: &BootstrapSourceBundleProfileInput,
+    store_prefix: &str,
+) -> Result<(), RunError> {
+    if !store_prefix.starts_with('/') {
+        return Err(RunError::Internal(format!("store prefix must be absolute: {store_prefix}")));
+    }
+    if input.bootstrap_sources.is_empty() {
+        return Err(RunError::Internal("bootstrap profile requires at least one bootstrap source archive".to_string()));
+    }
+    if input.mode.requires_self_build_inputs() {
+        if input.mantle_source.is_none() {
+            return Err(RunError::Internal("self-build bootstrap profile requires --mantle-source".to_string()));
+        }
+        if input.vendor_deps.is_none() {
+            return Err(RunError::Internal("self-build bootstrap profile requires --vendor-deps".to_string()));
+        }
+        if input.proof_inputs.is_empty() {
+            return Err(RunError::Internal(
+                "self-build bootstrap profile requires at least one --proof-input".to_string(),
+            ));
+        }
+    }
+    if input.bootstrap_sources.len() > MAX_SOURCE_RECORDS || input.proof_inputs.len() > MAX_SOURCE_RECORDS {
+        return Err(RunError::Internal(format!("bootstrap profile source count exceeds {MAX_SOURCE_RECORDS}")));
+    }
+    Ok(())
+}
+
+fn bootstrap_profile_record(
+    kind: SourceRecordKind,
+    identity: String,
+    path: &Path,
+    mode: BootstrapSourceBundleMode,
+    class: &str,
+    provider_metadata: Option<&BootstrapProviderProfileMetadata>,
+    store_prefix: &str,
+) -> Result<SourceRecord, RunError> {
+    let mut metadata = BTreeMap::new();
+    metadata.insert(RECORD_METADATA_PROFILE_MODE_KEY.to_string(), mode.as_str().to_string());
+    metadata.insert(RECORD_METADATA_PROFILE_CLASS_KEY.to_string(), class.to_string());
+    if let Some(provider_metadata) = provider_metadata {
+        metadata.insert(RECORD_METADATA_PROVIDER_KIND_KEY.to_string(), provider_metadata.provider_kind.clone());
+        metadata.insert(RECORD_METADATA_PROVIDER_SCHEMA_KEY.to_string(), provider_metadata.schema_version.clone());
+    }
+    let skip_git_dir = class == BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE;
+    source_record_from_path(kind, identity, path, store_prefix, metadata, None, skip_git_dir)
+}
+
+fn bootstrap_indexed_identity(class: &str, index: usize) -> Result<String, RunError> {
+    let display_index = index
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal("bootstrap profile index overflow".to_string()))?;
+    let identity = format!("{class}-{display_index:0width$}", width = BOOTSTRAP_PROFILE_INDEX_WIDTH);
+    validate_identity(&identity)?;
+    Ok(identity)
+}
+
+fn read_bootstrap_provider_profile_metadata(path: &Path) -> Result<BootstrapProviderProfileMetadata, RunError> {
+    let bytes = fs::read(path)
+        .map_err(|err| RunError::Internal(format!("reading bootstrap provider manifest {}: {err}", path.display())))?;
+    let value = serde_json::from_slice::<serde_json::Value>(&bytes)
+        .map_err(|err| RunError::Internal(format!("parsing bootstrap provider manifest {}: {err}", path.display())))?;
+    let provider_kind = provider_kind_from_json(&value).ok_or_else(|| {
+        RunError::Internal("bootstrap provider manifest missing provider_kind or provider.id".to_string())
+    })?;
+    let schema_version = provider_schema_from_json(&value);
+    validate_provider_manifest_has_boundary_metadata(&value)?;
+    Ok(BootstrapProviderProfileMetadata {
+        provider_kind,
+        schema_version,
+    })
+}
+
+fn provider_kind_from_json(value: &serde_json::Value) -> Option<String> {
+    value
+        .get("provider_kind")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| value.get("provider").and_then(|provider| provider.get("id")).and_then(serde_json::Value::as_str))
+        .map(str::to_string)
+}
+
+fn provider_schema_from_json(value: &serde_json::Value) -> String {
+    value
+        .get("schema_version")
+        .and_then(serde_json::Value::as_u64)
+        .map(|version| version.to_string())
+        .unwrap_or_else(|| "1".to_string())
+}
+
+fn validate_provider_manifest_has_boundary_metadata(value: &serde_json::Value) -> Result<(), RunError> {
+    if value.get("reduction").is_none() {
+        return Err(RunError::Internal("bootstrap provider manifest missing reduced-provider provenance".to_string()));
+    }
+    if value.get("normalized_seed_contract").is_none() && value.get("target").is_none() {
+        return Err(RunError::Internal(
+            "bootstrap provider manifest missing normalized seed contract facts".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_bootstrap_provider_kind(mode: BootstrapSourceBundleMode, provider_kind: &str) -> Result<(), RunError> {
+    let expected = mode.expected_provider_kind();
+    if provider_kind == expected {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "bootstrap provider kind mismatch for {}: expected {expected}, got {provider_kind}",
+        mode.as_str()
+    )))
 }
 
 fn canonicalize_payload_entries(path: &Path, skip_git_dir: bool) -> Result<(Vec<SourceFileEntry>, u64), RunError> {
@@ -1506,6 +1894,17 @@ fn source_record_is_fetcher_input(record: &SourceRecord) -> bool {
     matches!(record.kind, SourceRecordKind::FixedUrl | SourceRecordKind::VcsSnapshot)
 }
 
+fn bootstrap_provider_archive_record_matches(record: &SourceRecord, mode: BootstrapSourceBundleMode) -> bool {
+    let record_mode = record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str);
+    let mode_matches = record_mode == Some(mode.as_str())
+        || (mode == BootstrapSourceBundleMode::LegacySeed
+            && record_mode == Some(BootstrapSourceBundleMode::SelfBuildProof.as_str()));
+    record.kind == SourceRecordKind::BootstrapArchive
+        && mode_matches
+        && record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+            == Some(BOOTSTRAP_PROFILE_CLASS_PROVIDER_ARCHIVE)
+}
+
 fn imported_source_record_satisfies_fetcher_input<'a>(
     expected: &SourceRecord,
     imported_records: &'a [SourceRecord],
@@ -2064,6 +2463,52 @@ pub fn cmd_source(
     }
 }
 
+struct BootstrapProfileCliInput {
+    mode: String,
+    provider_archive: PathBuf,
+    provider_manifest: PathBuf,
+    bootstrap_sources: Vec<PathBuf>,
+    mantle_source: Option<PathBuf>,
+    vendor_deps: Option<PathBuf>,
+    toolchain_source_root: Option<PathBuf>,
+    proof_inputs: Vec<PathBuf>,
+    to: Option<PathBuf>,
+    preflight: bool,
+}
+
+fn cmd_bootstrap_profile(
+    input: BootstrapProfileCliInput,
+    state_dir: &Path,
+    store_prefix: &str,
+    json_output: bool,
+) -> Result<(), RunError> {
+    let mode = BootstrapSourceBundleMode::parse(&input.mode)?;
+    let profile_input = BootstrapSourceBundleProfileInput {
+        mode,
+        provider_archive: input.provider_archive,
+        provider_manifest: input.provider_manifest,
+        bootstrap_sources: input.bootstrap_sources,
+        mantle_source: input.mantle_source,
+        vendor_deps: input.vendor_deps,
+        toolchain_source_root: input.toolchain_source_root,
+        proof_inputs: input.proof_inputs,
+    };
+    let manifest = plan_bootstrap_source_bundle_profile(&profile_input, store_prefix)?;
+    if let Some(path) = input.to {
+        write_source_bundle(&path, &manifest)?;
+    }
+    if input.preflight {
+        let report = offline_preflight_for_manifest(&manifest, state_dir)?;
+        print_offline_preflight_report(&report, json_output)?;
+        if source_offline_preflight_is_ready(&report) {
+            return Ok(());
+        }
+        return Err(RunError::Reported(1));
+    }
+    let report = bootstrap_source_bundle_profile_report(&manifest, mode)?;
+    print_bootstrap_profile_report(&report, json_output)
+}
+
 fn cmd_source_bundle(
     action: crate::SourceBundleAction,
     state_dir: &Path,
@@ -2089,6 +2534,34 @@ fn cmd_source_bundle(
             write_source_bundle(&to, &manifest)?;
             print_plan_report(&plan_report(&manifest)?, json_output)
         }
+        crate::SourceBundleAction::BootstrapProfile {
+            mode,
+            provider_archive,
+            provider_manifest,
+            bootstrap_sources,
+            mantle_source,
+            vendor_deps,
+            toolchain_source_root,
+            proof_inputs,
+            to,
+            preflight,
+        } => cmd_bootstrap_profile(
+            BootstrapProfileCliInput {
+                mode,
+                provider_archive,
+                provider_manifest,
+                bootstrap_sources,
+                mantle_source,
+                vendor_deps,
+                toolchain_source_root,
+                proof_inputs,
+                to,
+                preflight,
+            },
+            state_dir,
+            store_prefix,
+            json_output,
+        ),
         crate::SourceBundleAction::List { from } => {
             let manifest = read_source_bundle(&from)?;
             print_plan_report(&list_source_bundle(&manifest)?, json_output)
@@ -2182,6 +2655,26 @@ fn evaluate_build_root_with_import_paths(
     session
         .force_all_roots::<crunch_glue::CrunchDerivation>()
         .map_err(|err| RunError::Eval(format!("evaluating source bundle build root {}: {err}", build_root.display())))
+}
+
+fn print_bootstrap_profile_report(
+    report: &BootstrapSourceBundleProfileReport,
+    json_output: bool,
+) -> Result<(), RunError> {
+    if json_output {
+        println!("{}", render_json(report)?);
+        return Ok(());
+    }
+    println!(
+        "format={} mode={} records={} manifest_blake3={} provider_kind={}",
+        report.format,
+        report.mode.as_str(),
+        report.required_record_count,
+        report.manifest_blake3,
+        report.provider_kind
+    );
+    eprintln!("non_claim={}", report.non_claim);
+    Ok(())
 }
 
 fn print_plan_report(report: &SourceBundlePlanReport, json_output: bool) -> Result<(), RunError> {
@@ -2375,6 +2868,49 @@ mod tests {
         let mut adapter = cargo_adapter();
         adapter.extra.insert(key.to_string(), value.to_string());
         adapter
+    }
+
+    fn write_provider_manifest(path: &Path, provider_kind: &str) {
+        let json = serde_json::json!({
+            "schema_version": 1,
+            "provider_kind": provider_kind,
+            "reduction": {
+                "retained_tools": ["cc", "ar"],
+                "dropped_components": ["locale-catalogs"]
+            },
+            "normalized_seed_contract": {
+                "target": "x86_64-linux-musl",
+                "dynamic_linker": "ld-musl-x86_64.so.1"
+            }
+        });
+        fs::write(path, serde_json::to_string_pretty(&json).unwrap()).unwrap();
+    }
+
+    fn bootstrap_profile_fixture(temp: &Path) -> BootstrapSourceBundleProfileInput {
+        let provider_archive = temp.join("provider-archive");
+        let provider_manifest = temp.join("provider.json");
+        let bootstrap_source = temp.join("bootstrap-src");
+        let mantle_source = temp.join("mantle-src");
+        let vendor_deps = temp.join("vendor-deps");
+        let toolchain = temp.join("toolchain");
+        let proof = temp.join("proof");
+        write_fixture(&provider_archive);
+        write_provider_manifest(&provider_manifest, BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED);
+        write_fixture(&bootstrap_source);
+        write_fixture(&mantle_source);
+        write_fixture(&vendor_deps);
+        write_fixture(&toolchain);
+        write_fixture(&proof);
+        BootstrapSourceBundleProfileInput {
+            mode: BootstrapSourceBundleMode::SelfBuildProof,
+            provider_archive,
+            provider_manifest,
+            bootstrap_sources: vec![bootstrap_source],
+            mantle_source: Some(mantle_source),
+            vendor_deps: Some(vendor_deps),
+            toolchain_source_root: Some(toolchain),
+            proof_inputs: vec![proof],
+        }
     }
 
     #[test]
@@ -2592,6 +3128,98 @@ mod tests {
         assert_eq!(manifest.records[1].kind, SourceRecordKind::ProofInput);
         assert_eq!(manifest.records[2].store_prefix.as_deref(), Some("/mantle/store"));
         assert_eq!(manifest.records[3].store_prefix.as_deref(), Some("/mantle/store"));
+    }
+
+    // r[verify bootstrap_inventory.offline_bootstrap_source_bundles]
+    #[test]
+    fn bootstrap_source_profile_exports_imports_and_preflights_ready() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = bootstrap_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let report = bootstrap_source_bundle_profile_report(&manifest, input.mode).unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&manifest, &state_dir, true).unwrap();
+
+        let preflight = offline_preflight_for_manifest(&manifest, &state_dir).unwrap();
+
+        assert_eq!(report.format, BOOTSTRAP_SOURCE_PROFILE_FORMAT);
+        assert_eq!(report.mode, BootstrapSourceBundleMode::SelfBuildProof);
+        assert_eq!(report.required_record_count, 7);
+        assert_eq!(report.provider_kind, BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED);
+        assert_eq!(report.non_claim, BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM);
+        assert_eq!(preflight.ready_class, SourceReadiness::Ready);
+        assert_eq!(preflight.record_count, report.required_record_count);
+        assert!(preflight.source_state_blake3.len() == BLAKE3_HEX_BYTES);
+    }
+
+    #[test]
+    fn bootstrap_source_profile_fetch_override_consumes_pinned_provider_archive() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = bootstrap_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&manifest, &state_dir, true).unwrap();
+
+        let plan =
+            bootstrap_legacy_seed_fetch_override_plan(&state_dir, "https://example.invalid/provider.tgz").unwrap();
+
+        assert_eq!(plan.report.ready_class, SourceReadiness::Ready);
+        assert_eq!(plan.overrides.len(), 1);
+        assert_eq!(plan.overrides[0].kind, crunch_build::FetchSourceOverrideKind::Tarball);
+        assert_eq!(plan.overrides[0].url, "https://example.invalid/provider.tgz");
+        assert!(plan.overrides[0].payload_path.join("src/main.txt").exists());
+    }
+
+    #[test]
+    fn bootstrap_source_profile_fetch_override_rejects_unpinned_provider_archive() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = bootstrap_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let state_dir = temp.path().join("state");
+        import_source_bundle(&manifest, &state_dir, false).unwrap();
+
+        let err =
+            bootstrap_legacy_seed_fetch_override_plan(&state_dir, "https://example.invalid/provider.tgz").unwrap_err();
+
+        assert!(err.to_string().contains("unpinned bootstrap provider archive"));
+    }
+
+    #[test]
+    fn bootstrap_source_profile_rejects_missing_vendor_for_self_build() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut input = bootstrap_profile_fixture(temp.path());
+        input.vendor_deps = None;
+
+        let err = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap_err();
+
+        assert!(err.to_string().contains("requires --vendor-deps"));
+    }
+
+    #[test]
+    fn bootstrap_source_profile_rejects_wrong_provider_kind() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = bootstrap_profile_fixture(temp.path());
+        write_provider_manifest(&input.provider_manifest, BOOTSTRAP_PROVIDER_KIND_SOURCE_ROOT);
+
+        let err = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap_err();
+
+        assert!(err.to_string().contains("provider kind mismatch"));
+    }
+
+    #[test]
+    fn bootstrap_source_profile_rejects_provider_manifest_without_reduction() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = bootstrap_profile_fixture(temp.path());
+        let bad = serde_json::json!({
+            "schema_version": 1,
+            "provider_kind": BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED,
+            "normalized_seed_contract": { "target": "x86_64-linux-musl" }
+        });
+        fs::write(&input.provider_manifest, serde_json::to_string_pretty(&bad).unwrap()).unwrap();
+
+        let err = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap_err();
+
+        assert!(err.to_string().contains("reduced-provider provenance"));
     }
 
     #[test]
