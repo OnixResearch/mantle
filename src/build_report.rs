@@ -204,6 +204,23 @@ pub struct BuildJsonCargoBuildEvidence {
     pub claim_class: String,
     pub project_build_status: String,
     pub evidence_path: String,
+    pub evidence_schema: String,
+    pub evidence_version: u32,
+    pub evidence_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lockfile: Option<BuildJsonCargoSourceClosureEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cargo_command: Option<BuildJsonCargoCommandEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network_policy: Option<BuildJsonCargoNetworkPolicyEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output: Option<BuildJsonCargoOutputEvidence>,
     pub source_closure: Vec<BuildJsonCargoSourceClosureEntry>,
     pub toolchain: BuildJsonCargoToolchainEvidence,
     pub non_claims: Vec<String>,
@@ -223,6 +240,12 @@ pub struct BuildJsonCargoBuildEvidenceDiagnostic {
 pub struct BuildJsonCargoSourceClosureEntry {
     pub role: String,
     pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub digest_blake3: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_digest_blake3: Option<String>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub identity_class: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -232,14 +255,23 @@ pub struct BuildJsonCargoToolchainEvidence {
     pub linker: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct OfflineCargoEvidenceFile {
-    schema: String,
-    claim_class: String,
-    project_build_status: String,
-    source_closure: Vec<BuildJsonCargoSourceClosureEntry>,
-    toolchain: BuildJsonCargoToolchainEvidence,
-    non_claims: Vec<String>,
+#[derive(Clone, Debug, Serialize)]
+pub struct BuildJsonCargoCommandEvidence {
+    pub program: String,
+    pub args: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct BuildJsonCargoNetworkPolicyEvidence {
+    pub mode: String,
+    pub result: String,
+    pub allow_undeclared_network: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct BuildJsonCargoOutputEvidence {
+    pub binary: String,
+    pub path: String,
 }
 
 pub fn render_build_json_report(
@@ -526,6 +558,16 @@ fn cargo_build_evidence_for_output(outcome: &BuildJsonOutcome, output: &BuildJso
             claim_class: evidence.claim_class,
             project_build_status: evidence.project_build_status,
             evidence_path: evidence_path.display().to_string(),
+            evidence_schema: evidence.evidence_schema,
+            evidence_version: evidence.evidence_version,
+            evidence_kind: evidence.evidence_kind,
+            target: evidence.target,
+            profile: evidence.profile,
+            binary: evidence.binary,
+            lockfile: evidence.lockfile,
+            cargo_command: evidence.cargo_command,
+            network_policy: evidence.network_policy,
+            output: evidence.output,
             source_closure: evidence.source_closure,
             toolchain: evidence.toolchain,
             non_claims: evidence.non_claims,
@@ -556,28 +598,188 @@ fn read_offline_cargo_evidence(path: &Path) -> OfflineCargoEvidenceRead {
             };
         }
     };
-    let evidence: OfflineCargoEvidenceFile = match serde_json::from_str(&text) {
+    let value: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(value) => value,
+        Err(error) => {
+            return OfflineCargoEvidenceRead::Invalid {
+                blocker_class: "malformed-offline-cargo-evidence".to_string(),
+                message: format!("offline Cargo evidence sidecar is not valid JSON: {error}"),
+            };
+        }
+    };
+    let schema = value.get("schema").and_then(serde_json::Value::as_str).unwrap_or_default();
+    match schema {
+        crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V1 => read_legacy_offline_cargo_evidence(value),
+        crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V2 => read_digest_bound_offline_cargo_evidence(value),
+        _ => OfflineCargoEvidenceRead::Invalid {
+            blocker_class: "unsupported-offline-cargo-evidence-schema".to_string(),
+            message: format!("unsupported offline Cargo evidence schema {schema}"),
+        },
+    }
+}
+
+fn read_legacy_offline_cargo_evidence(value: serde_json::Value) -> OfflineCargoEvidenceRead {
+    let evidence = match serde_json::from_value::<crate::offline_cargo::OfflineCargoEvidenceV1File>(value) {
         Ok(evidence) => evidence,
         Err(error) => {
             return OfflineCargoEvidenceRead::Invalid {
                 blocker_class: "malformed-offline-cargo-evidence".to_string(),
-                message: format!("offline Cargo evidence sidecar is not valid v1 JSON: {error}"),
+                message: format!("offline Cargo legacy evidence sidecar is malformed: {error}"),
             };
         }
     };
-    if evidence.schema != crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA {
-        return OfflineCargoEvidenceRead::Invalid {
-            blocker_class: "unsupported-offline-cargo-evidence-schema".to_string(),
-            message: format!("unsupported offline Cargo evidence schema {}", evidence.schema),
-        };
+    let blockers = crate::offline_cargo::validate_legacy_evidence(&evidence);
+    if !blockers.is_empty() {
+        return blockers_to_invalid(blockers);
     }
-    if evidence.claim_class != crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_CLASS {
-        return OfflineCargoEvidenceRead::Invalid {
-            blocker_class: "unexpected-offline-cargo-claim-class".to_string(),
-            message: format!("unexpected offline Cargo evidence claim class {}", evidence.claim_class),
-        };
+    OfflineCargoEvidenceRead::Valid(OfflineCargoEvidenceReport {
+        claim_class: evidence.claim_class,
+        project_build_status: evidence.project_build_status,
+        evidence_schema: evidence.schema,
+        evidence_version: crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_VERSION_V1,
+        evidence_kind: crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_KIND_LEGACY.to_string(),
+        target: None,
+        profile: None,
+        binary: None,
+        lockfile: None,
+        cargo_command: None,
+        network_policy: None,
+        output: None,
+        source_closure: evidence.source_closure.into_iter().map(report_input).collect(),
+        toolchain: report_toolchain(evidence.toolchain),
+        non_claims: evidence.non_claims,
+    })
+}
+
+fn read_digest_bound_offline_cargo_evidence(value: serde_json::Value) -> OfflineCargoEvidenceRead {
+    let mut evidence = match serde_json::from_value::<crate::offline_cargo::OfflineCargoEvidenceV2File>(value) {
+        Ok(evidence) => evidence,
+        Err(error) => {
+            return OfflineCargoEvidenceRead::Invalid {
+                blocker_class: "malformed-offline-cargo-evidence".to_string(),
+                message: format!("offline Cargo v2 evidence sidecar is malformed: {error}"),
+            };
+        }
+    };
+    if let Err((blocker_class, message)) = enrich_digest_bound_evidence(&mut evidence) {
+        return OfflineCargoEvidenceRead::Invalid { blocker_class, message };
     }
-    OfflineCargoEvidenceRead::Valid(evidence)
+    let blockers = crate::offline_cargo::validate_digest_bound_evidence(&evidence);
+    if !blockers.is_empty() {
+        return blockers_to_invalid(blockers);
+    }
+    OfflineCargoEvidenceRead::Valid(OfflineCargoEvidenceReport {
+        claim_class: evidence.claim_class,
+        project_build_status: evidence.project_build_status,
+        evidence_schema: evidence.schema,
+        evidence_version: evidence.evidence_version,
+        evidence_kind: crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_KIND_DIGEST_BOUND.to_string(),
+        target: Some(evidence.target),
+        profile: Some(evidence.profile),
+        binary: Some(evidence.binary),
+        lockfile: Some(report_input(evidence.lockfile)),
+        cargo_command: Some(BuildJsonCargoCommandEvidence {
+            program: evidence.cargo_command.program,
+            args: evidence.cargo_command.args,
+        }),
+        network_policy: Some(BuildJsonCargoNetworkPolicyEvidence {
+            mode: evidence.network_policy.mode,
+            result: evidence.network_policy.result,
+            allow_undeclared_network: evidence.network_policy.allow_undeclared_network,
+        }),
+        output: Some(BuildJsonCargoOutputEvidence {
+            binary: evidence.output.binary,
+            path: evidence.output.path,
+        }),
+        source_closure: evidence.source_closure.into_iter().map(report_input).collect(),
+        toolchain: report_toolchain(evidence.toolchain),
+        non_claims: evidence.non_claims,
+    })
+}
+
+fn enrich_digest_bound_evidence(
+    evidence: &mut crate::offline_cargo::OfflineCargoEvidenceV2File,
+) -> Result<(), (String, String)> {
+    bind_file_digest(&mut evidence.lockfile)?;
+    for input in &mut evidence.source_closure {
+        if input.identity_class != crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT {
+            continue;
+        }
+        bind_path_digest(input)?;
+    }
+    Ok(())
+}
+
+fn bind_file_digest(input: &mut crate::offline_cargo::OfflineCargoEvidenceInput) -> Result<(), (String, String)> {
+    let path = std::path::PathBuf::from(&input.path);
+    if !path.is_file() {
+        return Err((
+            "missing-lockfile-digest".to_string(),
+            format!("offline Cargo lockfile evidence path is not a file: {}", input.path),
+        ));
+    }
+    bind_actual_digest(input, &path)
+}
+
+fn bind_path_digest(input: &mut crate::offline_cargo::OfflineCargoEvidenceInput) -> Result<(), (String, String)> {
+    let path = std::path::PathBuf::from(&input.path);
+    if !path.exists() {
+        return Err((
+            "offline-cargo-evidence-digest-error".to_string(),
+            format!("offline Cargo evidence input path is missing: {}", input.path),
+        ));
+    }
+    bind_actual_digest(input, &path)
+}
+
+fn bind_actual_digest(
+    input: &mut crate::offline_cargo::OfflineCargoEvidenceInput,
+    path: &Path,
+) -> Result<(), (String, String)> {
+    let recorded_digest = input.digest_blake3.clone();
+    let actual_digest = crate::release_evidence::compute_path_blake3_digest(path).map_err(|error| {
+        (
+            "offline-cargo-evidence-digest-error".to_string(),
+            format!("offline Cargo evidence digest could not be computed for {}: {error}", path.display()),
+        )
+    })?;
+    if input.expected_digest_blake3.is_none() {
+        input.expected_digest_blake3 = recorded_digest;
+    }
+    input.digest_blake3 = Some(actual_digest);
+    Ok(())
+}
+
+fn blockers_to_invalid(blockers: Vec<crate::offline_cargo::RustOfflineCargoBlocker>) -> OfflineCargoEvidenceRead {
+    let first = &blockers[0];
+    let additional = blockers.iter().skip(1).map(|blocker| blocker.class.as_str()).collect::<Vec<_>>();
+    let message = if additional.is_empty() {
+        first.message.clone()
+    } else {
+        format!("{}; additional blockers: {}", first.message, additional.join(","))
+    };
+    OfflineCargoEvidenceRead::Invalid {
+        blocker_class: first.class.clone(),
+        message,
+    }
+}
+
+fn report_input(input: crate::offline_cargo::OfflineCargoEvidenceInput) -> BuildJsonCargoSourceClosureEntry {
+    BuildJsonCargoSourceClosureEntry {
+        role: input.role,
+        path: input.path,
+        digest_blake3: input.digest_blake3,
+        expected_digest_blake3: input.expected_digest_blake3,
+        identity_class: input.identity_class,
+    }
+}
+
+fn report_toolchain(toolchain: crate::offline_cargo::OfflineCargoEvidenceToolchain) -> BuildJsonCargoToolchainEvidence {
+    BuildJsonCargoToolchainEvidence {
+        cargo: toolchain.cargo,
+        rustc: toolchain.rustc,
+        linker: toolchain.linker,
+    }
 }
 
 enum CargoBuildEvidenceOutcome {
@@ -586,9 +788,27 @@ enum CargoBuildEvidenceOutcome {
     Invalid(BuildJsonCargoBuildEvidenceDiagnostic),
 }
 
+struct OfflineCargoEvidenceReport {
+    claim_class: String,
+    project_build_status: String,
+    evidence_schema: String,
+    evidence_version: u32,
+    evidence_kind: String,
+    target: Option<String>,
+    profile: Option<String>,
+    binary: Option<String>,
+    lockfile: Option<BuildJsonCargoSourceClosureEntry>,
+    cargo_command: Option<BuildJsonCargoCommandEvidence>,
+    network_policy: Option<BuildJsonCargoNetworkPolicyEvidence>,
+    output: Option<BuildJsonCargoOutputEvidence>,
+    source_closure: Vec<BuildJsonCargoSourceClosureEntry>,
+    toolchain: BuildJsonCargoToolchainEvidence,
+    non_claims: Vec<String>,
+}
+
 enum OfflineCargoEvidenceRead {
     Missing,
-    Valid(OfflineCargoEvidenceFile),
+    Valid(OfflineCargoEvidenceReport),
     Invalid { blocker_class: String, message: String },
 }
 
@@ -935,7 +1155,7 @@ mod tests {
     }
 
     #[test]
-    fn build_json_report_surfaces_offline_cargo_evidence_sidecar() {
+    fn build_json_report_surfaces_legacy_offline_cargo_evidence_sidecar() {
         use std::collections::HashMap;
 
         const MIN_MAX_JOBS: u32 = 1;
@@ -972,7 +1192,7 @@ mod tests {
         std::fs::write(
             &evidence_path,
             serde_json::json!({
-                "schema": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA,
+                "schema": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V1,
                 "claim_class": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_CLASS,
                 "project_build_status": crate::offline_cargo::OFFLINE_CARGO_PROJECT_BUILD_STATUS,
                 "source_closure": [{"role": "package-source", "path": "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo-src"}],
@@ -981,7 +1201,7 @@ mod tests {
                     "rustc": "/crunch/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-rust/bin/rustc",
                     "linker": "/crunch/store/cccccccccccccccccccccccccccccccc-seed/bin/x86_64-linux-musl-gcc",
                 },
-                "non_claims": ["not-cargo-free-execution", "not-full-cargo-compatibility"],
+                "non_claims": crate::offline_cargo::offline_cargo_non_claims(),
             })
             .to_string(),
         )
@@ -1035,8 +1255,219 @@ mod tests {
             crate::offline_cargo::OFFLINE_CARGO_PROJECT_BUILD_STATUS
         );
         assert_eq!(report.cargo_build_evidence[0].evidence_path, evidence_path.display().to_string());
+        assert_eq!(
+            report.cargo_build_evidence[0].evidence_schema,
+            crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V1
+        );
+        assert_eq!(
+            report.cargo_build_evidence[0].evidence_kind,
+            crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_KIND_LEGACY
+        );
+        assert!(report.cargo_build_evidence[0].lockfile.is_none());
         assert!(report.cargo_build_evidence[0].non_claims.contains(&"not-full-cargo-compatibility".to_string()));
         assert!(report.cargo_build_evidence_diagnostics.is_empty());
+    }
+
+    #[test]
+    fn build_json_report_surfaces_digest_bound_offline_cargo_evidence_sidecar() {
+        const LOCK_CONTENT: &str = "# lock\nversion = 4\n";
+        const SOURCE_CONTENT: &str = "fn main() {}\n";
+        const VENDOR_CONTENT: &str = "vendor-checksum\n";
+
+        let output_root = tempfile::tempdir().unwrap();
+        let source_dir = output_root.path().join("source");
+        let source_src_dir = source_dir.join("src");
+        let vendor_dir = output_root.path().join("vendor");
+        std::fs::create_dir_all(&source_src_dir).unwrap();
+        std::fs::create_dir_all(&vendor_dir).unwrap();
+        std::fs::write(source_dir.join("Cargo.lock"), LOCK_CONTENT).unwrap();
+        std::fs::write(source_src_dir.join("main.rs"), SOURCE_CONTENT).unwrap();
+        std::fs::write(vendor_dir.join("checksum.txt"), VENDOR_CONTENT).unwrap();
+        let evidence_path = output_root.path().join(crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_RELATIVE_PATH);
+        std::fs::create_dir_all(evidence_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &evidence_path,
+            serde_json::json!({
+                "schema": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V2,
+                "evidence_version": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_VERSION_V2,
+                "claim_class": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_CLASS,
+                "project_build_status": crate::offline_cargo::OFFLINE_CARGO_PROJECT_BUILD_STATUS,
+                "target": "x86_64-unknown-linux-musl",
+                "profile": "release",
+                "binary": "demo",
+                "lockfile": {
+                    "role": crate::offline_cargo::OFFLINE_CARGO_LOCKFILE_ROLE,
+                    "path": source_dir.join("Cargo.lock").display().to_string(),
+                    "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT,
+                },
+                "source_closure": [
+                    {
+                        "role": "package-source",
+                        "path": source_dir.display().to_string(),
+                        "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT,
+                    },
+                    {
+                        "role": "rust-toolchain",
+                        "path": "/crunch/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-rust",
+                        "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_STORE_PATH,
+                    },
+                    {
+                        "role": "seed-toolchain",
+                        "path": "/crunch/store/cccccccccccccccccccccccccccccccc-seed",
+                        "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_STORE_PATH,
+                    },
+                    {
+                        "role": "musl-runtime",
+                        "path": "/crunch/store/dddddddddddddddddddddddddddddddd-musl",
+                        "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_STORE_PATH,
+                    },
+                    {
+                        "role": "vendored-dependencies",
+                        "path": vendor_dir.display().to_string(),
+                        "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT,
+                    }
+                ],
+                "toolchain": {
+                    "cargo": "/crunch/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-rust/bin/cargo",
+                    "rustc": "/crunch/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-rust/bin/rustc",
+                    "linker": "/crunch/store/cccccccccccccccccccccccccccccccc-seed/bin/x86_64-linux-musl-gcc",
+                },
+                "cargo_command": {
+                    "program": crate::offline_cargo::OFFLINE_CARGO_COMMAND_PROGRAM,
+                    "args": ["build", "--locked", "--offline", "--release", "--bin", "demo", "--target", "x86_64-unknown-linux-musl"],
+                },
+                "network_policy": {
+                    "mode": crate::offline_cargo::OFFLINE_CARGO_NETWORK_MODE,
+                    "result": crate::offline_cargo::OFFLINE_CARGO_NETWORK_RESULT,
+                    "allow_undeclared_network": false,
+                },
+                "output": {
+                    "binary": "demo",
+                    "path": output_root.path().join("bin/demo").display().to_string(),
+                },
+                "non_claims": crate::offline_cargo::offline_cargo_non_claims(),
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let output = BuildJsonOutput {
+            name: "out".to_string(),
+            path: output_root.path().display().to_string(),
+            artifact_attestation: BuildJsonAttestationReference {
+                logical_path: "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo".to_string(),
+                path: "attestation.json".to_string(),
+            },
+            substitution: None,
+        };
+        let outcome = build_json_outcome_with_output(output);
+
+        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome]);
+        let lock_digest = blake3::hash(LOCK_CONTENT.as_bytes()).to_hex().to_string();
+        let source_digest = crate::release_evidence::compute_path_blake3_digest(&source_dir).unwrap();
+        let vendor_digest = crate::release_evidence::compute_path_blake3_digest(&vendor_dir).unwrap();
+
+        assert_eq!(reports.len(), 1);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+        assert_eq!(reports[0].evidence_kind, crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_KIND_DIGEST_BOUND);
+        assert_eq!(reports[0].target.as_deref(), Some("x86_64-unknown-linux-musl"));
+        assert_eq!(reports[0].profile.as_deref(), Some("release"));
+        assert_eq!(reports[0].binary.as_deref(), Some("demo"));
+        assert_eq!(reports[0].lockfile.as_ref().unwrap().digest_blake3.as_deref(), Some(lock_digest.as_str()));
+        let package_source = reports[0]
+            .source_closure
+            .iter()
+            .find(|entry| entry.role == "package-source")
+            .expect("package source evidence");
+        let vendor_source = reports[0]
+            .source_closure
+            .iter()
+            .find(|entry| entry.role == "vendored-dependencies")
+            .expect("vendor source evidence");
+        assert_eq!(package_source.digest_blake3.as_deref(), Some(source_digest.as_str()));
+        assert_eq!(vendor_source.digest_blake3.as_deref(), Some(vendor_digest.as_str()));
+        assert_eq!(
+            reports[0].network_policy.as_ref().unwrap().result,
+            crate::offline_cargo::OFFLINE_CARGO_NETWORK_RESULT
+        );
+        assert!(reports[0].non_claims.contains(&"not-compiler-correctness".to_string()));
+    }
+
+    #[test]
+    fn build_json_report_diagnoses_stale_digest_bound_offline_cargo_evidence_sidecar() {
+        const LOCK_CONTENT: &str = "# lock\nversion = 4\n";
+        const STALE_DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+        let output_root = tempfile::tempdir().unwrap();
+        let source_dir = output_root.path().join("source");
+        let source_src_dir = source_dir.join("src");
+        std::fs::create_dir_all(&source_src_dir).unwrap();
+        std::fs::write(source_dir.join("Cargo.lock"), LOCK_CONTENT).unwrap();
+        std::fs::write(source_src_dir.join("main.rs"), "fn main() {}\n").unwrap();
+        let evidence_path = output_root.path().join(crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_RELATIVE_PATH);
+        std::fs::create_dir_all(evidence_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &evidence_path,
+            serde_json::json!({
+                "schema": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_SCHEMA_V2,
+                "evidence_version": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_VERSION_V2,
+                "claim_class": crate::offline_cargo::OFFLINE_CARGO_EVIDENCE_CLASS,
+                "project_build_status": crate::offline_cargo::OFFLINE_CARGO_PROJECT_BUILD_STATUS,
+                "target": "x86_64-unknown-linux-musl",
+                "profile": "release",
+                "binary": "demo",
+                "lockfile": {
+                    "role": crate::offline_cargo::OFFLINE_CARGO_LOCKFILE_ROLE,
+                    "path": source_dir.join("Cargo.lock").display().to_string(),
+                    "digest_blake3": STALE_DIGEST,
+                    "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT,
+                },
+                "source_closure": [
+                    {
+                        "role": "package-source",
+                        "path": source_dir.display().to_string(),
+                        "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_BLAKE3_CONTENT,
+                    },
+                    {"role": "rust-toolchain", "path": "/crunch/store/rust", "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_STORE_PATH},
+                    {"role": "seed-toolchain", "path": "/crunch/store/seed", "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_STORE_PATH},
+                    {"role": "musl-runtime", "path": "/crunch/store/musl", "identity_class": crate::offline_cargo::OFFLINE_CARGO_IDENTITY_STORE_PATH}
+                ],
+                "toolchain": {
+                    "cargo": "/crunch/store/rust/bin/cargo",
+                    "rustc": "/crunch/store/rust/bin/rustc",
+                    "linker": "/crunch/store/seed/bin/x86_64-linux-musl-gcc",
+                },
+                "cargo_command": {
+                    "program": crate::offline_cargo::OFFLINE_CARGO_COMMAND_PROGRAM,
+                    "args": ["build", "--locked", "--offline", "--release", "--bin", "demo", "--target", "x86_64-unknown-linux-musl"],
+                },
+                "network_policy": {
+                    "mode": crate::offline_cargo::OFFLINE_CARGO_NETWORK_MODE,
+                    "result": crate::offline_cargo::OFFLINE_CARGO_NETWORK_RESULT,
+                    "allow_undeclared_network": false,
+                },
+                "output": {"binary": "demo", "path": output_root.path().join("bin/demo").display().to_string()},
+                "non_claims": crate::offline_cargo::offline_cargo_non_claims(),
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let output = BuildJsonOutput {
+            name: "out".to_string(),
+            path: output_root.path().display().to_string(),
+            artifact_attestation: BuildJsonAttestationReference {
+                logical_path: "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo".to_string(),
+                path: "attestation.json".to_string(),
+            },
+            substitution: None,
+        };
+        let outcome = build_json_outcome_with_output(output);
+
+        let (reports, diagnostics) = build_cargo_build_evidence_reports(&[outcome]);
+
+        assert!(reports.is_empty());
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].blocker_class, "stale-lockfile-digest");
+        assert!(diagnostics[0].message.contains("Cargo.lock digest differs"));
     }
 
     #[test]

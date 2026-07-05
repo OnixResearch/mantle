@@ -8,10 +8,15 @@
 let { Name, Input, .. } = import "contracts.ncl" in
 let Derivation = import "derivation.ncl" in
 
-let EvidenceSchema = "mantle-offline-cargo-build-evidence-v1" in
+let EvidenceSchema = "mantle-offline-cargo-build-evidence-v2" in
+let EvidenceVersion = "2" in
 let EvidenceClass = "cargo-inside-mantle-sandbox" in
 let ProjectBuildStatus = "default-project-build-lane" in
 let EvidencePath = "share/mantle/offline-cargo-build.json" in
+let IdentityBlake3Content = "blake3-content" in
+let IdentityStorePath = "store-path" in
+let NetworkPolicyMode = "offline" in
+let NetworkPolicyResult = "undeclared-network-denied" in
 let TargetTriple = String in
 let Profile = [| 'debug, 'release |] in
 let CargoSourceName = Name in
@@ -37,6 +42,14 @@ let profile_dir = fun profile =>
 in
 let profile_arg = fun profile =>
   if profile == 'release then "--release" else ""
+in
+let cargo_command_profile_json_arg = fun profile =>
+  if profile == 'release then
+    m%",
+    "--release"
+    "%
+  else
+    ""
 in
 let has_vendor = fun package => std.record.has_field "vendor_src" package in
 let input_closure = fun package =>
@@ -65,7 +78,9 @@ CARGOEOF
 in
 let evidence_vendor_json = fun package =>
   if has_vendor package then
-    m%",\n    {\"role\":\"vendored-dependencies\",\"path\":\"$VENDOR\"}"%
+    m%",
+    {"role":"vendored-dependencies","path":"$VENDOR","identity_class":"%{IdentityBlake3Content}"}
+    "%
   else
     ""
 in
@@ -122,6 +137,7 @@ in
             MUSL=$(find_input "%{package.musl_name}" "lib/libc.so")
             RUST=$(find_input "%{package.rust_name}" "bin/cargo")
             SRC=$(find_input "%{package.source_name}" Cargo.toml)
+            LOCKFILE="$SRC/Cargo.lock"
 
             $BB mkdir -p /lib 2>/dev/null || true
             $BB ln -sf "$MUSL/lib/libc.so" /lib/ld-musl-x86_64.so.1 2>/dev/null || true
@@ -151,21 +167,44 @@ CARGOEOF
             cat > "$out/%{EvidencePath}" << EOF
 {
   "schema": "%{EvidenceSchema}",
+  "evidence_version": %{EvidenceVersion},
   "claim_class": "%{EvidenceClass}",
   "project_build_status": "%{ProjectBuildStatus}",
   "target": "%{package.target}",
   "profile": "%{profile_text}",
   "binary": "%{package.binary}",
+  "lockfile": {"role":"cargo-lockfile","path":"$LOCKFILE","identity_class":"%{IdentityBlake3Content}"},
   "source_closure": [
-    {"role":"package-source","path":"$SRC"},
-    {"role":"rust-toolchain","path":"$RUST"},
-    {"role":"seed-toolchain","path":"$TOOLCHAIN"},
-    {"role":"musl-runtime","path":"$MUSL"}%{evidence_vendor_json package}
+    {"role":"package-source","path":"$SRC","identity_class":"%{IdentityBlake3Content}"},
+    {"role":"rust-toolchain","path":"$RUST","identity_class":"%{IdentityStorePath}"},
+    {"role":"seed-toolchain","path":"$TOOLCHAIN","identity_class":"%{IdentityStorePath}"},
+    {"role":"musl-runtime","path":"$MUSL","identity_class":"%{IdentityStorePath}"}%{evidence_vendor_json package}
   ],
   "toolchain": {
     "cargo": "$RUST/bin/cargo",
     "rustc": "$RUST/bin/rustc",
     "linker": "$TOOLCHAIN/bin/x86_64-linux-musl-gcc"
+  },
+  "cargo_command": {
+    "program": "cargo",
+    "args": [
+    "build",
+    "--locked",
+    "--offline"%{cargo_command_profile_json_arg package.profile},
+    "--bin",
+    "%{package.binary}",
+    "--target",
+    "%{package.target}"
+  ]
+  },
+  "network_policy": {
+    "mode": "%{NetworkPolicyMode}",
+    "result": "%{NetworkPolicyResult}",
+    "allow_undeclared_network": false
+  },
+  "output": {
+    "binary": "%{package.binary}",
+    "path": "$out/bin/%{package.binary}"
   },
   "non_claims": [
     "not-cargo-free-execution",
@@ -189,6 +228,7 @@ EOF
 
   offlineCargoEvidence = {
     schema = EvidenceSchema,
+    evidence_version = EvidenceVersion,
     claim_class = EvidenceClass,
     project_build_status = ProjectBuildStatus,
     evidence_path = EvidencePath,

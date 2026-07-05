@@ -260,11 +260,15 @@ for blocked surfaces such as vendored git, pkg-config, rustc-link metadata, or
 native C compilation. It is not proof of full Cargo compatibility.
 
 Structured JSON reports include `cargo_build_evidence[]` when the output
-contains `share/mantle/offline-cargo-build.json`. The claim class is
-`cargo-inside-mantle-sandbox`; it is evidence that the declared Cargo action
-produced the inspected output under Mantle's sandbox policy. It is not evidence
-of Cargo-free execution, full Cargo compatibility, compiler correctness, release
-reproducibility, bootstrap correctness, or module-layer semantics.
+contains `share/mantle/offline-cargo-build.json`. Current v2 evidence is
+`cargo-inside-mantle-sandbox` plus digest-bound Cargo.lock, package-source,
+optional vendor, command, target/profile, output, and offline network-policy
+facts. Legacy v1 sidecars are labeled as legacy path evidence, and malformed or
+stale sidecars are reported under `cargo_build_evidence_diagnostics[]`. This is
+evidence that the declared Cargo action produced the inspected output under
+Mantle's sandbox policy; it is not evidence of Cargo-free execution, full Cargo
+compatibility, compiler correctness, release reproducibility, bootstrap
+correctness, or module-layer semantics.
 
 ## Rust project verification lane
 

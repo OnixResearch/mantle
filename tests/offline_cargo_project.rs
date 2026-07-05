@@ -65,6 +65,10 @@ fn offline_cargo_helper_lowers_to_derivation_with_bounded_evidence() {
     assert_eq!(drv.env["MANTLE_BUILD_EVIDENCE_CLASS"], "cargo-inside-mantle-sandbox");
     assert!(script.contains("cargo build --locked --offline --release --bin demo"));
     assert!(script.contains("share/mantle/offline-cargo-build.json"));
+    assert!(script.contains("mantle-offline-cargo-build-evidence-v2"));
+    assert!(script.contains("\"lockfile\": {\"role\":\"cargo-lockfile\""));
+    assert!(script.contains("\"identity_class\":\"blake3-content\""));
+    assert!(script.contains("\"result\": \"undeclared-network-denied\""));
     assert!(script.contains("not-cargo-free-execution"));
     assert!(script.contains("not-full-cargo-compatibility"));
 }

@@ -1481,12 +1481,17 @@ lane only; it is not proof of full Cargo compatibility.
 
 The helper writes `share/mantle/offline-cargo-build.json` into the output and
 JSON build reports surface that sidecar under `cargo_build_evidence[]` when the
-output is materialized locally. The evidence class is
-`cargo-inside-mantle-sandbox`; it binds the inspected source closure,
-toolchain paths, output path, and artifact attestation reference. It explicitly
-does not claim Cargo-free execution, full Cargo compatibility, compiler
-correctness, release reproducibility, bootstrap correctness, or module-layer
-semantics.
+output is materialized locally. Current v2 evidence is digest-bound: reports
+record the schema/version, `cargo-inside-mantle-sandbox` claim class,
+Cargo.lock BLAKE3 digest, package-source and optional vendor BLAKE3 identities,
+selected target/profile, Cargo command shape, offline network-policy result,
+store-path-scoped toolchain identities, output path, and non-claims. Legacy v1
+sidecars remain visible as legacy path evidence, while malformed, stale,
+schema-mismatched, or wrong-claim sidecars appear in
+`cargo_build_evidence_diagnostics[]` instead of being silently promoted. This
+evidence explicitly does not claim Cargo-free execution, full Cargo
+compatibility, compiler correctness, release reproducibility, bootstrap
+correctness, or module-layer semantics.
 
 ## Build-tool boundary
 
