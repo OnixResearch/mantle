@@ -13,6 +13,7 @@ mod build_failure;
 mod build_log;
 mod build_plan;
 mod build_report;
+mod cache_substitution;
 mod cargo_free_self_build;
 mod cargo_import;
 mod errors;
