@@ -201,6 +201,7 @@ where BServ: BuildService + 'static
                 remote_pathinfo: None,
                 state_dir: PathBuf::from("/tmp/crunch-test"),
                 output_dir_str,
+                publishers: Vec::new(),
             },
             store_dir.to_string(),
         );
@@ -250,6 +251,7 @@ where BServ: BuildService + 'static
                 remote_pathinfo,
                 state_dir: sd,
                 output_dir_str,
+                publishers: Vec::new(),
             },
             store_dir.to_string(),
         );

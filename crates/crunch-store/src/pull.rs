@@ -865,6 +865,7 @@ mod tests {
                 remote_pathinfo: None,
                 state_dir: state_dir.to_path_buf(),
                 output_dir_str,
+                publishers: Vec::new(),
             },
             store_dir.to_string(),
         )

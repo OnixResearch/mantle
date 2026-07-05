@@ -216,15 +216,21 @@ mod tests {
         GLOBAL_COMPLETENESS_MARKERS.clear();
         let blob = MemoryBlobService::default();
         let dir = StubDirectoryService::new();
-        let empty = Directory::new();
-        let digest = empty.digest();
-        let node = Node::Directory { digest, size: 0 };
+        // Use a non-empty directory with a unique child to avoid digest
+        // collision with parallel tests that also create empty directories.
+        let mut unique_dir = Directory::new();
+        let name = PathComponent::try_from("unique-marker").unwrap();
+        unique_dir.add(name, Node::Symlink {
+            target: SymlinkTarget::try_from("placeholder").unwrap(),
+        }).unwrap();
+        let digest = unique_dir.digest();
+        let node = Node::Directory { digest, size: unique_dir.size() };
 
         // Not inserted yet
         assert!(!recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
 
         // Insert and recheck
-        dir.put(empty).await.unwrap();
+        dir.put(unique_dir).await.unwrap();
         assert!(recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
         assert!(GLOBAL_COMPLETENESS_MARKERS.contains(&digest));
     }

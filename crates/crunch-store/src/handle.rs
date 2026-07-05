@@ -48,6 +48,7 @@ use crate::StoreAuditKind;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
+use crate::Publisher;
 use crate::metadata_cache::{
     AdvisoryMetadataCache,
     MetadataCacheKey,
@@ -320,6 +321,8 @@ pub struct StoreHandleServices {
     pub remote_pathinfo: Option<Arc<dyn PathInfoService>>,
     pub state_dir: PathBuf,
     pub output_dir_str: String,
+    /// Output publication adapters called after successful admission.
+    pub publishers: Vec<Arc<dyn Publisher>>,
 }
 
 /// Grouped parameters for persisting a build output.
@@ -365,6 +368,8 @@ pub struct StoreHandle {
     advisory_metadata_cache: AdvisoryMetadataCache,
     #[cfg(test)]
     pub advisory_metadata_cache: AdvisoryMetadataCache,
+    /// Output publication adapters called after successful admission.
+    publishers: Vec<Arc<dyn Publisher>>,
 }
 
 impl StoreHandle {
@@ -461,6 +466,7 @@ impl StoreHandle {
             output_substitution_reports: HashMap::new(),
             ca_mappings,
             advisory_metadata_cache,
+            publishers: Vec::new(),
         })
     }
 
@@ -491,6 +497,7 @@ impl StoreHandle {
             output_substitution_reports: HashMap::new(),
             ca_mappings,
             advisory_metadata_cache,
+            publishers: services.publishers,
         }
     }
 
@@ -2036,6 +2043,19 @@ impl StoreHandle {
             self.register_retained_root(req.output_path, source).await?;
         }
 
+        // Run output publication adapters after successful admission.
+        // Errors are diagnostic warnings, not build failures.
+        // r[impl remote_builds.production_verified_publication]
+        for publisher in &self.publishers {
+            if let Err(err) = publisher.publish(&req.path_info).await {
+                tracing::warn!(
+                    path = %req.output_path,
+                    err = %err,
+                    "output publication failed (admitted anyway)"
+                );
+            }
+        }
+
         Ok(req.path_info)
     }
 
@@ -2407,6 +2427,7 @@ mod tests {
                 remote_pathinfo: None,
                 state_dir: state_dir.to_path_buf(),
                 output_dir_str: state_dir.display().to_string(),
+                publishers: Vec::new(),
             },
             store_dir.to_string(),
         )
@@ -2436,6 +2457,7 @@ mod tests {
                 remote_pathinfo: Some(remote.clone()),
                 state_dir: state_dir.to_path_buf(),
                 output_dir_str: state_dir.display().to_string(),
+                publishers: Vec::new(),
             },
             "/nix/store".to_string(),
         );

@@ -21,6 +21,7 @@ mod mutation_lock;
 mod policy;
 mod pull;
 mod push;
+mod publisher;
 mod query;
 mod roots;
 
@@ -92,6 +93,8 @@ pub use handle::StoreConfig;
 pub use handle::StoreHandle;
 pub use handle::StoreHandleServices;
 pub use mutation_lock::StoreMutationGuard;
+pub use publisher::Publisher;
+pub use publisher::NoopPublisher;
 pub use policy::StoreFallbackMode;
 pub use pull::PullOptions;
 pub use pull::PullReport;
