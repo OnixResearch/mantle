@@ -165,6 +165,7 @@ async fn open_http_pull_test_store(dir: &Path) -> crunch_store::StoreHandle {
         state_dir,
         output_dir,
         remote_cache_urls: Vec::new(),
+        base_state_dirs: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: "/mantle/store".to_string(),
     })

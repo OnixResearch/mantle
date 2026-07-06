@@ -55,6 +55,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         import_paths: import_paths(),
         output_dir: output_dir.to_path_buf(),
         state_dir: state_dir.to_path_buf(),
+        base_state_dirs: Vec::new(),
         store_dir: nix_compat::store_path::STORE_DIR.to_string(),
         verbose: false,
         max_jobs: 2,

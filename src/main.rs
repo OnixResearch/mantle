@@ -5241,6 +5241,7 @@ mod tests {
             store_prefix: store_prefix.to_string(),
             nix_compat,
             state_dir: None,
+            base_stores: Vec::new(),
             command: Command::Doctor {
                 profile: DoctorProfile::Build,
             },

@@ -258,6 +258,7 @@ fn seed_store() -> SeededStore {
             state_dir: state_dir.path().to_path_buf(),
             output_dir: output_dir.path().to_path_buf(),
             remote_cache_urls: Vec::new(),
+            base_state_dirs: Vec::new(),
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: STORE_DIR.to_string(),
         })

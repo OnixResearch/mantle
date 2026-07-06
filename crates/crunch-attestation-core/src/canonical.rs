@@ -558,6 +558,7 @@ mod tests {
                 logical_path: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-hello".to_string(),
                 output_name: "out".to_string(),
                 content_digest: "blake3-hello".to_string(),
+                store_layer: None,
             },
             subject_node_id: "artifact:hello".to_string(),
             nodes,
