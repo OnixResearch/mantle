@@ -156,6 +156,17 @@ pub struct ReleaseProofLinkage {
     pub proof_manifest_digest_blake3: String,
 }
 
+pub const PROVENANCE_COVERAGE_BOUNDARY: &str = "provenance coverage records identity and linkage only; it does not prove behavioral correctness, semantic equivalence, or that the binary satisfies the requirements";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProvenanceCoverage {
+    pub binary_hash: String,
+    pub covered_source_ids: Vec<String>,
+    pub covered_function_object_ids: Vec<String>,
+    pub covered_requirement_ids: Vec<String>,
+    pub coverage_boundary: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseEvidenceManifest {
     pub schema: String,
@@ -179,6 +190,8 @@ pub struct ReleaseEvidenceManifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub independent_agreement_report: Option<BundledArtifact>,
     pub proof_linkage: ReleaseProofLinkage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance_coverage: Option<ProvenanceCoverage>,
 }
 
 pub fn canonical_release_evidence_manifest(manifest: ReleaseEvidenceManifest) -> Result<Vec<u8>, ReleaseEvidenceError> {
@@ -227,6 +240,29 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_manifest_artifacts(manifest)?;
     validate_source_acquisition(manifest)?;
     validate_manifest_linkage(manifest)?;
+    validate_provenance_coverage(manifest)?;
+    Ok(())
+}
+
+fn validate_provenance_coverage(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let Some(coverage) = &manifest.provenance_coverage else {
+        return Ok(());
+    };
+    validate_blake3_hex(&coverage.binary_hash, "provenance_coverage.binary_hash")?;
+    if coverage.coverage_boundary != PROVENANCE_COVERAGE_BOUNDARY {
+        return Err(validation_error(
+            "provenance_coverage.coverage_boundary must match the required non-claim boundary".to_string(),
+        ));
+    }
+    if coverage.covered_source_ids.is_empty()
+        && coverage.covered_function_object_ids.is_empty()
+        && coverage.covered_requirement_ids.is_empty()
+    {
+        return Err(validation_error(
+            "provenance_coverage must record at least one covered source_id, function_object_id, or requirement_id"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -927,6 +963,7 @@ mod tests {
                 prerequisite_inventory_digest_blake3: inventory.digest_blake3,
                 proof_manifest_digest_blake3: sample_digest(9),
             },
+            provenance_coverage: None,
         }
     }
 
@@ -1315,5 +1352,69 @@ mod tests {
         let manifest_bytes = br#"{"schema":"fake-proof"}"#.to_vec();
         let err = extract_full_self_hosting_proof_identity_fields(manifest_bytes).unwrap_err();
         assert!(err.to_string().contains("full proof artifact required"));
+    }
+
+    #[test]
+    fn validate_accepts_manifest_without_provenance_coverage() {
+        let manifest = sample_manifest();
+        assert!(manifest.provenance_coverage.is_none());
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn validate_accepts_manifest_with_valid_provenance_coverage() {
+        let mut manifest = sample_manifest();
+        manifest.provenance_coverage = Some(ProvenanceCoverage {
+            binary_hash: sample_digest(42),
+            covered_source_ids: vec!["eq:bs_001".to_string()],
+            covered_function_object_ids: vec!["b3:abc123".to_string()],
+            covered_requirement_ids: vec!["r[cairn.pricing.black_scholes]".to_string()],
+            coverage_boundary: PROVENANCE_COVERAGE_BOUNDARY.to_string(),
+        });
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn validate_rejects_provenance_coverage_with_empty_all_covered_ids() {
+        let mut manifest = sample_manifest();
+        manifest.provenance_coverage = Some(ProvenanceCoverage {
+            binary_hash: sample_digest(42),
+            covered_source_ids: vec![],
+            covered_function_object_ids: vec![],
+            covered_requirement_ids: vec![],
+            coverage_boundary: PROVENANCE_COVERAGE_BOUNDARY.to_string(),
+        });
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("at least one covered"));
+    }
+
+    #[test]
+    fn validate_rejects_provenance_coverage_with_weakened_boundary() {
+        let mut manifest = sample_manifest();
+        manifest.provenance_coverage = Some(ProvenanceCoverage {
+            binary_hash: sample_digest(42),
+            covered_source_ids: vec!["eq:bs_001".to_string()],
+            covered_function_object_ids: vec![],
+            covered_requirement_ids: vec![],
+            coverage_boundary: "this is fine".to_string(),
+        });
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("coverage_boundary"));
+    }
+
+    #[test]
+    fn validate_rejects_provenance_coverage_with_invalid_binary_hash() {
+        let mut manifest = sample_manifest();
+        manifest.provenance_coverage = Some(ProvenanceCoverage {
+            binary_hash: "not-a-hash".to_string(),
+            covered_source_ids: vec!["eq:bs_001".to_string()],
+            covered_function_object_ids: vec![],
+            covered_requirement_ids: vec![],
+            coverage_boundary: PROVENANCE_COVERAGE_BOUNDARY.to_string(),
+        });
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("provenance_coverage.binary_hash"));
     }
 }
