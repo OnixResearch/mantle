@@ -537,3 +537,132 @@ GIVEN offline Cargo evidence is digest-bound and valid
 WHEN Mantle docs, reports, tasks, or release material cite it
 THEN the claim MUST remain limited to the declared Cargo action running inside Mantle's sandbox with the recorded offline inputs
 AND it MUST NOT claim Cargo-free execution, full Cargo compatibility, compiler correctness, release reproducibility, or bootstrap correctness without separate evidence.
+
+### Requirement: Freshness probe offline proof rail emits bounded versioned evidence
+
+r[project_workflows.freshness_probe_proof_rail] Mantle MUST provide a bounded local offline proof rail that exercises built-in, command-bounded, and network-requiring freshness probes through `mantle list-stale`, `mantle refresh`, and `mantle check` in no-network default mode, without ambient network services or hidden global state, and MUST emit a versioned, redacted, non-overclaiming evidence record that classifies each input as stale, unchanged, failed, skipped, or network-required, binds the observed value digest and probe kind, and states that freshness is not source integrity, trust, build success, or reproducibility.
+
+#### Scenario: offline rail composes probe list-stale refresh and check
+
+GIVEN a project fixture declares built-in, command-bounded, and network-requiring freshness probes
+WHEN the offline proof rail runs `mantle list-stale`, then `mantle refresh`, then `mantle check` in no-network default mode
+THEN `mantle list-stale` MUST report per-input status (stale, unchanged, failed, skipped, or network-required) without writing the lockfile, generated inputs, store state, or retention roots
+AND `mantle refresh` MUST update only selected stale inputs plus required patches or trust material and exit non-zero on any input or patch resolution failure
+AND `mantle check` MUST report soundness without contacting the network.
+
+#### Scenario: network-requiring probe is not run in no-network mode
+
+GIVEN a project input declares a network-requiring freshness probe
+WHEN the rail evaluates it in no-network mode
+THEN Mantle MUST report the probe as network-required or unavailable without contacting the network
+AND it MUST NOT treat the old lock value as freshly observed.
+
+#### Scenario: command probe failures are deterministic
+
+GIVEN a command freshness probe times out, emits oversized output, emits invalid UTF-8 where UTF-8 is required, has a missing executable, or exits non-success
+WHEN the rail runs the probe
+THEN Mantle MUST report a deterministic probe failure
+AND the evidence record MUST classify the input as failed or skipped without overclaiming freshness.
+
+#### Scenario: evidence is versioned redacted and non-overclaiming
+
+GIVEN the rail emits its evidence record
+WHEN the record is rendered
+THEN it MUST carry a stable schema version, per-input status, observed value digest, and probe kind
+AND it MUST omit raw environment values, uploaded content, and unbounded logs and MUST NOT claim source integrity, trust, build success, or reproducibility from freshness alone.
+
+### Requirement: Retention root offline proof rail emits bounded versioned evidence
+
+r[project_workflows.retention_root_proof_rail] Mantle MUST provide a bounded local offline proof rail that exercises `untracked`, `current`, and `recent-generations` input retention through refresh, import, and generated-input updates and `mantle check`, commits retention roots atomically into `.mantle/retention.json` and `.mantle/retention-roots/`, and emits a versioned, redacted, non-overclaiming evidence record that classifies each input as pinned, unpinned, stale-root, missing-root, or garbage-collection-eligible, binds the input name, lock digest, source identity, and content digest, and validates named bounded generation limits before roots are treated as durable.
+
+#### Scenario: current input is pinned after its root exists
+
+GIVEN a project input has retention set to track the current locked source
+WHEN Mantle commits a refresh, import, or generated-input update for that input through the rail
+THEN Mantle MUST plan or create a retention root bound to the input name, lock digest, source identity, and content digest
+AND diagnostics MUST report the input as pinned only after the root exists.
+
+#### Scenario: recent generations retain bounded lock-fact-based history
+
+GIVEN a project default or input override retains recent generations
+WHEN Mantle updates the lockfile across multiple generations through the rail
+THEN Mantle MUST retain no more than the configured bounded generation limit for that input
+AND generation selection MUST be based on Mantle-owned lock generation facts rather than filesystem timestamp ordering.
+
+#### Scenario: interrupted stale and untracked roots are diagnosed
+
+GIVEN a retention root update is interrupted, or a root is stale, missing, or untracked
+WHEN Mantle checks project soundness through the rail
+THEN Mantle MUST treat uncommitted retention records as absent or quarantined, report stale-root or missing-root diagnostics, and report an untracked input as garbage-collection-eligible
+AND it MUST NOT count a stale, missing, or untracked root as satisfying current retention or as durable.
+
+#### Scenario: evidence is versioned redacted and non-overclaiming
+
+GIVEN the rail emits its evidence record
+WHEN the record is rendered
+THEN it MUST carry a stable schema version, per-input mode and classification, bound input name/lock digest/source identity/content digest, generation limit when applicable, the atomicity assertion, and non-claims
+AND it MUST omit raw environment values, private key material, and unbounded logs and MUST NOT claim build correctness or release reproducibility from retention roots.
+
+### Requirement: Lock importer offline proof rail emits bounded versioned evidence
+
+r[project_workflows.lock_importer_proof_rail] Mantle MUST provide a bounded local offline proof rail that exercises the external pin import `--plan` and `--apply` workflow for a supported importer (Nixtamal), where `--plan` is side-effect free and reports planned file operations, mapped inputs/patches, unsupported semantics, and blockers, `--apply` writes only Mantle-owned files named by the plan and fails before writing on conflicts, unsupported semantics, or plan drift, and the rail emits a versioned, redacted, non-overclaiming evidence record stating the generated project remains a build-tool handoff (not Onix/NixOS module semantics).
+
+#### Scenario: plan is side-effect free and reviewable
+
+GIVEN a project contains external Nixtamal pinning files from a supported importer
+WHEN an operator runs the import `--plan` command through the rail
+THEN Mantle MUST render deterministic planned file operations, mapped inputs, mapped patches, unsupported semantics, and blockers
+AND it MUST NOT write project files, lockfiles, generated inputs, store state, or source state.
+
+#### Scenario: apply writes only planned Mantle files and fails on drift
+
+GIVEN an import plan has no blockers and the operator explicitly applies it through the rail
+WHEN Mantle writes imported project state
+THEN Mantle MUST write only the Mantle-owned files named by the plan
+AND it MUST fail before writing if existing files, conflicts, unsupported semantics, or plan drift make the apply unsafe.
+
+#### Scenario: composition semantics are blockers not hidden core semantics
+
+GIVEN an external pinning format includes recursive graph semantics, flake output composition, module-layer behavior, follows-like rewriting, or overlays that are not source pin facts
+WHEN Mantle plans import through the rail
+THEN Mantle MUST either map those facts into explicit source inputs with bounded meaning or report deterministic blockers
+AND it MUST NOT import them as hidden Mantle core semantics.
+
+#### Scenario: evidence is versioned redacted and non-overclaiming
+
+GIVEN the rail emits its evidence record
+WHEN the record is rendered
+THEN it MUST carry a stable schema version, importer kind, planned operations, mapped inputs/patches, blockers, the no-mutate and only-planned-files assertions, and non-claims
+AND it MUST omit raw environment values and unbounded logs and MUST NOT claim build success, deployability, or frontend module correctness from import alone.
+
+### Requirement: Input trust policy offline proof rail emits bounded versioned evidence
+
+r[project_workflows.input_trust_policy_proof_rail] Mantle MUST provide a bounded local offline proof rail that exercises input trust policy verification during refresh, accepts a refresh only when fetched bytes match the content hash and present valid trust evidence from the configured signer set, rejects before writing new lock entries on missing, malformed, invalid, untrusted, detached, or unsupported-verifier trust material, and emits a versioned, redacted, non-overclaiming evidence record that identifies the verified trust policy without exposing secret key material and states that a hash-only input is content integrity, not signer trust or upstream authenticity.
+
+#### Scenario: trusted input refresh is accepted
+
+GIVEN a project input declares a trust policy and the fetched bytes have matching content hash and valid trust evidence from the configured signer set
+WHEN the rail refreshes the input
+THEN Mantle MAY accept the lockfile update
+AND the evidence MUST identify the verified trust policy (verifier kind and trusted key identity or fingerprint) without exposing secret key material.
+
+#### Scenario: missing or invalid trust blocks the lock update
+
+GIVEN a project input or patch requires trust evidence and the signature material is missing, malformed, invalid, from an untrusted key, from a same-name-but-different-material key, detached from the fetched bytes, or verified by an unsupported verifier
+WHEN the rail refreshes the input
+THEN Mantle MUST reject the refresh before writing new lockfile entries
+AND existing lock entries MUST remain unchanged.
+
+#### Scenario: hash-only input is not signed evidence
+
+GIVEN an input has a content hash but no trust policy
+WHEN the rail reports refresh or project soundness
+THEN Mantle MAY claim content integrity against the recorded hash
+AND it MUST NOT claim signer trust or upstream authenticity for that input, and the evidence MUST state the content-integrity-only non-claim.
+
+#### Scenario: evidence is versioned redacted and non-overclaiming
+
+GIVEN the rail emits its evidence record
+WHEN the record is rendered
+THEN it MUST carry a stable schema version, per-input trust decision, verified trust policy identity, and signature binding assertion
+AND it MUST omit private key material, raw environment values, and unbounded logs and MUST NOT claim build success or release reproducibility from trust policy alone.

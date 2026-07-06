@@ -4770,6 +4770,7 @@ fn build_from_expr(
         hermeticity_mode,
         output_mode,
         source_fetch_overrides,
+        Vec::new(),
     )
 }
 
@@ -4839,6 +4840,7 @@ fn build_from_expr_raw(
         import_paths: import_paths.to_vec(),
         output_dir: output_dir.to_path_buf(),
         state_dir: state_dir.to_path_buf(),
+        base_state_dirs: Vec::new(),
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
@@ -5099,6 +5101,7 @@ fn build_file_raw(
         import_paths,
         output_dir: output_dir.to_path_buf(),
         state_dir: state_dir.to_path_buf(),
+        base_state_dirs: Vec::new(),
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
