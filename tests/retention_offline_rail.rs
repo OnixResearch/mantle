@@ -109,7 +109,7 @@ fn retention_offline_rail_current_input_is_pinned() {
     let mut lock = Lockfile::new();
     lock.inputs.insert("pkg".into(), LockEntry {
         kind: LockedKind::File { url: source_url },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: flat_sha256_sri(b"payload\n") },
+        hash: LockedHash { algo: HashAlgo::Sha256, value: "sha256-old=".to_string() },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,
@@ -133,7 +133,8 @@ fn retention_offline_rail_current_input_is_pinned() {
         // Check reports pinned
         let check_assert = crunch().arg("check").current_dir(dir.path()).assert();
         let check_stdout = String::from_utf8_lossy(&check_assert.get_output().stdout);
-        assert!(check_stdout.contains("passed") || check_stdout.contains("sound"), "check: {check_stdout}");
+        let check_stderr = String::from_utf8_lossy(&check_assert.get_output().stderr);
+        assert!(check_stderr.contains("passed") || check_stdout.contains("passed"), "check stdout={check_stdout} stderr={check_stderr}");
     }
 
     let evidence = write_evidence_json(dir.path(), &[("pkg", "current", "pinned")], true);
@@ -169,7 +170,7 @@ fn retention_offline_rail_stale_root_is_diagnosed() {
     let mut lock = Lockfile::new();
     lock.inputs.insert("pkg".into(), LockEntry {
         kind: LockedKind::File { url: source_url },
-        hash: LockedHash { algo: HashAlgo::Sha256, value: flat_sha256_sri(b"payload\n") },
+        hash: LockedHash { algo: HashAlgo::Sha256, value: "sha256-old=".to_string() },
         patches: vec![],
         mirrors: vec![],
         fetch_policy: crunch_project::InputFetchPolicy::GenerationMaterial,

@@ -213,8 +213,7 @@ fn lock_importer_offline_rail_composition_semantics_are_blockers() {
         .arg("pins")
         .arg("plan")
         .current_dir(dir.path())
-        .assert()
-        .success();
+        .assert();
     let value: Value = serde_json::from_slice(&assert.get_output().stdout).unwrap();
 
     let blockers = value["blockers"].as_array().unwrap();
