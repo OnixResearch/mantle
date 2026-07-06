@@ -24,6 +24,9 @@ use crunch_build::EvalMessage;
 use crunch_build::FailedGoal;
 use crunch_build::FetchBuildService;
 use crunch_build::FetchSourceOverride;
+use crunch_build::LocalBuildServiceRealizer;
+use crunch_build::RemoteBuildFallbackPolicy;
+use crunch_build::RemoteFirstBuildService;
 pub use crunch_build::FixedOutputNetworkDeclaration;
 pub use crunch_build::HermeticityAuditEvent;
 pub use crunch_build::HermeticityAuditKind;
@@ -64,6 +67,9 @@ pub struct BuildConfig {
     pub root_retention_source: Option<GcRootSource>,
     /// Optional local source-state payloads that can satisfy fixed-output fetchers.
     pub source_fetch_overrides: Vec<FetchSourceOverride>,
+    /// When true, wrap the sandbox service in RemoteFirstBuildService
+    /// to exercise the remote-build dispatch path through the scheduler.
+    pub remote_enabled: bool,
 }
 
 #[derive(Debug)]
@@ -194,10 +200,33 @@ async fn build_linux(
     let workdir = std::env::temp_dir().join("crunch-builds");
     std::fs::create_dir_all(&workdir).map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
 
-    let bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
     let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone())
         .with_source_overrides(config.source_fetch_overrides.clone());
-    let build_service = DispatchBuildService::new(fetch_service, bwrap_service);
+
+    // Wrap the sandbox service in RemoteFirstBuildService so remote
+    // dispatch (when configured) participates in the lazy scheduler:
+    // goal dedupe, waiter notification, -j bounds, local fallback,
+    // terminal-state propagation.
+    // r[impl remote_builds.production_scheduler_realization]
+    let profile = crunch_build::RealizerProfileFacts {
+        name: "local-sandbox".to_string(),
+        version: 1,
+        capabilities: Vec::new(),
+        parameters: std::collections::BTreeMap::new(),
+    };
+    let local_bwrap = BubblewrapBuildService::new(
+        std::env::temp_dir().join("crunch-builds-local"),
+        blob_service.clone(),
+        directory_service.clone(),
+    );
+    let remote_bwrap = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
+    let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
+    let sandbox_service = RemoteFirstBuildService::new(
+        remote_realizer,
+        local_bwrap,
+        RemoteBuildFallbackPolicy::OnRemoteFailure,
+    );
+    let build_service = DispatchBuildService::new(fetch_service, sandbox_service);
     let mut builder = Builder::with_state_dir(
         blob_service,
         directory_service,

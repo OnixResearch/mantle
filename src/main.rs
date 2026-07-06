@@ -4840,6 +4840,7 @@ fn build_from_expr_raw(
         trust_unsigned,
         root_retention_source: None,
         source_fetch_overrides: Vec::new(),
+        remote_enabled: false,
     };
 
     build_cmd::run_build(&config)
@@ -5099,6 +5100,7 @@ fn build_file_raw(
         trust_unsigned,
         root_retention_source: None,
         source_fetch_overrides: Vec::new(),
+        remote_enabled: false,
     };
 
     build_cmd::run_build(&config)

@@ -111,6 +111,7 @@ pub fn cmd_build_with_source_fetch_overrides(
         trust_unsigned,
         root_retention_source: Some(GcRootSource::Build),
         source_fetch_overrides,
+        remote_enabled: false,
     };
 
     let result = run_build(&config)?;

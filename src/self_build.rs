@@ -2286,6 +2286,7 @@ fn build_crunch_binary(
         trust_unsigned,
         root_retention_source: Some(crunch_store::GcRootSource::SelfBuild),
         source_fetch_overrides: Vec::new(),
+        remote_enabled: false,
     };
 
     let result = run_build(&config)?;
@@ -2340,6 +2341,7 @@ fn build_bootstrap_tool(
         trust_unsigned,
         root_retention_source: None,
         source_fetch_overrides: Vec::new(),
+        remote_enabled: false,
     };
 
     let result = run_build(&config)?;
