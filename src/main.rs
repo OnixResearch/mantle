@@ -52,6 +52,7 @@ mod release_reproducibility;
 mod release_source;
 #[allow(dead_code)]
 mod remote_build;
+mod remote_farm_config;
 mod rust_bootstrap_patch_plan;
 mod rust_plan;
 #[allow(dead_code)]
