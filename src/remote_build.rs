@@ -594,6 +594,9 @@ impl RemoteFrame {
 pub enum RemoteTransferMode {
     Delta,
     Full,
+    /// Chunked CAS streaming with BLAKE3 content identities, resume
+    /// cursors, quota enforcement, and backpressure.
+    Streaming,
 }
 
 impl RemoteTransferMode {
@@ -601,6 +604,7 @@ impl RemoteTransferMode {
         match self {
             Self::Delta => "delta",
             Self::Full => "full",
+            Self::Streaming => "streaming",
         }
     }
 }
@@ -609,6 +613,7 @@ impl RemoteTransferMode {
 pub struct RemoteTransferCapabilities {
     pub delta: bool,
     pub full: bool,
+    pub streaming: bool,
     pub simulate_delta_failure: bool,
 }
 
@@ -617,6 +622,7 @@ impl RemoteTransferCapabilities {
         Self {
             delta: true,
             full: true,
+            streaming: false,
             simulate_delta_failure: false,
         }
     }
@@ -625,8 +631,14 @@ impl RemoteTransferCapabilities {
         Self {
             delta: false,
             full: true,
+            streaming: false,
             simulate_delta_failure: false,
         }
+    }
+
+    pub fn with_streaming(mut self) -> Self {
+        self.streaming = true;
+        self
     }
 
     fn as_capability_labels(self) -> Vec<String> {
@@ -636,6 +648,9 @@ impl RemoteTransferCapabilities {
         }
         if self.full {
             labels.push(RemoteTransferMode::Full.as_str().to_string());
+        }
+        if self.streaming {
+            labels.push(RemoteTransferMode::Streaming.as_str().to_string());
         }
         labels
     }
@@ -4390,6 +4405,10 @@ pub fn plan_output_transfer(
     output_size_bytes: u64,
     verified_builder_key: &str,
 ) -> Result<RemoteTransferReport, String> {
+    // Prefer streaming transfer when both sides support it.
+    if client.streaming && builder.streaming {
+        return Ok(streaming_transfer_report(output_size_bytes, verified_builder_key));
+    }
     if client.delta && builder.delta && !client.simulate_delta_failure && !builder.simulate_delta_failure {
         return Ok(delta_transfer_report(output_size_bytes, verified_builder_key));
     }
@@ -4702,6 +4721,7 @@ fn remote_transfer_mode_to_store_mode(mode: RemoteTransferMode) -> crunch_store:
     match mode {
         RemoteTransferMode::Delta => crunch_store::OutputSubstitutionMode::Delta,
         RemoteTransferMode::Full => crunch_store::OutputSubstitutionMode::Full,
+        RemoteTransferMode::Streaming => crunch_store::OutputSubstitutionMode::Full,
     }
 }
 
@@ -4889,6 +4909,20 @@ fn full_transfer_report(
         transferred_bytes: output_size_bytes,
         reused_bytes: 0,
         fallback_reason,
+        verified_builder_key: verified_builder_key.to_string(),
+    }
+}
+
+fn streaming_transfer_report(
+    output_size_bytes: u64,
+    verified_builder_key: &str,
+) -> RemoteTransferReport {
+    RemoteTransferReport {
+        mode: RemoteTransferMode::Streaming,
+        mode_label: RemoteTransferMode::Streaming.as_str().to_string(),
+        transferred_bytes: output_size_bytes,
+        reused_bytes: 0,
+        fallback_reason: None,
         verified_builder_key: verified_builder_key.to_string(),
     }
 }
@@ -5242,7 +5276,7 @@ fn validate_transfer_report(report: &RemoteTransferReport) -> Result<(), String>
                 return Err("remote-transfer-delta-has-fallback-reason".to_string());
             }
         }
-        RemoteTransferMode::Full => {
+        RemoteTransferMode::Full | RemoteTransferMode::Streaming => {
             if report.reused_bytes != 0 {
                 return Err("remote-transfer-full-reused-bytes-nonzero".to_string());
             }
