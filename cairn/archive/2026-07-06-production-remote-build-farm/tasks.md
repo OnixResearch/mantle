@@ -10,7 +10,7 @@
 
 ## Verification
 
-- [ ] [serial] V1 Positive: a multi-root build dispatches at least one ready goal remotely and one locally while preserving dependency ordering, duplicate-goal dedupe, and ordinary build report output. r[remote_builds.production_scheduler_realization]
+- [x] [serial] V1 Positive: a multi-root build dispatches at least one ready goal remotely and one locally while preserving dependency ordering, duplicate-goal dedupe, and ordinary build report output. r[remote_builds.production_scheduler_realization]
 - [x] [serial] V2 Negative: raw frontend eval requests, mismatched store prefixes, invalid fallback policy, and untrusted output routes fail before a goal is marked successful. r[remote_builds.production_scheduler_realization]
 - [x] [serial] V3 Positive: a remote output signed by trusted key material is imported, exported, and reported with trust-basis evidence. r[remote_builds.production_cryptographic_output_trust]
 - [x] [serial] V4 Negative: unsigned PathInfo, same-name/different-material keys, forged signatures, stale object refs, wrong output names, and mismatched artifact attestations are rejected before persistence. r[remote_builds.production_cryptographic_output_trust]
