@@ -1820,7 +1820,7 @@ fn profile_requires_protected_exec(profile: &str) -> bool {
     )
 }
 
-fn canonicalize_violations(violations: &mut Vec<HermeticityViolation>) -> Result<(), ReleaseEvidenceError> {
+fn canonicalize_violations(violations: &mut [HermeticityViolation]) -> Result<(), ReleaseEvidenceError> {
     validate_collection_limit(violations.len(), MAX_GAUNTLET_BLOCKER_COUNT, "hermeticity violations")?;
     for violation in violations.iter() {
         validate_non_empty_string(&violation.class, "hermeticity violation class")?;

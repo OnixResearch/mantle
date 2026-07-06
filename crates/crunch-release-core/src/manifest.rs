@@ -658,7 +658,7 @@ fn validate_source_acquisition_url(
     if url.trim().is_empty() {
         return Err(validation_error("release evidence source_acquisition.url must not be empty".to_string()));
     }
-    let byte_count = u32_count(url.as_bytes().len(), "release evidence source_acquisition.url length overflowed u32")?;
+    let byte_count = u32_count(url.len(), "release evidence source_acquisition.url length overflowed u32")?;
     if byte_count > MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT {
         return Err(validation_error(format!(
             "release evidence source_acquisition.url is {byte_count} bytes, limit is {MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT}"
