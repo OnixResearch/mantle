@@ -10,6 +10,7 @@ use std::sync::Arc;
 use crunch_store::ArtifactProvenance;
 use crunch_store::GcRootSource;
 use crunch_store::OutputSubstitutionReport;
+use crunch_store::layer::StoreLayer;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
@@ -1294,6 +1295,7 @@ where BServ: BuildService + 'static
             claims,
             input_sources,
             input_artifacts,
+            store_layer: StoreLayer::Overlay,
         })
     }
 

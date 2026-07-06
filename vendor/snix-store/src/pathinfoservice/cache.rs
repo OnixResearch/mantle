@@ -88,8 +88,8 @@ where
         )
     }
 
-    async fn put(&self, _path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
-        Err(Error::Unimplemented)?
+    async fn put(&self, path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
+        self.near.put(path_info).await
     }
 
     fn list(&self) -> BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {

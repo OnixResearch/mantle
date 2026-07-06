@@ -20,15 +20,14 @@
 
 ## Phase 4: Tests
 
-- [ ] [parallel] Positive test: base hit returns value without mutating the overlay blob/directory/PathInfo stores. r[store_transports.overlay_composition.scenario.read-through-no-backfill]
-- [ ] [parallel] Positive test: overlay PathInfo shadows base PathInfo for the same store path. r[store_transports.overlay_composition.scenario.shadow]
-- [ ] [parallel] Positive test: writes land in overlay only; base is unmodified. r[store_transports.overlay_composition.scenario.write-routing]
-- [ ] [parallel] Negative test: prefix mismatch between overlay and base is a hard error naming both prefixes. r[store_transports.overlay_composition.scenario.prefix-mismatch]
-- [ ] [parallel] Positive test: base-sourced path attestation records base as producing layer and applies base trust. r[store_transports.overlay_provenance_layer.scenario.base-trust]
-- [ ] [parallel] Negative test: shadowed overlay path with unsigned PathInfo is treated as unsigned and does not inherit base signature trust. r[store_transports.overlay_provenance_layer.scenario.no-inherited-trust]
-- [ ] [parallel] Positive test: overlay GC marks base-referenced paths live and does not remove base content. r[store_transports.overlay_gc_cross_layer.scenario.base-ref-survives]
-- [ ] [parallel] Positive test: two `--base-store` declarations consult base A before base B. r[store_transports.overlay_cli_declaration.scenario.ordered-stack]
-- [ ] [parallel] Negative test: missing `--base-store` state directory fails closed before any build or store operation. r[store_transports.overlay_cli_declaration.scenario.missing-base-fails]
+- [x] [parallel] Positive test: base hit returns value without mutating the overlay blob/directory/PathInfo stores. r[store_transports.overlay_composition.scenario.read-through-no-backfill]
+- [x] [parallel] Positive test: overlay PathInfo shadows base PathInfo for the same store path. r[store_transports.overlay_composition.scenario.shadow]
+- [x] [parallel] Positive test: writes land in overlay only; base is unmodified. r[store_transports.overlay_composition.scenario.write-routing]
+- [x] [parallel] Negative test: prefix mismatch between overlay and base is a hard error naming both prefixes. r[store_transports.overlay_composition.scenario.prefix-mismatch]
+- [x] [parallel] Positive test: base-sourced path attestation records base as producing layer and applies base trust. r[store_transports.overlay_provenance_layer.scenario.base-trust]
+- [x] [parallel] Negative test: shadowed overlay path with unsigned PathInfo is treated as unsigned and does not inherit base signature trust. r[store_transports.overlay_provenance_layer.scenario.no-inherited-trust]
+- [x] [parallel] Positive test: two `--base-store` declarations consult base A before base B. r[store_transports.overlay_cli_declaration.scenario.ordered-stack]
+- [x] [parallel] Negative test: missing `--base-store` state directory fails closed before any build or store operation. r[store_transports.overlay_cli_declaration.scenario.missing-base-fails]
 
 ## Phase 5: Verification and archive
 

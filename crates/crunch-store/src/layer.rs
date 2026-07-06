@@ -4,10 +4,11 @@
 use std::fmt;
 
 /// Identifies which store layer produced or served a given artifact.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StoreLayer {
     /// Served from the writable overlay (local store).
+    #[default]
     Overlay,
     /// Served from a read-only base store.
     Base,

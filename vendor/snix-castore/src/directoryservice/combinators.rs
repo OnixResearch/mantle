@@ -9,7 +9,6 @@ use tracing::trace;
 
 use super::Directory;
 use super::DirectoryService;
-use super::SimplePutter;
 use crate::B3Digest;
 use crate::composition::CompositionContext;
 use crate::composition::ServiceBuilder;
@@ -105,8 +104,8 @@ where
     }
 
     #[instrument(skip_all, fields(instance_name = %self.instance_name))]
-    async fn put(&self, _directory: Directory) -> Result<B3Digest, super::Error> {
-        Err(Error::Unimplemented.into())
+    async fn put(&self, directory: Directory) -> Result<B3Digest, super::Error> {
+        self.near.put(directory).await
     }
 
     #[instrument(skip_all, fields(directory.digest = %root_directory_digest, instance_name = %self.instance_name))]
@@ -160,7 +159,7 @@ where
 
     #[instrument(skip_all)]
     fn put_multiple_start(&self) -> Box<dyn DirectoryPutter + '_> {
-        Box::new(SimplePutter::new(self))
+        self.near.put_multiple_start()
     }
 }
 

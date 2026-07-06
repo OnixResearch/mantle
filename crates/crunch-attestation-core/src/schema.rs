@@ -116,6 +116,10 @@ pub struct ArtifactFacts {
     pub logical_path: String,
     pub output_name: String,
     pub content_digest: String,
+    /// Which store layer produced this artifact ("overlay" or "base").
+    /// Absent for single-store attestations from before overlay composition.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub store_layer: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

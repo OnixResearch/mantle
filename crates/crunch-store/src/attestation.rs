@@ -23,6 +23,7 @@ use snix_store::pathinfoservice::PathInfoService;
 
 use crate::Error;
 use crate::StoreFallbackMode;
+use crate::layer::StoreLayer;
 use crate::resolve_closure;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -30,6 +31,8 @@ pub struct ArtifactProvenance {
     pub claims: Option<Claims>,
     pub input_sources: Vec<StorePath<String>>,
     pub input_artifacts: Vec<StorePath<String>>,
+    /// Which store layer produced this artifact (overlay or base).
+    pub store_layer: StoreLayer,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -163,6 +166,7 @@ fn synthesize_artifact_attestation(
             logical_path: subject_path,
             output_name: output_name.to_string(),
             content_digest: nar_sha256_digest(&path_info.nar_sha256),
+            store_layer: provenance.map(|p| p.store_layer.to_string()),
         },
         subject_node_id,
         nodes: graph.nodes,
@@ -641,6 +645,7 @@ mod tests {
                 }),
                 input_sources: vec![source],
                 input_artifacts: vec![input_artifact.clone()],
+                store_layer: StoreLayer::Overlay,
             }),
         )
         .await

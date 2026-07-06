@@ -288,6 +288,7 @@ mod tests {
             remote_cache_urls: Vec::new(),
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: "/nix/store".to_string(),
+            base_state_dirs: Vec::new(),
         })
         .await
         .unwrap()
@@ -481,6 +482,7 @@ mod tests {
             remote_cache_urls: Vec::new(),
             fallback_mode: StoreFallbackMode::Practical,
             store_dir: store_dir.to_string(),
+            base_state_dirs: Vec::new(),
         })
         .await
         .unwrap()
