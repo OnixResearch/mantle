@@ -11,7 +11,7 @@
 - [x] [serial] Add `StoreConfig.base_state_dirs: Vec<PathBuf>` and `StoreHandle::open_overlay` that wires overlay services over read-only base services using the no-backfill combinators. Enforce the same-prefix invariant. r[store_transports.overlay_composition]
 - [x] [serial] Route all writes (`put`, `put_multiple_start`, pathinfo `put`, blob writes, `persist_and_export_signed_output`) to the overlay only; open bases read-only and reject base writes. r[store_transports.overlay_composition]
 - [x] [serial] Add the `StoreLayer { Overlay, Base }` provenance tag to consumed nodes/PathInfo and thread it through attestation synthesis. r[store_transports.overlay_provenance_layer]
-- [ ] [serial] Extend overlay GC reachability to include base-referenced paths so an overlay GC cannot dangle a closure that reads through the base; never mutate the base. r[store_transports.overlay_gc_cross_layer]
+- [x] [serial] Extend overlay GC reachability to include base-referenced paths so an overlay GC cannot dangle a closure that reads through the base; never mutate the base. r[store_transports.overlay_gc_cross_layer]
 
 ## Phase 3: CLI and pipeline wiring
 
@@ -31,6 +31,6 @@
 
 ## Phase 5: Verification and archive
 
-- [ ] [serial] Run `cargo test -p crunch-store` and the overlay scenario tests with isolated `CARGO_TARGET_DIR`. r[store_transports.overlay_composition] r[store_transports.overlay_provenance_layer] r[store_transports.overlay_gc_cross_layer]
-- [ ] [serial] Run `cairn validate --root .` and `cairn gate proposal|design|tasks overlay-store-composition --root .`. r[store_transports.overlay_composition]
-- [ ] [serial] Sync this delta into accepted `store-transports` specs, archive the package, and commit the verified slice. r[store_transports.overlay_composition]
+- [x] [serial] Run `cargo test -p crunch-store` and the overlay scenario tests with isolated `CARGO_TARGET_DIR`. r[store_transports.overlay_composition] r[store_transports.overlay_provenance_layer] r[store_transports.overlay_gc_cross_layer]
+- [x] [serial] Run `cairn validate --root .` and `cairn gate proposal|design|tasks overlay-store-composition --root .`. r[store_transports.overlay_composition]
+- [x] [serial] Sync this delta into accepted `store-transports` specs, archive the package, and commit the verified slice. r[store_transports.overlay_composition]
