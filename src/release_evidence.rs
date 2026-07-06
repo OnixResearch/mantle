@@ -159,6 +159,7 @@ pub(crate) fn create_release_evidence_bundle(
             stage2_binary_digest_blake3: proof_identity.stage2_binary_digest_blake3,
             prerequisite_inventory_digest_blake3: proof_identity.prerequisite_inventory_digest_blake3,
             proof_manifest_digest_blake3: proof_identity.proof_manifest_digest_blake3,
+            provenance_coverage: None,
         },
     };
     write_manifest_file(&request.bundle_dir, &manifest)?;
@@ -889,6 +890,7 @@ mod tests {
                 prerequisite_inventory_digest_blake3: inventory.digest_blake3,
                 proof_manifest_digest_blake3: sample_digest(9),
             },
+            provenance_coverage: None,
         }
     }
 
