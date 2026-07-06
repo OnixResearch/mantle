@@ -18,3 +18,4 @@ compatibility surface, crate name, or historical decision.
 | [0009](0009-decentralized-release-verification.md) | Decentralized release verification separates technical and social trust | Proposed |
 | [0010](0010-keep-mantle-build-tool-boundary.md) | Keep Mantle's boundary build-shaped | Accepted |
 | [0011](0011-native-dynamic-plans.md) | Native dynamic plans | Proposed |
+| [0012](0012-overlay-store-composition.md) | Overlay store composition | Proposed |
