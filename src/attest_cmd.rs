@@ -498,6 +498,7 @@ async fn open_store(output_dir: &Path, state_dir: &Path, store_dir: &str) -> Res
         remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_dir.to_string(),
+        base_state_dirs: Vec::new(),
     };
     StoreHandle::open(config).await.map_err(|e| RunError::Internal(format!("opening store: {e}")))
 }

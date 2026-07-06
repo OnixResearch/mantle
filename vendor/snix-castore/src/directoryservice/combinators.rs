@@ -18,7 +18,8 @@ use crate::directoryservice::directory_graph::DirectoryGraphBuilder;
 
 /// Asks near first, if not found, asks far.
 /// If found in there, returns it, and *inserts* it into
-/// near.
+/// near (unless `read_only_far` is true, in which case the
+/// far value is returned without being inserted into near).
 /// Specifically, it always obtains the entire directory closure from far and inserts it into near,
 /// which is useful when far does not support accessing intermediate directories (but near does).
 /// There is no negative cache.
@@ -27,6 +28,9 @@ pub struct Cache<DS1, DS2> {
     instance_name: String,
     near: DS1,
     far: DS2,
+    /// When true, far hits are returned without inserting into near.
+    /// This is the "overlay" mode: read-through without backfill.
+    read_only_far: bool,
 }
 
 impl<DS1, DS2> Cache<DS1, DS2> {
@@ -35,6 +39,17 @@ impl<DS1, DS2> Cache<DS1, DS2> {
             instance_name,
             near,
             far,
+            read_only_far: false,
+        }
+    }
+
+    /// Create a Cache with read-only far mode (no backfill on read).
+    pub fn new_read_only_far(instance_name: String, near: DS1, far: DS2) -> Self {
+        Self {
+            instance_name,
+            near,
+            far,
+            read_only_far: true,
         }
     }
 }
@@ -70,17 +85,19 @@ where
             }
         }
 
-        // If far had the directory, put into near.
+        // If far had the directory, put into near (unless read_only_far).
         if let Some(resp_directory) = resp_directory {
-            let directory_graph = graph_builder.build()?;
-            // Drain into near
-            let mut near_putter = self.near.put_multiple_start();
-            for directory in directory_graph.drain_leaves_to_root() {
-                near_putter.put(directory).await.map_err(Error::NearPut)?;
-            }
+            if !self.read_only_far {
+                let directory_graph = graph_builder.build()?;
+                // Drain into near
+                let mut near_putter = self.near.put_multiple_start();
+                for directory in directory_graph.drain_leaves_to_root() {
+                    near_putter.put(directory).await.map_err(Error::NearPut)?;
+                }
 
-            let actual_digest = near_putter.close().await.map_err(Error::NearPut)?;
-            debug_assert_eq!(digest, &actual_digest);
+                let actual_digest = near_putter.close().await.map_err(Error::NearPut)?;
+                debug_assert_eq!(digest, &actual_digest);
+            }
             Ok(Some(resp_directory))
         } else {
             Ok(None)
@@ -122,18 +139,20 @@ where
                 yield directory;
             }
 
-            match builder.build() {
-                Ok(directory_graph) => {
-                    // Drain into near
-                    let mut near_putter = near.put_multiple_start();
-                    for directory in directory_graph.drain_leaves_to_root() {
-                        near_putter.put(directory).await.map_err(Error::NearPut)?;
+            if !self.read_only_far {
+                match builder.build() {
+                    Ok(directory_graph) => {
+                        // Drain into near
+                        let mut near_putter = near.put_multiple_start();
+                        for directory in directory_graph.drain_leaves_to_root() {
+                            near_putter.put(directory).await.map_err(Error::NearPut)?;
+                        }
+                        let actual_digest = near_putter.close().await.map_err(Error::NearPut)?;
+                        debug_assert_eq!(digest, actual_digest);
                     }
-                    let actual_digest = near_putter.close().await.map_err(Error::NearPut)?;
-                    debug_assert_eq!(digest, actual_digest);
+                    Err(crate::directoryservice::OrderingError::EmptySet) => return,
+                    Err(e) => Err(e)?
                 }
-                Err(crate::directoryservice::OrderingError::EmptySet) => return,
-                Err(e) => Err(e)?
             }
         }
         .boxed()
@@ -195,6 +214,7 @@ impl ServiceBuilder for CacheConfig {
             instance_name: instance_name.to_string(),
             near: near?,
             far: far?,
+            read_only_far: false,
         }))
     }
 }

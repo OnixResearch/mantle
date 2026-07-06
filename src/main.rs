@@ -144,6 +144,11 @@ struct Args {
     #[arg(long, global = true)]
     state_dir: Option<PathBuf>,
 
+    /// Ordered list of read-only base store state directories for overlay
+    /// composition. Declared in priority order (base A before base B).
+    #[arg(long = "base-store", global = true)]
+    base_stores: Vec<PathBuf>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -2172,6 +2177,7 @@ struct RunContext {
     store_prefix: String,
     verbose: bool,
     json: bool,
+    base_state_dirs: Vec<PathBuf>,
 }
 
 impl RunContext {
@@ -2207,6 +2213,7 @@ fn build_run_context(args: &Args) -> RunContext {
         store_prefix,
         verbose: args.verbose,
         json: args.json,
+        base_state_dirs: args.base_stores.clone(),
     }
 }
 
@@ -3224,6 +3231,7 @@ fn run_build_command(
                     hermeticity_mode,
                     ctx.output_mode(),
                     source_fetch_plan.overrides.clone(),
+                    ctx.base_state_dirs.clone(),
                 );
             }
             build_cmd::cmd_build(
@@ -3507,6 +3515,7 @@ async fn run_remote_build_dispatches_async(
         remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_prefix.to_string(),
+        base_state_dirs: Vec::new(),
     })
     .await
     .map_err(|err| RunError::Internal(format!("opening local store for remote build dispatch: {err}")))?;

@@ -2,21 +2,21 @@
 
 ## Phase 1: Vendored read-through primitive
 
-- [ ] [parallel] Add a read-only-far / no-backfill mode to the vendored `Cache` DirectoryService combinator (`vendor/snix-castore/src/directoryservice/combinators.rs`): base hits return without `put` into near. Default behavior unchanged. r[store_transports.overlay_composition]
-- [ ] [parallel] Add the no-backfill read mode to `CombinedBlobService` (`vendor/snix-castore/src/blobservice/combinator.rs`). r[store_transports.overlay_composition]
-- [ ] [parallel] Add the no-backfill read mode to the PathInfoService `Cache` combinator (`vendor/snix-store/src/pathinfoservice/cache.rs`). r[store_transports.overlay_composition]
+- [x] [parallel] Add a read-only-far / no-backfill mode to the vendored `Cache` DirectoryService combinator (`vendor/snix-castore/src/directoryservice/combinators.rs`): base hits return without `put` into near. Default behavior unchanged. r[store_transports.overlay_composition]
+- [x] [parallel] Add the no-backfill read mode to `CombinedBlobService` (`vendor/snix-castore/src/blobservice/combinator.rs`). r[store_transports.overlay_composition]
+- [x] [parallel] Add the no-backfill read mode to the PathInfoService `Cache` combinator (`vendor/snix-store/src/pathinfoservice/cache.rs`). r[store_transports.overlay_composition]
 
 ## Phase 2: crunch-store overlay composition
 
-- [ ] [serial] Add `StoreConfig.base_state_dirs: Vec<PathBuf>` and `StoreHandle::open_overlay` that wires overlay services over read-only base services using the no-backfill combinators. Enforce the same-prefix invariant. r[store_transports.overlay_composition]
-- [ ] [serial] Route all writes (`put`, `put_multiple_start`, pathinfo `put`, blob writes, `persist_and_export_signed_output`) to the overlay only; open bases read-only and reject base writes. r[store_transports.overlay_composition]
-- [ ] [serial] Add the `StoreLayer { Overlay, Base }` provenance tag to consumed nodes/PathInfo and thread it through attestation synthesis. r[store_transports.overlay_provenance_layer]
+- [x] [serial] Add `StoreConfig.base_state_dirs: Vec<PathBuf>` and `StoreHandle::open_overlay` that wires overlay services over read-only base services using the no-backfill combinators. Enforce the same-prefix invariant. r[store_transports.overlay_composition]
+- [x] [serial] Route all writes (`put`, `put_multiple_start`, pathinfo `put`, blob writes, `persist_and_export_signed_output`) to the overlay only; open bases read-only and reject base writes. r[store_transports.overlay_composition]
+- [x] [serial] Add the `StoreLayer { Overlay, Base }` provenance tag to consumed nodes/PathInfo and thread it through attestation synthesis. r[store_transports.overlay_provenance_layer]
 - [ ] [serial] Extend overlay GC reachability to include base-referenced paths so an overlay GC cannot dangle a closure that reads through the base; never mutate the base. r[store_transports.overlay_gc_cross_layer]
 
 ## Phase 3: CLI and pipeline wiring
 
-- [ ] [serial] Add the repeatable ordered `--base-store <state-dir>` global CLI option and fail closed on missing/unopenable bases. r[store_transports.overlay_cli_declaration]
-- [ ] [serial] Route `resolve_and_ingest_sources` / `cached_node_for_path` in `crates/crunch-build/src/orchestrate.rs` through the composed handle so the sandbox sees the merged castore view. r[store_transports.overlay_composition]
+- [x] [serial] Add the repeatable ordered `--base-store <state-dir>` global CLI option and fail closed on missing/unopenable bases. r[store_transports.overlay_cli_declaration]
+- [x] [serial] Route `resolve_and_ingest_sources` / `cached_node_for_path` in `crates/crunch-build/src/orchestrate.rs` through the composed handle so the sandbox sees the merged castore view. r[store_transports.overlay_composition]
 
 ## Phase 4: Tests
 

@@ -24,6 +24,12 @@ pub struct CombinedBlobService<BL, BR> {
     far: BR,
 }
 
+impl<BL, BR> CombinedBlobService<BL, BR> {
+    pub fn new(instance_name: String, near: BL, far: BR) -> Self {
+        Self { instance_name, near, far }
+    }
+}
+
 impl<BL, BR> Clone for CombinedBlobService<BL, BR>
 where
     BL: Clone,

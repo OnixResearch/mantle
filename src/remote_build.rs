@@ -1693,6 +1693,7 @@ async fn execute_remote_local_build_linux(
         remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: executor.store_prefix.clone(),
+        base_state_dirs: Vec::new(),
     })
     .await
     .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
@@ -7808,6 +7809,7 @@ mod tests {
             remote_cache_urls: Vec::new(),
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
             store_dir: "/mantle/store".to_string(),
+            base_state_dirs: Vec::new(),
         })
         .await
         .expect("remote import store opens")

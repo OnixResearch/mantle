@@ -57,6 +57,9 @@ pub struct BuildConfig {
     /// Ordered list of substituter URLs. Empty = no remote substitution.
     pub substituter_urls: Vec<String>,
     pub hermeticity_mode: HermeticityMode,
+    /// Ordered list of read-only base store state directories for overlay
+    /// composition.  Empty = no overlay composition (default single-store).
+    pub base_state_dirs: Vec<PathBuf>,
     /// Signing keypair — every build output gets signed.
     pub keypair: KeyPair,
     /// Trusted public keys for signature verification on cache hits.
@@ -150,22 +153,44 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
     let mut session = crunch_eval::session::EvaluationSession::open_file(&config.file, &config.import_paths)
         .map_err(map_eval_error)?;
 
-    let store = match crunch_store::StoreHandle::open(crunch_store::StoreConfig {
-        state_dir: config.state_dir.clone(),
-        output_dir: config.output_dir.clone(),
-        remote_cache_urls: config.substituter_urls.clone(),
-        fallback_mode: store_fallback_mode(config.hermeticity_mode),
-        store_dir: config.store_dir.clone(),
-    })
-    .await
-    {
-        Ok(store) => store,
-        Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
-            let derivations = session.force_all_roots::<CrunchDerivation>().map_err(map_eval_error)?;
-            debug_assert!(!derivations.is_empty(), "must have at least one derivation");
-            return build_preflight_failure(config, &derivations, err.to_string());
+    let store = if config.base_state_dirs.is_empty() {
+        match crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            state_dir: config.state_dir.clone(),
+            output_dir: config.output_dir.clone(),
+            remote_cache_urls: config.substituter_urls.clone(),
+            fallback_mode: store_fallback_mode(config.hermeticity_mode),
+            store_dir: config.store_dir.clone(),
+            base_state_dirs: Vec::new(),
+        })
+        .await
+        {
+            Ok(store) => store,
+            Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
+                let derivations = session.force_all_roots::<CrunchDerivation>().map_err(map_eval_error)?;
+                debug_assert!(!derivations.is_empty(), "must have at least one derivation");
+                return build_preflight_failure(config, &derivations, err.to_string());
+            }
+            Err(e) => return Err(Error::Internal(format!("opening store: {e}"))),
         }
-        Err(e) => return Err(Error::Internal(format!("opening store: {e}"))),
+    } else {
+        match crunch_store::StoreHandle::open_overlay(crunch_store::StoreConfig {
+            state_dir: config.state_dir.clone(),
+            output_dir: config.output_dir.clone(),
+            remote_cache_urls: config.substituter_urls.clone(),
+            fallback_mode: store_fallback_mode(config.hermeticity_mode),
+            store_dir: config.store_dir.clone(),
+            base_state_dirs: config.base_state_dirs.clone(),
+        })
+        .await
+        {
+            Ok(store) => store,
+            Err(err @ crunch_store::Error::PathInfoFallbackRejected { .. }) => {
+                let derivations = session.force_all_roots::<CrunchDerivation>().map_err(map_eval_error)?;
+                debug_assert!(!derivations.is_empty(), "must have at least one derivation");
+                return build_preflight_failure(config, &derivations, err.to_string());
+            }
+            Err(e) => return Err(Error::Internal(format!("opening overlay store: {e}"))),
+        }
     };
     let mut hermeticity_audit_events = mode_audit_events(config.hermeticity_mode);
     hermeticity_audit_events.extend(map_store_audit_events(store.startup_audit_events()));

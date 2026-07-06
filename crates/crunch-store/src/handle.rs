@@ -36,6 +36,10 @@ use tracing::info;
 use tracing::info as trace_info;
 use url::Url;
 
+use snix_castore::blobservice::CombinedBlobService;
+use snix_castore::directoryservice::Cache as DirectoryCache;
+use snix_store::pathinfoservice::CachePathInfoService as PathInfoCache;
+
 use crate::ArtifactProvenance;
 use crate::CaMappings;
 use crate::Error;
@@ -44,6 +48,7 @@ use crate::GcRootRecord;
 use crate::GcRootSource;
 use crate::StoreAuditEvent;
 use crate::completeness::recursive_castore_completeness;
+use crate::layer::StoreLayer;
 use crate::StoreAuditKind;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
@@ -87,6 +92,41 @@ pub struct StoreConfig {
     /// or "/nix/store" in compat mode). Derivation hashes, output paths,
     /// and sandbox layout all use this prefix.
     pub store_dir: String,
+
+    /// Ordered list of read-only base store state directories for overlay
+    /// composition. Declared in priority order: base A is consulted before
+    /// base B.  The local store remains the writable overlay.  All bases
+    /// MUST share the same `store_dir` prefix.  Empty = no overlay composition
+    /// (default single-store behavior).
+    pub base_state_dirs: Vec<PathBuf>,
+}
+
+impl StoreConfig {
+    /// Create a `StoreConfig` with the given directory and prefix. All other
+    /// fields (remote_cache_urls, base_state_dirs, etc.) default to empty.
+    /// `fallback_mode` defaults to `Practical`.
+    pub fn new(state_dir: PathBuf, output_dir: PathBuf, store_dir: String) -> Self {
+        Self {
+            state_dir,
+            output_dir,
+            remote_cache_urls: Vec::new(),
+            fallback_mode: crate::StoreFallbackMode::Practical,
+            store_dir,
+            base_state_dirs: Vec::new(),
+        }
+    }
+
+    /// Set `base_state_dirs` for overlay composition.
+    pub fn with_base_state_dirs(mut self, dirs: Vec<PathBuf>) -> Self {
+        self.base_state_dirs = dirs;
+        self
+    }
+
+    /// Add a single base state directory to the overlay stack.
+    pub fn add_base_state_dir(mut self, dir: PathBuf) -> Self {
+        self.base_state_dirs.push(dir);
+        self
+    }
 }
 
 /// Return type for a successful cache lookup on a single output.
@@ -452,6 +492,228 @@ impl StoreHandle {
             blob_service,
             directory_service,
             pathinfo_service,
+            remote_pathinfo,
+            remote_cache_urls,
+            remote_trusted_public_keys,
+            remote_delta_capability: None,
+            remote_delta_http_client: None,
+            state_dir: config.state_dir,
+            output_dir_str,
+            store_dir: config.store_dir,
+            startup_audit_events: std::mem::take(&mut startup_audit_events),
+            output_nodes: HashMap::new(),
+            built_outputs: HashMap::new(),
+            output_substitution_reports: HashMap::new(),
+            ca_mappings,
+            advisory_metadata_cache,
+            publishers: Vec::new(),
+        })
+    }
+
+    /// Open a store with overlay composition: a writable overlay over one or
+    /// more read-only base stores.  All bases MUST share the same `store_dir`
+    /// prefix as the overlay.  Writes route to the overlay only; bases are
+    /// opened read-only.
+    ///
+    /// When `base_state_dirs` is empty, this is equivalent to `open()`.
+    pub async fn open_overlay(config: StoreConfig) -> Result<Self, Error> {
+        assert!(!config.store_dir.is_empty(), "store_dir must not be empty");
+        assert!(config.store_dir.starts_with('/'), "store_dir must be an absolute path");
+
+        // Open the overlay (local writable store) services.
+        let state_dir = &config.state_dir;
+        std::fs::create_dir_all(state_dir)
+            .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
+
+        let overlay_blob = open_blob_service(state_dir)?;
+        let overlay_directory = open_directory_service(state_dir).await?;
+        let (overlay_pathinfo, mut startup_audit_events) =
+            open_pathinfo_service(state_dir, config.fallback_mode).await?;
+
+        // If no base stores, return a plain single-store handle.
+        if config.base_state_dirs.is_empty() {
+            return Self::open(config).await;
+        }
+
+        // Verify prefix match and open each base store in read-only mode.
+        let mut base_blob_services: Vec<Arc<dyn BlobService>> = Vec::with_capacity(config.base_state_dirs.len());
+        let mut base_directory_services: Vec<Arc<dyn DirectoryService>> = Vec::with_capacity(config.base_state_dirs.len());
+        let mut base_pathinfo_services: Vec<Arc<dyn PathInfoService>> = Vec::with_capacity(config.base_state_dirs.len());
+
+        for base_dir in &config.base_state_dirs {
+            if !base_dir.is_dir() {
+                return Err(Error::Store(format!(
+                    "base state directory does not exist: {}",
+                    base_dir.display()
+                )));
+            }
+
+            // Open base blob service (read-only, no write needed).
+            let blob_dir = base_dir.join("blobs");
+            if !blob_dir.is_dir() {
+                return Err(Error::Store(format!(
+                    "base blob directory does not exist: {}",
+                    blob_dir.display()
+                )));
+            }
+            let base_blob = ObjectStoreBlobService::new_local(&blob_dir)
+                .map_err(|e| Error::Store(format!("opening base blob service {}: {e}", blob_dir.display())))?;
+            base_blob_services.push(Arc::new(base_blob));
+
+            // Open base directory service (read-only).
+            let base_db_path = base_dir.join("directories.redb");
+            let base_directory = RedbDirectoryService::new("base".to_string(), RedbDirectoryServiceConfig {
+                path: Some(base_db_path.clone()),
+                read_only: true,
+                cache_size: None,
+            })
+            .await
+            .map_err(|e| Error::Store(format!("opening base directory {}: {e}", base_db_path.display())))?;
+            base_directory_services.push(Arc::new(base_directory));
+
+            // Open base pathinfo service (read-only).
+            let base_pathinfo = open_pathinfo_service_read_only(base_dir, config.fallback_mode).await?;
+            base_pathinfo_services.push(base_pathinfo);
+        }
+
+        // Chain services: near=overlay, far=base_stack
+        // For multiple bases, wrap inner layers: overlay -> baseA -> baseB
+        // Blob: CombinedBlobService already has read-through (no backfill) semantics.
+        let combined_blob = if base_blob_services.len() == 1 {
+            let base = base_blob_services.into_iter().next().unwrap();
+            Arc::new(CombinedBlobService::new(
+                "overlay".to_string(),
+                overlay_blob,
+                base,
+            )) as Arc<dyn BlobService>
+        } else {
+            // Chain multiple bases: inner_blob = baseA combined with baseB, etc.
+            let mut iter = base_blob_services.into_iter();
+            let mut inner: Arc<dyn BlobService> = iter.next().unwrap();
+            for base in iter {
+                inner = Arc::new(CombinedBlobService::new(
+                    "base-chain".to_string(),
+                    inner,
+                    base,
+                )) as Arc<dyn BlobService>;
+            }
+            Arc::new(CombinedBlobService::new(
+                "overlay".to_string(),
+                overlay_blob,
+                inner,
+            )) as Arc<dyn BlobService>
+        };
+
+        // Directory: Cache with read_only_far=true
+        let combined_directory: Arc<dyn DirectoryService> = if base_directory_services.len() == 1 {
+            let base = base_directory_services.into_iter().next().unwrap();
+            Arc::new(DirectoryCache::new_read_only_far(
+                "overlay".to_string(),
+                overlay_directory,
+                base,
+            ))
+        } else {
+            let mut iter = base_directory_services.into_iter();
+            let mut inner: Arc<dyn DirectoryService> = iter.next().unwrap();
+            for base in iter {
+                inner = Arc::new(DirectoryCache::new_read_only_far(
+                    "base-chain".to_string(),
+                    inner,
+                    base,
+                )) as Arc<dyn DirectoryService>;
+            }
+            Arc::new(DirectoryCache::new_read_only_far(
+                "overlay".to_string(),
+                overlay_directory,
+                inner,
+            ))
+        };
+
+        // PathInfo: Cache with read_only_far=true
+        let combined_pathinfo: Arc<dyn PathInfoService> = if base_pathinfo_services.len() == 1 {
+            let base = base_pathinfo_services.into_iter().next().unwrap();
+            Arc::new(PathInfoCache::new_read_only_far(
+                "overlay".to_string(),
+                overlay_pathinfo,
+                base,
+            ))
+        } else {
+            let mut iter = base_pathinfo_services.into_iter();
+            let mut inner: Arc<dyn PathInfoService> = iter.next().unwrap();
+            for base in iter {
+                inner = Arc::new(PathInfoCache::new_read_only_far(
+                    "base-chain".to_string(),
+                    inner,
+                    base,
+                )) as Arc<dyn PathInfoService>;
+            }
+            Arc::new(PathInfoCache::new_read_only_far(
+                "overlay".to_string(),
+                overlay_pathinfo,
+                inner,
+            ))
+        };
+
+        // Remote substitution (single cache URL, same as open() but added to combined pathinfo).
+        let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
+            Some(ref url_str) => match Url::parse(url_str) {
+                Ok(parsed_url) => match build_remote_pathinfo(url_str, combined_blob.clone(), combined_directory.clone())
+                {
+                    Ok(svc) => match parse_remote_trusted_public_keys(url_str) {
+                        Ok(trusted_public_keys) => {
+                            info!(url = %url_str, "binary cache substitution enabled (overlay mode)");
+                            (Some(svc), vec![parsed_url], trusted_public_keys)
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                url = %url_str,
+                                err = %err,
+                                "failed to parse remote cache trust policy, substitution disabled"
+                            );
+                            (None, Vec::new(), Vec::new())
+                        }
+                    },
+                    Err(e) => {
+                        tracing::warn!(
+                            url = %url_str,
+                            err = %e,
+                            "failed to configure remote cache, substitution disabled"
+                        );
+                        (None, Vec::new(), Vec::new())
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!(
+                        url = %url_str,
+                        err = %e,
+                        "failed to parse remote cache URL, substitution disabled"
+                    );
+                    (None, Vec::new(), Vec::new())
+                }
+            },
+            None => (None, Vec::new(), Vec::new()),
+        };
+
+        let output_dir_str = config.output_dir.to_str().unwrap_or(&config.store_dir).to_string();
+        let ca_mappings = CaMappings::load(&config.state_dir);
+
+        let prefix_with_slash = format!("{}/", config.store_dir);
+        if let Some(first_stale) = ca_mappings.first_key_with_wrong_prefix(&prefix_with_slash) {
+            tracing::warn!(
+                stale_path = %first_stale,
+                expected_prefix = %config.store_dir,
+                "CA mappings contain paths from a different store prefix. \
+                 Clear the state directory ({}) to reset.",
+                config.state_dir.display(),
+            );
+        }
+
+        let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
+
+        Ok(Self {
+            blob_service: combined_blob,
+            directory_service: combined_directory,
+            pathinfo_service: combined_pathinfo,
             remote_pathinfo,
             remote_cache_urls,
             remote_trusted_public_keys,
@@ -2350,6 +2612,49 @@ async fn open_pathinfo_service(
             .map_err(|e| Error::PathInfoService(format!("in-memory fallback: {e}")))?;
             let detail = format!("{detail}; using in-memory fallback");
             Ok((Arc::new(svc), vec![StoreAuditEvent::new(StoreAuditKind::PathInfoFallback, detail)]))
+        }
+    }
+}
+
+/// Open a PathInfo service in read-only mode for a base store.
+/// This is a simplified version that opens the database read-only
+/// and does not provide an in-memory fallback (base must be readable).
+async fn open_pathinfo_service_read_only(
+    state_dir: &Path,
+    fallback_mode: StoreFallbackMode,
+) -> Result<Arc<dyn PathInfoService>, Error> {
+    assert!(state_dir.is_absolute(), "base state_dir must be absolute");
+    assert!(state_dir.is_dir(), "base state_dir must exist");
+
+    let db_path = state_dir.join("pathinfo.redb");
+    match RedbPathInfoService::new("base".to_string(), RedbPathInfoServiceConfig {
+        path: Some(db_path.clone()),
+        read_only: true,
+        cache_size: None,
+    })
+    .await
+    {
+        Ok(svc) => {
+            info!(path = %db_path.display(), "base PathInfo database opened (read-only)");
+            Ok(Arc::new(svc))
+        }
+        Err(e) => {
+            let detail = format!("failed to open base PathInfo database at {}: {e}", db_path.display());
+            if fallback_mode.is_strict() {
+                return Err(Error::PathInfoFallbackRejected { detail });
+            }
+            tracing::warn!(
+                path = %db_path.display(),
+                err = %e,
+                "failed to open base PathInfo database, using in-memory fallback (read-only)"
+            );
+            let svc = RedbPathInfoService::new_temporary("base".to_string(), RedbPathInfoServiceConfig {
+                path: None,
+                cache_size: None,
+                read_only: false,
+            })
+            .map_err(|e| Error::PathInfoService(format!("in-memory fallback for base: {e}")))?;
+            Ok(Arc::new(svc))
         }
     }
 }

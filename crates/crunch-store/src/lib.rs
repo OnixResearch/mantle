@@ -16,6 +16,7 @@ mod error;
 mod export;
 mod gc;
 mod handle;
+pub mod layer;
 pub mod metadata_cache;
 mod mutation_lock;
 mod policy;

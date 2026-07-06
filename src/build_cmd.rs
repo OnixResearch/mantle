@@ -71,6 +71,7 @@ pub fn cmd_build(
         hermeticity_mode,
         output_mode,
         Vec::new(),
+        Vec::new(),
     )
 }
 
@@ -91,6 +92,7 @@ pub fn cmd_build_with_source_fetch_overrides(
     hermeticity_mode: HermeticityMode,
     output_mode: BuildOutputMode,
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
+    base_state_dirs: Vec<PathBuf>,
 ) -> Result<(), RunError> {
     let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, output_mode.is_human())?;
     let configured_trusted_keys = load_configured_trusted_public_keys(trusted_public_keys, state_dir)?;
@@ -112,6 +114,7 @@ pub fn cmd_build_with_source_fetch_overrides(
         root_retention_source: Some(GcRootSource::Build),
         source_fetch_overrides,
         remote_enabled: false,
+        base_state_dirs,
     };
 
     let result = run_build(&config)?;

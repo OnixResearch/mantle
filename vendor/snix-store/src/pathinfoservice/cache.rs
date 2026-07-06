@@ -15,13 +15,16 @@ use crate::pathinfoservice;
 
 /// Asks near first, if not found, asks far.
 /// If found in there, returns it, and *inserts* it into
-/// near.
+/// near (unless `read_only_far` is true).
 /// There is no negative cache.
 /// Inserts and listings are not implemented for now.
 pub struct Cache<PS1, PS2> {
     instance_name: String,
     near: PS1,
     far: PS2,
+    /// When true, far hits are returned without inserting into near.
+    /// This is the "overlay" mode: read-through without backfill.
+    read_only_far: bool,
 }
 
 impl<PS1, PS2> Cache<PS1, PS2> {
@@ -30,6 +33,17 @@ impl<PS1, PS2> Cache<PS1, PS2> {
             instance_name,
             near,
             far,
+            read_only_far: false,
+        }
+    }
+
+    /// Create a Cache with read-only far mode (no backfill on read).
+    pub fn new_read_only_far(instance_name: String, near: PS1, far: PS2) -> Self {
+        Self {
+            instance_name,
+            near,
+            far,
+            read_only_far: true,
         }
     }
 }
@@ -52,8 +66,12 @@ where
                 match self.far.get(digest).await.map_err(Error::FarGet)? {
                     None => Ok(None),
                     Some(path_info) => {
-                        debug!("found in remote, adding to cache");
-                        self.near.put(path_info.clone()).await.map_err(Error::NearPut)?;
+                        if !self.read_only_far {
+                            debug!("found in remote, adding to cache");
+                            self.near.put(path_info.clone()).await.map_err(Error::NearPut)?;
+                        } else {
+                            debug!("found in remote (read-only far, no backfill)");
+                        }
                         Ok(Some(path_info))
                     }
                 }
@@ -123,6 +141,7 @@ impl ServiceBuilder for CacheConfig {
             instance_name: instance_name.to_string(),
             near: near?,
             far: far?,
+            read_only_far: false,
         }))
     }
 }
