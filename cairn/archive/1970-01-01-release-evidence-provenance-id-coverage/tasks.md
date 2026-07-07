@@ -6,7 +6,7 @@
 
 ## Phase 2: Archive
 
-- [ ] [serial] r[mantle.release_evidence_provenance] Verify and archive the change.
+- [x] [serial] r[mantle.release_evidence_provenance] Verify and archive the change.
 
 ## Verification Coverage
 

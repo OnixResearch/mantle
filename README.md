@@ -1138,6 +1138,29 @@ default. The top-level `manifest.json` records BLAKE3 digests for the source
 archive, bundled binary or binaries, proof-bundle directory, prerequisite
 inventory, and the proof-linkage facts copied from the full self-hosting proof.
 
+Operators may also attach opaque external evidence sidecars when another stack
+component has already verified stack-specific semantics:
+
+```bash
+mantle release create \
+  --release-id mantle-<version> \
+  --binary target/self-hosting-proof/run-.../binaries/stage2-mantle \
+  --proof-bundle target/self-hosting-proof/run-... \
+  --external-evidence target/valence/stack-provenance.json \
+  --external-evidence-role stack-provenance-trace \
+  --external-evidence-schema valence.stack-provenance-adapter.v1 \
+  --external-evidence-claim-scope identity-linkage-sidecar \
+  --external-evidence-non-claim "Mantle validates only bundle-local path, digest, role, schema, claim scope, and non-claims"
+```
+
+Mantle treats these sidecars as optional adapter-owned evidence. It validates
+only bundle-local path safety, BLAKE3 digest, role/schema/claim-scope presence,
+and explicit non-claims. Stack-specific claims such as Valence/Octet/Trellis
+identity linkage remain owned by the adapter that produced the sidecar. Use
+`mantle release verify --require-external-evidence-role <role>` when a downstream
+policy wants to require a role without changing Mantle's default verification
+semantics.
+
 To produce the canonical byte-for-byte reproducibility report, run an explicitly
 supported rebuild recipe into a clean output directory. The current supported
 recipe identity is `mantle-release-reproducibility-v1`; unknown

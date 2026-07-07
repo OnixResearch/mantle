@@ -93,6 +93,16 @@ pub struct RoleBoundedReleaseArtifact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalEvidence {
+    pub role: String,
+    pub schema: String,
+    pub relative_path: String,
+    pub digest_blake3: String,
+    pub claim_scope: String,
+    pub non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceAcquisition {
     pub kind: String,
     pub url: String,
@@ -189,6 +199,8 @@ pub struct ReleaseEvidenceManifest {
     pub deterministic_sandbox_isolation_evidence: Option<RoleBoundedReleaseArtifact>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub independent_agreement_report: Option<BundledArtifact>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_evidence: Vec<ExternalEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance_coverage: Option<ProvenanceCoverage>,
@@ -241,6 +253,48 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_source_acquisition(manifest)?;
     validate_manifest_linkage(manifest)?;
     validate_provenance_coverage(manifest)?;
+    validate_external_evidence(manifest)?;
+    Ok(())
+}
+
+fn validate_external_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let mut seen_roles = BTreeSet::new();
+    for (index_usize, evidence) in manifest.external_evidence.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "external evidence index overflowed u32")?;
+        let field_name = format!("external_evidence[{index_u32}]");
+        validate_external_evidence_entry(evidence, &field_name)?;
+        if !seen_roles.insert(evidence.role.clone()) {
+            return Err(validation_error(format!(
+                "release evidence {field_name}.role duplicates another external evidence role"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_external_evidence_entry(evidence: &ExternalEvidence, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    if evidence.role.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {field_name}.role must not be empty")));
+    }
+    if evidence.schema.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {field_name}.schema must not be empty")));
+    }
+    validate_relative_member_path(&evidence.relative_path, &format!("{field_name}.relative_path"))?;
+    validate_blake3_hex(&evidence.digest_blake3, &format!("{field_name}.digest_blake3"))?;
+    if evidence.claim_scope.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {field_name}.claim_scope must not be empty")));
+    }
+    if evidence.non_claims.is_empty() {
+        return Err(validation_error(format!("release evidence {field_name}.non_claims must not be empty")));
+    }
+    for (claim_index_usize, non_claim) in evidence.non_claims.iter().enumerate() {
+        let claim_index_u32 = u32_count(claim_index_usize, "external evidence non-claim index overflowed u32")?;
+        if non_claim.trim().is_empty() {
+            return Err(validation_error(format!(
+                "release evidence {field_name}.non_claims[{claim_index_u32}] must not be empty"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -438,6 +492,12 @@ fn validate_manifest_artifacts(manifest: &ReleaseEvidenceManifest) -> Result<(),
     for (index_usize, artifact) in manifest.binaries.iter().enumerate() {
         let index_u32 = u32_count(index_usize, "release evidence binary index overflowed u32")?;
         validate_and_record_path(artifact, &format!("binaries[{index_u32}]"), &mut seen_paths)?;
+    }
+    for (index_usize, evidence) in manifest.external_evidence.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "external evidence index overflowed u32")?;
+        record_unique_artifact_path(&evidence.relative_path, &mut seen_paths).map_err(|err| {
+            validation_error(format!("release evidence external_evidence[{index_u32}].relative_path conflict: {err}"))
+        })?;
     }
     Ok(())
 }
@@ -931,6 +991,17 @@ mod tests {
         }
     }
 
+    fn sample_external_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: "stack-provenance-trace".to_string(),
+            schema: "valence.stack-provenance-adapter.v1".to_string(),
+            relative_path: "external-evidence/stack-provenance.json".to_string(),
+            digest_blake3: sample_digest(12),
+            claim_scope: "identity-linkage-sidecar".to_string(),
+            non_claims: vec!["not semantic validation by Mantle".to_string()],
+        }
+    }
+
     fn sample_manifest() -> ReleaseEvidenceManifest {
         let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 3);
         let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
@@ -952,6 +1023,7 @@ mod tests {
             deterministic_build_proof: None,
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
+            external_evidence: vec![],
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
@@ -1360,6 +1432,85 @@ mod tests {
         assert!(manifest.provenance_coverage.is_none());
         let bytes = canonical_release_evidence_manifest(manifest).unwrap();
         assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn validate_accepts_manifest_with_valid_external_evidence() {
+        let mut manifest = sample_manifest();
+        manifest.external_evidence = vec![sample_external_evidence()];
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn validate_rejects_external_evidence_path_escape() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_external_evidence();
+        evidence.relative_path = "../stack-provenance.json".to_string();
+        manifest.external_evidence = vec![evidence];
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("must not escape"));
+    }
+
+    #[test]
+    fn validate_rejects_external_evidence_empty_role() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_external_evidence();
+        evidence.role = String::new();
+        manifest.external_evidence = vec![evidence];
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("external_evidence[0].role"));
+    }
+
+    #[test]
+    fn validate_rejects_external_evidence_empty_schema() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_external_evidence();
+        evidence.schema = String::new();
+        manifest.external_evidence = vec![evidence];
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("external_evidence[0].schema"));
+    }
+
+    #[test]
+    fn validate_rejects_external_evidence_invalid_digest() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_external_evidence();
+        evidence.digest_blake3 = "not-a-digest".to_string();
+        manifest.external_evidence = vec![evidence];
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("external_evidence[0].digest_blake3"));
+    }
+
+    #[test]
+    fn validate_rejects_external_evidence_empty_claim_scope() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_external_evidence();
+        evidence.claim_scope = String::new();
+        manifest.external_evidence = vec![evidence];
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("external_evidence[0].claim_scope"));
+    }
+
+    #[test]
+    fn validate_rejects_external_evidence_empty_non_claims() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_external_evidence();
+        evidence.non_claims = vec![];
+        manifest.external_evidence = vec![evidence];
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("external_evidence[0].non_claims"));
+    }
+
+    #[test]
+    fn validate_rejects_external_evidence_duplicate_role() {
+        let mut manifest = sample_manifest();
+        let mut second_evidence = sample_external_evidence();
+        second_evidence.relative_path = "external-evidence/02-stack-provenance.json".to_string();
+        second_evidence.digest_blake3 = sample_digest(18);
+        manifest.external_evidence = vec![sample_external_evidence(), second_evidence];
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("duplicates another external evidence role"));
     }
 
     #[test]

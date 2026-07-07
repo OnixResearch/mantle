@@ -10,6 +10,7 @@ pub(crate) use crunch_release_core::BundledArtifactKind;
 pub(crate) use crunch_release_core::CLAIM_SCOPE_PACKAGED_INTEGRITY;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_COMMAND;
 pub(crate) use crunch_release_core::DEFAULT_PROOF_WORKFLOW_VERSION;
+use crunch_release_core::ExternalEvidence;
 #[cfg(test)]
 pub(crate) use crunch_release_core::FULL_SELF_HOSTING_PROOF_SCHEMA;
 use crunch_release_core::PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE;
@@ -63,6 +64,15 @@ pub(crate) struct GitSourceCreateRequest {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct ExternalEvidenceCreateRequest {
+    pub path: PathBuf,
+    pub role: String,
+    pub schema: String,
+    pub claim_scope: String,
+    pub non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct ReleaseBundleCreateRequest {
     pub release_id: String,
     pub bundle_dir: PathBuf,
@@ -75,6 +85,7 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub provider_fixed_point_proof_dir: Option<PathBuf>,
     pub source_acquisition_url: Option<String>,
     pub git_source: Option<GitSourceCreateRequest>,
+    pub external_evidence: Vec<ExternalEvidenceCreateRequest>,
 }
 
 impl ReleaseBundleCreateRequest {
@@ -98,6 +109,7 @@ impl ReleaseBundleCreateRequest {
             provider_fixed_point_proof_dir: None,
             source_acquisition_url: None,
             git_source: None,
+            external_evidence: vec![],
         }
     }
 }
@@ -128,6 +140,7 @@ pub(crate) fn create_release_evidence_bundle(
     let provider_fixed_point_proof = copy_optional_provider_fixed_point_proof(request)?;
     let reproducibility_report =
         copy_optional_reproducibility_report(request, &source_archive, &binaries, &proof_bundle)?;
+    let external_evidence = copy_external_evidence(request)?;
     let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
     let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
 
@@ -149,6 +162,7 @@ pub(crate) fn create_release_evidence_bundle(
         deterministic_build_proof: None,
         deterministic_sandbox_isolation_evidence: None,
         independent_agreement_report: None,
+        external_evidence,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
             source_archive_digest_blake3,
@@ -159,8 +173,8 @@ pub(crate) fn create_release_evidence_bundle(
             stage2_binary_digest_blake3: proof_identity.stage2_binary_digest_blake3,
             prerequisite_inventory_digest_blake3: proof_identity.prerequisite_inventory_digest_blake3,
             proof_manifest_digest_blake3: proof_identity.proof_manifest_digest_blake3,
-            provenance_coverage: None,
         },
+        provenance_coverage: None,
     };
     write_manifest_file(&request.bundle_dir, &manifest)?;
     Ok(manifest)
@@ -268,6 +282,38 @@ fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), R
                 "release evidence reproducibility report is missing: {}",
                 report_path.display()
             )));
+        }
+    }
+    for evidence in &request.external_evidence {
+        validate_external_evidence_request(evidence)?;
+    }
+    Ok(())
+}
+
+fn validate_external_evidence_request(evidence: &ExternalEvidenceCreateRequest) -> Result<(), RunError> {
+    if !evidence.path.is_file() {
+        return Err(RunError::Internal(format!(
+            "release evidence external evidence file is missing: {}",
+            evidence.path.display()
+        )));
+    }
+    if evidence.role.trim().is_empty() {
+        return Err(RunError::Internal("release evidence external evidence role must not be empty".to_string()));
+    }
+    if evidence.schema.trim().is_empty() {
+        return Err(RunError::Internal("release evidence external evidence schema must not be empty".to_string()));
+    }
+    if evidence.claim_scope.trim().is_empty() {
+        return Err(RunError::Internal("release evidence external evidence claim scope must not be empty".to_string()));
+    }
+    if evidence.non_claims.is_empty() {
+        return Err(RunError::Internal("release evidence external evidence non-claims must not be empty".to_string()));
+    }
+    for non_claim in &evidence.non_claims {
+        if non_claim.trim().is_empty() {
+            return Err(RunError::Internal(
+                "release evidence external evidence non-claims must not contain empty entries".to_string(),
+            ));
         }
     }
     Ok(())
@@ -422,6 +468,26 @@ fn copy_optional_reproducibility_report(
     validate_reproducibility_report_for_bundle(request, report_path, source_archive, binaries, proof_bundle)?;
     let relative = Path::new("reproducibility").join("reproducibility-report.json");
     copy_file_into_bundle(report_path, &request.bundle_dir, &relative).map(Some)
+}
+
+fn copy_external_evidence(request: &ReleaseBundleCreateRequest) -> Result<Vec<ExternalEvidence>, RunError> {
+    let mut records = Vec::with_capacity(request.external_evidence.len());
+    for (index_usize, evidence) in request.external_evidence.iter().enumerate() {
+        let index_u32: u32 = index_usize
+            .try_into()
+            .map_err(|_| RunError::Internal("release evidence external evidence index overflowed u32".to_string()))?;
+        let relative = bundle_file_destination("external-evidence", &evidence.path, index_u32.saturating_add(1))?;
+        let artifact = copy_file_into_bundle(&evidence.path, &request.bundle_dir, &relative)?;
+        records.push(ExternalEvidence {
+            role: evidence.role.clone(),
+            schema: evidence.schema.clone(),
+            relative_path: artifact.relative_path,
+            digest_blake3: artifact.digest_blake3,
+            claim_scope: evidence.claim_scope.clone(),
+            non_claims: evidence.non_claims.clone(),
+        });
+    }
+    Ok(records)
 }
 
 fn validate_reproducibility_report_for_bundle(
@@ -735,7 +801,29 @@ fn verify_manifest_artifacts(manifest: &ReleaseEvidenceManifest, bundle_dir: &Pa
     if let Some(report) = &manifest.independent_agreement_report {
         verify_artifact_matches_bundle(report, bundle_dir, "independent_agreement_report")?;
     }
+    for (index_usize, evidence) in manifest.external_evidence.iter().enumerate() {
+        let index_u32: u32 = index_usize.try_into().map_err(|_| {
+            RunError::Internal("release evidence verify external evidence index overflowed u32".to_string())
+        })?;
+        verify_external_evidence_matches_bundle(evidence, bundle_dir, &format!("external_evidence[{index_u32}]"))?;
+    }
     Ok(())
+}
+
+fn verify_external_evidence_matches_bundle(
+    evidence: &ExternalEvidence,
+    bundle_dir: &Path,
+    field_name: &str,
+) -> Result<(), RunError> {
+    let bundled = BundledArtifact {
+        kind: BundledArtifactKind::File,
+        relative_path: evidence.relative_path.clone(),
+        size_bytes: std::fs::metadata(bundle_dir.join(&evidence.relative_path))
+            .map_err(|err| RunError::Internal(format!("verifying {field_name}: {err}")))?
+            .len(),
+        digest_blake3: evidence.digest_blake3.clone(),
+    };
+    verify_artifact_matches_bundle(&bundled, bundle_dir, field_name)
 }
 
 fn verify_provider_fixed_point_artifact_matches_bundle(
@@ -879,6 +967,7 @@ mod tests {
             deterministic_build_proof: None,
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
+            external_evidence: vec![],
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
@@ -1167,6 +1256,85 @@ mod tests {
         assert!(output_bundle_dir.join("proof/self-hosting/manifest.json").exists());
         assert!(output_bundle_dir.join("proof/inventory.md").exists());
         assert!(output_bundle_dir.join("manifest.json").exists());
+    }
+
+    #[test]
+    fn create_and_verify_release_bundle_records_external_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let external_evidence_path = temp.path().join("stack-provenance.json");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        write_file(&external_evidence_path, br#"{"schema":"valence.stack-provenance-adapter.v1"}"#);
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.external_evidence = vec![ExternalEvidenceCreateRequest {
+            path: external_evidence_path,
+            role: "stack-provenance-trace".to_string(),
+            schema: "valence.stack-provenance-adapter.v1".to_string(),
+            claim_scope: "identity-linkage-sidecar".to_string(),
+            non_claims: vec!["not semantic validation by Mantle".to_string()],
+        }];
+        let created = create_release_evidence_bundle(&request).unwrap();
+        let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
+        let evidence = created.external_evidence.first().expect("external evidence recorded");
+
+        assert_eq!(created, verified);
+        assert_eq!(evidence.role, "stack-provenance-trace");
+        assert_eq!(evidence.schema, "valence.stack-provenance-adapter.v1");
+        assert_eq!(evidence.claim_scope, "identity-linkage-sidecar");
+        assert!(output_bundle_dir.join(&evidence.relative_path).is_file());
+    }
+
+    #[test]
+    fn verify_release_bundle_rejects_tampered_external_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let external_evidence_path = temp.path().join("stack-provenance.json");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        write_file(&external_evidence_path, br#"{"schema":"valence.stack-provenance-adapter.v1"}"#);
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.external_evidence = vec![ExternalEvidenceCreateRequest {
+            path: external_evidence_path,
+            role: "stack-provenance-trace".to_string(),
+            schema: "valence.stack-provenance-adapter.v1".to_string(),
+            claim_scope: "identity-linkage-sidecar".to_string(),
+            non_claims: vec!["not semantic validation by Mantle".to_string()],
+        }];
+        let created = create_release_evidence_bundle(&request).unwrap();
+        let evidence = created.external_evidence.first().expect("external evidence recorded");
+        write_file(&output_bundle_dir.join(&evidence.relative_path), b"tampered");
+
+        let err = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
+        assert!(err.to_string().contains("external_evidence[0] does not match manifest"));
     }
 
     #[test]

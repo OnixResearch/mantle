@@ -2618,6 +2618,7 @@ mod tests {
             deterministic_build_proof: None,
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
+            external_evidence: vec![],
             proof_linkage: crate::release_evidence::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
                 source_archive_digest_blake3: digest.clone(),
@@ -2629,6 +2630,7 @@ mod tests {
                 prerequisite_inventory_digest_blake3: digest.clone(),
                 proof_manifest_digest_blake3: digest,
             },
+            provenance_coverage: None,
         }
     }
 

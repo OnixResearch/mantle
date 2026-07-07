@@ -16,6 +16,7 @@ use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::default_verification_dir;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_COMMAND;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
+use crate::release_evidence::ExternalEvidenceCreateRequest;
 use crate::release_evidence::GitSourceCreateRequest;
 use crate::release_evidence::ReleaseBundleCreateRequest;
 use crate::release_evidence::create_release_evidence_bundle;
@@ -70,6 +71,11 @@ pub(crate) fn cmd_release(
             git_source_commit,
             git_source_ref,
             git_source_tag,
+            external_evidence,
+            external_evidence_role,
+            external_evidence_schema,
+            external_evidence_claim_scope,
+            external_evidence_non_claim,
             workflow_command,
             workflow_version,
         } => cmd_release_create(
@@ -86,6 +92,11 @@ pub(crate) fn cmd_release(
             git_source_commit,
             git_source_ref,
             git_source_tag,
+            external_evidence,
+            external_evidence_role,
+            external_evidence_schema,
+            external_evidence_claim_scope,
+            external_evidence_non_claim,
             workflow_command,
             workflow_version,
         ),
@@ -97,6 +108,7 @@ pub(crate) fn cmd_release(
             deterministic_sandbox_isolation_evidence,
             require_deterministic_release,
             provider_fixed_point_proof,
+            require_external_evidence_role,
             require_provider_fixed_point_proof,
         } => cmd_release_verify(
             current_dir,
@@ -108,6 +120,7 @@ pub(crate) fn cmd_release(
             deterministic_sandbox_isolation_evidence,
             require_deterministic_release,
             provider_fixed_point_proof,
+            require_external_evidence_role,
             require_provider_fixed_point_proof,
         ),
         crate::ReleaseAction::Reproduce {
@@ -240,6 +253,11 @@ fn cmd_release_create(
     git_source_commit: Option<String>,
     git_source_ref: Option<String>,
     git_source_tag: Option<String>,
+    external_evidence: Vec<PathBuf>,
+    external_evidence_role: Vec<String>,
+    external_evidence_schema: Vec<String>,
+    external_evidence_claim_scope: Vec<String>,
+    external_evidence_non_claim: Vec<String>,
     workflow_command: String,
     workflow_version: String,
 ) -> Result<(), RunError> {
@@ -247,6 +265,14 @@ fn cmd_release_create(
     let normalized_workflow_command = normalize_workflow_value(&workflow_command, DEFAULT_PROOF_WORKFLOW_COMMAND);
     let normalized_workflow_version = normalize_workflow_value(&workflow_version, DEFAULT_PROOF_WORKFLOW_VERSION);
     let git_source = release_create_git_source(git_source_url, git_source_commit, git_source_ref, git_source_tag)?;
+    let external_evidence = release_create_external_evidence(
+        current_dir,
+        external_evidence,
+        external_evidence_role,
+        external_evidence_schema,
+        external_evidence_claim_scope,
+        external_evidence_non_claim,
+    )?;
     if source_acquisition_url.is_some() && git_source.is_some() {
         return Err(RunError::Internal(
             "release create Git source flags conflict with --source-acquisition-url".to_string(),
@@ -267,6 +293,7 @@ fn cmd_release_create(
         provider_fixed_point_proof_dir: provider_fixed_point_proof.map(|path| resolve_input_path(current_dir, path)),
         source_acquisition_url,
         git_source,
+        external_evidence,
     };
     let manifest = create_release_evidence_bundle(&request)?;
     if json {
@@ -284,6 +311,9 @@ fn cmd_release_create(
         }
         if let Some(report) = &manifest.reproducibility_report {
             println!("reproducibility report: {}", report.relative_path);
+        }
+        if !manifest.external_evidence.is_empty() {
+            println!("external evidence: {}", manifest.external_evidence.len());
         }
         if let Some(source_acquisition) = &manifest.source_acquisition {
             println!("source acquisition: {} ({})", source_acquisition.url, source_acquisition.kind);
@@ -321,6 +351,59 @@ fn release_create_git_source(
     }))
 }
 
+fn release_create_external_evidence(
+    current_dir: &Path,
+    paths: Vec<PathBuf>,
+    roles: Vec<String>,
+    schemas: Vec<String>,
+    claim_scopes: Vec<String>,
+    non_claims: Vec<String>,
+) -> Result<Vec<ExternalEvidenceCreateRequest>, RunError> {
+    if paths.is_empty() {
+        if !(roles.is_empty() && schemas.is_empty() && claim_scopes.is_empty() && non_claims.is_empty()) {
+            return Err(RunError::Internal(
+                "release create external evidence metadata requires --external-evidence".to_string(),
+            ));
+        }
+        return Ok(vec![]);
+    }
+    validate_external_evidence_metadata_count(paths.len(), roles.len(), "--external-evidence-role")?;
+    validate_external_evidence_metadata_count(paths.len(), schemas.len(), "--external-evidence-schema")?;
+    validate_external_evidence_metadata_count(paths.len(), claim_scopes.len(), "--external-evidence-claim-scope")?;
+    if non_claims.is_empty() {
+        return Err(RunError::Internal(
+            "release create --external-evidence-non-claim is required when external evidence is bundled".to_string(),
+        ));
+    }
+
+    Ok(paths
+        .into_iter()
+        .zip(roles)
+        .zip(schemas)
+        .zip(claim_scopes)
+        .map(|(((path, role), schema), claim_scope)| ExternalEvidenceCreateRequest {
+            path: resolve_input_path(current_dir, path),
+            role,
+            schema,
+            claim_scope,
+            non_claims: non_claims.clone(),
+        })
+        .collect())
+}
+
+fn validate_external_evidence_metadata_count(
+    evidence_count: usize,
+    actual_count: usize,
+    flag_name: &str,
+) -> Result<(), RunError> {
+    if actual_count != evidence_count {
+        return Err(RunError::Internal(format!(
+            "release create {flag_name} count {actual_count} must match --external-evidence count {evidence_count}"
+        )));
+    }
+    Ok(())
+}
+
 fn cmd_release_verify(
     current_dir: &Path,
     json: bool,
@@ -331,6 +414,7 @@ fn cmd_release_verify(
     deterministic_sandbox_isolation_evidence: Option<PathBuf>,
     require_deterministic_release: bool,
     provider_fixed_point_proof: Option<PathBuf>,
+    require_external_evidence_role: Vec<String>,
     require_provider_fixed_point_proof: bool,
 ) -> Result<(), RunError> {
     let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
@@ -375,6 +459,9 @@ fn cmd_release_verify(
         println!("source digest: {}", manifest.source_archive.digest_blake3);
         println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
+        if !manifest.external_evidence.is_empty() {
+            println!("external evidence: {}", manifest.external_evidence.len());
+        }
         print_reproducibility_summary(reproducibility.as_ref());
         print_deterministic_release_summary(&deterministic_result);
         print_provider_fixed_point_summary(&provider_fixed_point_result);
@@ -408,12 +495,25 @@ fn cmd_release_verify(
             provider_fixed_point_result.blockers.join("; ")
         )));
     }
+    require_external_evidence_roles(&manifest, &require_external_evidence_role)?;
     if let Some(ref result) = stagex_result {
         if !result.status.is_satisfied() {
             return Err(RunError::Internal(format!(
                 "StageX no-quorum profile unsatisfied: {}",
                 result.failure_reasons.join("; ")
             )));
+        }
+    }
+    Ok(())
+}
+
+fn require_external_evidence_roles(
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    required_roles: &[String],
+) -> Result<(), RunError> {
+    for required_role in required_roles {
+        if !manifest.external_evidence.iter().any(|evidence| evidence.role == *required_role) {
+            return Err(RunError::Internal(format!("external evidence role required but missing: {required_role}")));
         }
     }
     Ok(())
@@ -1553,6 +1653,7 @@ mod tests {
             deterministic_build_proof: None,
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
+            external_evidence: vec![],
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
                 source_archive_digest_blake3: "a".repeat(64),
@@ -1564,6 +1665,7 @@ mod tests {
                 prerequisite_inventory_digest_blake3: "e".repeat(64),
                 proof_manifest_digest_blake3: "f".repeat(64),
             },
+            provenance_coverage: None,
         };
         let result = extract_stagex_proof_block(&manifest, bundle_dir);
         assert!(result.is_none(), "missing summary.txt must return None");
@@ -1630,6 +1732,7 @@ mod tests {
             deterministic_build_proof: None,
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
+            external_evidence: vec![],
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
                 source_archive_digest_blake3: "a".repeat(64),
@@ -1641,6 +1744,7 @@ mod tests {
                 prerequisite_inventory_digest_blake3: "f".repeat(64),
                 proof_manifest_digest_blake3: "1".repeat(64),
             },
+            provenance_coverage: None,
         }
     }
 

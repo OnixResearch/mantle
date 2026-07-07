@@ -409,6 +409,78 @@ fn make_release_bundle(include_provider_fixed_point: bool) -> (TempDir, PathBuf,
 }
 
 #[test]
+fn release_create_and_verify_external_evidence_sidecar() {
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    write_file(&binary_path, b"crunch-binary");
+    let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+    let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+    let proof_dir = temp.path().join("proof-input");
+    write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    let sidecar_path = temp.path().join("stack-provenance.json");
+    write_file(&sidecar_path, br#"{"schema":"valence.stack-provenance-adapter.v1"}"#);
+    let bundle_dir = temp.path().join("bundle-external-evidence");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-0.1.0-rc1")
+        .arg("--bundle-dir")
+        .arg(&bundle_dir)
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .arg("--external-evidence")
+        .arg(&sidecar_path)
+        .arg("--external-evidence-role")
+        .arg("stack-provenance-trace")
+        .arg("--external-evidence-schema")
+        .arg("valence.stack-provenance-adapter.v1")
+        .arg("--external-evidence-claim-scope")
+        .arg("identity-linkage-sidecar")
+        .arg("--external-evidence-non-claim")
+        .arg("not semantic validation by Mantle")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("external evidence: 1"));
+
+    let manifest: ReleaseEvidenceManifest =
+        serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
+    let evidence = manifest.external_evidence.first().expect("external evidence should be recorded");
+    assert_eq!(evidence.role, "stack-provenance-trace");
+    assert_eq!(evidence.schema, "valence.stack-provenance-adapter.v1");
+    assert_eq!(evidence.claim_scope, "identity-linkage-sidecar");
+    assert_eq!(evidence.non_claims, vec!["not semantic validation by Mantle".to_string()]);
+    assert!(bundle_dir.join(&evidence.relative_path).is_file());
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-external-evidence-role")
+        .arg("stack-provenance-trace")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("external evidence: 1"));
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-external-evidence-role")
+        .arg("missing-role")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("external evidence role required but missing"));
+}
+
+#[test]
 fn release_create_records_git_source_metadata() {
     let temp = tempfile::tempdir().unwrap();
     create_minimal_release_repo(temp.path());
@@ -5342,6 +5414,16 @@ struct ReleaseProofLinkage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ExternalEvidence {
+    role: String,
+    schema: String,
+    relative_path: String,
+    digest_blake3: String,
+    claim_scope: String,
+    non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct SourceAcquisition {
     kind: String,
     url: String,
@@ -5376,6 +5458,8 @@ struct ReleaseEvidenceManifest {
     deterministic_build_proof: Option<ProviderFixedPointProofArtifact>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     deterministic_sandbox_isolation_evidence: Option<ProviderFixedPointProofArtifact>,
+    #[serde(default)]
+    external_evidence: Vec<ExternalEvidence>,
     proof_linkage: ReleaseProofLinkage,
 }
 

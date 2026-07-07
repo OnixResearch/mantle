@@ -129,6 +129,7 @@ pub use manifest::DEFAULT_PROOF_WORKFLOW_COMMAND;
 pub use manifest::DEFAULT_PROOF_WORKFLOW_VERSION;
 pub use manifest::DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE;
 pub use manifest::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE;
+pub use manifest::ExternalEvidence;
 pub use manifest::FULL_SELF_HOSTING_PROOF_SCHEMA;
 pub use manifest::FullSelfHostingProofIdentityFields;
 pub use manifest::PROVENANCE_COVERAGE_BOUNDARY;

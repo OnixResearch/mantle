@@ -1273,6 +1273,7 @@ mod tests {
             deterministic_build_proof: None,
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
+            external_evidence: vec![],
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
@@ -1284,6 +1285,7 @@ mod tests {
                 prerequisite_inventory_digest_blake3: sample_digest(4),
                 proof_manifest_digest_blake3: sample_digest(9),
             },
+            provenance_coverage: None,
         }
     }
 

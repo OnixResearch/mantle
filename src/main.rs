@@ -1121,6 +1121,27 @@ pub enum ReleaseAction {
         #[arg(long, default_value = "./scripts/prove-self-hosting.sh")]
         workflow_command: String,
 
+        /// External evidence sidecar file to bundle opaquely (repeat with matching
+        /// role/schema/scope)
+        #[arg(long = "external-evidence")]
+        external_evidence: Vec<PathBuf>,
+
+        /// Role for each --external-evidence entry, e.g. stack-provenance-trace
+        #[arg(long = "external-evidence-role")]
+        external_evidence_role: Vec<String>,
+
+        /// Schema identifier for each --external-evidence entry
+        #[arg(long = "external-evidence-schema")]
+        external_evidence_schema: Vec<String>,
+
+        /// Claim scope for each --external-evidence entry
+        #[arg(long = "external-evidence-claim-scope")]
+        external_evidence_claim_scope: Vec<String>,
+
+        /// Non-claim text applied to bundled external evidence entries
+        #[arg(long = "external-evidence-non-claim")]
+        external_evidence_non_claim: Vec<String>,
+
         /// Workflow version recorded in the manifest
         #[arg(long, default_value = "mantle-self-hosting-proof-v2")]
         workflow_version: String,
@@ -1154,6 +1175,10 @@ pub enum ReleaseAction {
         /// evidence
         #[arg(long)]
         provider_fixed_point_proof: Option<PathBuf>,
+
+        /// Fail unless a bundled external evidence entry with this role is present (repeatable)
+        #[arg(long = "require-external-evidence-role")]
+        require_external_evidence_role: Vec<String>,
 
         /// Fail unless a valid provider fixed-point proof bundle is supplied
         #[arg(long)]
@@ -5977,6 +6002,73 @@ let Plan = {
             panic!("expected release create with source acquisition URL");
         };
         assert_eq!(url, source_url);
+    }
+
+    #[test]
+    fn release_create_accepts_external_evidence_flags() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "create",
+            "--release-id",
+            "mantle-0.1.0-rc1",
+            "--binary",
+            "/tmp/mantle",
+            "--proof-bundle",
+            "/tmp/self-hosting-proof",
+            "--external-evidence",
+            "/tmp/stack-provenance.json",
+            "--external-evidence-role",
+            "stack-provenance-trace",
+            "--external-evidence-schema",
+            "valence.stack-provenance-adapter.v1",
+            "--external-evidence-claim-scope",
+            "identity-linkage-sidecar",
+            "--external-evidence-non-claim",
+            "not semantic validation by Mantle",
+        ]);
+        let Command::Release {
+            action:
+                ReleaseAction::Create {
+                    external_evidence,
+                    external_evidence_role,
+                    external_evidence_schema,
+                    external_evidence_claim_scope,
+                    external_evidence_non_claim,
+                    ..
+                },
+        } = args.command
+        else {
+            panic!("expected release create with external evidence flags");
+        };
+        assert_eq!(external_evidence, vec![PathBuf::from("/tmp/stack-provenance.json")]);
+        assert_eq!(external_evidence_role, vec!["stack-provenance-trace".to_string()]);
+        assert_eq!(external_evidence_schema, vec!["valence.stack-provenance-adapter.v1".to_string()]);
+        assert_eq!(external_evidence_claim_scope, vec!["identity-linkage-sidecar".to_string()]);
+        assert_eq!(external_evidence_non_claim, vec!["not semantic validation by Mantle".to_string()]);
+    }
+
+    #[test]
+    fn release_verify_accepts_required_external_evidence_role() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "verify",
+            "/tmp/release-bundle",
+            "--require-external-evidence-role",
+            "stack-provenance-trace",
+        ]);
+        let Command::Release {
+            action:
+                ReleaseAction::Verify {
+                    require_external_evidence_role,
+                    ..
+                },
+        } = args.command
+        else {
+            panic!("expected release verify with external evidence role");
+        };
+        assert_eq!(require_external_evidence_role, vec!["stack-provenance-trace".to_string()]);
     }
 
     #[test]
