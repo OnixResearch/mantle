@@ -1,6 +1,6 @@
 ## Why
 
-Mantle's release-evidence bundles record binary hashes, proof bundles, and reproducibility reports, but they don't record which valence source functions and cairn requirements the bundled binary's behavior is traceable to. This change adds an optional `provenance_coverage` field to the `ReleaseEvidenceManifest` so a binary's attestation can answer "which requirements and which source functions is this binary's behavior traceable to" — the end-to-end audit chain's final link.
+Mantle's release-evidence bundles record binary hashes, proof bundles, and reproducibility reports, but they have only a compact optional place to summarize external provenance coverage when an operator already has adapter-produced traceability data. This change adds an optional `provenance_coverage` field to the `ReleaseEvidenceManifest` so a release can record opaque source/function/requirement ID coverage without making Mantle responsible for Valence, Octet, Trellis, or Cairn semantics.
 
 ## What Changes
 
@@ -14,4 +14,4 @@ Mantle's release-evidence bundles record binary hashes, proof bundles, and repro
 
 - **Files**: `crates/crunch-release-core/src/manifest.rs`, `crates/crunch-release-core/src/lib.rs`.
 - **Testing**: `cargo test -p crunch-release-core` (108 passed), `cargo fmt --check` (clean), `cargo clippy` (clean for new code).
-- **Non-claims**: provenance coverage records identity and linkage only. It does not prove behavioral correctness, semantic equivalence, or that the binary satisfies the requirements.
+- **Non-claims**: provenance coverage records identity and linkage only. It does not prove behavioral correctness, semantic equivalence, adapter-side semantic validity, or that the binary satisfies the requirements.

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Release evidence provenance coverage field
-r[mantle.release_evidence_provenance] The `ReleaseEvidenceManifest` MUST support an optional `provenance_coverage` field recording which source IDs, function-object IDs, and requirement IDs are covered by the bundled binary.
+r[mantle.release_evidence_provenance] The `ReleaseEvidenceManifest` MUST support an optional `provenance_coverage` field recording adapter-supplied source IDs, function-object IDs, and requirement IDs as opaque release metadata.
 
 #### Scenario: Manifest without coverage is valid
 r[mantle.release_evidence_provenance.optional]
@@ -11,9 +11,9 @@ r[mantle.release_evidence_provenance.optional]
 
 #### Scenario: Manifest with valid coverage is accepted
 r[mantle.release_evidence_provenance.valid]
-- GIVEN a ReleaseEvidenceManifest with provenance_coverage carrying a valid binary_hash, at least one covered ID, and the correct boundary text
+- GIVEN a ReleaseEvidenceManifest with provenance_coverage carrying a valid binary_hash, at least one opaque covered ID, and the correct boundary text
 - WHEN validated
-- THEN it is accepted
+- THEN it is accepted without Mantle interpreting adapter-specific ID semantics
 
 #### Scenario: Empty coverage is rejected
 r[mantle.release_evidence_provenance.empty_rejected]

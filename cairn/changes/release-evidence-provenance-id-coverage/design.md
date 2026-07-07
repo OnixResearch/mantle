@@ -16,22 +16,19 @@ is populated when a release pipeline has provenance threading information
 - At least one of `covered_source_ids`, `covered_function_object_ids`, or
   `covered_requirement_ids` is non-empty
 
-### Connection to valence Phase 2
+### Adapter relationship
 
-Valence's `ProvenanceChain` (Phase 2 `unified-provenance-id-threading`)
-threads source_id to function_object_id to requirement_ids to artifact_hash
-to binary_hash. Mantle's `ProvenanceCoverage` is the final link: it records
-which source_ids, function_object_ids, and requirement_ids are covered by a
-specific binary_hash. Together, they answer "show me where this number comes
-from" mechanically: binary → coverage → requirement → function → source.
+`ProvenanceCoverage` is a compact optional summary field for ID coverage that an external adapter has already produced. A Valence stack provenance adapter may generate the IDs, but Mantle treats them as opaque strings and does not parse or verify Valence, Octet, Trellis, or Cairn semantics.
+
+For richer stack-specific evidence, Mantle should bundle an adapter-produced sidecar through the generic external evidence slot. In that flow Mantle records sidecar identity while Valence owns semantic verification.
 
 ### Non-claims
 
 Provenance coverage records identity and linkage only. It does not prove:
 - behavioral correctness
 - semantic equivalence
+- adapter-side semantic validity
 - that the binary satisfies the requirements
 - that the coverage is exhaustive
 
-It proves the binary's behavior is *traceable* to source functions and
-requirements, not that it is *correct*.
+It records that a release carries adapter-supplied traceability IDs, not that those IDs are semantically sufficient for correctness or release approval.
