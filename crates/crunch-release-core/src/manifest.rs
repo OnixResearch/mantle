@@ -19,6 +19,18 @@ pub const DEFAULT_PROOF_WORKFLOW_VERSION: &str = "mantle-self-hosting-proof-v2";
 pub const PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE: &str = "cargo-free-source-built-handoff-evidence";
 pub const DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE: &str = "deterministic-build-proof-receipt";
 pub const DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE: &str = "deterministic-sandbox-isolation-evidence";
+pub const KANI_TOOLCHAIN_EVIDENCE_SCHEMA: &str = "mantle-kani-toolchain-evidence-v1";
+pub const KANI_RECEIPT_EVIDENCE_ROLE: &str = "kani-model-check-receipt";
+pub const KANI_EVIDENCE_CLAIM_SCOPE: &str = "kani-release-identity-linkage-only";
+pub const KANI_VALENCE_SEMANTIC_ROLE: &str = "valence-validated-kani-external-evidence";
+pub const KANI_NON_CLAIM_WHOLE_PROGRAM: &str = "kani.boundary.whole_program";
+pub const KANI_NON_CLAIM_VERIFIER_SOUNDNESS: &str = "kani.boundary.verifier_soundness";
+pub const KANI_NON_CLAIM_SEMANTICS: &str = "kani.boundary.semantics";
+pub const KANI_NON_CLAIM_RELEASE_ELIGIBILITY: &str = "mantle.boundary.release_eligibility";
+pub const KANI_SOLVER_KIND_CBMC_DEFAULT: &str = "cbmc-default";
+pub const KANI_SOLVER_KIND_MINISAT: &str = "minisat";
+pub const KANI_SOLVER_KIND_CADICAL: &str = "cadical";
+pub const KANI_SOLVER_KIND_KISSAT: &str = "kissat";
 pub const SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE: &str = "external-archive";
 pub const SOURCE_ACQUISITION_KIND_GIT: &str = "git";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
@@ -29,6 +41,18 @@ const MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT: u32 = 8192;
 const MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT: u32 = 512;
 const GIT_SHA1_HEX_LENGTH_CHARS: usize = 40;
 const GIT_SHA256_HEX_LENGTH_CHARS: usize = 64;
+const KANI_REQUIRED_NON_CLAIMS: &[&str] = &[
+    KANI_NON_CLAIM_WHOLE_PROGRAM,
+    KANI_NON_CLAIM_VERIFIER_SOUNDNESS,
+    KANI_NON_CLAIM_SEMANTICS,
+    KANI_NON_CLAIM_RELEASE_ELIGIBILITY,
+];
+const KANI_SUPPORTED_SOLVER_KINDS: &[&str] = &[
+    KANI_SOLVER_KIND_CBMC_DEFAULT,
+    KANI_SOLVER_KIND_MINISAT,
+    KANI_SOLVER_KIND_CADICAL,
+    KANI_SOLVER_KIND_KISSAT,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -98,6 +122,30 @@ pub struct ExternalEvidence {
     pub schema: String,
     pub relative_path: String,
     pub digest_blake3: String,
+    pub claim_scope: String,
+    pub non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KaniSolverIdentity {
+    pub kind: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KaniToolchainEvidence {
+    pub schema: String,
+    pub receipt_role: String,
+    pub receipt_relative_path: String,
+    pub receipt_digest_blake3: String,
+    pub kani_version: String,
+    pub rust_toolchain: String,
+    pub cbmc_version: String,
+    pub solver: KaniSolverIdentity,
+    pub invocation_wrapper: String,
+    pub closure_identity_blake3: String,
+    pub expected_closure_identity_blake3: String,
+    pub valence_semantic_role: String,
     pub claim_scope: String,
     pub non_claims: Vec<String>,
 }
@@ -201,6 +249,8 @@ pub struct ReleaseEvidenceManifest {
     pub independent_agreement_report: Option<BundledArtifact>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub external_evidence: Vec<ExternalEvidence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kani_toolchain_evidence: Vec<KaniToolchainEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance_coverage: Option<ProvenanceCoverage>,
@@ -254,6 +304,7 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_manifest_linkage(manifest)?;
     validate_provenance_coverage(manifest)?;
     validate_external_evidence(manifest)?;
+    validate_kani_toolchain_evidence(manifest)?;
     Ok(())
 }
 
@@ -294,6 +345,148 @@ fn validate_external_evidence_entry(evidence: &ExternalEvidence, field_name: &st
                 "release evidence {field_name}.non_claims[{claim_index_u32}] must not be empty"
             )));
         }
+    }
+    Ok(())
+}
+
+fn validate_kani_toolchain_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let mut seen_roles = BTreeSet::new();
+    for (index_usize, evidence) in manifest.kani_toolchain_evidence.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "Kani toolchain evidence index overflowed u32")?;
+        let field_name = format!("kani_toolchain_evidence[{index_u32}]");
+        validate_kani_toolchain_entry(evidence, &field_name)?;
+        if !seen_roles.insert(evidence.receipt_role.clone()) {
+            return Err(validation_error(format!(
+                "release evidence {field_name}.receipt_role duplicates another Kani receipt role"
+            )));
+        }
+        validate_kani_external_evidence_link(evidence, &manifest.external_evidence, &field_name)?;
+    }
+    for external in &manifest.external_evidence {
+        if external.role == KANI_RECEIPT_EVIDENCE_ROLE
+            && !manifest.kani_toolchain_evidence.iter().any(|evidence| evidence.receipt_role == external.role)
+        {
+            return Err(validation_error(
+                "release evidence Kani receipt external evidence requires matching kani_toolchain_evidence".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_kani_toolchain_entry(
+    evidence: &KaniToolchainEvidence,
+    field_name: &str,
+) -> Result<(), ReleaseEvidenceError> {
+    validate_required_literal_string(
+        &evidence.schema,
+        KANI_TOOLCHAIN_EVIDENCE_SCHEMA,
+        &format!("{field_name}.schema"),
+    )?;
+    validate_non_empty_string(&evidence.receipt_role, &format!("{field_name}.receipt_role"))?;
+    validate_relative_member_path(&evidence.receipt_relative_path, &format!("{field_name}.receipt_relative_path"))?;
+    validate_blake3_hex(&evidence.receipt_digest_blake3, &format!("{field_name}.receipt_digest_blake3"))?;
+    validate_non_empty_string(&evidence.kani_version, &format!("{field_name}.kani_version"))?;
+    validate_non_empty_string(&evidence.rust_toolchain, &format!("{field_name}.rust_toolchain"))?;
+    validate_non_empty_string(&evidence.cbmc_version, &format!("{field_name}.cbmc_version"))?;
+    validate_kani_solver_identity(&evidence.solver, &format!("{field_name}.solver"))?;
+    validate_non_empty_string(&evidence.invocation_wrapper, &format!("{field_name}.invocation_wrapper"))?;
+    validate_blake3_hex(&evidence.closure_identity_blake3, &format!("{field_name}.closure_identity_blake3"))?;
+    validate_blake3_hex(
+        &evidence.expected_closure_identity_blake3,
+        &format!("{field_name}.expected_closure_identity_blake3"),
+    )?;
+    if evidence.closure_identity_blake3 != evidence.expected_closure_identity_blake3 {
+        return Err(validation_error(format!(
+            "release evidence {field_name}.closure_identity_blake3 is stale or does not match expected_closure_identity_blake3"
+        )));
+    }
+    validate_required_literal_string(
+        &evidence.valence_semantic_role,
+        KANI_VALENCE_SEMANTIC_ROLE,
+        &format!("{field_name}.valence_semantic_role"),
+    )?;
+    validate_required_literal_string(
+        &evidence.claim_scope,
+        KANI_EVIDENCE_CLAIM_SCOPE,
+        &format!("{field_name}.claim_scope"),
+    )?;
+    validate_kani_non_claims(&evidence.non_claims, &format!("{field_name}.non_claims"))
+}
+
+fn validate_kani_solver_identity(solver: &KaniSolverIdentity, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    validate_non_empty_string(&solver.kind, &format!("{field_name}.kind"))?;
+    validate_non_empty_string(&solver.version, &format!("{field_name}.version"))?;
+    if !KANI_SUPPORTED_SOLVER_KINDS.contains(&solver.kind.as_str()) {
+        return Err(validation_error(format!(
+            "release evidence {field_name}.kind has unsupported Kani solver metadata: {}",
+            solver.kind
+        )));
+    }
+    Ok(())
+}
+
+fn validate_kani_external_evidence_link(
+    evidence: &KaniToolchainEvidence,
+    external_evidence: &[ExternalEvidence],
+    field_name: &str,
+) -> Result<(), ReleaseEvidenceError> {
+    let Some(external) = external_evidence.iter().find(|external| external.role == evidence.receipt_role) else {
+        return Err(validation_error(format!(
+            "release evidence {field_name}.receipt_role does not match a bundled external evidence role"
+        )));
+    };
+    if external.relative_path != evidence.receipt_relative_path {
+        return Err(validation_error(format!(
+            "release evidence {field_name}.receipt_relative_path does not match the Kani external evidence path"
+        )));
+    }
+    if external.digest_blake3 != evidence.receipt_digest_blake3 {
+        return Err(validation_error(format!(
+            "release evidence {field_name}.receipt_digest_blake3 does not match the Kani external evidence digest"
+        )));
+    }
+    if external.claim_scope != KANI_EVIDENCE_CLAIM_SCOPE {
+        return Err(validation_error(format!(
+            "release evidence external evidence for {field_name} must use claim_scope {KANI_EVIDENCE_CLAIM_SCOPE}"
+        )));
+    }
+    validate_kani_non_claims(&external.non_claims, &format!("external evidence for {field_name}.non_claims"))
+}
+
+fn validate_kani_non_claims(non_claims: &[String], field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    if non_claims.is_empty() {
+        return Err(validation_error(format!("release evidence {field_name} must not be empty")));
+    }
+    for required in KANI_REQUIRED_NON_CLAIMS {
+        if !non_claims.iter().any(|non_claim| non_claim == required) {
+            return Err(validation_error(format!(
+                "release evidence {field_name} missing required Kani non-claim {required}"
+            )));
+        }
+    }
+    for (index_usize, non_claim) in non_claims.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "Kani non-claim index overflowed u32")?;
+        validate_non_empty_string(non_claim, &format!("{field_name}[{index_u32}]"))?;
+    }
+    Ok(())
+}
+
+fn validate_non_empty_string(value: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+    if value.trim().is_empty() {
+        return Err(validation_error(format!("release evidence {field_name} must not be empty")));
+    }
+    Ok(())
+}
+
+fn validate_required_literal_string(
+    actual: &str,
+    expected: &str,
+    field_name: &str,
+) -> Result<(), ReleaseEvidenceError> {
+    validate_non_empty_string(actual, field_name)?;
+    if actual != expected {
+        return Err(validation_error(format!("release evidence {field_name} must be {expected}, got {actual}")));
     }
     Ok(())
 }
@@ -1002,6 +1195,44 @@ mod tests {
         }
     }
 
+    fn sample_kani_non_claims() -> Vec<String> {
+        KANI_REQUIRED_NON_CLAIMS.iter().map(ToString::to_string).collect()
+    }
+
+    fn sample_kani_external_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: KANI_RECEIPT_EVIDENCE_ROLE.to_string(),
+            schema: "cairn.kani_receipt.v1".to_string(),
+            relative_path: "external-evidence/01-kani-receipt.json".to_string(),
+            digest_blake3: sample_digest(13),
+            claim_scope: KANI_EVIDENCE_CLAIM_SCOPE.to_string(),
+            non_claims: sample_kani_non_claims(),
+        }
+    }
+
+    fn sample_kani_toolchain_evidence() -> KaniToolchainEvidence {
+        let external = sample_kani_external_evidence();
+        KaniToolchainEvidence {
+            schema: KANI_TOOLCHAIN_EVIDENCE_SCHEMA.to_string(),
+            receipt_role: external.role,
+            receipt_relative_path: external.relative_path,
+            receipt_digest_blake3: external.digest_blake3,
+            kani_version: "kani 0.63.0".to_string(),
+            rust_toolchain: "rustc 1.91.0-nightly".to_string(),
+            cbmc_version: "cbmc 6.4.0".to_string(),
+            solver: KaniSolverIdentity {
+                kind: KANI_SOLVER_KIND_CBMC_DEFAULT.to_string(),
+                version: "cbmc-default".to_string(),
+            },
+            invocation_wrapper: "cargo kani --harness checked_add".to_string(),
+            closure_identity_blake3: sample_digest(14),
+            expected_closure_identity_blake3: sample_digest(14),
+            valence_semantic_role: KANI_VALENCE_SEMANTIC_ROLE.to_string(),
+            claim_scope: KANI_EVIDENCE_CLAIM_SCOPE.to_string(),
+            non_claims: sample_kani_non_claims(),
+        }
+    }
+
     fn sample_manifest() -> ReleaseEvidenceManifest {
         let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 3);
         let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
@@ -1024,6 +1255,7 @@ mod tests {
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
             external_evidence: vec![],
+            kani_toolchain_evidence: vec![],
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
@@ -1511,6 +1743,107 @@ mod tests {
         manifest.external_evidence = vec![sample_external_evidence(), second_evidence];
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
         assert!(err.to_string().contains("duplicates another external evidence role"));
+    }
+
+    #[test]
+    fn validate_accepts_kani_toolchain_evidence_with_matching_receipt() {
+        let mut manifest = sample_manifest();
+        manifest.external_evidence = vec![sample_kani_external_evidence()];
+        manifest.kani_toolchain_evidence = vec![sample_kani_toolchain_evidence()];
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains(KANI_TOOLCHAIN_EVIDENCE_SCHEMA));
+        assert!(text.contains(KANI_VALENCE_SEMANTIC_ROLE));
+    }
+
+    #[test]
+    fn validate_rejects_kani_missing_version() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_kani_toolchain_evidence();
+        evidence.kani_version = String::new();
+        manifest.external_evidence = vec![sample_kani_external_evidence()];
+        manifest.kani_toolchain_evidence = vec![evidence];
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("kani_version"));
+    }
+
+    #[test]
+    fn validate_rejects_kani_stale_closure_identity() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_kani_toolchain_evidence();
+        evidence.expected_closure_identity_blake3 = sample_digest(15);
+        manifest.external_evidence = vec![sample_kani_external_evidence()];
+        manifest.kani_toolchain_evidence = vec![evidence];
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("stale"));
+    }
+
+    #[test]
+    fn validate_rejects_kani_unsupported_solver_metadata() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_kani_toolchain_evidence();
+        evidence.solver.kind = "unsupported-solver".to_string();
+        manifest.external_evidence = vec![sample_kani_external_evidence()];
+        manifest.kani_toolchain_evidence = vec![evidence];
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("unsupported Kani solver"));
+    }
+
+    #[test]
+    fn validate_rejects_kani_receipt_digest_mismatch() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_kani_toolchain_evidence();
+        evidence.receipt_digest_blake3 = sample_digest(15);
+        manifest.external_evidence = vec![sample_kani_external_evidence()];
+        manifest.kani_toolchain_evidence = vec![evidence];
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("receipt_digest_blake3"));
+    }
+
+    #[test]
+    fn validate_rejects_kani_missing_required_non_claim() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_kani_toolchain_evidence();
+        evidence.non_claims.retain(|non_claim| non_claim != KANI_NON_CLAIM_SEMANTICS);
+        manifest.external_evidence = vec![sample_kani_external_evidence()];
+        manifest.kani_toolchain_evidence = vec![evidence];
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains(KANI_NON_CLAIM_SEMANTICS));
+    }
+
+    #[test]
+    fn validate_rejects_kani_semantic_promotion() {
+        let mut manifest = sample_manifest();
+        let mut evidence = sample_kani_toolchain_evidence();
+        evidence.valence_semantic_role = "mantle-proves-kani-semantics".to_string();
+        manifest.external_evidence = vec![sample_kani_external_evidence()];
+        manifest.kani_toolchain_evidence = vec![evidence];
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("valence_semantic_role"));
+    }
+
+    #[test]
+    fn validate_rejects_kani_receipt_without_toolchain_identity() {
+        let mut manifest = sample_manifest();
+        manifest.external_evidence = vec![sample_kani_external_evidence()];
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("requires matching kani_toolchain_evidence"));
     }
 
     #[test]

@@ -1161,6 +1161,12 @@ identity linkage remain owned by the adapter that produced the sidecar. Use
 policy wants to require a role without changing Mantle's default verification
 semantics.
 
+Kani receipts use the same external-evidence boundary plus a dedicated optional
+`--kani-toolchain-evidence` metadata file. Mantle links the bundled
+`kani-model-check-receipt` sidecar to Kani, Rust, CBMC, solver, wrapper, and
+closure identity facts while preserving Valence as the owner of Kani semantics;
+see [`docs/kani-release-evidence.md`](docs/kani-release-evidence.md).
+
 To produce the canonical byte-for-byte reproducibility report, run an explicitly
 supported rebuild recipe into a clean output directory. The current supported
 recipe identity is `mantle-release-reproducibility-v1`; unknown

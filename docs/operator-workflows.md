@@ -536,6 +536,12 @@ The checked-in proof bundle keeps durable copies of stage1 and stage2 under
 `binaries/`, so the packaged release binary can be the proven stage2 output
 rather than a scratch-store path that disappears when the proof exits.
 
+Kani receipts can be bundled with `--external-evidence-role
+kani-model-check-receipt` plus `--kani-toolchain-evidence <json>`. The dedicated
+metadata records Kani, Rust, CBMC, solver, wrapper, closure, and receipt linkage
+identity only; Valence remains responsible for Kani semantic validation. See
+[`docs/kani-release-evidence.md`](kani-release-evidence.md).
+
 When `--provider-fixed-point-proof <dir>` is supplied to release creation, the
 provider proof must validate and its fixed-point stage binary digest must match
 one of those packaged `binaries/` artifacts. Required verification applies the

@@ -1142,6 +1142,10 @@ pub enum ReleaseAction {
         #[arg(long = "external-evidence-non-claim")]
         external_evidence_non_claim: Vec<String>,
 
+        /// Kani toolchain identity metadata JSON linked to a bundled Kani receipt
+        #[arg(long = "kani-toolchain-evidence")]
+        kani_toolchain_evidence: Vec<PathBuf>,
+
         /// Workflow version recorded in the manifest
         #[arg(long, default_value = "mantle-self-hosting-proof-v2")]
         workflow_version: String,
@@ -6046,6 +6050,33 @@ let Plan = {
         assert_eq!(external_evidence_schema, vec!["valence.stack-provenance-adapter.v1".to_string()]);
         assert_eq!(external_evidence_claim_scope, vec!["identity-linkage-sidecar".to_string()]);
         assert_eq!(external_evidence_non_claim, vec!["not semantic validation by Mantle".to_string()]);
+    }
+
+    #[test]
+    fn release_create_accepts_kani_toolchain_evidence_flag() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "create",
+            "--release-id",
+            "mantle-0.1.0-rc1",
+            "--binary",
+            "/tmp/mantle",
+            "--proof-bundle",
+            "/tmp/self-hosting-proof",
+            "--kani-toolchain-evidence",
+            "/tmp/kani-toolchain.json",
+        ]);
+        let Command::Release {
+            action: ReleaseAction::Create {
+                kani_toolchain_evidence,
+                ..
+            },
+        } = args.command
+        else {
+            panic!("expected release create with Kani toolchain evidence");
+        };
+        assert_eq!(kani_toolchain_evidence, vec![PathBuf::from("/tmp/kani-toolchain.json")]);
     }
 
     #[test]

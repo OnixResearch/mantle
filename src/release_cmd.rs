@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crunch_release_core::DeterministicBuildProofReceipt;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
+use crunch_release_core::KaniSolverIdentity;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_release_claim_eligible;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
@@ -18,6 +19,7 @@ use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_COMMAND;
 use crate::release_evidence::DEFAULT_PROOF_WORKFLOW_VERSION;
 use crate::release_evidence::ExternalEvidenceCreateRequest;
 use crate::release_evidence::GitSourceCreateRequest;
+use crate::release_evidence::KaniToolchainEvidenceCreateRequest;
 use crate::release_evidence::ReleaseBundleCreateRequest;
 use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
@@ -76,6 +78,7 @@ pub(crate) fn cmd_release(
             external_evidence_schema,
             external_evidence_claim_scope,
             external_evidence_non_claim,
+            kani_toolchain_evidence,
             workflow_command,
             workflow_version,
         } => cmd_release_create(
@@ -97,6 +100,7 @@ pub(crate) fn cmd_release(
             external_evidence_schema,
             external_evidence_claim_scope,
             external_evidence_non_claim,
+            kani_toolchain_evidence,
             workflow_command,
             workflow_version,
         ),
@@ -258,6 +262,7 @@ fn cmd_release_create(
     external_evidence_schema: Vec<String>,
     external_evidence_claim_scope: Vec<String>,
     external_evidence_non_claim: Vec<String>,
+    kani_toolchain_evidence: Vec<PathBuf>,
     workflow_command: String,
     workflow_version: String,
 ) -> Result<(), RunError> {
@@ -273,6 +278,7 @@ fn cmd_release_create(
         external_evidence_claim_scope,
         external_evidence_non_claim,
     )?;
+    let kani_toolchain_evidence = release_create_kani_toolchain_evidence(current_dir, kani_toolchain_evidence)?;
     if source_acquisition_url.is_some() && git_source.is_some() {
         return Err(RunError::Internal(
             "release create Git source flags conflict with --source-acquisition-url".to_string(),
@@ -294,6 +300,7 @@ fn cmd_release_create(
         source_acquisition_url,
         git_source,
         external_evidence,
+        kani_toolchain_evidence,
     };
     let manifest = create_release_evidence_bundle(&request)?;
     if json {
@@ -314,6 +321,9 @@ fn cmd_release_create(
         }
         if !manifest.external_evidence.is_empty() {
             println!("external evidence: {}", manifest.external_evidence.len());
+        }
+        if !manifest.kani_toolchain_evidence.is_empty() {
+            println!("Kani toolchain evidence: {}", manifest.kani_toolchain_evidence.len());
         }
         if let Some(source_acquisition) = &manifest.source_acquisition {
             println!("source acquisition: {} ({})", source_acquisition.url, source_acquisition.kind);
@@ -389,6 +399,45 @@ fn release_create_external_evidence(
             non_claims: non_claims.clone(),
         })
         .collect())
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct KaniToolchainEvidenceFile {
+    receipt_role: String,
+    kani_version: String,
+    rust_toolchain: String,
+    cbmc_version: String,
+    solver: KaniSolverIdentity,
+    invocation_wrapper: String,
+    closure_identity_blake3: String,
+    expected_closure_identity_blake3: String,
+    non_claims: Vec<String>,
+}
+
+fn release_create_kani_toolchain_evidence(
+    current_dir: &Path,
+    paths: Vec<PathBuf>,
+) -> Result<Vec<KaniToolchainEvidenceCreateRequest>, RunError> {
+    let mut records = Vec::with_capacity(paths.len());
+    for path in paths {
+        let resolved = resolve_input_path(current_dir, path);
+        let bytes = std::fs::read(&resolved)
+            .map_err(|error| RunError::Internal(format!("reading {}: {error}", resolved.display())))?;
+        let file: KaniToolchainEvidenceFile = serde_json::from_slice(&bytes)
+            .map_err(|error| RunError::Internal(format!("parsing {}: {error}", resolved.display())))?;
+        records.push(KaniToolchainEvidenceCreateRequest {
+            receipt_role: file.receipt_role,
+            kani_version: file.kani_version,
+            rust_toolchain: file.rust_toolchain,
+            cbmc_version: file.cbmc_version,
+            solver: file.solver,
+            invocation_wrapper: file.invocation_wrapper,
+            closure_identity_blake3: file.closure_identity_blake3,
+            expected_closure_identity_blake3: file.expected_closure_identity_blake3,
+            non_claims: file.non_claims,
+        });
+    }
+    Ok(records)
 }
 
 fn validate_external_evidence_metadata_count(
@@ -1654,6 +1703,7 @@ mod tests {
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
             external_evidence: vec![],
+            kani_toolchain_evidence: vec![],
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
                 source_archive_digest_blake3: "a".repeat(64),
@@ -1733,6 +1783,7 @@ mod tests {
             deterministic_sandbox_isolation_evidence: None,
             independent_agreement_report: None,
             external_evidence: vec![],
+            kani_toolchain_evidence: vec![],
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
                 source_archive_digest_blake3: "a".repeat(64),
