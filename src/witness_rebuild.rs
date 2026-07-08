@@ -2620,6 +2620,7 @@ mod tests {
             independent_agreement_report: None,
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
+            stack_provenance: None,
             proof_linkage: crate::release_evidence::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
                 source_archive_digest_blake3: digest.clone(),

@@ -40,7 +40,14 @@ pub(crate) use crunch_release_core::ReleaseWorkflowIdentity;
 use crunch_release_core::RoleBoundedReleaseArtifact;
 pub(crate) use crunch_release_core::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE;
 pub(crate) use crunch_release_core::SOURCE_ACQUISITION_KIND_GIT;
+use crunch_release_core::STACK_PROVENANCE_CLAIM_SCOPE;
+use crunch_release_core::STACK_PROVENANCE_EVIDENCE_ROLE;
+use crunch_release_core::STACK_PROVENANCE_GRAPH_REPORT_SCHEMA;
+use crunch_release_core::STACK_PROVENANCE_OPAQUE_BOUNDARY;
+use crunch_release_core::STACK_PROVENANCE_SIDECAR_SCHEMA;
 pub(crate) use crunch_release_core::SourceAcquisition;
+use crunch_release_core::StackProvenanceReleaseEvidence;
+use crunch_release_core::VALENCE_STACK_PROVENANCE_RECEIPT_ROLE;
 use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
@@ -96,6 +103,15 @@ pub(crate) struct KaniToolchainEvidenceCreateRequest {
     pub non_claims: Vec<String>,
 }
 
+// r[impl mantle.release_provenance.valence_receipt_binding]
+// r[impl mantle.release_provenance.opaque_boundary]
+#[derive(Debug, Clone)]
+pub(crate) struct StackProvenanceCreateRequest {
+    pub sidecar_path: PathBuf,
+    pub valence_receipt_path: PathBuf,
+    pub binary_path: Option<PathBuf>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ReleaseBundleCreateRequest {
     pub release_id: String,
@@ -111,6 +127,7 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub git_source: Option<GitSourceCreateRequest>,
     pub external_evidence: Vec<ExternalEvidenceCreateRequest>,
     pub kani_toolchain_evidence: Vec<KaniToolchainEvidenceCreateRequest>,
+    pub stack_provenance: Option<StackProvenanceCreateRequest>,
 }
 
 impl ReleaseBundleCreateRequest {
@@ -136,6 +153,7 @@ impl ReleaseBundleCreateRequest {
             git_source: None,
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
+            stack_provenance: None,
         }
     }
 }
@@ -166,7 +184,8 @@ pub(crate) fn create_release_evidence_bundle(
     let provider_fixed_point_proof = copy_optional_provider_fixed_point_proof(request)?;
     let reproducibility_report =
         copy_optional_reproducibility_report(request, &source_archive, &binaries, &proof_bundle)?;
-    let external_evidence = copy_external_evidence(request)?;
+    let mut external_evidence = copy_external_evidence(request)?;
+    let stack_provenance = copy_optional_stack_provenance_evidence(request, &mut external_evidence, &binaries)?;
     let kani_toolchain_evidence = build_kani_toolchain_evidence(request, &external_evidence)?;
     let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
     let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
@@ -191,6 +210,7 @@ pub(crate) fn create_release_evidence_bundle(
         independent_agreement_report: None,
         external_evidence,
         kani_toolchain_evidence,
+        stack_provenance,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
             source_archive_digest_blake3,
@@ -317,6 +337,33 @@ fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), R
     }
     for evidence in &request.kani_toolchain_evidence {
         validate_kani_toolchain_evidence_request(evidence)?;
+    }
+    if let Some(stack_provenance) = &request.stack_provenance {
+        validate_stack_provenance_create_request(stack_provenance)?;
+    }
+    Ok(())
+}
+
+fn validate_stack_provenance_create_request(request: &StackProvenanceCreateRequest) -> Result<(), RunError> {
+    if !request.sidecar_path.is_file() {
+        return Err(RunError::Internal(format!(
+            "release evidence stack provenance sidecar is missing: {}",
+            request.sidecar_path.display()
+        )));
+    }
+    if !request.valence_receipt_path.is_file() {
+        return Err(RunError::Internal(format!(
+            "release evidence Valence stack provenance receipt is missing: {}",
+            request.valence_receipt_path.display()
+        )));
+    }
+    if let Some(binary_path) = &request.binary_path {
+        if !binary_path.is_file() {
+            return Err(RunError::Internal(format!(
+                "release evidence stack provenance binary is missing: {}",
+                binary_path.display()
+            )));
+        }
     }
     Ok(())
 }
@@ -528,22 +575,111 @@ fn copy_optional_reproducibility_report(
 
 fn copy_external_evidence(request: &ReleaseBundleCreateRequest) -> Result<Vec<ExternalEvidence>, RunError> {
     let mut records = Vec::with_capacity(request.external_evidence.len());
-    for (index_usize, evidence) in request.external_evidence.iter().enumerate() {
-        let index_u32: u32 = index_usize
-            .try_into()
-            .map_err(|_| RunError::Internal("release evidence external evidence index overflowed u32".to_string()))?;
-        let relative = bundle_file_destination("external-evidence", &evidence.path, index_u32.saturating_add(1))?;
-        let artifact = copy_file_into_bundle(&evidence.path, &request.bundle_dir, &relative)?;
-        records.push(ExternalEvidence {
-            role: evidence.role.clone(),
-            schema: evidence.schema.clone(),
-            relative_path: artifact.relative_path,
-            digest_blake3: artifact.digest_blake3,
-            claim_scope: evidence.claim_scope.clone(),
-            non_claims: evidence.non_claims.clone(),
-        });
+    for evidence in &request.external_evidence {
+        let next_index = next_external_evidence_index(records.len())?;
+        records.push(copy_external_evidence_record(request, evidence, next_index)?);
     }
     Ok(records)
+}
+
+fn next_external_evidence_index(existing_count: usize) -> Result<u32, RunError> {
+    let index: u32 = existing_count
+        .try_into()
+        .map_err(|_| RunError::Internal("release evidence external evidence index overflowed u32".to_string()))?;
+    Ok(index.saturating_add(1))
+}
+
+fn copy_external_evidence_record(
+    request: &ReleaseBundleCreateRequest,
+    evidence: &ExternalEvidenceCreateRequest,
+    index: u32,
+) -> Result<ExternalEvidence, RunError> {
+    let relative = bundle_file_destination("external-evidence", &evidence.path, index)?;
+    let artifact = copy_file_into_bundle(&evidence.path, &request.bundle_dir, &relative)?;
+    Ok(ExternalEvidence {
+        role: evidence.role.clone(),
+        schema: evidence.schema.clone(),
+        relative_path: artifact.relative_path,
+        digest_blake3: artifact.digest_blake3,
+        claim_scope: evidence.claim_scope.clone(),
+        non_claims: evidence.non_claims.clone(),
+    })
+}
+
+// r[impl mantle.release_provenance.valence_receipt_binding.sidecar_digest]
+// r[impl mantle.release_provenance.valence_receipt_binding.valence_receipt]
+// r[impl mantle.release_provenance.valence_receipt_binding.binary_identity]
+// r[impl mantle.release_provenance.valence_receipt_binding.stale]
+fn copy_optional_stack_provenance_evidence(
+    request: &ReleaseBundleCreateRequest,
+    external_evidence: &mut Vec<ExternalEvidence>,
+    binaries: &[BundledArtifact],
+) -> Result<Option<StackProvenanceReleaseEvidence>, RunError> {
+    let Some(stack_request) = &request.stack_provenance else {
+        return Ok(None);
+    };
+    let sidecar = ExternalEvidenceCreateRequest {
+        path: stack_request.sidecar_path.clone(),
+        role: STACK_PROVENANCE_EVIDENCE_ROLE.to_string(),
+        schema: STACK_PROVENANCE_SIDECAR_SCHEMA.to_string(),
+        claim_scope: STACK_PROVENANCE_CLAIM_SCOPE.to_string(),
+        non_claims: vec![STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string()],
+    };
+    let valence_receipt = ExternalEvidenceCreateRequest {
+        path: stack_request.valence_receipt_path.clone(),
+        role: VALENCE_STACK_PROVENANCE_RECEIPT_ROLE.to_string(),
+        schema: STACK_PROVENANCE_GRAPH_REPORT_SCHEMA.to_string(),
+        claim_scope: STACK_PROVENANCE_CLAIM_SCOPE.to_string(),
+        non_claims: vec![STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string()],
+    };
+    let sidecar_artifact =
+        copy_external_evidence_record(request, &sidecar, next_external_evidence_index(external_evidence.len())?)?;
+    external_evidence.push(sidecar_artifact.clone());
+    let receipt_artifact = copy_external_evidence_record(
+        request,
+        &valence_receipt,
+        next_external_evidence_index(external_evidence.len())?,
+    )?;
+    external_evidence.push(receipt_artifact.clone());
+    let binary_artifact = select_stack_provenance_binary_artifact(request, binaries)?;
+    Ok(Some(StackProvenanceReleaseEvidence {
+        sidecar_role: sidecar_artifact.role,
+        sidecar_schema: sidecar_artifact.schema,
+        sidecar_claim_scope: sidecar_artifact.claim_scope,
+        sidecar_relative_path: sidecar_artifact.relative_path,
+        sidecar_digest_blake3: sidecar_artifact.digest_blake3,
+        valence_receipt_role: receipt_artifact.role,
+        valence_receipt_schema: receipt_artifact.schema,
+        valence_receipt_relative_path: receipt_artifact.relative_path,
+        valence_receipt_digest_blake3: receipt_artifact.digest_blake3,
+        release_binary_relative_path: binary_artifact.relative_path.clone(),
+        release_binary_digest_blake3: binary_artifact.digest_blake3.clone(),
+        non_claims: vec![STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string()],
+    }))
+}
+
+fn select_stack_provenance_binary_artifact<'a>(
+    request: &ReleaseBundleCreateRequest,
+    binaries: &'a [BundledArtifact],
+) -> Result<&'a BundledArtifact, RunError> {
+    if let Some(binary_path) = request.stack_provenance.as_ref().and_then(|request| request.binary_path.as_ref()) {
+        let Some(binary_index) = request.binary_paths.iter().position(|path| path == binary_path) else {
+            return Err(RunError::Internal(
+                "release evidence stack provenance binary must match one --binary input".to_string(),
+            ));
+        };
+        return binaries.get(binary_index).ok_or_else(|| {
+            RunError::Internal(
+                "release evidence stack provenance binary index did not match copied binaries".to_string(),
+            )
+        });
+    }
+    if binaries.len() == 1 {
+        return Ok(&binaries[0]);
+    }
+    Err(RunError::Internal(
+        "release evidence stack provenance binary must be selected when multiple binaries are bundled".to_string(),
+    ))
 }
 
 fn build_kani_toolchain_evidence(
@@ -1084,6 +1220,7 @@ mod tests {
             independent_agreement_report: None,
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
+            stack_provenance: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
@@ -1413,6 +1550,93 @@ mod tests {
         assert_eq!(evidence.schema, "valence.stack-provenance-adapter.v1");
         assert_eq!(evidence.claim_scope, "identity-linkage-sidecar");
         assert!(output_bundle_dir.join(&evidence.relative_path).is_file());
+    }
+
+    #[test]
+    fn create_and_verify_release_bundle_records_stack_provenance_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let stack_sidecar_path = temp.path().join("stack-provenance-sidecar.json");
+        let valence_receipt_path = temp.path().join("valence-stack-provenance-graph-report.json");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        write_file(&stack_sidecar_path, br#"{"schema":"valence.stack-provenance-sidecar.v1"}"#);
+        write_file(&valence_receipt_path, br#"{"schema":"valence.stack-provenance-graph-report.v1","valid":true}"#);
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.stack_provenance = Some(StackProvenanceCreateRequest {
+            sidecar_path: stack_sidecar_path,
+            valence_receipt_path,
+            binary_path: None,
+        });
+
+        let created = create_release_evidence_bundle(&request).unwrap();
+        let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
+        let stack_provenance = created.stack_provenance.as_ref().expect("stack provenance recorded");
+        let policy_result = crunch_release_core::evaluate_stack_provenance_release_evidence(
+            &created,
+            crunch_release_core::STACK_PROVENANCE_MODE_REQUIRED,
+        );
+
+        assert_eq!(created, verified);
+        assert!(policy_result.valid);
+        assert_eq!(stack_provenance.sidecar_role, STACK_PROVENANCE_EVIDENCE_ROLE);
+        assert_eq!(stack_provenance.valence_receipt_role, VALENCE_STACK_PROVENANCE_RECEIPT_ROLE);
+        assert_eq!(stack_provenance.sidecar_claim_scope, STACK_PROVENANCE_CLAIM_SCOPE);
+        assert!(stack_provenance.non_claims.contains(&STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string()));
+        assert!(output_bundle_dir.join(&stack_provenance.sidecar_relative_path).is_file());
+        assert!(output_bundle_dir.join(&stack_provenance.valence_receipt_relative_path).is_file());
+    }
+
+    #[test]
+    fn create_release_bundle_rejects_stack_provenance_without_binary_selection_for_multiple_binaries() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let other_binary_path = temp.path().join("mantle-helper");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let stack_sidecar_path = temp.path().join("stack-provenance-sidecar.json");
+        let valence_receipt_path = temp.path().join("valence-stack-provenance-graph-report.json");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        write_file(&other_binary_path, b"mantle-helper-binary");
+        write_file(&stack_sidecar_path, br#"{"schema":"valence.stack-provenance-sidecar.v1"}"#);
+        write_file(&valence_receipt_path, br#"{"schema":"valence.stack-provenance-graph-report.v1","valid":true}"#);
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-0.1.0-rc1".to_string(),
+            output_bundle_dir,
+            source_archive,
+            vec![binary_path, other_binary_path],
+            proof_bundle_dir,
+        );
+        request.stack_provenance = Some(StackProvenanceCreateRequest {
+            sidecar_path: stack_sidecar_path,
+            valence_receipt_path,
+            binary_path: None,
+        });
+
+        let err = create_release_evidence_bundle(&request).unwrap_err();
+
+        assert!(err.to_string().contains("must be selected when multiple binaries"));
     }
 
     #[test]

@@ -21,6 +21,7 @@ use crate::release_evidence::ExternalEvidenceCreateRequest;
 use crate::release_evidence::GitSourceCreateRequest;
 use crate::release_evidence::KaniToolchainEvidenceCreateRequest;
 use crate::release_evidence::ReleaseBundleCreateRequest;
+use crate::release_evidence::StackProvenanceCreateRequest;
 use crate::release_evidence::create_release_evidence_bundle;
 use crate::release_evidence::verify_release_evidence_bundle;
 use crate::release_nix_witness::ReleaseNixWitnessRequest;
@@ -79,6 +80,9 @@ pub(crate) fn cmd_release(
             external_evidence_claim_scope,
             external_evidence_non_claim,
             kani_toolchain_evidence,
+            stack_provenance_sidecar,
+            stack_provenance_valence_receipt,
+            stack_provenance_binary,
             workflow_command,
             workflow_version,
         } => cmd_release_create(
@@ -101,6 +105,9 @@ pub(crate) fn cmd_release(
             external_evidence_claim_scope,
             external_evidence_non_claim,
             kani_toolchain_evidence,
+            stack_provenance_sidecar,
+            stack_provenance_valence_receipt,
+            stack_provenance_binary,
             workflow_command,
             workflow_version,
         ),
@@ -114,6 +121,7 @@ pub(crate) fn cmd_release(
             provider_fixed_point_proof,
             require_external_evidence_role,
             require_provider_fixed_point_proof,
+            stack_provenance,
         } => cmd_release_verify(
             current_dir,
             json,
@@ -126,6 +134,7 @@ pub(crate) fn cmd_release(
             provider_fixed_point_proof,
             require_external_evidence_role,
             require_provider_fixed_point_proof,
+            stack_provenance,
         ),
         crate::ReleaseAction::Reproduce {
             bundle_dir,
@@ -263,6 +272,9 @@ fn cmd_release_create(
     external_evidence_claim_scope: Vec<String>,
     external_evidence_non_claim: Vec<String>,
     kani_toolchain_evidence: Vec<PathBuf>,
+    stack_provenance_sidecar: Option<PathBuf>,
+    stack_provenance_valence_receipt: Option<PathBuf>,
+    stack_provenance_binary: Option<PathBuf>,
     workflow_command: String,
     workflow_version: String,
 ) -> Result<(), RunError> {
@@ -279,6 +291,12 @@ fn cmd_release_create(
         external_evidence_non_claim,
     )?;
     let kani_toolchain_evidence = release_create_kani_toolchain_evidence(current_dir, kani_toolchain_evidence)?;
+    let stack_provenance = release_create_stack_provenance(
+        current_dir,
+        stack_provenance_sidecar,
+        stack_provenance_valence_receipt,
+        stack_provenance_binary,
+    )?;
     if source_acquisition_url.is_some() && git_source.is_some() {
         return Err(RunError::Internal(
             "release create Git source flags conflict with --source-acquisition-url".to_string(),
@@ -301,6 +319,7 @@ fn cmd_release_create(
         git_source,
         external_evidence,
         kani_toolchain_evidence,
+        stack_provenance,
     };
     let manifest = create_release_evidence_bundle(&request)?;
     if json {
@@ -414,6 +433,28 @@ struct KaniToolchainEvidenceFile {
     non_claims: Vec<String>,
 }
 
+fn release_create_stack_provenance(
+    current_dir: &Path,
+    sidecar_path: Option<PathBuf>,
+    valence_receipt_path: Option<PathBuf>,
+    binary_path: Option<PathBuf>,
+) -> Result<Option<StackProvenanceCreateRequest>, RunError> {
+    match (sidecar_path, valence_receipt_path) {
+        (None, None) => Ok(None),
+        (Some(sidecar_path), Some(valence_receipt_path)) => Ok(Some(StackProvenanceCreateRequest {
+            sidecar_path: resolve_input_path(current_dir, sidecar_path),
+            valence_receipt_path: resolve_input_path(current_dir, valence_receipt_path),
+            binary_path: binary_path.map(|path| resolve_input_path(current_dir, path)),
+        })),
+        (Some(_), None) => Err(RunError::Internal(
+            "release create --stack-provenance-sidecar requires --stack-provenance-valence-receipt".to_string(),
+        )),
+        (None, Some(_)) => Err(RunError::Internal(
+            "release create --stack-provenance-valence-receipt requires --stack-provenance-sidecar".to_string(),
+        )),
+    }
+}
+
 fn release_create_kani_toolchain_evidence(
     current_dir: &Path,
     paths: Vec<PathBuf>,
@@ -465,6 +506,7 @@ fn cmd_release_verify(
     provider_fixed_point_proof: Option<PathBuf>,
     require_external_evidence_role: Vec<String>,
     require_provider_fixed_point_proof: bool,
+    stack_provenance_mode: String,
 ) -> Result<(), RunError> {
     let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
     let deterministic_request = DeterministicVerifyRequest::new(
@@ -485,6 +527,12 @@ fn cmd_release_verify(
     let reproducibility_status = reproducibility_status(reproducibility.as_ref());
     let deterministic_result =
         evaluate_deterministic_release_claim(&manifest, &resolved_bundle_dir, deterministic_request)?;
+    // r[impl mantle.release_provenance.valence_required_policy]
+    // r[impl mantle.release_provenance.valence_required_policy.optional_absent]
+    // r[impl mantle.release_provenance.valence_required_policy.required_valid]
+    // r[impl mantle.release_provenance.valence_required_policy.required_missing]
+    let stack_provenance_result =
+        crunch_release_core::evaluate_stack_provenance_release_evidence(&manifest, &stack_provenance_mode);
 
     let stagex_result = if require_stagex_no_quorum {
         Some(evaluate_stagex_profile(&manifest, &resolved_bundle_dir, reproducibility.as_ref()))
@@ -500,6 +548,7 @@ fn cmd_release_verify(
             stagex_result.as_ref(),
             &deterministic_result,
             &provider_fixed_point_result,
+            &stack_provenance_result,
         )?;
     } else {
         println!("release evidence verified: {}", resolved_bundle_dir.display());
@@ -514,6 +563,7 @@ fn cmd_release_verify(
         print_reproducibility_summary(reproducibility.as_ref());
         print_deterministic_release_summary(&deterministic_result);
         print_provider_fixed_point_summary(&provider_fixed_point_result);
+        print_stack_provenance_summary(&stack_provenance_result);
         print_global_reproducibility_not_evaluated_summary();
         if let Some(ref result) = stagex_result {
             println!("stagex no-quorum profile: {}", result.status);
@@ -542,6 +592,13 @@ fn cmd_release_verify(
             "provider fixed-point proof required but status is {}: {}",
             provider_fixed_point_result.status,
             provider_fixed_point_result.blockers.join("; ")
+        )));
+    }
+    if !stack_provenance_result.valid {
+        return Err(RunError::Internal(format!(
+            "stack provenance evidence status is {}: {}",
+            stack_provenance_result.disposition,
+            stack_provenance_result.diagnostics.join("; ")
         )));
     }
     require_external_evidence_roles(&manifest, &require_external_evidence_role)?;
@@ -861,6 +918,7 @@ fn print_release_verify_json(
     stagex_result: Option<&crunch_bootstrap_core::StagexNoQuorumResult>,
     deterministic_result: &DeterministicReleaseVerifyResult,
     provider_fixed_point_result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+    stack_provenance_result: &crunch_release_core::StackProvenanceReleaseVerification,
 ) -> Result<(), RunError> {
     let report_json = reproducibility.map(|report| {
         serde_json::json!({
@@ -889,6 +947,7 @@ fn print_release_verify_json(
         "reproducibility_report": report_json,
         "deterministic_release": deterministic_json,
         "provider_fixed_point_proof": provider_fixed_point_result,
+        "stack_provenance": stack_provenance_result,
         "global_reproducibility": global_reproducibility_not_evaluated_json(),
     });
     if let Some(result) = stagex_result {
@@ -944,6 +1003,25 @@ fn print_provider_fixed_point_summary(result: &crate::cargo_free_self_build::Pro
     }
     for blocker in &result.blockers {
         println!("  provider fixed-point blocker: {blocker}");
+    }
+}
+
+// r[impl mantle.release_provenance.opaque_boundary.visible]
+fn print_stack_provenance_summary(result: &crunch_release_core::StackProvenanceReleaseVerification) {
+    println!("stack provenance: {}", result.disposition);
+    println!("stack provenance mode: {}", result.mode);
+    if let Some(digest) = &result.sidecar_digest_blake3 {
+        println!("stack provenance sidecar digest: {digest}");
+    }
+    if let Some(digest) = &result.valence_receipt_digest_blake3 {
+        println!("stack provenance Valence receipt digest: {digest}");
+    }
+    if let Some(path) = &result.release_binary_relative_path {
+        println!("stack provenance release binary: {path}");
+    }
+    println!("stack provenance boundary: {}", result.boundary);
+    for diagnostic in &result.diagnostics {
+        println!("  stack provenance diagnostic: {diagnostic}");
     }
 }
 
@@ -1704,6 +1782,7 @@ mod tests {
             independent_agreement_report: None,
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
+            stack_provenance: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
                 source_archive_digest_blake3: "a".repeat(64),
@@ -1784,6 +1863,7 @@ mod tests {
             independent_agreement_report: None,
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
+            stack_provenance: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
                 source_archive_digest_blake3: "a".repeat(64),

@@ -480,6 +480,79 @@ fn release_create_and_verify_external_evidence_sidecar() {
         .stderr(predicate::str::contains("external evidence role required but missing"));
 }
 
+// r[verify mantle.release_provenance.valence_receipt_binding]
+// r[verify mantle.release_provenance.valence_required_policy.required_valid]
+#[test]
+fn release_create_and_verify_stack_provenance_sidecar() {
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    write_file(&binary_path, b"crunch-binary");
+    let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+    let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+    let proof_dir = temp.path().join("proof-input");
+    write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    let sidecar_path = temp.path().join("stack-provenance-sidecar.json");
+    let receipt_path = temp.path().join("valence-stack-provenance-graph-report.json");
+    write_file(&sidecar_path, br#"{"schema":"valence.stack-provenance-sidecar.v1"}"#);
+    write_file(&receipt_path, br#"{"schema":"valence.stack-provenance-graph-report.v1","valid":true}"#);
+    let bundle_dir = temp.path().join("bundle-stack-provenance");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-0.1.0-rc1")
+        .arg("--bundle-dir")
+        .arg(&bundle_dir)
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .arg("--stack-provenance-sidecar")
+        .arg(&sidecar_path)
+        .arg("--stack-provenance-valence-receipt")
+        .arg(&receipt_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("external evidence: 2"));
+
+    let manifest_json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
+    assert_eq!(manifest_json["stack_provenance"]["sidecar_role"], "stack-provenance-trace");
+    assert_eq!(manifest_json["stack_provenance"]["valence_receipt_role"], "valence-stack-provenance-graph-report");
+    assert_eq!(manifest_json["stack_provenance"]["sidecar_claim_scope"], "identity-linkage-sidecar");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--stack-provenance")
+        .arg("required")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("stack provenance: present"))
+        .stdout(predicate::str::contains("stack provenance mode: required"));
+}
+
+// r[verify mantle.release_provenance.valence_required_policy.required_missing]
+#[test]
+fn release_verify_required_stack_provenance_fails_when_missing() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--stack-provenance")
+        .arg("required")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("required Valence stack provenance sidecar or receipt is missing"));
+}
+
 #[test]
 fn release_create_records_git_source_metadata() {
     let temp = tempfile::tempdir().unwrap();

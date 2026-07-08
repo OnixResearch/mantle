@@ -1,0 +1,65 @@
+[
+  {
+    "id": "null_value",
+    "description": "JSON null primitive",
+    "value": null,
+    "expected_hash": "4111d2d01cd6f342ffbf86955fa72cd2af2e4cbb38d4db96bb3c28f77eb9661a"
+  },
+  {
+    "id": "boolean_true",
+    "description": "JSON boolean primitive",
+    "value": true,
+    "expected_hash": "51d26a6b9bfaec0d66accd6f887d2dd4933b4f0a8f5a2bbba55ea4d60949be22"
+  },
+  {
+    "id": "integer_negative",
+    "description": "Negative integer value",
+    "value": -42,
+    "expected_hash": "61fd56f1d22671940dae7a8b57e96391d37aa285187458fbf5d71cdee7bfd55b"
+  },
+  {
+    "id": "unicode_string",
+    "description": "Unicode string value",
+    "value": "receipt ✓ snowman ☃",
+    "expected_hash": "6bf55357041d180a6326f2895e991ceb5ca91b3118dc06109bde6a7aebc91bee"
+  },
+  {
+    "id": "mixed_array",
+    "description": "Mixed primitive array value",
+    "value": [null, true, false, 7, "seven"],
+    "expected_hash": "d29fbb50c5472eb871f51526ab2a47194bda91bf2c127c0a6727009ed47095fa"
+  },
+  {
+    "id": "nested_object",
+    "description": "Nested object with sorted-key-sensitive material",
+    "value": {
+      "outer": {
+        "b": [2, 1],
+        "a": {
+          "ok": true
+        }
+      },
+      "kind": "nested"
+    },
+    "expected_hash": "e550da7855598efa07131555acb8f6078421352532afa14429cc4f60176bcc2e"
+  },
+  {
+    "id": "receipt_shaped",
+    "description": "Receipt-shaped deterministic evidence payload",
+    "value": {
+      "schema": "cairn.preserves.fixture.v1",
+      "valid": true,
+      "artifacts": [
+        {
+          "role": "receipt",
+          "hash": "abc123"
+        }
+      ],
+      "metadata": {
+        "tool": "cairn",
+        "version": 1
+      }
+    },
+    "expected_hash": "93d7a006075d01a6b059508ef97585ea7db1dae6619a6e150d985a73b730dccb"
+  }
+]

@@ -31,6 +31,17 @@ pub const KANI_SOLVER_KIND_CBMC_DEFAULT: &str = "cbmc-default";
 pub const KANI_SOLVER_KIND_MINISAT: &str = "minisat";
 pub const KANI_SOLVER_KIND_CADICAL: &str = "cadical";
 pub const KANI_SOLVER_KIND_KISSAT: &str = "kissat";
+pub const STACK_PROVENANCE_EVIDENCE_ROLE: &str = "stack-provenance-trace";
+pub const STACK_PROVENANCE_SIDECAR_SCHEMA: &str = "valence.stack-provenance-sidecar.v1";
+pub const STACK_PROVENANCE_GRAPH_REPORT_SCHEMA: &str = "valence.stack-provenance-graph-report.v1";
+pub const VALENCE_STACK_PROVENANCE_RECEIPT_ROLE: &str = "valence-stack-provenance-graph-report";
+pub const STACK_PROVENANCE_CLAIM_SCOPE: &str = "identity-linkage-sidecar";
+pub const STACK_PROVENANCE_MODE_OPTIONAL: &str = "optional";
+pub const STACK_PROVENANCE_MODE_REQUIRED: &str = "required";
+pub const STACK_PROVENANCE_DISPOSITION_ABSENT: &str = "absent";
+pub const STACK_PROVENANCE_DISPOSITION_PRESENT: &str = "present";
+pub const STACK_PROVENANCE_DISPOSITION_INVALID: &str = "invalid";
+pub const STACK_PROVENANCE_OPAQUE_BOUNDARY: &str = "Mantle validates bundle-local stack provenance path, digest, role, schema, claim scope, binary identity, and non-claims only; Valence owns stack semantics";
 pub const SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE: &str = "external-archive";
 pub const SOURCE_ACQUISITION_KIND_GIT: &str = "git";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
@@ -52,6 +63,16 @@ const KANI_SUPPORTED_SOLVER_KINDS: &[&str] = &[
     KANI_SOLVER_KIND_MINISAT,
     KANI_SOLVER_KIND_CADICAL,
     KANI_SOLVER_KIND_KISSAT,
+];
+const STACK_PROVENANCE_OVERCLAIM_FRAGMENTS: &[&str] = &[
+    "mantle semantically verified",
+    "mantle verifies octet",
+    "mantle verifies trellis",
+    "mantle verifies valence stack semantics",
+    "mantle verifies cairn lifecycle semantics",
+    "proves source-code correctness",
+    "proves release eligibility",
+    "proves verifier soundness",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,6 +169,41 @@ pub struct KaniToolchainEvidence {
     pub valence_semantic_role: String,
     pub claim_scope: String,
     pub non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StackProvenanceReleaseEvidence {
+    pub sidecar_role: String,
+    pub sidecar_schema: String,
+    pub sidecar_claim_scope: String,
+    pub sidecar_relative_path: String,
+    pub sidecar_digest_blake3: String,
+    pub valence_receipt_role: String,
+    pub valence_receipt_schema: String,
+    pub valence_receipt_relative_path: String,
+    pub valence_receipt_digest_blake3: String,
+    pub release_binary_relative_path: String,
+    pub release_binary_digest_blake3: String,
+    pub non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StackProvenanceReleaseVerification {
+    pub mode: String,
+    pub required: bool,
+    pub valid: bool,
+    pub disposition: String,
+    pub sidecar_role: Option<String>,
+    pub sidecar_schema: Option<String>,
+    pub sidecar_claim_scope: Option<String>,
+    pub sidecar_digest_blake3: Option<String>,
+    pub valence_receipt_role: Option<String>,
+    pub valence_receipt_schema: Option<String>,
+    pub valence_receipt_digest_blake3: Option<String>,
+    pub release_binary_relative_path: Option<String>,
+    pub release_binary_digest_blake3: Option<String>,
+    pub boundary: String,
+    pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -251,6 +307,8 @@ pub struct ReleaseEvidenceManifest {
     pub external_evidence: Vec<ExternalEvidence>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub kani_toolchain_evidence: Vec<KaniToolchainEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stack_provenance: Option<StackProvenanceReleaseEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance_coverage: Option<ProvenanceCoverage>,
@@ -305,7 +363,257 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_provenance_coverage(manifest)?;
     validate_external_evidence(manifest)?;
     validate_kani_toolchain_evidence(manifest)?;
+    validate_stack_provenance_manifest_evidence(manifest)?;
     Ok(())
+}
+
+pub fn evaluate_stack_provenance_release_evidence(
+    manifest: &ReleaseEvidenceManifest,
+    mode: &str,
+) -> StackProvenanceReleaseVerification {
+    let mut diagnostics = Vec::new();
+    if !stack_provenance_mode_is_supported(mode) {
+        diagnostics.push(format!("unsupported stack provenance mode: {mode}"));
+    }
+    let required = mode == STACK_PROVENANCE_MODE_REQUIRED;
+    let Some(evidence) = &manifest.stack_provenance else {
+        if required {
+            diagnostics.push("required Valence stack provenance sidecar or receipt is missing".to_string());
+        }
+        return StackProvenanceReleaseVerification {
+            mode: mode.to_string(),
+            required,
+            valid: diagnostics.is_empty(),
+            disposition: STACK_PROVENANCE_DISPOSITION_ABSENT.to_string(),
+            sidecar_role: None,
+            sidecar_schema: None,
+            sidecar_claim_scope: None,
+            sidecar_digest_blake3: None,
+            valence_receipt_role: None,
+            valence_receipt_schema: None,
+            valence_receipt_digest_blake3: None,
+            release_binary_relative_path: None,
+            release_binary_digest_blake3: None,
+            boundary: STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string(),
+            diagnostics,
+        };
+    };
+    diagnostics.extend(stack_provenance_evidence_diagnostics(manifest, evidence));
+    let valid = diagnostics.is_empty();
+    StackProvenanceReleaseVerification {
+        mode: mode.to_string(),
+        required,
+        valid,
+        disposition: if valid {
+            STACK_PROVENANCE_DISPOSITION_PRESENT.to_string()
+        } else {
+            STACK_PROVENANCE_DISPOSITION_INVALID.to_string()
+        },
+        sidecar_role: Some(evidence.sidecar_role.clone()),
+        sidecar_schema: Some(evidence.sidecar_schema.clone()),
+        sidecar_claim_scope: Some(evidence.sidecar_claim_scope.clone()),
+        sidecar_digest_blake3: Some(evidence.sidecar_digest_blake3.clone()),
+        valence_receipt_role: Some(evidence.valence_receipt_role.clone()),
+        valence_receipt_schema: Some(evidence.valence_receipt_schema.clone()),
+        valence_receipt_digest_blake3: Some(evidence.valence_receipt_digest_blake3.clone()),
+        release_binary_relative_path: Some(evidence.release_binary_relative_path.clone()),
+        release_binary_digest_blake3: Some(evidence.release_binary_digest_blake3.clone()),
+        boundary: STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string(),
+        diagnostics,
+    }
+}
+
+fn stack_provenance_mode_is_supported(mode: &str) -> bool {
+    mode == STACK_PROVENANCE_MODE_OPTIONAL || mode == STACK_PROVENANCE_MODE_REQUIRED
+}
+
+fn validate_stack_provenance_manifest_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let Some(evidence) = &manifest.stack_provenance else {
+        return Ok(());
+    };
+    let diagnostics = stack_provenance_evidence_diagnostics(manifest, evidence);
+    if let Some(first) = diagnostics.first() {
+        return Err(validation_error(format!("release evidence stack_provenance invalid: {first}")));
+    }
+    Ok(())
+}
+
+fn stack_provenance_evidence_diagnostics(
+    manifest: &ReleaseEvidenceManifest,
+    evidence: &StackProvenanceReleaseEvidence,
+) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    validate_stack_provenance_literals(evidence, &mut diagnostics);
+    validate_stack_provenance_paths_and_hashes(evidence, &mut diagnostics);
+    validate_stack_provenance_non_claims(&evidence.non_claims, "stack_provenance.non_claims", &mut diagnostics);
+    validate_stack_provenance_binary_link(manifest, evidence, &mut diagnostics);
+    validate_stack_provenance_external_link(
+        &manifest.external_evidence,
+        &evidence.sidecar_role,
+        &evidence.sidecar_schema,
+        &evidence.sidecar_claim_scope,
+        &evidence.sidecar_relative_path,
+        &evidence.sidecar_digest_blake3,
+        "sidecar",
+        &mut diagnostics,
+    );
+    validate_stack_provenance_external_link(
+        &manifest.external_evidence,
+        &evidence.valence_receipt_role,
+        &evidence.valence_receipt_schema,
+        STACK_PROVENANCE_CLAIM_SCOPE,
+        &evidence.valence_receipt_relative_path,
+        &evidence.valence_receipt_digest_blake3,
+        "Valence receipt",
+        &mut diagnostics,
+    );
+    diagnostics
+}
+
+fn validate_stack_provenance_literals(evidence: &StackProvenanceReleaseEvidence, diagnostics: &mut Vec<String>) {
+    push_literal_diagnostic(
+        &evidence.sidecar_role,
+        STACK_PROVENANCE_EVIDENCE_ROLE,
+        "stack_provenance.sidecar_role",
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        &evidence.sidecar_schema,
+        STACK_PROVENANCE_SIDECAR_SCHEMA,
+        "stack_provenance.sidecar_schema",
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        &evidence.sidecar_claim_scope,
+        STACK_PROVENANCE_CLAIM_SCOPE,
+        "stack_provenance.sidecar_claim_scope",
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        &evidence.valence_receipt_role,
+        VALENCE_STACK_PROVENANCE_RECEIPT_ROLE,
+        "stack_provenance.valence_receipt_role",
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        &evidence.valence_receipt_schema,
+        STACK_PROVENANCE_GRAPH_REPORT_SCHEMA,
+        "stack_provenance.valence_receipt_schema",
+        diagnostics,
+    );
+}
+
+fn push_literal_diagnostic(actual: &str, expected: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    if actual != expected {
+        diagnostics.push(format!("{field_name} must be {expected}, got {actual}"));
+    }
+}
+
+fn validate_stack_provenance_paths_and_hashes(
+    evidence: &StackProvenanceReleaseEvidence,
+    diagnostics: &mut Vec<String>,
+) {
+    push_relative_path_diagnostic(
+        &evidence.sidecar_relative_path,
+        "stack_provenance.sidecar_relative_path",
+        diagnostics,
+    );
+    push_relative_path_diagnostic(
+        &evidence.valence_receipt_relative_path,
+        "stack_provenance.valence_receipt_relative_path",
+        diagnostics,
+    );
+    push_relative_path_diagnostic(
+        &evidence.release_binary_relative_path,
+        "stack_provenance.release_binary_relative_path",
+        diagnostics,
+    );
+    push_blake3_diagnostic(&evidence.sidecar_digest_blake3, "stack_provenance.sidecar_digest_blake3", diagnostics);
+    push_blake3_diagnostic(
+        &evidence.valence_receipt_digest_blake3,
+        "stack_provenance.valence_receipt_digest_blake3",
+        diagnostics,
+    );
+    push_blake3_diagnostic(
+        &evidence.release_binary_digest_blake3,
+        "stack_provenance.release_binary_digest_blake3",
+        diagnostics,
+    );
+}
+
+fn push_relative_path_diagnostic(path: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    if let Err(error) = validate_relative_member_path(path, field_name) {
+        diagnostics.push(error.to_string());
+    }
+}
+
+fn push_blake3_diagnostic(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    if let Err(error) = validate_blake3_hex(value, field_name) {
+        diagnostics.push(error.to_string());
+    }
+}
+
+fn validate_stack_provenance_binary_link(
+    manifest: &ReleaseEvidenceManifest,
+    evidence: &StackProvenanceReleaseEvidence,
+    diagnostics: &mut Vec<String>,
+) {
+    let Some(binary) = manifest
+        .binaries
+        .iter()
+        .find(|binary| binary.relative_path == evidence.release_binary_relative_path)
+    else {
+        diagnostics.push("stack_provenance.release_binary_relative_path does not match a bundled binary".to_string());
+        return;
+    };
+    if binary.digest_blake3 != evidence.release_binary_digest_blake3 {
+        diagnostics.push("stack_provenance.release_binary_digest_blake3 does not match the bundled binary".to_string());
+    }
+}
+
+fn validate_stack_provenance_external_link(
+    external_evidence: &[ExternalEvidence],
+    role: &str,
+    schema: &str,
+    claim_scope: &str,
+    relative_path: &str,
+    digest_blake3: &str,
+    label: &str,
+    diagnostics: &mut Vec<String>,
+) {
+    let Some(external) = external_evidence.iter().find(|external| external.role == role) else {
+        diagnostics.push(format!("stack provenance {label} external evidence is missing"));
+        return;
+    };
+    if external.schema != schema {
+        diagnostics.push(format!("stack provenance {label} schema does not match declared metadata"));
+    }
+    if external.claim_scope != claim_scope {
+        diagnostics.push(format!("stack provenance {label} claim scope does not match declared metadata"));
+    }
+    if external.relative_path != relative_path {
+        diagnostics.push(format!("stack provenance {label} path does not match declared metadata"));
+    }
+    if external.digest_blake3 != digest_blake3 {
+        diagnostics.push(format!("stack provenance {label} digest does not match declared metadata"));
+    }
+    validate_stack_provenance_non_claims(&external.non_claims, label, diagnostics);
+}
+
+fn validate_stack_provenance_non_claims(non_claims: &[String], field_name: &str, diagnostics: &mut Vec<String>) {
+    if !non_claims.iter().any(|non_claim| non_claim == STACK_PROVENANCE_OPAQUE_BOUNDARY) {
+        diagnostics.push(format!("{field_name} missing Mantle opaque stack-provenance non-claim"));
+    }
+    for non_claim in non_claims {
+        if stack_provenance_text_overclaims(non_claim) {
+            diagnostics.push(format!("{field_name} contains stack provenance overclaim"));
+        }
+    }
+}
+
+fn stack_provenance_text_overclaims(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    STACK_PROVENANCE_OVERCLAIM_FRAGMENTS.iter().any(|fragment| lower.contains(fragment))
 }
 
 fn validate_external_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
@@ -1233,6 +1541,57 @@ mod tests {
         }
     }
 
+    fn sample_stack_provenance_sidecar_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: STACK_PROVENANCE_EVIDENCE_ROLE.to_string(),
+            schema: STACK_PROVENANCE_SIDECAR_SCHEMA.to_string(),
+            relative_path: "external-evidence/01-stack-provenance-sidecar.json".to_string(),
+            digest_blake3: sample_digest(21),
+            claim_scope: STACK_PROVENANCE_CLAIM_SCOPE.to_string(),
+            non_claims: vec![STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string()],
+        }
+    }
+
+    fn sample_stack_provenance_valence_receipt_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: VALENCE_STACK_PROVENANCE_RECEIPT_ROLE.to_string(),
+            schema: STACK_PROVENANCE_GRAPH_REPORT_SCHEMA.to_string(),
+            relative_path: "external-evidence/02-valence-stack-provenance-graph-report.json".to_string(),
+            digest_blake3: sample_digest(22),
+            claim_scope: STACK_PROVENANCE_CLAIM_SCOPE.to_string(),
+            non_claims: vec![STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string()],
+        }
+    }
+
+    fn sample_stack_provenance_release_evidence() -> StackProvenanceReleaseEvidence {
+        let sidecar = sample_stack_provenance_sidecar_evidence();
+        let receipt = sample_stack_provenance_valence_receipt_evidence();
+        StackProvenanceReleaseEvidence {
+            sidecar_role: sidecar.role,
+            sidecar_relative_path: sidecar.relative_path,
+            sidecar_digest_blake3: sidecar.digest_blake3,
+            sidecar_schema: sidecar.schema,
+            valence_receipt_role: receipt.role,
+            valence_receipt_relative_path: receipt.relative_path,
+            valence_receipt_digest_blake3: receipt.digest_blake3,
+            valence_receipt_schema: receipt.schema,
+            release_binary_relative_path: "binaries/01-mantle".to_string(),
+            release_binary_digest_blake3: sample_digest(3),
+            sidecar_claim_scope: STACK_PROVENANCE_CLAIM_SCOPE.to_string(),
+            non_claims: vec![STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string()],
+        }
+    }
+
+    fn sample_stack_provenance_manifest() -> ReleaseEvidenceManifest {
+        let mut manifest = sample_manifest();
+        manifest.external_evidence = vec![
+            sample_stack_provenance_sidecar_evidence(),
+            sample_stack_provenance_valence_receipt_evidence(),
+        ];
+        manifest.stack_provenance = Some(sample_stack_provenance_release_evidence());
+        manifest
+    }
+
     fn sample_manifest() -> ReleaseEvidenceManifest {
         let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 3);
         let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
@@ -1256,6 +1615,7 @@ mod tests {
             independent_agreement_report: None,
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
+            stack_provenance: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
@@ -1743,6 +2103,171 @@ mod tests {
         manifest.external_evidence = vec![sample_external_evidence(), second_evidence];
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
         assert!(err.to_string().contains("duplicates another external evidence role"));
+    }
+
+    // r[verify mantle.release_provenance.fixture_matrix.positive]
+    // r[verify mantle.release_provenance.valence_receipt_binding]
+    #[test]
+    fn validate_accepts_stack_provenance_release_evidence_with_matching_sidecars() {
+        let mut manifest = sample_manifest();
+        manifest.external_evidence = vec![
+            sample_stack_provenance_sidecar_evidence(),
+            sample_stack_provenance_valence_receipt_evidence(),
+        ];
+        manifest.stack_provenance = Some(sample_stack_provenance_release_evidence());
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains(STACK_PROVENANCE_EVIDENCE_ROLE));
+        assert!(text.contains(VALENCE_STACK_PROVENANCE_RECEIPT_ROLE));
+        assert!(text.contains(STACK_PROVENANCE_OPAQUE_BOUNDARY));
+    }
+
+    // r[verify mantle.release_provenance.valence_receipt_binding.stale]
+    #[test]
+    fn validate_rejects_stack_provenance_digest_mismatch() {
+        let mut manifest = sample_manifest();
+        let mut stack_provenance = sample_stack_provenance_release_evidence();
+        stack_provenance.sidecar_digest_blake3 = sample_digest(23);
+        manifest.external_evidence = vec![
+            sample_stack_provenance_sidecar_evidence(),
+            sample_stack_provenance_valence_receipt_evidence(),
+        ];
+        manifest.stack_provenance = Some(stack_provenance);
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("sidecar digest"));
+    }
+
+    // r[verify mantle.release_provenance.opaque_boundary.overclaim]
+    #[test]
+    fn validate_rejects_stack_provenance_semantic_promotion() {
+        let mut manifest = sample_manifest();
+        let mut stack_provenance = sample_stack_provenance_release_evidence();
+        stack_provenance.non_claims = vec![
+            STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string(),
+            "Mantle verifies Valence stack semantics".to_string(),
+        ];
+        manifest.external_evidence = vec![
+            sample_stack_provenance_sidecar_evidence(),
+            sample_stack_provenance_valence_receipt_evidence(),
+        ];
+        manifest.stack_provenance = Some(stack_provenance);
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("overclaim"));
+    }
+
+    // r[verify mantle.release_provenance.valence_required_policy.required_valid]
+    #[test]
+    fn stack_provenance_policy_accepts_required_valid_evidence() {
+        let manifest = sample_stack_provenance_manifest();
+
+        let result = evaluate_stack_provenance_release_evidence(&manifest, STACK_PROVENANCE_MODE_REQUIRED);
+
+        assert!(result.valid);
+        assert_eq!(STACK_PROVENANCE_DISPOSITION_PRESENT, result.disposition);
+    }
+
+    // r[verify mantle.release_provenance.valence_required_policy.optional_absent]
+    #[test]
+    fn stack_provenance_policy_accepts_optional_absent_evidence() {
+        let manifest = sample_manifest();
+
+        let result = evaluate_stack_provenance_release_evidence(&manifest, STACK_PROVENANCE_MODE_OPTIONAL);
+
+        assert!(result.valid);
+        assert_eq!(STACK_PROVENANCE_DISPOSITION_ABSENT, result.disposition);
+        assert!(result.diagnostics.is_empty());
+    }
+
+    // r[verify mantle.release_provenance.fixture_matrix.positive]
+    #[test]
+    fn stack_provenance_policy_accepts_optional_present_evidence() {
+        let manifest = sample_stack_provenance_manifest();
+
+        let result = evaluate_stack_provenance_release_evidence(&manifest, STACK_PROVENANCE_MODE_OPTIONAL);
+
+        assert!(result.valid);
+        assert_eq!(STACK_PROVENANCE_DISPOSITION_PRESENT, result.disposition);
+    }
+
+    // r[verify mantle.release_provenance.valence_required_policy.required_missing]
+    #[test]
+    fn stack_provenance_policy_rejects_required_absent_evidence() {
+        let manifest = sample_manifest();
+
+        let result = evaluate_stack_provenance_release_evidence(&manifest, STACK_PROVENANCE_MODE_REQUIRED);
+
+        assert!(!result.valid);
+        assert_eq!(STACK_PROVENANCE_DISPOSITION_ABSENT, result.disposition);
+        assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.contains("required")));
+    }
+
+    // r[verify mantle.release_provenance.fixture_matrix]
+    // r[verify mantle.release_provenance.fixture_matrix.negative]
+    #[test]
+    fn stack_provenance_policy_rejects_required_invalid_fixture_matrix() {
+        fn missing_sidecar(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.external_evidence.retain(|evidence| evidence.role != STACK_PROVENANCE_EVIDENCE_ROLE);
+        }
+        fn wrong_role(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.stack_provenance.as_mut().unwrap().sidecar_role = "wrong-stack-role".to_string();
+        }
+        fn wrong_schema(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.stack_provenance.as_mut().unwrap().sidecar_schema = "wrong.stack.schema".to_string();
+        }
+        fn wrong_claim_scope(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.stack_provenance.as_mut().unwrap().sidecar_claim_scope = "semantic-stack-claim".to_string();
+        }
+        fn stale_sidecar_digest(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.stack_provenance.as_mut().unwrap().sidecar_digest_blake3 = sample_digest(23);
+        }
+        fn missing_valence_receipt(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.external_evidence.retain(|evidence| evidence.role != VALENCE_STACK_PROVENANCE_RECEIPT_ROLE);
+        }
+        fn stale_valence_receipt_digest(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.stack_provenance.as_mut().unwrap().valence_receipt_digest_blake3 = sample_digest(24);
+        }
+        fn missing_binary_identity(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.stack_provenance.as_mut().unwrap().release_binary_relative_path = "binaries/missing".to_string();
+        }
+        fn weakened_non_claims(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.stack_provenance.as_mut().unwrap().non_claims =
+                vec!["Mantle verifies Valence stack semantics".to_string()];
+        }
+
+        let cases: [(&str, fn(&mut ReleaseEvidenceManifest), &str); 9] = [
+            ("missing sidecar", missing_sidecar, "sidecar external evidence is missing"),
+            ("wrong role", wrong_role, "sidecar_role"),
+            ("wrong schema", wrong_schema, "sidecar_schema"),
+            ("wrong claim scope", wrong_claim_scope, "sidecar_claim_scope"),
+            ("stale sidecar digest", stale_sidecar_digest, "sidecar digest"),
+            ("missing Valence receipt", missing_valence_receipt, "Valence receipt external evidence is missing"),
+            ("stale Valence receipt digest", stale_valence_receipt_digest, "Valence receipt digest"),
+            ("missing binary identity", missing_binary_identity, "release_binary_relative_path"),
+            ("weakened non-claims", weakened_non_claims, "non-claim"),
+        ];
+
+        for (name, mutate, expected_diagnostic) in cases {
+            let mut manifest = sample_stack_provenance_manifest();
+            mutate(&mut manifest);
+
+            let result = evaluate_stack_provenance_release_evidence(&manifest, STACK_PROVENANCE_MODE_REQUIRED);
+            let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+            assert!(!result.valid, "{name} should fail required policy");
+            assert_eq!(STACK_PROVENANCE_DISPOSITION_INVALID, result.disposition, "{name}");
+            assert!(
+                result.diagnostics.iter().any(|diagnostic| diagnostic.contains(expected_diagnostic)),
+                "{name} diagnostics should contain {expected_diagnostic:?}: {:?}",
+                result.diagnostics
+            );
+            assert!(err.to_string().contains("stack_provenance invalid"));
+        }
     }
 
     #[test]

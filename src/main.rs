@@ -1146,6 +1146,19 @@ pub enum ReleaseAction {
         #[arg(long = "kani-toolchain-evidence")]
         kani_toolchain_evidence: Vec<PathBuf>,
 
+        /// Valence stack-provenance sidecar to package as bounded external evidence
+        #[arg(long = "stack-provenance-sidecar", requires = "stack_provenance_valence_receipt")]
+        stack_provenance_sidecar: Option<PathBuf>,
+
+        /// Valence stack-provenance graph report/receipt for the sidecar
+        #[arg(long = "stack-provenance-valence-receipt", requires = "stack_provenance_sidecar")]
+        stack_provenance_valence_receipt: Option<PathBuf>,
+
+        /// Release binary input this stack-provenance sidecar names; required when multiple
+        /// binaries are bundled
+        #[arg(long = "stack-provenance-binary", requires = "stack_provenance_sidecar")]
+        stack_provenance_binary: Option<PathBuf>,
+
         /// Workflow version recorded in the manifest
         #[arg(long, default_value = "mantle-self-hosting-proof-v2")]
         workflow_version: String,
@@ -1187,6 +1200,10 @@ pub enum ReleaseAction {
         /// Fail unless a valid provider fixed-point proof bundle is supplied
         #[arg(long)]
         require_provider_fixed_point_proof: bool,
+
+        /// Stack-provenance release profile policy for Valence-validated sidecars
+        #[arg(long = "stack-provenance", value_parser = ["optional", "required"], default_value = "optional")]
+        stack_provenance: String,
     },
     /// Rebuild and compare published release artifacts, then write a reproducibility report
     Reproduce {

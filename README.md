@@ -1138,28 +1138,39 @@ default. The top-level `manifest.json` records BLAKE3 digests for the source
 archive, bundled binary or binaries, proof-bundle directory, prerequisite
 inventory, and the proof-linkage facts copied from the full self-hosting proof.
 
-Operators may also attach opaque external evidence sidecars when another stack
-component has already verified stack-specific semantics:
+<!-- r[related mantle.release_provenance.opaque_boundary.visible] -->
+<!-- r[related mantle.release_provenance.valence_required_policy] -->
+Operators may also attach Valence stack-provenance sidecars as opaque external
+evidence when Valence has already produced the stack graph report:
 
 ```bash
 mantle release create \
   --release-id mantle-<version> \
   --binary target/self-hosting-proof/run-.../binaries/stage2-mantle \
   --proof-bundle target/self-hosting-proof/run-... \
-  --external-evidence target/valence/stack-provenance.json \
-  --external-evidence-role stack-provenance-trace \
-  --external-evidence-schema valence.stack-provenance-adapter.v1 \
-  --external-evidence-claim-scope identity-linkage-sidecar \
-  --external-evidence-non-claim "Mantle validates only bundle-local path, digest, role, schema, claim scope, and non-claims"
+  --stack-provenance-sidecar target/valence/stack-provenance-sidecar.json \
+  --stack-provenance-valence-receipt target/valence/stack-provenance-graph-report.json
+
+mantle release verify target/release-evidence/<release-id> \
+  --stack-provenance required
 ```
 
-Mantle treats these sidecars as optional adapter-owned evidence. It validates
-only bundle-local path safety, BLAKE3 digest, role/schema/claim-scope presence,
-and explicit non-claims. Stack-specific claims such as Valence/Octet/Trellis
-identity linkage remain owned by the adapter that produced the sidecar. Use
-`mantle release verify --require-external-evidence-role <role>` when a downstream
-policy wants to require a role without changing Mantle's default verification
-semantics.
+When a bundle carries multiple `--binary` inputs, add `--stack-provenance-binary
+<path>` so Mantle can bind the sidecar to exactly one packaged release binary.
+`--stack-provenance optional` is the verify default and records an `absent`
+disposition when no sidecar is bundled. `--stack-provenance required` fails
+closed unless the bundle has the sidecar, the Valence graph report receipt,
+matching BLAKE3 digests, expected roles/schemas, `identity-linkage-sidecar`
+claim scope, release-binary identity, and the required non-claim boundary.
+Mantle validates only bundle-local path, digest, role, schema, claim scope,
+binary identity, and non-claims; Valence owns the stack semantics. This does not
+prove Octet, Trellis, Valence, or Cairn behavioral correctness, verifier
+soundness, release eligibility, or requirement satisfaction.
+
+Generic external evidence remains available via `--external-evidence` plus
+matching role/schema/scope/non-claim flags. Use `mantle release verify
+--require-external-evidence-role <role>` when a downstream policy wants to
+require a generic role without changing Mantle's default verification semantics.
 
 Kani receipts use the same external-evidence boundary plus a dedicated optional
 `--kani-toolchain-evidence` metadata file. Mantle links the bundled
