@@ -48,6 +48,7 @@ mod protected_exec;
 mod protected_exec_seccomp;
 mod realization_routing;
 mod release_attestation;
+mod release_capability;
 mod release_cmd;
 mod release_evidence;
 mod release_nix_witness;

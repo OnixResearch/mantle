@@ -248,3 +248,38 @@ r[mantle.release_provenance.nix_evidence_core.final_validation]
 - WHEN focused validation runs
 - THEN valid fixtures MUST pass, invalid fixtures MUST fail closed, Cairn validation/gates MUST pass, and documentation MUST preserve build/evaluation non-claims.
 
+### Requirement: Release filesystem capability dependency
+r[mantle.release_provenance.cap_std_boundary.dependency] Mantle MUST use `cap-std` only in crates or modules that own filesystem shell/adaptor behavior and MUST keep pure release planning cores free of ambient filesystem authority.
+
+#### Scenario: Capability dependency is shell-scoped
+- GIVEN release evidence code needs local filesystem access
+- WHEN the access is added or reviewed
+- THEN the `cap-std` dependency MUST remain in the Mantle binary shell surface rather than in no-std/pure release cores.
+
+### Requirement: Release capability root wrappers
+r[mantle.release_provenance.cap_std_boundary.root_wrappers] Mantle MUST expose typed capability roots for release evidence, witness rebuild, bootstrap, build artifact, and store roots.
+
+#### Scenario: Relative paths authorize under declared roots
+r[mantle.release_provenance.cap_std_boundary.tests.positive]
+- GIVEN a request names a valid relative path and the required root authority is present
+- WHEN the release path authorizer runs
+- THEN it MUST return a validated relative path that can be used through the matching capability root.
+
+### Requirement: Capability-relative release path conversion
+r[mantle.release_provenance.cap_std_boundary.conversion] Mantle MUST convert targeted release path opens to capability-relative operations without moving filesystem authority into pure planning logic.
+
+#### Scenario: Unsafe local paths fail closed
+r[mantle.release_provenance.cap_std_boundary.tests.negative]
+- GIVEN a request uses `../` traversal, an absolute path, missing root authority, wrong root authority, or a symlink escape
+- WHEN capability boundary validation or shell read/write runs
+- THEN the operation MUST fail before reading or writing outside the declared root.
+
+### Requirement: Release capability boundary documentation and validation
+r[mantle.release_provenance.cap_std_boundary.docs] Mantle docs MUST describe the local filesystem-authority boundary and preserve release-evidence non-claims.
+
+#### Scenario: Capability validation evidence exists
+r[mantle.release_provenance.cap_std_boundary.validation]
+- GIVEN the cap-std release boundary change is complete
+- WHEN focused validation runs
+- THEN positive relative-path fixtures and negative traversal/absolute/missing-authority/symlink fixtures MUST pass, and Cairn validation/gates MUST pass before archive.
+
