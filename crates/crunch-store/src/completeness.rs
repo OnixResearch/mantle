@@ -3,13 +3,14 @@
 //! r[impl cache_substitution.castore_completeness]
 
 use std::collections::HashSet;
-use std::sync::Mutex;
 use std::sync::LazyLock;
+use std::sync::Mutex;
 
 use snix_castore::B3Digest;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
+use tokio::io::AsyncReadExt;
 
 use crate::Error;
 
@@ -17,6 +18,14 @@ use crate::Error;
 const MAX_RECURSIVE_NODES: usize = 100_000;
 /// Maximum directory tree depth before aborting.
 const MAX_DEPTH: usize = 128;
+const BLOB_COMPLETENESS_READ_BUFFER_BYTES: usize = 65_536;
+const INITIAL_COMPLETENESS_WORKLIST_CAPACITY: usize = 128;
+
+#[derive(Debug)]
+enum CompletenessWorkItem {
+    CheckNode(Node, usize),
+    MarkDirectoryComplete(B3Digest),
+}
 
 /// Thread-safe in-memory store of completeness markers keyed by
 /// finalized directory node digest (BLAKE3).
@@ -53,9 +62,8 @@ impl CompletenessMarkerStore {
 }
 
 /// Global completeness marker store shared across all StoreHandles.
-pub static GLOBAL_COMPLETENESS_MARKERS: LazyLock<CompletenessMarkerStore> = LazyLock::new(|| {
-    CompletenessMarkerStore::new()
-});
+pub static GLOBAL_COMPLETENESS_MARKERS: LazyLock<CompletenessMarkerStore> =
+    LazyLock::new(|| CompletenessMarkerStore::new());
 
 /// Recursively check that a node's full castore tree is present.
 ///
@@ -68,11 +76,18 @@ pub async fn recursive_castore_completeness(
     node: &Node,
 ) -> Result<bool, Error> {
     // Iterative stack-based traversal to avoid recursive async fn.
-    let mut stack: Vec<(Node, usize)> = Vec::with_capacity(128);
-    stack.push((node.clone(), 0));
+    let mut stack: Vec<CompletenessWorkItem> = Vec::with_capacity(INITIAL_COMPLETENESS_WORKLIST_CAPACITY);
+    stack.push(CompletenessWorkItem::CheckNode(node.clone(), 0));
     let mut visited = 0usize;
 
-    while let Some((current_node, depth)) = stack.pop() {
+    while let Some(item) = stack.pop() {
+        let (current_node, depth) = match item {
+            CompletenessWorkItem::CheckNode(current_node, depth) => (current_node, depth),
+            CompletenessWorkItem::MarkDirectoryComplete(digest) => {
+                GLOBAL_COMPLETENESS_MARKERS.insert(digest);
+                continue;
+            }
+        };
         if depth > MAX_DEPTH {
             return Ok(false);
         }
@@ -82,10 +97,8 @@ pub async fn recursive_castore_completeness(
         visited += 1;
 
         match &current_node {
-            Node::File { digest, .. } => {
-                if !blob_service.has(digest).await.map_err(|e| {
-                    Error::BlobService(format!("completeness check: {e}"))
-                })? {
+            Node::File { digest, size, .. } => {
+                if !blob_has_declared_size(blob_service, digest, *size).await? {
                     return Ok(false);
                 }
             }
@@ -108,13 +121,12 @@ pub async fn recursive_castore_completeness(
                     None => return Ok(false),
                 };
 
-                // Push children onto the stack (cloned, owned Nodes).
+                // Mark only after all children have been checked. Pushing the
+                // marker first makes the LIFO worklist process it last.
+                stack.push(CompletenessWorkItem::MarkDirectoryComplete(*digest));
                 for child in dir.nodes() {
-                    stack.push((child.1.clone(), depth + 1));
+                    stack.push(CompletenessWorkItem::CheckNode(child.1.clone(), depth + 1));
                 }
-
-                // Mark as complete.
-                GLOBAL_COMPLETENESS_MARKERS.insert(*digest);
             }
         }
     }
@@ -122,19 +134,140 @@ pub async fn recursive_castore_completeness(
     Ok(true)
 }
 
+async fn blob_has_declared_size(
+    blob_service: &dyn BlobService,
+    digest: &B3Digest,
+    declared_size: u64,
+) -> Result<bool, Error> {
+    let Some(chunks) = blob_service
+        .chunks(digest)
+        .await
+        .map_err(|e| Error::BlobService(format!("completeness chunk check: {e}")))?
+    else {
+        return Ok(false);
+    };
+
+    if chunks.is_empty() {
+        return blob_reader_has_declared_size(blob_service, digest, declared_size).await;
+    }
+
+    let mut total_size = 0u64;
+    for chunk in chunks {
+        total_size = total_size
+            .checked_add(chunk.size)
+            .ok_or_else(|| Error::BlobService("completeness chunk check: chunk size overflow".to_string()))?;
+        let chunk_digest: B3Digest = chunk
+            .digest
+            .try_into()
+            .map_err(|_| Error::BlobService("completeness chunk check: invalid chunk digest".to_string()))?;
+        let chunk_present = blob_service
+            .has(&chunk_digest)
+            .await
+            .map_err(|e| Error::BlobService(format!("completeness chunk check: {e}")))?;
+        if !chunk_present {
+            return Ok(false);
+        }
+        if !blob_reader_has_declared_size(blob_service, &chunk_digest, chunk.size).await? {
+            return Ok(false);
+        }
+    }
+
+    Ok(total_size == declared_size)
+}
+
+async fn blob_reader_has_declared_size(
+    blob_service: &dyn BlobService,
+    digest: &B3Digest,
+    declared_size: u64,
+) -> Result<bool, Error> {
+    let Some(mut reader) = blob_service
+        .open_read(digest)
+        .await
+        .map_err(|e| Error::BlobService(format!("completeness blob read: {e}")))?
+    else {
+        return Ok(false);
+    };
+
+    let mut buffer = vec![0u8; BLOB_COMPLETENESS_READ_BUFFER_BYTES];
+    let mut total_size = 0u64;
+    let mut hasher = blake3::Hasher::new();
+    loop {
+        let read_bytes = reader
+            .read(&mut buffer)
+            .await
+            .map_err(|e| Error::BlobService(format!("completeness blob read: {e}")))?;
+        if read_bytes == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read_bytes]);
+        let read_bytes = u64::try_from(read_bytes)
+            .map_err(|_| Error::BlobService("completeness blob read: read size overflow".to_string()))?;
+        total_size = total_size
+            .checked_add(read_bytes)
+            .ok_or_else(|| Error::BlobService("completeness blob read: blob size overflow".to_string()))?;
+        if total_size > declared_size {
+            return Ok(false);
+        }
+    }
+
+    let observed_digest = B3Digest::from(hasher.finalize().as_bytes());
+    Ok(total_size == declared_size && observed_digest == *digest)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashMap;
-    use std::sync::Arc;
+
     use async_trait::async_trait;
+    use snix_castore::Directory;
     use snix_castore::Node;
     use snix_castore::PathComponent;
     use snix_castore::SymlinkTarget;
-    use snix_castore::Directory;
     use snix_castore::blobservice::BlobService;
+    use snix_castore::blobservice::BlobWriter;
     use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::DirectoryPutter;
+    use snix_castore::proto::stat_blob_response::ChunkMeta;
+
+    use super::*;
+
+    struct ChunkMetadataBlobService {
+        root_digest: B3Digest,
+        chunk_digest: B3Digest,
+        chunk_size: u64,
+        chunk_bytes: Vec<u8>,
+    }
+
+    #[async_trait]
+    impl BlobService for ChunkMetadataBlobService {
+        async fn has(&self, digest: &B3Digest) -> std::io::Result<bool> {
+            Ok(*digest == self.root_digest || *digest == self.chunk_digest)
+        }
+
+        async fn open_read(
+            &self,
+            digest: &B3Digest,
+        ) -> std::io::Result<Option<Box<dyn snix_castore::blobservice::BlobReader>>> {
+            if *digest != self.chunk_digest {
+                return Ok(None);
+            }
+            Ok(Some(Box::new(std::io::Cursor::new(self.chunk_bytes.clone()))))
+        }
+
+        async fn open_write(&self) -> Box<dyn BlobWriter> {
+            unimplemented!("test service is read-only")
+        }
+
+        async fn chunks(&self, digest: &B3Digest) -> std::io::Result<Option<Vec<ChunkMeta>>> {
+            if *digest != self.root_digest {
+                return Ok(None);
+            }
+            Ok(Some(vec![ChunkMeta {
+                digest: self.chunk_digest.as_slice().to_vec().into(),
+                size: self.chunk_size,
+            }]))
+        }
+    }
 
     /// An in-memory stub DirectoryService backed by a Mutex<HashMap>.
     struct StubDirectoryService {
@@ -143,7 +276,9 @@ mod tests {
 
     impl StubDirectoryService {
         fn new() -> Self {
-            Self { dirs: Mutex::new(HashMap::new()) }
+            Self {
+                dirs: Mutex::new(HashMap::new()),
+            }
         }
 
         fn put_sync(&self, digest: B3Digest, dir: Directory) {
@@ -191,7 +326,6 @@ mod tests {
         assert!(recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
 
         // Missing blob
-        // Missing blob
         let missing = B3Digest::from(blake3::hash(b"missing-blob").as_bytes());
         let missing_node = Node::File {
             digest: missing,
@@ -199,6 +333,67 @@ mod tests {
             executable: false,
         };
         assert!(!recursive_castore_completeness(&blob, &dir, &missing_node).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn blob_node_rejects_declared_size_mismatch() {
+        let blob = MemoryBlobService::default();
+        let dir = StubDirectoryService::new();
+        let data = b"hello";
+        let mut writer = blob.open_write().await;
+        tokio::io::AsyncWriteExt::write_all(&mut writer, data).await.unwrap();
+        let blob_digest = writer.close().await.unwrap();
+        let actual_size = u64::try_from(data.len()).expect("test data length fits u64");
+        let declared_size = actual_size.saturating_add(1);
+        let node = Node::File {
+            digest: blob_digest,
+            size: declared_size,
+            executable: false,
+        };
+
+        assert!(!recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn chunked_blob_metadata_must_match_declared_size() {
+        let root_digest = B3Digest::from(blake3::hash(b"root").as_bytes());
+        let chunk_digest = B3Digest::from(blake3::hash(b"chunk").as_bytes());
+        let chunk_bytes = b"chunk";
+        let chunk_size = u64::try_from(chunk_bytes.len()).expect("test chunk size fits u64");
+        let complete_blob = ChunkMetadataBlobService {
+            root_digest,
+            chunk_digest,
+            chunk_size,
+            chunk_bytes: chunk_bytes.to_vec(),
+        };
+        let short_blob = ChunkMetadataBlobService {
+            root_digest,
+            chunk_digest,
+            chunk_size,
+            chunk_bytes: b"chun".to_vec(),
+        };
+        let wrong_digest_blob = ChunkMetadataBlobService {
+            root_digest,
+            chunk_digest,
+            chunk_size,
+            chunk_bytes: b"wrong".to_vec(),
+        };
+        let dir = StubDirectoryService::new();
+        let matching = Node::File {
+            digest: root_digest,
+            size: chunk_size,
+            executable: false,
+        };
+        let mismatched = Node::File {
+            digest: root_digest,
+            size: chunk_size.saturating_add(1),
+            executable: false,
+        };
+
+        assert!(recursive_castore_completeness(&complete_blob, &dir, &matching).await.unwrap());
+        assert!(!recursive_castore_completeness(&complete_blob, &dir, &mismatched).await.unwrap());
+        assert!(!recursive_castore_completeness(&short_blob, &dir, &matching).await.unwrap());
+        assert!(!recursive_castore_completeness(&wrong_digest_blob, &dir, &matching).await.unwrap());
     }
 
     #[tokio::test]
@@ -220,11 +415,16 @@ mod tests {
         // collision with parallel tests that also create empty directories.
         let mut unique_dir = Directory::new();
         let name = PathComponent::try_from("unique-marker").unwrap();
-        unique_dir.add(name, Node::Symlink {
-            target: SymlinkTarget::try_from("placeholder").unwrap(),
-        }).unwrap();
+        unique_dir
+            .add(name, Node::Symlink {
+                target: SymlinkTarget::try_from("placeholder").unwrap(),
+            })
+            .unwrap();
         let digest = unique_dir.digest();
-        let node = Node::Directory { digest, size: unique_dir.size() };
+        let node = Node::Directory {
+            digest,
+            size: unique_dir.size(),
+        };
 
         // Not inserted yet
         assert!(!recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
@@ -256,15 +456,22 @@ mod tests {
 
         let child_name = PathComponent::try_from("subdir").unwrap();
         let mut parent = Directory::new();
-        parent.add(child_name, Node::Directory {
-            digest: child_digest,
-            size: 1,
-        }).unwrap();
+        parent
+            .add(child_name, Node::Directory {
+                digest: child_digest,
+                size: 1,
+            })
+            .unwrap();
         let parent_digest = parent.digest();
         dir.put(parent).await.unwrap();
 
-        let node = Node::Directory { digest: parent_digest, size: 2 };
+        let node = Node::Directory {
+            digest: parent_digest,
+            size: 2,
+        };
         assert!(!recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
+        assert!(!GLOBAL_COMPLETENESS_MARKERS.contains(&parent_digest));
+        assert!(!GLOBAL_COMPLETENESS_MARKERS.contains(&child_digest));
     }
 
     #[tokio::test]
@@ -298,16 +505,21 @@ mod tests {
         let name = PathComponent::try_from("sub").unwrap();
         for _ in 0..MAX_DEPTH + 5 {
             let mut parent = Directory::new();
-            parent.add(name.clone(), Node::Directory {
-                digest: current_digest,
-                size: current.size(),
-            }).unwrap();
+            parent
+                .add(name.clone(), Node::Directory {
+                    digest: current_digest,
+                    size: current.size(),
+                })
+                .unwrap();
             current_digest = parent.digest();
             dir.put(parent).await.unwrap();
             current = Directory::new();
         }
 
-        let node = Node::Directory { digest: current_digest, size: 0 };
+        let node = Node::Directory {
+            digest: current_digest,
+            size: 0,
+        };
         assert!(!recursive_castore_completeness(&blob, &dir, &node).await.unwrap());
     }
 }

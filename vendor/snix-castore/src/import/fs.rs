@@ -138,11 +138,12 @@ where
             .metadata()
             .map_err(|e| Error::Stat(walkdir_direntry.path().to_path_buf(), e.into()))?;
 
-        let digest = upload_blob(blob_service, walkdir_direntry.path(), reference_scanner).await?;
+        let expected_size = metadata.size();
+        let digest = upload_blob(blob_service, walkdir_direntry.path(), expected_size, reference_scanner).await?;
 
         Ok(IngestionEntry::Regular {
             path,
-            size: metadata.size(),
+            size: expected_size,
             // If it's executable by the user, it'll become executable.
             // This matches nix's dump() function behaviour.
             executable: metadata.permissions().mode() & 64 != 0,
@@ -158,6 +159,7 @@ where
 async fn upload_blob<BS, P>(
     blob_service: BS,
     path: impl AsRef<std::path::Path>,
+    expected_size: u64,
     reference_scanner: Option<&ReferenceScanner<P>>,
 ) -> Result<B3Digest, Error>
 where
@@ -173,26 +175,31 @@ where
         .await
         .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?;
 
-    let metadata = file.metadata().await.map_err(|e| Error::Stat(path.as_ref().to_path_buf(), e))?;
-
-    progress_span.pb_set_length(metadata.len());
+    progress_span.pb_set_length(expected_size);
     let reader = InspectReader::new(file, |d| {
         progress_span.pb_inc(d.len() as u64);
     });
 
     let mut writer = blob_service.open_write().await;
-    if let Some(reference_scanner) = reference_scanner {
+    let copied_size = if let Some(reference_scanner) = reference_scanner {
         let mut reader = ReferenceReader::new(reference_scanner, BufReader::new(reader));
         tokio::io::copy(&mut reader, &mut writer)
             .await
-            .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?;
+            .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?
     } else {
         tokio::io::copy(&mut BufReader::new(reader), &mut writer)
             .await
-            .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?;
-    }
+            .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?
+    };
 
     let digest = writer.close().await.map_err(|e| Error::BlobFinalize(path.as_ref().to_path_buf(), e))?;
+    if copied_size != expected_size {
+        return Err(Error::UnexpectedSize {
+            path: path.as_ref().to_path_buf(),
+            wanted: expected_size,
+            got: copied_size,
+        });
+    }
 
     Ok(digest)
 }
@@ -211,7 +218,39 @@ pub enum Error {
     #[error("unable to read {0}: {1}")]
     BlobRead(std::path::PathBuf, std::io::Error),
 
+    #[error("read unexpected size at {path}: wanted {wanted}, got {got}")]
+    UnexpectedSize {
+        path: std::path::PathBuf,
+        wanted: u64,
+        got: u64,
+    },
+
     // TODO: proper error for blob finalize
     #[error("unable to finalize blob {0}: {1}")]
     BlobFinalize(std::path::PathBuf, std::io::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::blobservice::MemoryBlobService;
+
+    #[tokio::test]
+    async fn upload_blob_rejects_short_read_against_expected_size() {
+        const EXPECTED_SIZE: u64 = 5;
+        const ACTUAL_SIZE: u64 = 4;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("shrunk");
+        std::fs::write(&path, b"shrt").unwrap();
+        let blob_service = MemoryBlobService::default();
+
+        let err = upload_blob::<_, &[u8]>(blob_service, &path, EXPECTED_SIZE, None).await.unwrap_err();
+
+        assert!(matches!(err, Error::UnexpectedSize {
+            wanted: EXPECTED_SIZE,
+            got: ACTUAL_SIZE,
+            ..
+        }));
+    }
 }

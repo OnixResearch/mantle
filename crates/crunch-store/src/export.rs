@@ -19,6 +19,8 @@ const NORMALIZED_MTIME_NANOSECONDS: u32 = 0;
 const NORMALIZED_NON_EXECUTABLE_MODE: u32 = 0o444;
 const NORMALIZED_EXECUTABLE_MODE: u32 = 0o555;
 const NORMALIZED_DIRECTORY_MODE: u32 = 0o555;
+const EXPORT_READ_BUFFER_BYTES: usize = 65_536;
+const MAX_BLOB_WRITE_BYTES: u64 = 4_294_967_296;
 
 #[derive(Debug)]
 enum ExportWorkItem {
@@ -70,8 +72,12 @@ async fn export_node_to_disk(
         return Err(format!("directory depth limit ({MAX_EXPORT_DEPTH}) exceeded at {dest}"));
     }
     match node {
-        Node::File { digest, executable, .. } => {
-            export_file_to_disk(&digest, executable, &dest, blob_service).await?;
+        Node::File {
+            digest,
+            size,
+            executable,
+        } => {
+            export_file_to_disk(&digest, size, executable, &dest, blob_service).await?;
         }
         Node::Symlink { target, .. } => {
             export_symlink_to_disk(target.as_ref(), &dest)?;
@@ -116,6 +122,7 @@ async fn export_directory_to_disk(
 /// Write a single file blob to disk.
 async fn export_file_to_disk(
     digest: &snix_castore::B3Digest,
+    expected_size: u64,
     is_executable: bool,
     dest: &str,
     blob_service: &(impl BlobService + Clone),
@@ -129,32 +136,79 @@ async fn export_file_to_disk(
         .map_err(|e| format!("opening blob {digest}: {e}"))?
         .ok_or_else(|| format!("blob {digest} not found in castore"))?;
 
+    if expected_size > MAX_BLOB_WRITE_BYTES {
+        return Err(format!("blob {digest} expected size {expected_size} exceeds maximum export size for {dest}"));
+    }
+
+    let temp_dest = temporary_export_file_path(dest)?;
     if let Some(parent) = std::path::Path::new(dest).parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("creating parent dir: {e}"))?;
     }
-    let mut file = std::fs::File::create(dest).map_err(|e| format!("creating {dest}: {e}"))?;
-    const BUF_SIZE: usize = 65_536;
-    const MAX_BLOB_WRITE_BYTES: u64 = 4_294_967_296; // 4 GiB
-    let mut buf = vec![0u8; BUF_SIZE];
+    let mut file = std::fs::File::create(&temp_dest).map_err(|e| format!("creating {temp_dest}: {e}"))?;
+    let mut buf = vec![0u8; EXPORT_READ_BUFFER_BYTES];
     let mut written_bytes: u64 = 0;
-    const MAX_READ_ITERATIONS: u64 = 65_537; // MAX_BLOB_WRITE_BYTES / BUF_SIZE + 1
-    for _ in 0..MAX_READ_ITERATIONS {
+    let mut saw_eof = false;
+    let mut hasher = blake3::Hasher::new();
+    loop {
         let n = reader.read(&mut buf).await.map_err(|e| format!("reading blob: {e}"))?;
         if n == 0 {
+            saw_eof = true;
             break;
         }
+        hasher.update(&buf[..n]);
         let n_u64 = match u64::try_from(n) {
             Ok(v) => v,
             Err(_) => return Err(format!("read size {n} overflows u64")),
         };
-        written_bytes = written_bytes.saturating_add(n_u64);
-        assert!(written_bytes <= MAX_BLOB_WRITE_BYTES, "blob write exceeded {MAX_BLOB_WRITE_BYTES} bytes");
-        std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| format!("writing {dest}: {e}"))?;
+        written_bytes = written_bytes
+            .checked_add(n_u64)
+            .ok_or_else(|| format!("blob {digest} write size overflow for {dest}"))?;
+        if written_bytes > expected_size {
+            drop(file);
+            let _ = std::fs::remove_file(&temp_dest);
+            return Err(format!(
+                "blob {digest} length mismatch for {dest}: expected {expected_size}, stream exceeded declared size"
+            ));
+        }
+        std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| format!("writing {temp_dest}: {e}"))?;
     }
-    std::io::Write::flush(&mut file).map_err(|e| format!("flushing {dest}: {e}"))?;
+    if !saw_eof {
+        drop(file);
+        let _ = std::fs::remove_file(&temp_dest);
+        return Err(format!("blob {digest} did not reach EOF while exporting {dest}"));
+    }
+    let observed_digest = snix_castore::B3Digest::from(hasher.finalize().as_bytes());
+    if written_bytes != expected_size {
+        drop(file);
+        let _ = std::fs::remove_file(&temp_dest);
+        return Err(format!(
+            "blob {digest} length mismatch for {dest}: expected {expected_size}, wrote {written_bytes}"
+        ));
+    }
+    if observed_digest != *digest {
+        drop(file);
+        let _ = std::fs::remove_file(&temp_dest);
+        return Err(format!("blob {digest} digest mismatch while exporting {dest}"));
+    }
+    std::io::Write::flush(&mut file).map_err(|e| format!("flushing {temp_dest}: {e}"))?;
     drop(file);
-    normalize_file_metadata(dest, is_executable)?;
+    normalize_file_metadata(&temp_dest, is_executable)?;
+    std::fs::rename(&temp_dest, dest).map_err(|e| format!("renaming {temp_dest} to {dest}: {e}"))?;
     Ok(())
+}
+
+fn temporary_export_file_path(dest: &str) -> Result<String, String> {
+    let path = std::path::Path::new(dest);
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("export dest has no UTF-8 file name: {dest}"))?;
+    let tmp_name = format!(".{file_name}.tmp-{}", std::process::id());
+    let tmp_path = path.with_file_name(tmp_name);
+    tmp_path
+        .to_str()
+        .map(str::to_string)
+        .ok_or_else(|| format!("temporary export path is not UTF-8 for {dest}"))
 }
 
 /// Create a symlink on disk.
@@ -222,6 +276,9 @@ fn normalize_symlink_timestamp(_dest: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use snix_castore::Directory;
+    use snix_castore::blobservice::BlobReader;
+    use snix_castore::blobservice::BlobService;
+    use snix_castore::blobservice::BlobWriter;
     use snix_castore::blobservice::MemoryBlobService;
     use snix_castore::directoryservice::DirectoryService;
     use snix_castore::directoryservice::RedbDirectoryService;
@@ -232,6 +289,88 @@ mod tests {
 
     fn tmp_ds() -> RedbDirectoryService {
         RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
+    }
+
+    #[derive(Clone)]
+    struct OneByteBlobService {
+        digest: snix_castore::B3Digest,
+        data: Vec<u8>,
+    }
+
+    struct OneByteBlobReader {
+        data: Vec<u8>,
+        pos: u64,
+    }
+
+    impl OneByteBlobReader {
+        fn new(data: Vec<u8>) -> Self {
+            Self { data, pos: 0 }
+        }
+    }
+
+    impl tokio::io::AsyncRead for OneByteBlobReader {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            if buf.remaining() == 0 || self.pos >= self.data.len() as u64 {
+                return std::task::Poll::Ready(Ok(()));
+            }
+            let byte = self.data[self.pos as usize];
+            self.pos = self.pos.saturating_add(1);
+            buf.put_slice(&[byte]);
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
+
+    impl tokio::io::AsyncSeek for OneByteBlobReader {
+        fn start_seek(mut self: std::pin::Pin<&mut Self>, position: std::io::SeekFrom) -> std::io::Result<()> {
+            let len = self.data.len() as u64;
+            let new_pos = match position {
+                std::io::SeekFrom::Start(pos) => pos,
+                std::io::SeekFrom::End(offset) => len
+                    .checked_add_signed(offset)
+                    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "seek over/underflow"))?,
+                std::io::SeekFrom::Current(offset) => self
+                    .pos
+                    .checked_add_signed(offset)
+                    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "seek over/underflow"))?,
+            };
+            if new_pos > len {
+                return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "seek past EOF"));
+            }
+            self.pos = new_pos;
+            Ok(())
+        }
+
+        fn poll_complete(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<u64>> {
+            std::task::Poll::Ready(Ok(self.pos))
+        }
+    }
+
+    impl BlobReader for OneByteBlobReader {}
+
+    #[async_trait::async_trait]
+    impl BlobService for OneByteBlobService {
+        async fn has(&self, digest: &snix_castore::B3Digest) -> std::io::Result<bool> {
+            Ok(*digest == self.digest)
+        }
+
+        async fn open_read(&self, digest: &snix_castore::B3Digest) -> std::io::Result<Option<Box<dyn BlobReader>>> {
+            if *digest == self.digest {
+                Ok(Some(Box::new(OneByteBlobReader::new(self.data.clone()))))
+            } else {
+                Ok(None)
+            }
+        }
+
+        async fn open_write(&self) -> Box<dyn BlobWriter> {
+            panic!("one-byte test service is read-only")
+        }
     }
 
     async fn insert_blob(bs: &MemoryBlobService, data: &[u8]) -> (snix_castore::B3Digest, Node) {
@@ -279,6 +418,50 @@ mod tests {
 
         let written = std::fs::read(&dest).unwrap();
         assert_eq!(written, data);
+    }
+
+    #[tokio::test]
+    async fn export_file_allows_many_small_reads() {
+        const SLOW_READ_BYTES: usize = 70_000;
+
+        let data = vec![b'x'; SLOW_READ_BYTES];
+        let digest = snix_castore::B3Digest::from(blake3::hash(&data).as_bytes());
+        let bs = OneByteBlobService {
+            digest,
+            data: data.clone(),
+        };
+        let ds = tmp_ds();
+        let node = Node::File {
+            digest,
+            size: SLOW_READ_BYTES as u64,
+            executable: false,
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = format!("{}/slow", tmp.path().display());
+
+        export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap();
+
+        let written = std::fs::read(&dest).unwrap();
+        assert_eq!(written, data);
+    }
+
+    #[tokio::test]
+    async fn export_file_rejects_short_blob() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let data = b"short";
+        let (_, mut node) = insert_blob(&bs, data).await;
+        if let Node::File { size, .. } = &mut node {
+            *size = size.saturating_add(1);
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = format!("{}/out", tmp.path().display());
+
+        let err = export_castore_to_disk(&node, &dest, &bs, &ds).await.unwrap_err();
+
+        assert!(err.contains("length mismatch"), "unexpected error: {err}");
+        assert!(!std::path::Path::new(&dest).exists(), "short export must not publish destination");
     }
 
     #[tokio::test]

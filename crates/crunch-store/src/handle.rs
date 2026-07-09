@@ -20,11 +20,15 @@ use reqwest::StatusCode;
 use reqwest::redirect::Policy;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
+use snix_castore::blobservice::CombinedBlobService;
 use snix_castore::blobservice::ObjectStoreBlobService;
+use snix_castore::directoryservice::Cache as DirectoryCache;
 use snix_castore::directoryservice::DirectoryService;
 use snix_castore::directoryservice::RedbDirectoryService;
 use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+use snix_castore::import::fs::ingest_path;
 use snix_store::path_info::PathInfo;
+use snix_store::pathinfoservice::CachePathInfoService as PathInfoCache;
 use snix_store::pathinfoservice::NixHTTPPathInfoService;
 use snix_store::pathinfoservice::NixHTTPPathInfoServiceConfig;
 use snix_store::pathinfoservice::PathInfoService;
@@ -36,40 +40,34 @@ use tracing::info;
 use tracing::info as trace_info;
 use url::Url;
 
-use snix_castore::blobservice::CombinedBlobService;
-use snix_castore::directoryservice::Cache as DirectoryCache;
-use snix_store::pathinfoservice::CachePathInfoService as PathInfoCache;
-
 use crate::ArtifactProvenance;
 use crate::CaMappings;
 use crate::Error;
 use crate::GcReport;
 use crate::GcRootRecord;
 use crate::GcRootSource;
+use crate::Publisher;
 use crate::StoreAuditEvent;
-use crate::completeness::recursive_castore_completeness;
-use crate::layer::StoreLayer;
 use crate::StoreAuditKind;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
-use crate::Publisher;
-use crate::metadata_cache::{
-    AdvisoryMetadataCache,
-    MetadataCacheKey,
-    MetadataClass,
-    MetadataSchemaVersion,
-    MetadataValidity,
-    RefreshPolicy,
-    build_metadata_cache_key,
-    check_metadata_validity,
-    new_metadata_entry,
-};
 use crate::attestation::load_artifact_attestation;
 use crate::attestation::load_or_create_runtime_closure_attestation;
 use crate::attestation::persist_artifact_attestation;
+use crate::completeness::recursive_castore_completeness;
 use crate::export::export_castore_to_disk;
 use crate::gc;
+use crate::layer::StoreLayer;
+use crate::metadata_cache::AdvisoryMetadataCache;
+use crate::metadata_cache::MetadataCacheKey;
+use crate::metadata_cache::MetadataClass;
+use crate::metadata_cache::MetadataSchemaVersion;
+use crate::metadata_cache::MetadataValidity;
+use crate::metadata_cache::RefreshPolicy;
+use crate::metadata_cache::build_metadata_cache_key;
+use crate::metadata_cache::check_metadata_validity;
+use crate::metadata_cache::new_metadata_entry;
 use crate::roots;
 
 /// Configuration for opening a store.
@@ -376,6 +374,15 @@ pub struct PersistOutputRequest<'a> {
     pub root_source: Option<GcRootSource>,
 }
 
+fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
+    let metadata = std::fs::symlink_metadata(path)?;
+    if metadata.is_dir() {
+        std::fs::remove_dir_all(path)
+    } else {
+        std::fs::remove_file(path)
+    }
+}
+
 /// Dynamic dispatch via trait objects. Store operations are I/O-bound so
 /// the vtable cost is irrelevant.
 pub struct StoreHandle {
@@ -541,24 +548,20 @@ impl StoreHandle {
 
         // Verify prefix match and open each base store in read-only mode.
         let mut base_blob_services: Vec<Arc<dyn BlobService>> = Vec::with_capacity(config.base_state_dirs.len());
-        let mut base_directory_services: Vec<Arc<dyn DirectoryService>> = Vec::with_capacity(config.base_state_dirs.len());
-        let mut base_pathinfo_services: Vec<Arc<dyn PathInfoService>> = Vec::with_capacity(config.base_state_dirs.len());
+        let mut base_directory_services: Vec<Arc<dyn DirectoryService>> =
+            Vec::with_capacity(config.base_state_dirs.len());
+        let mut base_pathinfo_services: Vec<Arc<dyn PathInfoService>> =
+            Vec::with_capacity(config.base_state_dirs.len());
 
         for base_dir in &config.base_state_dirs {
             if !base_dir.is_dir() {
-                return Err(Error::Store(format!(
-                    "base state directory does not exist: {}",
-                    base_dir.display()
-                )));
+                return Err(Error::Store(format!("base state directory does not exist: {}", base_dir.display())));
             }
 
             // Open base blob service (read-only, no write needed).
             let blob_dir = base_dir.join("blobs");
             if !blob_dir.is_dir() {
-                return Err(Error::Store(format!(
-                    "base blob directory does not exist: {}",
-                    blob_dir.display()
-                )));
+                return Err(Error::Store(format!("base blob directory does not exist: {}", blob_dir.display())));
             }
             let base_blob = ObjectStoreBlobService::new_local(&blob_dir)
                 .map_err(|e| Error::Store(format!("opening base blob service {}: {e}", blob_dir.display())))?;
@@ -585,108 +588,76 @@ impl StoreHandle {
         // Blob: CombinedBlobService already has read-through (no backfill) semantics.
         let combined_blob = if base_blob_services.len() == 1 {
             let base = base_blob_services.into_iter().next().unwrap();
-            Arc::new(CombinedBlobService::new(
-                "overlay".to_string(),
-                overlay_blob,
-                base,
-            )) as Arc<dyn BlobService>
+            Arc::new(CombinedBlobService::new("overlay".to_string(), overlay_blob, base)) as Arc<dyn BlobService>
         } else {
             // Chain multiple bases: inner_blob = baseA combined with baseB, etc.
             let mut iter = base_blob_services.into_iter();
             let mut inner: Arc<dyn BlobService> = iter.next().unwrap();
             for base in iter {
-                inner = Arc::new(CombinedBlobService::new(
-                    "base-chain".to_string(),
-                    inner,
-                    base,
-                )) as Arc<dyn BlobService>;
+                inner =
+                    Arc::new(CombinedBlobService::new("base-chain".to_string(), inner, base)) as Arc<dyn BlobService>;
             }
-            Arc::new(CombinedBlobService::new(
-                "overlay".to_string(),
-                overlay_blob,
-                inner,
-            )) as Arc<dyn BlobService>
+            Arc::new(CombinedBlobService::new("overlay".to_string(), overlay_blob, inner)) as Arc<dyn BlobService>
         };
 
         // Directory: Cache with read_only_far=true
         let combined_directory: Arc<dyn DirectoryService> = if base_directory_services.len() == 1 {
             let base = base_directory_services.into_iter().next().unwrap();
-            Arc::new(DirectoryCache::new_read_only_far(
-                "overlay".to_string(),
-                overlay_directory,
-                base,
-            ))
+            Arc::new(DirectoryCache::new_read_only_far("overlay".to_string(), overlay_directory, base))
         } else {
             let mut iter = base_directory_services.into_iter();
             let mut inner: Arc<dyn DirectoryService> = iter.next().unwrap();
             for base in iter {
-                inner = Arc::new(DirectoryCache::new_read_only_far(
-                    "base-chain".to_string(),
-                    inner,
-                    base,
-                )) as Arc<dyn DirectoryService>;
+                inner = Arc::new(DirectoryCache::new_read_only_far("base-chain".to_string(), inner, base))
+                    as Arc<dyn DirectoryService>;
             }
-            Arc::new(DirectoryCache::new_read_only_far(
-                "overlay".to_string(),
-                overlay_directory,
-                inner,
-            ))
+            Arc::new(DirectoryCache::new_read_only_far("overlay".to_string(), overlay_directory, inner))
         };
 
         // PathInfo: Cache with read_only_far=true
         let overlay_pathinfo_for_writes = overlay_pathinfo.clone();
         let combined_pathinfo: Arc<dyn PathInfoService> = if base_pathinfo_services.len() == 1 {
             let base = base_pathinfo_services.into_iter().next().unwrap();
-            Arc::new(PathInfoCache::new_read_only_far(
-                "overlay".to_string(),
-                overlay_pathinfo,
-                base,
-            ))
+            Arc::new(PathInfoCache::new_read_only_far("overlay".to_string(), overlay_pathinfo, base))
         } else {
             let mut iter = base_pathinfo_services.into_iter();
             let mut inner: Arc<dyn PathInfoService> = iter.next().unwrap();
             for base in iter {
-                inner = Arc::new(PathInfoCache::new_read_only_far(
-                    "base-chain".to_string(),
-                    inner,
-                    base,
-                )) as Arc<dyn PathInfoService>;
+                inner = Arc::new(PathInfoCache::new_read_only_far("base-chain".to_string(), inner, base))
+                    as Arc<dyn PathInfoService>;
             }
-            Arc::new(PathInfoCache::new_read_only_far(
-                "overlay".to_string(),
-                overlay_pathinfo,
-                inner,
-            ))
+            Arc::new(PathInfoCache::new_read_only_far("overlay".to_string(), overlay_pathinfo, inner))
         };
 
         // Remote substitution (single cache URL, same as open() but added to combined pathinfo).
         let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
             Some(ref url_str) => match Url::parse(url_str) {
-                Ok(parsed_url) => match build_remote_pathinfo(url_str, combined_blob.clone(), combined_directory.clone())
-                {
-                    Ok(svc) => match parse_remote_trusted_public_keys(url_str) {
-                        Ok(trusted_public_keys) => {
-                            info!(url = %url_str, "binary cache substitution enabled (overlay mode)");
-                            (Some(svc), vec![parsed_url], trusted_public_keys)
-                        }
-                        Err(err) => {
+                Ok(parsed_url) => {
+                    match build_remote_pathinfo(url_str, combined_blob.clone(), combined_directory.clone()) {
+                        Ok(svc) => match parse_remote_trusted_public_keys(url_str) {
+                            Ok(trusted_public_keys) => {
+                                info!(url = %url_str, "binary cache substitution enabled (overlay mode)");
+                                (Some(svc), vec![parsed_url], trusted_public_keys)
+                            }
+                            Err(err) => {
+                                tracing::warn!(
+                                    url = %url_str,
+                                    err = %err,
+                                    "failed to parse remote cache trust policy, substitution disabled"
+                                );
+                                (None, Vec::new(), Vec::new())
+                            }
+                        },
+                        Err(e) => {
                             tracing::warn!(
                                 url = %url_str,
-                                err = %err,
-                                "failed to parse remote cache trust policy, substitution disabled"
+                                err = %e,
+                                "failed to configure remote cache, substitution disabled"
                             );
                             (None, Vec::new(), Vec::new())
                         }
-                    },
-                    Err(e) => {
-                        tracing::warn!(
-                            url = %url_str,
-                            err = %e,
-                            "failed to configure remote cache, substitution disabled"
-                        );
-                        (None, Vec::new(), Vec::new())
                     }
-                },
+                }
                 Err(e) => {
                     tracing::warn!(
                         url = %url_str,
@@ -973,8 +944,12 @@ impl StoreHandle {
         assert!(!path.name().is_empty(), "store path name must not be empty");
         assert!(path.to_string().contains('-'), "store path text must include a digest/name separator");
 
-        if let Some(node) = self.output_nodes.get(path) {
-            return Ok(Some(node.clone()));
+        if let Some(node) = self.output_nodes.get(path).cloned() {
+            if self.castore_has_complete_content(&node).await? {
+                return Ok(Some(node));
+            }
+            self.output_nodes.remove(path);
+            return Ok(None);
         }
 
         let maybe_path_info = self
@@ -991,7 +966,7 @@ impl StoreHandle {
                 path_info.store_path
             )));
         }
-        if !self.castore_has_content(&path_info.node).await? {
+        if !self.castore_has_complete_content(&path_info.node).await? {
             return Ok(None);
         }
 
@@ -1043,23 +1018,19 @@ impl StoreHandle {
 
             match stored {
                 Some(path_info) => {
-                    // Directory outputs require recursive castore completeness
-                    // (child blobs and subdirectories must be present). File and
-                    // symlink outputs only need root-node existence.
+                    // All outputs require declared-size castore completeness.
+                    // Directory outputs recursively check child blobs and directories;
+                    // file outputs verify the blob can reconstruct the declared size;
+                    // symlinks are inline and always complete.
                     // r[impl cache_substitution.castore_completeness]
-                    let has_content = match &path_info.node {
-                        Node::Directory { .. } => {
-                            self.castore_has_complete_content(&path_info.node).await?
-                        }
-                        _ => self.castore_has_content(&path_info.node).await?,
-                    };
+                    let has_content = self.castore_has_complete_content(&path_info.node).await?;
                     if has_content {
                         persist_artifact_attestation(&self.state_dir, &self.store_dir, &path_info, output_name, None)
                             .await?;
+                        self.export_output_if_needed(&output_path, &path_info.node, is_root).await?;
                         self.output_nodes.insert(output_path.clone(), path_info.node.clone());
                         self.built_outputs
                             .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
-                        self.export_output_if_needed(&output_path, &path_info.node, is_root).await?;
                         if is_root && let Some(source) = root_source {
                             self.register_retained_root(&output_path, source).await?;
                         }
@@ -2048,11 +2019,9 @@ impl StoreHandle {
         if self.remote_cache_urls.len() > 1 {
             for fallback_idx in 1..self.remote_cache_urls.len() {
                 let url_str = self.remote_cache_urls[fallback_idx].as_str().to_string();
-                let Ok(fallback_svc) = build_remote_pathinfo(
-                    &url_str,
-                    self.blob_service.clone(),
-                    self.directory_service.clone(),
-                ) else {
+                let Ok(fallback_svc) =
+                    build_remote_pathinfo(&url_str, self.blob_service.clone(), self.directory_service.clone())
+                else {
                     tracing::warn!(
                         url = %url_str,
                         "failed to build fallback remote cache PathInfo service, skipping"
@@ -2111,7 +2080,16 @@ impl StoreHandle {
             }
         }
 
-        self.try_substitute_remote_fetch(remote, digest, output_path, output_name, is_root, root_source, delta_fallback_reason).await
+        self.try_substitute_remote_fetch(
+            remote,
+            digest,
+            output_path,
+            output_name,
+            is_root,
+            root_source,
+            delta_fallback_reason,
+        )
+        .await
     }
 
     /// Attempt substitution through a remote PathInfo service without
@@ -2125,7 +2103,8 @@ impl StoreHandle {
         is_root: bool,
         root_source: Option<GcRootSource>,
     ) -> Result<Option<PathInfo>, Error> {
-        self.try_substitute_remote_fetch(remote, digest, output_path, output_name, is_root, root_source, None).await
+        self.try_substitute_remote_fetch(remote, digest, output_path, output_name, is_root, root_source, None)
+            .await
     }
 
     /// Core NAR-fetch substitution for a single remote PathInfo service.
@@ -2154,23 +2133,15 @@ impl StoreHandle {
 
         let meta_key = build_metadata_cache_key(
             &cache_url,
-            "",  // trust_policy_digest: advisory only
+            "", // trust_policy_digest: advisory only
             &self.store_dir,
             &output_digest_hex,
             MetadataClass::Narinfo,
         );
-        let miss_key = build_metadata_cache_key(
-            &cache_url,
-            "",
-            &self.store_dir,
-            &output_digest_hex,
-            MetadataClass::NegativeMiss,
-        );
+        let miss_key =
+            build_metadata_cache_key(&cache_url, "", &self.store_dir, &output_digest_hex, MetadataClass::NegativeMiss);
 
-        let now_secs = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let now_secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
 
         // Check negative miss cache first.
         if let Some(entry) = self.advisory_metadata_cache.get(&miss_key) {
@@ -2240,15 +2211,15 @@ impl StoreHandle {
                     self.register_retained_root(output_path, source).await?;
                 }
 
-        // Record successful hit in advisory cache (if metadata was not
-        // already known, or to refresh the entry).
-        if !metadata_reused {
-            let hit_entry = new_metadata_entry(meta_key, now_secs, "substituted".to_string());
-            self.advisory_metadata_cache.put(hit_entry);
-            self.advisory_metadata_cache.save(&self.state_dir);
-        }
+                // Record successful hit in advisory cache (if metadata was not
+                // already known, or to refresh the entry).
+                if !metadata_reused {
+                    let hit_entry = new_metadata_entry(meta_key, now_secs, "substituted".to_string());
+                    self.advisory_metadata_cache.put(hit_entry);
+                    self.advisory_metadata_cache.save(&self.state_dir);
+                }
 
-        Ok(Some(remote_pi))
+                Ok(Some(remote_pi))
             }
             Ok(None) => {
                 // Record negative miss in advisory cache.
@@ -2302,10 +2273,10 @@ impl StoreHandle {
         )
         .await?;
 
+        self.export_output_if_needed(req.output_path, &req.final_node, req.is_root).await?;
         let abs_path = req.output_path.to_absolute_path_with_prefix(&self.output_dir_str);
         self.built_outputs.insert(abs_path, req.path_info.clone());
         self.output_nodes.insert(req.output_path.clone(), req.final_node.clone());
-        self.export_output_if_needed(req.output_path, &req.final_node, req.is_root).await?;
         if req.is_root
             && let Some(source) = req.root_source
         {
@@ -2339,8 +2310,17 @@ impl StoreHandle {
         }
 
         let abs_path = output_path.to_absolute_path_with_prefix(&self.output_dir_str);
-        if PathBuf::from(&abs_path).exists() {
-            return Ok(());
+        let abs_path_buf = PathBuf::from(&abs_path);
+        if std::fs::symlink_metadata(&abs_path_buf).is_ok() {
+            if self.exported_path_matches_node(&abs_path_buf, final_node).await? {
+                return Ok(());
+            }
+            tracing::warn!(
+                path = %abs_path,
+                "existing exported output differs from castore; refreshing materialization"
+            );
+            remove_existing_export_path(&abs_path_buf)
+                .map_err(|e| Error::Export(format!("removing stale exported output {abs_path}: {e}")))?;
         }
 
         match export_castore_to_disk(final_node, &abs_path, &self.blob_service, &self.directory_service).await {
@@ -2355,6 +2335,14 @@ impl StoreHandle {
             }
             Err(e) => Err(Error::Export(format!("exporting output {abs_path} to disk: {e}"))),
         }
+    }
+
+    async fn exported_path_matches_node(&self, path: &Path, expected_node: &Node) -> Result<bool, Error> {
+        let actual_node =
+            ingest_path::<_, _, _, &[u8]>(self.blob_service.clone(), self.directory_service.clone(), path, None)
+                .await
+                .map_err(|e| Error::Export(format!("inspecting existing export {}: {e}", path.display())))?;
+        Ok(actual_node == *expected_node)
     }
 
     pub async fn get_artifact_attestation(
@@ -3192,6 +3180,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cached_node_for_path_rejects_incomplete_session_node() {
+        const DIGEST_BYTE: u8 = 53;
+        const DECLARED_SIZE: u64 = 1;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("stale-session-node", DIGEST_BYTE);
+        let missing_digest = snix_castore::B3Digest::from(blake3::hash(b"missing-session-node").as_bytes());
+        let stale_node = Node::File {
+            digest: missing_digest,
+            size: DECLARED_SIZE,
+            executable: false,
+        };
+        handle.output_nodes.insert(output_path.clone(), stale_node);
+
+        let reused = handle.cached_node_for_path(&output_path).await.unwrap();
+
+        assert!(reused.is_none());
+        assert!(!handle.output_nodes.contains_key(&output_path));
+    }
+
+    #[tokio::test]
     async fn check_cache_directory_output_with_missing_child_is_castore_incomplete() {
         // V5: a directory output whose root exists but whose child blob
         // is missing from castore is rejected as a cache miss.
@@ -3211,7 +3221,8 @@ mod tests {
             digest: blob_digest,
             size: 13,
             executable: false,
-        }).unwrap();
+        })
+        .unwrap();
         let dir_digest = dir.digest();
         let dir_size = dir.size();
 
@@ -3263,16 +3274,17 @@ mod tests {
         // use a different blob_digest that was never written.
 
         // Rebuild with a missing-blob directory:
-        let missing_blob = snix_castore::B3Digest::from(blake3::hash(b"never-written").as_bytes());
+        let missing_payload = b"never-written";
+        let missing_blob = snix_castore::B3Digest::from(blake3::hash(missing_payload).as_bytes());
+        let missing_size = u64::try_from(missing_payload.len()).expect("test payload length fits u64");
         let mut missing_dir = snix_castore::Directory::new();
-        missing_dir.add(
-            snix_castore::PathComponent::try_from("missing.txt").unwrap(),
-            Node::File {
+        missing_dir
+            .add(snix_castore::PathComponent::try_from("missing.txt").unwrap(), Node::File {
                 digest: missing_blob,
-                size: 0,
+                size: missing_size,
                 executable: false,
-            },
-        ).unwrap();
+            })
+            .unwrap();
         let missing_dir_digest = missing_dir.digest();
         let missing_dir_size = missing_dir.size();
         handle.directory_service.put(missing_dir).await.unwrap();
@@ -3312,32 +3324,20 @@ mod tests {
 
         // Missing child blob → cache miss.
         {
-            let cached = handle
-                .check_cache(&drv_path_missing, &missing_derivation, false, None)
-                .await
-                .unwrap();
-            assert!(
-                cached.is_none(),
-                "directory with missing child blob should NOT be a cache hit"
-            );
+            let cached = handle.check_cache(&drv_path_missing, &missing_derivation, false, None).await.unwrap();
+            assert!(cached.is_none(), "directory with missing child blob should NOT be a cache hit");
         }
 
         // Now put the missing blob → cache hit.
         {
             let mut writer = handle.blob_service.open_write().await;
-            tokio::io::AsyncWriteExt::write_all(&mut writer, b"never-written").await.unwrap();
+            tokio::io::AsyncWriteExt::write_all(&mut writer, missing_payload).await.unwrap();
             writer.close().await.unwrap();
         }
 
         {
-            let cached = handle
-                .check_cache(&drv_path_missing, &missing_derivation, false, None)
-                .await
-                .unwrap();
-            assert!(
-                cached.is_some(),
-                "directory with all children present should be a cache hit"
-            );
+            let cached = handle.check_cache(&drv_path_missing, &missing_derivation, false, None).await.unwrap();
+            assert!(cached.is_some(), "directory with all children present should be a cache hit");
         }
     }
 
@@ -3502,6 +3502,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn root_export_refreshes_stale_materialized_path() {
+        const DIGEST_BYTE: u8 = 52;
+        const NAR_HASH_BYTE: u8 = 13;
+        const TEST_DIGEST_LEN: usize = 32;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("refresh-stale-export", DIGEST_BYTE);
+        let expected_bytes = b"fresh-castore-content";
+        let stale_bytes = b"stale-partial-content";
+        let digest = store_local_blob(&handle, expected_bytes).await;
+        let expected_size = u64::try_from(expected_bytes.len()).expect("test bytes fit u64");
+        let node = Node::File {
+            digest,
+            size: expected_size,
+            executable: false,
+        };
+        let output_abs = output_path.to_absolute_path_with_prefix(&state_dir.path().display().to_string());
+        let output_abs_path = PathBuf::from(&output_abs);
+        std::fs::create_dir_all(output_abs_path.parent().unwrap()).unwrap();
+        std::fs::write(&output_abs_path, stale_bytes).unwrap();
+        let signing_key = SigningKey::new(
+            "store-test-refresh".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[NAR_HASH_BYTE; TEST_DIGEST_LEN]),
+        );
+        let path_info = signed_pathinfo_with_signing_key(
+            output_path.clone(),
+            node.clone(),
+            expected_size,
+            [NAR_HASH_BYTE; TEST_DIGEST_LEN],
+            &signing_key,
+        );
+
+        handle
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &output_path,
+                path_info,
+                final_node: node,
+                provenance: None,
+                is_root: true,
+                root_source: Some(crate::GcRootSource::Build),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(std::fs::read(&output_abs_path).unwrap(), expected_bytes);
+    }
+
+    #[tokio::test]
     async fn persist_signed_output_registers_self_build_root() {
         let state_dir = tempfile::tempdir().unwrap();
         let mut handle = test_handle(state_dir.path());
@@ -3559,6 +3609,7 @@ mod tests {
         // V9: a configured publisher is called after successful output admission.
         // r[verify remote_builds.production_verified_publication]
         use std::sync::Arc;
+
         use crate::RecordingPublisher;
 
         let state_dir = tempfile::tempdir().unwrap();
@@ -3592,6 +3643,7 @@ mod tests {
         // retroactively fail the build admission.
         // r[verify remote_builds.production_verified_publication]
         use std::sync::Arc;
+
         use crate::RecordingPublisher;
 
         let state_dir = tempfile::tempdir().unwrap();
@@ -4939,23 +4991,19 @@ mod tests {
             let (mut handle, primary_svc) = test_handle_with_remote(state_dir.path());
             handle.remote_pathinfo = Some(primary_svc.clone());
             primary_svc.put(path_info.clone()).await.unwrap();
-            let result = handle
-                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
-                .await
-                .unwrap();
+            let result =
+                handle.try_substitute_remote(*output_path.digest(), &output_path, "out", false, None).await.unwrap();
             assert!(result.is_some(), "populated primary cache should return Some");
         }
 
         // Phase 2: primary is empty → returns None
         {
             let (mut handle, _primary_svc) = test_handle_with_remote(state_dir.path());
-            handle.remote_pathinfo = Some(Arc::new(
-                LruPathInfoService::with_capacity("empty".to_string(), NonZeroUsize::new(1).unwrap()),
-            ) as Arc<dyn PathInfoService>);
-            let result = handle
-                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
-                .await
-                .unwrap();
+            handle.remote_pathinfo =
+                Some(Arc::new(LruPathInfoService::with_capacity("empty".to_string(), NonZeroUsize::new(1).unwrap()))
+                    as Arc<dyn PathInfoService>);
+            let result =
+                handle.try_substitute_remote(*output_path.digest(), &output_path, "out", false, None).await.unwrap();
             assert!(result.is_none(), "empty primary cache should return None");
         }
 
@@ -4964,10 +5012,8 @@ mod tests {
             let (mut handle, _) = test_handle_with_remote(state_dir.path());
             handle.remote_pathinfo = None;
             handle.remote_cache_urls.clear();
-            let result = handle
-                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
-                .await
-                .unwrap();
+            let result =
+                handle.try_substitute_remote(*output_path.digest(), &output_path, "out", false, None).await.unwrap();
             assert!(result.is_none(), "no remote cache at all should return None");
         }
     }
@@ -4987,16 +5033,16 @@ mod tests {
 
         // First substitution: metadata cache should be populated with Narinfo
         {
-            let result = handle
-                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
-                .await
-                .unwrap();
+            let result =
+                handle.try_substitute_remote(*output_path.digest(), &output_path, "out", false, None).await.unwrap();
             assert!(result.is_some(), "first substitution should succeed");
         }
 
         // The metadata cache should now have a Narinfo entry for this output.
         let meta_key = build_metadata_cache_key(
-            "", "", &handle.store_dir,
+            "",
+            "",
+            &handle.store_dir,
             &output_path.digest().iter().map(|b| format!("{b:02x}")).collect::<String>(),
             MetadataClass::Narinfo,
         );
@@ -5017,22 +5063,22 @@ mod tests {
         let output_path = test_output("negative-miss", 88);
 
         // Set remote_pathinfo to a fresh empty service.
-        handle.remote_pathinfo = Some(Arc::new(
-            LruPathInfoService::with_capacity("empty".to_string(), NonZeroUsize::new(1).unwrap()),
-        ) as Arc<dyn PathInfoService>);
+        handle.remote_pathinfo =
+            Some(Arc::new(LruPathInfoService::with_capacity("empty".to_string(), NonZeroUsize::new(1).unwrap()))
+                as Arc<dyn PathInfoService>);
 
         // First call: remote has no PathInfo → records NegativeMiss
         {
-            let result = handle
-                .try_substitute_remote(*output_path.digest(), &output_path, "out", false, None)
-                .await
-                .unwrap();
+            let result =
+                handle.try_substitute_remote(*output_path.digest(), &output_path, "out", false, None).await.unwrap();
             assert!(result.is_none(), "empty remote should return None");
         }
 
         // Metadata cache should have a NegativeMiss entry.
         let miss_key = build_metadata_cache_key(
-            "", "", &handle.store_dir,
+            "",
+            "",
+            &handle.store_dir,
             &output_path.digest().iter().map(|b| format!("{b:02x}")).collect::<String>(),
             MetadataClass::NegativeMiss,
         );
@@ -5052,26 +5098,20 @@ mod tests {
         std::fs::create_dir_all(base_dir.join("blobs")).unwrap();
 
         // Open and close directory service to create the DB file.
-        let _dir_svc = RedbDirectoryService::new(
-            "base-test".to_string(),
-            RedbDirectoryServiceConfig {
-                path: Some(base_dir.join("directories.redb")),
-                read_only: false,
-                cache_size: None,
-            },
-        )
+        let _dir_svc = RedbDirectoryService::new("base-test".to_string(), RedbDirectoryServiceConfig {
+            path: Some(base_dir.join("directories.redb")),
+            read_only: false,
+            cache_size: None,
+        })
         .await
         .unwrap();
 
         // Open pathinfo service.
-        let pathinfo_svc = RedbPathInfoService::new(
-            "base-test".to_string(),
-            RedbPathInfoServiceConfig {
-                path: Some(base_dir.join("pathinfo.redb")),
-                read_only: false,
-                cache_size: None,
-            },
-        )
+        let pathinfo_svc = RedbPathInfoService::new("base-test".to_string(), RedbPathInfoServiceConfig {
+            path: Some(base_dir.join("pathinfo.redb")),
+            read_only: false,
+            cache_size: None,
+        })
         .await
         .unwrap();
 
@@ -5084,11 +5124,7 @@ mod tests {
 
     /// Create a real filesystem-based overlay store over a base store,
     /// both sharing the same store_dir prefix.
-    async fn create_overlay_handle(
-        overlay_dir: &Path,
-        base_dir: &Path,
-        store_dir: &str,
-    ) -> StoreHandle {
+    async fn create_overlay_handle(overlay_dir: &Path, base_dir: &Path, store_dir: &str) -> StoreHandle {
         StoreHandle::open_overlay(StoreConfig {
             state_dir: overlay_dir.to_path_buf(),
             output_dir: overlay_dir.to_path_buf(),
@@ -5213,14 +5249,11 @@ mod tests {
         assert!(overlay_hit.is_some(), "overlay must have the persisted path");
 
         // Verify the base does NOT have the path (it only has the base-only path).
-        let base_pathinfo = RedbPathInfoService::new(
-            "base-verify".to_string(),
-            RedbPathInfoServiceConfig {
-                path: Some(base_dir.path().join("pathinfo.redb")),
-                read_only: true,
-                cache_size: None,
-            },
-        )
+        let base_pathinfo = RedbPathInfoService::new("base-verify".to_string(), RedbPathInfoServiceConfig {
+            path: Some(base_dir.path().join("pathinfo.redb")),
+            read_only: true,
+            cache_size: None,
+        })
         .await
         .unwrap();
         let base_hit = base_pathinfo.get(*output_path.digest()).await.unwrap();
@@ -5238,7 +5271,8 @@ mod tests {
         let base_dir = tempfile::tempdir().unwrap();
 
         // Create base with /nix/store prefix.
-        let _base_path_info = create_base_store(base_dir.path(), "/nix/store", &test_output("prefix-mismatch", 9)).await;
+        let _base_path_info =
+            create_base_store(base_dir.path(), "/nix/store", &test_output("prefix-mismatch", 9)).await;
 
         // Open overlay with /crunch/store prefix — mismatch must fail.
         let result = StoreHandle::open_overlay(StoreConfig {
