@@ -38,6 +38,8 @@ pub const VALENCE_STACK_PROVENANCE_RECEIPT_ROLE: &str = "valence-stack-provenanc
 pub const STACK_PROVENANCE_CLAIM_SCOPE: &str = "identity-linkage-sidecar";
 pub const STACK_PROVENANCE_MODE_OPTIONAL: &str = "optional";
 pub const STACK_PROVENANCE_MODE_REQUIRED: &str = "required";
+pub const RELEASE_PROFILE_GENERIC: &str = "generic";
+pub const RELEASE_PROFILE_ONIX_STACK: &str = "onix-stack";
 pub const STACK_PROVENANCE_DISPOSITION_ABSENT: &str = "absent";
 pub const STACK_PROVENANCE_DISPOSITION_PRESENT: &str = "present";
 pub const STACK_PROVENANCE_DISPOSITION_INVALID: &str = "invalid";
@@ -365,6 +367,24 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_kani_toolchain_evidence(manifest)?;
     validate_stack_provenance_manifest_evidence(manifest)?;
     Ok(())
+}
+
+pub fn stack_provenance_mode_for_release_profile(
+    release_profile: &str,
+    requested_mode: &str,
+) -> Result<&'static str, ReleaseEvidenceError> {
+    if !stack_provenance_mode_is_supported(requested_mode) {
+        return Err(validation_error(format!("unsupported stack provenance mode: {requested_mode}")));
+    }
+    match release_profile {
+        RELEASE_PROFILE_GENERIC => match requested_mode {
+            STACK_PROVENANCE_MODE_OPTIONAL => Ok(STACK_PROVENANCE_MODE_OPTIONAL),
+            STACK_PROVENANCE_MODE_REQUIRED => Ok(STACK_PROVENANCE_MODE_REQUIRED),
+            _ => unreachable!("requested stack provenance mode was already validated"),
+        },
+        RELEASE_PROFILE_ONIX_STACK => Ok(STACK_PROVENANCE_MODE_REQUIRED),
+        _ => Err(validation_error(format!("unsupported release profile: {release_profile}"))),
+    }
 }
 
 pub fn evaluate_stack_provenance_release_evidence(
@@ -2159,6 +2179,38 @@ mod tests {
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
 
         assert!(err.to_string().contains("overclaim"));
+    }
+
+    // r[verify mantle.release_provenance.stack_profile.required]
+    // r[verify mantle.release_provenance.stack_profile.docs.generic]
+    #[test]
+    fn release_profile_maps_generic_and_onix_stack_modes() {
+        let generic_optional =
+            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_GENERIC, STACK_PROVENANCE_MODE_OPTIONAL).unwrap();
+        let generic_required =
+            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_GENERIC, STACK_PROVENANCE_MODE_REQUIRED).unwrap();
+        let onix_from_optional =
+            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_ONIX_STACK, STACK_PROVENANCE_MODE_OPTIONAL)
+                .unwrap();
+        let onix_from_required =
+            stack_provenance_mode_for_release_profile(RELEASE_PROFILE_ONIX_STACK, STACK_PROVENANCE_MODE_REQUIRED)
+                .unwrap();
+
+        assert_eq!(STACK_PROVENANCE_MODE_OPTIONAL, generic_optional);
+        assert_eq!(STACK_PROVENANCE_MODE_REQUIRED, generic_required);
+        assert_eq!(STACK_PROVENANCE_MODE_REQUIRED, onix_from_optional);
+        assert_eq!(STACK_PROVENANCE_MODE_REQUIRED, onix_from_required);
+    }
+
+    // r[verify mantle.release_provenance.stack_profile.negative]
+    #[test]
+    fn release_profile_rejects_unsupported_profile_or_stack_mode() {
+        let profile_err =
+            stack_provenance_mode_for_release_profile("experimental", STACK_PROVENANCE_MODE_OPTIONAL).unwrap_err();
+        let mode_err = stack_provenance_mode_for_release_profile(RELEASE_PROFILE_GENERIC, "ambient").unwrap_err();
+
+        assert!(profile_err.to_string().contains("unsupported release profile"));
+        assert!(mode_err.to_string().contains("unsupported stack provenance mode"));
     }
 
     // r[verify mantle.release_provenance.valence_required_policy.required_valid]

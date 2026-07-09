@@ -121,6 +121,7 @@ pub(crate) fn cmd_release(
             provider_fixed_point_proof,
             require_external_evidence_role,
             require_provider_fixed_point_proof,
+            release_profile,
             stack_provenance,
         } => cmd_release_verify(
             current_dir,
@@ -134,6 +135,7 @@ pub(crate) fn cmd_release(
             provider_fixed_point_proof,
             require_external_evidence_role,
             require_provider_fixed_point_proof,
+            release_profile,
             stack_provenance,
         ),
         crate::ReleaseAction::Reproduce {
@@ -506,6 +508,7 @@ fn cmd_release_verify(
     provider_fixed_point_proof: Option<PathBuf>,
     require_external_evidence_role: Vec<String>,
     require_provider_fixed_point_proof: bool,
+    release_profile: String,
     stack_provenance_mode: String,
 ) -> Result<(), RunError> {
     let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
@@ -527,12 +530,16 @@ fn cmd_release_verify(
     let reproducibility_status = reproducibility_status(reproducibility.as_ref());
     let deterministic_result =
         evaluate_deterministic_release_claim(&manifest, &resolved_bundle_dir, deterministic_request)?;
+    let effective_stack_provenance_mode =
+        crunch_release_core::stack_provenance_mode_for_release_profile(&release_profile, &stack_provenance_mode)
+            .map_err(|err| RunError::Internal(err.to_string()))?;
+    // r[impl mantle.release_provenance.stack_profile.required]
     // r[impl mantle.release_provenance.valence_required_policy]
     // r[impl mantle.release_provenance.valence_required_policy.optional_absent]
     // r[impl mantle.release_provenance.valence_required_policy.required_valid]
     // r[impl mantle.release_provenance.valence_required_policy.required_missing]
     let stack_provenance_result =
-        crunch_release_core::evaluate_stack_provenance_release_evidence(&manifest, &stack_provenance_mode);
+        crunch_release_core::evaluate_stack_provenance_release_evidence(&manifest, effective_stack_provenance_mode);
 
     let stagex_result = if require_stagex_no_quorum {
         Some(evaluate_stagex_profile(&manifest, &resolved_bundle_dir, reproducibility.as_ref()))
@@ -548,6 +555,7 @@ fn cmd_release_verify(
             stagex_result.as_ref(),
             &deterministic_result,
             &provider_fixed_point_result,
+            &release_profile,
             &stack_provenance_result,
         )?;
     } else {
@@ -557,6 +565,7 @@ fn cmd_release_verify(
         println!("source digest: {}", manifest.source_archive.digest_blake3);
         println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
         println!("proof mode: {}", manifest.proof_linkage.proof_mode);
+        println!("release profile: {release_profile}");
         if !manifest.external_evidence.is_empty() {
             println!("external evidence: {}", manifest.external_evidence.len());
         }
@@ -918,6 +927,7 @@ fn print_release_verify_json(
     stagex_result: Option<&crunch_bootstrap_core::StagexNoQuorumResult>,
     deterministic_result: &DeterministicReleaseVerifyResult,
     provider_fixed_point_result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+    release_profile: &str,
     stack_provenance_result: &crunch_release_core::StackProvenanceReleaseVerification,
 ) -> Result<(), RunError> {
     let report_json = reproducibility.map(|report| {
@@ -947,6 +957,7 @@ fn print_release_verify_json(
         "reproducibility_report": report_json,
         "deterministic_release": deterministic_json,
         "provider_fixed_point_proof": provider_fixed_point_result,
+        "release_profile": release_profile,
         "stack_provenance": stack_provenance_result,
         "global_reproducibility": global_reproducibility_not_evaluated_json(),
     });

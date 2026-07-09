@@ -1201,7 +1201,12 @@ pub enum ReleaseAction {
         #[arg(long)]
         require_provider_fixed_point_proof: bool,
 
-        /// Stack-provenance release profile policy for Valence-validated sidecars
+        /// Release verification profile; onix-stack requires Valence stack-provenance evidence
+        #[arg(long = "release-profile", default_value = "generic")]
+        release_profile: String,
+
+        /// Stack-provenance policy for generic releases; release-profile can require a stricter
+        /// mode
         #[arg(long = "stack-provenance", value_parser = ["optional", "required"], default_value = "optional")]
         stack_provenance: String,
     },
@@ -6117,6 +6122,31 @@ let Plan = {
             panic!("expected release verify with external evidence role");
         };
         assert_eq!(require_external_evidence_role, vec!["stack-provenance-trace".to_string()]);
+    }
+
+    #[test]
+    fn release_verify_accepts_onix_stack_release_profile() {
+        let args = Args::parse_from([
+            "mantle",
+            "release",
+            "verify",
+            "/tmp/release-bundle",
+            "--release-profile",
+            "onix-stack",
+        ]);
+        let Command::Release {
+            action:
+                ReleaseAction::Verify {
+                    release_profile,
+                    stack_provenance,
+                    ..
+                },
+        } = args.command
+        else {
+            panic!("expected release verify with Onix stack profile");
+        };
+        assert_eq!(release_profile, "onix-stack");
+        assert_eq!(stack_provenance, "optional");
     }
 
     #[test]

@@ -529,12 +529,23 @@ mantle release verify target/release-evidence/<release-id>
 
 # Require a verified bit-for-bit reproducibility report
 mantle release verify target/release-evidence/<release-id> --require-reproducible
+
+# Require Valence stack-provenance sidecar and graph-report evidence for Onix stack releases
+mantle release verify target/release-evidence/<release-id> --release-profile onix-stack
 ```
 
 Repeat `--binary` when one release bundle should carry multiple executables.
 The checked-in proof bundle keeps durable copies of stage1 and stage2 under
 `binaries/`, so the packaged release binary can be the proven stage2 output
 rather than a scratch-store path that disappears when the proof exits.
+
+Generic release verification leaves Valence stack provenance optional unless
+`--stack-provenance required` is selected. The `onix-stack` release profile makes
+that requirement profile-declared: verification fails closed unless the bundle
+carries the Valence sidecar, graph-report receipt, matching BLAKE3 digests,
+expected roles/schemas, `identity-linkage-sidecar` claim scope, release-binary
+identity, and Mantle's opaque-boundary non-claim. Mantle still validates only
+bundle-local evidence linkage; Valence owns stack semantics.
 
 Kani receipts can be bundled with `--external-evidence-role
 kani-model-check-receipt` plus `--kani-toolchain-evidence <json>`. The dedicated
