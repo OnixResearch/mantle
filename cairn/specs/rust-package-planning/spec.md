@@ -3960,3 +3960,49 @@ GIVEN a Rust package uses `links`, `pkg-config`, `cargo:rustc-link-lib`, `cargo:
 WHEN Mantle classifies the native Rust planning surface
 THEN the receipt MUST either model the link metadata and declared native inputs explicitly or fail with a native-link blocker
 AND it MUST NOT infer host library availability from ambient system paths.
+
+### Requirement: Rustc-dev-guide reference map
+r[rust_package_planning.rustc_dev_guide.reference_map] Mantle MUST use a pinned rustc-dev-guide reference map before making claim-bearing Rust planning, compiler-policy adapter, or source-built Rust provider statements from rustc internals documentation.
+
+#### Scenario: Guide references are pinned
+r[rust_package_planning.rustc_dev_guide.reference_map.pinned]
+- GIVEN a guide reference supports a claim-bearing Mantle decision
+- WHEN the reference map is validated
+- THEN it MUST name a section, consuming surface, pinned revision or digest, and bounded claim.
+- AND moving `main`, `master`, or `HEAD` references MUST fail validation for claim-bearing use.
+
+### Requirement: Backend invocation guide boundaries
+r[rust_package_planning.rustc_dev_guide.backend_invocation] Mantle MUST bind guide-backed backend invocation assumptions to explicit Rust planning evidence.
+
+#### Scenario: Backend assumptions are explicit
+- GIVEN Rust planning evidence cites rustc-dev-guide backend or driver material
+- WHEN validation runs
+- THEN it MUST bind crate type, target triple, codegen backend, linker args, metadata hash, externs, cfgs, path remaps, toolchain identity, reference IDs, and output digest.
+- AND unstated backend assumptions MUST fail closed.
+
+### Requirement: Compiler policy adapter guide boundaries
+r[rust_package_planning.rustc_dev_guide.compiler_policy_adapter] Mantle MUST keep compiler-policy adapter claims scoped to guide-backed HIR, MIR, driver, or invocation boundaries and separate from compiler or program correctness.
+
+#### Scenario: Compiler policy receipts keep non-claims
+- GIVEN compiler-policy adapter evidence cites rustc-dev-guide internals
+- WHEN validation runs
+- THEN it MUST bind adapter identity, rustc identity, policy digest, guide reference IDs, invocation status, waiver summary, and non-claims.
+- AND evidence MUST NOT claim compiler correctness or program correctness from the guide reference.
+
+### Requirement: Source provider patch-plan guide boundaries
+r[rust_package_planning.rustc_dev_guide.source_provider_patch_plan] Mantle MUST bind source-built Rust provider patch-plan operations that rely on rustc internals to guide-backed source anchors and digest evidence.
+
+#### Scenario: Patch plans cite pinned guide references
+- GIVEN a source provider patch plan changes rustc driver, sysroot, codegen, or related source surfaces
+- WHEN validation runs
+- THEN the plan MUST bind operation, source anchor, stage, guide reference ID, input digest, output digest, and non-claims.
+- AND missing guide references or malformed digest evidence MUST fail closed.
+
+### Requirement: Rustc-dev-guide validation fixtures
+r[rust_package_planning.rustc_dev_guide.final_validation] The rustc-dev-guide planning-boundary change MUST include positive and negative fixtures plus focused validation evidence before archive.
+
+#### Scenario: Positive and negative fixtures cover claim boundaries
+- GIVEN pinned guide references and malformed guide-boundary fixtures
+- WHEN focused validation runs
+- THEN valid fixtures MUST pass and unpinned links, missing references, semantic overclaims, and unstated backend assumptions MUST fail closed.
+

@@ -57,6 +57,7 @@ mod rust_bootstrap_patch_plan;
 mod rust_plan;
 #[allow(dead_code)]
 mod rust_source_provider;
+mod rustc_dev_guide;
 mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
