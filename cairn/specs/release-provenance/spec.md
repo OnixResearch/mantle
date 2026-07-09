@@ -148,3 +148,37 @@ r[mantle.release_provenance.stack_profile.validation.fixtures]
 - GIVEN positive and negative stack profile fixtures
 - WHEN focused validation runs
 - THEN valid fixtures MUST pass, invalid fixtures MUST fail closed, and saved evidence MUST bind profile and input identities.
+
+### Requirement: Preserves carrier contract
+r[mantle.release_provenance.preserves_carriers.contract] Mantle MUST validate Preserves release evidence carrier rows with explicit role, schema, payload digest, canonical digest, adapter identity when present, and bounded non-claims.
+
+#### Scenario: Opaque and adapter-backed carriers pass
+r[mantle.release_provenance.preserves_carriers.fixtures.positive]
+- GIVEN an opaque Preserves carrier row and an adapter-backed carrier row with matching digest-shaped identities and required non-claims
+- WHEN carrier validation runs
+- THEN both rows MUST pass without turning Preserves payload semantics into Mantle-owned proof claims.
+
+#### Scenario: Invalid carriers fail closed
+r[mantle.release_provenance.preserves_carriers.fixtures.negative]
+- GIVEN a Preserves carrier row has stale digest, wrong schema, wrong role, missing non-claims, or semantic overclaims
+- WHEN carrier validation runs
+- THEN validation MUST fail with deterministic diagnostics.
+
+### Requirement: Preserves carrier validation boundary
+r[mantle.release_provenance.preserves_carriers.validation] Mantle MUST integrate Preserves carrier validation as release external evidence checking over loaded rows while keeping file I/O, digesting, and payload acquisition in the shell.
+
+#### Scenario: Carrier opacity remains visible
+r[mantle.release_provenance.preserves_carriers.docs]
+- GIVEN Preserves carrier validation succeeds
+- WHEN Mantle reports or documents the evidence
+- THEN the claim MUST be limited to supported carrier identity and digest evidence.
+- AND the report MUST NOT claim release correctness, artifact correctness, deployment safety, full reproducibility, or semantic correctness from the carrier alone.
+
+### Requirement: Preserves carrier final validation
+r[mantle.release_provenance.preserves_carriers.final_validation] The Preserves carrier change MUST include positive and negative fixtures plus focused validation evidence before archive.
+
+#### Scenario: Focused carrier suite covers boundaries
+- GIVEN valid and invalid Preserves carrier fixtures
+- WHEN focused validation runs
+- THEN valid fixtures MUST pass and invalid fixtures MUST fail closed.
+

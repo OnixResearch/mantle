@@ -36,6 +36,7 @@ mod offline_cargo;
 mod operator_diagnostics;
 mod pin_import;
 mod portable_receipt;
+mod preserves_release_carrier;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
