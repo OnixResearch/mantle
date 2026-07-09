@@ -215,3 +215,36 @@ r[mantle.release_provenance.cairn_evidence_handoff.final_validation] The Cairn h
 - WHEN focused validation runs
 - THEN valid fixtures MUST pass and invalid fixtures MUST fail closed.
 
+### Requirement: Nix evidence core contract
+r[mantle.release_provenance.nix_evidence_core.contract] Mantle MUST normalize Nix-related release evidence rows with store path ref, derivation identity, output name, realization role, caveat, artifact digest, and non-claim fields.
+
+#### Scenario: Supported Nix evidence adapters pass
+r[mantle.release_provenance.nix_evidence_core.fixtures.positive]
+- GIVEN rows from Mantle build reports, release bundle rows, sidecar rows, Cairn Nix gates, Molten promotion evidence, and Valence provenance inputs
+- WHEN Nix evidence validation runs
+- THEN supported rows MUST pass with identity-only caveats and non-claims.
+
+#### Scenario: Invalid Nix evidence fails closed
+r[mantle.release_provenance.nix_evidence_core.fixtures.negative]
+- GIVEN a row has malformed store path, wrong output, digest mismatch, unsupported derivation, missing caveats, ambiguous role, missing non-claims, or overclaims
+- WHEN Nix evidence validation runs
+- THEN validation MUST fail with deterministic diagnostics.
+
+### Requirement: Nix evidence validation and adapters
+r[mantle.release_provenance.nix_evidence_core.validation] Mantle MUST validate normalized Nix evidence in a pure core and keep build/evaluation shell work, file reads, and source adapter parsing outside that core.
+
+#### Scenario: Adapter rows stay identity-only
+r[mantle.release_provenance.nix_evidence_core.adapters]
+- GIVEN an adapter normalizes Mantle build report, release provenance, Cairn Nix gate, Molten promotion, or Valence provenance material
+- WHEN the normalized row is accepted
+- THEN the accepted claim MUST remain limited to realization identity, digest shape, caveats, role, and non-claims.
+
+### Requirement: Nix evidence documentation and final validation
+r[mantle.release_provenance.nix_evidence_core.docs] Mantle operator docs MUST describe Nix evidence as realization identity only and name downstream migration boundaries.
+
+#### Scenario: Final Nix evidence validation passes
+r[mantle.release_provenance.nix_evidence_core.final_validation]
+- GIVEN valid and invalid Nix evidence fixtures
+- WHEN focused validation runs
+- THEN valid fixtures MUST pass, invalid fixtures MUST fail closed, Cairn validation/gates MUST pass, and documentation MUST preserve build/evaluation non-claims.
+

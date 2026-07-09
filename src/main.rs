@@ -30,6 +30,7 @@ mod global_reproducibility_release;
 mod log_cmd;
 mod native_toolchain_closure;
 mod nickel_export;
+mod nix_evidence_core;
 mod nix_free_demo_bundle;
 mod nix_free_demo_cmd;
 #[allow(dead_code)]
