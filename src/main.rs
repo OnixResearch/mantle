@@ -67,6 +67,7 @@ mod source_toolchain_closure;
 mod store_cmd;
 mod structured_refactor;
 mod transcript_cmd;
+mod vendor_source_manifest;
 mod verification_gauntlet_cmd;
 mod witness_handoff;
 mod witness_rebuild;
