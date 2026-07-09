@@ -1,7 +1,16 @@
 let Contracts = import "contracts.ncl" in
+let PolicySchemaVersion = "cairn.policy-schema.v1" in
+let PolicyFieldSetDigest = "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9a0e2bb909b42" in
 {
   name = "mantle-default",
   version = 1,
+
+  policy_schema_compatibility = {
+    schema_version = PolicySchemaVersion,
+    producer = "cairn policy export",
+    field_set_digest = PolicyFieldSetDigest,
+    refresh_command = "nix run path:$CAIRN_SOURCE#cairn -- policy export --output cairn-policy/generated/cairn-policy.json",
+  },
 
   schemas = [{
     id = "spec-driven",

@@ -932,6 +932,12 @@
     }
   },
   "name": "mantle-default",
+  "policy_schema_compatibility": {
+    "field_set_digest": "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9a0e2bb909b42",
+    "producer": "cairn policy export",
+    "refresh_command": "nix run path:$CAIRN_SOURCE#cairn -- policy export --output cairn-policy/generated/cairn-policy.json",
+    "schema_version": "cairn.policy-schema.v1"
+  },
   "probe_policy": {
     "command_profiles": [
       {

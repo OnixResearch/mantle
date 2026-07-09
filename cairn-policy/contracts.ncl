@@ -336,6 +336,13 @@ let PositiveNumber = std.contract.from_predicate (fun value =>
     canonicalization | Canonicalization,
   },
 
+  PolicySchemaCompatibility = {
+    schema_version | NonEmptyString,
+    producer | NonEmptyString,
+    field_set_digest | Blake3HexContract,
+    refresh_command | NonEmptyString,
+  },
+
   Exemption = {
     scope | NonEmptyString,
     owner | NonEmptyString,
@@ -352,6 +359,7 @@ let PositiveNumber = std.contract.from_predicate (fun value =>
   Policy = {
     name | NonEmptyString,
     version | SupportedPolicyVersion,
+    policy_schema_compatibility | PolicySchemaCompatibility,
     schemas | NonEmptyArray | Array ArtifactSchema,
     lifecycle_stages | NonEmptyArray | Array Stage,
     task_marker_policy | TaskMarkerPolicy,
