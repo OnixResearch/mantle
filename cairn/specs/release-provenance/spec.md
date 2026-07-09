@@ -182,3 +182,36 @@ r[mantle.release_provenance.preserves_carriers.final_validation] The Preserves c
 - WHEN focused validation runs
 - THEN valid fixtures MUST pass and invalid fixtures MUST fail closed.
 
+### Requirement: Cairn release evidence handoff contract
+r[mantle.release_provenance.cairn_evidence_handoff.contract] Mantle MUST validate Cairn release evidence handoff rows with explicit artifact id, role, schema, artifact digest, Cairn policy digest, release-readiness id, coverage ids, and non-claims.
+
+#### Scenario: Complete Cairn handoff passes
+r[mantle.release_provenance.cairn_evidence_handoff.fixtures.positive]
+- GIVEN Cairn release-readiness and archive-index handoff rows with supported roles, schemas, BLAKE3-shaped digests, coverage ids, and required non-claims
+- WHEN handoff validation runs
+- THEN validation MUST pass and preserve Cairn ownership of lifecycle readiness.
+
+#### Scenario: Invalid Cairn handoff fails closed
+r[mantle.release_provenance.cairn_evidence_handoff.fixtures.negative]
+- GIVEN a handoff row has missing artifact id, stale digest, wrong role, wrong schema, or weakened non-claims
+- WHEN handoff validation runs
+- THEN validation MUST fail with deterministic diagnostics.
+
+### Requirement: Cairn handoff validation boundary
+r[mantle.release_provenance.cairn_evidence_handoff.validation] Mantle MUST integrate Cairn handoff validation as release external evidence checking over loaded rows while file reads, digest measurement, and Cairn export production remain outside the pure core.
+
+#### Scenario: Mantle and Cairn ownership stays explicit
+r[mantle.release_provenance.cairn_evidence_handoff.docs]
+- GIVEN Cairn handoff validation succeeds
+- WHEN Mantle reports or documents the evidence
+- THEN the claim MUST be limited to bundle-local handoff identity and digest linkage.
+- AND Mantle MUST NOT claim release correctness, build correctness, source correctness, artifact correctness, or deployment safety from Cairn handoff evidence alone.
+
+### Requirement: Cairn handoff final validation
+r[mantle.release_provenance.cairn_evidence_handoff.final_validation] The Cairn handoff change MUST include positive and negative fixtures plus focused validation evidence before archive.
+
+#### Scenario: Focused handoff suite covers boundaries
+- GIVEN valid and invalid Cairn handoff fixtures
+- WHEN focused validation runs
+- THEN valid fixtures MUST pass and invalid fixtures MUST fail closed.
+

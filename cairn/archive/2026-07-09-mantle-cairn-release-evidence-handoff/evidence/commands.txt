@@ -1,0 +1,7 @@
+# Focused Cairn handoff validation
+nix develop -c rustfmt --check --config skip_children=true src/main.rs src/cairn_release_handoff.rs
+nix develop -c cargo test -p mantle --bin mantle cairn_release_handoff
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- validate --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate proposal mantle-cairn-release-evidence-handoff --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate design mantle-cairn-release-evidence-handoff --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate tasks mantle-cairn-release-evidence-handoff --root .
