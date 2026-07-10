@@ -1276,6 +1276,7 @@ mod tests {
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
+            function_address_evidence: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),

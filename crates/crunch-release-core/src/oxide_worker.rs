@@ -255,6 +255,9 @@ mod tests {
 
     use super::*;
 
+    type OxideFixtureMutator = fn(&mut OxideReleaseWorkerFixture);
+    type OxideFixtureCase = (&'static str, OxideFixtureMutator, &'static str);
+
     // r[verify mantle.verification_evidence.oxide_release_worker.reference_inventory]
     // r[verify mantle.verification_evidence.oxide_release_worker.validation]
     #[test]
@@ -273,7 +276,7 @@ mod tests {
     // r[verify mantle.verification_evidence.oxide_release_worker.validation]
     #[test]
     fn rejects_invalid_oxide_release_worker_fixture_matrix() {
-        let cases: [(&str, fn(&mut OxideReleaseWorkerFixture), &str); 6] = [
+        let cases: &[OxideFixtureCase] = &[
             ("expired metadata", expire_metadata, "expired"),
             ("tag mismatch", remove_target_tag, "tag mismatch"),
             ("untrusted policy override", add_untrusted_policy_override, "policy override"),

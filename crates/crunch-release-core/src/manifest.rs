@@ -44,6 +44,19 @@ pub const STACK_PROVENANCE_DISPOSITION_ABSENT: &str = "absent";
 pub const STACK_PROVENANCE_DISPOSITION_PRESENT: &str = "present";
 pub const STACK_PROVENANCE_DISPOSITION_INVALID: &str = "invalid";
 pub const STACK_PROVENANCE_OPAQUE_BOUNDARY: &str = "Mantle validates bundle-local stack provenance path, digest, role, schema, claim scope, binary identity, and non-claims only; Valence owns stack semantics";
+pub const FUNCTION_ADDRESS_EVIDENCE_ROLE: &str = "function-address-evidence-sidecar";
+pub const FUNCTION_ADDRESS_EVIDENCE_SCHEMA: &str = "valence.function-address-evidence.v1";
+pub const FUNCTION_ADDRESS_CLAIM_SCOPE: &str = "function-address-identity-linkage-only";
+pub const VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE: &str = "valence-function-address-evidence-profile";
+pub const VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA: &str = "function-address-evidence-v1";
+pub const KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE: &str = "kamacite-function-address-receipt";
+pub const KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA: &str = "kamacite.function-address-receipt.v1";
+pub const FUNCTION_ADDRESS_MODE_OPTIONAL: &str = "optional";
+pub const FUNCTION_ADDRESS_MODE_REQUIRED: &str = "required";
+pub const FUNCTION_ADDRESS_DISPOSITION_ABSENT: &str = "absent";
+pub const FUNCTION_ADDRESS_DISPOSITION_PRESENT: &str = "present";
+pub const FUNCTION_ADDRESS_DISPOSITION_INVALID: &str = "invalid";
+pub const FUNCTION_ADDRESS_OPAQUE_BOUNDARY: &str = "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics";
 pub const SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE: &str = "external-archive";
 pub const SOURCE_ACQUISITION_KIND_GIT: &str = "git";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
@@ -73,6 +86,16 @@ const STACK_PROVENANCE_OVERCLAIM_FRAGMENTS: &[&str] = &[
     "mantle verifies valence stack semantics",
     "mantle verifies cairn lifecycle semantics",
     "proves source-code correctness",
+    "proves release eligibility",
+    "proves verifier soundness",
+];
+const FUNCTION_ADDRESS_OVERCLAIM_FRAGMENTS: &[&str] = &[
+    "mantle verifies rust semantics",
+    "mantle verifies function semantics",
+    "mantle proves function correctness",
+    "proves rust semantic correctness",
+    "proves source-code correctness",
+    "proves whole-program safety",
     "proves release eligibility",
     "proves verifier soundness",
 ];
@@ -209,6 +232,54 @@ pub struct StackProvenanceReleaseVerification {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FunctionAddressReleaseEvidence {
+    pub sidecar_role: String,
+    pub sidecar_schema: String,
+    pub sidecar_claim_scope: String,
+    pub sidecar_relative_path: String,
+    pub sidecar_digest_blake3: String,
+    pub valence_receipt_role: String,
+    pub valence_receipt_schema: String,
+    pub valence_receipt_relative_path: String,
+    pub valence_receipt_digest_blake3: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kamacite_receipt_role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kamacite_receipt_schema: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kamacite_receipt_relative_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kamacite_receipt_digest_blake3: Option<String>,
+    pub source_archive_digest_blake3: String,
+    pub release_binary_relative_path: String,
+    pub release_binary_digest_blake3: String,
+    pub non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FunctionAddressReleaseVerification {
+    pub mode: String,
+    pub required: bool,
+    pub valid: bool,
+    pub disposition: String,
+    pub sidecar_role: Option<String>,
+    pub sidecar_schema: Option<String>,
+    pub sidecar_claim_scope: Option<String>,
+    pub sidecar_digest_blake3: Option<String>,
+    pub valence_receipt_role: Option<String>,
+    pub valence_receipt_schema: Option<String>,
+    pub valence_receipt_digest_blake3: Option<String>,
+    pub kamacite_receipt_role: Option<String>,
+    pub kamacite_receipt_schema: Option<String>,
+    pub kamacite_receipt_digest_blake3: Option<String>,
+    pub source_archive_digest_blake3: Option<String>,
+    pub release_binary_relative_path: Option<String>,
+    pub release_binary_digest_blake3: Option<String>,
+    pub boundary: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceAcquisition {
     pub kind: String,
     pub url: String,
@@ -311,6 +382,8 @@ pub struct ReleaseEvidenceManifest {
     pub kani_toolchain_evidence: Vec<KaniToolchainEvidence>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stack_provenance: Option<StackProvenanceReleaseEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function_address_evidence: Option<FunctionAddressReleaseEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance_coverage: Option<ProvenanceCoverage>,
@@ -366,6 +439,7 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_external_evidence(manifest)?;
     validate_kani_toolchain_evidence(manifest)?;
     validate_stack_provenance_manifest_evidence(manifest)?;
+    validate_function_address_manifest_evidence(manifest)?;
     Ok(())
 }
 
@@ -443,8 +517,93 @@ pub fn evaluate_stack_provenance_release_evidence(
     }
 }
 
+pub fn function_address_evidence_mode_for_release_profile(
+    release_profile: &str,
+    requested_mode: &str,
+) -> Result<&'static str, ReleaseEvidenceError> {
+    if !function_address_mode_is_supported(requested_mode) {
+        return Err(validation_error(format!("unsupported function-address evidence mode: {requested_mode}")));
+    }
+    match release_profile {
+        RELEASE_PROFILE_GENERIC | RELEASE_PROFILE_ONIX_STACK => match requested_mode {
+            FUNCTION_ADDRESS_MODE_OPTIONAL => Ok(FUNCTION_ADDRESS_MODE_OPTIONAL),
+            FUNCTION_ADDRESS_MODE_REQUIRED => Ok(FUNCTION_ADDRESS_MODE_REQUIRED),
+            _ => unreachable!("requested function-address evidence mode was already validated"),
+        },
+        _ => Err(validation_error(format!("unsupported release profile: {release_profile}"))),
+    }
+}
+
+pub fn evaluate_function_address_release_evidence(
+    manifest: &ReleaseEvidenceManifest,
+    mode: &str,
+) -> FunctionAddressReleaseVerification {
+    let mut diagnostics = Vec::new();
+    if !function_address_mode_is_supported(mode) {
+        diagnostics.push(format!("unsupported function-address evidence mode: {mode}"));
+    }
+    let required = mode == FUNCTION_ADDRESS_MODE_REQUIRED;
+    let Some(evidence) = &manifest.function_address_evidence else {
+        if required {
+            diagnostics.push("required function-address release evidence is missing".to_string());
+        }
+        return FunctionAddressReleaseVerification {
+            mode: mode.to_string(),
+            required,
+            valid: diagnostics.is_empty(),
+            disposition: FUNCTION_ADDRESS_DISPOSITION_ABSENT.to_string(),
+            sidecar_role: None,
+            sidecar_schema: None,
+            sidecar_claim_scope: None,
+            sidecar_digest_blake3: None,
+            valence_receipt_role: None,
+            valence_receipt_schema: None,
+            valence_receipt_digest_blake3: None,
+            kamacite_receipt_role: None,
+            kamacite_receipt_schema: None,
+            kamacite_receipt_digest_blake3: None,
+            source_archive_digest_blake3: None,
+            release_binary_relative_path: None,
+            release_binary_digest_blake3: None,
+            boundary: FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
+            diagnostics,
+        };
+    };
+    diagnostics.extend(function_address_evidence_diagnostics(manifest, evidence));
+    let valid = diagnostics.is_empty();
+    FunctionAddressReleaseVerification {
+        mode: mode.to_string(),
+        required,
+        valid,
+        disposition: if valid {
+            FUNCTION_ADDRESS_DISPOSITION_PRESENT.to_string()
+        } else {
+            FUNCTION_ADDRESS_DISPOSITION_INVALID.to_string()
+        },
+        sidecar_role: Some(evidence.sidecar_role.clone()),
+        sidecar_schema: Some(evidence.sidecar_schema.clone()),
+        sidecar_claim_scope: Some(evidence.sidecar_claim_scope.clone()),
+        sidecar_digest_blake3: Some(evidence.sidecar_digest_blake3.clone()),
+        valence_receipt_role: Some(evidence.valence_receipt_role.clone()),
+        valence_receipt_schema: Some(evidence.valence_receipt_schema.clone()),
+        valence_receipt_digest_blake3: Some(evidence.valence_receipt_digest_blake3.clone()),
+        kamacite_receipt_role: evidence.kamacite_receipt_role.clone(),
+        kamacite_receipt_schema: evidence.kamacite_receipt_schema.clone(),
+        kamacite_receipt_digest_blake3: evidence.kamacite_receipt_digest_blake3.clone(),
+        source_archive_digest_blake3: Some(evidence.source_archive_digest_blake3.clone()),
+        release_binary_relative_path: Some(evidence.release_binary_relative_path.clone()),
+        release_binary_digest_blake3: Some(evidence.release_binary_digest_blake3.clone()),
+        boundary: FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
+        diagnostics,
+    }
+}
+
 fn stack_provenance_mode_is_supported(mode: &str) -> bool {
     mode == STACK_PROVENANCE_MODE_OPTIONAL || mode == STACK_PROVENANCE_MODE_REQUIRED
+}
+
+fn function_address_mode_is_supported(mode: &str) -> bool {
+    mode == FUNCTION_ADDRESS_MODE_OPTIONAL || mode == FUNCTION_ADDRESS_MODE_REQUIRED
 }
 
 fn validate_stack_provenance_manifest_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
@@ -634,6 +793,259 @@ fn validate_stack_provenance_non_claims(non_claims: &[String], field_name: &str,
 fn stack_provenance_text_overclaims(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
     STACK_PROVENANCE_OVERCLAIM_FRAGMENTS.iter().any(|fragment| lower.contains(fragment))
+}
+
+fn validate_function_address_manifest_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let Some(evidence) = &manifest.function_address_evidence else {
+        return Ok(());
+    };
+    let diagnostics = function_address_evidence_diagnostics(manifest, evidence);
+    if let Some(first) = diagnostics.first() {
+        return Err(validation_error(format!("release evidence function_address_evidence invalid: {first}")));
+    }
+    Ok(())
+}
+
+fn function_address_evidence_diagnostics(
+    manifest: &ReleaseEvidenceManifest,
+    evidence: &FunctionAddressReleaseEvidence,
+) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    validate_function_address_literals(evidence, &mut diagnostics);
+    validate_function_address_paths_and_hashes(evidence, &mut diagnostics);
+    validate_function_address_non_claims(
+        &evidence.non_claims,
+        "function_address_evidence.non_claims",
+        &mut diagnostics,
+    );
+    validate_function_address_source_link(manifest, evidence, &mut diagnostics);
+    validate_function_address_binary_link(manifest, evidence, &mut diagnostics);
+    validate_function_address_external_link(
+        &manifest.external_evidence,
+        &evidence.sidecar_role,
+        &evidence.sidecar_schema,
+        &evidence.sidecar_claim_scope,
+        &evidence.sidecar_relative_path,
+        &evidence.sidecar_digest_blake3,
+        "sidecar",
+        &mut diagnostics,
+    );
+    validate_function_address_external_link(
+        &manifest.external_evidence,
+        &evidence.valence_receipt_role,
+        &evidence.valence_receipt_schema,
+        FUNCTION_ADDRESS_CLAIM_SCOPE,
+        &evidence.valence_receipt_relative_path,
+        &evidence.valence_receipt_digest_blake3,
+        "Valence receipt",
+        &mut diagnostics,
+    );
+    validate_optional_kamacite_function_address_external_link(manifest, evidence, &mut diagnostics);
+    diagnostics
+}
+
+fn validate_function_address_literals(evidence: &FunctionAddressReleaseEvidence, diagnostics: &mut Vec<String>) {
+    push_literal_diagnostic(
+        &evidence.sidecar_role,
+        FUNCTION_ADDRESS_EVIDENCE_ROLE,
+        "function_address_evidence.sidecar_role",
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        &evidence.sidecar_schema,
+        FUNCTION_ADDRESS_EVIDENCE_SCHEMA,
+        "function_address_evidence.sidecar_schema",
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        &evidence.sidecar_claim_scope,
+        FUNCTION_ADDRESS_CLAIM_SCOPE,
+        "function_address_evidence.sidecar_claim_scope",
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        &evidence.valence_receipt_role,
+        VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+        "function_address_evidence.valence_receipt_role",
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        &evidence.valence_receipt_schema,
+        VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+        "function_address_evidence.valence_receipt_schema",
+        diagnostics,
+    );
+}
+
+fn validate_function_address_paths_and_hashes(
+    evidence: &FunctionAddressReleaseEvidence,
+    diagnostics: &mut Vec<String>,
+) {
+    push_relative_path_diagnostic(
+        &evidence.sidecar_relative_path,
+        "function_address_evidence.sidecar_relative_path",
+        diagnostics,
+    );
+    push_relative_path_diagnostic(
+        &evidence.valence_receipt_relative_path,
+        "function_address_evidence.valence_receipt_relative_path",
+        diagnostics,
+    );
+    push_relative_path_diagnostic(
+        &evidence.release_binary_relative_path,
+        "function_address_evidence.release_binary_relative_path",
+        diagnostics,
+    );
+    push_blake3_diagnostic(
+        &evidence.sidecar_digest_blake3,
+        "function_address_evidence.sidecar_digest_blake3",
+        diagnostics,
+    );
+    push_blake3_diagnostic(
+        &evidence.valence_receipt_digest_blake3,
+        "function_address_evidence.valence_receipt_digest_blake3",
+        diagnostics,
+    );
+    push_blake3_diagnostic(
+        &evidence.source_archive_digest_blake3,
+        "function_address_evidence.source_archive_digest_blake3",
+        diagnostics,
+    );
+    push_blake3_diagnostic(
+        &evidence.release_binary_digest_blake3,
+        "function_address_evidence.release_binary_digest_blake3",
+        diagnostics,
+    );
+}
+
+fn validate_function_address_source_link(
+    manifest: &ReleaseEvidenceManifest,
+    evidence: &FunctionAddressReleaseEvidence,
+    diagnostics: &mut Vec<String>,
+) {
+    if manifest.source_archive.digest_blake3 != evidence.source_archive_digest_blake3 {
+        diagnostics.push(
+            "function_address_evidence.source_archive_digest_blake3 does not match the bundled source archive"
+                .to_string(),
+        );
+    }
+}
+
+fn validate_function_address_binary_link(
+    manifest: &ReleaseEvidenceManifest,
+    evidence: &FunctionAddressReleaseEvidence,
+    diagnostics: &mut Vec<String>,
+) {
+    let Some(binary) = manifest
+        .binaries
+        .iter()
+        .find(|binary| binary.relative_path == evidence.release_binary_relative_path)
+    else {
+        diagnostics
+            .push("function_address_evidence.release_binary_relative_path does not match a bundled binary".to_string());
+        return;
+    };
+    if binary.digest_blake3 != evidence.release_binary_digest_blake3 {
+        diagnostics.push(
+            "function_address_evidence.release_binary_digest_blake3 does not match the bundled binary".to_string(),
+        );
+    }
+}
+
+fn validate_function_address_external_link(
+    external_evidence: &[ExternalEvidence],
+    role: &str,
+    schema: &str,
+    claim_scope: &str,
+    relative_path: &str,
+    digest_blake3: &str,
+    label: &str,
+    diagnostics: &mut Vec<String>,
+) {
+    let Some(external) = external_evidence.iter().find(|external| external.role == role) else {
+        diagnostics.push(format!("function-address {label} external evidence is missing"));
+        return;
+    };
+    if external.schema != schema {
+        diagnostics.push(format!("function-address {label} schema does not match declared metadata"));
+    }
+    if external.claim_scope != claim_scope {
+        diagnostics.push(format!("function-address {label} claim scope does not match declared metadata"));
+    }
+    if external.relative_path != relative_path {
+        diagnostics.push(format!("function-address {label} path does not match declared metadata"));
+    }
+    if external.digest_blake3 != digest_blake3 {
+        diagnostics.push(format!("function-address {label} digest does not match declared metadata"));
+    }
+    validate_function_address_non_claims(&external.non_claims, label, diagnostics);
+}
+
+fn validate_optional_kamacite_function_address_external_link(
+    manifest: &ReleaseEvidenceManifest,
+    evidence: &FunctionAddressReleaseEvidence,
+    diagnostics: &mut Vec<String>,
+) {
+    match (
+        &evidence.kamacite_receipt_role,
+        &evidence.kamacite_receipt_schema,
+        &evidence.kamacite_receipt_relative_path,
+        &evidence.kamacite_receipt_digest_blake3,
+    ) {
+        (None, None, None, None) => {}
+        (Some(role), Some(schema), Some(relative_path), Some(digest_blake3)) => {
+            push_literal_diagnostic(
+                role,
+                KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+                "function_address_evidence.kamacite_receipt_role",
+                diagnostics,
+            );
+            push_literal_diagnostic(
+                schema,
+                KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+                "function_address_evidence.kamacite_receipt_schema",
+                diagnostics,
+            );
+            push_relative_path_diagnostic(
+                relative_path,
+                "function_address_evidence.kamacite_receipt_relative_path",
+                diagnostics,
+            );
+            push_blake3_diagnostic(
+                digest_blake3,
+                "function_address_evidence.kamacite_receipt_digest_blake3",
+                diagnostics,
+            );
+            validate_function_address_external_link(
+                &manifest.external_evidence,
+                role,
+                schema,
+                FUNCTION_ADDRESS_CLAIM_SCOPE,
+                relative_path,
+                digest_blake3,
+                "Kamacite receipt",
+                diagnostics,
+            );
+        }
+        _ => diagnostics
+            .push("function_address_evidence Kamacite receipt metadata must be all present or all absent".to_string()),
+    }
+}
+
+fn validate_function_address_non_claims(non_claims: &[String], field_name: &str, diagnostics: &mut Vec<String>) {
+    if !non_claims.iter().any(|non_claim| non_claim == FUNCTION_ADDRESS_OPAQUE_BOUNDARY) {
+        diagnostics.push(format!("{field_name} missing Mantle opaque function-address non-claim"));
+    }
+    for non_claim in non_claims {
+        if function_address_text_overclaims(non_claim) {
+            diagnostics.push(format!("{field_name} contains function-address overclaim"));
+        }
+    }
+}
+
+fn function_address_text_overclaims(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    FUNCTION_ADDRESS_OVERCLAIM_FRAGMENTS.iter().any(|fragment| lower.contains(fragment))
 }
 
 fn validate_external_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
@@ -1478,6 +1890,16 @@ mod tests {
 
     use super::*;
 
+    const SOURCE_ARCHIVE_DIGEST_SEED: u8 = 1;
+    const RELEASE_BINARY_DIGEST_SEED: u8 = 3;
+    const FUNCTION_ADDRESS_SIDECAR_DIGEST_SEED: u8 = 31;
+    const FUNCTION_ADDRESS_VALENCE_DIGEST_SEED: u8 = 32;
+    const FUNCTION_ADDRESS_KAMACITE_DIGEST_SEED: u8 = 33;
+    const FUNCTION_ADDRESS_STALE_DIGEST_SEED: u8 = 34;
+
+    type ManifestMutator = fn(&mut ReleaseEvidenceManifest);
+    type ManifestFixtureCase = (&'static str, ManifestMutator, &'static str);
+
     fn sample_digest(seed: u8) -> String {
         let byte = format!("{:x}", seed % 16);
         byte.repeat(BLAKE3_HEX_LENGTH_CHARS)
@@ -1612,6 +2034,81 @@ mod tests {
         manifest
     }
 
+    fn sample_function_address_non_claims() -> Vec<String> {
+        vec![FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string()]
+    }
+
+    fn sample_function_address_sidecar_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: FUNCTION_ADDRESS_EVIDENCE_ROLE.to_string(),
+            schema: FUNCTION_ADDRESS_EVIDENCE_SCHEMA.to_string(),
+            relative_path: "external-evidence/03-function-address-sidecar.json".to_string(),
+            digest_blake3: sample_digest(FUNCTION_ADDRESS_SIDECAR_DIGEST_SEED),
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+            non_claims: sample_function_address_non_claims(),
+        }
+    }
+
+    fn sample_function_address_valence_receipt_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE.to_string(),
+            schema: VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA.to_string(),
+            relative_path: "external-evidence/04-valence-function-address-profile.json".to_string(),
+            digest_blake3: sample_digest(FUNCTION_ADDRESS_VALENCE_DIGEST_SEED),
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+            non_claims: sample_function_address_non_claims(),
+        }
+    }
+
+    fn sample_function_address_kamacite_receipt_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE.to_string(),
+            schema: KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA.to_string(),
+            relative_path: "external-evidence/05-kamacite-function-address-receipt.preserves".to_string(),
+            digest_blake3: sample_digest(FUNCTION_ADDRESS_KAMACITE_DIGEST_SEED),
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+            non_claims: sample_function_address_non_claims(),
+        }
+    }
+
+    fn sample_function_address_release_evidence(with_kamacite: bool) -> FunctionAddressReleaseEvidence {
+        let sidecar = sample_function_address_sidecar_evidence();
+        let valence = sample_function_address_valence_receipt_evidence();
+        let kamacite = with_kamacite.then(sample_function_address_kamacite_receipt_evidence);
+        FunctionAddressReleaseEvidence {
+            sidecar_role: sidecar.role,
+            sidecar_schema: sidecar.schema,
+            sidecar_claim_scope: sidecar.claim_scope,
+            sidecar_relative_path: sidecar.relative_path,
+            sidecar_digest_blake3: sidecar.digest_blake3,
+            valence_receipt_role: valence.role,
+            valence_receipt_schema: valence.schema,
+            valence_receipt_relative_path: valence.relative_path,
+            valence_receipt_digest_blake3: valence.digest_blake3,
+            kamacite_receipt_role: kamacite.as_ref().map(|evidence| evidence.role.clone()),
+            kamacite_receipt_schema: kamacite.as_ref().map(|evidence| evidence.schema.clone()),
+            kamacite_receipt_relative_path: kamacite.as_ref().map(|evidence| evidence.relative_path.clone()),
+            kamacite_receipt_digest_blake3: kamacite.as_ref().map(|evidence| evidence.digest_blake3.clone()),
+            source_archive_digest_blake3: sample_digest(SOURCE_ARCHIVE_DIGEST_SEED),
+            release_binary_relative_path: "binaries/01-mantle".to_string(),
+            release_binary_digest_blake3: sample_digest(RELEASE_BINARY_DIGEST_SEED),
+            non_claims: sample_function_address_non_claims(),
+        }
+    }
+
+    fn sample_function_address_manifest(with_kamacite: bool) -> ReleaseEvidenceManifest {
+        let mut manifest = sample_manifest();
+        manifest.external_evidence = vec![
+            sample_function_address_sidecar_evidence(),
+            sample_function_address_valence_receipt_evidence(),
+        ];
+        if with_kamacite {
+            manifest.external_evidence.push(sample_function_address_kamacite_receipt_evidence());
+        }
+        manifest.function_address_evidence = Some(sample_function_address_release_evidence(with_kamacite));
+        manifest
+    }
+
     fn sample_manifest() -> ReleaseEvidenceManifest {
         let stage2_binary = sample_artifact(BundledArtifactKind::File, "binaries/01-mantle", 3);
         let inventory = sample_artifact(BundledArtifactKind::File, "proof/inventory.md", 5);
@@ -1636,6 +2133,7 @@ mod tests {
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
+            function_address_evidence: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
                 source_archive_digest_blake3: sample_digest(1),
@@ -2292,7 +2790,7 @@ mod tests {
                 vec!["Mantle verifies Valence stack semantics".to_string()];
         }
 
-        let cases: [(&str, fn(&mut ReleaseEvidenceManifest), &str); 9] = [
+        let cases: &[ManifestFixtureCase] = &[
             ("missing sidecar", missing_sidecar, "sidecar external evidence is missing"),
             ("wrong role", wrong_role, "sidecar_role"),
             ("wrong schema", wrong_schema, "sidecar_schema"),
@@ -2319,6 +2817,192 @@ mod tests {
                 result.diagnostics
             );
             assert!(err.to_string().contains("stack_provenance invalid"));
+        }
+    }
+
+    #[test]
+    fn validate_accepts_function_address_release_evidence_without_kamacite_receipt() {
+        let manifest = sample_function_address_manifest(false);
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains(FUNCTION_ADDRESS_EVIDENCE_ROLE));
+        assert!(text.contains(VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE));
+        assert!(text.contains(FUNCTION_ADDRESS_OPAQUE_BOUNDARY));
+    }
+
+    #[test]
+    fn validate_accepts_function_address_release_evidence_with_kamacite_receipt() {
+        let manifest = sample_function_address_manifest(true);
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains(FUNCTION_ADDRESS_EVIDENCE_ROLE));
+        assert!(text.contains(KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE));
+        assert!(text.contains(KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA));
+    }
+
+    #[test]
+    fn function_address_release_profile_maps_optional_and_required_modes() {
+        let generic_optional =
+            function_address_evidence_mode_for_release_profile(RELEASE_PROFILE_GENERIC, FUNCTION_ADDRESS_MODE_OPTIONAL)
+                .unwrap();
+        let generic_required =
+            function_address_evidence_mode_for_release_profile(RELEASE_PROFILE_GENERIC, FUNCTION_ADDRESS_MODE_REQUIRED)
+                .unwrap();
+        let onix_optional = function_address_evidence_mode_for_release_profile(
+            RELEASE_PROFILE_ONIX_STACK,
+            FUNCTION_ADDRESS_MODE_OPTIONAL,
+        )
+        .unwrap();
+        let onix_required = function_address_evidence_mode_for_release_profile(
+            RELEASE_PROFILE_ONIX_STACK,
+            FUNCTION_ADDRESS_MODE_REQUIRED,
+        )
+        .unwrap();
+
+        assert_eq!(FUNCTION_ADDRESS_MODE_OPTIONAL, generic_optional);
+        assert_eq!(FUNCTION_ADDRESS_MODE_REQUIRED, generic_required);
+        assert_eq!(FUNCTION_ADDRESS_MODE_OPTIONAL, onix_optional);
+        assert_eq!(FUNCTION_ADDRESS_MODE_REQUIRED, onix_required);
+    }
+
+    #[test]
+    fn function_address_release_profile_rejects_unsupported_profile_or_mode() {
+        let profile_err =
+            function_address_evidence_mode_for_release_profile("experimental", FUNCTION_ADDRESS_MODE_OPTIONAL)
+                .unwrap_err();
+        let mode_err =
+            function_address_evidence_mode_for_release_profile(RELEASE_PROFILE_GENERIC, "ambient").unwrap_err();
+
+        assert!(profile_err.to_string().contains("unsupported release profile"));
+        assert!(mode_err.to_string().contains("unsupported function-address evidence mode"));
+    }
+
+    #[test]
+    fn function_address_policy_accepts_optional_absent_evidence() {
+        let manifest = sample_manifest();
+
+        let result = evaluate_function_address_release_evidence(&manifest, FUNCTION_ADDRESS_MODE_OPTIONAL);
+
+        assert!(result.valid);
+        assert_eq!(FUNCTION_ADDRESS_DISPOSITION_ABSENT, result.disposition);
+        assert!(result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn function_address_policy_accepts_optional_and_required_present_evidence() {
+        let manifest = sample_function_address_manifest(true);
+
+        let optional = evaluate_function_address_release_evidence(&manifest, FUNCTION_ADDRESS_MODE_OPTIONAL);
+        let required = evaluate_function_address_release_evidence(&manifest, FUNCTION_ADDRESS_MODE_REQUIRED);
+
+        assert!(optional.valid);
+        assert!(required.valid);
+        assert_eq!(FUNCTION_ADDRESS_DISPOSITION_PRESENT, optional.disposition);
+        assert_eq!(FUNCTION_ADDRESS_DISPOSITION_PRESENT, required.disposition);
+    }
+
+    #[test]
+    fn function_address_policy_rejects_required_absent_evidence() {
+        let manifest = sample_manifest();
+
+        let result = evaluate_function_address_release_evidence(&manifest, FUNCTION_ADDRESS_MODE_REQUIRED);
+
+        assert!(!result.valid);
+        assert_eq!(FUNCTION_ADDRESS_DISPOSITION_ABSENT, result.disposition);
+        assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.contains("required")));
+    }
+
+    #[test]
+    fn function_address_policy_rejects_required_invalid_fixture_matrix() {
+        fn missing_sidecar(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.external_evidence.retain(|evidence| evidence.role != FUNCTION_ADDRESS_EVIDENCE_ROLE);
+        }
+        fn stale_sidecar_digest(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().sidecar_digest_blake3 =
+                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        fn wrong_role(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().sidecar_role = "wrong-function-role".to_string();
+        }
+        fn wrong_schema(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().sidecar_schema = "wrong.function.schema".to_string();
+        }
+        fn wrong_claim_scope(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().sidecar_claim_scope =
+                "semantic-function-claim".to_string();
+        }
+        fn missing_valence_receipt(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.external_evidence.retain(|evidence| evidence.role != VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+        }
+        fn stale_valence_receipt_digest(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().valence_receipt_digest_blake3 =
+                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        fn source_archive_mismatch(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().source_archive_digest_blake3 =
+                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        fn binary_identity_mismatch(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().release_binary_digest_blake3 =
+                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        fn weakened_non_claims(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().non_claims = vec![];
+        }
+        fn overclaim(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().non_claims = vec![
+                FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
+                "Mantle proves function correctness".to_string(),
+            ];
+        }
+        fn partial_kamacite_metadata(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.function_address_evidence.as_mut().unwrap().kamacite_receipt_digest_blake3 = None;
+        }
+        fn missing_kamacite_external(manifest: &mut ReleaseEvidenceManifest) {
+            manifest
+                .external_evidence
+                .retain(|evidence| evidence.role != KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+        }
+
+        let cases: &[ManifestFixtureCase] = &[
+            ("missing sidecar", missing_sidecar, "sidecar external evidence is missing"),
+            ("stale sidecar digest", stale_sidecar_digest, "sidecar digest"),
+            ("wrong role", wrong_role, "sidecar_role"),
+            ("wrong schema", wrong_schema, "sidecar_schema"),
+            ("wrong claim scope", wrong_claim_scope, "sidecar_claim_scope"),
+            ("missing Valence receipt", missing_valence_receipt, "Valence receipt external evidence is missing"),
+            ("stale Valence receipt digest", stale_valence_receipt_digest, "Valence receipt digest"),
+            ("source archive mismatch", source_archive_mismatch, "source_archive_digest_blake3"),
+            ("binary identity mismatch", binary_identity_mismatch, "release_binary_digest_blake3"),
+            ("weakened non-claims", weakened_non_claims, "non-claim"),
+            ("overclaim", overclaim, "overclaim"),
+            ("partial Kamacite metadata", partial_kamacite_metadata, "all present or all absent"),
+            (
+                "missing Kamacite external",
+                missing_kamacite_external,
+                "Kamacite receipt external evidence is missing",
+            ),
+        ];
+
+        for (name, mutate, expected_diagnostic) in cases {
+            let mut manifest = sample_function_address_manifest(true);
+            mutate(&mut manifest);
+
+            let result = evaluate_function_address_release_evidence(&manifest, FUNCTION_ADDRESS_MODE_REQUIRED);
+            let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+            assert!(!result.valid, "{name} should fail required policy");
+            assert_eq!(FUNCTION_ADDRESS_DISPOSITION_INVALID, result.disposition, "{name}");
+            assert!(
+                result.diagnostics.iter().any(|diagnostic| diagnostic.contains(expected_diagnostic)),
+                "{name} diagnostics should contain {expected_diagnostic:?}: {:?}",
+                result.diagnostics
+            );
+            assert!(err.to_string().contains("function_address_evidence invalid"));
         }
     }
 
