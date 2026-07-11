@@ -101,12 +101,12 @@ r[mantle.wasm_component.virtualization] Mantle MUST construct WASI-Virt plans fr
 
 ### Requirement: Portable outputs pass independent build and Octet validation
 
-r[mantle.wasm_component.validation] Every portable component output MUST pass pinned build-local wasm-tools validation before publication, Wizer transformation, or Wasmtime precompilation; consumer and release profiles MUST also run the declared Octet artifact rail over the exact final bytes and bind its independent profile, cohort, and report identity.
+r[mantle.wasm_component.validation] Every portable component output, including identity-changing WAC, WASI-Virt, and Wizer outputs, MUST pass pinned build-local wasm-tools validation before publication or later-stage use; consumer and release profiles MUST also run the declared Octet artifact rail over each exact portable output admitted into the materialization bundle and bind its independent profile, cohort, and report identity.
 
 #### Scenario: Output matches both declared profiles
-- GIVEN a portable component passes build-local validation and the Octet rail reports that the same exact bytes satisfy the declared artifact profile
+- GIVEN a compiled, composed, virtualized, or Wizer-transformed portable component passes build-local validation and the Octet rail reports that the same exact bytes satisfy the declared artifact profile
 - WHEN output validation completes
-- THEN Mantle MAY admit it to later build stages and MUST persist both independently identified reports.
+- THEN Mantle MAY admit those bytes to the next stage or materialization bundle and MUST persist both independently identified reports.
 
 #### Scenario: Link succeeds but a validation layer differs
 - GIVEN the compiler/composer exits successfully but build-local facts violate policy, or the Octet report names different bytes, profile, cohort, world, imports, proposals, or resource declarations

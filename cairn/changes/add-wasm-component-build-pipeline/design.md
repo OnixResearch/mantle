@@ -44,7 +44,7 @@ Mantle should orchestrate those tools as explicit derivations and evidence stage
 
 ### 7. Portable output validation has independent build and policy layers
 
-**Choice:** Validate each portable component with the pinned build-local wasm-tools cohort before it is published or used as input to Wizer/AOT stages. Consumer and release profiles then invoke the pinned Octet artifact rail over the exact final portable bytes and declared Octet profile, retaining both reports and their independent cohort identities. Mantle orchestrates and binds the Octet result but does not reinterpret its findings or replace Octet policy with build-manifest fields.
+**Choice:** Validate each portable component with the pinned build-local wasm-tools cohort before it is published or used as input to another stage. Every identity-changing portable WAC, WASI-Virt, or Wizer output re-enters validation before later use. Consumer and release profiles then invoke the pinned Octet artifact rail over each exact portable output admitted into the materialization bundle and its declared Octet profile, retaining both reports and their independent cohort identities. Mantle orchestrates and binds the Octet results but does not reinterpret their findings or replace Octet policy with build-manifest fields.
 
 **Rationale:** Build-local validation catches malformed or mismatched output immediately, while an independent Octet policy result prevents every producer from inventing a different static acceptance vocabulary.
 
