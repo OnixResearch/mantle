@@ -68,7 +68,7 @@ Mantle should orchestrate those tools as explicit derivations and evidence stage
 
 ### 11. Evidence follows the build stage graph
 
-**Choice:** Build reports and attestations expose package resolution, lock, source, binding generation, compilation, composition, virtualization, build-local validation, Octet validation, Wizer, AOT, and materialization-bundle nodes plus typed parent edges and non-claims. Valence sidecars remain opaque external evidence when bundled; Mantle does not interpret their semantics.
+**Choice:** Build reports and attestations expose package resolution, lock, source, binding generation, compilation, composition, virtualization, build-local validation, Octet validation, Wizer, AOT, and materialization-bundle nodes plus typed parent edges and non-claims. Valence sidecars and Cairn acceptance receipts are assembled only into later release/admission envelopes keyed to the materialization-bundle identity; they do not enter the canonical bundle hash, and Mantle does not interpret them.
 
 **Rationale:** A component filename, store path, or WIT world alone cannot identify what was materialized or which downstream admission remains required.
 

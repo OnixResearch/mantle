@@ -150,8 +150,8 @@ r[mantle.wasm_component.bundle] Mantle MUST emit a versioned component materiali
 - WHEN Mantle materializes the consumer bundle
 - THEN every object MUST be independently rehashable and linked to its producing stage so the consumer can remeasure and perform its own admission.
 
-#### Scenario: Bundle swaps or omits an object
-- GIVEN a bundle omits a required profile/report/parent, names bytes with a mismatched BLAKE3, or substitutes a store path for exact identity
+#### Scenario: Bundle swaps, omits, or circularly embeds evidence
+- GIVEN a bundle omits a required profile/report/parent, names bytes with a mismatched BLAKE3, substitutes a store path for exact identity, or includes a post-materialization Valence/Cairn identity that itself references the bundle
 - WHEN bundle verification runs
 - THEN Mantle MUST fail closed and MUST NOT publish the bundle as consumer-admissible.
 
