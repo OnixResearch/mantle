@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Build, resolve, compose, virtualize, validate, transform, and optionally precompile WebAssembly components as explicit Mantle build stages while preserving digest roles and leaving runtime authority and evidence semantics to their owners.
+Build, resolve, compose, virtualize, validate, transform, optionally precompile, and materialize WebAssembly components as explicit Mantle stages while preserving digest roles and leaving runtime authority and evidence semantics to their owners.
 
 ## Requirements
 
 ### Requirement: Component build configuration is Nickel-authored
 
-r[mantle.wasm_component.config] Mantle MUST define component package/build, WIT/world, dependency, composition, WASI virtualization, validation, Wizer, AOT, output, and non-claim configuration in typed Nickel and MUST generate deterministic tool-native inputs where external tools require them.
+r[mantle.wasm_component.config] Mantle MUST define component package/build, WIT/world, dependency, composition, WASI virtualization, Octet artifact-profile identity, expected runtime-profile identity, Wizer, AOT, output, and non-claim configuration in typed Nickel and MUST generate deterministic tool-native inputs where external tools require them.
 
 #### Scenario: Component manifest is valid
 - GIVEN a complete Nickel component-build manifest satisfies its contracts
@@ -99,19 +99,19 @@ r[mantle.wasm_component.virtualization] Mantle MUST construct WASI-Virt plans fr
 - WHEN plan validation runs
 - THEN Mantle MUST reject the plan before composition.
 
-### Requirement: Portable outputs pass wasm-tools validation
+### Requirement: Portable outputs pass independent build and Octet validation
 
-r[mantle.wasm_component.validation] Every portable component output MUST pass the pinned wasm-tools validation and the declared WIT world, import/export, proposal, metadata, and resource policy before publication, Wizer transformation, or Wasmtime precompilation.
+r[mantle.wasm_component.validation] Every portable component output MUST pass pinned build-local wasm-tools validation before publication, Wizer transformation, or Wasmtime precompilation; consumer and release profiles MUST also run the declared Octet artifact rail over the exact final bytes and bind its independent profile, cohort, and report identity.
 
-#### Scenario: Output matches declared profile
-- GIVEN a portable component is valid and all extracted facts satisfy policy
-- WHEN output validation runs
-- THEN Mantle MAY admit it to later build stages and MUST persist the validation report.
+#### Scenario: Output matches both declared profiles
+- GIVEN a portable component passes build-local validation and the Octet rail reports that the same exact bytes satisfy the declared artifact profile
+- WHEN output validation completes
+- THEN Mantle MAY admit it to later build stages and MUST persist both independently identified reports.
 
-#### Scenario: Link succeeds but world or imports differ
-- GIVEN the compiler/composer exits successfully but the output world, imports, proposals, or resource declarations violate policy
+#### Scenario: Link succeeds but a validation layer differs
+- GIVEN the compiler/composer exits successfully but build-local facts violate policy, or the Octet report names different bytes, profile, cohort, world, imports, proposals, or resource declarations
 - WHEN validation runs
-- THEN Mantle MUST deny the artifact from later stages.
+- THEN Mantle MUST deny the artifact from later stages without reinterpreting the Octet finding.
 
 ### Requirement: Wizer is a bounded optional transform
 
@@ -141,9 +141,23 @@ r[mantle.wasm_component.precompile] Mantle MUST precompile only validated portab
 - WHEN release or consumer verification runs
 - THEN verification MUST fail closed.
 
+### Requirement: Consumers receive one rehashable materialization bundle
+
+r[mantle.wasm_component.bundle] Mantle MUST emit a versioned component materialization bundle binding exact store objects and BLAKE3 identities for WIT/package inputs, source closure, lock, final portable bytes, build cohort, expected Octet/runtime profiles, every stage receipt, and any optional Wizer or precompiled outputs; paths and names MUST remain locator metadata only.
+
+#### Scenario: Complete bundle is handed to a consumer
+- GIVEN a component pipeline produces all required objects and reports
+- WHEN Mantle materializes the consumer bundle
+- THEN every object MUST be independently rehashable and linked to its producing stage so the consumer can remeasure and perform its own admission.
+
+#### Scenario: Bundle swaps or omits an object
+- GIVEN a bundle omits a required profile/report/parent, names bytes with a mismatched BLAKE3, or substitutes a store path for exact identity
+- WHEN bundle verification runs
+- THEN Mantle MUST fail closed and MUST NOT publish the bundle as consumer-admissible.
+
 ### Requirement: Component build evidence follows the stage graph
 
-r[mantle.wasm_component.evidence] Mantle MUST expose package resolution, lock, binding, compilation, composition, virtualization, validation, Wizer, and AOT stages as typed build-report/attestation nodes with BLAKE3 parent links and explicit non-claims.
+r[mantle.wasm_component.evidence] Mantle MUST expose package resolution, lock, binding, compilation, composition, virtualization, build-local validation, Octet validation, Wizer, AOT, and materialization stages as typed build-report/attestation nodes with BLAKE3 parent links and explicit non-claims.
 
 #### Scenario: Build report is reviewed
 - GIVEN a component pipeline completes or fails
@@ -157,7 +171,7 @@ r[mantle.wasm_component.evidence] Mantle MUST expose package resolution, lock, b
 
 ### Requirement: Component planning has a functional core
 
-r[mantle.wasm_component.functional_core] Manifest/lock validation, digest-role separation, cohort identity, source and command planning, composition graph validation, virtualization planning, output-result admission, transform comparison, precompile manifest checks, and report construction MUST be pure deterministic logic.
+r[mantle.wasm_component.functional_core] Manifest/lock validation, digest-role separation, cohort identity, source and command planning, composition graph validation, virtualization planning, build/Octet result binding, transform comparison, precompile manifest checks, materialization-bundle construction, and report construction MUST be pure deterministic logic.
 
 #### Scenario: Identical build facts produce identical plan
 - GIVEN identical normalized manifest, lock, package, source, cohort, composition, virtualization, and target facts
@@ -166,7 +180,7 @@ r[mantle.wasm_component.functional_core] Manifest/lock validation, digest-role s
 
 ### Requirement: Component pipeline has positive and negative validation
 
-r[mantle.wasm_component.final_validation] The pipeline MUST include positive build/composition/virtualization cases and negative registry, lock, dependency, world, implicit-resolution, pass-through, import, transform, precompile, report, and overclaim cases plus focused lifecycle validation.
+r[mantle.wasm_component.final_validation] The pipeline MUST include positive build/composition/virtualization/materialization cases and negative registry, lock, dependency, world, implicit-resolution, pass-through, import, Octet-report, transform, precompile, bundle, report, and overclaim cases plus focused lifecycle validation.
 
 #### Scenario: Pipeline change is reviewed
 - GIVEN manifest, resolver, tool cohort, build, composition, virtualization, validation, transform, precompile, or evidence behavior changes

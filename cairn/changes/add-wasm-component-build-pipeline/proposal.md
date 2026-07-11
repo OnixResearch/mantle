@@ -12,12 +12,14 @@ Mantle should own this as a build-shaped pipeline while leaving component runtim
 - Pin one Rust/wasm32-wasip2, wit-bindgen, wasm-component-ld, wasm-tools, WAC, WASI-Virt, Wizer, and Wasmtime compatibility cohort.
 - Use WAC for exact local component composition and explicit dependency graphs; do not depend on archived Warg resolution.
 - Apply WASI-Virt from an explicit deny-all plan before reviewed allow/virtualize rules, then validate the final component against the declared world and import policy.
+- Run build-local `wasm-tools` validation and the Octet artifact rail over the exact final portable bytes, binding both reports without treating either as runtime authority.
 - Optionally emit Wizer-preinitialized portable artifacts and Wasmtime precompiled native artifacts with exact configuration/target evidence.
-- Extend build reports and attestations with package, composition, virtualization, validation, transform, and precompile evidence.
+- Emit one canonical component materialization bundle that binds exact store objects, profile/cohort identities, stage receipts, optional native outputs, and consumer-facing verification inputs.
+- Extend build reports and attestations with package, composition, virtualization, validation, transform, precompile, and materialization evidence.
 
 ## Impact
 
 - **Surfaces**: Nickel stdlib/contracts, project manifests/locks, source fetchers, component build helpers, WAC/WASI-Virt plans, build reports, attestations, release evidence, fixtures, and documentation.
-- **Architecture boundary**: Mantle builds and identifies artifacts. It does not host components, authorize imports, define Preserves semantics, interpret Valence roles, or decide release eligibility.
+- **Architecture boundary**: Mantle is the stack-owned production materializer for component bytes, bindings, compositions, transforms, and precompiled outputs. It does not host components, authorize imports, define Preserves semantics, interpret Octet/Valence results, or decide release eligibility.
 - **Security**: registry credentials remain shell-owned handles; build sandboxes receive only resolved immutable inputs. Precompiled Wasmtime artifacts are native trusted outputs and never treated as portable validated Wasm.
 - **Compatibility**: native tool formats such as WIT, WAC, OCI metadata, and `wkg.lock` remain tool-native; human-authored policy and orchestration stay Nickel-authored.
