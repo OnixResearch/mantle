@@ -217,6 +217,29 @@ Pueue task 2001 ran authoritative validation after sync. Exact output:
 }
 ```
 
-## Scope guard
+## Archive evidence
 
-The accepted remote-builds spec has been synced. The active change has not yet been archived.
+```text
+change: fence-durable-remote-attempts
+archive path: ./cairn/archive/2026-07-12-fence-durable-remote-attempts
+input_hash: 85b7d50e4b85720258e159016924aa488284e213d1c1719dcfd8219e9983c1e1
+plan_hash: ae2788a2c7e0888d9d2426d326ac63ed8bcd2d841f21109806bf0859018c93c4
+receipt_hash: f067a7bebb76799b66ed5e8a9d4012ac9ddb533be5731034a6a3c470a0f25fb0
+mutated: true
+blocked: false
+```
+
+Pueue task 2004 ran authoritative validation after archive. Exact output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 14,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 38,
+  "valid": true
+}
+```
