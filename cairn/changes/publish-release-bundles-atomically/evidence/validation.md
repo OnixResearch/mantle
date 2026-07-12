@@ -88,3 +88,9 @@ Adversarial integration review identified a post-verification replacement window
 Pueue task `697` ran the focused pre-commit replacement test plus all 13 release-create CLI tests. Pueue task `710` then ran the full root release-evidence lane (36 passed, 0 failed), the complete release core (194 passed, 0 failed), and strict core Clippy with warnings denied.
 
 Pueue task `713` ran repository validation and proposal, design, and tasks gates with the generated Mantle policy. Validation reported 9 active changes, 36 specs, no issues, and `valid: true`; all three gates returned no issues, `valid: true`, and `verdict: PASS` under policy hash `d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c`.
+
+## Accepted-spec synchronization
+
+Pueue task `718` dry-ran and executed Cairn sync with no blockers. The execute receipt reported identical accepted-spec before/after hashes (`3ad907ef326c43be2888717905fccb5ad99fbb77bbd0e4ad4afb5661d0f643f6`), and the atomic-publication requirements were absent, so the reviewed delta was appended manually.
+
+The first standalone comparison task (`733`) failed before evidence because the ambient Cargo wrapper could not launch; it produced no validation result. Pueue task `737` reran in the documented development environment with wrappers cleared and proved the accepted requirement suffix is byte-for-byte equal to the reviewed delta: 4624 bytes, BLAKE3 `33720bb3ae7ea6486f1ebe4174a63150189892568155aaa0855c051c06605cdd`. Post-sync validation remained `valid: true` with 9 active changes and 36 specs.
