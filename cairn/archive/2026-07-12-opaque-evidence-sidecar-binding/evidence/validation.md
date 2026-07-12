@@ -125,7 +125,7 @@ Pueue task 1627 ran the authoritative Cairn CLI with `--root . --policy cairn-po
 
 ## Archive evidence
 
-The executed sync was idempotent: its before/after canonical `release-provenance` spec content hash was `639debe228164d42a9f95865530ec8dd8d6a1c160fef1b52c781214daf082a1c`, proving the accepted spec already contained the delta. The executed archive receipt was:
+The executed sync reported identical before/after canonical `release-provenance` hashes. A post-archive content audit then found that the archived package used a standalone `## Requirements` heading rather than Cairn's delta marker, so the no-op sync did **not** prove requirement acceptance. Per the repository lifecycle rule, the four opaque-sidecar requirements were copied explicitly into the canonical spec and revalidated before this archive repair was committed. The executed archive receipt was:
 
 ```text
 change: opaque-evidence-sidecar-binding
@@ -137,7 +137,24 @@ mutated: true
 blocked: false
 ```
 
-Pueue task 1643 ran the authoritative validation command after archive. Exact output:
+Pueue task 1643 ran the authoritative validation command immediately after archive. Exact output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 17,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 42,
+  "valid": true
+}
+```
+
+### Canonical-spec repair validation
+
+Pueue task 1659 ran the same authoritative validation after the missing requirements were copied into `cairn/specs/release-provenance/spec.md`. Exact output:
 
 ```text
 {
