@@ -106,6 +106,10 @@ receipt_hash: 46c22d28052eddc8218cca7e274307d9ae822f529631ad421a28793da308e9af
 
 No sync or archive command was run.
 
+## Main-branch integration checkpoint
+
+After integration with atomic release publication and content-bound rebuild authority, pueue task `341` successfully reran `crunch-release-core`, `crunch-bootstrap-core`, focused Cairn handoff and release-evidence binary tests, Cairn handoff CLI tests, and all 13 `release_reproduce_` tests in one isolated target. The merge-specific handoff path now measures the planned artifact/policy bytes before staging, includes those files in the pure atomic publication plan, remeasures while assembling, and verifies the staged receipt again before no-clobber commit. This closes unplanned-artifact and post-plan replacement seams without claiming external Cairn authentication. Pueue task `400` then passed Cairn validation and proposal/design/tasks gates with no issues; the external accepted-authentication dependency and final production smoke remain explicitly incomplete.
+
 ## Required flake-check attempt
 
 ```text
