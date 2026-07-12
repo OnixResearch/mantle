@@ -1,11 +1,18 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::fs::File;
-use std::io::{Read, Write};
-use std::path::{Component, Path, PathBuf};
+use std::io::Read;
+use std::io::Write;
+use std::path::Component;
+use std::path::Path;
+use std::path::PathBuf;
 
-use crunch_wasm_component_core::{Blake3Identity, GeneratedInputPlan, OciSha256Digest, StoreObject};
-use sha2::{Digest, Sha256};
+use crunch_wasm_component_core::Blake3Identity;
+use crunch_wasm_component_core::GeneratedInputPlan;
+use crunch_wasm_component_core::OciSha256Digest;
+use crunch_wasm_component_core::StoreObject;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::Error;
 
@@ -26,17 +33,17 @@ pub fn copy_source_tree(source: &Path, destination: &Path) -> Result<StoreObject
             return Err(Error::Invalid(format!("source tree exceeds depth {MAX_TREE_DEPTH}")));
         }
         let source_dir = source.join(&relative);
-        let destination_dir = destination.join(&relative);
         for entry in read_entries_sorted(&source_dir)? {
-            entry_count = entry_count.checked_add(1)
+            entry_count = entry_count
+                .checked_add(1)
                 .ok_or_else(|| Error::Invalid("source entry count overflowed u32".to_string()))?;
             if entry_count > MAX_TREE_ENTRIES {
                 return Err(Error::Invalid(format!("source tree exceeds {MAX_TREE_ENTRIES} entries")));
             }
             let child_relative = relative.join(entry.file_name());
             validate_relative_path(&child_relative)?;
-            let file_type = entry.file_type()
-                .map_err(|error| Error::io("reading source entry type", &entry.path(), error))?;
+            let file_type =
+                entry.file_type().map_err(|error| Error::io("reading source entry type", &entry.path(), error))?;
             let destination_path = destination.join(&child_relative);
             if file_type.is_symlink() {
                 return Err(Error::Invalid(format!("source symlink is not admitted: {}", child_relative.display())));
@@ -48,7 +55,8 @@ pub fn copy_source_tree(source: &Path, destination: &Path) -> Result<StoreObject
                 queue.push_back((child_relative, depth.saturating_add(1)));
             } else if file_type.is_file() {
                 let file_size = copy_file_hashed(&entry.path(), &destination_path, &child_relative, &mut hasher)?;
-                byte_count = byte_count.checked_add(file_size)
+                byte_count = byte_count
+                    .checked_add(file_size)
                     .ok_or_else(|| Error::Invalid("source byte count overflowed u64".to_string()))?;
                 if byte_count > MAX_TREE_BYTES {
                     return Err(Error::Invalid(format!("source tree exceeds {MAX_TREE_BYTES} bytes")));
@@ -65,23 +73,25 @@ pub fn copy_source_tree(source: &Path, destination: &Path) -> Result<StoreObject
     Ok(StoreObject {
         logical_path: source.display().to_string(),
         digest_blake3: digest,
+        size_bytes: byte_count,
     })
 }
 
-pub fn materialize_generated_inputs(root: &Path, plans: &[GeneratedInputPlan]) -> Result<(), Error> {
-    for plan in plans {
-        let path = root.join(&plan.relative_path);
-        let parent = path.parent()
-            .ok_or_else(|| Error::Invalid(format!("generated input has no parent: {}", plan.relative_path)))?;
+pub fn materialize_generated_inputs(root: &Path, plan: &GeneratedInputPlan) -> Result<(), Error> {
+    for input in &plan.inputs {
+        let path = root.join(&input.target);
+        let parent = path
+            .parent()
+            .ok_or_else(|| Error::Invalid(format!("generated input has no parent: {}", input.target)))?;
         fs::create_dir_all(parent).map_err(|error| Error::io("creating generated input parent", parent, error))?;
-        write_new(&path, plan.content.as_bytes())?;
-        let measured = Blake3Identity::from_slice(plan.content.as_bytes());
-        if measured != plan.digest_blake3 {
-            return Err(Error::Invalid(format!("generated input digest drifted: {}", plan.relative_path)));
+        write_new(&path, input.content.as_bytes())?;
+        let measured = Blake3Identity::from_slice(input.content.as_bytes());
+        if measured != input.content_identity_blake3 {
+            return Err(Error::Invalid(format!("generated input digest drifted: {}", input.target)));
         }
     }
-    debug_assert_eq!(plans.len(), plans.iter().filter(|plan| root.join(&plan.relative_path).is_file()).count());
-    debug_assert!(plans.iter().all(|plan| !plan.relative_path.is_empty()));
+    debug_assert_eq!(plan.inputs.len(), plan.inputs.iter().filter(|input| root.join(&input.target).is_file()).count());
+    debug_assert!(plan.inputs.iter().all(|input| !input.target.is_empty()));
     Ok(())
 }
 
@@ -102,8 +112,11 @@ pub fn sha256_file(path: &Path) -> Result<OciSha256Digest, Error> {
     let mut byte_count = 0_u64;
     loop {
         let count = file.read(&mut buffer).map_err(|error| Error::io("hashing package file", path, error))?;
-        if count == 0 { break; }
-        byte_count = byte_count.checked_add(u64::try_from(count).unwrap_or(u64::MAX))
+        if count == 0 {
+            break;
+        }
+        byte_count = byte_count
+            .checked_add(u64::try_from(count).unwrap_or(u64::MAX))
             .ok_or_else(|| Error::Invalid("package byte count overflowed u64".to_string()))?;
         if byte_count > MAX_TREE_BYTES {
             return Err(Error::Invalid(format!("package exceeds {MAX_TREE_BYTES} bytes")));
@@ -137,16 +150,24 @@ fn copy_file_hashed(
     }
     hash_record(hasher, b"file\0", relative, metadata.len());
     let mut input = File::open(source).map_err(|error| Error::io("opening source file", source, error))?;
-    let mut output = fs::OpenOptions::new().create_new(true).write(true).open(destination)
+    let mut output = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(destination)
         .map_err(|error| Error::io("creating source copy", destination, error))?;
     let mut buffer = vec![0_u8; HASH_BUFFER_CAPACITY_BYTES];
     let mut copied = 0_u64;
     loop {
         let count = input.read(&mut buffer).map_err(|error| Error::io("reading source file", source, error))?;
-        if count == 0 { break; }
-        output.write_all(&buffer[..count]).map_err(|error| Error::io("writing source copy", destination, error))?;
+        if count == 0 {
+            break;
+        }
+        output
+            .write_all(&buffer[..count])
+            .map_err(|error| Error::io("writing source copy", destination, error))?;
         hasher.update(&buffer[..count]);
-        copied = copied.checked_add(u64::try_from(count).unwrap_or(u64::MAX))
+        copied = copied
+            .checked_add(u64::try_from(count).unwrap_or(u64::MAX))
             .ok_or_else(|| Error::Invalid("copied byte count overflowed u64".to_string()))?;
     }
     if copied != metadata.len() {
@@ -177,7 +198,9 @@ fn read_entries_sorted(path: &Path) -> Result<Vec<fs::DirEntry>, Error> {
 
 fn validate_source_root(source: &Path, destination: &Path) -> Result<(), Error> {
     if !source.is_absolute() || !source.is_dir() || !destination.is_absolute() || destination.exists() {
-        return Err(Error::Invalid("source copy requires an absolute directory and a new absolute destination".to_string()));
+        return Err(Error::Invalid(
+            "source copy requires an absolute directory and a new absolute destination".to_string(),
+        ));
     }
     if destination.starts_with(source) || source.starts_with(destination) {
         return Err(Error::Invalid("source and destination trees must not contain each other".to_string()));
@@ -186,7 +209,8 @@ fn validate_source_root(source: &Path, destination: &Path) -> Result<(), Error> 
 }
 
 pub fn validate_relative_path(path: &Path) -> Result<(), Error> {
-    if path.as_os_str().is_empty() || path.is_absolute()
+    if path.as_os_str().is_empty()
+        || path.is_absolute()
         || !path.components().all(|component| matches!(component, Component::Normal(_)))
     {
         return Err(Error::Invalid(format!("unsafe relative path `{}`", path.display())));

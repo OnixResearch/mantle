@@ -18,6 +18,7 @@ members = [
   "crates/crunch-bootstrap-core",
   "crates/crunch-kernelscript-core",
   "crates/crunch-wasm-component-core",
+  "crates/crunch-wasm-component",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
   "vendor/snix-build",
@@ -50,6 +51,7 @@ default_scope = [
   "-p", "crunch-shell-core",
   "-p", "crunch-store",
   "-p", "crunch-wasm-component-core",
+  "-p", "crunch-wasm-component",
 ]
 cargo_check_args = ["--lib"]
 
@@ -98,6 +100,7 @@ crunch-eval = { path = "crates/crunch-eval" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-build = { path = "crates/crunch-build" }
 crunch-store = { path = "crates/crunch-store" }
+crunch-wasm-component = { path = "crates/crunch-wasm-component" }
 crunch-project = { path = "crates/crunch-project" }
 crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }

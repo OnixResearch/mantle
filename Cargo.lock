@@ -1501,6 +1501,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-wasm-component"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "crunch-wasm-component-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "crunch-wasm-component-core"
 version = "0.1.0"
 dependencies = [
@@ -4390,6 +4403,7 @@ dependencies = [
  "crunch-release-core",
  "crunch-shell",
  "crunch-store",
+ "crunch-wasm-component",
  "crunch-wasm-component-core",
  "data-encoding",
  "digest 0.10.7",
