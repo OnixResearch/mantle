@@ -57,6 +57,28 @@ impl RemoteAttemptId {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
+pub struct RemoteAssignmentNonce(String);
+
+impl RemoteAssignmentNonce {
+    pub fn new(value: impl Into<String>) -> Result<Self, RemoteAttemptReasonCode> {
+        let value = value.into();
+        if !is_blake3_hex_digest(&value) {
+            return Err(RemoteAttemptReasonCode::AssignmentNonceInvalid);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+fn legacy_missing_assignment_nonce() -> RemoteAssignmentNonce {
+    RemoteAssignmentNonce(String::new())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct RemoteEventId(String);
 
 impl RemoteEventId {
@@ -246,6 +268,8 @@ impl RemoteAttemptReport {
 pub struct RemoteAttemptState {
     pub job_id: RemoteJobId,
     pub attempt_id: RemoteAttemptId,
+    #[serde(default = "legacy_missing_assignment_nonce")]
+    pub assignment_nonce: RemoteAssignmentNonce,
     pub fence_generation: RemoteFenceGeneration,
     pub phase: RemoteAttemptPhase,
     pub attempts_started: u32,
@@ -361,6 +385,7 @@ pub enum RemoteAttemptReasonCode {
     PayloadSerializationFailed,
     PayloadTooLarge,
     IdentityInvalid,
+    AssignmentNonceInvalid,
     FenceInvalid,
     FenceExhausted,
     StaleReportRejected,
@@ -399,6 +424,7 @@ impl RemoteAttemptReasonCode {
             Self::PayloadSerializationFailed => "payload-serialization-failed",
             Self::PayloadTooLarge => "payload-too-large",
             Self::IdentityInvalid => "identity-invalid",
+            Self::AssignmentNonceInvalid => "assignment-nonce-invalid",
             Self::FenceInvalid => "fence-invalid",
             Self::FenceExhausted => "fence-exhausted",
             Self::StaleReportRejected => "stale-report-rejected",
@@ -444,13 +470,16 @@ pub fn canonical_remote_attempt_payload_digest(
 
 pub fn derive_remote_attempt_id(
     job_id: &RemoteJobId,
+    assignment_nonce: &RemoteAssignmentNonce,
     fence_generation: RemoteFenceGeneration,
     worker_endpoint_id: &str,
 ) -> Result<RemoteAttemptId, RemoteAttemptReasonCode> {
     let worker_endpoint_id = bounded_identity(worker_endpoint_id.to_string())?;
+    RemoteAssignmentNonce::new(assignment_nonce.as_str().to_string())?;
     let mut hasher = blake3::Hasher::new();
     hash_identity_part(&mut hasher, REMOTE_ATTEMPT_ID_DOMAIN);
     hash_identity_part(&mut hasher, job_id.as_str());
+    hash_identity_part(&mut hasher, assignment_nonce.as_str());
     hash_identity_part(&mut hasher, &fence_generation.get().to_string());
     hash_identity_part(&mut hasher, &worker_endpoint_id);
     let value = hasher.finalize().to_hex().to_string();
@@ -462,6 +491,7 @@ pub fn derive_remote_attempt_id(
 pub fn plan_remote_attempt_assignment(
     job_id: &RemoteJobId,
     worker_endpoint_id: &str,
+    assignment_nonce: RemoteAssignmentNonce,
     previous: Option<&RemoteAttemptState>,
     retry_policy: RemoteAttemptRetryPolicy,
     time: RemoteAttemptTimeFacts,
@@ -481,13 +511,14 @@ pub fn plan_remote_attempt_assignment(
     if deadline_unix_s <= time.now_unix_s {
         return Err(RemoteAttemptReasonCode::RetryDeadlineExceeded);
     }
-    let attempt_id = derive_remote_attempt_id(job_id, fence_generation, worker_endpoint_id)?;
+    let attempt_id = derive_remote_attempt_id(job_id, &assignment_nonce, fence_generation, worker_endpoint_id)?;
     let applied_events = previous.map(|attempt| attempt.applied_events.clone()).unwrap_or_default();
     debug_assert!(applied_events.len() <= MAX_REMOTE_ATTEMPT_EVENTS);
     debug_assert!(deadline_unix_s > time.now_unix_s);
     Ok(RemoteAttemptState {
         job_id: job_id.clone(),
         attempt_id,
+        assignment_nonce,
         fence_generation,
         phase: RemoteAttemptPhase::Queued,
         attempts_started,
@@ -774,6 +805,9 @@ fn accepted_plan(
         RemoteAttemptReportPayload::Heartbeat { observed_unix_s } => {
             next_state.last_heartbeat_unix_s = Some(*observed_unix_s);
         }
+        RemoteAttemptReportPayload::Failure { .. } => {
+            next_state.result_digest_blake3 = None;
+        }
         _ => {}
     }
     next_state
@@ -836,6 +870,9 @@ fn validate_previous_attempt(
     if let Some(previous) = previous {
         if &previous.job_id != job_id {
             return Err(RemoteAttemptReasonCode::JobIdentityMismatch);
+        }
+        if RemoteAssignmentNonce::new(previous.assignment_nonce.as_str().to_string()).is_err() {
+            return Err(RemoteAttemptReasonCode::AssignmentNonceInvalid);
         }
         if previous.applied_events.len() > MAX_REMOTE_ATTEMPT_EVENTS {
             return Err(RemoteAttemptReasonCode::EventRetentionExhausted);
@@ -905,6 +942,10 @@ mod tests {
         RemoteJobId::new("job-1").unwrap()
     }
 
+    fn assignment_nonce(label: &str) -> RemoteAssignmentNonce {
+        RemoteAssignmentNonce::new(blake3::hash(label.as_bytes()).to_hex().to_string()).unwrap()
+    }
+
     fn policy() -> RemoteAttemptRetryPolicy {
         RemoteAttemptRetryPolicy::default()
     }
@@ -918,7 +959,15 @@ mod tests {
     }
 
     fn attempt() -> RemoteAttemptState {
-        plan_remote_attempt_assignment(&job_id(), "worker-1", None, policy(), time_facts(TEST_NOW_UNIX_S)).unwrap()
+        plan_remote_attempt_assignment(
+            &job_id(),
+            "worker-1",
+            assignment_nonce("attempt-1"),
+            None,
+            policy(),
+            time_facts(TEST_NOW_UNIX_S),
+        )
+        .unwrap()
     }
 
     fn report(state: &RemoteAttemptState, event_id: &str, payload: RemoteAttemptReportPayload) -> RemoteAttemptReport {
@@ -998,6 +1047,7 @@ mod tests {
         let second = plan_remote_attempt_assignment(
             &job_id(),
             "worker-2",
+            assignment_nonce("attempt-2"),
             Some(&first),
             policy(),
             time_facts(TEST_SECOND_ATTEMPT_NOW_UNIX_S),
@@ -1011,6 +1061,43 @@ mod tests {
         assert_eq!(decision.reason_code, RemoteAttemptReasonCode::StaleReportRejected);
         assert_eq!(decision.next_state, second);
         assert!(!decision.output_admission_allowed);
+    }
+
+    #[test]
+    fn assignment_nonce_prevents_identity_reuse_after_state_reset() {
+        let first = plan_remote_attempt_assignment(
+            &job_id(),
+            "worker-1",
+            assignment_nonce("coordinator-incarnation-1"),
+            None,
+            policy(),
+            time_facts(TEST_NOW_UNIX_S),
+        )
+        .unwrap();
+        let replacement_after_reset = plan_remote_attempt_assignment(
+            &job_id(),
+            "worker-1",
+            assignment_nonce("coordinator-incarnation-2"),
+            None,
+            policy(),
+            time_facts(TEST_NOW_UNIX_S),
+        )
+        .unwrap();
+        let stale = report(&first, "reset-stale", RemoteAttemptReportPayload::Start);
+        let decision = plan_remote_attempt_report(&replacement_after_reset, &stale, authorized());
+
+        assert_ne!(first.assignment_nonce, replacement_after_reset.assignment_nonce);
+        assert_ne!(first.attempt_id, replacement_after_reset.attempt_id);
+        assert_eq!(decision.reason_code, RemoteAttemptReasonCode::AttemptIdentityMismatch);
+        assert_eq!(decision.next_state, replacement_after_reset);
+    }
+
+    #[test]
+    fn malformed_assignment_nonce_fails_before_identity_derivation() {
+        let error = RemoteAssignmentNonce::new("not-a-blake3-digest").unwrap_err();
+
+        assert_eq!(error, RemoteAttemptReasonCode::AssignmentNonceInvalid);
+        assert_eq!(error.as_str(), "assignment-nonce-invalid");
     }
 
     #[test]
@@ -1080,13 +1167,20 @@ mod tests {
             max_attempts: TEST_FENCE_CHAIN_ATTEMPTS,
             ..policy()
         };
-        let mut current =
-            plan_remote_attempt_assignment(&job_id(), "worker-chain", None, chain_policy, time_facts(TEST_NOW_UNIX_S))
-                .unwrap();
+        let mut current = plan_remote_attempt_assignment(
+            &job_id(),
+            "worker-chain",
+            assignment_nonce("chain-0"),
+            None,
+            chain_policy,
+            time_facts(TEST_NOW_UNIX_S),
+        )
+        .unwrap();
         for attempt_index in INITIAL_REMOTE_ATTEMPT_COUNT..TEST_FENCE_CHAIN_ATTEMPTS {
             let next = plan_remote_attempt_assignment(
                 &job_id(),
                 "worker-chain",
+                assignment_nonce(&format!("chain-{attempt_index}")),
                 Some(&current),
                 chain_policy,
                 time_facts(TEST_NOW_UNIX_S + u64::from(attempt_index)),
@@ -1243,6 +1337,7 @@ mod kani_proofs {
         let state = plan_remote_attempt_assignment(
             &job_id,
             "kani-worker",
+            RemoteAssignmentNonce::new("a".repeat(BLAKE3_HEX_LENGTH_CHARS)).unwrap(),
             None,
             RemoteAttemptRetryPolicy::default(),
             RemoteAttemptTimeFacts {

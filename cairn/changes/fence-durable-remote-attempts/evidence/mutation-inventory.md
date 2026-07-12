@@ -22,8 +22,10 @@ Date: 2026-07-12
 
 ## Implemented ownership boundary
 
-- `crates/crunch-build/src/distributed/remote_attempt.rs` owns typed identities, canonical BLAKE3 payload digests, bounded retained event bindings, fence comparison, authorization, transitions, retry decisions, and report application plans.
-- `src/remote_build.rs` owns worker transport authorization facts, candidate-state mutation, atomic durable writes, log storage, transfer/result fields, output-admission plumbing, migration, and rendering.
+- `crates/crunch-build/src/distributed/remote_attempt.rs` owns typed identities and assignment nonces, canonical BLAKE3 payload digests, bounded retained event bindings, fence comparison, authorization, transitions, retry decisions, and report application plans.
+- `src/remote_build.rs` owns operating-system nonce generation, worker transport authorization facts, candidate-state mutation, atomic durable writes, log storage, transfer/result fields, output-admission plumbing, migration, and rendering.
 - `src/remote_farm_config.rs` and `lib/remote-builders.ncl` own provider-neutral typed retry policy; callers supply time facts explicitly.
 - The coordinator clones candidate state, persists it, and only then replaces visible in-memory state or returns a new assignment.
+- Initial job ids and every attempt id bind a fresh 256-bit shell-supplied nonce, so deleting/resetting coordinator state cannot deterministically recreate stale credentials for the same request, worker, and fence.
 - Worker resume summaries can confirm only the coordinator's existing durable owner; they cannot create or overwrite coordinator jobs.
+- An already-applied finished-undelivered result can reconstruct its admission report after restart only by revalidating the supplied response; this changes no durable state and malformed duplicates fail closed.

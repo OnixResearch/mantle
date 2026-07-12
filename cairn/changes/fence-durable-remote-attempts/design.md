@@ -6,9 +6,9 @@
 
 ### 1. Use a three-level identity model
 
-**Choice:** Preserve the existing normalized realization key for dedupe, retain a durable job id for client attachment, and add a unique attempt id plus monotonic fence generation for each assignment.
+**Choice:** Preserve the existing normalized realization key for dedupe, retain a durable job id for client attachment, and add a unique attempt id plus monotonic fence generation for each assignment. The imperative shell supplies a fresh 256-bit assignment nonce from operating-system randomness; both the initial job id and attempt id bind that nonce, while retries retain the job id and bind a fresh nonce into the replacement attempt id.
 
-**Rationale:** A retry is the same logical request but a different owner. Collapsing those identities makes stale reports indistinguishable from current reports.
+**Rationale:** A retry is the same logical request but a different owner. Collapsing those identities makes stale reports indistinguishable from current reports. A nonce prevents an ABA identity reuse if coordinator state is reset and the same normalized request, worker, and initial fence recur.
 
 ### 2. Fence every state-changing worker report
 
@@ -18,9 +18,9 @@
 
 ### 3. Make event application idempotent
 
-**Choice:** Each attempt report carries a stable event id and canonical payload digest. Repeating the same event id and digest returns an `already-applied` decision; reusing an event id with different content fails as a conflict; reports from a lower or unknown fence fail as stale.
+**Choice:** Each attempt report carries a stable event id and canonical payload digest. Repeating the same event id and digest returns an `already-applied` decision; reusing an event id with different content fails as a conflict; reports from a lower or unknown fence fail as stale. A duplicate finished-undelivered result may reconstruct its admission report only after its response is cryptographically revalidated; this redelivery does not reapply durable state.
 
-**Rationale:** At-least-once transport delivery is normal. Idempotent state application is safer than trying to make transport exactly once.
+**Rationale:** At-least-once transport delivery is normal. Idempotent state application is safer than trying to make transport exactly once. Reconstructing admission after a crash avoids turning a persisted result-ready event into an unrecoverable delivery gap.
 
 ### 4. Keep authorization, retry, and transition logic pure
 
@@ -47,7 +47,7 @@
 
 ## Risks / Trade-offs
 
-- Existing persisted coordinator state needs an explicit migration that treats legacy live jobs conservatively rather than inventing a current fence.
+- Existing persisted coordinator state needs an explicit migration that treats legacy live jobs conservatively rather than inventing a current nonce or fence.
 - A monotonic fence is coordinator-scoped; multi-coordinator consensus remains out of scope.
 - Cancellation latency can waste work, but stale output rejection preserves correctness.
 - Event-id retention must be bounded without allowing an old conflicting event to become current again.

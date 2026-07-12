@@ -1,7 +1,7 @@
 ## Implementation
 
 - [x] [serial] r[remote_builds.durable_attempt_fencing] Inventory current job, lease, retry, authorization, resume, log, transfer, and output-admission mutations; document which mutations currently lack attempt/fence identity.
-- [x] [serial] r[remote_builds.durable_attempt_fencing] Add typed job, attempt, fence-generation, and event identities plus a bounded attempt-state model that preserves the existing normalized realization key.
+- [x] [serial] r[remote_builds.durable_attempt_fencing] Add typed job, attempt, assignment-nonce, fence-generation, and event identities plus a bounded attempt-state model that preserves the existing normalized realization key.
 - [x] [depends:attempt-identities] r[remote_builds.pure_attempt_decisions] Extract pure authorization, retry, transition, idempotency, and fence-validation functions over immutable input facts.
 - [x] [depends:pure-attempt-decisions] r[remote_builds.durable_attempt_fencing] Make the coordinator shell persist a new attempt and advanced fence before exposing assignment, and migrate legacy durable state fail-closed.
 - [x] [depends:durable-attempt-state] r[remote_builds.idempotent_attempt_reporting] Require job, attempt, fence, event id, and canonical payload digest on worker state changes, log appends, transfer checkpoints, result reports, and completion.
@@ -21,7 +21,8 @@
 
 - Mutation inventory: `evidence/mutation-inventory.md`.
 - Baseline at `f2e43a9fa396683d624f3d9e6df6586062a522d3`: coordinator 9 passed, remote config 9 passed, distributed core 41 passed (`pueue` task 1352).
-- Final focused tests: pure attempt core 13 passed (task 1356), coordinator 20 passed (task 1357), typed remote config 12 passed (task 1359), existing distributed core 41 passed (task 1360), and `cargo check -p mantle --bin mantle` passed (task 1363).
+- Agent validation: pure attempt core 13 passed (task 1356), coordinator 20 passed (task 1357), typed remote config 12 passed (task 1359), existing distributed core 41 passed (task 1360), and `cargo check -p mantle --bin mantle` passed (task 1363).
+- Integrated-main adversarial hardening added fresh assignment nonces, state-reset ABA rejection, durable nonce/attempt derivation checks, and cryptographically revalidated finished-undelivered redelivery. Current focused counts and receipts are recorded in `evidence/validation-2026-07-12.md`.
 - Three `#[kani::proof]` harnesses cover deterministic equivalent decisions, monotonic fences, and terminal-state closure. `cargo-kani` is unavailable on this host (task 973), so Kani execution is not claimed.
 - Final Cairn validation reported `valid: true` with no policy/spec/change issues. Proposal, design, and post-completion tasks gates each reported `PASS` with no issues; exact receipts are recorded in `evidence/validation-2026-07-12.md`.
 - The separate repository-wide Tracey profile remains blocked by pre-existing release-provenance debt: `valid: false`, 18 of 73 referenced, 55 missing, zero dangling; the next missing group is `mantle.release_provenance.cairn_evidence_handoff.*` (task 1422).

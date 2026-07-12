@@ -4379,6 +4379,7 @@ dependencies = [
  "nix-compat",
  "predicates",
  "pretty_assertions",
+ "rand 0.8.6",
  "serde",
  "serde_json",
  "sha2",

@@ -6,12 +6,12 @@ The next remote-build hardening slice must guarantee one accepted current attemp
 
 ## What Changes
 
-- Separate stable realization identity, durable job identity, and per-assignment attempt identity.
+- Separate stable realization identity, durable job identity, and per-assignment attempt identity, with a fresh shell-supplied nonce preventing identity reuse after coordinator-state reset.
 - Issue a monotonically advancing fence generation whenever ownership moves to a new attempt.
 - Require attempt and fence identity on worker state changes, log appends, transfer checkpoints, result reports, and completion admission.
 - Make duplicate reports idempotent and reject stale or conflicting reports before coordinator mutation or output admission.
 - Extract pure authorization, retry, transition, and fencing kernels over explicit immutable facts; keep clocks, persistence, transport, and process control in thin shells.
-- Persist enough attempt state to recover the current owner and exact lost phase after restart.
+- Persist enough attempt state to recover the current owner and exact lost phase after restart, and revalidate duplicate finished-undelivered responses when reconstructing admission after a crash.
 
 ## Impact
 

@@ -429,14 +429,17 @@
 // The pure identity/fence model lives in
 // `crates/crunch-build/src/distributed/remote_attempt.rs`; the durable shell is
 // in `src/remote_build.rs`. Focused coordinator tests cover persistence-before-
-// exposure, fail-closed legacy migration, restart/reassignment, and stale report
-// rejection across start, log, transfer, result, failure, and completion events.
+// exposure, fresh assignment nonces, fail-closed legacy migration, state-reset
+// identity separation, restart/reassignment, and stale report rejection across
+// start, log, transfer, result, failure, and completion events.
 //
 // r[impl remote_builds.idempotent_attempt_reporting]
 // r[verify remote_builds.idempotent_attempt_reporting]
 // Canonical BLAKE3 payload digests and bounded event retention are implemented
 // in the pure attempt core. Coordinator tests verify identical redelivery leaves
-// durable bytes unchanged and conflicting event reuse changes no mutable surface.
+// durable bytes unchanged, finished-undelivered admission is reconstructed only
+// after cryptographic revalidation, and conflicting event reuse changes no
+// mutable surface.
 //
 // r[impl remote_builds.pure_attempt_decisions]
 // r[verify remote_builds.pure_attempt_decisions]

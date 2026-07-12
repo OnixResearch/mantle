@@ -14,6 +14,7 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+pub use crunch_build::distributed::RemoteAssignmentNonce;
 pub use crunch_build::distributed::RemoteAttemptApplyDisposition;
 pub use crunch_build::distributed::RemoteAttemptAuthorizationFacts;
 pub use crunch_build::distributed::RemoteAttemptFailureClass;
@@ -34,6 +35,8 @@ use crunch_build::distributed::derive_remote_attempt_id;
 use crunch_build::distributed::plan_remote_attempt_assignment;
 use crunch_build::distributed::plan_remote_attempt_report;
 use nix_compat::store_path::StorePath;
+use rand::RngCore;
+use rand::rngs::OsRng;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_store::path_info::PathInfo;
@@ -97,6 +100,8 @@ const MAX_REMOTE_LOG_BYTES: u64 = 1_048_576;
 const MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES: usize = 512;
 const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
+const REMOTE_ASSIGNMENT_NONCE_LABEL: &str = "remote-assignment-nonce";
+const REMOTE_ASSIGNMENT_NONCE_BYTES: usize = 32;
 const LEGACY_MISSING_ATTEMPT_ID: &str = "legacy-missing-attempt-id";
 const REMOTE_CHILD_POLL_INTERVAL_MS: u64 = 10;
 const SSH_STDIO_FIXED_ARG_COUNT: usize = 2;
@@ -3338,6 +3343,7 @@ fn validate_worker_resume_claim(
 fn plan_coordinator_dispatch(
     state: &RemoteCoordinatorState,
     request: &RemoteCoordinatorBuildRequest,
+    assignment_nonce: &RemoteAssignmentNonce,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
     let normalized_key = normalized_remote_build_key(request)?;
     if let Some(reason) = conflicting_live_output_claim(state, request, &normalized_key) {
@@ -3349,16 +3355,17 @@ fn plan_coordinator_dispatch(
     let Some(worker) = select_coordinator_worker(state, request) else {
         return Ok(no_worker_dispatch_decision(state, request));
     };
-    new_dispatch_decision(&worker.endpoint_id, normalized_key)
+    new_dispatch_decision(&worker.endpoint_id, normalized_key, assignment_nonce)
 }
 
 fn new_dispatch_decision(
     worker_endpoint_id: &str,
     normalized_build_key: String,
+    assignment_nonce: &RemoteAssignmentNonce,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
-    let job_id = coordinator_job_id(&normalized_build_key);
+    let job_id = coordinator_job_id(&normalized_build_key, assignment_nonce);
     let fence_generation = RemoteFenceGeneration::INITIAL;
-    let attempt_id = derive_remote_attempt_id(&job_id, fence_generation, worker_endpoint_id)
+    let attempt_id = derive_remote_attempt_id(&job_id, assignment_nonce, fence_generation, worker_endpoint_id)
         .map_err(|reason| reason.as_str().to_string())?;
     Ok(RemoteCoordinatorDispatchDecision::Dispatch {
         worker_endpoint_id: worker_endpoint_id.to_string(),
@@ -3386,7 +3393,18 @@ pub fn admit_coordinator_dispatch(
     retry_policy: RemoteAttemptRetryPolicy,
     time: RemoteAttemptTimeFacts,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
-    let decision = plan_coordinator_dispatch(state, request)?;
+    let assignment_nonce = generate_remote_assignment_nonce()?;
+    admit_coordinator_dispatch_with_nonce(state, request, retry_policy, time, assignment_nonce)
+}
+
+fn admit_coordinator_dispatch_with_nonce(
+    state: &mut RemoteCoordinatorState,
+    request: &RemoteCoordinatorBuildRequest,
+    retry_policy: RemoteAttemptRetryPolicy,
+    time: RemoteAttemptTimeFacts,
+    assignment_nonce: RemoteAssignmentNonce,
+) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    let decision = plan_coordinator_dispatch(state, request, &assignment_nonce)?;
     let RemoteCoordinatorDispatchDecision::Dispatch {
         worker_endpoint_id,
         job_id,
@@ -3397,7 +3415,15 @@ pub fn admit_coordinator_dispatch(
     else {
         return Ok(decision);
     };
-    let summary = queued_job_summary(job_id, normalized_build_key, worker_endpoint_id, request, retry_policy, time)?;
+    let summary = queued_job_summary(
+        job_id,
+        normalized_build_key,
+        worker_endpoint_id,
+        assignment_nonce,
+        request,
+        retry_policy,
+        time,
+    )?;
     if summary.current_attempt.as_ref().map(|attempt| &attempt.attempt_id) != Some(attempt_id)
         || summary.current_attempt.as_ref().map(|attempt| attempt.fence_generation) != Some(*fence_generation)
     {
@@ -3417,12 +3443,14 @@ fn queued_job_summary(
     job_id: &RemoteJobId,
     normalized_key: &str,
     worker_endpoint_id: &str,
+    assignment_nonce: RemoteAssignmentNonce,
     request: &RemoteCoordinatorBuildRequest,
     retry_policy: RemoteAttemptRetryPolicy,
     time: RemoteAttemptTimeFacts,
 ) -> Result<RemoteCoordinatorJobSummary, String> {
-    let current_attempt = plan_remote_attempt_assignment(job_id, worker_endpoint_id, None, retry_policy, time)
-        .map_err(|reason| reason.as_str().to_string())?;
+    let current_attempt =
+        plan_remote_attempt_assignment(job_id, worker_endpoint_id, assignment_nonce, None, retry_policy, time)
+            .map_err(|reason| reason.as_str().to_string())?;
     Ok(RemoteCoordinatorJobSummary {
         job_id: job_id.clone(),
         normalized_build_key: normalized_key.to_string(),
@@ -3450,6 +3478,27 @@ pub fn reassign_coordinator_attempt(
     retry_policy: RemoteAttemptRetryPolicy,
     time: RemoteAttemptTimeFacts,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    let assignment_nonce = generate_remote_assignment_nonce()?;
+    reassign_coordinator_attempt_with_nonce(
+        state,
+        job_id,
+        worker_endpoint_id,
+        failure_class,
+        retry_policy,
+        time,
+        assignment_nonce,
+    )
+}
+
+fn reassign_coordinator_attempt_with_nonce(
+    state: &mut RemoteCoordinatorState,
+    job_id: &RemoteJobId,
+    worker_endpoint_id: &str,
+    failure_class: RemoteAttemptFailureClass,
+    retry_policy: RemoteAttemptRetryPolicy,
+    time: RemoteAttemptTimeFacts,
+    assignment_nonce: RemoteAssignmentNonce,
+) -> Result<RemoteCoordinatorDispatchDecision, String> {
     let job = state.jobs.get(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
     let previous = job
         .current_attempt
@@ -3462,8 +3511,15 @@ pub fn reassign_coordinator_attempt(
         });
     }
     require_registered_worker(state, worker_endpoint_id)?;
-    let next = plan_remote_attempt_assignment(job_id, worker_endpoint_id, Some(previous), retry_policy, time)
-        .map_err(|reason| reason.as_str().to_string())?;
+    let next = plan_remote_attempt_assignment(
+        job_id,
+        worker_endpoint_id,
+        assignment_nonce,
+        Some(previous),
+        retry_policy,
+        time,
+    )
+    .map_err(|reason| reason.as_str().to_string())?;
     let normalized_build_key = job.normalized_build_key.clone();
     let decision = dispatch_decision_from_attempt(worker_endpoint_id, &normalized_build_key, &next);
     let mut candidate = state.clone();
@@ -3774,10 +3830,25 @@ fn active_jobs_for_worker(state: &RemoteCoordinatorState, endpoint_id: &str) -> 
         .unwrap_or(MAX_REMOTE_WORKER_CONCURRENCY)
 }
 
-fn coordinator_job_id(normalized_key: &str) -> RemoteJobId {
+fn generate_remote_assignment_nonce() -> Result<RemoteAssignmentNonce, String> {
+    let mut entropy = [0_u8; REMOTE_ASSIGNMENT_NONCE_BYTES];
+    OsRng
+        .try_fill_bytes(&mut entropy)
+        .map_err(|error| format!("remote-assignment-nonce-generation-failed: {error}"))?;
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "kind", REMOTE_ASSIGNMENT_NONCE_LABEL);
+    hasher.update(&entropy);
+    let digest = hasher.finalize().to_hex().to_string();
+    debug_assert!(is_blake3_hex_digest(&digest));
+    debug_assert_eq!(entropy.len(), REMOTE_ASSIGNMENT_NONCE_BYTES);
+    RemoteAssignmentNonce::new(digest).map_err(|reason| reason.as_str().to_string())
+}
+
+fn coordinator_job_id(normalized_key: &str, assignment_nonce: &RemoteAssignmentNonce) -> RemoteJobId {
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "kind", REMOTE_COORDINATOR_JOB_ID_LABEL);
     hash_labeled_str(&mut hasher, "normalized-key", normalized_key);
+    hash_labeled_str(&mut hasher, "assignment-nonce", assignment_nonce.as_str());
     let digest = hasher.finalize().to_hex().to_string();
     RemoteJobId::new(digest).expect("BLAKE3 coordinator job id is a valid bounded identity")
 }
@@ -4858,7 +4929,12 @@ pub fn admit_fenced_remote_builder_response(
     response: &RemoteBuilderFrameResponse,
 ) -> Result<RemoteFencedOutputAdmissionDecision, String> {
     let preflight = preflight_fenced_output_report(state, report, worker_authorized);
-    if preflight.disposition != RemoteAttemptApplyDisposition::Applied {
+    if preflight.disposition == RemoteAttemptApplyDisposition::Rejected {
+        return Ok(RemoteFencedOutputAdmissionDecision::NoAdmission { attempt: preflight });
+    }
+    if preflight.disposition == RemoteAttemptApplyDisposition::AlreadyApplied
+        && !already_applied_output_result_is_redeliverable(state, report)
+    {
         return Ok(RemoteFencedOutputAdmissionDecision::NoAdmission { attempt: preflight });
     }
     let RemoteAttemptReportPayload::ResultReady { output_digest_blake3 } = &report.payload else {
@@ -4868,24 +4944,52 @@ pub fn admit_fenced_remote_builder_response(
         return Err(RemoteAttemptReasonCode::ResultDigestMismatch.as_str().to_string());
     }
     let admission = validate_remote_builder_response_output_import(request, trusted_output_keys, response)?;
-    let attempt = apply_coordinator_attempt_report(
-        state,
-        report,
-        RemoteAttemptAuthorizationFacts {
-            worker_authorized,
-            output_admission_authorized: true,
-        },
-        log_policy,
-    )?;
-    if !attempt.output_admission_allowed {
-        return Err("remote-fenced-output-admission-invariant".to_string());
-    }
+    let attempt = if preflight.disposition == RemoteAttemptApplyDisposition::Applied {
+        let applied = apply_coordinator_attempt_report(
+            state,
+            report,
+            RemoteAttemptAuthorizationFacts {
+                worker_authorized,
+                output_admission_authorized: true,
+            },
+            log_policy,
+        )?;
+        if !applied.output_admission_allowed {
+            return Err("remote-fenced-output-admission-invariant".to_string());
+        }
+        applied
+    } else {
+        preflight
+    };
     debug_assert_eq!(admission.output_digest_blake3, *output_digest_blake3);
-    debug_assert_eq!(attempt.disposition, RemoteAttemptApplyDisposition::Applied);
+    debug_assert!(matches!(
+        attempt.disposition,
+        RemoteAttemptApplyDisposition::Applied | RemoteAttemptApplyDisposition::AlreadyApplied
+    ));
     Ok(RemoteFencedOutputAdmissionDecision::Admit {
         attempt,
         admission: Box::new(admission),
     })
+}
+
+fn already_applied_output_result_is_redeliverable(
+    state: &RemoteCoordinatorState,
+    report: &RemoteAttemptReport,
+) -> bool {
+    let RemoteAttemptReportPayload::ResultReady { output_digest_blake3 } = &report.payload else {
+        return false;
+    };
+    let Some(job) = state.jobs.get(&report.identity.job_id) else {
+        return false;
+    };
+    let Some(attempt) = job.current_attempt.as_ref() else {
+        return false;
+    };
+    let phase_is_redeliverable =
+        matches!(attempt.phase, RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed);
+    phase_is_redeliverable
+        && job.output_admission_completed
+        && attempt.result_digest_blake3.as_deref() == Some(output_digest_blake3.as_str())
 }
 
 fn preflight_fenced_output_report(
@@ -5880,6 +5984,9 @@ fn coordinator_attempt_identity_is_valid(job: &RemoteCoordinatorJobSummary, atte
     if RemoteAttemptId::new(attempt.attempt_id.as_str().to_string()).is_err() {
         return false;
     }
+    if RemoteAssignmentNonce::new(attempt.assignment_nonce.as_str().to_string()).is_err() {
+        return false;
+    }
     if attempt.fence_generation.get() == 0 {
         return false;
     }
@@ -5887,6 +5994,12 @@ fn coordinator_attempt_identity_is_valid(job: &RemoteCoordinatorJobSummary, atte
         return false;
     }
     if attempt.attempts_started > crunch_build::distributed::MAX_REMOTE_ATTEMPTS {
+        return false;
+    }
+    if !coordinator_attempt_derivation_is_valid(job, attempt) {
+        return false;
+    }
+    if !coordinator_attempt_result_is_valid(attempt) {
         return false;
     }
     if attempt.started_unix_s >= attempt.deadline_unix_s {
@@ -5912,6 +6025,34 @@ fn coordinator_attempt_identity_is_valid(job: &RemoteCoordinatorJobSummary, atte
         }
     }
     true
+}
+
+fn coordinator_attempt_derivation_is_valid(job: &RemoteCoordinatorJobSummary, attempt: &RemoteAttemptState) -> bool {
+    let Some(worker_endpoint_id) = job.assigned_worker_endpoint_id.as_deref() else {
+        return false;
+    };
+    let Ok(expected_attempt_id) = derive_remote_attempt_id(
+        &attempt.job_id,
+        &attempt.assignment_nonce,
+        attempt.fence_generation,
+        worker_endpoint_id,
+    ) else {
+        return false;
+    };
+    expected_attempt_id == attempt.attempt_id
+}
+
+fn coordinator_attempt_result_is_valid(attempt: &RemoteAttemptState) -> bool {
+    match attempt.phase {
+        RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed => {
+            attempt.result_digest_blake3.as_deref().is_some_and(is_blake3_hex_digest)
+        }
+        RemoteAttemptPhase::Queued
+        | RemoteAttemptPhase::Running
+        | RemoteAttemptPhase::Transferring
+        | RemoteAttemptPhase::Failed
+        | RemoteAttemptPhase::Superseded => attempt.result_digest_blake3.is_none(),
+    }
 }
 
 fn coordinator_attempt_projection_matches(job: &RemoteCoordinatorJobSummary, attempt: &RemoteAttemptState) -> bool {
@@ -6249,15 +6390,21 @@ mod tests {
         }
     }
 
+    fn fixture_assignment_nonce(label: &str) -> RemoteAssignmentNonce {
+        RemoteAssignmentNonce::new(blake3::hash(label.as_bytes()).to_hex().to_string()).unwrap()
+    }
+
     fn admit_fixture_dispatch(
         state: &mut RemoteCoordinatorState,
         request: &RemoteCoordinatorBuildRequest,
     ) -> Result<RemoteCoordinatorDispatchDecision, String> {
-        admit_coordinator_dispatch(
+        let nonce_label = format!("fixture-dispatch-{}", state.jobs.len());
+        admit_coordinator_dispatch_with_nonce(
             state,
             request,
             RemoteAttemptRetryPolicy::default(),
             fixture_attempt_time(TEST_ATTEMPT_NOW_UNIX_S),
+            fixture_assignment_nonce(&nonce_label),
         )
     }
 
@@ -7890,6 +8037,58 @@ mod tests {
     }
 
     #[test]
+    fn coordinator_state_reset_cannot_reissue_job_or_attempt_identity() {
+        let request = fixture_coordinator_request();
+        let mut first_state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut first_state, fixture_worker_registration()).unwrap();
+        let first = admit_coordinator_dispatch_with_nonce(
+            &mut first_state,
+            &request,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_attempt_time(TEST_ATTEMPT_NOW_UNIX_S),
+            fixture_assignment_nonce("coordinator-incarnation-1"),
+        )
+        .unwrap();
+        let RemoteCoordinatorDispatchDecision::Dispatch {
+            job_id: first_job_id,
+            attempt_id: first_attempt_id,
+            ..
+        } = first
+        else {
+            panic!("first coordinator incarnation must dispatch");
+        };
+        let first_attempt = first_state.jobs[&first_job_id].current_attempt.as_ref().unwrap().clone();
+        let stale_report =
+            fixture_report_for_attempt(&first_attempt, "stale-after-reset", RemoteAttemptReportPayload::Start);
+
+        let mut replacement_state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut replacement_state, fixture_worker_registration()).unwrap();
+        let replacement = admit_coordinator_dispatch_with_nonce(
+            &mut replacement_state,
+            &request,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_attempt_time(TEST_ATTEMPT_NOW_UNIX_S),
+            fixture_assignment_nonce("coordinator-incarnation-2"),
+        )
+        .unwrap();
+        let RemoteCoordinatorDispatchDecision::Dispatch {
+            job_id: replacement_job_id,
+            attempt_id: replacement_attempt_id,
+            ..
+        } = replacement
+        else {
+            panic!("replacement coordinator incarnation must dispatch");
+        };
+        let before_stale = replacement_state.clone();
+        let rejected = apply_fixture_attempt_report(&mut replacement_state, &stale_report);
+
+        assert_ne!(first_job_id, replacement_job_id);
+        assert_ne!(first_attempt_id, replacement_attempt_id);
+        assert_eq!(rejected.reason_code, RemoteAttemptReasonCode::JobIdentityMismatch);
+        assert_eq!(replacement_state, before_stale);
+    }
+
+    #[test]
     fn coordinator_resume_summary_redelivers_finished_result() {
         let request = fixture_coordinator_request();
         let normalized_key = normalized_remote_build_key(&request).expect("request key");
@@ -7922,7 +8121,8 @@ mod tests {
             log_next_cursor: 0,
         });
         let adopted = apply_worker_registration(&mut state, worker).expect("matching resume summary registers");
-        let decision = plan_coordinator_dispatch(&state, &request).expect("resumed request plans");
+        let decision = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("resume-plan"))
+            .expect("resumed request plans");
 
         assert_eq!(adopted, vec![job_id]);
         assert!(
@@ -8068,10 +8268,14 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_fenced_output_admission_binds_current_result_and_skips_duplicate_validation() {
+    fn coordinator_fenced_output_admission_redelivers_after_restart_and_revalidates() {
+        let temp = tempfile::tempdir().expect("temp state dir");
         let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
         let response = fixture_builder_response(&client);
-        let mut state = RemoteCoordinatorState::default();
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
         apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
         let request = fixture_remote_operator_coordinator_request(&client);
         let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
@@ -8097,26 +8301,42 @@ mod tests {
         assert!(matches!(admitted, RemoteFencedOutputAdmissionDecision::Admit { .. }));
         assert!(state.jobs[&job_id].output_admission_completed);
         assert!(!state.jobs[&job_id].result_available);
-        let before_duplicate = state.clone();
-        let mut invalid_duplicate_response = response;
-        invalid_duplicate_response.output_digest_blake3 = "invalid".to_string();
-        let duplicate = admit_fenced_remote_builder_response(
-            &mut state,
+
+        let mut restarted = load_coordinator_state(temp.path()).expect("admitted result reloads");
+        let before_redelivery = restarted.clone();
+        let redelivered = admit_fenced_remote_builder_response(
+            &mut restarted,
             &result,
             true,
             RemoteLogRetentionPolicy::default(),
             &client.request,
-            &[],
+            &client.trusted_output_keys,
+            &response,
+        )
+        .expect("valid duplicate reconstructs admission after restart");
+        assert!(matches!(redelivered, RemoteFencedOutputAdmissionDecision::Admit {
+            attempt: RemoteCoordinatorAttemptApplyResult {
+                disposition: RemoteAttemptApplyDisposition::AlreadyApplied,
+                ..
+            },
+            ..
+        }));
+        assert_eq!(restarted, before_redelivery);
+
+        let mut invalid_duplicate_response = response;
+        invalid_duplicate_response.output_digest_blake3 = "invalid".to_string();
+        let error = admit_fenced_remote_builder_response(
+            &mut restarted,
+            &result,
+            true,
+            RemoteLogRetentionPolicy::default(),
+            &client.request,
+            &client.trusted_output_keys,
             &invalid_duplicate_response,
         )
-        .expect("duplicate is classified before output validation");
-        assert!(matches!(duplicate, RemoteFencedOutputAdmissionDecision::NoAdmission {
-            attempt: RemoteCoordinatorAttemptApplyResult {
-                reason_code: RemoteAttemptReasonCode::AlreadyApplied,
-                ..
-            }
-        }));
-        assert_eq!(state, before_duplicate);
+        .expect_err("duplicate response is cryptographically revalidated");
+        assert_eq!(error, RemoteAttemptReasonCode::ResultDigestMismatch.as_str());
+        assert_eq!(restarted, before_redelivery);
     }
 
     #[test]
@@ -8372,12 +8592,66 @@ mod tests {
     }
 
     #[test]
+    fn coordinator_load_rejects_legacy_attempt_without_assignment_nonce() {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        apply_worker_registration(&mut state, fixture_worker_registration()).unwrap();
+        let request = fixture_coordinator_request();
+        let dispatch = admit_fixture_dispatch(&mut state, &request).unwrap();
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let mut encoded = serde_json::to_value(&state).unwrap();
+        let encoded_job = encoded["jobs"].as_object_mut().unwrap().values_mut().next().unwrap();
+        encoded_job["current_attempt"].as_object_mut().unwrap().remove("assignment_nonce");
+        fs::write(coordinator_state_path(temp.path()), serde_json::to_vec_pretty(&encoded).unwrap()).unwrap();
+
+        let loaded = load_coordinator_state(temp.path()).expect("legacy attempt fails closed");
+        let job = &loaded.jobs[&job_id];
+
+        assert_eq!(job.phase, RemoteCoordinatorJobPhase::Lost);
+        assert!(job.current_attempt.is_none());
+        assert_eq!(job.last_attempt_reason_code, Some(RemoteAttemptReasonCode::DurableStateInvalid));
+    }
+
+    #[test]
+    fn coordinator_load_rejects_attempt_id_not_derived_from_durable_nonce() {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        apply_worker_registration(&mut state, fixture_worker_registration()).unwrap();
+        let request = fixture_coordinator_request();
+        let dispatch = admit_fixture_dispatch(&mut state, &request).unwrap();
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let mut encoded = serde_json::to_value(&state).unwrap();
+        let encoded_job = encoded["jobs"].as_object_mut().unwrap().values_mut().next().unwrap();
+        encoded_job["current_attempt"]["assignment_nonce"] =
+            serde_json::Value::String(fixture_assignment_nonce("tampered-nonce").as_str().to_string());
+        fs::write(coordinator_state_path(temp.path()), serde_json::to_vec_pretty(&encoded).unwrap()).unwrap();
+
+        let loaded = load_coordinator_state(temp.path()).expect("mismatched attempt derivation fails closed");
+        let job = &loaded.jobs[&job_id];
+
+        assert_eq!(job.phase, RemoteCoordinatorJobPhase::Lost);
+        assert!(job.current_attempt.is_none());
+        assert_eq!(job.last_attempt_reason_code, Some(RemoteAttemptReasonCode::DurableStateInvalid));
+    }
+
+    #[test]
     fn coordinator_rejects_untrusted_worker_key_without_using_coordinator_as_trust_root() {
         let mut state = RemoteCoordinatorState::default();
         apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
         let mut request = fixture_coordinator_request();
         request.trusted_output_keys = vec!["other-key".to_string()];
-        let decision = plan_coordinator_dispatch(&state, &request).expect("untrusted worker plans terminally");
+        let decision = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("untrusted-plan"))
+            .expect("untrusted worker plans terminally");
 
         assert!(
             matches!(decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "output-trust-mismatch")
@@ -8399,7 +8673,8 @@ mod tests {
             action_id: "action-2".to_string(),
             spec_json: fixture_action_spec_json("action-2"),
         };
-        let decision = plan_coordinator_dispatch(&state, &conflict).expect("conflict plans");
+        let decision = plan_coordinator_dispatch(&state, &conflict, &fixture_assignment_nonce("conflict-plan"))
+            .expect("conflict plans");
 
         assert!(
             matches!(decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "live-output-claim-conflict")
@@ -8413,7 +8688,9 @@ mod tests {
 
         let mut feature_mismatch = fixture_coordinator_request();
         feature_mismatch.required_features = vec!["gpu".to_string()];
-        let feature_decision = plan_coordinator_dispatch(&state, &feature_mismatch).expect("feature mismatch plans");
+        let feature_decision =
+            plan_coordinator_dispatch(&state, &feature_mismatch, &fixture_assignment_nonce("feature-plan"))
+                .expect("feature mismatch plans");
         assert!(
             matches!(feature_decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "remote-worker-feature-mismatch")
         );
@@ -8424,7 +8701,8 @@ mod tests {
         apply_worker_registration(&mut prefix_state, prefix_worker).expect("prefix worker registers");
         let store_prefix_mismatch = fixture_coordinator_request();
         let store_decision =
-            plan_coordinator_dispatch(&prefix_state, &store_prefix_mismatch).expect("store mismatch plans");
+            plan_coordinator_dispatch(&prefix_state, &store_prefix_mismatch, &fixture_assignment_nonce("store-plan"))
+                .expect("store mismatch plans");
         assert!(
             matches!(store_decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "remote-worker-store-prefix-mismatch")
         );
@@ -8437,7 +8715,8 @@ mod tests {
             spec_json: fixture_action_spec_json("action-2"),
         };
         second.live_output_claims = vec!["claim-second".to_string()];
-        let resource_decision = plan_coordinator_dispatch(&state, &second).expect("resource mismatch plans");
+        let resource_decision = plan_coordinator_dispatch(&state, &second, &fixture_assignment_nonce("resource-plan"))
+            .expect("resource mismatch plans");
         assert!(
             matches!(resource_decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "worker-concurrency-limit")
         );
@@ -8793,7 +9072,8 @@ mod tests {
             output_admission_completed: false,
             last_attempt_reason_code: None,
         });
-        let decision = plan_coordinator_dispatch(&state, &request).expect("lost job decision");
+        let decision = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("lost-plan"))
+            .expect("lost job decision");
 
         assert!(
             matches!(decision, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == "restart-state-unavailable-phase-build-execution")

@@ -146,6 +146,50 @@ Final stage gates:
 | design | 1380 | `d4accedd83c1ca1cf89b08709ee73801e646c3250bc06d40bdfa173abb1973e2` | `PASS`, no issues |
 | tasks (post-completion) | 1438 | `42df1f328cdd728ebcb9adfe44c8123952574efd22db7e20ae423570e8afd34b` | `PASS`, no issues |
 
+## Integrated-main adversarial hardening
+
+Review after integration found an ABA identity gap: job and attempt ids were deterministic functions of the normalized request, initial fence, and worker, so deleting/resetting coordinator state could recreate credentials held by an old worker. The shell now supplies a fresh 256-bit operating-system nonce for every assignment. Initial job ids and every attempt id bind that nonce; durable reload re-derives the attempt id from the stored nonce and assigned worker, and legacy/mismatched nonce state fails closed.
+
+Review also found that an already-applied `ResultReady` event returned no admission report after restart. Finished-undelivered duplicate responses are now cryptographically revalidated and can reconstruct the admission report without reapplying state. Malformed duplicate responses fail instead of bypassing validation.
+
+Current integrated-main evidence:
+
+```text
+pueue 1942: cargo test -p crunch-build --lib distributed::remote_attempt::tests:: -- --nocapture
+PASS: 15 passed; 0 failed
+Includes positive nonce-separated assignment identity and negative malformed nonce coverage.
+
+pueue 1965: cargo test -p mantle --bin mantle remote_build::tests::coordinator_ -- --nocapture
+PASS: 23 passed; 0 failed
+Includes state-reset identity separation, missing/tampered durable nonce rejection,
+and post-restart admission reconstruction with duplicate cryptographic revalidation.
+
+pueue 1988: cargo test -p mantle --bin mantle remote_farm_config::tests:: -- --nocapture
+PASS: 12 passed; 0 failed
+
+pueue 1979: cargo test -p crunch-build --lib distributed::tests:: -- --nocapture
+PASS: 41 passed; 0 failed
+
+pueue 1980: cargo check -p mantle --bin mantle
+PASS at the repository's existing warning baseline.
+
+pueue 1981: targeted rustfmt --check and git diff --check
+PASS
+```
+
+Strict first-party Clippy with `--no-deps` remains blocked by the same nine pre-existing diagnostics in `dynamic_plan.rs`, `network_policy.rs`, and `worker.rs`; pueue task 1986 produced no `remote_attempt.rs` diagnostic. The broader command without `--no-deps` stopped earlier in vendored `fuse-backend-rs` (task 1982). No Kani execution is claimed.
+
+The authoritative integrated-main lifecycle rerun passed after the delta-marker repair and adversarial hardening:
+
+```text
+validate: valid=true, issues=[], changes=15, specs_validated=39
+proposal: PASS, issues=[], receipt_hash=a0442e24bc53b19fe5c7cc77f383d07b2d9ab37ec5a75315893a6d6699dc1107
+design: PASS, issues=[], receipt_hash=1a85c2e9784128aa574347accca72730692bc7a4076a806caa545536a2a5bf04
+tasks: PASS, issues=[], receipt_hash=4d104181253a9415aecd75164a8f1f7a03a7483e90dc7d813123ca89b9c9229b
+```
+
+The native sync dry run planned one `sync_delta_spec` action for `cairn/specs/remote-builds/spec.md` with plan hash `ccd557aa309302bf53fa7b349b77dde71af876136f5aeb7a55c6e23e68bcfec7`. It was non-mutating.
+
 ## Scope guard
 
-No accepted spec was synced and the active change was not archived.
+No accepted spec has been synced and the active change has not been archived.

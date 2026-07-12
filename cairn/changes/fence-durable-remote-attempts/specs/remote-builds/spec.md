@@ -1,10 +1,10 @@
-# Remote Builds Specification
+# Remote Builds Specification Delta
 
 ## Purpose
 
 Define durable attempt identity, fencing, and pure decision boundaries for remote-build execution.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Remote assignments use durable attempt fencing [r[remote_builds.durable_attempt_fencing]]
 
@@ -28,8 +28,15 @@ Mantle MUST distinguish normalized realization keys, durable coordinator jobs, a
 
 - GIVEN a coordinator restarts with a queued, running, transferring, or finished-undelivered attempt
 - WHEN durable state is reloaded
-- THEN Mantle MUST recover the current attempt id, fence generation, phase, and retained-result disposition
-- AND ambiguous or legacy live state without a safe current fence MUST fail closed instead of inventing successful ownership.
+- THEN Mantle MUST recover the current attempt id, assignment nonce, fence generation, phase, and retained-result disposition
+- AND ambiguous or legacy live state without a safe current nonce and fence MUST fail closed instead of inventing successful ownership.
+
+#### Scenario: Coordinator state reset cannot recreate a stale owner
+
+- GIVEN an older worker retains credentials from a prior coordinator state incarnation
+- WHEN a replacement coordinator admits the same normalized request on the same worker and initial fence
+- THEN the replacement job and attempt identities MUST use a fresh shell-supplied assignment nonce
+- AND the older credentials MUST be rejected before any current-state mutation.
 
 ### Requirement: Attempt reports are idempotent and conflict detecting [r[remote_builds.idempotent_attempt_reporting]]
 
@@ -40,7 +47,8 @@ Mantle MUST apply attempt reports through stable event ids and canonical payload
 - GIVEN a current attempt report was durably applied
 - WHEN transport redelivers the same event id with the same canonical payload digest
 - THEN Mantle MUST return an already-applied disposition
-- AND job, log, transfer, lease, and output state MUST remain unchanged.
+- AND job, log, transfer, lease, and output state MUST remain unchanged
+- AND a finished-undelivered output response MAY be cryptographically revalidated to reconstruct its admission report after restart without reapplying state.
 
 #### Scenario: Conflicting duplicate fails closed
 
