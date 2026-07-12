@@ -1,5 +1,3 @@
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -57,10 +55,10 @@ use crunch_release_core::validate_release_reproducibility_report_artifact_names;
 use crunch_release_core::validate_release_reproducibility_report_linkage;
 
 use crate::errors::RunError;
+use crate::release_tree_copy::PreparedTreeCopy;
 
 const PROOF_INVENTORY_RELATIVE_PATH: &str = "stage0-prerequisites/inventory.md";
 const MAX_BINARY_ARTIFACTS: u32 = 16;
-const MAX_BUNDLE_TREE_ENTRIES: u32 = 4096;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FullSelfHostingProofIdentity {
@@ -167,21 +165,30 @@ pub(crate) fn create_release_evidence_bundle(
 ) -> Result<ReleaseEvidenceManifest, RunError> {
     validate_create_request(request)?;
     validate_optional_provider_fixed_point_proof(request)?;
+    let proof_identity = load_full_self_hosting_proof_identity(&request.proof_bundle_dir)?;
+    let prepared_proof_bundle = crate::release_tree_copy::prepare_tree_copy(&request.proof_bundle_dir)?;
+    let prepared_provider_fixed_point = request
+        .provider_fixed_point_proof_dir
+        .as_deref()
+        .map(crate::release_tree_copy::prepare_tree_copy)
+        .transpose()?;
     prepare_output_bundle_dir(&request.bundle_dir)?;
 
-    let proof_identity = load_full_self_hosting_proof_identity(&request.proof_bundle_dir)?;
     let source_archive = copy_file_into_bundle(
         &request.source_archive_path,
         &request.bundle_dir,
         &bundle_file_destination("source", &request.source_archive_path, 0)?,
     )?;
     let binaries = copy_binary_set_into_bundle(&request.binary_paths, &request.bundle_dir)?;
-    let proof_bundle =
-        copy_directory_into_bundle(&request.proof_bundle_dir, &request.bundle_dir, Path::new("proof/self-hosting"))?;
+    let proof_bundle = copy_prepared_directory_into_bundle(
+        prepared_proof_bundle,
+        &request.bundle_dir,
+        Path::new("proof/self-hosting"),
+    )?;
     let inventory_path = request.proof_bundle_dir.join(PROOF_INVENTORY_RELATIVE_PATH);
     let prerequisite_inventory =
         copy_file_into_bundle(&inventory_path, &request.bundle_dir, Path::new("proof/inventory.md"))?;
-    let provider_fixed_point_proof = copy_optional_provider_fixed_point_proof(request)?;
+    let provider_fixed_point_proof = copy_optional_provider_fixed_point_proof(request, prepared_provider_fixed_point)?;
     let reproducibility_report =
         copy_optional_reproducibility_report(request, &source_archive, &binaries, &proof_bundle)?;
     let mut external_evidence = copy_external_evidence(request)?;
@@ -457,25 +464,24 @@ fn validate_git_source_create_request(git_source: &GitSourceCreateRequest) -> Re
 }
 
 fn prepare_output_bundle_dir(bundle_dir: &Path) -> Result<(), RunError> {
-    if bundle_dir.exists() {
-        if !bundle_dir.is_dir() {
-            return Err(RunError::Internal(format!(
-                "release evidence bundle path is not a directory: {}",
-                bundle_dir.display()
-            )));
-        }
-        let mut existing_entries = std::fs::read_dir(bundle_dir)
-            .map_err(|err| RunError::Internal(format!("reading {}: {err}", bundle_dir.display())))?;
-        if existing_entries.next().is_some() {
-            return Err(RunError::Internal(format!(
-                "release evidence bundle directory must be empty: {}",
-                bundle_dir.display()
-            )));
-        }
-        return Ok(());
+    let root = crate::release_capability::ReleaseCapabilityRoot::create_ambient_dir_all_nofollow(
+        crate::release_capability::ReleaseRootKind::ReleaseEvidence,
+        bundle_dir,
+    )
+    .map_err(|error| {
+        RunError::Internal(format!("opening no-follow release bundle root {}: {error}", bundle_dir.display()))
+    })?;
+    if !root
+        .is_empty()
+        .map_err(|error| RunError::Internal(format!("reading release bundle root {}: {error}", bundle_dir.display())))?
+    {
+        return Err(RunError::Internal(format!(
+            "release evidence bundle directory must be empty: {}",
+            bundle_dir.display()
+        )));
     }
-    std::fs::create_dir_all(bundle_dir)
-        .map_err(|err| RunError::Internal(format!("creating {}: {err}", bundle_dir.display())))
+    assert_eq!(root.kind(), crate::release_capability::ReleaseRootKind::ReleaseEvidence);
+    Ok(())
 }
 
 fn bundle_file_destination(prefix: &str, source_path: &Path, index_u32: u32) -> Result<PathBuf, RunError> {
@@ -546,11 +552,17 @@ fn build_input_binary_artifacts(binary_paths: &[PathBuf]) -> Result<Vec<BundledA
 
 fn copy_optional_provider_fixed_point_proof(
     request: &ReleaseBundleCreateRequest,
+    prepared: Option<PreparedTreeCopy>,
 ) -> Result<Option<ProviderFixedPointProofArtifact>, RunError> {
-    let Some(proof_dir) = &request.provider_fixed_point_proof_dir else {
+    if request.provider_fixed_point_proof_dir.is_none() {
+        assert!(prepared.is_none(), "absent provider proof must not have a prepared copy plan");
         return Ok(None);
-    };
-    let artifact = copy_directory_into_bundle(proof_dir, &request.bundle_dir, Path::new("proof/provider-fixed-point"))?;
+    }
+    let prepared = prepared.ok_or_else(|| {
+        RunError::Internal("provider fixed-point proof copy plan was not prepared before mutation".to_string())
+    })?;
+    let artifact =
+        copy_prepared_directory_into_bundle(prepared, &request.bundle_dir, Path::new("proof/provider-fixed-point"))?;
     Ok(Some(ProviderFixedPointProofArtifact {
         kind: artifact.kind,
         relative_path: artifact.relative_path,
@@ -764,87 +776,18 @@ fn copy_file_into_bundle(
     build_artifact_record(&dest_path, relative_path, BundledArtifactKind::File)
 }
 
-fn copy_directory_into_bundle(
-    source_dir: &Path,
+fn copy_prepared_directory_into_bundle(
+    prepared: PreparedTreeCopy,
     bundle_dir: &Path,
     relative_path: &Path,
 ) -> Result<BundledArtifact, RunError> {
-    if !source_dir.is_dir() {
-        return Err(RunError::Internal(format!("bundle input directory missing: {}", source_dir.display())));
-    }
     let dest_dir = bundle_dir.join(relative_path);
-    std::fs::create_dir_all(&dest_dir)
-        .map_err(|err| RunError::Internal(format!("creating {}: {err}", dest_dir.display())))?;
-    copy_directory_tree(source_dir, &dest_dir)?;
+    crate::release_tree_copy::copy_prepared_tree(prepared, &dest_dir)?;
     build_artifact_record(&dest_dir, relative_path, BundledArtifactKind::Directory)
 }
 
 pub(crate) fn copy_directory_tree(source_dir: &Path, dest_dir: &Path) -> Result<(), RunError> {
-    let mut entries = Vec::new();
-    collect_paths_sorted(source_dir, &mut entries)?;
-    assert!(
-        entries.len() <= usize::try_from(MAX_BUNDLE_TREE_ENTRIES).unwrap(),
-        "bundle tree copy entry count exceeded limit"
-    );
-    for source_entry in &entries {
-        let relative = source_entry.strip_prefix(source_dir).map_err(|err| {
-            RunError::Internal(format!(
-                "bundle tree strip_prefix {} from {}: {err}",
-                source_entry.display(),
-                source_dir.display()
-            ))
-        })?;
-        let dest_entry = dest_dir.join(relative);
-        copy_tree_entry(source_entry, &dest_entry)?;
-    }
-    Ok(())
-}
-
-fn copy_tree_entry(source_path: &Path, dest_path: &Path) -> Result<(), RunError> {
-    let metadata = std::fs::symlink_metadata(source_path)
-        .map_err(|err| RunError::Internal(format!("symlink_metadata {}: {err}", source_path.display())))?;
-    if metadata.is_dir() {
-        std::fs::create_dir_all(dest_path)
-            .map_err(|err| RunError::Internal(format!("creating {}: {err}", dest_path.display())))?;
-        return Ok(());
-    }
-    if metadata.is_file() {
-        if let Some(parent) = dest_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
-        }
-        std::fs::copy(source_path, dest_path).map_err(|err| {
-            RunError::Internal(format!("copying {} to {}: {err}", source_path.display(), dest_path.display()))
-        })?;
-        return Ok(());
-    }
-    if metadata.file_type().is_symlink() {
-        return copy_symlink_entry(source_path, dest_path);
-    }
-    Err(RunError::Internal(format!("unsupported bundle tree entry type: {}", source_path.display())))
-}
-
-#[cfg(unix)]
-fn copy_symlink_entry(source_path: &Path, dest_path: &Path) -> Result<(), RunError> {
-    use std::os::unix::fs::symlink;
-
-    let target = std::fs::read_link(source_path)
-        .map_err(|err| RunError::Internal(format!("read_link {}: {err}", source_path.display())))?;
-    if let Some(parent) = dest_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
-    }
-    symlink(&target, dest_path).map_err(|err| {
-        RunError::Internal(format!("creating symlink {} -> {}: {err}", dest_path.display(), target.display()))
-    })
-}
-
-#[cfg(not(unix))]
-fn copy_symlink_entry(source_path: &Path, _dest_path: &Path) -> Result<(), RunError> {
-    Err(RunError::Internal(format!(
-        "symlink bundle copy is only supported on Unix: {}",
-        source_path.display()
-    )))
+    crate::release_tree_copy::copy_directory_tree(source_dir, dest_dir)
 }
 
 fn build_artifact_record(
@@ -867,132 +810,27 @@ fn build_artifact_record(
 }
 
 pub(crate) fn compute_path_blake3_digest(path: &Path) -> Result<String, RunError> {
-    if path.is_file() {
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| {
+        RunError::Internal(format!("reading no-follow artifact metadata {}: {error}", path.display()))
+    })?;
+    if metadata.file_type().is_symlink() {
+        return Err(RunError::Internal(format!("top-level artifact must not be a symlink: {}", path.display())));
+    }
+    if metadata.is_file() {
         return hash_file(path).map(|(_size_bytes, digest_blake3)| digest_blake3);
     }
-    if path.is_dir() {
+    if metadata.is_dir() {
         return hash_directory(path).map(|(_size_bytes, digest_blake3)| digest_blake3);
     }
     Err(RunError::Internal(format!("expected file or directory artifact: {}", path.display())))
 }
 
 fn hash_file(path: &Path) -> Result<(u64, String), RunError> {
-    let metadata =
-        std::fs::metadata(path).map_err(|err| RunError::Internal(format!("metadata {}: {err}", path.display())))?;
-    if !metadata.is_file() {
-        return Err(RunError::Internal(format!("expected file artifact: {}", path.display())));
-    }
-    let mut file = File::open(path).map_err(|err| RunError::Internal(format!("open {}: {err}", path.display())))?;
-    let mut hasher = blake3::Hasher::new();
-    let mut buffer = [0_u8; 8192];
-    loop {
-        let bytes_read = file
-            .read(&mut buffer)
-            .map_err(|err| RunError::Internal(format!("read {}: {err}", path.display())))?;
-        if bytes_read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..bytes_read]);
-    }
-    Ok((metadata.len(), hasher.finalize().to_hex().to_string()))
+    crate::release_tree_copy::hash_file_nofollow(path)
 }
 
 fn hash_directory(path: &Path) -> Result<(u64, String), RunError> {
-    if !path.is_dir() {
-        return Err(RunError::Internal(format!("expected directory artifact: {}", path.display())));
-    }
-    let mut entries = Vec::new();
-    collect_paths_sorted(path, &mut entries)?;
-    let mut hasher = blake3::Hasher::new();
-    let mut total_file_bytes: u64 = 0;
-    for entry in &entries {
-        total_file_bytes = total_file_bytes.saturating_add(hash_tree_entry(path, entry, &mut hasher)?);
-    }
-    if total_file_bytes == 0 {
-        total_file_bytes = 1;
-    }
-    Ok((total_file_bytes, hasher.finalize().to_hex().to_string()))
-}
-
-fn collect_paths_sorted(root: &Path, entries: &mut Vec<PathBuf>) -> Result<(), RunError> {
-    let mut children = Vec::new();
-    for child_result in
-        std::fs::read_dir(root).map_err(|err| RunError::Internal(format!("read_dir {}: {err}", root.display())))?
-    {
-        let child =
-            child_result.map_err(|err| RunError::Internal(format!("read_dir entry {}: {err}", root.display())))?;
-        children.push(child.path());
-    }
-    children.sort();
-    for child in children {
-        let entry_count_u32: u32 = entries
-            .len()
-            .try_into()
-            .map_err(|_| RunError::Internal("bundle tree entry count overflowed u32".to_string()))?;
-        if entry_count_u32 >= MAX_BUNDLE_TREE_ENTRIES {
-            return Err(RunError::Internal(format!("bundle tree exceeds {MAX_BUNDLE_TREE_ENTRIES} entries")));
-        }
-        entries.push(child.clone());
-        if child.is_dir() {
-            collect_paths_sorted(&child, entries)?;
-        }
-    }
-    Ok(())
-}
-
-fn hash_tree_entry(root: &Path, entry: &Path, hasher: &mut blake3::Hasher) -> Result<u64, RunError> {
-    let relative = entry.strip_prefix(root).map_err(|err| {
-        RunError::Internal(format!("tree hash strip_prefix {} from {}: {err}", entry.display(), root.display()))
-    })?;
-    let metadata = std::fs::symlink_metadata(entry)
-        .map_err(|err| RunError::Internal(format!("symlink_metadata {}: {err}", entry.display())))?;
-    let relative_bytes = relative.as_os_str().as_encoded_bytes();
-    hasher.update(&(relative_bytes.len() as u64).to_le_bytes());
-    hasher.update(relative_bytes);
-    hasher.update(&entry_mode_bits(&metadata).to_le_bytes());
-
-    if metadata.file_type().is_symlink() {
-        let target = std::fs::read_link(entry)
-            .map_err(|err| RunError::Internal(format!("read_link {}: {err}", entry.display())))?;
-        let target_bytes = target.as_os_str().as_encoded_bytes();
-        hasher.update(b"symlink\0");
-        hasher.update(&(target_bytes.len() as u64).to_le_bytes());
-        hasher.update(target_bytes);
-        return Ok(0);
-    }
-    if metadata.is_dir() {
-        hasher.update(b"dir\0");
-        return Ok(0);
-    }
-    if metadata.is_file() {
-        hasher.update(b"file\0");
-        hasher.update(&metadata.len().to_le_bytes());
-        let mut file =
-            File::open(entry).map_err(|err| RunError::Internal(format!("open {}: {err}", entry.display())))?;
-        let mut buffer = [0_u8; 8192];
-        loop {
-            let bytes_read = file
-                .read(&mut buffer)
-                .map_err(|err| RunError::Internal(format!("read {}: {err}", entry.display())))?;
-            if bytes_read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..bytes_read]);
-        }
-        return Ok(metadata.len());
-    }
-    Err(RunError::Internal(format!("unsupported tree hash entry type: {}", entry.display())))
-}
-
-#[cfg(unix)]
-fn entry_mode_bits(metadata: &std::fs::Metadata) -> u32 {
-    use std::os::unix::fs::MetadataExt;
-    metadata.mode()
-}
-
-#[cfg(not(unix))]
-fn entry_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
-    0
+    crate::release_tree_copy::hash_directory_tree(path)
 }
 
 fn write_manifest_file(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
@@ -1511,6 +1349,97 @@ mod tests {
         assert!(output_bundle_dir.join("proof/self-hosting/manifest.json").exists());
         assert!(output_bundle_dir.join("proof/inventory.md").exists());
         assert!(output_bundle_dir.join("manifest.json").exists());
+    }
+
+    // r[verify mantle.release_provenance.bundle_tree_copy.fixtures.positive]
+    // r[verify mantle.release_provenance.bundle_tree_copy.validation.production]
+    #[test]
+    #[cfg(unix)]
+    fn create_release_bundle_preserves_internal_symlink_and_tree_digest() {
+        use std::os::unix::fs::symlink;
+
+        const INTERNAL_PROOF_BYTES: &[u8] = b"internal-proof";
+        const INTERNAL_LINK_TARGET: &str = "nested/proof.txt";
+
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let output_bundle_dir = temp.path().join("release-bundle");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+        write_file(&proof_bundle_dir.join("nested/proof.txt"), INTERNAL_PROOF_BYTES);
+        symlink(INTERNAL_LINK_TARGET, proof_bundle_dir.join("proof-link")).unwrap();
+        let expected_digest = hash_directory(&proof_bundle_dir).unwrap();
+
+        let request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-symlink-positive".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        let created = create_release_evidence_bundle(&request).unwrap();
+        let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
+
+        assert_eq!((created.proof_bundle.size_bytes, created.proof_bundle.digest_blake3.clone()), expected_digest);
+        assert_eq!(created, verified);
+        assert_eq!(
+            std::fs::read_link(output_bundle_dir.join("proof/self-hosting/proof-link")).unwrap(),
+            Path::new(INTERNAL_LINK_TARGET)
+        );
+    }
+
+    // r[verify mantle.release_provenance.bundle_tree_copy.fixtures.negative.symlink_escape]
+    // r[verify mantle.release_provenance.bundle_tree_copy.validation.production]
+    #[test]
+    #[cfg(unix)]
+    fn create_release_bundle_rejects_directory_symlink_escape_without_external_writes() {
+        use std::os::unix::fs::symlink;
+
+        const EXTERNAL_SENTINEL_BYTES: &[u8] = b"external-sentinel";
+        const ATTACKER_REPLACEMENT_BYTES: &[u8] = b"attacker-replacement";
+        const ATTACKER_CREATED_BYTES: &[u8] = b"attacker-created";
+        const ESCAPING_TARGET: &str = "../../../outside";
+
+        let source_temp = tempfile::tempdir().unwrap();
+        let destination_temp = tempfile::tempdir().unwrap();
+        let source_archive = source_temp.path().join("mantle-src.tar");
+        let binary_path = source_temp.path().join("mantle");
+        let proof_bundle_dir = source_temp.path().join("a/b/proof-input");
+        let source_outside_dir = source_temp.path().join("outside");
+        let output_bundle_dir = destination_temp.path().join("release-bundle");
+        let external_dir = destination_temp.path().join("outside");
+        let external_sentinel_path = external_dir.join("sentinel.txt");
+        let external_created_path = external_dir.join("created.txt");
+
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+        write_file(&source_outside_dir.join("sentinel.txt"), ATTACKER_REPLACEMENT_BYTES);
+        write_file(&source_outside_dir.join("created.txt"), ATTACKER_CREATED_BYTES);
+        symlink(ESCAPING_TARGET, proof_bundle_dir.join("escape")).unwrap();
+        write_file(&external_sentinel_path, EXTERNAL_SENTINEL_BYTES);
+
+        let request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-security-regression".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        let result = create_release_evidence_bundle(&request);
+
+        assert_eq!(std::fs::read(&external_sentinel_path).unwrap(), EXTERNAL_SENTINEL_BYTES);
+        assert!(!external_created_path.exists(), "tree copy must not create an external path");
+        assert!(result.is_err(), "escaping proof-bundle symlink must fail closed");
+        assert!(!output_bundle_dir.exists(), "invalid copy plans must block bundle mutation");
     }
 
     #[test]

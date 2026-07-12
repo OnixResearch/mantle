@@ -100,6 +100,7 @@ snix-build = { path = "vendor/snix-build" }
 snix-castore = { path = "vendor/snix-castore" }
 snix-store = { path = "vendor/snix-store" }
 cap-std = "4.0.2"
+cap-fs-ext = "4.0.2"
 futures = "0.3"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"

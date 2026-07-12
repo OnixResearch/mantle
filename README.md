@@ -1107,6 +1107,25 @@ bootstrap root.
 
 ### Release evidence bundles
 
+Release tree inputs are fail-closed. Mantle accepts regular files, real
+directories, and relative symlinks that lexically resolve inside the planned
+input tree and name another planned entry. It rejects absolute, escaping,
+unplanned, non-UTF-8, or otherwise unsupported symlinks and rejects sockets,
+FIFOs, devices, and other special files.
+
+Tree discovery, copying, hashing, and verification use no-follow entry metadata;
+a symlink is hashed as its target text and is never traversed. Before mutation,
+a pure planner validates deterministic ordering, parent-directory shape, unique
+normalized paths, and the named release limits of 4,096 entries, 128 path
+components, and 4,096 UTF-8 bytes per relative path. Destination operations run
+beneath one capability-opened root, reject symlinked roots or parents, create
+links only after directory and file writes, and revalidate source kinds and
+modes at execution time.
+
+This confinement proves bounded path and byte handling for bundle assembly. It
+does not validate the semantics, correctness, or trustworthiness of copied proof
+or release artifacts.
+
 A successful proof bundle can be packaged as release evidence:
 
 ```bash

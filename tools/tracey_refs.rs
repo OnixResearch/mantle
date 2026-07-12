@@ -356,3 +356,28 @@
 // Verified by retention core interruption tests, CLI shell tests for atomic root
 // persistence, and the archived project-input-retention-roots validation
 // transcript.
+
+// Release bundle tree-copy confinement bridge.
+//
+// r[impl mantle.release_provenance.bundle_tree_copy.plan]
+// r[impl mantle.release_provenance.bundle_tree_copy.plan.invalid]
+// The pure deterministic planner and named entry/depth/path bounds live in
+// `crates/crunch-release-core/src/tree_copy.rs`.
+//
+// r[impl mantle.release_provenance.bundle_tree_copy.no_follow]
+// r[impl mantle.release_provenance.bundle_tree_copy.destination_confinement]
+// r[impl mantle.release_provenance.bundle_tree_copy.symlink_policy]
+// The no-follow observation, capability-confined execution, source revalidation,
+// and hash shell live in `src/release_tree_copy.rs`; release creation preflights
+// its directory plans in `src/release_evidence.rs` before bundle mutation.
+//
+// r[verify mantle.release_provenance.bundle_tree_copy.fixtures.positive]
+// r[verify mantle.release_provenance.bundle_tree_copy.fixtures.negative.symlink_escape]
+// r[verify mantle.release_provenance.bundle_tree_copy.fixtures.negative.target]
+// r[verify mantle.release_provenance.bundle_tree_copy.fixtures.negative.type_drift]
+// r[verify mantle.release_provenance.bundle_tree_copy.validation]
+// r[verify mantle.release_provenance.bundle_tree_copy.validation.production]
+// Verified by positive planner/copy/hash fixtures and adversarial source,
+// destination, target, type-drift, special-file, bound, and external-sentinel
+// tests in `crates/crunch-release-core/src/tree_copy.rs`,
+// `src/release_tree_copy.rs`, and `src/release_evidence.rs`.

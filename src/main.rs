@@ -56,6 +56,7 @@ mod release_evidence;
 mod release_nix_witness;
 mod release_reproducibility;
 mod release_source;
+mod release_tree_copy;
 #[allow(dead_code)]
 mod remote_build;
 mod remote_farm_config;

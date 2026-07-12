@@ -1442,6 +1442,59 @@ fn release_create_fails_when_proof_bundle_is_missing() {
         .stderr(predicate::str::contains("proof bundle directory does not exist"));
 }
 
+// r[verify mantle.release_provenance.bundle_tree_copy.validation.production]
+// r[verify mantle.release_provenance.bundle_tree_copy.fixtures.negative.symlink_escape]
+#[test]
+#[cfg(unix)]
+fn release_create_rejects_directory_symlink_escape_without_external_writes() {
+    use std::os::unix::fs::symlink;
+
+    const EXTERNAL_SENTINEL_BYTES: &[u8] = b"external-sentinel";
+    const ATTACKER_REPLACEMENT_BYTES: &[u8] = b"attacker-replacement";
+    const ATTACKER_CREATED_BYTES: &[u8] = b"attacker-created";
+    const ESCAPING_TARGET: &str = "../../../outside";
+
+    let source_temp = tempfile::tempdir().unwrap();
+    let destination_temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(source_temp.path());
+    let binary_path = source_temp.path().join("mantle-bin");
+    let proof_dir = source_temp.path().join("a/b/proof-input");
+    let source_outside = source_temp.path().join("outside");
+    let bundle_dir = destination_temp.path().join("release-bundle");
+    let external_dir = destination_temp.path().join("outside");
+    let external_sentinel = external_dir.join("sentinel.txt");
+    let external_created = external_dir.join("created.txt");
+
+    write_file(&binary_path, b"crunch-binary");
+    let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+    let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+    write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    write_file(&source_outside.join("sentinel.txt"), ATTACKER_REPLACEMENT_BYTES);
+    write_file(&source_outside.join("created.txt"), ATTACKER_CREATED_BYTES);
+    symlink(ESCAPING_TARGET, proof_dir.join("escape")).unwrap();
+    write_file(&external_sentinel, EXTERNAL_SENTINEL_BYTES);
+
+    crunch()
+        .current_dir(source_temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-tree-copy-security")
+        .arg("--bundle-dir")
+        .arg(&bundle_dir)
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("symlink target escapes"));
+
+    assert_eq!(std::fs::read(&external_sentinel).unwrap(), EXTERNAL_SENTINEL_BYTES);
+    assert!(!external_created.exists(), "release create must not create an external path");
+    assert!(!bundle_dir.exists(), "invalid tree plan must block bundle mutation");
+}
+
 #[test]
 fn release_create_rejects_prerequisite_only_proof_bundle() {
     let temp = tempfile::tempdir().unwrap();

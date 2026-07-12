@@ -1,16 +1,21 @@
+use std::ffi::OsString;
 use std::io;
 use std::path::Component;
 use std::path::Path;
+use std::path::PathBuf;
 
+use cap_fs_ext::DirExt;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
-const MAX_RELEASE_RELATIVE_PATH_BYTES: usize = 4096;
+const MAX_RELEASE_RELATIVE_PATH_BYTES: usize = 4_096;
 const MAX_RELEASE_PATH_COMPONENTS: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReleaseRootKind {
     ReleaseEvidence,
+    ReleaseTreeSource,
+    ReleaseTreeDestination,
     WitnessRebuild,
     Bootstrap,
     BuildArtifact,
@@ -61,12 +66,29 @@ impl ValidatedReleasePath {
 
 impl ReleaseCapabilityRoot {
     pub(crate) fn open_ambient(kind: ReleaseRootKind, root_path: &Path) -> io::Result<Self> {
-        let dir = Dir::open_ambient_dir(root_path, ambient_authority())?;
+        Self::open_ambient_nofollow(kind, root_path)
+    }
+
+    pub(crate) fn open_ambient_nofollow(kind: ReleaseRootKind, root_path: &Path) -> io::Result<Self> {
+        let dir = walk_ambient_directory_nofollow(root_path, false)?;
+        Ok(Self { kind, dir })
+    }
+
+    pub(crate) fn create_ambient_dir_all_nofollow(kind: ReleaseRootKind, root_path: &Path) -> io::Result<Self> {
+        let dir = walk_ambient_directory_nofollow(root_path, true)?;
         Ok(Self { kind, dir })
     }
 
     pub(crate) fn kind(&self) -> ReleaseRootKind {
         self.kind
+    }
+
+    pub(crate) fn dir(&self) -> &Dir {
+        &self.dir
+    }
+
+    pub(crate) fn is_empty(&self) -> io::Result<bool> {
+        Ok(self.dir.entries()?.next().is_none())
     }
 
     pub(crate) fn read(&self, path: &ValidatedReleasePath) -> io::Result<Vec<u8>> {
@@ -89,6 +111,71 @@ pub(crate) fn authorize_release_path(request: &ReleasePathRequest) -> Result<Val
         });
     }
     ValidatedReleasePath::new(&request.relative_path)
+}
+
+fn walk_ambient_directory_nofollow(root_path: &Path, create_missing: bool) -> io::Result<Dir> {
+    let (anchor, components) = absolute_anchor_and_components(root_path)?;
+    let mut current = Dir::open_ambient_dir(&anchor, ambient_authority())?;
+    for component in components {
+        current = open_or_create_child_directory(&current, &component, create_missing)?;
+    }
+    Ok(current)
+}
+
+fn absolute_anchor_and_components(path: &Path) -> io::Result<(PathBuf, Vec<OsString>)> {
+    let absolute = std::path::absolute(path)?;
+    let mut anchor = PathBuf::new();
+    let mut components = Vec::new();
+    for component in absolute.components() {
+        match component {
+            Component::Prefix(prefix) => anchor.push(prefix.as_os_str()),
+            Component::RootDir => anchor.push(component.as_os_str()),
+            Component::Normal(name) => components.push(name.to_os_string()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("capability root path retains parent traversal: {}", absolute.display()),
+                ));
+            }
+        }
+    }
+    if anchor.as_os_str().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("capability root path has no absolute anchor: {}", absolute.display()),
+        ));
+    }
+    Ok((anchor, components))
+}
+
+fn open_or_create_child_directory(parent: &Dir, name: &OsString, create_missing: bool) -> io::Result<Dir> {
+    match parent.symlink_metadata(name) {
+        Ok(metadata) => validate_real_directory(&metadata, name)?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound && create_missing => match parent.create_dir(name) {
+            Ok(()) => {}
+            Err(create_error) if create_error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(create_error) => return Err(create_error),
+        },
+        Err(error) => return Err(error),
+    }
+    parent.open_dir_nofollow(name)
+}
+
+fn validate_real_directory(metadata: &cap_std::fs::Metadata, name: &OsString) -> io::Result<()> {
+    if metadata.file_type().is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("capability root path component is a symlink: {}", Path::new(name).display()),
+        ));
+    }
+    if !metadata.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("capability root path component is not a directory: {}", Path::new(name).display()),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_relative_release_path(path: &str) -> Result<(), ReleasePathError> {
@@ -119,6 +206,8 @@ fn validate_relative_release_path(path: &str) -> Result<(), ReleasePathError> {
 mod tests {
     use super::*;
 
+    const PATH_NEGATIVE_CASES_COUNT: usize = 4;
+
     #[test]
     fn accepts_relative_paths_under_declared_roots() {
         let request = ReleasePathRequest {
@@ -134,7 +223,7 @@ mod tests {
 
     #[test]
     fn rejects_path_and_authority_negative_fixtures() {
-        let cases: [(&str, ReleasePathRequest, ReleasePathError); 4] = [
+        let cases: [(&str, ReleasePathRequest, ReleasePathError); PATH_NEGATIVE_CASES_COUNT] = [
             (
                 "parent traversal",
                 request("../secret", Some(ReleaseRootKind::ReleaseEvidence)),
@@ -178,6 +267,40 @@ mod tests {
         let read = root.read(&path);
 
         assert!(read.is_err(), "capability read should reject symlink escape");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn nofollow_root_open_rejects_symlink_root_and_parent() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let real_root = temp.path().join("real-root");
+        let root_link = temp.path().join("root-link");
+        let parent_link = temp.path().join("parent-link");
+        std::fs::create_dir(&real_root).expect("real root");
+        std::os::unix::fs::symlink(&real_root, &root_link).expect("root symlink");
+        std::os::unix::fs::symlink(temp.path(), &parent_link).expect("parent symlink");
+
+        let root_error = ReleaseCapabilityRoot::open_ambient_nofollow(ReleaseRootKind::ReleaseEvidence, &root_link);
+        let parent_error = ReleaseCapabilityRoot::create_ambient_dir_all_nofollow(
+            ReleaseRootKind::ReleaseEvidence,
+            &parent_link.join("child"),
+        );
+
+        assert!(root_error.is_err(), "symlink root must be rejected");
+        assert!(parent_error.is_err(), "symlink parent must be rejected");
+    }
+
+    #[test]
+    fn nofollow_root_creation_builds_and_opens_real_directory_chain() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root_path = temp.path().join("nested/root");
+        let root =
+            ReleaseCapabilityRoot::create_ambient_dir_all_nofollow(ReleaseRootKind::ReleaseTreeDestination, &root_path)
+                .expect("cap root");
+
+        assert_eq!(root.kind(), ReleaseRootKind::ReleaseTreeDestination);
+        assert!(root.is_empty().expect("empty root"));
+        assert!(std::fs::symlink_metadata(root_path).expect("root metadata").is_dir());
     }
 
     #[test]

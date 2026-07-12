@@ -13,6 +13,7 @@ mod proof_eligibility;
 mod reproducibility;
 mod source_archive;
 mod strict_regression;
+mod tree_copy;
 
 pub use determinism::BUILD_EFFECT_POLICY_VERSION;
 pub use determinism::BuildEffect;
@@ -277,3 +278,14 @@ pub use strict_regression::strict_hermeticity_regression_suite_plan_canonical_by
 pub use strict_regression::strict_hermeticity_regression_suite_plan_digest_blake3;
 pub use strict_regression::strict_hermeticity_regression_suite_report_canonical_bytes;
 pub use strict_regression::strict_hermeticity_regression_suite_report_digest_blake3;
+pub use tree_copy::RELEASE_TREE_COPY_MAX_DEPTH_COUNT;
+pub use tree_copy::RELEASE_TREE_COPY_MAX_ENTRIES_COUNT;
+pub use tree_copy::RELEASE_TREE_COPY_MAX_PATH_BYTES;
+pub use tree_copy::TreeCopyBlocker;
+pub use tree_copy::TreeCopyBlockerKind;
+pub use tree_copy::TreeCopyLimits;
+pub use tree_copy::TreeCopyOperation;
+pub use tree_copy::TreeCopyPlan;
+pub use tree_copy::TreeEntryKind;
+pub use tree_copy::TreeEntryObservation;
+pub use tree_copy::plan_tree_copy;
