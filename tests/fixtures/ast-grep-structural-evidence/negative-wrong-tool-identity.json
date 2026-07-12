@@ -1,0 +1,44 @@
+{
+  "schema": "mantle-ast-grep-structural-evidence-v1",
+  "claim_scope": "structural-tool-evidence-only",
+  "claim_labels": ["structural-tool-evidence"],
+  "tool": {
+    "package": "ast-grep",
+    "version": "0.42.1",
+    "expected_version": "0.42.1",
+    "binary_digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expected_binary_digest_blake3": "9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "command": {
+    "kind": "scan",
+    "argv_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "rule_bundle": {
+    "digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "expected_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "scan_scope": {
+    "description": "src/**/*.rs",
+    "input_digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "expected_input_digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "output": {
+    "format": "json-compact",
+    "finding_summary": {
+      "rule_count": 1,
+      "finding_count": 1,
+      "test_case_count": 0,
+      "passed_test_count": 0,
+      "failed_test_count": 0
+    }
+  },
+  "receipt": {
+    "digest_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "non_claims": [
+    "ast-grep.boundary.not-source-behavior",
+    "ast-grep.boundary.not-build-correctness",
+    "ast-grep.boundary.not-cache-correctness",
+    "ast-grep.boundary.not-release-eligibility"
+  ]
+}

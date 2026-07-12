@@ -1,6 +1,7 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 mod artifact_cmd;
+mod ast_grep_evidence;
 mod attest_cmd;
 mod bootstrap;
 mod bootstrap_parity;
@@ -3700,6 +3701,8 @@ fn remote_client_build_json_report(
         "network_policy_reports": [],
         "native_dynamic_plans": [],
         "frontend_artifact_attestations": [],
+        "ast_grep_structural_evidence": [],
+        "ast_grep_structural_evidence_diagnostics": [],
         "cargo_build_evidence": [],
         "diagnostic_persistence_failures": [],
         "counts": {
@@ -5571,6 +5574,8 @@ mod tests {
         .expect("remote build JSON report renders");
 
         assert_eq!(json["schema"], BUILD_JSON_REPORT_SCHEMA);
+        assert_eq!(json["ast_grep_structural_evidence"], serde_json::json!([]));
+        assert_eq!(json["ast_grep_structural_evidence_diagnostics"], serde_json::json!([]));
         assert_eq!(json["counts"]["succeeded_total"], 1);
         assert_eq!(json["counts"]["cached_total"], 1);
         assert_eq!(json["outcomes"][0]["cached"], true);

@@ -82,6 +82,81 @@
             pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
           ];
 
+        astGrepVersion = "0.42.1";
+        astGrepUpstream = pkgs.ast-grep;
+        astGrepToolchain =
+          assert pkgs.lib.assertMsg (
+            astGrepUpstream.version == astGrepVersion
+          ) "Mantle ast-grep pin drifted: expected ${astGrepVersion}, got ${astGrepUpstream.version}";
+          pkgs.runCommand "mantle-ast-grep-toolchain-${astGrepVersion}"
+            {
+              passthru = {
+                version = astGrepVersion;
+                upstream = astGrepUpstream;
+              };
+              meta = astGrepUpstream.meta // {
+                mainProgram = "ast-grep";
+              };
+            }
+            ''
+              set -eu
+              mkdir -p "$out/bin" "$out/share/mantle"
+              cp "${astGrepUpstream}/bin/ast-grep" "$out/bin/ast-grep"
+              chmod u=rwx,go=rx "$out/bin/ast-grep"
+              ln -s ast-grep "$out/bin/sg"
+
+              binaryDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$out/bin/ast-grep")"
+              ${pkgs.jq}/bin/jq --null-input --sort-keys \
+                --arg schema "mantle-ast-grep-toolchain-identity-v1" \
+                --arg package "ast-grep" \
+                --arg version "${astGrepVersion}" \
+                --arg binary "bin/ast-grep" \
+                --arg digestAlgorithm "blake3" \
+                --arg binaryDigestBlake3 "$binaryDigest" \
+                --arg upstreamStorePath "${astGrepUpstream}" \
+                '{
+                  schema: $schema,
+                  package: $package,
+                  version: $version,
+                  binary: $binary,
+                  digest_algorithm: $digestAlgorithm,
+                  binary_digest_blake3: $binaryDigestBlake3,
+                  upstream_store_path: $upstreamStorePath
+                }' > "$out/share/mantle/ast-grep-toolchain.json"
+            '';
+
+        astGrepPackageIdentity = pkgs.runCommand "mantle-ast-grep-package-identity-smoke" { } ''
+          set -eu
+          identity="${astGrepToolchain}/share/mantle/ast-grep-toolchain.json"
+          binary="${astGrepToolchain}/bin/ast-grep"
+          actualDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$binary")"
+          versionOutput="$("$binary" --version)"
+          aliasVersionOutput="$("${astGrepToolchain}/bin/sg" --version)"
+          test "$aliasVersionOutput" = "$versionOutput"
+
+          ${pkgs.jq}/bin/jq --exit-status \
+            --arg schema "mantle-ast-grep-toolchain-identity-v1" \
+            --arg package "ast-grep" \
+            --arg version "${astGrepVersion}" \
+            --arg binaryPath "bin/ast-grep" \
+            --arg actualDigest "$actualDigest" \
+            --arg upstreamStorePath "${astGrepUpstream}" \
+            '.schema == $schema
+              and .package == $package
+              and .version == $version
+              and .binary == $binaryPath
+              and .digest_algorithm == "blake3"
+              and .binary_digest_blake3 == $actualDigest
+              and .upstream_store_path == $upstreamStorePath' \
+            "$identity" > /dev/null
+          printf '%s\n' "$versionOutput" | ${pkgs.gnugrep}/bin/grep --fixed-strings -- "${astGrepVersion}" > /dev/null
+
+          mkdir -p "$out"
+          cp "$identity" "$out/identity.json"
+          printf '%s\n' "$versionOutput" > "$out/version.txt"
+          printf '%s\n' "$actualDigest" > "$out/binary.blake3"
+        '';
+
         # Build just the cargo dependencies for caching
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
@@ -180,6 +255,8 @@
         packages = {
           default = crunch;
           crunch = crunch;
+          ast-grep-toolchain = astGrepToolchain;
+          ast-grep-package-identity = astGrepPackageIdentity;
           mantle-transcript-quality = mantleTranscriptQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
         };
@@ -193,6 +270,7 @@
 
         checks = {
           inherit crunch;
+          ast-grep-package-identity = astGrepPackageIdentity;
           mantle-transcript-quality = mantleTranscriptQuality;
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
           release-determinism-quality = releaseDeterminismQuality;
@@ -254,6 +332,7 @@
               rust-analyzer
             ]
             ++ [
+              astGrepToolchain
               tigerstyle.packages.${system}.cargo-tigerstyle
             ];
 

@@ -4,11 +4,15 @@ use crunch_pipeline::BuildConfig;
 use crunch_pipeline::PipelineResult;
 use crunch_pipeline::drv_key_for;
 use crunch_pipeline::label_for_key;
+use crunch_release_core::AstGrepStructuralEvidence;
 use nix_compat::store_path::StorePath;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_store::path_info::PathInfo;
 
+use crate::ast_grep_evidence::AST_GREP_EVIDENCE_RELATIVE_PATH;
+use crate::ast_grep_evidence::AstGrepEvidenceRead;
+use crate::ast_grep_evidence::read_ast_grep_evidence;
 use crate::build_failure::BuildFailureEnvelope;
 use crate::build_failure::build_failure_envelopes;
 use crate::build_log::DiagnosticPersistenceFailure;
@@ -17,6 +21,7 @@ use crate::frontend_artifact_spec::FrontendArtifactAdmissionAttestation;
 
 const OFFLINE_CARGO_EVIDENCE_NEXT_ACTION: &str =
     "inspect share/mantle/offline-cargo-build.json and rebuild with mantle.offlineCargoPackage if the sidecar is stale";
+const AST_GREP_EVIDENCE_NEXT_ACTION: &str = "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities";
 
 #[derive(Debug, Serialize)]
 pub struct BuildJsonReport {
@@ -31,6 +36,8 @@ pub struct BuildJsonReport {
     pub network_policy_reports: Vec<BuildJsonNetworkPolicyReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub frontend_artifact_attestations: Vec<FrontendArtifactAdmissionAttestation>,
+    pub ast_grep_structural_evidence: Vec<BuildJsonAstGrepStructuralEvidence>,
+    pub ast_grep_structural_evidence_diagnostics: Vec<BuildJsonAstGrepStructuralEvidenceDiagnostic>,
     pub cargo_build_evidence: Vec<BuildJsonCargoBuildEvidence>,
     pub cargo_build_evidence_diagnostics: Vec<BuildJsonCargoBuildEvidenceDiagnostic>,
     pub diagnostic_persistence_failures: Vec<DiagnosticPersistenceFailure>,
@@ -208,6 +215,26 @@ pub struct BuildJsonFodMismatch {
 }
 
 #[derive(Debug, Serialize)]
+pub struct BuildJsonAstGrepStructuralEvidence {
+    pub label: String,
+    pub output_name: String,
+    pub evidence_path: String,
+    pub sidecar_file_digest_blake3: String,
+    pub sidecar_canonical_digest_blake3: String,
+    pub evidence: AstGrepStructuralEvidence,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonAstGrepStructuralEvidenceDiagnostic {
+    pub label: String,
+    pub output_name: String,
+    pub evidence_path: String,
+    pub blocker_class: String,
+    pub message: String,
+    pub next_action: &'static str,
+}
+
+#[derive(Debug, Serialize)]
 pub struct BuildJsonCargoBuildEvidence {
     pub label: String,
     pub output_name: String,
@@ -320,6 +347,8 @@ fn build_json_report(
 ) -> BuildJsonReport {
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
     let outcome_reports = build_outcome_reports(config, result, logs_dir);
+    let (ast_grep_structural_evidence, ast_grep_structural_evidence_diagnostics) =
+        build_ast_grep_structural_evidence_reports(&outcome_reports);
     let (cargo_build_evidence, cargo_build_evidence_diagnostics) = build_cargo_build_evidence_reports(&outcome_reports);
     let failure_reports = build_failure_envelopes(result, &config.store_dir, logs_dir);
     let counts = build_counts(&outcome_reports, &failure_reports);
@@ -356,6 +385,8 @@ fn build_json_report(
         network_policy_reports,
         native_dynamic_plans,
         frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
+        ast_grep_structural_evidence,
+        ast_grep_structural_evidence_diagnostics,
         cargo_build_evidence,
         cargo_build_evidence_diagnostics,
         diagnostic_persistence_failures: diagnostic_persistence_failures.to_vec(),
@@ -538,6 +569,55 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
         .collect();
     reports.sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_key.cmp(&right.drv_key)));
     reports
+}
+
+fn build_ast_grep_structural_evidence_reports(
+    outcomes: &[BuildJsonOutcome],
+) -> (Vec<BuildJsonAstGrepStructuralEvidence>, Vec<BuildJsonAstGrepStructuralEvidenceDiagnostic>) {
+    let mut reports = Vec::new();
+    let mut diagnostics = Vec::new();
+    for outcome in outcomes {
+        for output in &outcome.outputs {
+            match ast_grep_structural_evidence_for_output(outcome, output) {
+                AstGrepStructuralEvidenceOutcome::Absent => {}
+                AstGrepStructuralEvidenceOutcome::Valid(report) => reports.push(report),
+                AstGrepStructuralEvidenceOutcome::Invalid(diagnostic) => diagnostics.push(diagnostic),
+            }
+        }
+    }
+    reports.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
+    diagnostics.sort_by(|left, right| left.label.cmp(&right.label).then(left.output_name.cmp(&right.output_name)));
+    (reports, diagnostics)
+}
+
+fn ast_grep_structural_evidence_for_output(
+    outcome: &BuildJsonOutcome,
+    output: &BuildJsonOutput,
+) -> AstGrepStructuralEvidenceOutcome {
+    let evidence_path = Path::new(&output.path).join(AST_GREP_EVIDENCE_RELATIVE_PATH);
+    match read_ast_grep_evidence(&evidence_path) {
+        AstGrepEvidenceRead::Missing => AstGrepStructuralEvidenceOutcome::Absent,
+        AstGrepEvidenceRead::Valid(loaded) => {
+            AstGrepStructuralEvidenceOutcome::Valid(BuildJsonAstGrepStructuralEvidence {
+                label: outcome.label.clone(),
+                output_name: output.name.clone(),
+                evidence_path: evidence_path.display().to_string(),
+                sidecar_file_digest_blake3: loaded.sidecar_file_digest_blake3,
+                sidecar_canonical_digest_blake3: loaded.sidecar_canonical_digest_blake3,
+                evidence: loaded.evidence,
+            })
+        }
+        AstGrepEvidenceRead::Invalid { blocker_class, message } => {
+            AstGrepStructuralEvidenceOutcome::Invalid(BuildJsonAstGrepStructuralEvidenceDiagnostic {
+                label: outcome.label.clone(),
+                output_name: output.name.clone(),
+                evidence_path: evidence_path.display().to_string(),
+                blocker_class: blocker_class.to_string(),
+                message,
+                next_action: AST_GREP_EVIDENCE_NEXT_ACTION,
+            })
+        }
+    }
 }
 
 fn build_cargo_build_evidence_reports(
@@ -791,6 +871,12 @@ fn report_toolchain(toolchain: crate::offline_cargo::OfflineCargoEvidenceToolcha
         rustc: toolchain.rustc,
         linker: toolchain.linker,
     }
+}
+
+enum AstGrepStructuralEvidenceOutcome {
+    Absent,
+    Valid(BuildJsonAstGrepStructuralEvidence),
+    Invalid(BuildJsonAstGrepStructuralEvidenceDiagnostic),
 }
 
 enum CargoBuildEvidenceOutcome {
@@ -1547,6 +1633,69 @@ mod tests {
         assert_eq!(diagnostics[0].next_action, OFFLINE_CARGO_EVIDENCE_NEXT_ACTION);
     }
 
+    // r[verify mantle.ast_grep_structural_rails.sidecar]
+    // r[verify mantle.ast_grep_structural_rails.identity]
+    #[test]
+    fn build_json_report_surfaces_valid_ast_grep_structural_evidence() {
+        let output_root = tempfile::tempdir().unwrap();
+        let evidence_path = output_root.path().join(AST_GREP_EVIDENCE_RELATIVE_PATH);
+        let fixture = include_bytes!("../tests/fixtures/ast-grep-structural-evidence/positive-scan.json");
+        std::fs::create_dir_all(evidence_path.parent().unwrap()).unwrap();
+        std::fs::write(&evidence_path, fixture).unwrap();
+        let outcome = build_json_outcome_with_output(ast_grep_test_output(output_root.path()));
+
+        let (reports, diagnostics) = build_ast_grep_structural_evidence_reports(&[outcome]);
+
+        assert_eq!(reports.len(), 1);
+        assert!(diagnostics.is_empty());
+        assert_eq!(reports[0].evidence.command.kind, crunch_release_core::AstGrepCommandKind::Scan);
+        assert_eq!(reports[0].evidence_path, evidence_path.display().to_string());
+        assert_eq!(reports[0].sidecar_file_digest_blake3, blake3::hash(fixture).to_hex().to_string());
+    }
+
+    #[test]
+    fn build_json_report_diagnoses_stale_ast_grep_structural_evidence() {
+        let output_root = tempfile::tempdir().unwrap();
+        let evidence_path = output_root.path().join(AST_GREP_EVIDENCE_RELATIVE_PATH);
+        let fixture = include_bytes!("../tests/fixtures/ast-grep-structural-evidence/negative-stale-rule-bundle.json");
+        std::fs::create_dir_all(evidence_path.parent().unwrap()).unwrap();
+        std::fs::write(&evidence_path, fixture).unwrap();
+        let outcome = build_json_outcome_with_output(ast_grep_test_output(output_root.path()));
+
+        let (reports, diagnostics) = build_ast_grep_structural_evidence_reports(&[outcome]);
+
+        assert!(reports.is_empty());
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].blocker_class, "invalid-ast-grep-evidence");
+        assert!(diagnostics[0].message.contains("rule_bundle_digest_blake3 is stale"));
+        assert_eq!(diagnostics[0].next_action, AST_GREP_EVIDENCE_NEXT_ACTION);
+    }
+
+    #[test]
+    fn build_json_report_omits_absent_ast_grep_structural_evidence() {
+        let output_root = tempfile::tempdir().unwrap();
+        let outcome = build_json_outcome_with_output(ast_grep_test_output(output_root.path()));
+
+        let (reports, diagnostics) = build_ast_grep_structural_evidence_reports(&[outcome]);
+
+        assert!(reports.is_empty());
+        assert!(diagnostics.is_empty());
+        assert!(!output_root.path().join(AST_GREP_EVIDENCE_RELATIVE_PATH).exists());
+    }
+
+    fn ast_grep_test_output(output_root: &Path) -> BuildJsonOutput {
+        BuildJsonOutput {
+            name: "out".to_string(),
+            path: output_root.display().to_string(),
+            artifact_attestation: BuildJsonAttestationReference {
+                logical_path: "/crunch/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo".to_string(),
+                path: "attestation.json".to_string(),
+            },
+            substitution: None,
+            cache_admission: None,
+        }
+    }
+
     fn build_json_outcome_with_output(output: BuildJsonOutput) -> BuildJsonOutcome {
         BuildJsonOutcome {
             drv_key: "drv".to_string(),
@@ -1768,6 +1917,8 @@ mod tests {
                 "network_policy_reports": [],
                 "native_dynamic_plans": [],
                 "frontend_artifact_attestations": [],
+                "ast_grep_structural_evidence": [],
+                "ast_grep_structural_evidence_diagnostics": [],
                 "cargo_build_evidence": [],
                 "cargo_build_evidence_diagnostics": [],
                 "diagnostic_persistence_failures": [{

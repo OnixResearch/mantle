@@ -1,0 +1,44 @@
+{
+  "schema": "mantle-ast-grep-structural-evidence-v1",
+  "claim_scope": "structural-tool-evidence-only",
+  "claim_labels": ["structural-tool-evidence"],
+  "tool": {
+    "package": "ast-grep",
+    "version": "0.42.1",
+    "expected_version": "0.42.1",
+    "binary_digest_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
+    "expected_binary_digest_blake3": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "command": {
+    "kind": "rule-test",
+    "argv_digest_blake3": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "rule_bundle": {
+    "digest_blake3": "3333333333333333333333333333333333333333333333333333333333333333",
+    "expected_digest_blake3": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "scan_scope": {
+    "description": "rules/tests/**/*.yml",
+    "input_digest_blake3": "4444444444444444444444444444444444444444444444444444444444444444",
+    "expected_input_digest_blake3": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "output": {
+    "format": "text-color-never",
+    "finding_summary": {
+      "rule_count": 1,
+      "finding_count": 0,
+      "test_case_count": 1,
+      "passed_test_count": 1,
+      "failed_test_count": 0
+    }
+  },
+  "receipt": {
+    "digest_blake3": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "non_claims": [
+    "ast-grep.boundary.not-source-behavior",
+    "ast-grep.boundary.not-build-correctness",
+    "ast-grep.boundary.not-cache-correctness",
+    "ast-grep.boundary.not-release-eligibility"
+  ]
+}

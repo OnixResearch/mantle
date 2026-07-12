@@ -397,3 +397,27 @@
 // r[verify mantle.operator_diagnostics.release_verification.render_boundary.test]
 // Verified by positive/negative release CLI fixtures in `tests/release_cli.rs`
 // plus the root-package pure renderer test in `src/release_cmd.rs`.
+// Pinned ast-grep structural evidence bridge.
+//
+// r[impl mantle.ast_grep_structural_rails.toolchain]
+// The explicit ast-grep version pin, packaged executable, generated BLAKE3
+// identity record, development-shell profile, and identity smoke live in
+// `flake.nix`.
+//
+// r[verify mantle.ast_grep_structural_rails.toolchain]
+// Verified by `checks.<system>.ast-grep-package-identity`, which recomputes the
+// packaged executable BLAKE3 and checks the reported package/version identity.
+//
+// r[impl mantle.ast_grep_structural_rails.shell_boundary]
+// Filesystem reads and raw sidecar hashing live in `src/ast_grep_evidence.rs`;
+// the no-std validator lives in `crates/crunch-release-core/src/ast_grep.rs`.
+// Mantle does not automatically invoke ast-grep.
+//
+// r[verify mantle.ast_grep_structural_rails.shell_boundary]
+// Verified by the shell-adapter boundary test and the no-std core build.
+//
+// r[impl mantle.ast_grep_structural_rails.validation]
+// r[verify mantle.ast_grep_structural_rails.validation]
+// Verified by positive and negative fixture tests, focused build-report and
+// release-attachment tests, the package identity smoke, and Cairn lifecycle
+// validation/gates recorded for the active change.

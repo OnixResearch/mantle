@@ -38,9 +38,11 @@ mantle --json build hello.ncl
 `mantle --json build` writes a stable `crunch-build-report-v1` JSON
 object to stdout. It includes per-root outcomes, cache hits, failure
 records, output paths, hermeticity audit data, `network_policy_reports`,
-`cargo_build_evidence[]`, `cargo_build_evidence_diagnostics[]`, and per-output
-`artifact_attestation` references (`logical_path` + sidecar `path`) so tests and
-operators can assert on structured data instead of scraping human text. The
+`cargo_build_evidence[]`, `cargo_build_evidence_diagnostics[]`,
+`ast_grep_structural_evidence[]`, `ast_grep_structural_evidence_diagnostics[]`,
+and per-output `artifact_attestation` references (`logical_path` + sidecar
+`path`) so tests and operators can assert on structured data instead of scraping
+human text. The
 optional `log_file` fields are only present when the corresponding log was
 actually written to disk.
 
@@ -265,6 +267,9 @@ For the full command path, examples, and sidecar rules, see
 
 For frontend-neutral action/object/reference-scan evidence contracts, see
 [`docs/build-correctness-primitives.md`](docs/build-correctness-primitives.md).
+For the pinned ast-grep profile, sidecar schema, build-report fields, BLAKE3
+identity rules, release attachment, and structural-only non-claims, see
+[`docs/ast-grep-structural-evidence.md`](docs/ast-grep-structural-evidence.md).
 For foreign derivation import receipt boundaries, policy digests, cache/source
 trust, sandbox capabilities, Guix-like and Nix-like examples, and admission-only
 non-claims, see
@@ -345,6 +350,20 @@ The strict clippy helper excludes vendored workspace members
 `fuse-backend-rs`, `nix-compat`, `nix-compat-derive`, `snix-build`,
 `snix-castore`, `snix-store`, and `snix-tracing` so first-party warnings fail
 cleanly.
+
+**Pinned ast-grep structural rail**
+
+The default development shell includes ast-grep `0.42.1`. The standalone
+profile carries a generated BLAKE3 executable identity record, and its focused
+smoke recomputes that identity before accepting the package:
+
+```bash
+nix run .#ast-grep-toolchain -- --version
+nix build .#checks.x86_64-linux.ast-grep-package-identity --no-link -L
+```
+
+See [`docs/ast-grep-structural-evidence.md`](docs/ast-grep-structural-evidence.md)
+for repository-owned scan/rule-test sidecars and claim boundaries.
 
 **Tigerstyle lane**
 

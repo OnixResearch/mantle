@@ -1,6 +1,7 @@
 #![no_std]
 extern crate alloc;
 
+mod ast_grep;
 mod determinism;
 mod error;
 mod gauntlet;
@@ -17,6 +18,31 @@ mod strict_regression;
 mod tree_copy;
 mod verification_decision;
 
+pub use ast_grep::AST_GREP_EXTERNAL_EVIDENCE_ROLE;
+pub use ast_grep::AST_GREP_NON_CLAIM_BUILD_CORRECTNESS;
+pub use ast_grep::AST_GREP_NON_CLAIM_CACHE_CORRECTNESS;
+pub use ast_grep::AST_GREP_NON_CLAIM_RELEASE_ELIGIBILITY;
+pub use ast_grep::AST_GREP_NON_CLAIM_SOURCE_BEHAVIOR;
+pub use ast_grep::AST_GREP_STRUCTURAL_CLAIM_LABEL;
+pub use ast_grep::AST_GREP_STRUCTURAL_CLAIM_SCOPE;
+pub use ast_grep::AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA;
+pub use ast_grep::AST_GREP_TOOL_PACKAGE;
+pub use ast_grep::AST_GREP_TOOL_VERSION;
+pub use ast_grep::AstGrepCommandIdentity;
+pub use ast_grep::AstGrepCommandKind;
+pub use ast_grep::AstGrepFindingSummary;
+pub use ast_grep::AstGrepOutputEvidence;
+pub use ast_grep::AstGrepReceiptIdentity;
+pub use ast_grep::AstGrepReleaseAttachment;
+pub use ast_grep::AstGrepRuleBundleIdentity;
+pub use ast_grep::AstGrepScanScope;
+pub use ast_grep::AstGrepStructuralEvidence;
+pub use ast_grep::AstGrepToolIdentity;
+pub use ast_grep::ast_grep_structural_evidence_canonical_bytes;
+pub use ast_grep::ast_grep_structural_evidence_digest_blake3;
+pub use ast_grep::parse_ast_grep_structural_evidence_json;
+pub use ast_grep::validate_ast_grep_release_attachment;
+pub use ast_grep::validate_ast_grep_structural_evidence;
 pub use determinism::BUILD_EFFECT_POLICY_VERSION;
 pub use determinism::BuildEffect;
 pub use determinism::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;

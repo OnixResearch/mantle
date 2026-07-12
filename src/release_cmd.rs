@@ -2,6 +2,9 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crunch_release_core::AST_GREP_EXTERNAL_EVIDENCE_ROLE;
+use crunch_release_core::AST_GREP_STRUCTURAL_CLAIM_SCOPE;
+use crunch_release_core::AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA;
 use crunch_release_core::DeterministicBuildProofReceipt;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::KaniSolverIdentity;
@@ -16,6 +19,7 @@ use crunch_release_core::deterministic_release_claim_eligible;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
 use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
 
+use crate::ast_grep_evidence::validate_ast_grep_release_attachment_file;
 use crate::errors::RunError;
 use crate::global_reproducibility_cmd::cmd_global_reproducibility;
 use crate::global_reproducibility_release::cmd_global_reproducibility_release_evidence;
@@ -416,7 +420,7 @@ fn release_create_external_evidence(
         ));
     }
 
-    Ok(paths
+    let requests = paths
         .into_iter()
         .zip(roles)
         .zip(schemas)
@@ -428,7 +432,35 @@ fn release_create_external_evidence(
             claim_scope,
             non_claims: non_claims.clone(),
         })
-        .collect())
+        .collect::<Vec<_>>();
+    for request in &requests {
+        validate_ast_grep_external_evidence_request(request)?;
+    }
+    Ok(requests)
+}
+
+fn validate_ast_grep_external_evidence_request(request: &ExternalEvidenceCreateRequest) -> Result<(), RunError> {
+    if !ast_grep_attachment_marker_present(request) {
+        return Ok(());
+    }
+    validate_ast_grep_release_attachment_file(
+        &request.path,
+        request.role.clone(),
+        request.schema.clone(),
+        request.claim_scope.clone(),
+        request.non_claims.clone(),
+    )
+    .map_err(RunError::Internal)
+}
+
+fn ast_grep_attachment_marker_present(request: &ExternalEvidenceCreateRequest) -> bool {
+    if request.role == AST_GREP_EXTERNAL_EVIDENCE_ROLE {
+        return true;
+    }
+    if request.schema == AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA {
+        return true;
+    }
+    request.claim_scope == AST_GREP_STRUCTURAL_CLAIM_SCOPE
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -1913,6 +1945,44 @@ fn print_witness_rebuild_success(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ast_grep_external_evidence_is_validated_before_release_attachment() {
+        let temp = tempfile::tempdir().unwrap();
+        let relative_path = PathBuf::from("ast-grep-evidence.json");
+        let absolute_path = temp.path().join(&relative_path);
+        let fixture = include_bytes!("../tests/fixtures/ast-grep-structural-evidence/positive-scan.json");
+        std::fs::write(&absolute_path, fixture).unwrap();
+        let non_claims = vec![
+            crunch_release_core::AST_GREP_NON_CLAIM_SOURCE_BEHAVIOR.to_string(),
+            crunch_release_core::AST_GREP_NON_CLAIM_BUILD_CORRECTNESS.to_string(),
+            crunch_release_core::AST_GREP_NON_CLAIM_CACHE_CORRECTNESS.to_string(),
+            crunch_release_core::AST_GREP_NON_CLAIM_RELEASE_ELIGIBILITY.to_string(),
+        ];
+
+        let valid = release_create_external_evidence(
+            temp.path(),
+            vec![relative_path.clone()],
+            vec![AST_GREP_EXTERNAL_EVIDENCE_ROLE.to_string()],
+            vec![AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA.to_string()],
+            vec![AST_GREP_STRUCTURAL_CLAIM_SCOPE.to_string()],
+            non_claims.clone(),
+        )
+        .unwrap();
+        let invalid = release_create_external_evidence(
+            temp.path(),
+            vec![relative_path],
+            vec![AST_GREP_EXTERNAL_EVIDENCE_ROLE.to_string()],
+            vec![AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA.to_string()],
+            vec!["release-eligible".to_string()],
+            non_claims,
+        )
+        .unwrap_err();
+
+        assert_eq!(valid.len(), 1);
+        assert_eq!(valid[0].path, absolute_path);
+        assert!(invalid.to_string().contains("claim_scope"));
+    }
 
     #[test]
     fn compute_artifact_set_digest_is_deterministic() {
