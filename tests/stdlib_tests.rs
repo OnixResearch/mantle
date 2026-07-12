@@ -415,3 +415,156 @@ fn select_round_trip_through_glue() {
     assert_eq!(outputs.len(), 1);
     assert!(outputs.contains("dev"));
 }
+
+const WASM_COMPONENT_GENERATED_INPUT_COUNT: usize = 5;
+const WASM_COMPONENT_BLAKE3_HEX_LENGTH: usize = 64;
+
+fn wasm_component_export_expression() -> String {
+    let digest = "a".repeat(WASM_COMPONENT_BLAKE3_HEX_LENGTH);
+    format!(
+        r#"
+        let mantle = import "lib.ncl" in
+        let digest = "{digest}" in
+        let object = fun name => {{
+          logical_path = "/mantle/store/%{{name}}",
+          digest_blake3 = digest,
+          size_bytes = 1,
+        }} in
+        let tool = fun name => {{
+          version = "test-version",
+          executable = object name,
+          configuration_identity_blake3 = digest,
+        }} in
+        let checked_manifest = {{
+          name = "demo-component",
+          package_resolution = {{
+            default_registry = "wasi.dev",
+            registries = [{{
+              namespace = "wasi",
+              registry = "wasi.dev",
+              oci_registry = "ghcr.io",
+              namespace_prefix = "webassembly/",
+              credential_handle = "secret://registry/ghcr",
+            }}],
+            requirements = [{{
+              package = "wasi:cli",
+              requirement = "=0.2.0",
+              registry = "wasi.dev",
+              kind = 'wit,
+            }}],
+            local_overrides = [{{
+              package = "wasi:cli",
+              path = "/mantle/store/wasi-cli",
+            }}],
+          }},
+          wit = {{ package = "demo:app", world = "demo", source = object "wit" }},
+          implementation = {{
+            source = object "source",
+            package = "demo",
+            crate_name = "demo",
+          }},
+          cohort = {{
+            rust_toolchain = tool "rust",
+            rust_target = "wasm32-wasip2",
+            wit_bindgen = tool "wit-bindgen",
+            wasm_component_ld = tool "wasm-component-ld",
+            wasm_tools = tool "wasm-tools",
+            wac = tool "wac",
+            wasi_virt = tool "wasi-virt",
+            wizer = tool "wizer",
+            wasmtime = tool "wasmtime",
+          }},
+          composition = {{
+            package = "demo:composition",
+            source_wac = "package demo:composition; export app.run;",
+            nodes = [{{
+              id = "app",
+              package = "demo:app",
+              world = "demo",
+              artifact = object "app-component",
+            }}],
+            output_world = "demo",
+          }},
+          validation_profiles = {{
+            octet_artifact_profile_identity_blake3 = digest,
+            expected_runtime_profile_identity_blake3 = digest,
+          }},
+          outputs = [{{
+            name = "component",
+            path = "component.wasm",
+            class = 'validated-portable-component,
+          }}],
+        }} | mantle.WasmComponentBuildManifest in
+        mantle.exportWasmComponentBuild {{
+          manifest = checked_manifest,
+          source_identity_blake3 = digest,
+          dependency_identity_blake3 = digest,
+        }}
+        "#
+    )
+}
+
+#[test]
+fn wasm_component_manifest_exports_owned_tool_inputs() {
+    let expression = wasm_component_export_expression();
+    let export: serde_json::Value =
+        crunch_eval::evaluate_str_and_deserialize(&expression, &stdlib_import_path()).unwrap();
+    let generated = export["generated_inputs"].as_array().unwrap();
+    let serialized = serde_json::to_string(&export).unwrap();
+
+    assert_eq!(export["schema"], "mantle-wasm-component-export-v1");
+    assert_eq!(generated.len(), WASM_COMPONENT_GENERATED_INPUT_COUNT);
+    assert!(generated.iter().all(|item| {
+        item["owner"]["generator"] == "mantle-wasm-component-export"
+            && item["owner"]["schema"] == "mantle-wasm-component-generated-input-receipt-v1"
+            && item["owner"]["export_name"] == item["name"]
+    }));
+    assert!(serialized.contains("[namespace_registries]"));
+    assert!(serialized.contains("package demo:composition"));
+    assert!(!serialized.contains("secret://registry/ghcr"));
+}
+
+#[test]
+fn wasm_component_export_is_deterministic() {
+    let expression = wasm_component_export_expression();
+    let first: serde_json::Value =
+        crunch_eval::evaluate_str_and_deserialize(&expression, &stdlib_import_path()).unwrap();
+    let second: serde_json::Value =
+        crunch_eval::evaluate_str_and_deserialize(&expression, &stdlib_import_path()).unwrap();
+
+    assert_eq!(first, second);
+    assert_eq!(first["source_identity_blake3"], "a".repeat(WASM_COMPONENT_BLAKE3_HEX_LENGTH));
+}
+
+#[test]
+fn wasm_component_manifest_rejects_empty_world() {
+    let valid = wasm_component_export_expression();
+    let invalid = valid.replace("world = \"demo\", source", "world = \"\", source");
+    assert_ne!(valid, invalid, "fixture mutation must change the WIT world");
+
+    let result = crunch_eval::evaluate_str(&invalid, &stdlib_import_path());
+    assert!(result.is_err(), "empty WIT worlds must fail the typed contract");
+}
+
+#[test]
+fn wasm_component_export_rejects_digest_role_confusion() {
+    let valid = wasm_component_export_expression();
+    let invalid = valid.replace(
+        "source_identity_blake3 = digest",
+        "source_identity_blake3 = \"sha256:e7e85458e11caf76554b724ebf4f113259decf0f3b1ee2e2930de096f72114a7\"",
+    );
+    assert_ne!(valid, invalid, "fixture mutation must change the source identity role");
+
+    let result = crunch_eval::evaluate_str(&invalid, &stdlib_import_path());
+    assert!(result.is_err(), "OCI SHA-256 must not satisfy a Mantle BLAKE3 role");
+}
+
+#[test]
+fn wasm_component_manifest_rejects_unknown_output_class() {
+    let valid = wasm_component_export_expression();
+    let invalid = valid.replace("class = 'validated-portable-component", "class = 'runtime-authority");
+    assert_ne!(valid, invalid, "fixture mutation must change the output class");
+
+    let result = crunch_eval::evaluate_str(&invalid, &stdlib_import_path());
+    assert!(result.is_err(), "unknown output classes must fail the typed contract");
+}

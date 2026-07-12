@@ -22,6 +22,7 @@ const STDLIB_FILES: &[(&str, &str)] = &[
     ("project_outputs.ncl", include_str!("../../../lib/project_outputs.ncl")),
     ("seed.ncl", include_str!("../../../lib/seed.ncl")),
     ("remote-builders.ncl", include_str!("../../../lib/remote-builders.ncl")),
+    ("wasm_component.ncl", include_str!("../../../lib/wasm_component.ncl")),
 ];
 
 /// Write the embedded stdlib to a directory. Returns the path that

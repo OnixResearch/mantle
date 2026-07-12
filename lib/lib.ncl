@@ -7,6 +7,7 @@ let { FixedOutput } = import "fixed_output.ncl" in
 let helpers = import "helpers.ncl" in
 let fetch = import "fetch.ncl" in
 let offline_cargo = import "offline_cargo.ncl" in
+let wasm_component = import "wasm_component.ncl" in
 
 {
   # The main derivation contract. Apply with: record | crunch.Derivation
@@ -46,6 +47,12 @@ let offline_cargo = import "offline_cargo.ncl" in
   # Bounded Rust project package helper.
   offlineCargoPackage = offline_cargo.offlineCargoPackage,
   offlineCargoEvidence = offline_cargo.offlineCargoEvidence,
+
+  # Typed WebAssembly component build manifest and deterministic export.
+  WasmComponentBuildManifest = wasm_component.ComponentBuildManifest,
+  WasmComponentExportRequest = wasm_component.ComponentExportRequest,
+  exportWasmComponentBuild = wasm_component.exportComponentBuild,
+  WasmComponentOutputClass = wasm_component.OutputClass,
 
   # Output selection
   select
