@@ -94,3 +94,23 @@ Pueue task `713` ran repository validation and proposal, design, and tasks gates
 Pueue task `718` dry-ran and executed Cairn sync with no blockers. The execute receipt reported identical accepted-spec before/after hashes (`3ad907ef326c43be2888717905fccb5ad99fbb77bbd0e4ad4afb5661d0f643f6`), and the atomic-publication requirements were absent, so the reviewed delta was appended manually.
 
 The first standalone comparison task (`733`) failed before evidence because the ambient Cargo wrapper could not launch; it produced no validation result. Pueue task `737` reran in the documented development environment with wrappers cleared and proved the accepted requirement suffix is byte-for-byte equal to the reviewed delta: 4624 bytes, BLAKE3 `33720bb3ae7ea6486f1ebe4174a63150189892568155aaa0855c051c06605cdd`. Post-sync validation remained `valid: true` with 9 active changes and 36 specs.
+
+## Archive and post-archive validation
+
+Pueue task `740` dry-ran and executed archive with no blockers. Cairn created a `1970-01-01` archive directory, which was manually renamed to `cairn/archive/2026-07-12-publish-release-bundles-atomically` under the repo-local date workaround.
+
+Pueue task `742` proved the archived delta remains byte-for-byte equal to the accepted suffix (4624 bytes, BLAKE3 `33720bb3ae7ea6486f1ebe4174a63150189892568155aaa0855c051c06605cdd`) and captured final post-archive validation:
+
+```text
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 8,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 35,
+  "valid": true
+}
+```
