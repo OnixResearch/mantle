@@ -60,7 +60,7 @@ All Cargo commands below used isolated target directory `/tmp/mantle-main-releas
 - Pueue task 1606: root binary clippy completed at the repository warning baseline with **zero diagnostics in the touched release files**.
 - Pueue task 1610: `cargo check -p mantle --bin mantle`, targeted rustfmt check, and `git diff --check` — **PASS**.
 
-## Final pre-sync Cairn evidence
+## Initial pre-sync Cairn evidence
 
 Pueue task 1649 ran the authoritative Cairn CLI with `--root . --policy cairn-policy/generated/cairn-policy.json`.
 
@@ -154,5 +154,135 @@ Pueue task 1649 ran the authoritative Cairn CLI with `--root . --policy cairn-po
   "stage": "tasks",
   "valid": true,
   "verdict": "PASS"
+}
+```
+
+That first executed sync was a no-op because both package specs used standalone `## Requirements` headings. Before archive, they were corrected to Cairn `## ADDED Requirements` deltas and every gate was rerun.
+
+## Final pre-sync Cairn evidence after delta repair
+
+Pueue task 1665 reran the authoritative validation and all three gates.
+
+### Validation
+
+```text
+{
+  "change_issues": [],
+  "changes": 17,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 42,
+  "valid": true
+}
+```
+
+### Proposal gate
+
+```text
+{
+  "change": "defer-release-verification-success",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "83f1365a5b1734165d96643285047009badf84d31e295acc3e89801450f71128",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "de16bfc60b649c6bded3db8704e159e4a06c9c222b437308b5b5baf6c3b21c02",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+### Design gate
+
+```text
+{
+  "change": "defer-release-verification-success",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "a7976eb2a55c410febad017229f5a0eb2e0b90fb2125aed711496ddb07e4cb09",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "b09841c993abe96e5b1090e5eb950675f87c207abed2358537a53bd4ac2a7eaa",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+### Tasks gate
+
+```text
+{
+  "change": "defer-release-verification-success",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "dc90a4c3dc56790f1990b01fc48eef61553f832aaf1cf69a94978daf4ed9e793",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "b38902e720f398d5fd286a9218a8e8ae95ad29a11b4d561f7ca4d49e44749928",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+## Executed sync evidence
+
+After the delta-marker repair, the executed sync changed both accepted specs:
+
+```text
+change: defer-release-verification-success
+operator-diagnostics before: a07752e9ec1d11a440ca49a78dbd4cd4b3326d27ec3caf152c6bbd9d48cbe748
+operator-diagnostics after: c34a0d84a890c7ff3c657b852e8e86d347f2ef3460e53f446280f45ddcc857ec
+release-provenance before: b6061a6b961aea5a40f3ca0671cc6df19b81c596b86fb702063d889a854b9d5b
+release-provenance after: ed9e12750461ad32938a5f34e0f7ea891dbe4321d010620d0050596b429f8cd8
+plan_hash: 73888f6b37f9453b86d0007805211def0f034078aae675d2fbf9590051436314
+receipt_hash: f7d0238ac22bfe9b2df083bdef7c33e26e3bd4e4fb579127dca47e5cbbd2acc2
+mutated: true
+blocked: false
+```
+
+Pueue task 1677 validated the accepted specs after sync. Exact output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 17,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 42,
+  "valid": true
 }
 ```

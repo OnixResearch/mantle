@@ -1,10 +1,10 @@
-# Release Provenance Specification
+# Release Provenance Specification Delta
 
 ## Purpose
 
 Require release verification to decide complete selected policy before reporting command success.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Release verification produces one final policy decision
 

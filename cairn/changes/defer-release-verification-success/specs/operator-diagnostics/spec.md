@@ -1,10 +1,10 @@
-# Operator Diagnostics Specification
+# Operator Diagnostics Specification Delta
 
 ## Purpose
 
 Make human and JSON release verification output accurately represent the final policy verdict.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Release verification success is rendered only after acceptance
 
