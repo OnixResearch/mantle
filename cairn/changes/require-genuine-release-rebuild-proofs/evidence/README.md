@@ -39,3 +39,10 @@ Observed focused results:
 No full production rebuild, compiler/verifier soundness proof, self-hosting proof,
 full-bootstrap reproducibility proof, Guix parity proof, or StageX parity proof was
 run or claimed by this focused validation.
+
+## Accepted-spec synchronization
+
+Pueue task `356` dry-ran and executed Cairn sync without blockers, but Cairn left both accepted specs unchanged and the new requirement IDs absent. The reviewed deltas were therefore materialized manually. Pueue task `372` proved byte-for-byte suffix equality:
+
+- `cairn/specs/build-correctness/spec.md`: 3202 bytes, BLAKE3 `014ad3c047d21fda494ba8234a663ec55e7f7ee31018282568803f7414b91264`.
+- `cairn/specs/release-provenance/spec.md`: 1942 bytes, BLAKE3 `e773a1b112f0086b12d6e1ee9e30353172af4b39741bd15e673db926f5f15738`.
