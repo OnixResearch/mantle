@@ -13,6 +13,7 @@ were observed in the current run.
 | Self-build fixed point | `./scripts/prove-self-hosting.sh` | `target/self-hosting-proof/run-.../` | The checked-out Mantle can rebuild a byte-identical stage2 Mantle from the staged source under the selected proof mode. |
 | Non-Nix-host self-build | `./scripts/prove-self-hosting.sh --non-nix-host` | `target/self-hosting-proof/run-.../` | The fixed-point proof also ran with Nix commands scrubbed from the proof-runner `PATH`. |
 | Host-tool-free stage0 boundary | `./scripts/prove-self-hosting.sh --no-host-tools --stage0-inventory <file>` | `target/self-hosting-proof/run-.../protected-exec-audit.json` | The protected stage0 boundary used declared seed executables under protected exec supervision. |
+| Genuine release rebuild | `./scripts/prove-real-release-determinism.sh --toolchain-archive <archive>` | `target/release-evidence/<release-id>-proof/` plus summary/verify JSON | The named packaged artifact rebuilt twice from the exact v2 descriptor/authority identities under fresh isolated roots and matched. |
 | Cargo-free fixed point | `mantle self-build --cargo-free --fixed-point --strict-hermetic --out /tmp/mantle-cargo-free` | `/tmp/mantle-cargo-free/` | Mantle built the requested Mantle binary through the bounded native Rust topology and stage1/stage2 binary digests matched under strict proof admission. |
 | Nix-free demo bundle | `mantle --json nix-free-demo validate <summary.json>` | generated demo README plus machine summary | The recorded source-root Cargo-free fixed-point demo profile is claimable only when all validator diagnostics are absent. |
 | Foreign import receipt review | [`docs/foreign-derivation-import-trust-model.md`](foreign-derivation-import-trust-model.md) | import receipt, graph, index, and policy files | Admission evidence is claim-safe only when reported with receipt non-claims and without output-trust or build-success wording. |
@@ -146,6 +147,41 @@ proof class, and narrower claim instead of satisfying the stricter proof class.
 The self-build proof does not prove compiler correctness, does not prove full
 Cargo compatibility, does not prove release reproducibility, does not prove
 deploy success, and does not prove general Nix replacement completeness.
+
+## Genuine release rebuild proof
+
+Use the reviewed production recipe with an explicit content-bound toolchain
+closure:
+
+```bash
+./scripts/prove-real-release-determinism.sh \
+  --proof-bundle target/self-hosting-proof/run-... \
+  --toolchain-archive /path/to/content-bound-toolchain.tar
+```
+
+Before either proof run, Mantle hashes a canonical v2 descriptor over the exact
+source archive, recipe, executable, ordered arguments, tool/toolchain inputs,
+provider, policies, selected target identities, and fresh roots. Its pure
+authority planner rejects target bytes and same-content copies, hardlink object
+aliases, symlinks, the whole release bundle, prior proof outputs, the ordinary
+reproduction output, undeclared reads, reused roots, and read/write overlap. The
+sandbox receives only separately materialized approved regular files; the
+release bundle is not mounted.
+
+Inspect `deterministic-build-proof.json` for
+`mantle-deterministic-proof-receipt-v2`, both descriptor/authority-plan BLAKE3
+fields, `target_authority_excluded = true`, empty plan blockers, and each run's
+matching citations, approved read identities, and empty authority violations.
+Then inspect the release verify receipt and generated summary. Version 1 remains
+parseable for diagnosis but is always `missing-genuine-rebuild-evidence` and
+cannot satisfy release verification, the standalone checker, Nix witness
+admission, summaries, or bootstrap-parity evidence.
+
+For bootstrap parity, genuine v2 release evidence is partial evidence only. A
+missing, legacy, or incomplete genuine-rebuild fact leaves `crunch.self-build`
+blocked; even accepted release evidence does not complete Guix or StageX parity.
+Report the exact descriptor/plan digests and fresh roots. The claim does not
+establish compiler/verifier soundness or full-bootstrap reproducibility.
 
 ## Cargo-free fixed-point proof
 

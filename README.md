@@ -441,10 +441,15 @@ nix-witness` CLI path and is exposed as both
 `checks.<system>.release-nix-witness-quality`, keeping it opt-in rather than part
 of ordinary developer builds. Deterministic verification-gauntlet report schemas
 and CLI aggregation are documented in
-[`docs/verification-gauntlets.md`](docs/verification-gauntlets.md). `bootstrap parity-report` consumes the checked compact
-self-build descriptor in `bootstrap/evidence/real-self-build-proof-parity.json`
-and surfaces bounded `crunch.self-build` proof details without marking Guix or
-StageX parity complete. The determinism probe is an ignored integration rail,
+[`docs/verification-gauntlets.md`](docs/verification-gauntlets.md). `bootstrap
+parity-report` consumes the compact release-rebuild descriptor in
+`bootstrap/evidence/real-self-build-proof-parity.json` only when it carries
+`mantle-deterministic-proof-receipt-v2`, genuine rebuild authority, and descriptor
+and authority-plan BLAKE3 identities. Accepted evidence marks
+`crunch.self-build` partial without completing Guix or StageX parity; missing or
+legacy v1 evidence marks it blocked. The checked descriptor is currently legacy
+v1 and therefore blocked until refreshed from a genuine release rebuild. The
+determinism probe is an ignored integration rail,
 not part of every edit. `./scripts/prove-self-hosting.sh --check` is only
 self-hosting preflight. The full ignored proof run stays heavier:
 
@@ -1310,23 +1315,32 @@ recipe identity is `mantle-release-reproducibility-v1`; unknown
 ```bash
 mantle release reproduce target/release-evidence/<release-id> \
   --rebuild-output-dir /tmp/mantle-rebuild-out \
-  --rebuild-command ./scripts/rebuild-release-artifacts.sh
+  --rebuild-command /path/to/rebuild-recipe
 ```
 
 For a stronger deterministic-build proof attempt, ask `release reproduce` to run
-at least two additional clean proof runs. Each proof run is executed through a
-recorded proof sandbox envelope instead of a direct host process. The envelope
-uses `bwrap` when available, denies network by default, binds the release bundle
-and rebuild recipe read-only, and exposes only the per-run output tree plus a
-fresh store directory (`MANTLE_DETERMINISTIC_PROOF_STORE_DIR`) as writable proof
-state. The proof directory must be separate from and not nested with the main
-rebuild output directory. If the sandbox executor is unavailable or unsupported,
-deterministic proof mode fails closed before writing a proof receipt.
+at least two additional clean proof runs. Before launching either run, Mantle
+creates a content-bound rebuild descriptor and authority plan over the exact
+source archive, reviewed recipe, executable, tool/toolchain inputs, provider
+identity, policy identities, and fresh run roots. The published target, every
+content-identical copy or hardlink, every symlink, the complete release bundle,
+prior proof outputs, and the ordinary reproduction output are excluded from read
+authority. Undeclared inputs and reused or overlapping roots fail closed.
+
+Each accepted proof run executes through `bwrap` with network denied and only the
+approved regular-file capabilities mounted read-only. The complete release bundle
+is deliberately absent. Only the per-run output tree and fresh store directory
+(`MANTLE_DETERMINISTIC_PROOF_STORE_DIR`) are writable. The proof directory must
+be separate from the ordinary output and all run roots. Unsupported sandboxing,
+invalid input kinds, target aliases, or authority drift stop receipt emission.
 
 ```bash
 mantle release reproduce target/release-evidence/<release-id> \
   --rebuild-output-dir /tmp/mantle-rebuild-out \
-  --rebuild-command ./scripts/rebuild-release-artifacts.sh \
+  --rebuild-command /path/to/busybox \
+  --rebuild-arg sh \
+  --rebuild-arg ./scripts/rebuild-release-artifacts.sh \
+  --rebuild-arg /path/to/content-bound-toolchain.tar \
   --deterministic-proof-runs 2 \
   --deterministic-proof-dir /tmp/mantle-deterministic-proof
 ```
@@ -1339,8 +1353,8 @@ cargo -Zscript scripts/release-determinism-smoke.rs
 ```
 
 The smoke rail runs the checked-in CLI regression that creates release evidence,
-generates a `mantle-deterministic-proof-receipt-v1` receipt from two clean proof
-stores, and verifies it with `mantle release verify
+generates a `mantle-deterministic-proof-receipt-v2` receipt from two clean proof
+stores with genuine rebuild authority, and verifies it with `mantle release verify
 --require-deterministic-release`. It writes `receipt.json` and `test.log` under
 `target/release-determinism-smoke/latest/` by default. Validate the rail receipt
 schema and log BLAKE3 with:
@@ -1358,11 +1372,15 @@ stage2 mantle binary, produce two clean deterministic proof rebuilds under real
 `bwrap`, and verify the generated proof in one command:
 
 ```bash
-./scripts/prove-real-release-determinism.sh
+./scripts/prove-real-release-determinism.sh \
+  --toolchain-archive /path/to/content-bound-toolchain.tar
 ```
 
 Use `--proof-bundle target/self-hosting-proof/run-...` to reuse an existing full
-self-hosting proof bundle. The script writes the release bundle,
+self-hosting proof bundle. The required toolchain archive is an explicit
+content-bound input; it is extracted only inside the fresh proof store by the
+reviewed `scripts/rebuild-release-artifacts.sh` source-build recipe. The script
+writes the release bundle,
 `deterministic-build-proof.json`, sandbox evidence, verify receipt, and portable
 `<release-id>-determinism-summary.{json,md}` under `target/release-evidence/`.
 It validates the proof outputs with the checked-in real proof receipt checker
@@ -1384,12 +1402,13 @@ cargo -Zscript scripts/summarize-real-release-determinism.rs \
 
 That first runs the real proof receipt checker, then writes
 `target/release-evidence/<release-id>-determinism-summary.{json,md}` with the
-release id, provider kind, source/vendor BLAKE3, artifact digest set,
-proof/sandbox/verify BLAKE3 evidence, `self-rebuild-match`, `eligible`, and
-explicit non-claims. The successful claim is bounded to the packaged stage2
-artifact rebuilding twice from the recorded inputs under recorded
-`mantle-proof-sandbox-v1:*` profiles with matching BLAKE3 digest sets; it does
-not claim full bootstrap reproducibility.
+release id, provider kind, source/vendor BLAKE3, rebuild descriptor and authority
+plan BLAKE3 identities, artifact digest set, proof/sandbox/verify BLAKE3 evidence,
+`self-rebuild-match`, `eligible`, and explicit non-claims. The successful claim
+is bounded to the packaged stage2 artifact rebuilding twice from those exact
+content-bound inputs and fresh run roots under recorded
+`mantle-proof-sandbox-v1:*` profiles with matching BLAKE3 digest sets. It does
+not claim compiler/verifier soundness or full bootstrap reproducibility.
 
 The report records a closed proof-class ladder:
 
@@ -1412,24 +1431,31 @@ proof classes by default, because explicit impure mode permits ambient host inpu
 outside the declared proof boundary.
 
 A stronger deterministic-release claim is separate from `self-rebuild-match`.
-Mantle models it with `mantle-deterministic-proof-receipt-v1` receipts whose
-closed verdicts include `self-rebuild-match`, `mismatch`, `missing-evidence`,
-`reused-store`, `impure-mode`, `unsupported-workflow`, `unsupported-sandbox`,
-`provider-kind-mismatch`, and `malformed-receipt`. A deterministic receipt
-records the proof unit before execution: target artifact identity, selected
-provider kind, source/vendor BLAKE3 inputs, toolchain/stage roots, selected
-outputs, logical store prefix, and sandbox profile identity. It requires strict
-hermetic mode, at least two clean proof runs, distinct fresh store and output
-root identities, a recorded ambient host perturbation matrix (`HOME`, `PATH`,
-`USER`, `LOGNAME`, `TZ`, `LANG`, `LC_ALL`, temp dirs, cwd, umask, and
-environment noise), typed hermeticity audit events, and matching per-output
-BLAKE3 digest sets. Each run must also name a supported canonical sandbox
-profile identity (`mantle-proof-sandbox-v1:<blake3>`); receipts without that
-profile evidence, or with a direct-host/unsupported profile, fail closed instead
-of promoting the claim. The bounded claim is only: this artifact rebuilt twice
-from these recorded inputs under this sandbox and matched. It is still scoped
-release-artifact evidence; it does not claim full bootstrap reproducibility or
-global Nix-like determinism for all Mantle builds.
+Mantle promotes only `mantle-deterministic-proof-receipt-v2`. Version 1 remains
+parseable for diagnostics but is permanently non-promoting because it bound
+paths without proving genuine rebuild authority. Closed v2 verdicts add
+`missing-genuine-rebuild-evidence` and `target-authority-violation` to the
+existing mismatch, missing-evidence, reused-store, impure, unsupported, and
+malformed classes.
+
+A v2 receipt binds the proof unit and a canonical content descriptor: selected
+target identities; source closure; recipe; executable; ordered arguments; tool
+and provider identities; sandbox/effect/normalization policy digests; and fresh
+run-root identities. Its authority plan proves that target bytes, aliases,
+symlinks, bundle-wide inputs, prior outputs, and ordinary outputs were excluded.
+Every run cites the same descriptor/plan BLAKE3 and records exactly the approved
+read identities with no authority violations. Strict hermetic mode, two distinct
+clean stores/output roots, the ambient-host perturbation matrix, typed effects,
+normalization controls, supported `mantle-proof-sandbox-v1:<blake3>` profiles,
+and matching per-output BLAKE3 sets remain mandatory. Release verification,
+standalone receipt checking, summaries, and Nix-witness admission all use this
+same fail-closed genuine-rebuild rule.
+
+The bounded claim is only: this named artifact rebuilt twice from these exact
+content identities and policies under these isolated roots and matched. It does
+not claim compiler/verifier soundness, full-bootstrap reproducibility, or global
+Nix-like determinism for all Mantle builds. See
+[ADR 0023](adr/0023-require-content-bound-release-rebuild-authority.md).
 
 Provider fixed-point proof evidence is release-adjacent unless it also binds to
 one packaged release binary. When `mantle release create
