@@ -32,7 +32,23 @@ const RELEASE_CLAIM_SCOPE: &str = "packaged-integrity-evidence";
 const PROOF_SCHEMA: &str = "mantle-deterministic-proof-receipt-v1";
 const EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
 const PROOF_VERDICT: &str = "self-rebuild-match";
-const VERIFY_KIND: &str = "mantle-release-verify-v1";
+const VERIFY_KIND: &str = "mantle-release-verify-v2";
+const VERIFY_DECISION_SCHEMA: &str = "mantle-release-verification-decision-v1";
+const VERIFY_ACCEPTED_DISPOSITION: &str = "accepted";
+const VERIFY_REQUIRED_REQUIREMENT: &str = "required";
+const VERIFY_SATISFIED_DISPOSITION: &str = "satisfied";
+const VERIFY_DETERMINISTIC_CONTRIBUTOR: &str = "deterministic-release";
+const VERIFY_CONTRIBUTORS: &[&str] = &[
+    "manifest-integrity",
+    "reproducibility",
+    VERIFY_DETERMINISTIC_CONTRIBUTOR,
+    "provider-fixed-point-proof",
+    "stack-provenance",
+    "external-evidence-roles",
+    "stagex-no-quorum",
+    "function-address",
+    "cairn-handoff",
+];
 const SANDBOX_SCHEMA: &str = "mantle-deterministic-sandbox-isolation-evidence-v1";
 const SANDBOX_PROFILE_FAMILY: &str = "mantle-proof-sandbox-v1";
 const SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1:";
@@ -300,7 +316,7 @@ fn validate_verify_receipt(
     sandbox: &Value,
     verify: &Value,
 ) -> Result<(), String> {
-    require_str(verify, "kind", VERIFY_KIND)?;
+    validate_verify_decision(verify)?;
     require_str(verify, "release_id", field_str(manifest, "release_id")?)?;
     let deterministic = object_field(verify, "deterministic_release")?;
     require_bool(deterministic, "eligible", true)?;
@@ -328,6 +344,39 @@ fn validate_verify_receipt(
     require_str(object_field(verify_manifest, "proof_bundle")?, "digest_blake3", field_str(proof, "vendor_blake3")?)?;
     validate_provider_bound_verify_receipt(verify_manifest, verify)?;
     let _ = sandbox; // Keep signature explicit: all four output documents are required.
+    Ok(())
+}
+
+fn validate_verify_decision(verify: &Value) -> Result<(), String> {
+    require_str(verify, "kind", VERIFY_KIND)?;
+    require_str(verify, "decision_schema", VERIFY_DECISION_SCHEMA)?;
+    require_bool(verify, "valid", true)?;
+    require_str(verify, "disposition", VERIFY_ACCEPTED_DISPOSITION)?;
+    require_empty_array(verify, "diagnostics")?;
+    let checks = array_field(verify, "checks")?;
+    if checks.len() != VERIFY_CONTRIBUTORS.len() {
+        return Err(format!(
+            "verify checks count mismatch: expected {}, got {}",
+            VERIFY_CONTRIBUTORS.len(),
+            checks.len()
+        ));
+    }
+    for (index, (check, expected_contributor)) in checks.iter().zip(VERIFY_CONTRIBUTORS).enumerate() {
+        let actual_contributor = field_str(check, "contributor")?;
+        if actual_contributor != *expected_contributor {
+            return Err(format!(
+                "verify check {index} contributor mismatch: expected {expected_contributor}, got {actual_contributor}"
+            ));
+        }
+        require_non_empty_str(check, "requirement")?;
+        require_non_empty_str(check, "disposition")?;
+        require_bool(check, "blocking", false)?;
+        let _ = array_field(check, "diagnostics")?;
+        if *expected_contributor == VERIFY_DETERMINISTIC_CONTRIBUTOR {
+            require_str(check, "requirement", VERIFY_REQUIRED_REQUIREMENT)?;
+            require_str(check, "disposition", VERIFY_SATISFIED_DISPOSITION)?;
+        }
+    }
     Ok(())
 }
 
@@ -630,6 +679,14 @@ fn run_self_test() -> Result<(), String> {
     fixture.write_proof(fixture.proof.clone())?;
     fixture.write_verify_for_current_proof()?;
 
+    fixture.write_verify(mutate(&fixture.verify()?, "valid", json!(false)))?;
+    assert_rejected("non-final verify receipt", &fixture.paths)?;
+
+    let mut reordered_checks = fixture.verify()?;
+    reordered_checks["checks"].as_array_mut().unwrap().swap(0, 1);
+    fixture.write_verify(reordered_checks)?;
+    assert_rejected("reordered final-decision checks", &fixture.paths)?;
+
     fixture.write_verify(mutate(
         &fixture.verify()?,
         "deterministic_release",
@@ -759,6 +816,11 @@ impl Fixture {
         let sandbox_digest = blake3_file(&self.paths.sandbox)?;
         Ok(json!({
             "kind": VERIFY_KIND,
+            "decision_schema": VERIFY_DECISION_SCHEMA,
+            "valid": true,
+            "disposition": VERIFY_ACCEPTED_DISPOSITION,
+            "checks": accepted_verify_checks(),
+            "diagnostics": [],
             "release_id": "demo-release",
             "manifest": self.manifest,
             "reproducibility_status": "absent",
@@ -773,6 +835,20 @@ impl Fixture {
             }
         }))
     }
+}
+
+fn accepted_verify_checks() -> Value {
+    json!([
+        {"contributor": "manifest-integrity", "requirement": "mandatory", "disposition": "satisfied", "blocking": false, "diagnostics": []},
+        {"contributor": "reproducibility", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
+        {"contributor": VERIFY_DETERMINISTIC_CONTRIBUTOR, "requirement": VERIFY_REQUIRED_REQUIREMENT, "disposition": VERIFY_SATISFIED_DISPOSITION, "blocking": false, "diagnostics": []},
+        {"contributor": "provider-fixed-point-proof", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
+        {"contributor": "stack-provenance", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
+        {"contributor": "external-evidence-roles", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
+        {"contributor": "stagex-no-quorum", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
+        {"contributor": "function-address", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
+        {"contributor": "cairn-handoff", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []}
+    ])
 }
 
 fn write_json(path: &Path, value: &Value) -> Result<(), String> {

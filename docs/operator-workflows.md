@@ -570,7 +570,21 @@ unless a separate operator supplies the counted witness sidecar.
 `mantle release verify` proves bundle-local integrity and proof-context by
 itself. It checks that required bundled artifacts exist, that the manifest stays
 canonical, that recorded digests still match, and that the nested proof bundle
-is a full proof artifact. Reproducibility is reported separately as `absent`,
+is a full proof artifact. The human success marker is terminal: it is written
+only after the complete selected policy decision is accepted. Policy rejection
+uses `release evidence rejected`, emits ordered check diagnostics, and exits
+nonzero without first printing the success marker.
+
+Machine output is versioned as `mantle-release-verify-v2`. Both accepted and
+policy-rejected decisions contain top-level `valid`, `disposition`, ordered
+`checks`, and ordered `diagnostics`. A policy-rejected decision is still one
+parseable JSON value on stdout and still exits nonzero; operational failures
+that prevent a decision remain ordinary command errors. JSON consumers migrating
+from `mantle-release-verify-v1` MUST require both a zero process status and
+`valid: true`, branch on the `kind` version, and MUST NOT infer acceptance from
+the presence of a parsed manifest or verification payload.
+
+Reproducibility is reported separately as `absent`,
 `matched`, or `mismatched`. The bit-for-bit reproducible release label requires
 a verified canonical reproducibility report whose artifact set matches the
 published release artifact set; ordinary bundle-local integrity never implies

@@ -1,9 +1,16 @@
+use std::fmt::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_release_core::DeterministicBuildProofReceipt;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::KaniSolverIdentity;
+use crunch_release_core::ReleaseVerificationDecision;
+use crunch_release_core::ReleaseVerificationFact;
+use crunch_release_core::ReleaseVerificationFacts;
+use crunch_release_core::ReleaseVerificationRequirement;
+use crunch_release_core::ReleaseVerificationRequirements;
+use crunch_release_core::aggregate_release_verification;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_release_claim_eligible;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
@@ -52,6 +59,8 @@ use crate::witness_rebuild::write_audit_meta;
 
 const PROVIDER_FIXED_POINT_SOURCE_BUNDLED: &str = "bundled";
 const PROVIDER_FIXED_POINT_SOURCE_EXTERNAL: &str = "external";
+const RELEASE_VERIFY_JSON_KIND: &str = "mantle-release-verify-v2";
+const RELEASE_VERIFICATION_REJECTED_EXIT_CODE: u8 = 1;
 const GLOBAL_REPRODUCIBILITY_STATUS_NOT_EVALUATED: &str = "not-evaluated";
 const GLOBAL_REPRODUCIBILITY_RELEASE_VERIFY_REASON: &str = "release verification is scoped to this bundle; run release global-reproducibility with a universe and policy for a global claim";
 
@@ -496,6 +505,37 @@ fn validate_external_evidence_metadata_count(
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReleaseVerifyRequest {
+    current_dir: PathBuf,
+    bundle_dir: PathBuf,
+    require_reproducible: bool,
+    require_stagex_no_quorum: bool,
+    deterministic_proof: Option<PathBuf>,
+    deterministic_sandbox_isolation_evidence: Option<PathBuf>,
+    require_deterministic_release: bool,
+    provider_fixed_point_proof: Option<PathBuf>,
+    require_external_evidence_role: Vec<String>,
+    require_provider_fixed_point_proof: bool,
+    release_profile: String,
+    stack_provenance_mode: String,
+}
+
+#[derive(Debug)]
+struct ReleaseVerifyEvaluation {
+    resolved_bundle_dir: PathBuf,
+    manifest: crate::release_evidence::ReleaseEvidenceManifest,
+    reproducibility: Option<VerifiedReproducibilityReport>,
+    reproducibility_status: ReproducibilityStatus,
+    deterministic_result: DeterministicReleaseVerifyResult,
+    provider_fixed_point_result: crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+    release_profile: String,
+    stack_provenance_result: crunch_release_core::StackProvenanceReleaseVerification,
+    stagex_result: Option<crunch_bootstrap_core::StagexNoQuorumResult>,
+    decision: ReleaseVerificationDecision,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn cmd_release_verify(
     current_dir: &Path,
     json: bool,
@@ -511,127 +551,269 @@ fn cmd_release_verify(
     release_profile: String,
     stack_provenance_mode: String,
 ) -> Result<(), RunError> {
-    let resolved_bundle_dir = resolve_input_path(current_dir, bundle_dir);
-    let deterministic_request = DeterministicVerifyRequest::new(
-        current_dir,
+    let request = ReleaseVerifyRequest {
+        current_dir: current_dir.to_path_buf(),
+        bundle_dir,
+        require_reproducible,
+        require_stagex_no_quorum,
         deterministic_proof,
         deterministic_sandbox_isolation_evidence,
         require_deterministic_release,
+        provider_fixed_point_proof,
+        require_external_evidence_role,
+        require_provider_fixed_point_proof,
+        release_profile,
+        stack_provenance_mode,
+    };
+    let evaluation = evaluate_release_verification(request)?;
+    emit_release_verification(&evaluation, json)
+}
+
+// r[impl mantle.release_provenance.verification_decision.complete]
+fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<ReleaseVerifyEvaluation, RunError> {
+    let resolved_bundle_dir = resolve_input_path(&request.current_dir, request.bundle_dir.clone());
+    let deterministic_request = DeterministicVerifyRequest::new(
+        &request.current_dir,
+        request.deterministic_proof.clone(),
+        request.deterministic_sandbox_isolation_evidence.clone(),
+        request.require_deterministic_release,
     );
     let manifest = verify_release_evidence_bundle(&resolved_bundle_dir)?;
     let provider_fixed_point_result = evaluate_provider_fixed_point_proof(
-        current_dir,
+        &request.current_dir,
         &resolved_bundle_dir,
         &manifest,
-        provider_fixed_point_proof,
-        require_provider_fixed_point_proof,
+        request.provider_fixed_point_proof.clone(),
+        request.require_provider_fixed_point_proof,
     );
     let reproducibility = load_bundle_reproducibility_report(&resolved_bundle_dir, &manifest)?;
     let reproducibility_status = reproducibility_status(reproducibility.as_ref());
     let deterministic_result =
         evaluate_deterministic_release_claim(&manifest, &resolved_bundle_dir, deterministic_request)?;
-    let effective_stack_provenance_mode =
-        crunch_release_core::stack_provenance_mode_for_release_profile(&release_profile, &stack_provenance_mode)
-            .map_err(|err| RunError::Internal(err.to_string()))?;
-    // r[impl mantle.release_provenance.stack_profile.required]
-    // r[impl mantle.release_provenance.valence_required_policy]
-    // r[impl mantle.release_provenance.valence_required_policy.optional_absent]
-    // r[impl mantle.release_provenance.valence_required_policy.required_valid]
-    // r[impl mantle.release_provenance.valence_required_policy.required_missing]
+    let effective_stack_mode = crunch_release_core::stack_provenance_mode_for_release_profile(
+        &request.release_profile,
+        &request.stack_provenance_mode,
+    )
+    .map_err(|err| RunError::Internal(err.to_string()))?;
     let stack_provenance_result =
-        crunch_release_core::evaluate_stack_provenance_release_evidence(&manifest, effective_stack_provenance_mode);
+        crunch_release_core::evaluate_stack_provenance_release_evidence(&manifest, effective_stack_mode);
+    let stagex_result = selected_stagex_result(
+        request.require_stagex_no_quorum,
+        &manifest,
+        &resolved_bundle_dir,
+        reproducibility.as_ref(),
+    );
+    let decision = aggregate_release_verify_decision(ReleaseVerifyDecisionInput {
+        request: &request,
+        manifest: &manifest,
+        reproducibility_status,
+        deterministic_result: &deterministic_result,
+        provider_fixed_point_result: &provider_fixed_point_result,
+        effective_stack_mode,
+        stack_provenance_result: &stack_provenance_result,
+        stagex_result: stagex_result.as_ref(),
+    });
 
-    let stagex_result = if require_stagex_no_quorum {
-        Some(evaluate_stagex_profile(&manifest, &resolved_bundle_dir, reproducibility.as_ref()))
-    } else {
-        None
-    };
-
-    if json {
-        print_release_verify_json(
-            &manifest,
-            reproducibility.as_ref(),
-            reproducibility_status,
-            stagex_result.as_ref(),
-            &deterministic_result,
-            &provider_fixed_point_result,
-            &release_profile,
-            &stack_provenance_result,
-        )?;
-    } else {
-        println!("release evidence verified: {}", resolved_bundle_dir.display());
-        println!("release id: {}", manifest.release_id);
-        println!("binaries: {}", manifest.binaries.len());
-        println!("source digest: {}", manifest.source_archive.digest_blake3);
-        println!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3);
-        println!("proof mode: {}", manifest.proof_linkage.proof_mode);
-        println!("release profile: {release_profile}");
-        if !manifest.external_evidence.is_empty() {
-            println!("external evidence: {}", manifest.external_evidence.len());
-        }
-        print_reproducibility_summary(reproducibility.as_ref());
-        print_deterministic_release_summary(&deterministic_result);
-        print_provider_fixed_point_summary(&provider_fixed_point_result);
-        print_stack_provenance_summary(&stack_provenance_result);
-        print_global_reproducibility_not_evaluated_summary();
-        if let Some(ref result) = stagex_result {
-            println!("stagex no-quorum profile: {}", result.status);
-            if !result.failure_reasons.is_empty() {
-                for reason in &result.failure_reasons {
-                    println!("  failure: {reason}");
-                }
-            }
-        }
-    }
-    if require_reproducible && reproducibility_status != ReproducibilityStatus::Matched {
-        return Err(RunError::Internal(format!(
-            "reproducibility evidence required but status is {}",
-            reproducibility_status.as_str()
-        )));
-    }
-    if require_deterministic_release && !deterministic_result.eligible {
-        return Err(RunError::Internal(format!(
-            "deterministic release evidence required but status is {}: {}",
-            deterministic_result.status,
-            deterministic_result.blockers.join("; ")
-        )));
-    }
-    if require_provider_fixed_point_proof && !provider_fixed_point_result.valid {
-        return Err(RunError::Internal(format!(
-            "provider fixed-point proof required but status is {}: {}",
-            provider_fixed_point_result.status,
-            provider_fixed_point_result.blockers.join("; ")
-        )));
-    }
-    if !stack_provenance_result.valid {
-        return Err(RunError::Internal(format!(
-            "stack provenance evidence status is {}: {}",
-            stack_provenance_result.disposition,
-            stack_provenance_result.diagnostics.join("; ")
-        )));
-    }
-    require_external_evidence_roles(&manifest, &require_external_evidence_role)?;
-    if let Some(ref result) = stagex_result {
-        if !result.status.is_satisfied() {
-            return Err(RunError::Internal(format!(
-                "StageX no-quorum profile unsatisfied: {}",
-                result.failure_reasons.join("; ")
-            )));
-        }
-    }
-    Ok(())
+    Ok(ReleaseVerifyEvaluation {
+        resolved_bundle_dir,
+        manifest,
+        reproducibility,
+        reproducibility_status,
+        deterministic_result,
+        provider_fixed_point_result,
+        release_profile: request.release_profile,
+        stack_provenance_result,
+        stagex_result,
+        decision,
+    })
 }
 
-fn require_external_evidence_roles(
+fn selected_stagex_result(
+    required: bool,
+    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
+    bundle_dir: &Path,
+    reproducibility: Option<&VerifiedReproducibilityReport>,
+) -> Option<crunch_bootstrap_core::StagexNoQuorumResult> {
+    required.then(|| evaluate_stagex_profile(manifest, bundle_dir, reproducibility))
+}
+
+struct ReleaseVerifyDecisionInput<'a> {
+    request: &'a ReleaseVerifyRequest,
+    manifest: &'a crate::release_evidence::ReleaseEvidenceManifest,
+    reproducibility_status: ReproducibilityStatus,
+    deterministic_result: &'a DeterministicReleaseVerifyResult,
+    provider_fixed_point_result: &'a crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+    effective_stack_mode: &'a str,
+    stack_provenance_result: &'a crunch_release_core::StackProvenanceReleaseVerification,
+    stagex_result: Option<&'a crunch_bootstrap_core::StagexNoQuorumResult>,
+}
+
+fn aggregate_release_verify_decision(input: ReleaseVerifyDecisionInput<'_>) -> ReleaseVerificationDecision {
+    let facts = ReleaseVerificationFacts {
+        manifest_integrity: ReleaseVerificationFact::satisfied(),
+        reproducibility: reproducibility_fact(input.reproducibility_status, input.request.require_reproducible),
+        deterministic_release: deterministic_release_fact(
+            input.deterministic_result,
+            input.request.require_deterministic_release,
+        ),
+        provider_fixed_point_proof: provider_fixed_point_fact(
+            input.provider_fixed_point_result,
+            input.request.require_provider_fixed_point_proof,
+        ),
+        stack_provenance: stack_provenance_fact(input.stack_provenance_result),
+        external_evidence_roles: external_evidence_roles_fact(
+            input.manifest,
+            &input.request.require_external_evidence_role,
+        ),
+        stagex_no_quorum: stagex_fact(input.stagex_result),
+        function_address: ReleaseVerificationFact::not_evaluated(),
+        cairn_handoff: ReleaseVerificationFact::not_evaluated(),
+    };
+    let requirements = release_verification_requirements(&input);
+    aggregate_release_verification(facts, requirements)
+}
+
+fn release_verification_requirements(input: &ReleaseVerifyDecisionInput<'_>) -> ReleaseVerificationRequirements {
+    ReleaseVerificationRequirements {
+        manifest_integrity: ReleaseVerificationRequirement::Mandatory,
+        reproducibility: selected_or_advisory(input.request.require_reproducible),
+        deterministic_release: selected_or_advisory(input.request.require_deterministic_release),
+        provider_fixed_point_proof: selected_or_advisory(input.request.require_provider_fixed_point_proof),
+        stack_provenance: selected_or_advisory(
+            input.effective_stack_mode == crunch_release_core::STACK_PROVENANCE_MODE_REQUIRED
+                || !input.stack_provenance_result.valid,
+        ),
+        external_evidence_roles: selected_or_not_selected(!input.request.require_external_evidence_role.is_empty()),
+        stagex_no_quorum: selected_or_not_selected(input.request.require_stagex_no_quorum),
+        function_address: ReleaseVerificationRequirement::NotSelected,
+        cairn_handoff: ReleaseVerificationRequirement::NotSelected,
+    }
+}
+
+fn selected_or_advisory(selected: bool) -> ReleaseVerificationRequirement {
+    if selected {
+        ReleaseVerificationRequirement::Required
+    } else {
+        ReleaseVerificationRequirement::Advisory
+    }
+}
+
+fn selected_or_not_selected(selected: bool) -> ReleaseVerificationRequirement {
+    if selected {
+        ReleaseVerificationRequirement::Required
+    } else {
+        ReleaseVerificationRequirement::NotSelected
+    }
+}
+
+fn reproducibility_fact(status: ReproducibilityStatus, required: bool) -> ReleaseVerificationFact {
+    match status {
+        ReproducibilityStatus::Matched => ReleaseVerificationFact::satisfied(),
+        ReproducibilityStatus::Absent => ReleaseVerificationFact::absent(
+            required
+                .then(|| format!("reproducibility evidence required but status is {}", status.as_str()))
+                .into_iter()
+                .collect(),
+        ),
+        ReproducibilityStatus::Mismatched => ReleaseVerificationFact::rejected(required_policy_diagnostics(
+            required.then(|| format!("reproducibility evidence required but status is {}", status.as_str())),
+            &[],
+        )),
+    }
+}
+
+fn deterministic_release_fact(result: &DeterministicReleaseVerifyResult, required: bool) -> ReleaseVerificationFact {
+    if result.eligible {
+        return ReleaseVerificationFact::satisfied();
+    }
+    let diagnostics = required_policy_diagnostics(
+        required.then(|| format!("deterministic release evidence required but status is {}", result.status)),
+        &result.blockers,
+    );
+    if result.status == "absent" {
+        return ReleaseVerificationFact::absent(diagnostics);
+    }
+    ReleaseVerificationFact::rejected(diagnostics)
+}
+
+fn provider_fixed_point_fact(
+    result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+    required: bool,
+) -> ReleaseVerificationFact {
+    if result.valid {
+        return ReleaseVerificationFact::satisfied();
+    }
+    let diagnostics = required_policy_diagnostics(
+        required.then(|| format!("provider fixed-point proof required but status is {}", result.status)),
+        &result.blockers,
+    );
+    if result.status == "absent" {
+        return ReleaseVerificationFact::absent(diagnostics);
+    }
+    ReleaseVerificationFact::rejected(diagnostics)
+}
+
+fn stack_provenance_fact(result: &crunch_release_core::StackProvenanceReleaseVerification) -> ReleaseVerificationFact {
+    if result.valid && result.disposition == crunch_release_core::STACK_PROVENANCE_DISPOSITION_PRESENT {
+        return ReleaseVerificationFact::satisfied();
+    }
+    if result.valid && result.disposition == crunch_release_core::STACK_PROVENANCE_DISPOSITION_ABSENT {
+        return ReleaseVerificationFact::absent(Vec::new());
+    }
+    ReleaseVerificationFact::rejected(required_policy_diagnostics(
+        Some(format!("stack provenance evidence status is {}", result.disposition)),
+        &result.diagnostics,
+    ))
+}
+
+fn external_evidence_roles_fact(
     manifest: &crate::release_evidence::ReleaseEvidenceManifest,
     required_roles: &[String],
-) -> Result<(), RunError> {
-    for required_role in required_roles {
-        if !manifest.external_evidence.iter().any(|evidence| evidence.role == *required_role) {
-            return Err(RunError::Internal(format!("external evidence role required but missing: {required_role}")));
-        }
+) -> ReleaseVerificationFact {
+    if required_roles.is_empty() {
+        return ReleaseVerificationFact::not_evaluated();
     }
-    Ok(())
+    let role_limit = crunch_release_core::MAX_RELEASE_VERIFICATION_REQUIRED_EXTERNAL_ROLES as usize;
+    if required_roles.len() > role_limit {
+        return ReleaseVerificationFact::rejected(vec![format!(
+            "required external evidence role count exceeds limit {}: observed {}",
+            crunch_release_core::MAX_RELEASE_VERIFICATION_REQUIRED_EXTERNAL_ROLES,
+            required_roles.len()
+        )]);
+    }
+
+    let missing = required_roles
+        .iter()
+        .filter(|required_role| {
+            !manifest.external_evidence.iter().any(|evidence| evidence.role.as_str() == required_role.as_str())
+        })
+        .map(|required_role| format!("external evidence role required but missing: {required_role}"))
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        ReleaseVerificationFact::satisfied()
+    } else {
+        ReleaseVerificationFact::rejected(missing)
+    }
+}
+
+fn stagex_fact(result: Option<&crunch_bootstrap_core::StagexNoQuorumResult>) -> ReleaseVerificationFact {
+    let Some(result) = result else {
+        return ReleaseVerificationFact::not_evaluated();
+    };
+    if result.status.is_satisfied() {
+        return ReleaseVerificationFact::satisfied();
+    }
+    ReleaseVerificationFact::rejected(required_policy_diagnostics(
+        Some("StageX no-quorum profile unsatisfied".to_string()),
+        &result.failure_reasons,
+    ))
+}
+
+fn required_policy_diagnostics(headline: Option<String>, details: &[String]) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(details.len().saturating_add(usize::from(headline.is_some())));
+    diagnostics.extend(headline);
+    diagnostics.extend(details.iter().cloned());
+    diagnostics
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -920,22 +1102,36 @@ fn load_canonical_deterministic_isolation_evidence(
     })
 }
 
-fn print_release_verify_json(
-    manifest: &crate::release_evidence::ReleaseEvidenceManifest,
-    reproducibility: Option<&VerifiedReproducibilityReport>,
-    status: ReproducibilityStatus,
-    stagex_result: Option<&crunch_bootstrap_core::StagexNoQuorumResult>,
-    deterministic_result: &DeterministicReleaseVerifyResult,
-    provider_fixed_point_result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification,
-    release_profile: &str,
-    stack_provenance_result: &crunch_release_core::StackProvenanceReleaseVerification,
-) -> Result<(), RunError> {
-    let report_json = reproducibility.map(|report| {
+// r[impl mantle.operator_diagnostics.release_verification.render_boundary]
+// r[impl mantle.operator_diagnostics.release_verification.json_contract]
+fn emit_release_verification(evaluation: &ReleaseVerifyEvaluation, json: bool) -> Result<(), RunError> {
+    let valid = evaluation.decision.valid;
+    if json {
+        let rendered = render_release_verify_json(evaluation)?;
+        println!("{rendered}");
+    } else {
+        let rendered = render_release_verify_human(evaluation);
+        if valid {
+            print!("{rendered}");
+        } else {
+            eprint!("{rendered}");
+        }
+    }
+    if valid {
+        Ok(())
+    } else {
+        Err(RunError::Reported(RELEASE_VERIFICATION_REJECTED_EXIT_CODE))
+    }
+}
+
+fn render_release_verify_json(evaluation: &ReleaseVerifyEvaluation) -> Result<String, RunError> {
+    let report_json = evaluation.reproducibility.as_ref().map(|report| {
         serde_json::json!({
             "path": report.path.display().to_string(),
             "digest_blake3": report.digest_blake3,
         })
     });
+    let deterministic_result = &evaluation.deterministic_result;
     let deterministic_json = serde_json::json!({
         "status": deterministic_result.status,
         "eligible": deterministic_result.eligible,
@@ -949,27 +1145,198 @@ fn print_release_verify_json(
         "sandbox_isolation_evidence_digest_blake3": deterministic_result.isolation_evidence_digest_blake3,
         "blockers": deterministic_result.blockers,
     });
+    let decision = &evaluation.decision;
     let mut rendered = serde_json::json!({
-        "kind": "mantle-release-verify-v1",
-        "release_id": manifest.release_id,
-        "manifest": manifest,
-        "reproducibility_status": status.as_str(),
+        "kind": RELEASE_VERIFY_JSON_KIND,
+        "decision_schema": decision.schema,
+        "valid": decision.valid,
+        "disposition": decision.disposition,
+        "checks": decision.checks,
+        "diagnostics": decision.diagnostics,
+        "release_id": evaluation.manifest.release_id,
+        "manifest": evaluation.manifest,
+        "reproducibility_status": evaluation.reproducibility_status.as_str(),
         "reproducibility_report": report_json,
         "deterministic_release": deterministic_json,
-        "provider_fixed_point_proof": provider_fixed_point_result,
-        "release_profile": release_profile,
-        "stack_provenance": stack_provenance_result,
+        "provider_fixed_point_proof": evaluation.provider_fixed_point_result,
+        "release_profile": evaluation.release_profile,
+        "stack_provenance": evaluation.stack_provenance_result,
         "global_reproducibility": global_reproducibility_not_evaluated_json(),
     });
-    if let Some(result) = stagex_result {
+    if let Some(result) = &evaluation.stagex_result {
         rendered["stagex_no_quorum"] = serde_json::to_value(result)
             .map_err(|err| RunError::Internal(format!("serializing stagex profile: {err}")))?;
     }
-    println!(
-        "{}",
-        serde_json::to_string(&rendered)
-            .map_err(|err| RunError::Internal(format!("serializing verified release evidence output: {err}")))?
-    );
+    serde_json::to_string(&rendered)
+        .map_err(|err| RunError::Internal(format!("serializing release verification decision: {err}")))
+}
+
+// r[impl mantle.operator_diagnostics.release_verification.terminal_verdict]
+fn render_release_verify_human(evaluation: &ReleaseVerifyEvaluation) -> String {
+    let mut output = String::new();
+    append_release_verify_human(&mut output, evaluation)
+        .expect("writing release verification output to String cannot fail");
+    output
+}
+
+fn append_release_verify_human(output: &mut String, evaluation: &ReleaseVerifyEvaluation) -> std::fmt::Result {
+    writeln!(output, "release verification verdict: {}", evaluation.decision.disposition.as_str())?;
+    writeln!(output, "release id: {}", evaluation.manifest.release_id)?;
+    writeln!(output, "binaries: {}", evaluation.manifest.binaries.len())?;
+    writeln!(output, "source digest: {}", evaluation.manifest.source_archive.digest_blake3)?;
+    writeln!(output, "stage2 digest: {}", evaluation.manifest.proof_linkage.stage2_binary_digest_blake3)?;
+    writeln!(output, "proof mode: {}", evaluation.manifest.proof_linkage.proof_mode)?;
+    writeln!(output, "release profile: {}", evaluation.release_profile)?;
+    if !evaluation.manifest.external_evidence.is_empty() {
+        writeln!(output, "external evidence: {}", evaluation.manifest.external_evidence.len())?;
+    }
+    append_reproducibility_summary(output, evaluation.reproducibility.as_ref())?;
+    append_deterministic_release_summary(output, &evaluation.deterministic_result)?;
+    append_provider_fixed_point_summary(output, &evaluation.provider_fixed_point_result)?;
+    append_stack_provenance_summary(output, &evaluation.stack_provenance_result)?;
+    append_global_reproducibility_summary(output)?;
+    append_stagex_summary(output, evaluation.stagex_result.as_ref())?;
+    append_release_verification_checks(output, &evaluation.decision)?;
+    if evaluation.decision.valid {
+        writeln!(output, "release evidence verified: {}", evaluation.resolved_bundle_dir.display())?;
+    } else {
+        writeln!(output, "release evidence rejected: {}", evaluation.resolved_bundle_dir.display())?;
+    }
+    Ok(())
+}
+
+fn append_release_verification_checks(output: &mut String, decision: &ReleaseVerificationDecision) -> std::fmt::Result {
+    for check in &decision.checks {
+        writeln!(
+            output,
+            "verification check: contributor={} requirement={} disposition={} blocking={}",
+            check.contributor.as_str(),
+            check.requirement.as_str(),
+            check.disposition.as_str(),
+            check.blocking
+        )?;
+    }
+    for diagnostic in &decision.diagnostics {
+        writeln!(output, "verification diagnostic: {diagnostic}")?;
+    }
+    Ok(())
+}
+
+fn append_provider_fixed_point_summary(
+    output: &mut String,
+    result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification,
+) -> std::fmt::Result {
+    writeln!(output, "provider fixed-point proof: {}", result.status)?;
+    writeln!(output, "provider fixed-point proof source: {}", result.proof_source)?;
+    if let Some(path) = &result.proof_dir {
+        writeln!(output, "provider fixed-point proof bundle: {}", path.display())?;
+    }
+    if let Some(role) = &result.bounded_evidence_role {
+        writeln!(output, "provider fixed-point bounded evidence role: {role}")?;
+    }
+    if let Some(digest) = &result.proof_artifact_digest_blake3 {
+        writeln!(output, "provider fixed-point proof artifact digest: {digest}")?;
+    }
+    if let Some(digest) = &result.stage_binary_digest_blake3 {
+        writeln!(output, "provider fixed-point stage binary digest: {digest}")?;
+    }
+    if let Some(path) = &result.release_artifact_relative_path {
+        writeln!(output, "provider fixed-point release artifact: {path}")?;
+    }
+    if let Some(digest) = &result.release_artifact_digest_blake3 {
+        writeln!(output, "provider fixed-point release artifact digest: {digest}")?;
+    }
+    if let Some(digest) = &result.closure_policy_digest_blake3 {
+        writeln!(output, "provider fixed-point closure policy digest: {digest}")?;
+    }
+    for non_claim in &result.non_claims {
+        writeln!(output, "provider fixed-point non-claim: {non_claim}")?;
+    }
+    for blocker in &result.blockers {
+        writeln!(output, "  provider fixed-point blocker: {blocker}")?;
+    }
+    Ok(())
+}
+
+// r[impl mantle.release_provenance.opaque_boundary.visible]
+fn append_stack_provenance_summary(
+    output: &mut String,
+    result: &crunch_release_core::StackProvenanceReleaseVerification,
+) -> std::fmt::Result {
+    writeln!(output, "stack provenance: {}", result.disposition)?;
+    writeln!(output, "stack provenance mode: {}", result.mode)?;
+    if let Some(digest) = &result.sidecar_digest_blake3 {
+        writeln!(output, "stack provenance sidecar digest: {digest}")?;
+    }
+    if let Some(digest) = &result.valence_receipt_digest_blake3 {
+        writeln!(output, "stack provenance Valence receipt digest: {digest}")?;
+    }
+    if let Some(path) = &result.release_binary_relative_path {
+        writeln!(output, "stack provenance release binary: {path}")?;
+    }
+    writeln!(output, "stack provenance boundary: {}", result.boundary)?;
+    for diagnostic in &result.diagnostics {
+        writeln!(output, "  stack provenance diagnostic: {diagnostic}")?;
+    }
+    Ok(())
+}
+
+fn append_global_reproducibility_summary(output: &mut String) -> std::fmt::Result {
+    writeln!(output, "global reproducibility: {GLOBAL_REPRODUCIBILITY_STATUS_NOT_EVALUATED}")?;
+    writeln!(output, "global reproducibility reason: {GLOBAL_REPRODUCIBILITY_RELEASE_VERIFY_REASON}")
+}
+
+fn append_reproducibility_summary(
+    output: &mut String,
+    reproducibility: Option<&VerifiedReproducibilityReport>,
+) -> std::fmt::Result {
+    match reproducibility {
+        Some(report) => {
+            writeln!(output, "reproducibility: {}", report.status.as_str())?;
+            writeln!(output, "reproducibility report: {}", report.path.display())?;
+            writeln!(output, "reproducibility report digest: {}", report.digest_blake3)
+        }
+        None => writeln!(output, "reproducibility: {}", ReproducibilityStatus::Absent.as_str()),
+    }
+}
+
+fn append_deterministic_release_summary(
+    output: &mut String,
+    result: &DeterministicReleaseVerifyResult,
+) -> std::fmt::Result {
+    writeln!(output, "deterministic release: {}", result.status)?;
+    if let Some(path) = &result.proof_path {
+        writeln!(output, "deterministic proof: {}", path.display())?;
+    }
+    if let Some(digest) = &result.proof_digest_blake3 {
+        writeln!(output, "deterministic proof digest: {digest}")?;
+    }
+    if let Some(source) = result.proof_source {
+        writeln!(output, "deterministic proof source: {source}")?;
+    }
+    if let Some(path) = &result.isolation_evidence_path {
+        writeln!(output, "deterministic sandbox isolation evidence: {}", path.display())?;
+    }
+    if let Some(digest) = &result.isolation_evidence_digest_blake3 {
+        writeln!(output, "deterministic sandbox isolation evidence digest: {digest}")?;
+    }
+    for blocker in &result.blockers {
+        writeln!(output, "  deterministic blocker: {blocker}")?;
+    }
+    Ok(())
+}
+
+fn append_stagex_summary(
+    output: &mut String,
+    result: Option<&crunch_bootstrap_core::StagexNoQuorumResult>,
+) -> std::fmt::Result {
+    let Some(result) = result else {
+        return Ok(());
+    };
+    writeln!(output, "stagex no-quorum profile: {}", result.status)?;
+    for reason in &result.failure_reasons {
+        writeln!(output, "  failure: {reason}")?;
+    }
     Ok(())
 }
 
@@ -983,97 +1350,6 @@ fn global_reproducibility_not_evaluated_json() -> serde_json::Value {
 
 fn reproducibility_status(reproducibility: Option<&VerifiedReproducibilityReport>) -> ReproducibilityStatus {
     reproducibility.map(|report| report.status).unwrap_or(ReproducibilityStatus::Absent)
-}
-
-fn print_provider_fixed_point_summary(result: &crate::cargo_free_self_build::ProviderFixedPointProofVerification) {
-    println!("provider fixed-point proof: {}", result.status);
-    println!("provider fixed-point proof source: {}", result.proof_source);
-    if let Some(path) = &result.proof_dir {
-        println!("provider fixed-point proof bundle: {}", path.display());
-    }
-    if let Some(role) = &result.bounded_evidence_role {
-        println!("provider fixed-point bounded evidence role: {role}");
-    }
-    if let Some(digest) = &result.proof_artifact_digest_blake3 {
-        println!("provider fixed-point proof artifact digest: {digest}");
-    }
-    if let Some(digest) = &result.stage_binary_digest_blake3 {
-        println!("provider fixed-point stage binary digest: {digest}");
-    }
-    if let Some(path) = &result.release_artifact_relative_path {
-        println!("provider fixed-point release artifact: {path}");
-    }
-    if let Some(digest) = &result.release_artifact_digest_blake3 {
-        println!("provider fixed-point release artifact digest: {digest}");
-    }
-    if let Some(digest) = &result.closure_policy_digest_blake3 {
-        println!("provider fixed-point closure policy digest: {digest}");
-    }
-    for non_claim in &result.non_claims {
-        println!("provider fixed-point non-claim: {non_claim}");
-    }
-    for blocker in &result.blockers {
-        println!("  provider fixed-point blocker: {blocker}");
-    }
-}
-
-// r[impl mantle.release_provenance.opaque_boundary.visible]
-fn print_stack_provenance_summary(result: &crunch_release_core::StackProvenanceReleaseVerification) {
-    println!("stack provenance: {}", result.disposition);
-    println!("stack provenance mode: {}", result.mode);
-    if let Some(digest) = &result.sidecar_digest_blake3 {
-        println!("stack provenance sidecar digest: {digest}");
-    }
-    if let Some(digest) = &result.valence_receipt_digest_blake3 {
-        println!("stack provenance Valence receipt digest: {digest}");
-    }
-    if let Some(path) = &result.release_binary_relative_path {
-        println!("stack provenance release binary: {path}");
-    }
-    println!("stack provenance boundary: {}", result.boundary);
-    for diagnostic in &result.diagnostics {
-        println!("  stack provenance diagnostic: {diagnostic}");
-    }
-}
-
-fn print_global_reproducibility_not_evaluated_summary() {
-    println!("global reproducibility: {GLOBAL_REPRODUCIBILITY_STATUS_NOT_EVALUATED}");
-    println!("global reproducibility reason: {GLOBAL_REPRODUCIBILITY_RELEASE_VERIFY_REASON}");
-}
-
-fn print_reproducibility_summary(reproducibility: Option<&VerifiedReproducibilityReport>) {
-    match reproducibility {
-        Some(report) => {
-            println!("reproducibility: {}", report.status.as_str());
-            println!("reproducibility report: {}", report.path.display());
-            println!("reproducibility report digest: {}", report.digest_blake3);
-        }
-        None => {
-            println!("reproducibility: {}", ReproducibilityStatus::Absent.as_str());
-        }
-    }
-}
-
-fn print_deterministic_release_summary(result: &DeterministicReleaseVerifyResult) {
-    println!("deterministic release: {}", result.status);
-    if let Some(path) = &result.proof_path {
-        println!("deterministic proof: {}", path.display());
-    }
-    if let Some(digest) = &result.proof_digest_blake3 {
-        println!("deterministic proof digest: {digest}");
-    }
-    if let Some(source) = result.proof_source {
-        println!("deterministic proof source: {source}");
-    }
-    if let Some(path) = &result.isolation_evidence_path {
-        println!("deterministic sandbox isolation evidence: {}", path.display());
-    }
-    if let Some(digest) = &result.isolation_evidence_digest_blake3 {
-        println!("deterministic sandbox isolation evidence digest: {digest}");
-    }
-    for blocker in &result.blockers {
-        println!("  deterministic blocker: {blocker}");
-    }
 }
 
 fn evaluate_stagex_profile(
@@ -1892,6 +2168,81 @@ mod tests {
             },
             provenance_coverage: None,
         }
+    }
+
+    fn test_release_verify_evaluation(require_reproducible: bool) -> ReleaseVerifyEvaluation {
+        let manifest = test_manifest();
+        let request = ReleaseVerifyRequest {
+            current_dir: PathBuf::from("/tmp"),
+            bundle_dir: PathBuf::from("/tmp/release-bundle"),
+            require_reproducible,
+            require_stagex_no_quorum: false,
+            deterministic_proof: None,
+            deterministic_sandbox_isolation_evidence: None,
+            require_deterministic_release: false,
+            provider_fixed_point_proof: None,
+            require_external_evidence_role: Vec::new(),
+            require_provider_fixed_point_proof: false,
+            release_profile: crunch_release_core::RELEASE_PROFILE_GENERIC.to_string(),
+            stack_provenance_mode: crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
+        };
+        let deterministic_result = DeterministicReleaseVerifyResult::absent(Vec::new());
+        let provider_fixed_point_result =
+            crate::cargo_free_self_build::ProviderFixedPointProofVerification::absent(false);
+        let stack_provenance_result = crunch_release_core::evaluate_stack_provenance_release_evidence(
+            &manifest,
+            crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL,
+        );
+        let decision = aggregate_release_verify_decision(ReleaseVerifyDecisionInput {
+            request: &request,
+            manifest: &manifest,
+            reproducibility_status: ReproducibilityStatus::Absent,
+            deterministic_result: &deterministic_result,
+            provider_fixed_point_result: &provider_fixed_point_result,
+            effective_stack_mode: crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL,
+            stack_provenance_result: &stack_provenance_result,
+            stagex_result: None,
+        });
+        ReleaseVerifyEvaluation {
+            resolved_bundle_dir: request.bundle_dir,
+            manifest,
+            reproducibility: None,
+            reproducibility_status: ReproducibilityStatus::Absent,
+            deterministic_result,
+            provider_fixed_point_result,
+            release_profile: request.release_profile,
+            stack_provenance_result,
+            stagex_result: None,
+            decision,
+        }
+    }
+
+    // r[verify mantle.operator_diagnostics.release_verification.render_boundary.test]
+    #[test]
+    fn release_verify_renderers_preserve_completed_decision_and_terminal_verdict() {
+        let accepted = test_release_verify_evaluation(false);
+        let accepted_before = accepted.decision.clone();
+        let accepted_human = render_release_verify_human(&accepted);
+        let accepted_json: serde_json::Value =
+            serde_json::from_str(&render_release_verify_json(&accepted).unwrap()).unwrap();
+
+        assert_eq!(accepted.decision, accepted_before);
+        assert_eq!(accepted_human.matches("release evidence verified").count(), 1);
+        assert!(accepted_human.trim_end().ends_with("release evidence verified: /tmp/release-bundle"));
+        assert_eq!(accepted_json["valid"], true);
+        assert_eq!(accepted_json["checks"].as_array().unwrap().len(), accepted.decision.checks.len());
+
+        let rejected = test_release_verify_evaluation(true);
+        let rejected_before = rejected.decision.clone();
+        let rejected_human = render_release_verify_human(&rejected);
+        let rejected_json: serde_json::Value =
+            serde_json::from_str(&render_release_verify_json(&rejected).unwrap()).unwrap();
+
+        assert_eq!(rejected.decision, rejected_before);
+        assert!(!rejected_human.contains("release evidence verified"));
+        assert!(rejected_human.trim_end().ends_with("release evidence rejected: /tmp/release-bundle"));
+        assert_eq!(rejected_json["valid"], false);
+        assert_eq!(rejected_json["diagnostics"], serde_json::to_value(&rejected.decision.diagnostics).unwrap());
     }
 
     fn write_summary_with_provider_mode(proof_dir: &Path, provider_mode: &str) {

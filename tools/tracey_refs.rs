@@ -381,3 +381,19 @@
 // destination, target, type-drift, special-file, bound, and external-sentinel
 // tests in `crates/crunch-release-core/src/tree_copy.rs`,
 // `src/release_tree_copy.rs`, and `src/release_evidence.rs`.
+
+// Release verification terminal-decision bridge.
+//
+// r[impl mantle.operator_diagnostics.release_verification.terminal_verdict]
+// r[impl mantle.operator_diagnostics.release_verification.json_contract]
+// r[impl mantle.operator_diagnostics.release_verification.render_boundary]
+// Implemented by `src/release_cmd.rs`: the shell collects release facts, calls
+// the fixed pure decision core, renders one completed immutable decision, and
+// emits the human success marker only for final acceptance.
+//
+// r[verify mantle.operator_diagnostics.release_verification.fixtures.positive]
+// r[verify mantle.operator_diagnostics.release_verification.fixtures.negative]
+// r[verify mantle.operator_diagnostics.release_verification.json_negative]
+// r[verify mantle.operator_diagnostics.release_verification.render_boundary.test]
+// Verified by positive/negative release CLI fixtures in `tests/release_cli.rs`
+// plus the root-package pure renderer test in `src/release_cmd.rs`.

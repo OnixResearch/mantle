@@ -1356,6 +1356,18 @@ byte-for-byte report:
 mantle release verify target/release-evidence/<release-id> --require-reproducible
 ```
 
+Human verification prints `release evidence verified` only as the terminal
+verdict after every selected policy check passes. Policy rejection instead
+prints `release evidence rejected` with ordered diagnostics and exits nonzero.
+`mantle --json release verify` emits the versioned
+`mantle-release-verify-v2` shape for both outcomes, including top-level `valid`,
+`disposition`, ordered `checks`, and ordered `diagnostics`. Rejected policy
+results remain one JSON value on stdout and return a nonzero status. Consumers
+migrating from v1 must require both a zero exit status and `valid: true`; a
+parseable payload alone is not acceptance. Input or I/O failures that prevent a
+final policy decision remain ordinary command errors rather than v2 decision
+payloads.
+
 The bit-for-bit reproducible release label is reserved for bundles whose
 canonical reproducibility report verifies and whose artifact set matches the
 published release artifact set. Ordinary bundle-local integrity is still only

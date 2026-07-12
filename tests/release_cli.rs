@@ -72,11 +72,69 @@ const DEFAULT_PROVIDER_WITNESS_TARGET: &str = "x86_64-unknown-linux-musl";
 const TEST_BUNDLED_DETERMINISTIC_PROOF_PATH: &str = "deterministic-release/deterministic-build-proof.json";
 const TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH: &str =
     "deterministic-release/deterministic-sandbox-isolation-evidence.json";
+const RELEASE_VERIFY_JSON_KIND: &str = "mantle-release-verify-v2";
+const RELEASE_VERIFY_DECISION_SCHEMA: &str = "mantle-release-verification-decision-v1";
+const RELEASE_VERIFY_SUCCESS_MARKER: &str = "release evidence verified";
+const RELEASE_VERIFY_REJECTION_MARKER: &str = "release evidence rejected";
+const RELEASE_VERIFY_REJECTED_DISPOSITION: &str = "policy-rejected";
 #[cfg(unix)]
 const TEST_SCRIPT_MODE: u32 = 0o755;
 
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
+}
+
+fn assert_no_release_verify_success_marker(output: &Output) {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stdout.contains(RELEASE_VERIFY_SUCCESS_MARKER), "stdout was: {stdout}");
+    assert!(!stderr.contains(RELEASE_VERIFY_SUCCESS_MARKER), "stderr was: {stderr}");
+}
+
+fn assert_human_release_verify_rejection(output: Output, expected_diagnostic: &str) {
+    assert!(!output.status.success());
+    assert_no_release_verify_success_marker(&output);
+    assert!(output.stdout.is_empty(), "stdout was: {}", String::from_utf8_lossy(&output.stdout));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains(RELEASE_VERIFY_REJECTION_MARKER), "stderr was: {stderr}");
+    assert!(stderr.contains(expected_diagnostic), "stderr was: {stderr}");
+}
+
+fn assert_json_release_verify_rejection(
+    output: Output,
+    expected_contributor: &str,
+    expected_diagnostic: &str,
+) -> serde_json::Value {
+    assert!(!output.status.success());
+    assert_no_release_verify_success_marker(&output);
+    assert!(output.stderr.is_empty(), "stderr was: {}", String::from_utf8_lossy(&output.stderr));
+    let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+    assert_eq!(json["kind"], RELEASE_VERIFY_JSON_KIND);
+    assert_eq!(json["decision_schema"], RELEASE_VERIFY_DECISION_SCHEMA);
+    assert_eq!(json["valid"], false);
+    assert_eq!(json["disposition"], RELEASE_VERIFY_REJECTED_DISPOSITION);
+    assert!(
+        json["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|diagnostic| diagnostic.as_str().unwrap().contains(expected_diagnostic)),
+        "JSON was: {json}"
+    );
+    let checks = json["checks"].as_array().unwrap();
+    assert!(
+        checks
+            .iter()
+            .any(|check| { check["contributor"] == expected_contributor && check["blocking"] == true }),
+        "JSON was: {json}"
+    );
+    let ordered_check_diagnostics = checks
+        .iter()
+        .filter(|check| check["blocking"] == true)
+        .flat_map(|check| check["diagnostics"].as_array().unwrap().iter().cloned())
+        .collect::<Vec<_>>();
+    assert_eq!(json["diagnostics"].as_array().unwrap(), ordered_check_diagnostics.as_slice());
+    json
 }
 
 fn write_file(path: &Path, content: &[u8]) {
@@ -468,16 +526,16 @@ fn release_create_and_verify_external_evidence_sidecar() {
         .success()
         .stdout(predicate::str::contains("external evidence: 1"));
 
-    crunch()
+    let output = crunch()
         .current_dir(temp.path())
         .arg("release")
         .arg("verify")
         .arg(&bundle_dir)
         .arg("--require-external-evidence-role")
         .arg("missing-role")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("external evidence role required but missing"));
+        .output()
+        .unwrap();
+    assert_human_release_verify_rejection(output, "external evidence role required but missing");
 }
 
 // r[verify mantle.release_provenance.valence_receipt_binding]
@@ -542,15 +600,15 @@ fn release_create_and_verify_stack_provenance_sidecar() {
 fn release_verify_required_stack_provenance_fails_when_missing() {
     let (_temp, bundle_dir, _manifest) = make_valid_bundle();
 
-    crunch()
+    let output = crunch()
         .arg("release")
         .arg("verify")
         .arg(&bundle_dir)
         .arg("--stack-provenance")
         .arg("required")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("required Valence stack provenance sidecar or receipt is missing"));
+        .output()
+        .unwrap();
+    assert_human_release_verify_rejection(output, "required Valence stack provenance sidecar or receipt is missing");
 }
 
 #[test]
@@ -1191,6 +1249,14 @@ fn write_deterministic_verify_artifacts(
             "output-dir-empty".to_string(),
             "sandbox=bwrap".to_string(),
             format!("sandbox-profile={profile}"),
+            "normalization:time=fixed".to_string(),
+            "normalization:timezone=utc".to_string(),
+            "normalization:locale=c".to_string(),
+            "normalization:temp-roots=isolated".to_string(),
+            "normalization:host-user-metadata=fixed".to_string(),
+            "normalization:umask=0022".to_string(),
+            "normalization:modeled-randomness=seeded".to_string(),
+            "normalization:order-sensitive-output-processing=sorted".to_string(),
         ],
         ambient_host_perturbations: vec![
             "HOME".to_string(),
@@ -1251,7 +1317,7 @@ fn install_bundled_deterministic_artifacts(
         TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH,
         DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE,
     ));
-    write_file(&bundle_dir.join("manifest.json"), &serde_json::to_vec(&updated).unwrap());
+    write_canonical_manifest(bundle_dir, &updated);
     updated
 }
 
@@ -1610,19 +1676,21 @@ fn release_verify_rejects_fake_proof_bundle_even_if_manifest_digest_matches() {
 fn release_verify_succeeds_using_bundle_local_contents_only() {
     let (_temp, bundle_dir, manifest) = make_valid_bundle();
 
-    crunch()
-        .arg("release")
-        .arg("verify")
-        .arg(&bundle_dir)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(format!("release id: {}", manifest.release_id)))
-        .stdout(predicate::str::contains(format!("binaries: {}", manifest.binaries.len())))
-        .stdout(predicate::str::contains(format!("source digest: {}", manifest.source_archive.digest_blake3)))
-        .stdout(predicate::str::contains(format!(
-            "stage2 digest: {}",
-            manifest.proof_linkage.stage2_binary_digest_blake3
-        )));
+    let output = crunch().arg("release").arg("verify").arg(&bundle_dir).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.stderr.is_empty(), "stderr was: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains(&format!("release id: {}", manifest.release_id)));
+    assert!(stdout.contains(&format!("binaries: {}", manifest.binaries.len())));
+    assert!(stdout.contains(&format!("source digest: {}", manifest.source_archive.digest_blake3)));
+    assert!(stdout.contains(&format!("stage2 digest: {}", manifest.proof_linkage.stage2_binary_digest_blake3)));
+    assert_eq!(stdout.matches(RELEASE_VERIFY_SUCCESS_MARKER).count(), 1);
+    assert_eq!(
+        stdout.matches("verification check:").count(),
+        crunch_release_core::RELEASE_VERIFICATION_CONTRIBUTOR_COUNT
+    );
+    assert!(stdout.rfind("verification check:").unwrap() < stdout.find(RELEASE_VERIFY_SUCCESS_MARKER).unwrap());
+    assert!(stdout.trim_end().ends_with(&format!("{}: {}", RELEASE_VERIFY_SUCCESS_MARKER, bundle_dir.display())));
 }
 
 #[test]
@@ -1646,6 +1714,10 @@ fn release_verify_reports_required_deterministic_release_from_artifacts() {
         .assert()
         .success();
     let stdout = serde_json::from_slice::<serde_json::Value>(&assert.get_output().stdout).unwrap();
+    assert_eq!(stdout["kind"], RELEASE_VERIFY_JSON_KIND);
+    assert_eq!(stdout["valid"], true);
+    assert_eq!(stdout["disposition"], "accepted");
+    assert!(stdout["diagnostics"].as_array().unwrap().is_empty());
     assert_eq!(stdout["deterministic_release"]["status"], "eligible");
     assert_eq!(stdout["deterministic_release"]["eligible"], true);
     assert_eq!(stdout["deterministic_release"]["proof_digest_blake3"], proof_digest);
@@ -1659,7 +1731,7 @@ fn release_verify_require_deterministic_release_rejects_missing_isolation_eviden
     let (proof_path, _evidence_path, _proof_digest, _evidence_digest) =
         write_deterministic_verify_artifacts(&proof_dir, &manifest);
 
-    crunch()
+    let output = crunch()
         .current_dir(temp.path())
         .arg("release")
         .arg("verify")
@@ -1667,9 +1739,9 @@ fn release_verify_require_deterministic_release_rejects_missing_isolation_eviden
         .arg("--deterministic-proof")
         .arg(&proof_path)
         .arg("--require-deterministic-release")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("missing deterministic sandbox isolation evidence"));
+        .output()
+        .unwrap();
+    assert_human_release_verify_rejection(output, "missing deterministic sandbox isolation evidence");
 }
 
 #[test]
@@ -1838,11 +1910,13 @@ fn release_verify_blocks_bundled_deterministic_proof_digest_mismatch() {
         .arg("--require-deterministic-release")
         .output()
         .unwrap();
-    assert!(!output.status.success());
-    let stdout = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+    let stdout = assert_json_release_verify_rejection(
+        output,
+        "deterministic-release",
+        "deterministic proof artifacts do not prove",
+    );
     assert_eq!(stdout["deterministic_release"]["status"], "blocked");
     assert_eq!(stdout["deterministic_release"]["proof_source"], "bundled");
-    assert!(String::from_utf8_lossy(&output.stderr).contains("deterministic proof artifacts do not prove"));
 }
 
 #[cfg(unix)]
@@ -2429,15 +2503,14 @@ fn release_verify_required_provider_fixed_point_uses_bundled_proof() {
 fn release_verify_required_provider_fixed_point_fails_when_missing() {
     let (_temp, bundle_dir, _manifest) = make_valid_bundle();
 
-    crunch()
+    let output = crunch()
         .arg("release")
         .arg("verify")
         .arg(&bundle_dir)
         .arg("--require-provider-fixed-point-proof")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("provider fixed-point proof required"))
-        .stderr(predicate::str::contains("missing provider fixed-point proof bundle"));
+        .output()
+        .unwrap();
+    assert_human_release_verify_rejection(output, "missing provider fixed-point proof bundle");
 }
 
 #[test]
@@ -2553,7 +2626,15 @@ fn release_verify_json_reports_absent_reproducibility() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
 
-    assert_eq!(json["kind"], "mantle-release-verify-v1");
+    assert_eq!(json["kind"], RELEASE_VERIFY_JSON_KIND);
+    assert_eq!(json["decision_schema"], RELEASE_VERIFY_DECISION_SCHEMA);
+    assert_eq!(json["valid"], true);
+    assert_eq!(json["disposition"], "accepted");
+    assert_eq!(
+        json["checks"].as_array().unwrap().len(),
+        crunch_release_core::RELEASE_VERIFICATION_CONTRIBUTOR_COUNT
+    );
+    assert!(json["diagnostics"].as_array().unwrap().is_empty());
     assert_eq!(json["reproducibility_status"], "absent");
     assert!(json["reproducibility_report"].is_null());
 }
@@ -2575,6 +2656,7 @@ fn release_verify_json_reports_matched_reproducibility() {
     assert_eq!(json["reproducibility_report"]["digest_blake3"].as_str().unwrap().len(), BLAKE3_HEX_LEN);
 }
 
+// r[verify mantle.operator_diagnostics.release_verification.json_negative]
 #[test]
 fn release_verify_require_reproducible_fails_when_report_absent() {
     let (_temp, bundle_dir, _manifest) = make_valid_bundle();
@@ -2587,11 +2669,157 @@ fn release_verify_require_reproducible_fails_when_report_absent() {
         .arg("--require-reproducible")
         .output()
         .unwrap();
-    assert!(!output.status.success());
-    let json = serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+    let json = assert_json_release_verify_rejection(output, "reproducibility", "reproducibility evidence required");
 
     assert_eq!(json["reproducibility_status"], "absent");
-    assert!(String::from_utf8_lossy(&output.stderr).contains("reproducibility evidence required"));
+}
+
+// r[verify mantle.operator_diagnostics.release_verification.fixtures.negative]
+#[test]
+fn release_verify_human_rejects_missing_required_reproducibility_without_success_marker() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+
+    let output = crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-reproducible")
+        .output()
+        .unwrap();
+
+    assert_human_release_verify_rejection(output, "reproducibility evidence required");
+}
+
+// r[verify mantle.operator_diagnostics.release_verification.json_negative]
+#[test]
+fn release_verify_json_rejects_missing_required_deterministic_proof_once() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-deterministic-release")
+        .output()
+        .unwrap();
+
+    assert_json_release_verify_rejection(
+        output,
+        "deterministic-release",
+        "missing bundled deterministic proof artifact",
+    );
+}
+
+// r[verify mantle.operator_diagnostics.release_verification.json_negative]
+#[test]
+fn release_verify_json_rejects_missing_required_provider_proof_once() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-provider-fixed-point-proof")
+        .output()
+        .unwrap();
+
+    assert_json_release_verify_rejection(
+        output,
+        "provider-fixed-point-proof",
+        "missing provider fixed-point proof bundle",
+    );
+}
+
+// r[verify mantle.operator_diagnostics.release_verification.json_negative]
+#[test]
+fn release_verify_json_rejects_missing_required_stack_provenance_once() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--stack-provenance")
+        .arg("required")
+        .output()
+        .unwrap();
+
+    assert_json_release_verify_rejection(
+        output,
+        "stack-provenance",
+        "required Valence stack provenance sidecar or receipt is missing",
+    );
+}
+
+// r[verify mantle.operator_diagnostics.release_verification.json_negative]
+#[test]
+fn release_verify_json_rejects_missing_required_external_role_once() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-external-evidence-role")
+        .arg("missing-role")
+        .output()
+        .unwrap();
+
+    assert_json_release_verify_rejection(
+        output,
+        "external-evidence-roles",
+        "external evidence role required but missing: missing-role",
+    );
+}
+
+// r[verify mantle.operator_diagnostics.release_verification.json_negative]
+#[test]
+fn release_verify_json_rejects_external_role_count_above_fixed_limit() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let mut command = crunch();
+    command.arg("--json").arg("release").arg("verify").arg(&bundle_dir);
+    for role_index in 0..=crunch_release_core::MAX_RELEASE_VERIFICATION_REQUIRED_EXTERNAL_ROLES {
+        command.arg("--require-external-evidence-role").arg(format!("missing-role-{role_index}"));
+    }
+
+    let output = command.output().unwrap();
+
+    assert_json_release_verify_rejection(
+        output,
+        "external-evidence-roles",
+        "required external evidence role count exceeds limit",
+    );
+}
+
+// r[verify mantle.operator_diagnostics.release_verification.json_negative]
+#[test]
+fn release_verify_json_rejects_unsatisfied_stagex_policy_once() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let output = crunch()
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-stagex-no-quorum")
+        .output()
+        .unwrap();
+
+    assert_json_release_verify_rejection(output, "stagex-no-quorum", "StageX no-quorum profile unsatisfied");
+}
+
+// r[verify mantle.operator_diagnostics.release_verification.fixtures.negative]
+#[test]
+fn release_verify_human_rejects_unsatisfied_stagex_without_success_marker() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let output = crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-stagex-no-quorum")
+        .output()
+        .unwrap();
+
+    assert_human_release_verify_rejection(output, "StageX no-quorum profile unsatisfied");
 }
 
 #[cfg(unix)]
@@ -5408,7 +5636,10 @@ fn attest_release_verify_reports_policy_insufficient_for_untrusted_witness_ident
 }
 
 fn write_canonical_manifest(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) {
-    let bytes = serde_json::to_vec(manifest).unwrap();
+    let core_manifest =
+        serde_json::from_value::<crunch_release_core::ReleaseEvidenceManifest>(serde_json::to_value(manifest).unwrap())
+            .unwrap();
+    let bytes = serde_json::to_vec(&core_manifest).unwrap();
     std::fs::write(bundle_dir.join("manifest.json"), bytes).unwrap();
 }
 

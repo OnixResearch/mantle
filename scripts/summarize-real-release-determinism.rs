@@ -32,6 +32,8 @@ const SUMMARY_SCHEMA: &str = "mantle-real-release-determinism-summary-v1";
 const BOUNDED_CLAIM: &str = "This artifact rebuilt twice from the recorded inputs under the recorded mantle-proof-sandbox-v1 profiles and the BLAKE3 digest sets matched. This is a bounded packaged-artifact proof, not a full-bootstrap reproducibility claim.";
 const PROOF_VERDICT: &str = "self-rebuild-match";
 const VERIFY_STATUS: &str = "eligible";
+const VERIFY_KIND: &str = "mantle-release-verify-v2";
+const VERIFY_DECISION_SCHEMA: &str = "mantle-release-verification-decision-v1";
 const SANDBOX_PREFIX: &str = "mantle-proof-sandbox-v1:";
 
 fn main() -> ExitCode {
@@ -459,7 +461,8 @@ fn write_fixture(release_bundle: &Path, proof_dir: &Path) -> Result<(), String> 
             "sandbox_profile_identity": profile,
             "output_digests": [{"name": "binaries/01-stage2-mantle", "digest_blake3": binary_digest}],
             "substituted_dependency_identities": [],
-            "hermeticity_audit_events": []
+            "hermeticity_audit_events": [],
+            "observed_effects": ["environment", "read-store", "write-output"]
         })
     };
     let proof = json!({
@@ -475,6 +478,8 @@ fn write_fixture(release_bundle: &Path, proof_dir: &Path) -> Result<(), String> 
         "toolchain_stage_roots": [format!("prerequisite-inventory={prereq_digest}"), format!("stage2-binary={binary_digest}"), "staged-source=/tmp/staged-source"],
         "logical_store_prefix": "/mantle/store",
         "physical_store_isolation": "fresh-store-per-run",
+        "effect_policy_version": "mantle-build-effects-v1",
+        "declared_effects": ["environment", "read-store", "write-output"],
         "normalized_execution_envelope": ["sandbox=bwrap", format!("sandbox-profile={sandbox_a}"), format!("sandbox-profile={sandbox_b}")],
         "ambient_host_perturbations": ["HOME", "PATH"],
         "sandbox_profile_identities": [sandbox_a, sandbox_b],
@@ -494,7 +499,12 @@ fn write_fixture(release_bundle: &Path, proof_dir: &Path) -> Result<(), String> 
     write_json(&proof_path, &proof)?;
     write_json(&sandbox_path, &sandbox)?;
     let verify = json!({
-        "kind": "mantle-release-verify-v1",
+        "kind": VERIFY_KIND,
+        "decision_schema": VERIFY_DECISION_SCHEMA,
+        "valid": true,
+        "disposition": "accepted",
+        "checks": accepted_verify_checks(),
+        "diagnostics": [],
         "release_id": "demo-release",
         "manifest": manifest,
         "reproducibility_status": "absent",
@@ -509,6 +519,20 @@ fn write_fixture(release_bundle: &Path, proof_dir: &Path) -> Result<(), String> 
         }
     });
     write_json(&verify_path, &verify)
+}
+
+fn accepted_verify_checks() -> Value {
+    json!([
+        {"contributor": "manifest-integrity", "requirement": "mandatory", "disposition": "satisfied", "blocking": false, "diagnostics": []},
+        {"contributor": "reproducibility", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
+        {"contributor": "deterministic-release", "requirement": "required", "disposition": "satisfied", "blocking": false, "diagnostics": []},
+        {"contributor": "provider-fixed-point-proof", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
+        {"contributor": "stack-provenance", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
+        {"contributor": "external-evidence-roles", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
+        {"contributor": "stagex-no-quorum", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
+        {"contributor": "function-address", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
+        {"contributor": "cairn-handoff", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []}
+    ])
 }
 
 fn unix_ms() -> u128 {
