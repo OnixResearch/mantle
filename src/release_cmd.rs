@@ -14,6 +14,7 @@ use crunch_release_core::ReleaseVerificationFacts;
 use crunch_release_core::ReleaseVerificationRequirement;
 use crunch_release_core::ReleaseVerificationRequirements;
 use crunch_release_core::aggregate_release_verification;
+use crunch_release_core::deterministic_build_proof_has_genuine_rebuild_authority;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_release_claim_eligible;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
@@ -1018,6 +1019,7 @@ impl DeterministicReleaseVerifyResult {
     }
 }
 
+// r[impl mantle.release_provenance.deterministic_rebuild_admission.validation]
 fn evaluate_deterministic_release_claim(
     manifest: &crate::release_evidence::ReleaseEvidenceManifest,
     bundle_dir: &Path,
@@ -1032,11 +1034,18 @@ fn evaluate_deterministic_release_claim(
     let isolation_evidence = load_canonical_deterministic_isolation_evidence(&resolved.isolation_evidence_path)?;
     let release_digest_set =
         manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect::<Vec<_>>();
+    let genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.value.clone())
+        .map_err(|err| RunError::Internal(format!("deterministic rebuild authority validation failed: {err}")))?;
     let eligible =
         deterministic_release_claim_eligible(&release_digest_set, &[proof.value], Some(&isolation_evidence.value))
             .map_err(|err| RunError::Internal(format!("deterministic release claim validation failed: {err}")))?;
     let blockers = if eligible {
         Vec::new()
+    } else if !genuine_rebuild {
+        vec![
+            "missing-genuine-rebuild-evidence: legacy path-bound or incomplete deterministic receipt is non-promoting"
+                .to_string(),
+        ]
     } else {
         vec!["deterministic proof artifacts do not prove the release artifact digest set".to_string()]
     };

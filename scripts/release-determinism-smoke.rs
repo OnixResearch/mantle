@@ -98,7 +98,7 @@ fn run() -> Result<(), String> {
         "workflow": WORKFLOW,
         "version": 1,
         "verdict": if passed { "passed" } else { "failed" },
-        "bounded_claim": "The checked-in CLI regression generated a mantle-deterministic-proof-receipt-v1 receipt from two clean proof stores, verified matching BLAKE3 artifact digest sets under supported sandbox evidence, and release verification accepted that generated proof.",
+        "bounded_claim": "The checked-in CLI regression generated a mantle-deterministic-proof-receipt-v2 receipt from two clean proof stores, bound exact source/recipe/tool/provider/policy/run-root identities, excluded published target authority, verified matching BLAKE3 artifact digest sets under supported sandbox evidence, and release verification accepted that generated proof. This does not claim compiler/verifier soundness.",
         "repo_root": repo_root,
         "git_head": git_head.trim(),
         "git_status": git_status.trim_end(),

@@ -23,6 +23,7 @@ use crunch_release_core::DeterministicOutputDigest;
 use crunch_release_core::DeterministicProofUnit;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
+use crunch_release_core::MAX_REBUILD_RUN_COUNT;
 use crunch_release_core::PURE_LOCAL_BUILD_EFFECTS;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
 use crunch_release_core::RebuildWorkflowIdentity;
@@ -46,6 +47,9 @@ use crunch_release_core::validate_release_reproducibility_report_artifact_names;
 use crunch_release_core::validate_release_reproducibility_report_linkage;
 
 use crate::errors::RunError;
+use crate::rebuild_authority::PreparedRebuildAuthority;
+use crate::rebuild_authority::RebuildRunPaths;
+use crate::rebuild_authority::prepare_rebuild_authority;
 use crate::release_evidence::verify_release_evidence_bundle;
 
 pub(crate) const DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION: &str = "mantle-release-reproducibility-v1";
@@ -53,6 +57,8 @@ pub(crate) const DEFAULT_REPRODUCIBILITY_WORKFLOW_VERSION: &str = "mantle-releas
 const REPRODUCE_BUNDLE_DIR_ENV: &str = "MANTLE_REPRODUCE_BUNDLE_DIR";
 const REPRODUCE_OUTPUT_DIR_ENV: &str = "MANTLE_REPRODUCE_OUTPUT_DIR";
 const REPRODUCE_RELEASE_ID_ENV: &str = "MANTLE_REPRODUCE_RELEASE_ID";
+const REBUILD_SOURCE_ARCHIVE_ENV: &str = "MANTLE_REBUILD_SOURCE_ARCHIVE";
+const REBUILD_EXECUTABLE_ENV: &str = "MANTLE_REBUILD_EXECUTABLE";
 const DETERMINISTIC_PROOF_STORE_DIR_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_STORE_DIR";
 const DEFAULT_REPORT_RELATIVE_PATH: &str = "reproducibility/reproducibility-report.json";
 const DETERMINISTIC_BUILD_PROOF_BUNDLE_RELATIVE_PATH: &str = "deterministic-release/deterministic-build-proof.json";
@@ -62,8 +68,7 @@ const HASH_BUFFER_BYTES: usize = 8192;
 const MAX_REBUILD_OUTPUT_ENTRIES: u32 = 4096;
 const PROOF_SANDBOX_BWRAP_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_BWRAP";
 const PROOF_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1";
-const PROOF_SANDBOX_SYSTEM_TOOLS_DIR: &str = "/run/current-system/sw";
-const PROOF_SANDBOX_PATH: &str = "/run/current-system/sw/bin:/usr/bin:/bin";
+const PROOF_SANDBOX_PATH: &str = "/nonexistent";
 const PROOF_SANDBOX_TEMP_ROOT: &str = "/tmp";
 const PROOF_SANDBOX_USER: &str = "nobody";
 const PROOF_SANDBOX_LOCALE: &str = "C.UTF-8";
@@ -104,8 +109,12 @@ struct ProofSandboxProfile {
     executor: PathBuf,
     executor_version: String,
     network_policy: String,
-    command_identity: String,
-    bundle_dir: PathBuf,
+    descriptor_blake3: String,
+    authority_plan_blake3: String,
+    command_path: PathBuf,
+    command_args: Vec<OsString>,
+    source_archive_path: PathBuf,
+    read_only_paths: Vec<PathBuf>,
     output_dir: PathBuf,
     store_dir: PathBuf,
 }
@@ -118,8 +127,12 @@ impl ProofSandboxProfile {
             format!("executor_path={}", self.executor.display()),
             format!("executor_version={}", self.executor_version),
             format!("network={}", self.network_policy),
-            format!("bundle_ro={}", self.bundle_dir.display()),
-            format!("recipe_ro={}", self.command_identity),
+            "release_bundle_authority=absent".to_string(),
+            format!("rebuild_descriptor_blake3={}", self.descriptor_blake3),
+            format!("rebuild_authority_plan_blake3={}", self.authority_plan_blake3),
+            format!("command_ro={}", self.command_path.display()),
+            format!("source_archive_ro={}", self.source_archive_path.display()),
+            format!("read_only_input_count={}", self.read_only_paths.len()),
             format!("output_rw={}", self.output_dir.display()),
             format!("store_rw={}", self.store_dir.display()),
             "executor_env_policy=clear-with-bounded-test-seam".to_string(),
@@ -206,7 +219,16 @@ pub(crate) fn reproduce_release_artifacts(
     validate_request(request)?;
     let mut manifest = verify_release_evidence_bundle(&request.bundle_dir)?;
     prepare_rebuild_output_dir(&request.rebuild_output_dir)?;
-    run_rebuild_command(request, &manifest.release_id, &request.rebuild_output_dir, None, None)?;
+    let source_archive_path = request.bundle_dir.join(&manifest.source_archive.relative_path);
+    run_rebuild_command(
+        request,
+        &manifest.release_id,
+        &request.rebuild_output_dir,
+        &source_archive_path,
+        None,
+        None,
+        None,
+    )?;
     let unexpected_outputs = collect_unexpected_rebuilt_outputs(&manifest.binaries, &request.rebuild_output_dir)?;
     let report = build_reproducibility_report(&manifest, request)?;
     let counts = count_report_results(&report.artifacts);
@@ -226,6 +248,9 @@ pub(crate) fn reproduce_release_artifacts(
             "source_blake3": proof.receipt.source_blake3.clone(),
             "vendor_blake3": proof.receipt.vendor_blake3.clone(),
             "toolchain_stage_roots": proof.receipt.toolchain_stage_roots.clone(),
+            "rebuild_descriptor_blake3": proof.receipt.rebuild_descriptor_blake3.clone(),
+            "rebuild_authority_plan_blake3": proof.receipt.rebuild_authority_plan_blake3.clone(),
+            "target_authority_excluded": proof.receipt.rebuild_authority_plan.as_ref().map(|plan| plan.target_authority_excluded),
         })
     });
     let deterministic_proof_run_roots = deterministic_proof.as_ref().map(|proof| {
@@ -356,6 +381,12 @@ fn validate_request(request: &ReleaseReproduceRequest) -> Result<(), RunError> {
             "deterministic proof runs must be 0 or at least 2; one run cannot prove determinism".to_string(),
         ));
     }
+    if request.deterministic_proof_runs > MAX_REBUILD_RUN_COUNT {
+        return Err(RunError::Internal(format!(
+            "deterministic proof runs {} exceed maximum {MAX_REBUILD_RUN_COUNT}",
+            request.deterministic_proof_runs
+        )));
+    }
     Ok(())
 }
 
@@ -385,16 +416,23 @@ fn run_rebuild_command(
     request: &ReleaseReproduceRequest,
     release_id: &str,
     output_dir: &Path,
+    source_archive_path: &Path,
     deterministic_store_dir: Option<&Path>,
+    prepared_rebuild: Option<&PreparedRebuildAuthority>,
     sandbox_profile: Option<&ProofSandboxProfile>,
 ) -> Result<(), RunError> {
     let mut command = if let Some(profile) = sandbox_profile {
-        sandboxed_rebuild_command(request, release_id, output_dir, deterministic_store_dir, profile)?
+        let prepared_rebuild = prepared_rebuild.ok_or_else(|| {
+            RunError::Internal("deterministic proof sandbox requires prepared rebuild authority".to_string())
+        })?;
+        sandboxed_rebuild_command(release_id, output_dir, deterministic_store_dir, prepared_rebuild, profile)?
     } else {
         let mut command = ProcessCommand::new(&request.rebuild_command);
         command
             .args(&request.rebuild_args)
             .env(REPRODUCE_BUNDLE_DIR_ENV, &request.bundle_dir)
+            .env(REBUILD_SOURCE_ARCHIVE_ENV, source_archive_path)
+            .env(REBUILD_EXECUTABLE_ENV, &request.rebuild_command)
             .env(REPRODUCE_OUTPUT_DIR_ENV, output_dir)
             .env(REPRODUCE_RELEASE_ID_ENV, release_id);
         if let Some(store_dir) = deterministic_store_dir {
@@ -496,6 +534,8 @@ fn write_release_evidence_manifest(bundle_dir: &Path, manifest: &ReleaseEvidence
     std::fs::write(&path, bytes).map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
 }
 
+// r[impl mantle.build_correctness.release_determinism.genuine_rebuild]
+// r[impl mantle.build_correctness.release_determinism.fixtures.positive]
 fn maybe_run_deterministic_proof(
     request: &ReleaseReproduceRequest,
     manifest: &ReleaseEvidenceManifest,
@@ -507,55 +547,132 @@ fn maybe_run_deterministic_proof(
     let proof_root = deterministic_proof_root(request);
     validate_deterministic_proof_root(&proof_root, &request.rebuild_output_dir)?;
     prepare_rebuild_output_dir(&proof_root)?;
-    let mut runs = Vec::new();
-    let mut sandbox_profiles = Vec::new();
-    for run_index in 0..request.deterministic_proof_runs {
-        let run_id = format!("run-{run_index:03}");
-        let run_root = proof_root.join(&run_id);
-        let output_dir = run_root.join("outputs");
-        let store_dir = run_root.join("store");
-        prepare_rebuild_output_dir(&output_dir)?;
-        prepare_rebuild_output_dir(&store_dir)?;
-        let sandbox_profile = proof_sandbox_profile(request, &manifest.release_id, &output_dir, &store_dir)?;
-        run_rebuild_command(request, &manifest.release_id, &output_dir, Some(&store_dir), Some(&sandbox_profile))?;
-        let unexpected_outputs = collect_unexpected_rebuilt_outputs(&manifest.binaries, &output_dir)?;
-        let comparisons = compare_manifest_artifacts(&manifest.binaries, &output_dir)?;
-        let proof_report = ReleaseReproducibilityReport::new(ReleaseReproducibilityReportInit {
-            release_id: manifest.release_id.clone(),
-            proof_class: ReproducibilityProofClass::SelfRebuildMatch,
-            comparison_verdict: ReproducibilityComparisonVerdict::Matched,
-            source_archive_digest_blake3: manifest.source_archive.digest_blake3.clone(),
-            proof_bundle_digest_blake3: manifest.proof_bundle.digest_blake3.clone(),
-            rebuild_workflow: RebuildWorkflowIdentity {
-                command: workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?,
-                version: request.workflow_version.clone(),
-            },
-            environment_assumptions: reproducibility_environment_assumptions(),
-            clean_rebuild_store_identities: vec![store_dir.display().to_string()],
-            evidence_artifact_digests_blake3: vec![
-                manifest.source_archive.digest_blake3.clone(),
-                manifest.proof_bundle.digest_blake3.clone(),
-            ],
-            artifacts: comparisons.clone(),
-        });
-        fail_if_reproduction_drifted(&proof_report, &unexpected_outputs, report_path)?;
-        runs.push(deterministic_run_receipt(
-            &run_id,
-            run_index,
-            &store_dir,
-            &output_dir,
-            &sandbox_profile.identity,
-            &comparisons,
-        )?);
-        sandbox_profiles.push(sandbox_profile);
+    let run_paths = deterministic_run_paths(&proof_root, request.deterministic_proof_runs);
+    let prepared_rebuild = prepare_rebuild_authority(
+        manifest,
+        &request.bundle_dir,
+        &request.rebuild_command,
+        &request.rebuild_args,
+        &proof_root,
+        &request.rebuild_output_dir,
+        &run_paths,
+    )?;
+    let (runs, sandbox_profiles) =
+        execute_deterministic_runs(request, manifest, report_path, &prepared_rebuild, &run_paths)?;
+    let receipt = build_deterministic_receipt(manifest, &prepared_rebuild, runs);
+    persist_deterministic_proof(&proof_root, receipt, &sandbox_profiles).map(Some)
+}
+
+fn deterministic_run_paths(proof_root: &Path, run_count: u32) -> Vec<RebuildRunPaths> {
+    (0..run_count)
+        .map(|run_index| {
+            let run_id = format!("run-{run_index:03}");
+            let run_root = proof_root.join(&run_id);
+            RebuildRunPaths {
+                run_id,
+                output_dir: run_root.join("outputs"),
+                store_dir: run_root.join("store"),
+            }
+        })
+        .collect()
+}
+
+fn execute_deterministic_runs(
+    request: &ReleaseReproduceRequest,
+    manifest: &ReleaseEvidenceManifest,
+    report_path: &Path,
+    prepared_rebuild: &PreparedRebuildAuthority,
+    run_paths: &[RebuildRunPaths],
+) -> Result<(Vec<DeterministicBuildRunReceipt>, Vec<ProofSandboxProfile>), RunError> {
+    let mut receipts = Vec::with_capacity(run_paths.len());
+    let mut profiles = Vec::with_capacity(run_paths.len());
+    for (run_index, run_path) in run_paths.iter().enumerate() {
+        let run_index = u32::try_from(run_index)
+            .map_err(|_| RunError::Internal("deterministic proof run index overflowed u32".to_string()))?;
+        let (receipt, profile) =
+            execute_deterministic_run(request, manifest, report_path, prepared_rebuild, run_path, run_index)?;
+        receipts.push(receipt);
+        profiles.push(profile);
     }
-    let sandbox_profile_identities = runs
+    Ok((receipts, profiles))
+}
+
+fn execute_deterministic_run(
+    request: &ReleaseReproduceRequest,
+    manifest: &ReleaseEvidenceManifest,
+    report_path: &Path,
+    prepared_rebuild: &PreparedRebuildAuthority,
+    run_path: &RebuildRunPaths,
+    run_index: u32,
+) -> Result<(DeterministicBuildRunReceipt, ProofSandboxProfile), RunError> {
+    prepare_rebuild_output_dir(&run_path.output_dir)?;
+    prepare_rebuild_output_dir(&run_path.store_dir)?;
+    let profile = proof_sandbox_profile(prepared_rebuild, &run_path.output_dir, &run_path.store_dir)?;
+    run_rebuild_command(
+        request,
+        &manifest.release_id,
+        &run_path.output_dir,
+        &prepared_rebuild.source_archive_path,
+        Some(&run_path.store_dir),
+        Some(prepared_rebuild),
+        Some(&profile),
+    )?;
+    let unexpected_outputs = collect_unexpected_rebuilt_outputs(&manifest.binaries, &run_path.output_dir)?;
+    let comparisons = compare_manifest_artifacts(&manifest.binaries, &run_path.output_dir)?;
+    let report = deterministic_run_report(request, manifest, &run_path.store_dir, comparisons.clone())?;
+    fail_if_reproduction_drifted(&report, &unexpected_outputs, report_path)?;
+    let receipt = deterministic_run_receipt(
+        &run_path.run_id,
+        run_index,
+        &run_path.store_dir,
+        &run_path.output_dir,
+        &profile.identity,
+        &comparisons,
+        &prepared_rebuild.descriptor_blake3,
+        &prepared_rebuild.authority_plan_blake3,
+        &prepared_rebuild.authority_plan.approved_read_identities,
+    )?;
+    Ok((receipt, profile))
+}
+
+fn deterministic_run_report(
+    request: &ReleaseReproduceRequest,
+    manifest: &ReleaseEvidenceManifest,
+    store_dir: &Path,
+    comparisons: Vec<ReproducibilityArtifactComparison>,
+) -> Result<ReleaseReproducibilityReport, RunError> {
+    Ok(ReleaseReproducibilityReport::new(ReleaseReproducibilityReportInit {
+        release_id: manifest.release_id.clone(),
+        proof_class: ReproducibilityProofClass::SelfRebuildMatch,
+        comparison_verdict: ReproducibilityComparisonVerdict::Matched,
+        source_archive_digest_blake3: manifest.source_archive.digest_blake3.clone(),
+        proof_bundle_digest_blake3: manifest.proof_bundle.digest_blake3.clone(),
+        rebuild_workflow: RebuildWorkflowIdentity {
+            command: workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?,
+            version: request.workflow_version.clone(),
+        },
+        environment_assumptions: reproducibility_environment_assumptions(),
+        clean_rebuild_store_identities: vec![store_dir.display().to_string()],
+        evidence_artifact_digests_blake3: vec![
+            manifest.source_archive.digest_blake3.clone(),
+            manifest.proof_bundle.digest_blake3.clone(),
+        ],
+        artifacts: comparisons,
+    }))
+}
+
+fn build_deterministic_receipt(
+    manifest: &ReleaseEvidenceManifest,
+    prepared: &PreparedRebuildAuthority,
+    runs: Vec<DeterministicBuildRunReceipt>,
+) -> DeterministicBuildProofReceipt {
+    let sandbox_profiles = runs
         .iter()
         .map(|run| run.sandbox_profile_identity.clone())
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let receipt = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
+    DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
         proof_unit: DeterministicProofUnit {
             target_artifact_identity: format!("release:{}", manifest.release_id),
             output_identities: manifest.binaries.iter().map(|artifact| artifact.relative_path.clone()).collect(),
@@ -567,13 +684,14 @@ fn maybe_run_deterministic_proof(
         source_blake3: manifest.source_archive.digest_blake3.clone(),
         vendor_blake3: manifest.proof_bundle.digest_blake3.clone(),
         toolchain_provider_identity: format!(
-            "provider-kind={};command={}",
+            "provider-kind={};provider-blake3={};rebuild-descriptor-blake3={}",
             manifest.proof_linkage.selected_provider_kind,
-            workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?
+            prepared.descriptor.provider.digest_blake3,
+            prepared.descriptor_blake3
         ),
         toolchain_stage_roots: vec![
             format!("staged-source={}", manifest.proof_linkage.staged_source),
-            format!("stage2-binary={}", manifest.proof_linkage.stage2_binary_digest_blake3),
+            format!("source-archive={}", manifest.source_archive.digest_blake3),
             format!("prerequisite-inventory={}", manifest.proof_linkage.prerequisite_inventory_digest_blake3),
         ],
         logical_store_prefix: "/mantle/store".to_string(),
@@ -581,44 +699,57 @@ fn maybe_run_deterministic_proof(
         effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
         declared_effects: PURE_LOCAL_BUILD_EFFECTS.to_vec(),
         observed_effects: None,
-        normalized_execution_envelope: deterministic_execution_envelope(&sandbox_profile_identities),
+        normalized_execution_envelope: deterministic_execution_envelope(&sandbox_profiles),
         ambient_host_perturbations: deterministic_ambient_host_perturbations(),
-        sandbox_profile_identities,
+        sandbox_profile_identities: sandbox_profiles,
         runs,
-    });
+        rebuild_descriptor: prepared.descriptor.clone(),
+        rebuild_descriptor_blake3: prepared.descriptor_blake3.clone(),
+        rebuild_authority_plan: prepared.authority_plan.clone(),
+        rebuild_authority_plan_blake3: prepared.authority_plan_blake3.clone(),
+    })
+}
+
+fn persist_deterministic_proof(
+    proof_root: &Path,
+    receipt: DeterministicBuildProofReceipt,
+    sandbox_profiles: &[ProofSandboxProfile],
+) -> Result<DeterministicProofOutput, RunError> {
     let digest_blake3 = deterministic_build_proof_receipt_digest_blake3(receipt.clone()).map_err(core_error)?;
     let path = proof_root.join("deterministic-build-proof.json");
     write_deterministic_proof_receipt(&path, receipt.clone())?;
-    let isolation_evidence = deterministic_sandbox_isolation_evidence(&sandbox_profiles)?;
+    let isolation_evidence = deterministic_sandbox_isolation_evidence(sandbox_profiles)?;
     let isolation_evidence_digest_blake3 =
         deterministic_sandbox_isolation_evidence_digest_blake3(isolation_evidence.clone()).map_err(core_error)?;
     let isolation_evidence_path = proof_root.join("deterministic-sandbox-isolation-evidence.json");
     write_deterministic_sandbox_isolation_evidence(&isolation_evidence_path, isolation_evidence)?;
-    Ok(Some(DeterministicProofOutput {
+    Ok(DeterministicProofOutput {
         path,
         digest_blake3,
         receipt,
         isolation_evidence_path,
         isolation_evidence_digest_blake3,
-    }))
+    })
 }
 
 fn proof_sandbox_profile(
-    request: &ReleaseReproduceRequest,
-    _release_id: &str,
+    prepared_rebuild: &PreparedRebuildAuthority,
     output_dir: &Path,
     store_dir: &Path,
 ) -> Result<ProofSandboxProfile, RunError> {
     let executor = resolve_bwrap_executor()?;
     let executor_version = bwrap_version(&executor)?;
-    let command_identity = workflow_command_identity(&request.rebuild_command, &request.rebuild_args)?;
     let mut profile = ProofSandboxProfile {
         identity: String::new(),
         executor,
         executor_version,
         network_policy: "none".to_string(),
-        command_identity,
-        bundle_dir: absolutize_existing_path(&request.bundle_dir, "release evidence bundle")?,
+        descriptor_blake3: prepared_rebuild.descriptor_blake3.clone(),
+        authority_plan_blake3: prepared_rebuild.authority_plan_blake3.clone(),
+        command_path: prepared_rebuild.command_path.clone(),
+        command_args: prepared_rebuild.command_args.clone(),
+        source_archive_path: prepared_rebuild.source_archive_path.clone(),
+        read_only_paths: prepared_rebuild.read_only_paths.clone(),
         output_dir: absolutize_path(output_dir)?,
         store_dir: absolutize_path(store_dir)?,
     };
@@ -629,16 +760,15 @@ fn proof_sandbox_profile(
 }
 
 fn sandboxed_rebuild_command(
-    request: &ReleaseReproduceRequest,
     release_id: &str,
     output_dir: &Path,
     deterministic_store_dir: Option<&Path>,
+    prepared_rebuild: &PreparedRebuildAuthority,
     profile: &ProofSandboxProfile,
 ) -> Result<ProcessCommand, RunError> {
     let store_dir = deterministic_store_dir.ok_or_else(|| {
         RunError::Internal("deterministic proof sandbox requires a proof store directory".to_string())
     })?;
-    let command_path = absolutize_existing_path(&request.rebuild_command, "release reproducibility command")?;
     let mut command = ProcessCommand::new(&profile.executor);
     configure_executor_environment(&mut command);
     command
@@ -648,31 +778,21 @@ fn sandboxed_rebuild_command(
         .arg("--clearenv")
         .arg("--tmpfs")
         .arg(PROOF_SANDBOX_TEMP_ROOT);
-    let system_tools_dir = Path::new(PROOF_SANDBOX_SYSTEM_TOOLS_DIR);
-    let existing_arg_paths = existing_absolute_rebuild_arg_paths(&request.rebuild_args);
-    let mut parent_paths = vec![&profile.bundle_dir, &command_path, output_dir, store_dir];
-    parent_paths.extend(existing_arg_paths.iter().map(PathBuf::as_path));
-    if system_tools_dir.is_dir() {
-        parent_paths.push(system_tools_dir);
-    }
+    let mut parent_paths = prepared_rebuild.read_only_paths.iter().map(PathBuf::as_path).collect::<Vec<_>>();
+    parent_paths.push(output_dir);
+    parent_paths.push(store_dir);
     append_bwrap_parent_dirs(&mut command, parent_paths);
-    if system_tools_dir.is_dir() {
-        command.arg("--ro-bind").arg(system_tools_dir).arg(system_tools_dir);
-    }
-    command
-        .arg("--ro-bind")
-        .arg(&profile.bundle_dir)
-        .arg(&profile.bundle_dir)
-        .arg("--ro-bind")
-        .arg(&command_path)
-        .arg(&command_path);
-    for arg_path in &existing_arg_paths {
-        command.arg("--ro-bind").arg(arg_path).arg(arg_path);
+    for input_path in &prepared_rebuild.read_only_paths {
+        command.arg("--ro-bind").arg(input_path).arg(input_path);
     }
     command.arg("--bind").arg(output_dir).arg(output_dir).arg("--bind").arg(store_dir).arg(store_dir);
     append_rebuild_sandbox_environment(&mut command, release_id, profile, output_dir, store_dir);
     configure_sandbox_umask(&mut command);
-    command.arg("--chdir").arg(PROOF_SANDBOX_TEMP_ROOT).arg(&command_path).args(&request.rebuild_args);
+    command
+        .arg("--chdir")
+        .arg(PROOF_SANDBOX_TEMP_ROOT)
+        .arg(&prepared_rebuild.command_path)
+        .args(&prepared_rebuild.command_args);
     Ok(command)
 }
 
@@ -697,7 +817,8 @@ fn append_rebuild_sandbox_environment(
     store_dir: &Path,
 ) {
     let dynamic_environment = [
-        (REPRODUCE_BUNDLE_DIR_ENV, profile.bundle_dir.as_os_str()),
+        (REBUILD_SOURCE_ARCHIVE_ENV, profile.source_archive_path.as_os_str()),
+        (REBUILD_EXECUTABLE_ENV, profile.command_path.as_os_str()),
         (REPRODUCE_OUTPUT_DIR_ENV, output_dir.as_os_str()),
         (REPRODUCE_RELEASE_ID_ENV, OsStr::new(release_id)),
         (DETERMINISTIC_PROOF_STORE_DIR_ENV, store_dir.as_os_str()),
@@ -836,6 +957,9 @@ fn deterministic_run_receipt(
     output_dir: &Path,
     sandbox_profile_identity: &str,
     comparisons: &[ReproducibilityArtifactComparison],
+    rebuild_descriptor_blake3: &str,
+    rebuild_authority_plan_blake3: &str,
+    observed_read_identities: &[String],
 ) -> Result<DeterministicBuildRunReceipt, RunError> {
     let mut output_digests = Vec::with_capacity(comparisons.len());
     for comparison in comparisons {
@@ -860,6 +984,10 @@ fn deterministic_run_receipt(
         substituted_dependency_identities: Vec::new(),
         hermeticity_audit_events: Vec::new(),
         observed_effects: Some(PURE_LOCAL_BUILD_EFFECTS.to_vec()),
+        rebuild_descriptor_blake3: Some(rebuild_descriptor_blake3.to_string()),
+        rebuild_authority_plan_blake3: Some(rebuild_authority_plan_blake3.to_string()),
+        observed_read_identities: observed_read_identities.to_vec(),
+        authority_violations: Vec::new(),
     })
 }
 
@@ -1378,8 +1506,12 @@ mod tests {
             executor: PathBuf::from("bwrap"),
             executor_version: "test".to_string(),
             network_policy: "none".to_string(),
-            command_identity: "test-command".to_string(),
-            bundle_dir: PathBuf::from("/bundle"),
+            descriptor_blake3: sample_digest(1),
+            authority_plan_blake3: sample_digest(2),
+            command_path: PathBuf::from("/inputs/executable"),
+            command_args: vec![OsString::from("sh"), OsString::from("/inputs/recipe")],
+            source_archive_path: PathBuf::from("/inputs/source.tar"),
+            read_only_paths: vec![PathBuf::from("/inputs/executable"), PathBuf::from("/inputs/recipe")],
             output_dir: PathBuf::from("/output"),
             store_dir: PathBuf::from("/store"),
         };
@@ -1489,6 +1621,9 @@ mod tests {
             Path::new("/tmp/proof/run-000/outputs"),
             "mantle-proof-sandbox-v1:test",
             &[comparison],
+            &sample_digest(2),
+            &sample_digest(3),
+            &["Source:source:demo".to_string()],
         )
         .unwrap();
 

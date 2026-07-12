@@ -12,7 +12,9 @@ output_root="$DEFAULT_OUTPUT_ROOT"
 proof_bundle_dir=""
 busybox="${SNIX_BUILD_SANDBOX_SHELL:-}"
 bwrap="${MANTLE_DETERMINISTIC_PROOF_BWRAP:-}"
+toolchain_archive="${MANTLE_RELEASE_REBUILD_TOOLCHAIN_ARCHIVE:-}"
 check_only=0
+self_test=0
 force=0
 skip_self_hosting=0
 
@@ -31,18 +33,23 @@ Options:
   --release-id ID          release id (default: real-self-hosting-stage2-<UTC>)
   --proof-bundle DIR       reuse an existing full self-hosting proof bundle
   --output-root DIR        output root (default: target/release-evidence)
-  --busybox PATH           static busybox used to run the rebuild helper
+  --busybox PATH           static busybox used to run the rebuild recipe
                            (default: $SNIX_BUILD_SANDBOX_SHELL)
   --bwrap PATH             bubblewrap executor used for proof sandboxing
                            (default: $MANTLE_DETERMINISTIC_PROOF_BWRAP or PATH)
+  --toolchain-archive PATH content-bound toolchain closure consumed by the
+                           reviewed source rebuild recipe
+                           (default: $MANTLE_RELEASE_REBUILD_TOOLCHAIN_ARCHIVE)
   --check                  validate prerequisites and print planned paths only
+  --self-test              verify the production rail uses the reviewed source recipe
   --force                  remove prior output dirs for the selected release id
   -h, --help               show this help
 
 The resulting deterministic claim is intentionally bounded: the packaged
-stage2 mantle artifact rebuilt twice from the recorded release/proof inputs
-under recorded mantle-proof-sandbox-v1:* profiles and the BLAKE3 output digest
-sets matched. This is not a full-bootstrap-reproducibility claim.
+stage2 Mantle artifact rebuilt twice from the content-bound source archive,
+reviewed recipe, and explicit toolchain closure under recorded
+mantle-proof-sandbox-v1:* profiles, with matching BLAKE3 output digest sets.
+This does not claim compiler/verifier soundness or full-bootstrap reproducibility.
 EOF
 }
 
@@ -102,8 +109,17 @@ parse_args() {
         bwrap="$(normalize_path "$2")"
         shift 2
         ;;
+      --toolchain-archive)
+        [[ $# -ge 2 ]] || die "--toolchain-archive requires a path"
+        toolchain_archive="$(normalize_path "$2")"
+        shift 2
+        ;;
       --check)
         check_only=1
+        shift
+        ;;
+      --self-test)
+        self_test=1
         shift
         ;;
       --force)
@@ -135,9 +151,27 @@ resolve_tools() {
 
   [[ -n "$busybox" ]] || die "static busybox not set. Set SNIX_BUILD_SANDBOX_SHELL or pass --busybox"
   [[ -x "$busybox" ]] || die "busybox is not executable: $busybox"
+  [[ -n "$toolchain_archive" ]] || die "content-bound toolchain archive not set. Set MANTLE_RELEASE_REBUILD_TOOLCHAIN_ARCHIVE or pass --toolchain-archive"
+  [[ -f "$toolchain_archive" ]] || die "toolchain archive is not a regular file: $toolchain_archive"
+  [[ -x "$SCRIPT_DIR/rebuild-release-artifacts.sh" ]] || die "reviewed rebuild recipe is missing or not executable"
 
   command -v cargo >/dev/null || die "cargo not found"
   cargo --version | grep -Fq 'nightly' || die "nightly cargo is required for this repo; adjust PATH before running"
+}
+
+self_test_production_recipe() {
+  local recipe="$SCRIPT_DIR/rebuild-release-artifacts.sh"
+  [[ -x "$recipe" ]] || die "reviewed rebuild recipe is missing or not executable"
+  grep -Fq 'MANTLE_REBUILD_SOURCE_ARCHIVE' "$recipe" || die "recipe does not consume the declared source archive"
+  grep -Fq 'TOOLCHAIN_ARCHIVE' "$recipe" || die "recipe does not consume the declared toolchain archive"
+  grep -Fq 'cargo' "$recipe" || die "recipe does not execute the source build"
+  if grep -Fq 'MANTLE_REPRODUCE_BUNDLE_DIR' "$recipe"; then
+    die "recipe must not receive complete release-bundle authority"
+  fi
+  if grep -Fq 'binaries/01-stage2-mantle" "$MANTLE_REPRODUCE_OUTPUT_DIR' "$recipe"; then
+    die "recipe contains the retired target-copy authority pattern"
+  fi
+  note "real release determinism production recipe self-test passed"
 }
 
 proof_stage2_binary() {
@@ -151,22 +185,6 @@ proof_stage2_binary() {
     return
   fi
   die "proof bundle does not contain binaries/stage2-mantle or binaries/01-stage2-mantle: $bundle"
-}
-
-write_rebuild_helper() {
-  local helper="${1:?helper path is required}"
-  mkdir -p -- "$(dirname -- "$helper")"
-  cat >"$helper" <<EOF
-set -eu
-BB=$busybox
-\$BB mkdir -p "\$MANTLE_REPRODUCE_OUTPUT_DIR/binaries"
-\$BB cp "\$MANTLE_REPRODUCE_BUNDLE_DIR/binaries/01-stage2-mantle" "\$MANTLE_REPRODUCE_OUTPUT_DIR/binaries/01-stage2-mantle"
-if [ -n "\${MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}" ]; then
-  \$BB mkdir -p "\$MANTLE_DETERMINISTIC_PROOF_STORE_DIR"
-  \$BB printf '%s\n' "\$MANTLE_DETERMINISTIC_PROOF_STORE_DIR" > "\$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt"
-fi
-EOF
-  chmod +x -- "$helper"
 }
 
 validate_receipts() {
@@ -195,6 +213,10 @@ write_summary() {
 main() {
   parse_args "$@"
   require_repo_root
+  if [[ "$self_test" == "1" ]]; then
+    self_test_production_recipe
+    exit 0
+  fi
   resolve_tools
   cd -- "$REPO_ROOT"
 
@@ -202,7 +224,7 @@ main() {
   local deterministic_proof_dir="$output_root/$release_id-proof"
   local rebuild_output_dir="$output_root/$release_id-rebuild"
   local verify_json="$output_root/verify-$release_id.json"
-  local helper="$release_bundle/rebuild-stage2-mantle-copy.sh"
+  local recipe="$SCRIPT_DIR/rebuild-release-artifacts.sh"
 
   if [[ -z "$proof_bundle_dir" ]]; then
     proof_bundle_dir="$DEFAULT_SELF_HOSTING_ROOT/$release_id-self-hosting"
@@ -217,6 +239,8 @@ main() {
   note "summary markdown: $output_root/$release_id-determinism-summary.md"
   note "bwrap: $bwrap"
   note "busybox: $busybox"
+  note "rebuild recipe: $recipe"
+  note "toolchain archive: $toolchain_archive"
 
   if [[ "$check_only" == "1" ]]; then
     if [[ "$skip_self_hosting" == "1" ]]; then
@@ -255,15 +279,14 @@ main() {
     --binary "$stage2_binary" \
     --proof-bundle "$proof_bundle_dir"
 
-  write_rebuild_helper "$helper"
-
   export MANTLE_DETERMINISTIC_PROOF_BWRAP="$bwrap"
-  print_command cargo run -p mantle --bin mantle -- release reproduce "$release_bundle" --rebuild-output-dir "$rebuild_output_dir" --rebuild-command "$busybox" --rebuild-arg sh --rebuild-arg "$helper" --deterministic-proof-runs "$DEFAULT_PROOF_RUNS" --deterministic-proof-dir "$deterministic_proof_dir"
+  print_command cargo run -p mantle --bin mantle -- release reproduce "$release_bundle" --rebuild-output-dir "$rebuild_output_dir" --rebuild-command "$busybox" --rebuild-arg sh --rebuild-arg "$recipe" --rebuild-arg "$toolchain_archive" --deterministic-proof-runs "$DEFAULT_PROOF_RUNS" --deterministic-proof-dir "$deterministic_proof_dir"
   cargo run -p mantle --bin mantle -- release reproduce "$release_bundle" \
     --rebuild-output-dir "$rebuild_output_dir" \
     --rebuild-command "$busybox" \
     --rebuild-arg sh \
-    --rebuild-arg "$helper" \
+    --rebuild-arg "$recipe" \
+    --rebuild-arg "$toolchain_archive" \
     --deterministic-proof-runs "$DEFAULT_PROOF_RUNS" \
     --deterministic-proof-dir "$deterministic_proof_dir"
 

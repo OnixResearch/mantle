@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 blake3 = "1.8.2"
+crunch-release-core = { path = "../crates/crunch-release-core" }
 serde_json = "1"
 ---
 
@@ -24,12 +25,13 @@ use std::process::ExitCode;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use crunch_release_core::*;
 use serde_json::Value;
 use serde_json::json;
 
 const RELEASE_SCHEMA: &str = "mantle-release-evidence-v1";
 const RELEASE_CLAIM_SCOPE: &str = "packaged-integrity-evidence";
-const PROOF_SCHEMA: &str = "mantle-deterministic-proof-receipt-v1";
+const PROOF_SCHEMA: &str = "mantle-deterministic-proof-receipt-v2";
 const EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
 const PROOF_VERDICT: &str = "self-rebuild-match";
 const VERIFY_KIND: &str = "mantle-release-verify-v2";
@@ -80,6 +82,9 @@ fn run() -> Result<(), String> {
     if args.self_test {
         return run_self_test();
     }
+    if let Some(root) = args.write_self_test_fixture.as_deref() {
+        return write_self_test_fixture(root);
+    }
 
     let release_bundle =
         args.release_bundle.as_ref().ok_or("release bundle path is required unless --self-test is used")?;
@@ -91,11 +96,13 @@ fn run() -> Result<(), String> {
     println!("  source BLAKE3: {}", summary.source_blake3);
     println!("  proof bundle BLAKE3: {}", summary.vendor_blake3);
     println!("  artifact digests: {}", summary.artifact_digest_set);
+    println!("  rebuild descriptor BLAKE3: {}", summary.rebuild_descriptor_blake3);
+    println!("  rebuild authority plan BLAKE3: {}", summary.rebuild_authority_plan_blake3);
     println!("  proof: {}", paths.proof.display());
     println!("  sandbox evidence: {}", paths.sandbox.display());
     println!("  verify: {}", paths.verify.display());
     println!(
-        "  bounded claim: packaged release artifacts rebuilt twice from recorded inputs under recorded {SANDBOX_PROFILE_PREFIX} profiles with matching BLAKE3 digest sets; this is not a full-bootstrap reproducibility claim"
+        "  bounded claim: packaged release artifacts rebuilt twice from the exact source closure, recipe, executable/tool identities, provider identity, policies, and fresh run roots bound by the v2 descriptor/authority plan, under recorded {SANDBOX_PROFILE_PREFIX} profiles with matching BLAKE3 digest sets; this does not claim compiler/verifier soundness or full-bootstrap reproducibility"
     );
     Ok(())
 }
@@ -106,6 +113,7 @@ struct Args {
     proof_dir: Option<PathBuf>,
     verify_receipt: Option<PathBuf>,
     self_test: bool,
+    write_self_test_fixture: Option<PathBuf>,
     help: bool,
 }
 
@@ -117,6 +125,7 @@ impl Args {
             proof_dir: None,
             verify_receipt: None,
             self_test: false,
+            write_self_test_fixture: None,
             help: false,
         };
         let mut args = args.peekable();
@@ -131,6 +140,10 @@ impl Args {
                     parsed.verify_receipt = Some(PathBuf::from(value));
                 }
                 "--self-test" => parsed.self_test = true,
+                "--write-self-test-fixture" => {
+                    let value = args.next().ok_or("--write-self-test-fixture requires a directory")?;
+                    parsed.write_self_test_fixture = Some(PathBuf::from(value));
+                }
                 "-h" | "--help" => parsed.help = true,
                 other if other.starts_with('-') => return Err(format!("unknown argument: {other}")),
                 path => {
@@ -150,6 +163,7 @@ fn print_usage() {
         "Usage: cargo -Zscript scripts/check-real-release-determinism-receipt.rs [--proof-dir DIR] [--verify-receipt JSON] RELEASE_BUNDLE"
     );
     println!("       cargo -Zscript scripts/check-real-release-determinism-receipt.rs --self-test");
+    println!("       cargo -Zscript scripts/check-real-release-determinism-receipt.rs --write-self-test-fixture DIR");
 }
 
 #[derive(Debug)]
@@ -213,6 +227,8 @@ struct ValidationSummary {
     source_blake3: String,
     vendor_blake3: String,
     artifact_digest_set: String,
+    rebuild_descriptor_blake3: String,
+    rebuild_authority_plan_blake3: String,
 }
 
 fn validate_proof_paths(paths: &ProofPaths) -> Result<ValidationSummary, String> {
@@ -232,6 +248,8 @@ fn validate_proof_paths(paths: &ProofPaths) -> Result<ValidationSummary, String>
         source_blake3: field_str(&proof, "source_blake3")?.to_string(),
         vendor_blake3: field_str(&proof, "vendor_blake3")?.to_string(),
         artifact_digest_set: artifact_digest_set_label(runs(&proof)?),
+        rebuild_descriptor_blake3: field_str(&proof, "rebuild_descriptor_blake3")?.to_string(),
+        rebuild_authority_plan_blake3: field_str(&proof, "rebuild_authority_plan_blake3")?.to_string(),
     })
 }
 
@@ -261,6 +279,15 @@ fn validate_release_manifest(manifest: &Value) -> Result<(), String> {
 }
 
 fn validate_deterministic_proof(manifest: &Value, proof: &Value) -> Result<(), String> {
+    let typed: DeterministicBuildProofReceipt =
+        serde_json::from_value(proof.clone()).map_err(|err| format!("parse deterministic proof contract: {err}"))?;
+    deterministic_build_proof_receipt_canonical_bytes(typed.clone())
+        .map_err(|err| format!("validate deterministic proof contract: {err}"))?;
+    let genuine = deterministic_build_proof_has_genuine_rebuild_authority(typed)
+        .map_err(|err| format!("validate genuine rebuild authority: {err}"))?;
+    if !genuine {
+        return Err("missing-genuine-rebuild-evidence: path-bound or incomplete proof is non-promoting".to_string());
+    }
     require_str(proof, "schema", PROOF_SCHEMA)?;
     require_str(proof, "workflow_version", PROOF_SCHEMA)?;
     require_str(proof, "effect_policy_version", EFFECT_POLICY_VERSION)?;
@@ -269,6 +296,7 @@ fn validate_deterministic_proof(manifest: &Value, proof: &Value) -> Result<(), S
     require_str(proof, "hermeticity_mode", "strict")?;
     require_str(proof, "physical_store_isolation", "fresh-store-per-run")?;
     require_empty_array(proof, "blocking_reasons")?;
+    require_genuine_rebuild_fields(proof)?;
 
     let release_id = field_str(manifest, "release_id")?;
     let proof_unit = object_field(proof, "proof_unit")?;
@@ -292,6 +320,44 @@ fn validate_deterministic_proof(manifest: &Value, proof: &Value) -> Result<(), S
     require_distinct_run_roots(run_values)?;
     require_profiles(proof, run_values)?;
     require_artifact_digest_sets(manifest, proof_unit, run_values)?;
+    Ok(())
+}
+
+fn require_genuine_rebuild_fields(proof: &Value) -> Result<(), String> {
+    let descriptor_digest = field_str(proof, "rebuild_descriptor_blake3")?;
+    let authority_digest = field_str(proof, "rebuild_authority_plan_blake3")?;
+    require_digest(descriptor_digest, "rebuild_descriptor_blake3")?;
+    require_digest(authority_digest, "rebuild_authority_plan_blake3")?;
+    let descriptor = object_field(proof, "rebuild_descriptor")?;
+    require_str(descriptor, "schema", "mantle-content-bound-rebuild-descriptor-v1")?;
+    let _ = object_field(descriptor, "recipe")?;
+    let _ = object_field(descriptor, "executable")?;
+    let _ = object_field(descriptor, "provider")?;
+    let _ = object_field(descriptor, "policies")?;
+    let sources = array_field(descriptor, "source_inputs")?;
+    if sources.is_empty() {
+        return Err("rebuild_descriptor.source_inputs must not be empty".to_string());
+    }
+    let authority = object_field(proof, "rebuild_authority_plan")?;
+    require_str(authority, "schema", "mantle-rebuild-authority-plan-v1")?;
+    require_str(authority, "descriptor_blake3", descriptor_digest)?;
+    require_bool(authority, "target_authority_excluded", true)?;
+    require_empty_array(authority, "blockers")?;
+    let approved_reads = strings_array(authority, "approved_read_identities")?;
+    if approved_reads.is_empty() {
+        return Err("rebuild_authority_plan.approved_read_identities must not be empty".to_string());
+    }
+    for (index, run) in runs(proof)?.iter().enumerate() {
+        require_str(run, "rebuild_descriptor_blake3", descriptor_digest)
+            .map_err(|err| format!("runs[{index}].{err}"))?;
+        require_str(run, "rebuild_authority_plan_blake3", authority_digest)
+            .map_err(|err| format!("runs[{index}].{err}"))?;
+        require_empty_array(run, "authority_violations").map_err(|err| format!("runs[{index}].{err}"))?;
+        let observed = strings_array(run, "observed_read_identities")?;
+        if observed != approved_reads {
+            return Err(format!("runs[{index}].observed_read_identities differ from authority plan"));
+        }
+    }
     Ok(())
 }
 
@@ -642,6 +708,18 @@ fn require_digest(digest: &str, field: &str) -> Result<(), String> {
     }
 }
 
+fn write_self_test_fixture(root: &Path) -> Result<(), String> {
+    let release_bundle = root.join("demo-release");
+    let proof_dir = root.join("demo-release-proof");
+    fs::create_dir_all(&release_bundle).map_err(|err| format!("create {}: {err}", release_bundle.display()))?;
+    fs::create_dir_all(&proof_dir).map_err(|err| format!("create {}: {err}", proof_dir.display()))?;
+    let fixture = Fixture::new(&release_bundle, &proof_dir);
+    fixture.write_all()?;
+    validate_proof_paths(&fixture.paths)?;
+    println!("{}", release_bundle.display());
+    Ok(())
+}
+
 fn run_self_test() -> Result<(), String> {
     let dir = env::temp_dir().join(format!("mantle-real-release-proof-check-{}-{}", std::process::id(), unix_ms()));
     let release_bundle = dir.join("demo-release");
@@ -673,9 +751,20 @@ fn run_self_test() -> Result<(), String> {
     fixture.write_proof(fixture.proof.clone())?;
     fixture.write_verify_for_current_proof()?;
 
-    fixture.write_proof(mutate(&fixture.proof, "workflow_version", json!("mantle-deterministic-proof-receipt-v2")))?;
+    fixture.write_proof(mutate(&fixture.proof, "workflow_version", json!("mantle-deterministic-proof-receipt-v1")))?;
     fixture.write_verify_for_current_proof()?;
     assert_rejected("unsupported workflow version", &fixture.paths)?;
+    fixture.write_proof(fixture.proof.clone())?;
+    fixture.write_verify_for_current_proof()?;
+
+    let mut legacy = fixture.proof.clone();
+    legacy["schema"] = json!("mantle-deterministic-proof-receipt-v1");
+    legacy["workflow_version"] = json!("mantle-deterministic-proof-receipt-v1");
+    legacy["verdict"] = json!("missing-genuine-rebuild-evidence");
+    legacy["blocking_reasons"] = json!(["missing genuine rebuild evidence: legacy path-bound v1 receipt"]);
+    fixture.write_proof(legacy)?;
+    fixture.write_verify_for_current_proof()?;
+    assert_rejected("legacy path-bound proof remains non-promoting", &fixture.paths)?;
     fixture.write_proof(fixture.proof.clone())?;
     fixture.write_verify_for_current_proof()?;
 
@@ -697,6 +786,103 @@ fn run_self_test() -> Result<(), String> {
     fs::remove_dir_all(&dir).map_err(|err| format!("remove {}: {err}", dir.display()))?;
     println!("real release determinism receipt checker self-test passed");
     Ok(())
+}
+
+fn fixture_rebuild_authority(
+    source_digest: &str,
+    binary_digest: &str,
+    prereq_digest: &str,
+) -> (Value, String, Value, String, Vec<String>) {
+    let content = |name: &str, role: RebuildInputRole, digest: String| RebuildContentIdentity {
+        name: name.to_string(),
+        role,
+        kind: RebuildContentKind::RegularFile,
+        digest_blake3: digest,
+        size_bytes: 1,
+    };
+    let arguments = vec!["literal:sh".to_string(), "input:Recipe:recipe".to_string()];
+    let descriptor = ContentBoundRebuildDescriptor {
+        schema: CONTENT_BOUND_REBUILD_DESCRIPTOR_SCHEMA.to_string(),
+        target_artifacts: vec![content(
+            "binaries/01-stage2-mantle",
+            RebuildInputRole::PublishedTarget,
+            binary_digest.to_string(),
+        )],
+        recipe: content("recipe", RebuildInputRole::Recipe, "2".repeat(HEX64_LEN)),
+        executable: content("executable", RebuildInputRole::Executable, "3".repeat(HEX64_LEN)),
+        tools: vec![content("tool", RebuildInputRole::Tool, "4".repeat(HEX64_LEN))],
+        ordered_arguments: arguments.clone(),
+        arguments_blake3: rebuild_arguments_digest_blake3(arguments).unwrap(),
+        source_inputs: vec![content("source", RebuildInputRole::Source, source_digest.to_string())],
+        provider: content("provider", RebuildInputRole::Provider, prereq_digest.to_string()),
+        policies: RebuildPolicyIdentities {
+            sandbox_policy_blake3: "5".repeat(HEX64_LEN),
+            effect_policy_blake3: "6".repeat(HEX64_LEN),
+            normalization_policy_blake3: "7".repeat(HEX64_LEN),
+        },
+        run_roots: ["run-000", "run-001"]
+            .into_iter()
+            .map(|run_id| RebuildRunRootIdentity {
+                run_id: run_id.to_string(),
+                output_root_identity: format!("/tmp/{run_id}/out"),
+                store_root_identity: format!("/tmp/{run_id}/store"),
+            })
+            .collect(),
+    };
+    let descriptor_digest = content_bound_rebuild_descriptor_digest_blake3(descriptor.clone()).unwrap();
+    let observed = |identity: RebuildContentIdentity, path: &str| RebuildInputObservation {
+        identity,
+        normalized_path: path.to_string(),
+        filesystem_object_identity: None,
+    };
+    let policy = |role: RebuildInputRole, digest: String| {
+        observed(
+            RebuildContentIdentity {
+                name: "policy".to_string(),
+                role,
+                kind: RebuildContentKind::SyntheticPolicy,
+                digest_blake3: digest,
+                size_bytes: 1,
+            },
+            "policy",
+        )
+    };
+    let authority = plan_rebuild_authority(RebuildAuthorityInput {
+        descriptor: descriptor.clone(),
+        descriptor_blake3: descriptor_digest.clone(),
+        published_targets: vec![observed(descriptor.target_artifacts[0].clone(), "/bundle/target")],
+        candidate_inputs: vec![
+            observed(descriptor.recipe.clone(), "/input/recipe"),
+            observed(descriptor.executable.clone(), "/input/executable"),
+            observed(descriptor.tools[0].clone(), "/input/tool"),
+            observed(descriptor.source_inputs[0].clone(), "/input/source"),
+            observed(descriptor.provider.clone(), "/input/provider"),
+            policy(RebuildInputRole::SandboxPolicy, descriptor.policies.sandbox_policy_blake3.clone()),
+            policy(RebuildInputRole::EffectPolicy, descriptor.policies.effect_policy_blake3.clone()),
+            policy(RebuildInputRole::NormalizationPolicy, descriptor.policies.normalization_policy_blake3.clone()),
+        ],
+        run_roots: descriptor
+            .run_roots
+            .iter()
+            .map(|run| RebuildRunRootObservation {
+                identity: run.clone(),
+                normalized_output_path: format!("/tmp/{}/out", run.run_id),
+                normalized_store_path: format!("/tmp/{}/store", run.run_id),
+            })
+            .collect(),
+        ordinary_output_path: "/tmp/ordinary".to_string(),
+        proof_root_path: "/tmp/proof".to_string(),
+    });
+    assert!(authority.blockers.is_empty());
+    let authority_digest = rebuild_authority_plan_digest_blake3(authority.clone()).unwrap();
+    let approved = authority.approved_read_identities.clone();
+    (
+        serde_json::to_value(descriptor).unwrap(),
+        descriptor_digest,
+        serde_json::to_value(authority).unwrap(),
+        authority_digest,
+        approved,
+    )
 }
 
 struct Fixture {
@@ -741,6 +927,8 @@ impl Fixture {
                 "staged_source": "/tmp/staged-source"
             }
         });
+        let (descriptor, descriptor_digest, authority, authority_digest, approved_reads) =
+            fixture_rebuild_authority(&source_digest, &binary_digest, &prereq_digest);
         let run = |run_id: &str, profile: &str, root: &str, store: &str| {
             json!({
                 "run_id": run_id,
@@ -751,7 +939,11 @@ impl Fixture {
                 "output_digests": [{"name": "binaries/01-stage2-mantle", "digest_blake3": binary_digest}],
                 "substituted_dependency_identities": [],
                 "hermeticity_audit_events": [],
-                "observed_effects": ["environment", "read-store", "write-output"]
+                "observed_effects": ["environment", "read-store", "write-output"],
+                "rebuild_descriptor_blake3": descriptor_digest,
+                "rebuild_authority_plan_blake3": authority_digest,
+                "observed_read_identities": approved_reads,
+                "authority_violations": []
             })
         };
         let proof = json!({
@@ -765,12 +957,27 @@ impl Fixture {
             "vendor_blake3": vendor_digest,
             "toolchain_provider_identity": "provider-kind=legacy-fetch;command=busybox sh helper",
             "toolchain_stage_roots": [format!("prerequisite-inventory={prereq_digest}"), format!("stage2-binary={binary_digest}"), "staged-source=/tmp/staged-source"],
+            "rebuild_descriptor": descriptor,
+            "rebuild_descriptor_blake3": descriptor_digest,
+            "rebuild_authority_plan": authority,
+            "rebuild_authority_plan_blake3": authority_digest,
             "logical_store_prefix": "/mantle/store",
             "physical_store_isolation": "fresh-store-per-run",
             "effect_policy_version": EFFECT_POLICY_VERSION,
             "declared_effects": ["environment", "read-store", "write-output"],
-            "normalized_execution_envelope": ["sandbox=bwrap", format!("sandbox-profile={sandbox_a}"), format!("sandbox-profile={sandbox_b}")],
-            "ambient_host_perturbations": ["HOME", "PATH"],
+            "normalized_execution_envelope": [
+                "sandbox=bwrap", "network=none",
+                "normalization:time=enforced", "normalization:timezone=enforced",
+                "normalization:locale=enforced", "normalization:temp-roots=enforced",
+                "normalization:host-user-metadata=enforced", "normalization:umask=enforced",
+                "normalization:modeled-randomness=enforced",
+                "normalization:order-sensitive-output-processing=enforced",
+                format!("sandbox-profile={sandbox_a}"), format!("sandbox-profile={sandbox_b}")
+            ],
+            "ambient_host_perturbations": [
+                "HOME", "PATH", "USER", "LOGNAME", "TZ", "LANG", "LC_ALL", "TMPDIR",
+                "cwd", "umask", "env-noise"
+            ],
             "sandbox_profile_identities": [sandbox_a, sandbox_b],
             "runs": [run("run-000", &sandbox_a, "/tmp/run-000/out", "/tmp/run-000/store"), run("run-001", &sandbox_b, "/tmp/run-001/out", "/tmp/run-001/store")],
             "verdict": PROOF_VERDICT,

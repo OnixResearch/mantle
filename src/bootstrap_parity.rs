@@ -128,6 +128,8 @@ pub struct ParityProofDetails {
     pub selected_provider_kind: ProviderKind,
     pub evidence_digest_blake3: String,
     pub deterministic_proof_digest_blake3: String,
+    pub rebuild_descriptor_blake3: String,
+    pub rebuild_authority_plan_blake3: String,
     pub sandbox_evidence_digest_blake3: String,
     pub verify_receipt_digest_blake3: String,
     pub summary_json_digest_blake3: String,
@@ -288,24 +290,28 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
     let evidence_result = validate_stage_evidence(project_root, path.as_deref(), spec.evidence_check);
     let evidence_failure = evidence_result.as_ref().err().map(String::as_str);
     let proof_details = evidence_result.as_ref().ok().and_then(|validation| validation.proof_details.clone());
-    let status = match (spec.expected_complete, file_state) {
-        (false, None) if spec.evidence_check != EvidenceCheck::None && evidence_failure.is_none() => {
-            StageStatus::Partial
+    let status = if spec.evidence_check == EvidenceCheck::RealSelfBuildProof && evidence_failure.is_some() {
+        StageStatus::Blocked
+    } else {
+        match (spec.expected_complete, file_state) {
+            (false, None) if spec.evidence_check != EvidenceCheck::None && evidence_failure.is_none() => {
+                StageStatus::Partial
+            }
+            (_, None) => StageStatus::Blocked,
+            (_, Some(FileState::Missing)) => StageStatus::NotStarted,
+            (_, Some(FileState::Present)) if evidence_failure.is_some() => StageStatus::Partial,
+            (false, Some(FileState::Present)) => StageStatus::Partial,
+            (false, Some(FileState::Placeholder))
+                if spec.evidence_check == EvidenceCheck::Gcc40PlaceholderInventory && evidence_failure.is_none() =>
+            {
+                StageStatus::Partial
+            }
+            (false, Some(FileState::Placeholder)) => StageStatus::Placeholder,
+            (true, Some(FileState::Present)) => StageStatus::Complete,
+            (true, Some(FileState::Placeholder)) => StageStatus::Placeholder,
+            (true, Some(FileState::Unreadable)) => StageStatus::Blocked,
+            (false, Some(FileState::Unreadable)) => StageStatus::Blocked,
         }
-        (_, None) => StageStatus::Blocked,
-        (_, Some(FileState::Missing)) => StageStatus::NotStarted,
-        (_, Some(FileState::Present)) if evidence_failure.is_some() => StageStatus::Partial,
-        (false, Some(FileState::Present)) => StageStatus::Partial,
-        (false, Some(FileState::Placeholder))
-            if spec.evidence_check == EvidenceCheck::Gcc40PlaceholderInventory && evidence_failure.is_none() =>
-        {
-            StageStatus::Partial
-        }
-        (false, Some(FileState::Placeholder)) => StageStatus::Placeholder,
-        (true, Some(FileState::Present)) => StageStatus::Complete,
-        (true, Some(FileState::Placeholder)) => StageStatus::Placeholder,
-        (true, Some(FileState::Unreadable)) => StageStatus::Blocked,
-        (false, Some(FileState::Unreadable)) => StageStatus::Blocked,
     };
     let provider_kind = provider_kind_for(spec, status, proof_details.as_ref());
     let notes = row_notes(spec, status, path.as_deref(), evidence_failure, proof_details.as_ref());
@@ -369,10 +375,12 @@ fn row_notes(
     }
     if let Some(details) = proof_details {
         notes.push(format!(
-            "real self-build proof evidence accepted for provider_kind={} release_id={} proof_digest={} verify_status={}; bounded claim: {}",
+            "genuine release rebuild evidence accepted as partial bootstrap-parity evidence for provider_kind={} release_id={} proof_digest={} rebuild_descriptor={} rebuild_authority_plan={} verify_status={}; bounded claim: {}",
             details.selected_provider_kind,
             details.release_id,
             details.deterministic_proof_digest_blake3,
+            details.rebuild_descriptor_blake3,
+            details.rebuild_authority_plan_blake3,
             details.verify_status,
             details.bounded_claim
         ));
@@ -1667,6 +1675,7 @@ fn require_stagex_empty_array(value: &serde_json::Value, field: &str) -> Result<
     Ok(())
 }
 
+// r[impl mantle.release_provenance.deterministic_rebuild_admission.validation]
 fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result<EvidenceValidation, String> {
     validate_self_build_provider_kind_linkage(project_root)?;
     let path = project_root.join(REAL_SELF_BUILD_PROOF_PARITY_RECEIPT);
@@ -1695,8 +1704,13 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
     require_real_proof_object_string(provider_kind_linkage, "receipt_path", SELF_BUILD_PROVIDER_KIND_LINKAGE_RECEIPT)?;
     require_real_proof_object_provider_kind(provider_kind_linkage, "selected_provider_kind", selected_provider_kind)?;
 
-    require_real_proof_object_string(deterministic_proof, "workflow", "mantle-deterministic-proof-receipt-v1")?;
+    require_real_proof_object_string(deterministic_proof, "workflow", "mantle-deterministic-proof-receipt-v2")?;
     require_real_proof_object_string(deterministic_proof, "verdict", "self-rebuild-match")?;
+    require_real_proof_object_bool(deterministic_proof, "genuine_rebuild_authority", true)?;
+    let rebuild_descriptor_blake3 =
+        require_real_proof_object_digest(deterministic_proof, "rebuild_descriptor_blake3")?.to_string();
+    let rebuild_authority_plan_blake3 =
+        require_real_proof_object_digest(deterministic_proof, "rebuild_authority_plan_blake3")?.to_string();
     require_real_proof_object_provider_kind(deterministic_proof, "selected_provider_kind", selected_provider_kind)?;
     let deterministic_proof_digest_blake3 =
         require_real_proof_object_digest(deterministic_proof, "digest_blake3")?.to_string();
@@ -1767,18 +1781,17 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
     require_real_proof_object_string(summary, "proof_digest_blake3", &deterministic_proof_digest_blake3)?;
     require_real_proof_object_string(summary, "sandbox_evidence_digest_blake3", &sandbox_evidence_digest_blake3)?;
     let bounded_claim = require_real_proof_object_non_empty_string(summary, "bounded_claim")?.to_string();
-    if !bounded_claim.contains("rebuilt twice") || !bounded_claim.contains("recorded inputs") {
-        return Err("real self-build proof bounded claim must state rebuilt-twice recorded-input scope".to_string());
+    if !bounded_claim.contains("rebuilt twice") || !bounded_claim.contains("exact content") {
+        return Err("real self-build proof bounded claim must state rebuilt-twice exact-content scope".to_string());
     }
     let non_claims = summary
         .get("non_claims")
         .and_then(|v| v.as_array())
         .ok_or_else(|| "real self-build proof summary missing array field `non_claims`".to_string())?;
-    if !non_claims
-        .iter()
-        .any(|claim| claim.as_str().unwrap_or("").contains("full bootstrap reproducibility"))
-    {
-        return Err("real self-build proof summary non_claims must reject full bootstrap reproducibility".to_string());
+    for required_non_claim in ["compiler or verifier soundness", "full bootstrap reproducibility"] {
+        if !non_claims.iter().any(|claim| claim.as_str().unwrap_or("").contains(required_non_claim)) {
+            return Err(format!("real self-build proof summary non_claims must reject {required_non_claim}"));
+        }
     }
 
     require_real_proof_string(&value, "source_blake3", source_digest)?;
@@ -1790,6 +1803,8 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
         selected_provider_kind,
         evidence_digest_blake3,
         deterministic_proof_digest_blake3,
+        rebuild_descriptor_blake3,
+        rebuild_authority_plan_blake3,
         sandbox_evidence_digest_blake3,
         verify_receipt_digest_blake3,
         summary_json_digest_blake3,
@@ -1872,6 +1887,22 @@ fn require_real_proof_object_digest<'a>(
     let digest = require_real_proof_object_non_empty_string(object, field)?;
     validate_blake3_digest(digest, field)?;
     Ok(digest)
+}
+
+fn require_real_proof_object_bool(
+    object: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+    expected: bool,
+) -> Result<(), String> {
+    let actual = object
+        .get(field)
+        .and_then(|value| value.as_bool())
+        .ok_or_else(|| format!("real self-build proof parity receipt missing boolean field `{field}`"))?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!("real self-build proof parity receipt `{field}` is `{actual}`, expected `{expected}`"))
+    }
 }
 
 fn require_real_proof_object_provider_kind(
@@ -2769,8 +2800,11 @@ mod tests {
     "selected_provider_kind": "source-root"
   },
   "deterministic_proof": {
-    "workflow": "mantle-deterministic-proof-receipt-v1",
+    "workflow": "mantle-deterministic-proof-receipt-v2",
     "verdict": "self-rebuild-match",
+    "genuine_rebuild_authority": true,
+    "rebuild_descriptor_blake3": "4444444444444444444444444444444444444444444444444444444444444444",
+    "rebuild_authority_plan_blake3": "5555555555555555555555555555555555555555555555555555555555555555",
     "selected_provider_kind": "source-root",
     "digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "source_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2797,8 +2831,8 @@ mod tests {
     "verify_status": "eligible",
     "proof_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "sandbox_evidence_digest_blake3": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    "bounded_claim": "This artifact rebuilt twice from the recorded inputs under the recorded sandbox and matched.",
-    "non_claims": ["full bootstrap reproducibility"]
+    "bounded_claim": "This artifact rebuilt twice from the exact content identities and policies under isolated roots and matched.",
+    "non_claims": ["compiler or verifier soundness", "full bootstrap reproducibility"]
   }
 }
 "#
@@ -4729,13 +4763,13 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn self_build_without_provider_kind_linkage_receipt_remains_partial() {
+    fn self_build_without_provider_kind_linkage_receipt_is_blocked() {
         let dir = tempdir().unwrap();
         write_stage(dir.path(), "crunch.ncl", "# real crunch derivation body\n");
 
         let row = evaluate_stage(dir.path(), &self_build_spec());
 
-        assert_eq!(row.status, StageStatus::Partial);
+        assert_eq!(row.status, StageStatus::Blocked);
         assert_eq!(row.provider_kind, ProviderKind::Unknown);
         assert!(row.proof_details.is_none());
         assert!(row.notes.contains("provider-kind linkage receipt missing"));
@@ -4760,7 +4794,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         assert_eq!(proof.verdict, "self-rebuild-match");
         assert_eq!(proof.verify_status, "eligible");
         assert!(proof.bounded_claim.contains("rebuilt twice"));
-        assert!(row.notes.contains("real self-build proof evidence accepted"));
+        assert!(row.notes.contains("genuine release rebuild evidence accepted as partial bootstrap-parity evidence"));
         assert!(!row.notes.contains("evidence check failed"));
     }
 
@@ -4806,13 +4840,28 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
         write_real_self_build_proof_parity(
             dir.path(),
-            "mantle-deterministic-proof-receipt-v1=>mantle-deterministic-proof-receipt-v2",
+            "mantle-deterministic-proof-receipt-v2=>mantle-deterministic-proof-receipt-v1",
         );
 
         let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
 
         assert!(err.contains("workflow"));
-        assert!(err.contains("mantle-deterministic-proof-receipt-v1"));
+        assert!(err.contains("mantle-deterministic-proof-receipt-v2"));
+    }
+
+    #[test]
+    fn self_build_real_proof_descriptor_rejects_missing_genuine_rebuild_authority() {
+        let dir = tempdir().unwrap();
+        write_self_build_provider_kind_linkage(dir.path(), "source-root", "source-root", "source-root");
+        write_real_self_build_proof_parity(
+            dir.path(),
+            "\"genuine_rebuild_authority\": true=>\"genuine_rebuild_authority\": false",
+        );
+
+        let err = validate_real_self_build_proof_parity_evidence(dir.path()).unwrap_err();
+
+        assert!(err.contains("genuine_rebuild_authority"));
+        assert!(err.contains("expected `true`"));
     }
 
     #[test]
@@ -4875,17 +4924,17 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn self_build_real_derivation_reports_real_proof_backed_partial_without_completing_axes() {
+    fn self_build_checked_legacy_release_evidence_is_blocked_until_genuine_v2_refresh() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);
         let row = report.rows.iter().find(|row| row.id == "crunch.self-build").unwrap();
 
-        assert_eq!(row.status, StageStatus::Partial);
-        assert_eq!(row.provider_kind, ProviderKind::SourceRoot);
+        assert_eq!(row.status, StageStatus::Blocked);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
         assert!(row.status.blocks_parity());
-        assert!(row.proof_details.is_some());
+        assert!(row.proof_details.is_none());
         assert!(!row.notes.contains("provider-kind linkage receipt missing"));
-        assert!(!row.notes.contains("evidence check failed"));
+        assert!(row.notes.contains("mantle-deterministic-proof-receipt-v2"));
         assert!(report.axes.iter().any(|axis| axis.axis == ParityAxis::Guix && !axis.complete));
         assert!(report.axes.iter().any(|axis| axis.axis == ParityAxis::Stagex && !axis.complete));
     }

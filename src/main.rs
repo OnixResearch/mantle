@@ -54,6 +54,7 @@ mod protected_exec;
 #[allow(dead_code)]
 mod protected_exec_seccomp;
 mod realization_routing;
+mod rebuild_authority;
 mod release_attestation;
 mod release_capability;
 mod release_cmd;

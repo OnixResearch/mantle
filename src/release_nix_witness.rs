@@ -11,6 +11,7 @@ use crunch_release_core::NixCrossBuilderWitnessReceipt;
 use crunch_release_core::NixCrossBuilderWitnessReceiptInit;
 use crunch_release_core::NixCrossBuilderWitnessVerdict;
 use crunch_release_core::canonical_nix_cross_builder_witness_receipt;
+use crunch_release_core::deterministic_build_proof_has_genuine_rebuild_authority;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::nix_cross_builder_witness_receipt_digest_blake3;
 
@@ -210,6 +211,14 @@ fn ensure_deterministic_proof_promotes(
     proof: &VerifiedDeterministicProof,
     manifest: &crunch_release_core::ReleaseEvidenceManifest,
 ) -> Result<(), RunError> {
+    let genuine_rebuild = deterministic_build_proof_has_genuine_rebuild_authority(proof.receipt.clone())
+        .map_err(|err| RunError::Internal(format!("validating deterministic proof rebuild authority: {err}")))?;
+    if !genuine_rebuild {
+        return Err(RunError::Internal(
+            "nix cross-builder witness requires content-bound genuine rebuild authority; legacy path-bound evidence is non-promoting"
+                .to_string(),
+        ));
+    }
     if proof.receipt.verdict != DeterministicBuildProofVerdict::SelfRebuildMatch {
         return Err(RunError::Internal(format!(
             "nix cross-builder witness requires a deterministic proof with self-rebuild-match verdict, got {:?}",

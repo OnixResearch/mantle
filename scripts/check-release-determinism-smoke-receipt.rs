@@ -30,8 +30,9 @@ const VERSION: u64 = 1;
 const TEST_NAME: &str = "release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release";
 const EXPECTED_COMMAND: &[&str] = &["cargo", "test", "--test", "release_cli", TEST_NAME, "--", "--nocapture"];
 const REQUIRED_CLAIM_FRAGMENTS: &[&str] = &[
-    "mantle-deterministic-proof-receipt-v1",
+    "mantle-deterministic-proof-receipt-v2",
     "two clean proof stores",
+    "published target authority",
     "BLAKE3 artifact digest sets",
     "supported sandbox evidence",
     "release verification accepted",
@@ -247,7 +248,7 @@ fn valid_receipt(log_path: &Path) -> Result<Value, String> {
         "workflow": WORKFLOW,
         "version": VERSION,
         "verdict": "passed",
-        "bounded_claim": "The checked-in CLI regression generated a mantle-deterministic-proof-receipt-v1 receipt from two clean proof stores, verified matching BLAKE3 artifact digest sets under supported sandbox evidence, and release verification accepted that generated proof.",
+        "bounded_claim": "The checked-in CLI regression generated a mantle-deterministic-proof-receipt-v2 receipt from two clean proof stores, bound exact source/recipe/tool/provider/policy/run-root identities, excluded published target authority, verified matching BLAKE3 artifact digest sets under supported sandbox evidence, and release verification accepted that generated proof. This does not claim compiler/verifier soundness.",
         "repo_root": "/repo",
         "git_head": "abc123",
         "git_status": "## main",

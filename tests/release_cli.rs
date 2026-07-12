@@ -29,6 +29,8 @@ use crunch_attestation::independent_agreement_report_canonical_bytes;
 use crunch_build::KeyPair;
 use crunch_build::load_keypair;
 use crunch_release_core::BUILD_EFFECT_POLICY_VERSION;
+use crunch_release_core::CONTENT_BOUND_REBUILD_DESCRIPTOR_SCHEMA;
+use crunch_release_core::ContentBoundRebuildDescriptor;
 use crunch_release_core::DETERMINISTIC_BUILD_PROOF_EVIDENCE_ROLE;
 use crunch_release_core::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
 use crunch_release_core::DETERMINISTIC_SANDBOX_ISOLATION_EVIDENCE_ROLE;
@@ -64,11 +66,24 @@ use crunch_release_core::OpaqueEvidenceUpstreamValidationLink;
 use crunch_release_core::PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE;
 use crunch_release_core::PURE_LOCAL_BUILD_EFFECTS;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
+use crunch_release_core::RebuildAuthorityInput;
+use crunch_release_core::RebuildAuthorityPlan;
+use crunch_release_core::RebuildContentIdentity;
+use crunch_release_core::RebuildContentKind;
+use crunch_release_core::RebuildInputObservation;
+use crunch_release_core::RebuildInputRole;
+use crunch_release_core::RebuildPolicyIdentities;
+use crunch_release_core::RebuildRunRootIdentity;
+use crunch_release_core::RebuildRunRootObservation;
 use crunch_release_core::ReleaseReproducibilityReport;
 use crunch_release_core::SUPPORTED_SANDBOX_PROFILE_FAMILY;
+use crunch_release_core::content_bound_rebuild_descriptor_digest_blake3;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
 use crunch_release_core::opaque_evidence_sidecar_binding_receipt;
+use crunch_release_core::plan_rebuild_authority;
+use crunch_release_core::rebuild_arguments_digest_blake3;
+use crunch_release_core::rebuild_authority_plan_digest_blake3;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use predicates::prelude::*;
 use serde::Deserialize;
@@ -1718,6 +1733,67 @@ fn write_rebuild_copy_script(script_path: &Path, binary_relative_path: &str) {
     );
 }
 
+fn retarget_release_binary_to_source_size(bundle_dir: &Path, manifest: &mut ReleaseEvidenceManifest) {
+    let source_archive = bundle_dir.join(&manifest.source_archive.relative_path);
+    let source_size_bytes = std::fs::metadata(&source_archive).unwrap().len();
+    let output_bytes = format!("source-size:{source_size_bytes}\n").into_bytes();
+    let target = bundle_dir.join(&manifest.binaries[0].relative_path);
+    write_file(&target, &output_bytes);
+    let output_digest = blake3::hash(&output_bytes).to_hex().to_string();
+    manifest.binaries[0].size_bytes = u64::try_from(output_bytes.len()).unwrap();
+    manifest.binaries[0].digest_blake3 = output_digest.clone();
+    manifest.proof_linkage.stage2_binary_digest_blake3 = output_digest.clone();
+
+    let proof_dir = bundle_dir.join(&manifest.proof_bundle.relative_path);
+    let proof_manifest_path = proof_dir.join("manifest.json");
+    let mut proof_manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&proof_manifest_path).unwrap()).unwrap();
+    proof_manifest["binaries"]["stage2"]["size_bytes"] = serde_json::json!(output_bytes.len());
+    proof_manifest["binaries"]["stage2"]["digest_blake3"] = serde_json::json!(output_digest);
+    let proof_manifest_bytes = serde_json::to_vec(&proof_manifest).unwrap();
+    write_file(&proof_manifest_path, &proof_manifest_bytes);
+    manifest.proof_linkage.proof_manifest_digest_blake3 = blake3::hash(&proof_manifest_bytes).to_hex().to_string();
+    let (proof_size_bytes, proof_digest) = hash_directory(&proof_dir).unwrap();
+    manifest.proof_bundle.size_bytes = proof_size_bytes;
+    manifest.proof_bundle.digest_blake3 = proof_digest;
+    write_canonical_manifest(bundle_dir, manifest);
+}
+
+fn write_source_size_rebuild_script(script_path: &Path, binary_relative_path: &str) -> [PathBuf; 2] {
+    let host_wc = ["/run/current-system/sw/bin/wc", "/usr/bin/wc", "/bin/wc"]
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|path| path.is_file())
+        .expect("a wc executable is required for release rebuild fixtures");
+    let wc_tool = script_path.with_file_name("wc-tool").join("wc");
+    write_rebuild_script(&wc_tool, &format!("exec \"{}\" \"$@\"\n", host_wc.display()));
+    let mkdir_tool = write_genuine_rebuild_script(script_path, binary_relative_path);
+    write_rebuild_script(
+        script_path,
+        &format!(
+            "mkdir_tool=\"$1\"\nwc_tool=\"$2\"\nsource_archive=\"${{MANTLE_REBUILD_SOURCE_ARCHIVE:?}}\"\n\"$mkdir_tool\" -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\nset -- $(\"$wc_tool\" -c \"$source_archive\")\nprintf 'source-size:%s\\n' \"$1\" > \"$MANTLE_REPRODUCE_OUTPUT_DIR/{binary_relative_path}\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then\n  printf '%s\\n' \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt\"\n  umask > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/umask.txt\"\n  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' \"$SOURCE_DATE_EPOCH\" \"$TZ\" \"$LANG\" \"$LC_ALL\" \"$TEMP\" \"$TEMPDIR\" \"$TMP\" \"$TMPDIR\" \"$USER\" \"$LOGNAME\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/normalization-env.txt\"\nfi\n"
+        ),
+    );
+    [mkdir_tool, wc_tool]
+}
+
+fn write_genuine_rebuild_script(script_path: &Path, binary_relative_path: &str) -> PathBuf {
+    let host_mkdir = ["/run/current-system/sw/bin/mkdir", "/usr/bin/mkdir", "/bin/mkdir"]
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|path| path.is_file())
+        .expect("a mkdir executable is required for release rebuild fixtures");
+    let mkdir_tool = script_path.with_file_name("mkdir-tool").join("mkdir");
+    write_rebuild_script(&mkdir_tool, &format!("exec \"{}\" \"$@\"\n", host_mkdir.display()));
+    write_rebuild_script(
+        script_path,
+        &format!(
+            "mkdir_tool=\"$1\"\nsource_archive=\"${{MANTLE_REBUILD_SOURCE_ARCHIVE:?}}\"\n[ -s \"$source_archive\" ]\n\"$mkdir_tool\" -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\nprintf '%s%s' 'crunch-' 'binary' > \"$MANTLE_REPRODUCE_OUTPUT_DIR/{binary_relative_path}\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then\n  printf '%s\\n' \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt\"\n  umask > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/umask.txt\"\n  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' \"$SOURCE_DATE_EPOCH\" \"$TZ\" \"$LANG\" \"$LC_ALL\" \"$TEMP\" \"$TEMPDIR\" \"$TMP\" \"$TMPDIR\" \"$USER\" \"$LOGNAME\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/normalization-env.txt\"\nfi\n"
+        ),
+    );
+    mkdir_tool
+}
+
 fn write_rebuild_script(script_path: &Path, body: &str) {
     let script = format!("#!/bin/sh\nset -eu\n{body}");
     write_file(script_path, script.as_bytes());
@@ -1808,6 +1884,109 @@ fn write_canonical_reproducibility_report(report_path: &Path, report: ReleaseRep
     write_file(report_path, &bytes);
 }
 
+fn deterministic_fixture_authority(
+    manifest: &ReleaseEvidenceManifest,
+) -> (ContentBoundRebuildDescriptor, String, RebuildAuthorityPlan, String) {
+    let content = |name: &str, role: RebuildInputRole, digest_blake3: String| RebuildContentIdentity {
+        name: name.to_string(),
+        role,
+        kind: RebuildContentKind::RegularFile,
+        digest_blake3,
+        size_bytes: 1,
+    };
+    let output = &manifest.binaries[0];
+    let fixture_digest = |label: &str| blake3::hash(label.as_bytes()).to_hex().to_string();
+    let arguments = vec!["literal:sh".to_string(), "input:Recipe:fixture".to_string()];
+    let run_roots = ["run-000", "run-001"]
+        .into_iter()
+        .map(|run_id| RebuildRunRootIdentity {
+            run_id: run_id.to_string(),
+            output_root_identity: format!("{run_id}:output"),
+            store_root_identity: format!("{run_id}:store"),
+        })
+        .collect::<Vec<_>>();
+    let descriptor = ContentBoundRebuildDescriptor {
+        schema: CONTENT_BOUND_REBUILD_DESCRIPTOR_SCHEMA.to_string(),
+        target_artifacts: vec![RebuildContentIdentity {
+            name: output.relative_path.clone(),
+            role: RebuildInputRole::PublishedTarget,
+            kind: RebuildContentKind::RegularFile,
+            digest_blake3: output.digest_blake3.clone(),
+            size_bytes: output.size_bytes,
+        }],
+        recipe: content("recipe", RebuildInputRole::Recipe, fixture_digest("fixture-recipe")),
+        executable: content("executable", RebuildInputRole::Executable, fixture_digest("fixture-executable")),
+        tools: vec![content("tool", RebuildInputRole::Tool, fixture_digest("fixture-tool"))],
+        ordered_arguments: arguments.clone(),
+        arguments_blake3: rebuild_arguments_digest_blake3(arguments).unwrap(),
+        source_inputs: vec![content(
+            "source",
+            RebuildInputRole::Source,
+            manifest.source_archive.digest_blake3.clone(),
+        )],
+        provider: content(
+            "provider",
+            RebuildInputRole::Provider,
+            manifest.prerequisite_inventory.digest_blake3.clone(),
+        ),
+        policies: RebuildPolicyIdentities {
+            sandbox_policy_blake3: fixture_digest("fixture-sandbox-policy"),
+            effect_policy_blake3: fixture_digest("fixture-effect-policy"),
+            normalization_policy_blake3: fixture_digest("fixture-normalization-policy"),
+        },
+        run_roots,
+    };
+    let descriptor_blake3 = content_bound_rebuild_descriptor_digest_blake3(descriptor.clone()).unwrap();
+    let observed = |identity: RebuildContentIdentity, path: &str| RebuildInputObservation {
+        identity,
+        normalized_path: path.to_string(),
+        filesystem_object_identity: None,
+    };
+    let policy = |role: RebuildInputRole, digest_blake3: String| RebuildInputObservation {
+        identity: RebuildContentIdentity {
+            name: "policy".to_string(),
+            role,
+            kind: RebuildContentKind::SyntheticPolicy,
+            digest_blake3,
+            size_bytes: 1,
+        },
+        normalized_path: format!("policy:{role:?}"),
+        filesystem_object_identity: None,
+    };
+    let plan = plan_rebuild_authority(RebuildAuthorityInput {
+        descriptor: descriptor.clone(),
+        descriptor_blake3: descriptor_blake3.clone(),
+        published_targets: vec![observed(descriptor.target_artifacts[0].clone(), "/bundle/target")],
+        candidate_inputs: vec![
+            observed(descriptor.recipe.clone(), "/inputs/recipe"),
+            observed(descriptor.executable.clone(), "/inputs/executable"),
+            observed(descriptor.tools[0].clone(), "/inputs/tool"),
+            observed(descriptor.source_inputs[0].clone(), "/inputs/source"),
+            observed(descriptor.provider.clone(), "/inputs/provider"),
+            policy(RebuildInputRole::SandboxPolicy, descriptor.policies.sandbox_policy_blake3.clone()),
+            policy(RebuildInputRole::EffectPolicy, descriptor.policies.effect_policy_blake3.clone()),
+            policy(RebuildInputRole::NormalizationPolicy, descriptor.policies.normalization_policy_blake3.clone()),
+        ],
+        run_roots: vec![
+            RebuildRunRootObservation {
+                identity: descriptor.run_roots[0].clone(),
+                normalized_output_path: "/tmp/proof/run-000/outputs".to_string(),
+                normalized_store_path: "/tmp/proof/run-000/store".to_string(),
+            },
+            RebuildRunRootObservation {
+                identity: descriptor.run_roots[1].clone(),
+                normalized_output_path: "/tmp/proof/run-001/outputs".to_string(),
+                normalized_store_path: "/tmp/proof/run-001/store".to_string(),
+            },
+        ],
+        ordinary_output_path: "/tmp/ordinary-output".to_string(),
+        proof_root_path: "/tmp/proof".to_string(),
+    });
+    assert!(plan.eligible(), "{:?}", plan.blockers);
+    let plan_blake3 = rebuild_authority_plan_digest_blake3(plan.clone()).unwrap();
+    (descriptor, descriptor_blake3, plan, plan_blake3)
+}
+
 fn write_deterministic_verify_artifacts(
     dir: &Path,
     manifest: &ReleaseEvidenceManifest,
@@ -1817,6 +1996,9 @@ fn write_deterministic_verify_artifacts(
     let profile = format!("{SUPPORTED_SANDBOX_PROFILE_FAMILY}:test-profile");
     let output_digest = manifest.binaries[0].digest_blake3.clone();
     let output_name = manifest.binaries[0].relative_path.clone();
+    let (rebuild_descriptor, rebuild_descriptor_blake3, rebuild_authority_plan, rebuild_authority_plan_blake3) =
+        deterministic_fixture_authority(manifest);
+    let approved_read_identities = rebuild_authority_plan.approved_read_identities.clone();
     let run = |run_id: &str, perturbation_case: &str, store: &str| DeterministicBuildRunReceipt {
         run_id: run_id.to_string(),
         perturbation_case: perturbation_case.to_string(),
@@ -1830,6 +2012,10 @@ fn write_deterministic_verify_artifacts(
         substituted_dependency_identities: Vec::new(),
         hermeticity_audit_events: Vec::new(),
         observed_effects: Some(PURE_LOCAL_BUILD_EFFECTS.to_vec()),
+        rebuild_descriptor_blake3: Some(rebuild_descriptor_blake3.clone()),
+        rebuild_authority_plan_blake3: Some(rebuild_authority_plan_blake3.clone()),
+        observed_read_identities: approved_read_identities.clone(),
+        authority_violations: Vec::new(),
     };
     let proof = DeterministicBuildProofReceipt::new(DeterministicBuildProofReceiptInit {
         proof_unit: DeterministicProofUnit {
@@ -1889,6 +2075,10 @@ fn write_deterministic_verify_artifacts(
             run("run-000", "baseline-clean-env", "/tmp/store-a"),
             run("run-001", "host-env-noise", "/tmp/store-b"),
         ],
+        rebuild_descriptor,
+        rebuild_descriptor_blake3,
+        rebuild_authority_plan,
+        rebuild_authority_plan_blake3,
     });
     let proof_bytes = deterministic_build_proof_receipt_canonical_bytes(proof).unwrap();
     let proof_digest = blake3::hash(&proof_bytes).to_hex().to_string();
@@ -2071,7 +2261,27 @@ fn release_nix_witness_rejects_deterministic_proof_source_drift() {
     populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
     let mut proof: DeterministicBuildProofReceipt =
         serde_json::from_slice(&std::fs::read(&proof_path).unwrap()).unwrap();
-    proof.source_blake3 = sample_digest(41);
+    let old_source_digest = proof.source_blake3.clone();
+    let new_source_digest = sample_digest(41);
+    proof.source_blake3 = new_source_digest.clone();
+    let descriptor = proof.rebuild_descriptor.as_mut().unwrap();
+    descriptor.source_inputs[0].digest_blake3 = new_source_digest.clone();
+    let descriptor_digest = content_bound_rebuild_descriptor_digest_blake3(descriptor.clone()).unwrap();
+    proof.rebuild_descriptor_blake3 = Some(descriptor_digest.clone());
+    let authority = proof.rebuild_authority_plan.as_mut().unwrap();
+    authority.descriptor_blake3 = descriptor_digest.clone();
+    for identity in &mut authority.approved_read_identities {
+        *identity = identity.replace(&old_source_digest, &new_source_digest);
+    }
+    let authority_digest = rebuild_authority_plan_digest_blake3(authority.clone()).unwrap();
+    proof.rebuild_authority_plan_blake3 = Some(authority_digest.clone());
+    for run in &mut proof.runs {
+        run.rebuild_descriptor_blake3 = Some(descriptor_digest.clone());
+        run.rebuild_authority_plan_blake3 = Some(authority_digest.clone());
+        for identity in &mut run.observed_read_identities {
+            *identity = identity.replace(&old_source_digest, &new_source_digest);
+        }
+    }
     let proof_bytes = deterministic_build_proof_receipt_canonical_bytes(proof).unwrap();
     write_file(&proof_path, &proof_bytes);
 
@@ -2082,6 +2292,38 @@ fn release_nix_witness_rejects_deterministic_proof_source_drift() {
         .stderr(predicate::str::contains(
             "deterministic proof source digest does not match release bundle source digest",
         ));
+    assert!(!receipt_path.exists());
+}
+
+// r[verify mantle.release_provenance.deterministic_rebuild_admission.legacy]
+#[test]
+fn release_nix_witness_keeps_legacy_path_bound_receipt_non_promoting() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (proof_path, _, _, _) = write_deterministic_verify_artifacts(&temp.path().join("legacy-proof"), &manifest);
+    let nix_output_dir = temp.path().join("legacy-nix-output");
+    let receipt_path = temp.path().join("legacy-nix-witness.json");
+    populate_nix_output_from_bundle(&bundle_dir, &manifest, &nix_output_dir);
+    let mut legacy: DeterministicBuildProofReceipt =
+        serde_json::from_slice(&std::fs::read(&proof_path).unwrap()).unwrap();
+    legacy.schema = "mantle-deterministic-proof-receipt-v1".to_string();
+    legacy.workflow_version = "mantle-deterministic-proof-receipt-v1".to_string();
+    legacy.rebuild_descriptor = None;
+    legacy.rebuild_descriptor_blake3 = None;
+    legacy.rebuild_authority_plan = None;
+    legacy.rebuild_authority_plan_blake3 = None;
+    for run in &mut legacy.runs {
+        run.rebuild_descriptor_blake3 = None;
+        run.rebuild_authority_plan_blake3 = None;
+        run.observed_read_identities.clear();
+        run.authority_violations.clear();
+    }
+    write_file(&proof_path, &deterministic_build_proof_receipt_canonical_bytes(legacy).unwrap());
+
+    run_nix_witness_args(&bundle_dir, &nix_output_dir, &proof_path, &receipt_path)
+        .current_dir(temp.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("requires content-bound genuine rebuild authority"));
     assert!(!receipt_path.exists());
 }
 
@@ -2375,6 +2617,48 @@ fn release_verify_reports_required_deterministic_release_from_artifacts() {
     assert_eq!(stdout["deterministic_release"]["sandbox_isolation_evidence_digest_blake3"], evidence_digest);
 }
 
+// r[verify mantle.release_provenance.deterministic_rebuild_admission.legacy]
+#[test]
+fn release_verify_keeps_legacy_path_bound_receipt_non_promoting() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let proof_dir = temp.path().join("legacy-deterministic-proof");
+    let (proof_path, evidence_path, _, _) = write_deterministic_verify_artifacts(&proof_dir, &manifest);
+    let mut legacy: DeterministicBuildProofReceipt =
+        serde_json::from_slice(&std::fs::read(&proof_path).unwrap()).unwrap();
+    legacy.schema = "mantle-deterministic-proof-receipt-v1".to_string();
+    legacy.workflow_version = "mantle-deterministic-proof-receipt-v1".to_string();
+    legacy.rebuild_descriptor = None;
+    legacy.rebuild_descriptor_blake3 = None;
+    legacy.rebuild_authority_plan = None;
+    legacy.rebuild_authority_plan_blake3 = None;
+    for run in &mut legacy.runs {
+        run.rebuild_descriptor_blake3 = None;
+        run.rebuild_authority_plan_blake3 = None;
+        run.observed_read_identities.clear();
+        run.authority_violations.clear();
+    }
+    let bytes = deterministic_build_proof_receipt_canonical_bytes(legacy).unwrap();
+    write_file(&proof_path, &bytes);
+
+    let output = crunch()
+        .current_dir(temp.path())
+        .arg("--json")
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--deterministic-proof")
+        .arg(&proof_path)
+        .arg("--deterministic-sandbox-isolation-evidence")
+        .arg(&evidence_path)
+        .arg("--require-deterministic-release")
+        .output()
+        .unwrap();
+    let stdout =
+        assert_json_release_verify_rejection(output, "deterministic-release", "missing-genuine-rebuild-evidence");
+    assert_eq!(stdout["deterministic_release"]["status"], "blocked");
+    assert_eq!(stdout["deterministic_release"]["eligible"], false);
+}
+
 #[test]
 fn release_verify_require_deterministic_release_rejects_missing_isolation_evidence() {
     let (temp, bundle_dir, manifest) = make_valid_bundle();
@@ -2615,7 +2899,8 @@ fn release_reproduce_writes_matched_report_from_isolated_rebuild_output() {
 #[cfg(unix)]
 #[test]
 fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
-    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    retarget_release_binary_to_source_size(&bundle_dir, &mut manifest);
     let rebuild_script = temp.path().join("fake-deterministic-rebuild.sh");
     let rebuild_output_dir = temp.path().join("deterministic-main-output");
     let fake_bwrap = temp.path().join("fake-bwrap.sh");
@@ -2624,12 +2909,7 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     let proof_dir = temp.path().join("deterministic-proof-work");
     let report_path = temp.path().join("deterministic-report.json");
     let relative_path = &manifest.binaries[0].relative_path;
-    write_rebuild_script(
-        &rebuild_script,
-        &format!(
-            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$MANTLE_REPRODUCE_BUNDLE_DIR/{relative_path}\" \"$MANTLE_REPRODUCE_OUTPUT_DIR/{relative_path}\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then\n  mkdir -p \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\"\n  printf '%s\\n' \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt\"\n  umask > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/umask.txt\"\n  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' \"$SOURCE_DATE_EPOCH\" \"$TZ\" \"$LANG\" \"$LC_ALL\" \"$TEMP\" \"$TEMPDIR\" \"$TMP\" \"$TMPDIR\" \"$USER\" \"$LOGNAME\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/normalization-env.txt\"\nfi\n"
-        ),
-    );
+    let [mkdir_tool, wc_tool] = write_source_size_rebuild_script(&rebuild_script, relative_path);
 
     let assert = crunch()
         .current_dir(temp.path())
@@ -2641,6 +2921,10 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
         .arg(&rebuild_output_dir)
         .arg("--rebuild-command")
         .arg(&rebuild_script)
+        .arg("--rebuild-arg")
+        .arg(&mkdir_tool)
+        .arg("--rebuild-arg")
+        .arg(&wc_tool)
         .arg("--report-path")
         .arg(&report_path)
         .arg("--deterministic-proof-runs")
@@ -2725,8 +3009,8 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
             "denies-undeclared-host-access"
         ])
     );
-    assert_eq!(proof["schema"], "mantle-deterministic-proof-receipt-v1");
-    assert_eq!(proof["workflow_version"], "mantle-deterministic-proof-receipt-v1");
+    assert_eq!(proof["schema"], "mantle-deterministic-proof-receipt-v2");
+    assert_eq!(proof["workflow_version"], "mantle-deterministic-proof-receipt-v2");
     assert_eq!(proof["proof_unit"]["target_artifact_identity"], format!("release:{}", manifest.release_id));
     assert_eq!(proof["selected_provider_kind"], manifest.proof_linkage.selected_provider_kind);
     assert_eq!(proof["source_blake3"], manifest.source_archive.digest_blake3);
@@ -2745,22 +3029,167 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert!(runs[1]["sandbox_profile_identity"].as_str().unwrap().starts_with("mantle-proof-sandbox-v1:"));
     assert_eq!(runs[0]["output_digests"][0]["name"], *relative_path);
     assert_eq!(runs[0]["output_digests"], runs[1]["output_digests"]);
+    assert_eq!(proof["rebuild_authority_plan"]["target_authority_excluded"], true);
+    assert!(proof["rebuild_authority_plan"]["blockers"].as_array().unwrap().is_empty());
+    assert!(proof["rebuild_descriptor_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
+    assert!(proof["rebuild_authority_plan_blake3"].as_str().unwrap().len() == BLAKE3_HEX_LEN);
+    assert_eq!(runs[0]["rebuild_descriptor_blake3"], proof["rebuild_descriptor_blake3"]);
+    assert!(runs[0]["authority_violations"].as_array().unwrap().is_empty());
 
     let transcript = std::fs::read_to_string(&fake_bwrap_transcript).unwrap();
     assert!(transcript.contains("--unshare-all"));
     assert!(transcript.contains("--clearenv"));
     assert!(!transcript.contains("--share-net"));
     assert!(!transcript.contains(&rebuild_output_dir.display().to_string()));
+    assert!(!transcript.contains(&bundle_dir.display().to_string()));
+    assert!(transcript.contains(&proof_dir.join("rebuild-inputs").display().to_string()));
     assert!(transcript.contains(&proof_dir.join("run-000/output").display().to_string()));
     assert!(transcript.contains(&proof_dir.join("run-000/store").display().to_string()));
     assert!(transcript.contains(&proof_dir.join("run-001/output").display().to_string()));
     assert!(transcript.contains(&proof_dir.join("run-001/store").display().to_string()));
 }
 
+// r[verify mantle.build_correctness.release_determinism.fixtures.negative.target_copy]
+#[cfg(unix)]
+#[test]
+fn release_reproduce_rejects_direct_target_copy_authority_before_proof() {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let rebuild_script = temp.path().join("copy-target-rebuild.sh");
+    let rebuild_output_dir = temp.path().join("copy-target-output");
+    let proof_dir = temp.path().join("copy-target-proof");
+    let fake_bwrap = temp.path().join("copy-target-bwrap.sh");
+    write_fake_bwrap(&fake_bwrap);
+    write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("reproduce")
+        .arg(&bundle_dir)
+        .arg("--rebuild-output-dir")
+        .arg(&rebuild_output_dir)
+        .arg("--rebuild-command")
+        .arg(&rebuild_script)
+        .arg("--deterministic-proof-runs")
+        .arg("2")
+        .arg("--deterministic-proof-dir")
+        .arg(&proof_dir)
+        .env("MANTLE_DETERMINISTIC_PROOF_BWRAP", &fake_bwrap)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("deterministic genuine rebuild authority blocked"))
+        .stderr(predicate::str::contains("PublishedTargetInput"));
+    assert!(!proof_dir.join("deterministic-build-proof.json").exists());
+}
+
+// r[verify mantle.build_correctness.release_determinism.fixtures.negative.target_copy]
+#[cfg(unix)]
+#[test]
+fn release_reproduce_rejects_copy_hardlink_and_symlink_target_aliases() {
+    for alias_kind in ["copy", "hardlink", "symlink", "proof-bundle-copy"] {
+        let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+        let target = bundle_dir.join(&manifest.binaries[0].relative_path);
+        let alias = if alias_kind == "proof-bundle-copy" {
+            bundle_dir.join(&manifest.proof_bundle.relative_path).join("target-alias")
+        } else {
+            temp.path().join(format!("{alias_kind}-target-alias"))
+        };
+        match alias_kind {
+            "copy" | "proof-bundle-copy" => {
+                std::fs::copy(&target, &alias).unwrap();
+            }
+            "hardlink" => std::fs::hard_link(&target, &alias).unwrap(),
+            "symlink" => symlink(&target, &alias).unwrap(),
+            _ => unreachable!(),
+        }
+        if alias_kind == "proof-bundle-copy" {
+            let proof_bundle = bundle_dir.join(&manifest.proof_bundle.relative_path);
+            let (size_bytes, digest_blake3) = hash_directory(&proof_bundle).unwrap();
+            manifest.proof_bundle.size_bytes = size_bytes;
+            manifest.proof_bundle.digest_blake3 = digest_blake3;
+            write_canonical_manifest(&bundle_dir, &manifest);
+        }
+        let rebuild_script = temp.path().join(format!("{alias_kind}-genuine-rebuild.sh"));
+        let mkdir_tool = write_genuine_rebuild_script(&rebuild_script, &manifest.binaries[0].relative_path);
+        let rebuild_output_dir = temp.path().join(format!("{alias_kind}-output"));
+        let proof_dir = temp.path().join(format!("{alias_kind}-proof"));
+        let fake_bwrap = temp.path().join(format!("{alias_kind}-bwrap.sh"));
+        write_fake_bwrap(&fake_bwrap);
+
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("reproduce")
+            .arg(&bundle_dir)
+            .arg("--rebuild-output-dir")
+            .arg(&rebuild_output_dir)
+            .arg("--rebuild-command")
+            .arg(&rebuild_script)
+            .arg("--rebuild-arg")
+            .arg(&mkdir_tool)
+            .arg("--rebuild-arg")
+            .arg(&alias)
+            .arg("--deterministic-proof-runs")
+            .arg("2")
+            .arg("--deterministic-proof-dir")
+            .arg(&proof_dir)
+            .env("MANTLE_DETERMINISTIC_PROOF_BWRAP", &fake_bwrap)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("deterministic genuine rebuild authority blocked"));
+        assert!(!proof_dir.join("deterministic-build-proof.json").exists(), "{alias_kind}");
+    }
+}
+
+// r[verify mantle.build_correctness.release_determinism.fixtures.negative.target_copy]
+#[cfg(unix)]
+#[test]
+fn release_reproduce_rejects_whole_bundle_prior_and_ordinary_output_inputs() {
+    for forbidden_kind in ["whole-bundle", "prior-output", "ordinary-output"] {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let rebuild_script = temp.path().join(format!("{forbidden_kind}-genuine-rebuild.sh"));
+        let mkdir_tool = write_genuine_rebuild_script(&rebuild_script, &manifest.binaries[0].relative_path);
+        let rebuild_output_dir = temp.path().join(format!("{forbidden_kind}-output"));
+        let proof_dir = temp.path().join(format!("{forbidden_kind}-proof"));
+        let forbidden = match forbidden_kind {
+            "whole-bundle" => bundle_dir.clone(),
+            "prior-output" => proof_dir.clone(),
+            "ordinary-output" => rebuild_output_dir.clone(),
+            _ => unreachable!(),
+        };
+        let fake_bwrap = temp.path().join(format!("{forbidden_kind}-bwrap.sh"));
+        write_fake_bwrap(&fake_bwrap);
+
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("reproduce")
+            .arg(&bundle_dir)
+            .arg("--rebuild-output-dir")
+            .arg(&rebuild_output_dir)
+            .arg("--rebuild-command")
+            .arg(&rebuild_script)
+            .arg("--rebuild-arg")
+            .arg(&mkdir_tool)
+            .arg("--rebuild-arg")
+            .arg(&forbidden)
+            .arg("--deterministic-proof-runs")
+            .arg("2")
+            .arg("--deterministic-proof-dir")
+            .arg(&proof_dir)
+            .env("MANTLE_DETERMINISTIC_PROOF_BWRAP", &fake_bwrap)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("deterministic genuine rebuild authority blocked"));
+        assert!(!proof_dir.join("deterministic-build-proof.json").exists(), "{forbidden_kind}");
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release() {
-    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    retarget_release_binary_to_source_size(&bundle_dir, &mut manifest);
     let rebuild_script = temp.path().join("fake-e2e-deterministic-rebuild.sh");
     let rebuild_output_dir = temp.path().join("e2e-deterministic-main-output");
     let fake_bwrap = temp.path().join("fake-bwrap.sh");
@@ -2768,12 +3197,7 @@ fn release_reproduce_generated_two_clean_store_proof_verifies_deterministic_rele
     let proof_dir = temp.path().join("e2e-deterministic-proof-work");
     let report_path = temp.path().join("e2e-deterministic-report.json");
     let relative_path = &manifest.binaries[0].relative_path;
-    write_rebuild_script(
-        &rebuild_script,
-        &format!(
-            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$MANTLE_REPRODUCE_BUNDLE_DIR/{relative_path}\" \"$MANTLE_REPRODUCE_OUTPUT_DIR/{relative_path}\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then mkdir -p \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\"; printf '%s\\n' \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt\"; fi\n"
-        ),
-    );
+    let [mkdir_tool, wc_tool] = write_source_size_rebuild_script(&rebuild_script, relative_path);
 
     let reproduce_assert = crunch()
         .current_dir(temp.path())
@@ -2785,6 +3209,10 @@ fn release_reproduce_generated_two_clean_store_proof_verifies_deterministic_rele
         .arg(&rebuild_output_dir)
         .arg("--rebuild-command")
         .arg(&rebuild_script)
+        .arg("--rebuild-arg")
+        .arg(&mkdir_tool)
+        .arg("--rebuild-arg")
+        .arg(&wc_tool)
         .arg("--report-path")
         .arg(&report_path)
         .arg("--deterministic-proof-runs")
@@ -2806,7 +3234,7 @@ fn release_reproduce_generated_two_clean_store_proof_verifies_deterministic_rele
 
     let proof = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&proof_path).unwrap()).unwrap();
     let runs = proof["runs"].as_array().unwrap();
-    assert_eq!(proof["schema"], "mantle-deterministic-proof-receipt-v1");
+    assert_eq!(proof["schema"], "mantle-deterministic-proof-receipt-v2");
     assert_eq!(proof["verdict"], "self-rebuild-match", "proof was: {proof}");
     assert_eq!(runs.len(), 2);
     assert_ne!(runs[0]["output_store_paths"][0], runs[1]["output_store_paths"][0]);
@@ -2865,7 +3293,7 @@ fn release_reproduce_generated_two_clean_store_proof_verifies_deterministic_rele
 
 #[cfg(unix)]
 #[test]
-fn release_reproduce_denies_host_only_deterministic_proof_recipe() {
+fn release_reproduce_rejects_recipe_bundle_authority_before_sandbox() {
     let (temp, bundle_dir, manifest) = make_valid_bundle();
     let rebuild_script = temp.path().join("host-only-deterministic-rebuild.sh");
     let rebuild_output_dir = temp.path().join("deterministic-main-output-host-only");
@@ -2901,7 +3329,8 @@ fn release_reproduce_denies_host_only_deterministic_proof_recipe() {
         .env("MANTLE_FAKE_BWRAP_FORBIDDEN_HOST_PATH", &host_secret)
         .assert()
         .failure()
-        .stderr(predicate::str::contains("fake bwrap denied undeclared host path"));
+        .stderr(predicate::str::contains("deterministic genuine rebuild authority blocked"))
+        .stderr(predicate::str::contains("PublishedTargetInput"));
 
     assert!(!proof_dir.join("deterministic-build-proof.json").exists());
 }
@@ -2913,7 +3342,7 @@ fn release_reproduce_fails_closed_without_deterministic_proof_sandbox() {
     let rebuild_script = temp.path().join("fake-deterministic-rebuild.sh");
     let rebuild_output_dir = temp.path().join("deterministic-main-output-missing-sandbox");
     let proof_dir = temp.path().join("deterministic-proof-missing-sandbox");
-    write_rebuild_copy_script(&rebuild_script, &manifest.binaries[0].relative_path);
+    let mkdir_tool = write_genuine_rebuild_script(&rebuild_script, &manifest.binaries[0].relative_path);
 
     crunch()
         .current_dir(temp.path())
@@ -2925,6 +3354,8 @@ fn release_reproduce_fails_closed_without_deterministic_proof_sandbox() {
         .arg(&rebuild_output_dir)
         .arg("--rebuild-command")
         .arg(&rebuild_script)
+        .arg("--rebuild-arg")
+        .arg(&mkdir_tool)
         .arg("--deterministic-proof-runs")
         .arg("2")
         .arg("--deterministic-proof-dir")

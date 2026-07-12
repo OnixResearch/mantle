@@ -29,11 +29,9 @@ use serde_json::Value;
 use serde_json::json;
 
 const SUMMARY_SCHEMA: &str = "mantle-real-release-determinism-summary-v1";
-const BOUNDED_CLAIM: &str = "This artifact rebuilt twice from the recorded inputs under the recorded mantle-proof-sandbox-v1 profiles and the BLAKE3 digest sets matched. This is a bounded packaged-artifact proof, not a full-bootstrap reproducibility claim.";
+const BOUNDED_CLAIM: &str = "This artifact rebuilt twice from the exact source closure, recipe, executable/tool identities, provider identity, policies, and fresh run roots bound by the v2 descriptor/authority plan under recorded mantle-proof-sandbox-v1 profiles, and the BLAKE3 digest sets matched. This does not claim compiler/verifier soundness or full-bootstrap reproducibility.";
 const PROOF_VERDICT: &str = "self-rebuild-match";
 const VERIFY_STATUS: &str = "eligible";
-const VERIFY_KIND: &str = "mantle-release-verify-v2";
-const VERIFY_DECISION_SCHEMA: &str = "mantle-release-verification-decision-v1";
 const SANDBOX_PREFIX: &str = "mantle-proof-sandbox-v1:";
 
 fn main() -> ExitCode {
@@ -244,7 +242,9 @@ fn build_summary(paths: &ProofPaths) -> Result<Value, String> {
             "physical_store_isolation": field_str(&proof, "physical_store_isolation")?,
             "run_count": runs.len(),
             "run_root_identities": runs.iter().map(|run| field_str(run, "output_root_identity").map(String::from)).collect::<Result<Vec<_>, _>>()?,
-            "proof_file_blake3": blake3_file(&paths.proof)?
+            "proof_file_blake3": blake3_file(&paths.proof)?,
+            "rebuild_descriptor_blake3": field_str(&proof, "rebuild_descriptor_blake3")?,
+            "rebuild_authority_plan_blake3": field_str(&proof, "rebuild_authority_plan_blake3")?
         },
         "verify": {
             "status": field_str(deterministic, "status")?,
@@ -255,6 +255,7 @@ fn build_summary(paths: &ProofPaths) -> Result<Value, String> {
         },
         "bounded_claim": BOUNDED_CLAIM,
         "non_claims": [
+            "compiler or verifier soundness",
             "full bootstrap reproducibility",
             "absence of all environmental influence",
             "parity with every upstream bootstrap lineage"
@@ -297,6 +298,11 @@ fn render_markdown(summary: &Value) -> Result<String, String> {
     let sandbox = object_field(summary, "sandbox")?;
     let proof = object_field(summary, "proof")?;
     let verify = object_field(summary, "verify")?;
+    out.push_str(&format!("- Rebuild descriptor BLAKE3: `{}`\n", field_str(proof, "rebuild_descriptor_blake3")?));
+    out.push_str(&format!(
+        "- Rebuild authority plan BLAKE3: `{}`\n",
+        field_str(proof, "rebuild_authority_plan_blake3")?
+    ));
     out.push_str(&format!("- Proof file BLAKE3: `{}`\n", field_str(proof, "proof_file_blake3")?));
     out.push_str(&format!(
         "- Sandbox evidence file BLAKE3: `{}`\n",
@@ -381,16 +387,33 @@ fn field_str<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {
     value.get(field).and_then(Value::as_str).ok_or_else(|| format!("missing string field {field}"))
 }
 
+fn write_fixture_via_validator(root: &Path) -> Result<(), String> {
+    let validator = Path::new("scripts/check-real-release-determinism-receipt.rs");
+    let output = Command::new("cargo")
+        .arg("-Zscript")
+        .arg(validator)
+        .arg("--write-self-test-fixture")
+        .arg(root)
+        .output()
+        .map_err(|err| format!("write validated self-test fixture: {err}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "validator fixture generation failed ({}): {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    ))
+}
+
 fn run_self_test() -> Result<(), String> {
     let dir =
         env::temp_dir().join(format!("mantle-real-release-determinism-summary-{}-{}", std::process::id(), unix_ms()));
     let release_bundle = dir.join("demo-release");
     let proof_dir = dir.join("demo-release-proof");
     let output_dir = dir.join("summary-out");
-    fs::create_dir_all(&release_bundle).map_err(|err| format!("create {}: {err}", release_bundle.display()))?;
-    fs::create_dir_all(&proof_dir).map_err(|err| format!("create {}: {err}", proof_dir.display()))?;
     fs::create_dir_all(&output_dir).map_err(|err| format!("create {}: {err}", output_dir.display()))?;
-    write_fixture(&release_bundle, &proof_dir)?;
+    write_fixture_via_validator(&dir)?;
     run_validator(&release_bundle, Some(&proof_dir), Some(&dir.join("verify-demo-release.json")))?;
     let paths = ProofPaths::resolve(&release_bundle, Some(&proof_dir), Some(&dir.join("verify-demo-release.json")))?;
     let summary = build_summary(&paths)?;
@@ -405,7 +428,8 @@ fn run_self_test() -> Result<(), String> {
     }
     let md = render_markdown(&summary)?;
     for required in [
-        "bounded packaged-artifact proof",
+        "exact source closure",
+        "compiler or verifier soundness",
         "full bootstrap reproducibility",
         "mantle-proof-sandbox-v1:",
     ] {
@@ -416,123 +440,6 @@ fn run_self_test() -> Result<(), String> {
     fs::remove_dir_all(&dir).map_err(|err| format!("remove {}: {err}", dir.display()))?;
     println!("real release determinism summary self-test passed");
     Ok(())
-}
-
-fn write_fixture(release_bundle: &Path, proof_dir: &Path) -> Result<(), String> {
-    let source_digest = "a".repeat(64);
-    let vendor_digest = "b".repeat(64);
-    let binary_digest = "c".repeat(64);
-    let prereq_digest = "d".repeat(64);
-    let proof_manifest_digest = "e".repeat(64);
-    let sandbox_digest = "f".repeat(64);
-    let sandbox_a = format!("{SANDBOX_PREFIX}{}", "1".repeat(64));
-    let sandbox_b = format!("{SANDBOX_PREFIX}{}", "2".repeat(64));
-    let verify_path = release_bundle.parent().unwrap().join("verify-demo-release.json");
-    let manifest_path = release_bundle.join("manifest.json");
-    let proof_path = proof_dir.join("deterministic-build-proof.json");
-    let sandbox_path = proof_dir.join("deterministic-sandbox-isolation-evidence.json");
-    let manifest = json!({
-        "schema": "mantle-release-evidence-v1",
-        "release_id": "demo-release",
-        "claim_scope": "packaged-integrity-evidence",
-        "workflow": {"command": "./scripts/prove-self-hosting.sh", "version": "mantle-self-hosting-proof-v2"},
-        "source_archive": {"kind": "file", "relative_path": "source/src.tar", "size_bytes": 1, "digest_blake3": source_digest},
-        "binaries": [{"kind": "file", "relative_path": "binaries/01-stage2-mantle", "size_bytes": 1, "digest_blake3": binary_digest}],
-        "proof_bundle": {"kind": "directory", "relative_path": "proof/self-hosting", "size_bytes": 1, "digest_blake3": vendor_digest},
-        "prerequisite_inventory": {"kind": "file", "relative_path": "proof/inventory.md", "size_bytes": 1, "digest_blake3": prereq_digest},
-        "proof_linkage": {
-            "release_id": "demo-release",
-            "source_archive_digest_blake3": source_digest,
-            "proof_bundle_schema": "mantle-self-hosting-proof-v2",
-            "proof_mode": "fixed-point",
-            "selected_provider_kind": "legacy-fetch",
-            "stage2_binary_digest_blake3": binary_digest,
-            "prerequisite_inventory_digest_blake3": prereq_digest,
-            "proof_manifest_digest_blake3": proof_manifest_digest,
-            "staged_source": "/tmp/staged-source"
-        }
-    });
-    let run = |run_id: &str, profile: &str, root: &str, store: &str| {
-        json!({
-            "run_id": run_id,
-            "perturbation_case": "baseline-clean-env",
-            "output_store_paths": [store],
-            "output_root_identity": root,
-            "sandbox_profile_identity": profile,
-            "output_digests": [{"name": "binaries/01-stage2-mantle", "digest_blake3": binary_digest}],
-            "substituted_dependency_identities": [],
-            "hermeticity_audit_events": [],
-            "observed_effects": ["environment", "read-store", "write-output"]
-        })
-    };
-    let proof = json!({
-        "schema": "mantle-deterministic-proof-receipt-v1",
-        "proof_unit": {"target_artifact_identity": "release:demo-release", "output_identities": ["binaries/01-stage2-mantle"]},
-        "derivation_identity": "release:demo-release",
-        "hermeticity_mode": "strict",
-        "workflow_version": "mantle-deterministic-proof-receipt-v1",
-        "selected_provider_kind": "legacy-fetch",
-        "source_blake3": source_digest,
-        "vendor_blake3": vendor_digest,
-        "toolchain_provider_identity": "provider-kind=legacy-fetch;command=busybox sh helper",
-        "toolchain_stage_roots": [format!("prerequisite-inventory={prereq_digest}"), format!("stage2-binary={binary_digest}"), "staged-source=/tmp/staged-source"],
-        "logical_store_prefix": "/mantle/store",
-        "physical_store_isolation": "fresh-store-per-run",
-        "effect_policy_version": "mantle-build-effects-v1",
-        "declared_effects": ["environment", "read-store", "write-output"],
-        "normalized_execution_envelope": ["sandbox=bwrap", format!("sandbox-profile={sandbox_a}"), format!("sandbox-profile={sandbox_b}")],
-        "ambient_host_perturbations": ["HOME", "PATH"],
-        "sandbox_profile_identities": [sandbox_a, sandbox_b],
-        "runs": [run("run-000", &sandbox_a, "/tmp/run-000/out", "/tmp/run-000/store"), run("run-001", &sandbox_b, "/tmp/run-001/out", "/tmp/run-001/store")],
-        "verdict": PROOF_VERDICT,
-        "blocking_reasons": []
-    });
-    let sandbox = json!({
-        "schema": "mantle-deterministic-sandbox-isolation-evidence-v1",
-        "profile_family": "mantle-proof-sandbox-v1",
-        "evidence_version": "mantle-release-reproducibility-v1",
-        "status": "passed",
-        "checks": ["denies-host-network-by-default", "denies-main-output-and-proof-store-reuse", "denies-undeclared-host-access"],
-        "evidence_digest_blake3": sandbox_digest
-    });
-    write_json(&manifest_path, &manifest)?;
-    write_json(&proof_path, &proof)?;
-    write_json(&sandbox_path, &sandbox)?;
-    let verify = json!({
-        "kind": VERIFY_KIND,
-        "decision_schema": VERIFY_DECISION_SCHEMA,
-        "valid": true,
-        "disposition": "accepted",
-        "checks": accepted_verify_checks(),
-        "diagnostics": [],
-        "release_id": "demo-release",
-        "manifest": manifest,
-        "reproducibility_status": "absent",
-        "deterministic_release": {
-            "eligible": true,
-            "status": VERIFY_STATUS,
-            "blockers": [],
-            "proof_path": proof_path,
-            "proof_digest_blake3": blake3_file(&proof_path)?,
-            "sandbox_isolation_evidence_path": sandbox_path,
-            "sandbox_isolation_evidence_digest_blake3": blake3_file(&sandbox_path)?
-        }
-    });
-    write_json(&verify_path, &verify)
-}
-
-fn accepted_verify_checks() -> Value {
-    json!([
-        {"contributor": "manifest-integrity", "requirement": "mandatory", "disposition": "satisfied", "blocking": false, "diagnostics": []},
-        {"contributor": "reproducibility", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
-        {"contributor": "deterministic-release", "requirement": "required", "disposition": "satisfied", "blocking": false, "diagnostics": []},
-        {"contributor": "provider-fixed-point-proof", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
-        {"contributor": "stack-provenance", "requirement": "advisory", "disposition": "absent", "blocking": false, "diagnostics": []},
-        {"contributor": "external-evidence-roles", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
-        {"contributor": "stagex-no-quorum", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
-        {"contributor": "function-address", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []},
-        {"contributor": "cairn-handoff", "requirement": "not-selected", "disposition": "not-evaluated", "blocking": false, "diagnostics": []}
-    ])
 }
 
 fn unix_ms() -> u128 {
