@@ -218,6 +218,7 @@ pub(crate) fn create_release_evidence_bundle(
         external_evidence,
         kani_toolchain_evidence,
         stack_provenance,
+        opaque_evidence_sidecar_bindings: vec![],
         function_address_evidence: None,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
@@ -1060,6 +1061,7 @@ mod tests {
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
+            opaque_evidence_sidecar_bindings: vec![],
             function_address_evidence: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),

@@ -1794,6 +1794,7 @@ mod tests {
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
+            opaque_evidence_sidecar_bindings: vec![],
             function_address_evidence: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
@@ -1876,6 +1877,7 @@ mod tests {
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
+            opaque_evidence_sidecar_bindings: vec![],
             function_address_evidence: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),

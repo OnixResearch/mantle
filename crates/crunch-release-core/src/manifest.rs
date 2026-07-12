@@ -8,6 +8,52 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::ReleaseEvidenceError;
+use crate::opaque_evidence::FUNCTION_ADDRESS_CLAIM_SCOPE;
+use crate::opaque_evidence::FUNCTION_ADDRESS_DISPOSITION_ABSENT;
+use crate::opaque_evidence::FUNCTION_ADDRESS_DISPOSITION_INVALID;
+use crate::opaque_evidence::FUNCTION_ADDRESS_DISPOSITION_PRESENT;
+use crate::opaque_evidence::FUNCTION_ADDRESS_EVIDENCE_ROLE;
+use crate::opaque_evidence::FUNCTION_ADDRESS_EVIDENCE_SCHEMA;
+use crate::opaque_evidence::FUNCTION_ADDRESS_MODE_OPTIONAL;
+use crate::opaque_evidence::FUNCTION_ADDRESS_MODE_REQUIRED;
+use crate::opaque_evidence::FUNCTION_ADDRESS_OPAQUE_BOUNDARY;
+use crate::opaque_evidence::FUNCTION_ADDRESS_PROFILE_VERSION;
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE;
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA;
+use crate::opaque_evidence::MAX_OPAQUE_EVIDENCE_BINDINGS_COUNT;
+#[cfg(test)]
+use crate::opaque_evidence::OPAQUE_EVIDENCE_GENERIC_CLAIM_SCOPE;
+use crate::opaque_evidence::OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS;
+#[cfg(test)]
+use crate::opaque_evidence::OPAQUE_EVIDENCE_KIND_LIFECYCLE;
+#[cfg(test)]
+use crate::opaque_evidence::OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE;
+#[cfg(test)]
+use crate::opaque_evidence::OPAQUE_EVIDENCE_POLICY_KIND_UPSTREAM_PROFILE;
+#[cfg(test)]
+use crate::opaque_evidence::OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM;
+#[cfg(test)]
+use crate::opaque_evidence::OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA;
+#[cfg(test)]
+use crate::opaque_evidence::OpaqueEvidenceCanonicalEnvelopeLink;
+#[cfg(test)]
+use crate::opaque_evidence::OpaqueEvidenceCompatibilityProjection;
+#[cfg(test)]
+use crate::opaque_evidence::OpaqueEvidencePolicyHash;
+#[cfg(test)]
+use crate::opaque_evidence::OpaqueEvidenceReleaseBinaryLink;
+#[cfg(test)]
+use crate::opaque_evidence::OpaqueEvidenceSidecarBinding;
+use crate::opaque_evidence::OpaqueEvidenceSidecarBindingReceipt;
+#[cfg(test)]
+use crate::opaque_evidence::OpaqueEvidenceSourceArtifactLink;
+#[cfg(test)]
+use crate::opaque_evidence::OpaqueEvidenceUpstreamValidationLink;
+use crate::opaque_evidence::VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE;
+use crate::opaque_evidence::VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA;
+use crate::opaque_evidence::opaque_evidence_sidecar_binding_diagnostics;
+#[cfg(test)]
+use crate::opaque_evidence::opaque_evidence_sidecar_binding_receipt;
 use crate::source_archive::RELEASE_SOURCE_ARCHIVE_PROFILE;
 use crate::source_archive::RELEASE_SOURCE_ARCHIVE_VERSION;
 
@@ -44,19 +90,6 @@ pub const STACK_PROVENANCE_DISPOSITION_ABSENT: &str = "absent";
 pub const STACK_PROVENANCE_DISPOSITION_PRESENT: &str = "present";
 pub const STACK_PROVENANCE_DISPOSITION_INVALID: &str = "invalid";
 pub const STACK_PROVENANCE_OPAQUE_BOUNDARY: &str = "Mantle validates bundle-local stack provenance path, digest, role, schema, claim scope, binary identity, and non-claims only; Valence owns stack semantics";
-pub const FUNCTION_ADDRESS_EVIDENCE_ROLE: &str = "function-address-evidence-sidecar";
-pub const FUNCTION_ADDRESS_EVIDENCE_SCHEMA: &str = "valence.function-address-evidence.v1";
-pub const FUNCTION_ADDRESS_CLAIM_SCOPE: &str = "function-address-identity-linkage-only";
-pub const VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE: &str = "valence-function-address-evidence-profile";
-pub const VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA: &str = "function-address-evidence-v1";
-pub const KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE: &str = "kamacite-function-address-receipt";
-pub const KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA: &str = "kamacite.function-address-receipt.v1";
-pub const FUNCTION_ADDRESS_MODE_OPTIONAL: &str = "optional";
-pub const FUNCTION_ADDRESS_MODE_REQUIRED: &str = "required";
-pub const FUNCTION_ADDRESS_DISPOSITION_ABSENT: &str = "absent";
-pub const FUNCTION_ADDRESS_DISPOSITION_PRESENT: &str = "present";
-pub const FUNCTION_ADDRESS_DISPOSITION_INVALID: &str = "invalid";
-pub const FUNCTION_ADDRESS_OPAQUE_BOUNDARY: &str = "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics";
 pub const SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE: &str = "external-archive";
 pub const SOURCE_ACQUISITION_KIND_GIT: &str = "git";
 pub const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
@@ -354,6 +387,10 @@ pub struct ProvenanceCoverage {
     pub coverage_boundary: String,
 }
 
+fn empty_opaque_evidence_sidecar_bindings() -> Vec<OpaqueEvidenceSidecarBindingReceipt> {
+    Vec::new()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseEvidenceManifest {
     pub schema: String,
@@ -382,6 +419,11 @@ pub struct ReleaseEvidenceManifest {
     pub kani_toolchain_evidence: Vec<KaniToolchainEvidence>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stack_provenance: Option<StackProvenanceReleaseEvidence>,
+    #[serde(
+        default = "empty_opaque_evidence_sidecar_bindings",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub opaque_evidence_sidecar_bindings: Vec<OpaqueEvidenceSidecarBindingReceipt>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_address_evidence: Option<FunctionAddressReleaseEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
@@ -439,7 +481,51 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_external_evidence(manifest)?;
     validate_kani_toolchain_evidence(manifest)?;
     validate_stack_provenance_manifest_evidence(manifest)?;
+    validate_opaque_evidence_sidecar_bindings(manifest)?;
     validate_function_address_manifest_evidence(manifest)?;
+    Ok(())
+}
+
+fn validate_opaque_evidence_sidecar_bindings(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let binding_count = u32_count(
+        manifest.opaque_evidence_sidecar_bindings.len(),
+        "opaque evidence sidecar binding count overflowed u32",
+    )?;
+    if binding_count > MAX_OPAQUE_EVIDENCE_BINDINGS_COUNT {
+        return Err(validation_error(format!(
+            "release evidence records {binding_count} opaque evidence sidecar bindings, limit is {MAX_OPAQUE_EVIDENCE_BINDINGS_COUNT}"
+        )));
+    }
+    let mut is_function_address_binding_seen = false;
+    for (index_usize, receipt) in manifest.opaque_evidence_sidecar_bindings.iter().enumerate() {
+        let index_u32 = u32_count(index_usize, "opaque evidence sidecar binding index overflowed u32")?;
+        if receipt.binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS {
+            if is_function_address_binding_seen {
+                return Err(validation_error(format!(
+                    "release evidence opaque_evidence_sidecar_bindings[{index_u32}] duplicates function-address evidence"
+                )));
+            }
+            is_function_address_binding_seen = true;
+        }
+        let diagnostics = opaque_evidence_sidecar_binding_diagnostics(
+            receipt,
+            &manifest.source_archive,
+            &manifest.binaries,
+            &manifest.external_evidence,
+        );
+        if let Some(first) = diagnostics.first() {
+            return Err(validation_error(format!(
+                "release evidence opaque_evidence_sidecar_bindings[{index_u32}] invalid: {first}"
+            )));
+        }
+    }
+    if manifest.function_address_evidence.is_some() && is_function_address_binding_seen {
+        return Err(validation_error(
+            "release evidence cannot contain both generic and legacy function-address bindings".to_string(),
+        ));
+    }
+    debug_assert!(binding_count <= MAX_OPAQUE_EVIDENCE_BINDINGS_COUNT);
+    debug_assert!(!is_function_address_binding_seen || manifest.function_address_evidence.is_none());
     Ok(())
 }
 
@@ -534,68 +620,196 @@ pub fn function_address_evidence_mode_for_release_profile(
     }
 }
 
+// r[impl mantle.release_provenance.opaque_evidence_sidecar_binding.function_address]
+// r[impl mantle.release_provenance.opaque_evidence_sidecar_binding.opaque_core]
 pub fn evaluate_function_address_release_evidence(
     manifest: &ReleaseEvidenceManifest,
     mode: &str,
 ) -> FunctionAddressReleaseVerification {
+    debug_assert_ne!(FUNCTION_ADDRESS_MODE_OPTIONAL, FUNCTION_ADDRESS_MODE_REQUIRED);
+    debug_assert_ne!(FUNCTION_ADDRESS_DISPOSITION_PRESENT, FUNCTION_ADDRESS_DISPOSITION_INVALID);
     let mut diagnostics = Vec::new();
     if !function_address_mode_is_supported(mode) {
         diagnostics.push(format!("unsupported function-address evidence mode: {mode}"));
     }
-    let required = mode == FUNCTION_ADDRESS_MODE_REQUIRED;
-    let Some(evidence) = &manifest.function_address_evidence else {
-        if required {
-            diagnostics.push("required function-address release evidence is missing".to_string());
+    let is_required = mode == FUNCTION_ADDRESS_MODE_REQUIRED;
+    let mut generic_bindings = manifest
+        .opaque_evidence_sidecar_bindings
+        .iter()
+        .filter(|receipt| opaque_binding_is_function_address_candidate(receipt));
+    if let Some(receipt) = generic_bindings.next() {
+        if generic_bindings.next().is_some() {
+            diagnostics.push("multiple function-address opaque evidence bindings are present".to_string());
         }
-        return FunctionAddressReleaseVerification {
-            mode: mode.to_string(),
-            required,
-            valid: diagnostics.is_empty(),
-            disposition: FUNCTION_ADDRESS_DISPOSITION_ABSENT.to_string(),
-            sidecar_role: None,
-            sidecar_schema: None,
-            sidecar_claim_scope: None,
-            sidecar_digest_blake3: None,
-            valence_receipt_role: None,
-            valence_receipt_schema: None,
-            valence_receipt_digest_blake3: None,
-            kamacite_receipt_role: None,
-            kamacite_receipt_schema: None,
-            kamacite_receipt_digest_blake3: None,
-            source_archive_digest_blake3: None,
-            release_binary_relative_path: None,
-            release_binary_digest_blake3: None,
-            boundary: FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
-            diagnostics,
-        };
-    };
+        if manifest.function_address_evidence.is_some() {
+            diagnostics.push("generic and legacy function-address evidence cannot both be present".to_string());
+        }
+        return generic_function_address_verification(manifest, receipt, mode, is_required, diagnostics);
+    }
+    if let Some(evidence) = &manifest.function_address_evidence {
+        return legacy_function_address_verification(manifest, evidence, mode, is_required, diagnostics);
+    }
+    absent_function_address_verification(mode, is_required, diagnostics)
+}
+
+fn opaque_binding_is_function_address_candidate(receipt: &OpaqueEvidenceSidecarBindingReceipt) -> bool {
+    let binding = &receipt.binding;
+    if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS {
+        return true;
+    }
+    if binding.profile_version == FUNCTION_ADDRESS_PROFILE_VERSION {
+        return true;
+    }
+    binding.canonical_envelope.role == FUNCTION_ADDRESS_EVIDENCE_ROLE
+}
+
+fn generic_function_address_verification(
+    manifest: &ReleaseEvidenceManifest,
+    receipt: &OpaqueEvidenceSidecarBindingReceipt,
+    mode: &str,
+    is_required: bool,
+    mut diagnostics: Vec<String>,
+) -> FunctionAddressReleaseVerification {
+    debug_assert!(opaque_binding_is_function_address_candidate(receipt));
+    debug_assert!(manifest.opaque_evidence_sidecar_bindings.iter().any(|candidate| core::ptr::eq(candidate, receipt)));
+    diagnostics.extend(opaque_evidence_sidecar_binding_diagnostics(
+        receipt,
+        &manifest.source_archive,
+        &manifest.binaries,
+        &manifest.external_evidence,
+    ));
+    let binding = &receipt.binding;
+    let kamacite = binding
+        .compatibility_projections
+        .iter()
+        .find(|projection| projection.role == KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+    present_function_address_verification(mode, is_required, diagnostics, FunctionAddressVerificationLinks {
+        sidecar_role: binding.canonical_envelope.role.clone(),
+        sidecar_schema: binding.canonical_envelope.schema.clone(),
+        sidecar_claim_scope: binding.claim_scope.clone(),
+        sidecar_digest_blake3: binding.canonical_envelope.digest_blake3.clone(),
+        valence_receipt_role: binding.upstream_validation.role.clone(),
+        valence_receipt_schema: binding.upstream_validation.schema.clone(),
+        valence_receipt_digest_blake3: binding.upstream_validation.digest_blake3.clone(),
+        kamacite_receipt_role: kamacite.map(|projection| projection.role.clone()),
+        kamacite_receipt_schema: kamacite.map(|projection| projection.schema.clone()),
+        kamacite_receipt_digest_blake3: kamacite.map(|projection| projection.digest_blake3.clone()),
+        source_archive_digest_blake3: binding.source_artifact.digest_blake3.clone(),
+        release_binary_relative_path: binding.release_binary.relative_path.clone(),
+        release_binary_digest_blake3: binding.release_binary.digest_blake3.clone(),
+    })
+}
+
+fn legacy_function_address_verification(
+    manifest: &ReleaseEvidenceManifest,
+    evidence: &FunctionAddressReleaseEvidence,
+    mode: &str,
+    is_required: bool,
+    mut diagnostics: Vec<String>,
+) -> FunctionAddressReleaseVerification {
     diagnostics.extend(function_address_evidence_diagnostics(manifest, evidence));
-    let valid = diagnostics.is_empty();
-    FunctionAddressReleaseVerification {
+    present_function_address_verification(mode, is_required, diagnostics, FunctionAddressVerificationLinks {
+        sidecar_role: evidence.sidecar_role.clone(),
+        sidecar_schema: evidence.sidecar_schema.clone(),
+        sidecar_claim_scope: evidence.sidecar_claim_scope.clone(),
+        sidecar_digest_blake3: evidence.sidecar_digest_blake3.clone(),
+        valence_receipt_role: evidence.valence_receipt_role.clone(),
+        valence_receipt_schema: evidence.valence_receipt_schema.clone(),
+        valence_receipt_digest_blake3: evidence.valence_receipt_digest_blake3.clone(),
+        kamacite_receipt_role: evidence.kamacite_receipt_role.clone(),
+        kamacite_receipt_schema: evidence.kamacite_receipt_schema.clone(),
+        kamacite_receipt_digest_blake3: evidence.kamacite_receipt_digest_blake3.clone(),
+        source_archive_digest_blake3: evidence.source_archive_digest_blake3.clone(),
+        release_binary_relative_path: evidence.release_binary_relative_path.clone(),
+        release_binary_digest_blake3: evidence.release_binary_digest_blake3.clone(),
+    })
+}
+
+struct FunctionAddressVerificationLinks {
+    sidecar_role: String,
+    sidecar_schema: String,
+    sidecar_claim_scope: String,
+    sidecar_digest_blake3: String,
+    valence_receipt_role: String,
+    valence_receipt_schema: String,
+    valence_receipt_digest_blake3: String,
+    kamacite_receipt_role: Option<String>,
+    kamacite_receipt_schema: Option<String>,
+    kamacite_receipt_digest_blake3: Option<String>,
+    source_archive_digest_blake3: String,
+    release_binary_relative_path: String,
+    release_binary_digest_blake3: String,
+}
+
+fn present_function_address_verification(
+    mode: &str,
+    is_required: bool,
+    diagnostics: Vec<String>,
+    links: FunctionAddressVerificationLinks,
+) -> FunctionAddressReleaseVerification {
+    let is_valid = diagnostics.is_empty();
+    let verification = FunctionAddressReleaseVerification {
         mode: mode.to_string(),
-        required,
-        valid,
-        disposition: if valid {
+        required: is_required,
+        valid: is_valid,
+        disposition: if is_valid {
             FUNCTION_ADDRESS_DISPOSITION_PRESENT.to_string()
         } else {
             FUNCTION_ADDRESS_DISPOSITION_INVALID.to_string()
         },
-        sidecar_role: Some(evidence.sidecar_role.clone()),
-        sidecar_schema: Some(evidence.sidecar_schema.clone()),
-        sidecar_claim_scope: Some(evidence.sidecar_claim_scope.clone()),
-        sidecar_digest_blake3: Some(evidence.sidecar_digest_blake3.clone()),
-        valence_receipt_role: Some(evidence.valence_receipt_role.clone()),
-        valence_receipt_schema: Some(evidence.valence_receipt_schema.clone()),
-        valence_receipt_digest_blake3: Some(evidence.valence_receipt_digest_blake3.clone()),
-        kamacite_receipt_role: evidence.kamacite_receipt_role.clone(),
-        kamacite_receipt_schema: evidence.kamacite_receipt_schema.clone(),
-        kamacite_receipt_digest_blake3: evidence.kamacite_receipt_digest_blake3.clone(),
-        source_archive_digest_blake3: Some(evidence.source_archive_digest_blake3.clone()),
-        release_binary_relative_path: Some(evidence.release_binary_relative_path.clone()),
-        release_binary_digest_blake3: Some(evidence.release_binary_digest_blake3.clone()),
+        sidecar_role: Some(links.sidecar_role),
+        sidecar_schema: Some(links.sidecar_schema),
+        sidecar_claim_scope: Some(links.sidecar_claim_scope),
+        sidecar_digest_blake3: Some(links.sidecar_digest_blake3),
+        valence_receipt_role: Some(links.valence_receipt_role),
+        valence_receipt_schema: Some(links.valence_receipt_schema),
+        valence_receipt_digest_blake3: Some(links.valence_receipt_digest_blake3),
+        kamacite_receipt_role: links.kamacite_receipt_role,
+        kamacite_receipt_schema: links.kamacite_receipt_schema,
+        kamacite_receipt_digest_blake3: links.kamacite_receipt_digest_blake3,
+        source_archive_digest_blake3: Some(links.source_archive_digest_blake3),
+        release_binary_relative_path: Some(links.release_binary_relative_path),
+        release_binary_digest_blake3: Some(links.release_binary_digest_blake3),
         boundary: FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
         diagnostics,
+    };
+    debug_assert_eq!(verification.valid, verification.diagnostics.is_empty());
+    debug_assert_eq!(verification.disposition == FUNCTION_ADDRESS_DISPOSITION_PRESENT, verification.valid);
+    verification
+}
+
+fn absent_function_address_verification(
+    mode: &str,
+    is_required: bool,
+    mut diagnostics: Vec<String>,
+) -> FunctionAddressReleaseVerification {
+    if is_required {
+        diagnostics.push("required function-address release evidence is missing".to_string());
     }
+    let verification = FunctionAddressReleaseVerification {
+        mode: mode.to_string(),
+        required: is_required,
+        valid: diagnostics.is_empty(),
+        disposition: FUNCTION_ADDRESS_DISPOSITION_ABSENT.to_string(),
+        sidecar_role: None,
+        sidecar_schema: None,
+        sidecar_claim_scope: None,
+        sidecar_digest_blake3: None,
+        valence_receipt_role: None,
+        valence_receipt_schema: None,
+        valence_receipt_digest_blake3: None,
+        kamacite_receipt_role: None,
+        kamacite_receipt_schema: None,
+        kamacite_receipt_digest_blake3: None,
+        source_archive_digest_blake3: None,
+        release_binary_relative_path: None,
+        release_binary_digest_blake3: None,
+        boundary: FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
+        diagnostics,
+    };
+    debug_assert_eq!(verification.disposition, FUNCTION_ADDRESS_DISPOSITION_ABSENT);
+    debug_assert!(verification.sidecar_digest_blake3.is_none());
+    verification
 }
 
 fn stack_provenance_mode_is_supported(mode: &str) -> bool {
@@ -1835,7 +2049,7 @@ fn validate_stage_report(
     Ok(())
 }
 
-fn validate_relative_member_path(path: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
+pub(crate) fn validate_relative_member_path(path: &str, field_name: &str) -> Result<(), ReleaseEvidenceError> {
     if path.trim().is_empty() {
         return Err(validation_error(format!("release evidence {field_name} must not be empty")));
     }
@@ -1896,6 +2110,19 @@ mod tests {
     const FUNCTION_ADDRESS_VALENCE_DIGEST_SEED: u8 = 32;
     const FUNCTION_ADDRESS_KAMACITE_DIGEST_SEED: u8 = 33;
     const FUNCTION_ADDRESS_STALE_DIGEST_SEED: u8 = 34;
+    const FUNCTION_ADDRESS_UPSTREAM_POLICY_DIGEST_SEED: u8 = 35;
+    const FUNCTION_ADDRESS_MANTLE_POLICY_DIGEST_SEED: u8 = 36;
+    const LIFECYCLE_ENVELOPE_DIGEST_SEED: u8 = 37;
+    const LIFECYCLE_VALIDATION_DIGEST_SEED: u8 = 38;
+    const LIFECYCLE_UPSTREAM_POLICY_DIGEST_SEED: u8 = 39;
+    const LIFECYCLE_MANTLE_POLICY_DIGEST_SEED: u8 = 40;
+    const DOMAIN_SEPARATION_ENVELOPE_DIGEST_SEED: u8 = 41;
+    const DOMAIN_SEPARATION_VALIDATION_DIGEST_SEED: u8 = 42;
+    const DOMAIN_SEPARATION_SOURCE_DIGEST_SEED: u8 = 43;
+    const DOMAIN_SEPARATION_BINARY_DIGEST_SEED: u8 = 44;
+    const DOMAIN_SEPARATION_POLICY_DIGEST_SEED: u8 = 45;
+    const SECOND_LIFECYCLE_ENVELOPE_DIGEST_SEED: u8 = 46;
+    const SECOND_LIFECYCLE_VALIDATION_DIGEST_SEED: u8 = 47;
 
     type ManifestMutator = fn(&mut ReleaseEvidenceManifest);
     type ManifestFixtureCase = (&'static str, ManifestMutator, &'static str);
@@ -2035,7 +2262,10 @@ mod tests {
     }
 
     fn sample_function_address_non_claims() -> Vec<String> {
-        vec![FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string()]
+        vec![
+            OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM.to_string(),
+            FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
+        ]
     }
 
     fn sample_function_address_sidecar_evidence() -> ExternalEvidence {
@@ -2071,7 +2301,62 @@ mod tests {
         }
     }
 
-    fn sample_function_address_release_evidence(with_kamacite: bool) -> FunctionAddressReleaseEvidence {
+    fn sample_function_address_binding(with_kamacite: bool) -> OpaqueEvidenceSidecarBinding {
+        let sidecar = sample_function_address_sidecar_evidence();
+        let valence = sample_function_address_valence_receipt_evidence();
+        let compatibility_projections = if with_kamacite {
+            let kamacite = sample_function_address_kamacite_receipt_evidence();
+            vec![OpaqueEvidenceCompatibilityProjection {
+                role: kamacite.role,
+                schema: kamacite.schema,
+                relative_path: kamacite.relative_path,
+                digest_blake3: kamacite.digest_blake3,
+                canonical_envelope_digest_blake3: sidecar.digest_blake3.clone(),
+            }]
+        } else {
+            vec![]
+        };
+        OpaqueEvidenceSidecarBinding {
+            schema: OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA.to_string(),
+            evidence_kind: OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS.to_string(),
+            profile_version: FUNCTION_ADDRESS_PROFILE_VERSION.to_string(),
+            canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink {
+                role: sidecar.role,
+                schema: sidecar.schema,
+                relative_path: sidecar.relative_path,
+                digest_blake3: sidecar.digest_blake3,
+            },
+            upstream_validation: OpaqueEvidenceUpstreamValidationLink {
+                role: valence.role,
+                schema: valence.schema,
+                relative_path: valence.relative_path,
+                digest_blake3: valence.digest_blake3,
+            },
+            source_artifact: OpaqueEvidenceSourceArtifactLink {
+                relative_path: "source/mantle-src.tar".to_string(),
+                digest_blake3: sample_digest(SOURCE_ARCHIVE_DIGEST_SEED),
+            },
+            release_binary: OpaqueEvidenceReleaseBinaryLink {
+                relative_path: "binaries/01-mantle".to_string(),
+                digest_blake3: sample_digest(RELEASE_BINARY_DIGEST_SEED),
+            },
+            policy_hashes: vec![
+                OpaqueEvidencePolicyHash {
+                    policy_kind: OPAQUE_EVIDENCE_POLICY_KIND_UPSTREAM_PROFILE.to_string(),
+                    digest_blake3: sample_digest(FUNCTION_ADDRESS_UPSTREAM_POLICY_DIGEST_SEED),
+                },
+                OpaqueEvidencePolicyHash {
+                    policy_kind: OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE.to_string(),
+                    digest_blake3: sample_digest(FUNCTION_ADDRESS_MANTLE_POLICY_DIGEST_SEED),
+                },
+            ],
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+            compatibility_projections,
+            non_claims: sample_function_address_non_claims(),
+        }
+    }
+
+    fn sample_legacy_function_address_release_evidence(with_kamacite: bool) -> FunctionAddressReleaseEvidence {
         let sidecar = sample_function_address_sidecar_evidence();
         let valence = sample_function_address_valence_receipt_evidence();
         let kamacite = with_kamacite.then(sample_function_address_kamacite_receipt_evidence);
@@ -2105,7 +2390,83 @@ mod tests {
         if with_kamacite {
             manifest.external_evidence.push(sample_function_address_kamacite_receipt_evidence());
         }
-        manifest.function_address_evidence = Some(sample_function_address_release_evidence(with_kamacite));
+        manifest.opaque_evidence_sidecar_bindings =
+            vec![opaque_evidence_sidecar_binding_receipt(sample_function_address_binding(with_kamacite)).unwrap()];
+        manifest
+    }
+
+    fn sample_legacy_function_address_manifest(with_kamacite: bool) -> ReleaseEvidenceManifest {
+        let mut manifest = sample_manifest();
+        manifest.external_evidence = vec![
+            sample_function_address_sidecar_evidence(),
+            sample_function_address_valence_receipt_evidence(),
+        ];
+        if with_kamacite {
+            manifest.external_evidence.push(sample_function_address_kamacite_receipt_evidence());
+        }
+        manifest.function_address_evidence = Some(sample_legacy_function_address_release_evidence(with_kamacite));
+        manifest
+    }
+
+    fn sample_lifecycle_opaque_binding_manifest() -> ReleaseEvidenceManifest {
+        let mut manifest = sample_manifest();
+        let non_claims = vec![OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM.to_string()];
+        let envelope = ExternalEvidence {
+            role: "cairn-lifecycle-evidence-envelope".to_string(),
+            schema: "cairn.lifecycle-evidence.v1".to_string(),
+            relative_path: "external-evidence/06-cairn-lifecycle-evidence.bin".to_string(),
+            digest_blake3: sample_digest(LIFECYCLE_ENVELOPE_DIGEST_SEED),
+            claim_scope: OPAQUE_EVIDENCE_GENERIC_CLAIM_SCOPE.to_string(),
+            non_claims: non_claims.clone(),
+        };
+        let validation = ExternalEvidence {
+            role: "valence-lifecycle-evidence-validation".to_string(),
+            schema: "valence.lifecycle-evidence-validation.v1".to_string(),
+            relative_path: "external-evidence/07-valence-lifecycle-validation.bin".to_string(),
+            digest_blake3: sample_digest(LIFECYCLE_VALIDATION_DIGEST_SEED),
+            claim_scope: OPAQUE_EVIDENCE_GENERIC_CLAIM_SCOPE.to_string(),
+            non_claims: non_claims.clone(),
+        };
+        let binding = OpaqueEvidenceSidecarBinding {
+            schema: OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA.to_string(),
+            evidence_kind: OPAQUE_EVIDENCE_KIND_LIFECYCLE.to_string(),
+            profile_version: "lifecycle-evidence-v1".to_string(),
+            canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink {
+                role: envelope.role.clone(),
+                schema: envelope.schema.clone(),
+                relative_path: envelope.relative_path.clone(),
+                digest_blake3: envelope.digest_blake3.clone(),
+            },
+            upstream_validation: OpaqueEvidenceUpstreamValidationLink {
+                role: validation.role.clone(),
+                schema: validation.schema.clone(),
+                relative_path: validation.relative_path.clone(),
+                digest_blake3: validation.digest_blake3.clone(),
+            },
+            source_artifact: OpaqueEvidenceSourceArtifactLink {
+                relative_path: manifest.source_archive.relative_path.clone(),
+                digest_blake3: manifest.source_archive.digest_blake3.clone(),
+            },
+            release_binary: OpaqueEvidenceReleaseBinaryLink {
+                relative_path: manifest.binaries[0].relative_path.clone(),
+                digest_blake3: manifest.binaries[0].digest_blake3.clone(),
+            },
+            policy_hashes: vec![
+                OpaqueEvidencePolicyHash {
+                    policy_kind: OPAQUE_EVIDENCE_POLICY_KIND_UPSTREAM_PROFILE.to_string(),
+                    digest_blake3: sample_digest(LIFECYCLE_UPSTREAM_POLICY_DIGEST_SEED),
+                },
+                OpaqueEvidencePolicyHash {
+                    policy_kind: OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE.to_string(),
+                    digest_blake3: sample_digest(LIFECYCLE_MANTLE_POLICY_DIGEST_SEED),
+                },
+            ],
+            claim_scope: OPAQUE_EVIDENCE_GENERIC_CLAIM_SCOPE.to_string(),
+            compatibility_projections: vec![],
+            non_claims,
+        };
+        manifest.external_evidence = vec![envelope, validation];
+        manifest.opaque_evidence_sidecar_bindings = vec![opaque_evidence_sidecar_binding_receipt(binding).unwrap()];
         manifest
     }
 
@@ -2133,6 +2494,7 @@ mod tests {
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
+            opaque_evidence_sidecar_bindings: vec![],
             function_address_evidence: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
@@ -2820,20 +3182,23 @@ mod tests {
         }
     }
 
+    // r[verify mantle.release_provenance.opaque_evidence_sidecar_binding.positive]
+    // r[verify mantle.release_provenance.opaque_evidence_sidecar_binding.function_address]
     #[test]
-    fn validate_accepts_function_address_release_evidence_without_kamacite_receipt() {
+    fn validate_accepts_function_address_through_generic_binding_without_projection() {
         let manifest = sample_function_address_manifest(false);
 
         let bytes = canonical_release_evidence_manifest(manifest).unwrap();
         let text = String::from_utf8(bytes).unwrap();
 
-        assert!(text.contains(FUNCTION_ADDRESS_EVIDENCE_ROLE));
+        assert!(text.contains(OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS));
         assert!(text.contains(VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE));
         assert!(text.contains(FUNCTION_ADDRESS_OPAQUE_BOUNDARY));
     }
 
+    // r[verify mantle.release_provenance.opaque_evidence_sidecar_binding.positive]
     #[test]
-    fn validate_accepts_function_address_release_evidence_with_kamacite_receipt() {
+    fn validate_accepts_function_address_through_generic_binding_with_projection() {
         let manifest = sample_function_address_manifest(true);
 
         let bytes = canonical_release_evidence_manifest(manifest).unwrap();
@@ -2842,6 +3207,134 @@ mod tests {
         assert!(text.contains(FUNCTION_ADDRESS_EVIDENCE_ROLE));
         assert!(text.contains(KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE));
         assert!(text.contains(KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA));
+    }
+
+    // r[verify mantle.release_provenance.opaque_evidence_sidecar_binding.positive]
+    // r[verify mantle.release_provenance.opaque_evidence_sidecar_binding.opaque_core]
+    #[test]
+    fn validate_accepts_non_function_lifecycle_stub_as_opaque_metadata() {
+        let manifest = sample_lifecycle_opaque_binding_manifest();
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains(OPAQUE_EVIDENCE_KIND_LIFECYCLE));
+        assert!(text.contains("cairn-lifecycle-evidence-envelope"));
+        assert!(!text.contains("profile_payload"));
+    }
+
+    #[test]
+    fn validate_accepts_multiple_profiles_for_same_non_function_kind() {
+        let mut manifest = sample_lifecycle_opaque_binding_manifest();
+        let mut second_binding = manifest.opaque_evidence_sidecar_bindings[0].binding.clone();
+        second_binding.profile_version = "lifecycle-evidence-v2".to_string();
+        second_binding.canonical_envelope.role = "cairn-lifecycle-evidence-envelope-v2".to_string();
+        second_binding.canonical_envelope.schema = "cairn.lifecycle-evidence.v2".to_string();
+        second_binding.canonical_envelope.relative_path =
+            "external-evidence/08-cairn-lifecycle-evidence-v2.bin".to_string();
+        second_binding.canonical_envelope.digest_blake3 = sample_digest(SECOND_LIFECYCLE_ENVELOPE_DIGEST_SEED);
+        second_binding.upstream_validation.role = "valence-lifecycle-evidence-validation-v2".to_string();
+        second_binding.upstream_validation.schema = "valence.lifecycle-evidence-validation.v2".to_string();
+        second_binding.upstream_validation.relative_path =
+            "external-evidence/09-valence-lifecycle-validation-v2.bin".to_string();
+        second_binding.upstream_validation.digest_blake3 = sample_digest(SECOND_LIFECYCLE_VALIDATION_DIGEST_SEED);
+        let second_non_claims = second_binding.non_claims.clone();
+        manifest.external_evidence.extend([
+            ExternalEvidence {
+                role: second_binding.canonical_envelope.role.clone(),
+                schema: second_binding.canonical_envelope.schema.clone(),
+                relative_path: second_binding.canonical_envelope.relative_path.clone(),
+                digest_blake3: second_binding.canonical_envelope.digest_blake3.clone(),
+                claim_scope: second_binding.claim_scope.clone(),
+                non_claims: second_non_claims.clone(),
+            },
+            ExternalEvidence {
+                role: second_binding.upstream_validation.role.clone(),
+                schema: second_binding.upstream_validation.schema.clone(),
+                relative_path: second_binding.upstream_validation.relative_path.clone(),
+                digest_blake3: second_binding.upstream_validation.digest_blake3.clone(),
+                claim_scope: second_binding.claim_scope.clone(),
+                non_claims: second_non_claims,
+            },
+        ]);
+        manifest
+            .opaque_evidence_sidecar_bindings
+            .push(opaque_evidence_sidecar_binding_receipt(second_binding).unwrap());
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains("lifecycle-evidence-v2"));
+        assert!(text.contains("cairn-lifecycle-evidence-envelope-v2"));
+        assert!(text.contains("valence-lifecycle-evidence-validation-v2"));
+    }
+
+    #[test]
+    fn generic_binding_receipt_is_deterministic_and_policy_order_independent() {
+        let first_binding = sample_function_address_binding(true);
+        let mut second_binding = first_binding.clone();
+        second_binding.policy_hashes.reverse();
+
+        let first = opaque_evidence_sidecar_binding_receipt(first_binding).unwrap();
+        let second = opaque_evidence_sidecar_binding_receipt(second_binding).unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(first.binding_digest_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+        assert_eq!(first.binding.evidence_kind, OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS);
+    }
+
+    #[test]
+    fn generic_binding_digest_changes_for_each_typed_link_domain() {
+        let base = sample_function_address_binding(true);
+        let base_digest = crate::opaque_evidence::opaque_evidence_sidecar_binding_digest_blake3(base.clone()).unwrap();
+
+        let mut envelope_changed = base.clone();
+        let envelope_digest = sample_digest(DOMAIN_SEPARATION_ENVELOPE_DIGEST_SEED);
+        envelope_changed.canonical_envelope.digest_blake3 = envelope_digest.clone();
+        envelope_changed.compatibility_projections[0].canonical_envelope_digest_blake3 = envelope_digest;
+        let envelope_binding_digest =
+            crate::opaque_evidence::opaque_evidence_sidecar_binding_digest_blake3(envelope_changed).unwrap();
+
+        let mut validation_changed = base.clone();
+        validation_changed.upstream_validation.digest_blake3 = sample_digest(DOMAIN_SEPARATION_VALIDATION_DIGEST_SEED);
+        let validation_binding_digest =
+            crate::opaque_evidence::opaque_evidence_sidecar_binding_digest_blake3(validation_changed).unwrap();
+
+        let mut source_changed = base.clone();
+        source_changed.source_artifact.digest_blake3 = sample_digest(DOMAIN_SEPARATION_SOURCE_DIGEST_SEED);
+        let source_binding_digest =
+            crate::opaque_evidence::opaque_evidence_sidecar_binding_digest_blake3(source_changed).unwrap();
+
+        let mut binary_changed = base.clone();
+        binary_changed.release_binary.digest_blake3 = sample_digest(DOMAIN_SEPARATION_BINARY_DIGEST_SEED);
+        let binary_binding_digest =
+            crate::opaque_evidence::opaque_evidence_sidecar_binding_digest_blake3(binary_changed).unwrap();
+
+        let mut policy_changed = base;
+        policy_changed.policy_hashes[0].digest_blake3 = sample_digest(DOMAIN_SEPARATION_POLICY_DIGEST_SEED);
+        let policy_binding_digest =
+            crate::opaque_evidence::opaque_evidence_sidecar_binding_digest_blake3(policy_changed).unwrap();
+
+        assert_ne!(base_digest, envelope_binding_digest);
+        assert_ne!(base_digest, validation_binding_digest);
+        assert_ne!(base_digest, source_binding_digest);
+        assert_ne!(base_digest, binary_binding_digest);
+        assert_ne!(base_digest, policy_binding_digest);
+    }
+
+    #[test]
+    fn legacy_function_address_manifest_remains_readable() {
+        let manifest = sample_legacy_function_address_manifest(true);
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        let decoded: ReleaseEvidenceManifest = serde_json::from_slice(&bytes).unwrap();
+        let result = evaluate_function_address_release_evidence(&decoded, FUNCTION_ADDRESS_MODE_REQUIRED);
+
+        assert!(!text.contains("opaque_evidence_sidecar_bindings"));
+        assert!(decoded.opaque_evidence_sidecar_bindings.is_empty());
+        assert!(result.valid);
+        assert_eq!(FUNCTION_ADDRESS_DISPOSITION_PRESENT, result.disposition);
     }
 
     #[test]
@@ -2893,7 +3386,7 @@ mod tests {
     }
 
     #[test]
-    fn function_address_policy_accepts_optional_and_required_present_evidence() {
+    fn function_address_policy_accepts_optional_and_required_generic_binding() {
         let manifest = sample_function_address_manifest(true);
 
         let optional = evaluate_function_address_release_evidence(&manifest, FUNCTION_ADDRESS_MODE_OPTIONAL);
@@ -2916,75 +3409,111 @@ mod tests {
         assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.contains("required")));
     }
 
+    fn function_address_binding_mut(manifest: &mut ReleaseEvidenceManifest) -> &mut OpaqueEvidenceSidecarBinding {
+        assert_eq!(manifest.opaque_evidence_sidecar_bindings.len(), 1);
+        let receipt = &mut manifest.opaque_evidence_sidecar_bindings[0];
+        assert_eq!(receipt.binding.evidence_kind, OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS);
+        &mut receipt.binding
+    }
+
+    // r[verify mantle.release_provenance.opaque_evidence_sidecar_binding.negative]
     #[test]
-    fn function_address_policy_rejects_required_invalid_fixture_matrix() {
-        fn missing_sidecar(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.external_evidence.retain(|evidence| evidence.role != FUNCTION_ADDRESS_EVIDENCE_ROLE);
+    fn function_address_generic_binding_rejects_invalid_fixture_matrix() {
+        fn unknown_kind(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).evidence_kind = "unknown-evidence-kind".to_string();
         }
-        fn stale_sidecar_digest(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().sidecar_digest_blake3 =
+        fn missing_canonical_hash(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).canonical_envelope.digest_blake3.clear();
+        }
+        fn malformed_canonical_hash(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).canonical_envelope.digest_blake3 = "not-a-blake3".to_string();
+        }
+        fn stale_valence_hash(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).upstream_validation.digest_blake3 =
                 sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        fn stale_binding_receipt(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.opaque_evidence_sidecar_bindings[0].binding_digest_blake3 =
+                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        fn duplicate_function_address_binding(manifest: &mut ReleaseEvidenceManifest) {
+            let duplicate = manifest.opaque_evidence_sidecar_bindings[0].clone();
+            manifest.opaque_evidence_sidecar_bindings.push(duplicate);
+        }
+        fn source_mismatch(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).source_artifact.digest_blake3 =
+                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        fn binary_mismatch(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).release_binary.digest_blake3 =
+                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        fn unsupported_claim_scope(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).claim_scope = "semantic-function-claim".to_string();
+        }
+        fn unsupported_profile_version(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).profile_version = "function-address-evidence-v2".to_string();
         }
         fn wrong_role(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().sidecar_role = "wrong-function-role".to_string();
+            function_address_binding_mut(manifest).canonical_envelope.role = "wrong-function-role".to_string();
         }
         fn wrong_schema(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().sidecar_schema = "wrong.function.schema".to_string();
+            function_address_binding_mut(manifest).canonical_envelope.schema = "wrong.function.schema".to_string();
         }
-        fn wrong_claim_scope(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().sidecar_claim_scope =
-                "semantic-function-claim".to_string();
-        }
-        fn missing_valence_receipt(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.external_evidence.retain(|evidence| evidence.role != VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE);
-        }
-        fn stale_valence_receipt_digest(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().valence_receipt_digest_blake3 =
-                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
-        }
-        fn source_archive_mismatch(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().source_archive_digest_blake3 =
-                sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
-        }
-        fn binary_identity_mismatch(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().release_binary_digest_blake3 =
+        fn projection_drift(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest).compatibility_projections[0].canonical_envelope_digest_blake3 =
                 sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
         }
         fn weakened_non_claims(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().non_claims = vec![];
+            function_address_binding_mut(manifest).non_claims = vec![FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string()];
+        }
+        fn missing_mantle_policy_hash(manifest: &mut ReleaseEvidenceManifest) {
+            function_address_binding_mut(manifest)
+                .policy_hashes
+                .retain(|policy| policy.policy_kind != OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE);
         }
         fn overclaim(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().non_claims = vec![
-                FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
-                "Mantle proves function correctness".to_string(),
-            ];
+            function_address_binding_mut(manifest)
+                .non_claims
+                .push("Mantle proves function correctness".to_string());
         }
-        fn partial_kamacite_metadata(manifest: &mut ReleaseEvidenceManifest) {
-            manifest.function_address_evidence.as_mut().unwrap().kamacite_receipt_digest_blake3 = None;
+        fn missing_envelope_external(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.external_evidence.retain(|evidence| evidence.role != FUNCTION_ADDRESS_EVIDENCE_ROLE);
         }
-        fn missing_kamacite_external(manifest: &mut ReleaseEvidenceManifest) {
-            manifest
-                .external_evidence
-                .retain(|evidence| evidence.role != KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+        fn missing_valence_external(manifest: &mut ReleaseEvidenceManifest) {
+            manifest.external_evidence.retain(|evidence| evidence.role != VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE);
         }
 
         let cases: &[ManifestFixtureCase] = &[
-            ("missing sidecar", missing_sidecar, "sidecar external evidence is missing"),
-            ("stale sidecar digest", stale_sidecar_digest, "sidecar digest"),
-            ("wrong role", wrong_role, "sidecar_role"),
-            ("wrong schema", wrong_schema, "sidecar_schema"),
-            ("wrong claim scope", wrong_claim_scope, "sidecar_claim_scope"),
-            ("missing Valence receipt", missing_valence_receipt, "Valence receipt external evidence is missing"),
-            ("stale Valence receipt digest", stale_valence_receipt_digest, "Valence receipt digest"),
-            ("source archive mismatch", source_archive_mismatch, "source_archive_digest_blake3"),
-            ("binary identity mismatch", binary_identity_mismatch, "release_binary_digest_blake3"),
-            ("weakened non-claims", weakened_non_claims, "non-claim"),
-            ("overclaim", overclaim, "overclaim"),
-            ("partial Kamacite metadata", partial_kamacite_metadata, "all present or all absent"),
+            ("unknown kind", unknown_kind, "evidence_kind is unsupported"),
+            ("missing canonical hash", missing_canonical_hash, "canonical_envelope.digest_blake3"),
+            ("malformed digest", malformed_canonical_hash, "canonical_envelope.digest_blake3"),
+            ("stale Valence hash", stale_valence_hash, "upstream validation digest"),
+            ("stale binding receipt", stale_binding_receipt, "binding_digest_blake3"),
             (
-                "missing Kamacite external",
-                missing_kamacite_external,
-                "Kamacite receipt external evidence is missing",
+                "duplicate function-address binding",
+                duplicate_function_address_binding,
+                "multiple function-address",
+            ),
+            ("source mismatch", source_mismatch, "source_artifact.digest_blake3"),
+            ("binary mismatch", binary_mismatch, "release_binary.digest_blake3"),
+            ("unsupported claim scope", unsupported_claim_scope, "binding.claim_scope"),
+            ("unsupported profile version", unsupported_profile_version, "binding.profile_version"),
+            ("wrong role", wrong_role, "canonical_envelope.role"),
+            ("wrong schema", wrong_schema, "canonical_envelope.schema"),
+            ("projection drift", projection_drift, "canonical envelope digest drifted"),
+            ("weakened non-claims", weakened_non_claims, "required opaque payload boundary"),
+            ("missing policy hash", missing_mantle_policy_hash, "requires at least 2 entries"),
+            ("overclaim", overclaim, "overclaim"),
+            (
+                "missing envelope external",
+                missing_envelope_external,
+                "canonical envelope external evidence is missing",
+            ),
+            (
+                "missing Valence external",
+                missing_valence_external,
+                "upstream validation external evidence is missing",
             ),
         ];
 
@@ -3002,7 +3531,7 @@ mod tests {
                 "{name} diagnostics should contain {expected_diagnostic:?}: {:?}",
                 result.diagnostics
             );
-            assert!(err.to_string().contains("function_address_evidence invalid"));
+            assert!(err.to_string().contains("opaque_evidence_sidecar_bindings"));
         }
     }
 
