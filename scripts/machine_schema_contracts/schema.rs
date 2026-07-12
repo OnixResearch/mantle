@@ -633,7 +633,17 @@ fn validate_semantic(surface_id: &str, object: &Map<String, Value>, path: &str, 
         return;
     };
     let supported = value.as_str().is_some_and(|semantic| {
-        matches!(semantic, "blake3" | "mantle-digest" | "sha256" | "safe-reference" | "redaction-safe" | "non-empty")
+        matches!(
+            semantic,
+            "blake3"
+                | "mantle-digest"
+                | "sha256"
+                | "sha256-digest"
+                | "mantle-reference"
+                | "safe-reference"
+                | "redaction-safe"
+                | "non-empty"
+        )
     });
     if !supported {
         push_issue(

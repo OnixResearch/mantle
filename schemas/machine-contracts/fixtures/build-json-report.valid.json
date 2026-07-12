@@ -12,6 +12,8 @@
   "frontend_artifact_attestations": [],
   "cargo_build_evidence": [],
   "cargo_build_evidence_diagnostics": [],
+  "ast_grep_structural_evidence": [],
+  "ast_grep_structural_evidence_diagnostics": [],
   "diagnostic_persistence_failures": [],
   "counts": {
     "succeeded_total": 0,

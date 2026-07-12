@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/oci-import-report-v1",
+  "x-mantle-rust-owner": "src/oci_projection.rs::OciImportReport",
+  "$defs": {
+    "text_array": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 16384,
+      "x-mantle-bound-name": { "minItems": "MIN_OCI_NON_CLAIM_COUNT", "maxItems": "MAX_OCI_ENTRIES" },
+      "items": { "type": "string", "maxLength": 4096, "x-mantle-bound-name": { "maxLength": "MAX_OCI_TEXT_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "redaction-safe" }
+    },
+    "reference_array": {
+      "type": "array",
+      "maxItems": 16384,
+      "x-mantle-bound-name": { "maxItems": "MAX_OCI_ENTRIES" },
+      "items": { "type": "string", "x-mantle-semantic": "safe-reference" }
+    },
+    "annotations": {
+      "type": "object",
+      "maxProperties": 256,
+      "x-mantle-bound-name": { "maxProperties": "MAX_OCI_ANNOTATIONS" },
+      "additionalProperties": { "type": "string", "maxLength": 4096, "x-mantle-bound-name": { "maxLength": "MAX_OCI_TEXT_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "redaction-safe" }
+    },
+    "frontend_spec": {
+      "type": "object",
+      "required": ["id", "version", "hash_algorithm", "hash"],
+      "properties": {
+        "id": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "version": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "hash_algorithm": { "type": "string", "const": "blake3" },
+        "hash": { "type": "string", "x-mantle-semantic": "blake3" }
+      },
+      "additionalProperties": false
+    },
+    "round_trip": {
+      "type": "object",
+      "required": ["kernel_build_identity", "bundle_identity", "manifest_identity", "component_identities", "pack_identities"],
+      "properties": {
+        "kernel_build_identity": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "bundle_identity": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "manifest_identity": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "component_identities": { "$ref": "#/$defs/reference_array" },
+        "pack_identities": { "$ref": "#/$defs/reference_array" }
+      },
+      "additionalProperties": false
+    },
+    "issue": {
+      "type": "object",
+      "required": ["code", "path", "message"],
+      "properties": {
+        "code": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "path": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "message": { "type": "string", "x-mantle-semantic": "redaction-safe" }
+      },
+      "additionalProperties": false
+    },
+    "descriptor": {
+      "type": "object",
+      "required": ["mediaType", "digest", "size"],
+      "properties": {
+        "mediaType": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "digest": { "type": "string", "x-mantle-semantic": "sha256-digest" },
+        "size": { "type": "integer", "minimum": 0, "maximum": 1073741824, "x-mantle-bound-name": { "minimum": "MIN_OCI_BYTES", "maximum": "MAX_OCI_BYTES" } },
+        "annotations": { "$ref": "#/$defs/annotations" },
+        "platform": { "type": "object", "required": ["architecture", "os"], "properties": { "architecture": { "type": "string", "x-mantle-semantic": "non-empty" }, "os": { "type": "string", "x-mantle-semantic": "non-empty" } }, "additionalProperties": false }
+      },
+      "additionalProperties": false
+    },
+    "imported_object": {
+      "type": "object",
+      "required": ["role", "media_type", "oci_sha256", "blob_blake3", "size_bytes", "archive_profile"],
+      "properties": {
+        "role": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "media_type": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "oci_sha256": { "type": "string", "x-mantle-semantic": "sha256-digest" },
+        "blob_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "size_bytes": { "type": "integer", "minimum": 0, "maximum": 1073741824, "x-mantle-bound-name": { "minimum": "MIN_OCI_BYTES", "maximum": "MAX_OCI_BYTES" } },
+        "archive_profile": { "type": "string", "enum": ["exact-blob", "mantle-canonical-exact", "external-safe-inspection", "exact-json"] },
+        "artifact_ref": { "type": "string", "x-mantle-semantic": "mantle-reference" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["schema", "schema_version", "imported", "state", "layout_blake3", "manifest_descriptor", "objects", "frontend_spec", "object_admissions_blake3", "projection_blake3", "round_trip", "issues", "non_claims", "receipt_blake3"],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-oci-import-report-v1", "x-mantle-issue-class": "version" },
+    "schema_version": { "type": "integer", "const": 1, "x-mantle-issue-class": "version" },
+    "imported": { "type": "boolean", "const": true },
+    "state": { "type": "string", "enum": ["admitted", "compatibility-only"] },
+    "layout_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "manifest_descriptor": { "type": ["object", "null"], "required": ["mediaType", "digest", "size"], "properties": { "mediaType": { "type": "string", "x-mantle-semantic": "safe-reference" }, "digest": { "type": "string", "x-mantle-semantic": "sha256-digest" }, "size": { "type": "integer", "minimum": 0, "maximum": 1073741824, "x-mantle-bound-name": { "minimum": "MIN_OCI_BYTES", "maximum": "MAX_OCI_BYTES" } }, "annotations": { "$ref": "#/$defs/annotations" }, "platform": { "type": "object", "required": ["architecture", "os"], "properties": { "architecture": { "type": "string", "x-mantle-semantic": "non-empty" }, "os": { "type": "string", "x-mantle-semantic": "non-empty" } }, "additionalProperties": false } }, "additionalProperties": false },
+    "objects": { "type": "array", "minItems": 1, "maxItems": 16384, "x-mantle-bound-name": { "minItems": "MIN_OCI_ENTRIES", "maxItems": "MAX_OCI_ENTRIES" }, "items": { "$ref": "#/$defs/imported_object" } },
+    "frontend_spec": { "type": ["object", "null"], "required": ["id", "version", "hash_algorithm", "hash"], "properties": { "id": { "type": "string", "x-mantle-semantic": "safe-reference" }, "version": { "type": "string", "x-mantle-semantic": "non-empty" }, "hash_algorithm": { "type": "string", "const": "blake3" }, "hash": { "type": "string", "x-mantle-semantic": "blake3" } }, "additionalProperties": false },
+    "object_admissions_blake3": { "type": ["string", "null"], "x-mantle-semantic": "blake3" },
+    "projection_blake3": { "type": ["string", "null"], "x-mantle-semantic": "blake3" },
+    "round_trip": { "type": ["object", "null"], "required": ["kernel_build_identity", "bundle_identity", "manifest_identity", "component_identities", "pack_identities"], "properties": { "kernel_build_identity": { "type": "string", "x-mantle-semantic": "safe-reference" }, "bundle_identity": { "type": "string", "x-mantle-semantic": "safe-reference" }, "manifest_identity": { "type": "string", "x-mantle-semantic": "safe-reference" }, "component_identities": { "$ref": "#/$defs/reference_array" }, "pack_identities": { "$ref": "#/$defs/reference_array" } }, "additionalProperties": false },
+    "issues": { "type": "array", "maxItems": 128, "x-mantle-bound-name": { "maxItems": "MAX_OCI_ISSUES" }, "items": { "$ref": "#/$defs/issue" } },
+    "non_claims": { "$ref": "#/$defs/text_array" },
+    "receipt_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+  },
+  "additionalProperties": false
+}

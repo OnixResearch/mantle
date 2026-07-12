@@ -642,6 +642,12 @@ fn run_registry_self_test() -> Result<(), String> {
     if validate_registry(&escaped_registry).is_empty() {
         return Err("self-test accepted an artifact path outside the repository contract root".to_string());
     }
+    let mut misplaced_negative_registry = registry.clone();
+    misplaced_negative_registry.surfaces[0].artifacts.negative_fixture_set =
+        "tests/fixtures/misplaced-negative.json".to_string();
+    if validate_registry(&misplaced_negative_registry).is_empty() {
+        return Err("self-test accepted a negative fixture outside the contract artifact root".to_string());
+    }
     let mut duplicate_registry = registry.clone();
     duplicate_registry.surfaces.push(surface.clone());
     duplicate_registry.initial_cohort.push(surface.id.clone());

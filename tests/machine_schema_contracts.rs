@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 const INVENTORY_PATH: &str = "schemas/machine-contracts/inventory.ncl";
-const CONTRACTED_SURFACE_COUNT: u32 = 13;
+const CONTRACTED_SURFACE_COUNT: u32 = 15;
 const UTF8_EXACT_BYTES: u32 = 4;
 
 #[derive(Debug, Deserialize)]
@@ -87,6 +87,13 @@ fn string_bounds_probe(value: &str) -> String {
     )
 }
 
+fn prelude_predicate_probe(predicate: &str, value: &str) -> String {
+    let prelude = contract_directory().join("prelude.ncl");
+    let prelude_literal = serde_json::to_string(&prelude.display().to_string()).expect("serialize prelude path");
+    let value_literal = serde_json::to_string(value).expect("serialize predicate fixture");
+    format!("let C = import {prelude_literal} in\nC.{predicate} {value_literal}\n")
+}
+
 #[test]
 fn inventory_is_typed_nickel_data() {
     let registry = load_registry();
@@ -105,6 +112,31 @@ fn shared_string_bounds_count_utf8_bytes_exactly() {
     assert!(exact_bytes.is_ok(), "four UTF-8 bytes should satisfy exact byte bounds: {exact_bytes:?}");
     let too_many_bytes = evaluate_source(&string_bounds_probe("ééé"));
     assert!(too_many_bytes.is_err(), "six UTF-8 bytes must fail a four-byte bound");
+}
+
+#[test]
+fn shared_oci_identity_predicates_are_callable_and_fail_closed() {
+    let cases = [
+        (
+            "IsSha256Digest",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
+        (
+            "IsMantleReference",
+            "mantle://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "../aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
+    ];
+
+    for (predicate, valid, invalid) in cases {
+        let accepted = evaluate_source(&prelude_predicate_probe(predicate, valid))
+            .unwrap_or_else(|error| panic!("{predicate} rejected a valid identity: {error}"));
+        let rejected = evaluate_source(&prelude_predicate_probe(predicate, invalid))
+            .unwrap_or_else(|error| panic!("{predicate} failed to evaluate an invalid identity: {error}"));
+        assert_eq!(accepted, Value::Bool(true), "{predicate} must accept its canonical identity");
+        assert_eq!(rejected, Value::Bool(false), "{predicate} must reject its malformed identity");
+    }
 }
 
 #[test]

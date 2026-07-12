@@ -174,6 +174,8 @@ fn render_string_predicates(object: &Map<String, Value>, value: &str) -> Result<
             "blake3" => "C.IsBlake3Hex",
             "mantle-digest" => "C.IsMantleDigest",
             "sha256" => "C.IsSha256Hex",
+            "sha256-digest" => "C.IsSha256Digest",
+            "mantle-reference" => "C.IsMantleReference",
             "safe-reference" => "C.IsSafeReference",
             "redaction-safe" => "C.IsRedactionSafe",
             "non-empty" => "C.IsNonEmptyString",

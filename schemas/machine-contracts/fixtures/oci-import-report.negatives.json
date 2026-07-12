@@ -1,0 +1,81 @@
+{
+  "surface_id": "oci.import-report",
+  "cases": [
+    {
+      "id": "unsupported-schema-version",
+      "issue_class": "version",
+      "expected_path": "/schema_version",
+      "artifact": { "schema_version": 2 }
+    },
+    {
+      "id": "unsupported-import-state",
+      "issue_class": "enum",
+      "expected_path": "/state",
+      "artifact": { "state": "frontend-admitted" }
+    },
+    {
+      "id": "wrong-digest-role",
+      "issue_class": "digest",
+      "expected_path": "/manifest_descriptor/digest",
+      "artifact": {
+        "manifest_descriptor": {
+          "mediaType": "application/vnd.oci.image.manifest.v1+json",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size": 1
+        }
+      }
+    },
+    {
+      "id": "null-skipped-imported-reference",
+      "issue_class": "schema",
+      "expected_path": "/objects/0/artifact_ref",
+      "artifact": {
+        "objects": [
+          { "artifact_ref": null }
+        ]
+      }
+    },
+    {
+      "id": "unsafe-imported-reference",
+      "issue_class": "reference",
+      "expected_path": "/objects/0/artifact_ref",
+      "artifact": {
+        "objects": [
+          { "artifact_ref": "../escape" }
+        ]
+      }
+    },
+    {
+      "id": "object-size-over-bound",
+      "issue_class": "bounds",
+      "expected_path": "/objects/0/size_bytes",
+      "artifact": {
+        "objects": [
+          { "size_bytes": 1073741825 }
+        ]
+      }
+    },
+    {
+      "id": "unknown-root-field",
+      "issue_class": "unknown-field",
+      "expected_path": "/registry_token",
+      "artifact": { "registry_token": "must-not-exist" }
+    },
+    {
+      "id": "missing-non-claim-boundary",
+      "issue_class": "bounds",
+      "expected_path": "/non_claims",
+      "artifact": { "non_claims": [] }
+    },
+    {
+      "id": "redaction-leak",
+      "issue_class": "redaction",
+      "expected_path": "/issues/0/message",
+      "artifact": {
+        "issues": [
+          { "code": "unsafe-diagnostic", "path": "report", "message": "password=secret" }
+        ]
+      }
+    }
+  ]
+}

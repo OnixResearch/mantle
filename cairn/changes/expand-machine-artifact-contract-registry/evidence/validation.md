@@ -7,8 +7,8 @@ Covers: mantle.machine_artifact_contracts.inventory, mantle.machine_artifact_con
 
 ## Result summary
 
-- 42 public machine-artifact families are classified.
-- 13 initial-cohort surfaces are contracted.
+- 44 public machine-artifact families are classified.
+- 15 surfaces are contracted: the 13 original cohort surfaces plus the stable OCI export/import reports.
 - Rust DTOs remain runtime authority; generated Nickel contracts run only in checker/integration tests.
 - No prior schema versions are declared supported. The checker rejects any prior version unless both an explicit converter and migration fixtures are registered.
 - No sync, archive, or push operation was run.
@@ -194,6 +194,75 @@ The attempted `cargo clippy -Zscript ...` invocation is not claimed as evidence:
 this Cargo version dispatches that form to `cargo check` and rejects the script
 path as an unexpected argument. The executable self-test/check, scoped rustfmt,
 Rust producer fixtures, and Nickel integration tests are the validated rails.
+
+## Post-integration DTO drift and OCI extension
+
+Concurrent integration added two `BuildJsonReport` fields after the original
+13-surface evidence was captured. The generic Rust-owner parity rail rejected
+the stale schema with exact missing-field diagnostics for
+`ast_grep_structural_evidence` and
+`ast_grep_structural_evidence_diagnostics`. The build-report schema, fixtures,
+generated contract, and producer freshness inputs now include both fields and
+the bounded nested structural-evidence shape.
+
+The accepted generic rail also exposed four previously unclassified OCI report
+producer files. `OciExportReport` and `OciImportReport` are now registered as
+contracted surfaces with Rust ownership, exact schemas, generated Nickel
+contracts, Rust-generated golden fixtures, categorized negative fixtures,
+version rejection, BLAKE3 freshness, SHA-256 role predicates, Mantle reference
+predicates, and frontend-neutral non-claims.
+
+Adversarial review found two integration-specific false-pass/failure paths and
+closed them before completion:
+
+- nullable schema fields were initially used for nested `Option` fields whose
+  Rust serializers use `skip_serializing_if = "Option::is_none"`; those fields
+  are now optional but non-null, with negative null fixtures;
+- recursive Nickel record name resolution shadowed the raw
+  `IsSha256Digest`/`IsMantleReference` predicates with sibling contract fields;
+  the raw predicate bindings now have unambiguous names and a positive/negative
+  callable-predicate regression test.
+
+Current integrated evidence:
+
+```text
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --generate
+machine schema contract generation: PASS (15 contracted, 44 classified)
+
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --self-test
+machine schema contract self-test: PASS
+
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (15 contracted, 44 classified)
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-registry-target cargo test -q -p mantle --bin mantle machine_contract -- --nocapture
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1355 filtered out; finished in 0.00s
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-registry-target cargo test -q -p mantle --test machine_schema_contracts -- --nocapture
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.59s
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-registry-target cargo test -q -p mantle --bin mantle oci_projection::tests::golden_reports_cover_full_minimal_and_both_import_states -- --exact --nocapture
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1360 filtered out; finished in 0.01s
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-registry-target cargo check -q -p mantle --bin mantle
+(exit 0)
+
+$ nix develop -c rustfmt --check --edition 2024 src/machine_contract_producer_tests.rs src/oci_projection.rs scripts/check-machine-schema-contracts.rs scripts/machine_schema_contracts/mod.rs scripts/machine_schema_contracts/model.rs scripts/machine_schema_contracts/registry.rs scripts/machine_schema_contracts/schema.rs scripts/machine_schema_contracts/instance.rs scripts/machine_schema_contracts/render.rs scripts/machine_schema_contracts/freshness.rs tests/machine_schema_contracts.rs tools/tracey_refs.rs
+(exit 0)
+
+$ git diff --check
+(exit 0)
+```
+
+The Cargo commands above ran through `nix develop -c env` with the isolated
+`CARGO_TARGET_DIR` shown. Existing workspace warnings were captured separately
+and are not promoted to clean-lint evidence.
 
 ## Claim boundary
 

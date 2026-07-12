@@ -70,7 +70,9 @@ let Registry = {
     "source-bundle.offline-preflight-report",
     "nickel-export.report",
     "nickel-export.receipt",
-    "attestation.release-envelope"
+    "attestation.release-envelope",
+    "oci.export-report",
+    "oci.import-report"
   ],
   "surfaces"= [
     {
@@ -119,7 +121,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "27e36c9c867910b2358b8c9520d6bb1075a7aab7744db3eff7719f6f644e640e",
         "contract_blake3"= "c0021386177a6791a848a95a1740926cb3c44e9fb345a8e70cdff361f26da667",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "b2c0eee0dfbf01929d3f4b3aca13cab3695a693053e5249ca5d79c186966b586",
         "producer_identity_blake3"= "c16c10e8d1cee02eff583fed1a5baa898be17a7088bcb9cd7252a231637a85a0",
         "consumer_policy_blake3"= "9e1b4b671ba1ac277a6faee85e944fee5bc1b51ce308638f9a977b9b75606b82"
@@ -141,7 +143,9 @@ let Registry = {
           "src/build_failure.rs",
           "src/build_log.rs",
           "src/cache_substitution.rs",
-          "src/frontend_artifact_spec.rs"
+          "src/frontend_artifact_spec.rs",
+          "src/ast_grep_evidence.rs",
+          "crates/crunch-release-core/src/ast_grep.rs"
         ]
       },
       "consumers"= [
@@ -176,11 +180,11 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds the full report projection and all directly serialized owner modules",
       "freshness"= {
-        "schema_blake3"= "ed523975017580b2b79790073efc745cce361efd088966ab1054dd12e1e7a2b8",
-        "contract_blake3"= "bdfc3d491025bbda7615332f8290420fe6bb50ce15b7d54434286de7020a3dda",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
-        "fixture_set_blake3"= "a61a5899057e4eecf8164a0b97c3b355cbfcebd58468743fe04d68d41454747b",
-        "producer_identity_blake3"= "98e640e678b93acf1cb4e5d04447d6f0adfbd3a8100781ea49128b57d57d715d",
+        "schema_blake3"= "a890788484c6f4a0dd17f39dc0bec6c8244e8fd58f890d90b581aa2965e9f56a",
+        "contract_blake3"= "20ff80cf8f4ed2716695eb6fa92f9ace897eef29cc33d2cf8cc5708e95120394",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "4af6434c4c85c48ceadd52f0fef4389dfa0ec8cdcfb78efdac64660ec8a37b21",
+        "producer_identity_blake3"= "3347e51ff495db4e7210bca21cd258c007de0140f83961c53ad892a20112d3c3",
         "consumer_policy_blake3"= "7d4455f3467f3be7d648f7b5f2db114d776215cfc4c89187da0fa2c07a5520dd"
       },
       "non_claims"= [
@@ -232,9 +236,9 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "bb5e5fb41273e20dceb422b7dcb3e448f81fa7b262201011ba7603eae6274fbd",
         "contract_blake3"= "fa172e4f74cf9605bd211ac683c628a83917b623554554b38538b58f49d56829",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "576b0cc4dbed5d3c850a408c032411c180e9a0446507ec333606c25c4b15f719",
-        "producer_identity_blake3"= "0f6cd8b4b7cae8dd640acf86d40f89937a937195fb517dfa8b6e9d128bc78b24",
+        "producer_identity_blake3"= "dbe731a57496166bd4c44ccc86bed96f07f85389b5526e5e50743ade646e4e04",
         "consumer_policy_blake3"= "d9c1ccf9e8d250b9ce0b12e6b0b73a2e13db503096b5d725ac3a16e9d65061ed"
       },
       "non_claims"= [
@@ -286,7 +290,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "6264c981a69074be3666b86282a1e9dcc8e7d87132e39cb4d2595cea6940d308",
         "contract_blake3"= "cd20cb1f42f9c0b91267ba44ba449dfab772996cc5f7efc98c643b7134676546",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "326f83bf601b7aaf442cadcde8c09e8274e606b510e83a7b327cb8e1debc45a0",
         "producer_identity_blake3"= "660917bd30d3d28571b6f522822866d8d613d119ee15bfe2bea0cffe038e864e",
         "consumer_policy_blake3"= "7660bcc9154bd8b4e2e5f317f88b8a276523f64e31aad9c2fef0bb68d5f89dc1"
@@ -340,7 +344,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "e6af958159a48f87e3b1a1ba21e4891091ad0ac358d405648ba5e8fd23e4867e",
         "contract_blake3"= "2dbee0e6faf2eaa07243e7be7b1ad4f8e415efd0bf60bc3db72348ee1115d1fa",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "f8efd884abc9b6beffd9527db139ab53356b198331c91adb4b41259ca6684c88",
         "producer_identity_blake3"= "b26610924a3c05af55c432d2a3a9377ce2edd3e89cd38fe37a3b723d95c685c1",
         "consumer_policy_blake3"= "499fa604950b42de900457a05728162a807c3d38acaa39f691602bcf30d5ef06"
@@ -394,7 +398,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "a1e0b82024f62b39d917514de7585e2e6dd9365d564a5e58feb23484b2305aec",
         "contract_blake3"= "eaab54bca79c41b817f96c198ebb511a4d1710602395e5cd704ca02e73363d35",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "a9cd57d937da9107de66d87888629c51f19a07dc585beda5192baa817bf77ec9",
         "producer_identity_blake3"= "5a2e8649734f8d0ccaa3d293beff4741426d17e9c20e7f9040d9e45d86c7bfff",
         "consumer_policy_blake3"= "c8b7b1c63ebb54254bf7cce2d855df6a7e48601089a7102d3698e757827e974e"
@@ -447,7 +451,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "fa5a902ed68036aa6e1bb1472b10b845c60980cb2cb34665f6cb6625e7fb0355",
         "contract_blake3"= "54fbc926003092124a7a4a88eb1fc29c43a274dab9e72fe082230138163e570a",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "6788977d15737936e07f67f8cc3ee1c5fd7acbe275762801e54e680681de19d2",
         "producer_identity_blake3"= "22dd4da2bf0f447d98e3ddc9b66da79e684f89aa3e2f2e55266e526a56e9339e",
         "consumer_policy_blake3"= "15cedc21de51570e0fa4d214d357f33de4adafa7d8674274eec0285d6f18d7fd"
@@ -501,7 +505,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "89b0785a736e8c4854c41d54c1fe75e22ba43b0cae90399d4aff1c863dc9deed",
         "contract_blake3"= "1b298a1327e9ab47c6bdb31c1b0efe373bcc77dbb868e94b004e956593e80bbd",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "996d0ea5521663d8180e90e955fcba9c92b4570b8935e13b2e57af45c81260e2",
         "producer_identity_blake3"= "53dfeaa242f411594a037e984610c6751f84d077a01e95a6ca72b53140300a17",
         "consumer_policy_blake3"= "b41da07fbbd17d793f07c51876465ca6e73d83db0dc79b9beb02c8a8110b59d1"
@@ -555,7 +559,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "5350efbbd43f29ff26bf6ccdf64cdfff33c6cc7f17ea90252dc679a6fb2c524c",
         "contract_blake3"= "82d26b857396ae116cc3d245dc6f3f6edd37fcad4417a02e65f69f11b4a86339",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1ad119357b7d7217396fe2f47598b14cb8d87bc105982a428e3924e7c3213c11",
         "producer_identity_blake3"= "9f44162362c6a2b01f67d2b84d96b9170130330edd3ed78189a8d9aea1e7786c",
         "consumer_policy_blake3"= "edc96af15dd9073d7cd0178ed0d617acd41c8cf91c6719a674dd1422a7e285e4"
@@ -609,7 +613,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "40aaec6972d156951612eee123c5878b829f7a822a5eb8a4a3dc32c23dd7c059",
         "contract_blake3"= "b3cbddb94afb0b1d25aeacee4dc02932548be98c2d32d551a2579ea17d18938b",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "74b65baffbfcfb59d5557a99ea0ed63c02711ee4c865c5f7be1eb14ad57071c8",
         "producer_identity_blake3"= "6467468a25dd31623a415dffc06c6e3ce7d559c0310a17436b3fbce8744fc6af",
         "consumer_policy_blake3"= "2604bdd4cb6aa3824e00fa515e64f68a01ab5df84d2f2342ee0f1e7029f91f07"
@@ -663,7 +667,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "c42a0b70093997a3d741882d93be44f43e732e59a6ecbfee232bb86feceef564",
         "contract_blake3"= "4ff8d00ce8180be6207e7a87bb53b210b4eb8420826c75cbf1977ebd5a33c5c4",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "3cf4824049a7e2294fe7aa79115d67f79739889171e3e022cb7c07da622af610",
         "producer_identity_blake3"= "73b784a1b0c2b3408ddebc585bbf41357ae177d109455ed1cd799d47c635d570",
         "consumer_policy_blake3"= "197e7e60804e37ca2cbb8548b889953f4392802d4f04d0f1a56fc5d346528442"
@@ -717,7 +721,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "5f4fe9ff3df4c34fe20480caaaa0e810ec6715b543c740173a9fe4f100b472d4",
         "contract_blake3"= "0ebfa8dc10228f19a76f97e5afd406b55c2c5df5ba8358a02d58bc77f1485e7d",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "e39044713ad33d6d6153018742b25fa6b1da7c3b5b013537854684078292a2c8",
         "producer_identity_blake3"= "28e141869781254076884f49dbab779120a2c004b5b4289080868aaf71c7064c",
         "consumer_policy_blake3"= "dc57ec430384237cfec878c7eb95770c629a3afa911374a8de998780d26b0842"
@@ -773,7 +777,7 @@ let Registry = {
       "freshness"= {
         "schema_blake3"= "24541155258a9ec67af44b95848176c35e9823fa977ebd64fa24bbe762c9f271",
         "contract_blake3"= "4f12c53d77531fcac374d86b0bf5df1e1c9d6b854b22d1a73a5bbd177abae980",
-        "prelude_blake3"= "496f0c79d7918f1761ccb04a0ce3643954aa2653eeae115068ea67092fda4db5",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "67d9e9232706f73f157c68abea93383ffa5af8ef83a924ecc2fb8fadce10a357",
         "producer_identity_blake3"= "da3cb30f7be5aeba2634b3f6b3afc0aa73063722b9c26b97bded402723839045",
         "consumer_policy_blake3"= "fce9cfc511ed3931f6804f5e99cd0ae3d6d325a2a6e47899b8f027ccaa6787ec"
@@ -782,6 +786,137 @@ let Registry = {
         "shape and digest syntax do not prove attestation truth, signer trust, reproducibility, or release eligibility"
       ],
       "rationale"= "Selected stable release handoff envelope crosses publisher, witness, and verifier boundaries."
+    },
+    {
+      "id"= "oci.export-report",
+      "class"= "contracted",
+      "rust_owner"= "src/oci_projection.rs::OciExportReport",
+      "producer"= {
+        "command_or_api"= "mantle artifact export --destination oci-layout",
+        "marker"= "oci.export-report",
+        "source_paths"= [
+          "src/oci_projection.rs",
+          "src/oci_projection/archive.rs",
+          "src/oci_projection/layout.rs",
+          "src/oci_projection/tests.rs",
+          "src/oci_projection_shell.rs"
+        ]
+      },
+      "consumers"= [
+        "local OCI layout tooling",
+        "frontend adapters",
+        "audit and handoff tooling"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/oci-export-report.schema.json",
+        "generated_contract"= "schemas/machine-contracts/oci-export-report.contract.ncl",
+        "positive_fixtures"= [
+          "tests/fixtures/kernel-bundle-oci/mantle-export-minimal.json",
+          "tests/fixtures/kernel-bundle-oci/mantle-export-full.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/oci-export-report.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-oci-export-report-v1",
+        "supported"= [
+          "mantle-oci-export-report-v1"
+        ],
+        "unknown_version_behavior"= "reject before report verification or OCI layout handoff",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p mantle oci_projection::tests::golden_reports_cover_full_minimal_and_both_import_states"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "enum",
+        "digest",
+        "reference",
+        "bounds",
+        "unknown-field",
+        "redaction",
+        "cross-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the frontend-neutral Rust report owner, exact digest-role schema, generated contract, reviewed fixtures, and consumer non-claims",
+      "freshness"= {
+        "schema_blake3"= "0db24b0f3f4952c80b074eed1d7ff8e03d3685a57deeb51ad2d318d31f27de85",
+        "contract_blake3"= "2e330d8d92559ab8d45c5b54b67f12f17720d65558b0328b3db4201d4fe196a4",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "76599ed52294ac203020c80c063c840e475c0d41e66841650c3e26192be9d259",
+        "producer_identity_blake3"= "da8216a8ab056d522179ed29dc0daeac19041dbbfd3236670fd85c02d8a70fe9",
+        "consumer_policy_blake3"= "d2045dba8cfd1dea820752fb60f94beb4cd88674ba02fabca73b2fbe53ffb251"
+      },
+      "non_claims"= [
+        "report conformance does not prove registry publication, frontend semantics, kernel compatibility, bootability, deployability, signature policy, or release eligibility"
+      ],
+      "rationale"= "The stable local OCI export report crosses a generic build and transport boundary while frontend meaning remains external."
+    },
+    {
+      "id"= "oci.import-report",
+      "class"= "contracted",
+      "rust_owner"= "src/oci_projection.rs::OciImportReport",
+      "producer"= {
+        "command_or_api"= "mantle artifact import --source oci-layout",
+        "marker"= "oci.import-report",
+        "source_paths"= [
+          "src/oci_projection.rs",
+          "src/oci_projection/archive.rs",
+          "src/oci_projection/layout.rs",
+          "src/oci_projection/tests.rs",
+          "src/oci_projection_shell.rs"
+        ]
+      },
+      "consumers"= [
+        "local OCI layout tooling",
+        "frontend reconstruction adapters",
+        "audit and handoff tooling"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/oci-import-report.schema.json",
+        "generated_contract"= "schemas/machine-contracts/oci-import-report.contract.ncl",
+        "positive_fixtures"= [
+          "tests/fixtures/kernel-bundle-oci/mantle-import-admitted.json",
+          "tests/fixtures/kernel-bundle-oci/mantle-import-compatibility-only.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/oci-import-report.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-oci-import-report-v1",
+        "supported"= [
+          "mantle-oci-import-report-v1"
+        ],
+        "unknown_version_behavior"= "reject before CAS admission or frontend reconstruction handoff",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p mantle oci_projection::tests::golden_reports_cover_full_minimal_and_both_import_states"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "enum",
+        "digest",
+        "reference",
+        "bounds",
+        "unknown-field",
+        "redaction"
+      ],
+      "freshness_strategy"= "BLAKE3 binds admitted and compatibility-only Rust report projections, OCI SHA-256 roles, Mantle BLAKE3 identities, fixtures, and consumer non-claims",
+      "freshness"= {
+        "schema_blake3"= "6cebc78ec0db150ffa5d5511ca0a562b7d0033e48c83a6c85f2137fe373e70f3",
+        "contract_blake3"= "ce21d8ae6b38624e8cda66d54822e5d0eef0ba0328b92461174f748b17b26c21",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "04a452fb28f5bbcc589051a9901f352f3411f14665ec1002232433f7d7ac01c9",
+        "producer_identity_blake3"= "f6f86629afcc633baa0c4df23ed6fda70271ef97c3667a4f21dbdb78b8594352",
+        "consumer_policy_blake3"= "d9734a8c052a4e80a65917ca0a08b68273017dfe057ab8f7bbd59d423b66d963"
+      },
+      "non_claims"= [
+        "report conformance does not recover frontend semantics or prove signature trust, kernel compatibility, bootability, deployability, publication, or release eligibility"
+      ],
+      "rationale"= "The stable import report distinguishes admitted and compatibility-only layouts without granting frontend semantic authority to Mantle."
     },
     {
       "id"= "cli.error-envelope",

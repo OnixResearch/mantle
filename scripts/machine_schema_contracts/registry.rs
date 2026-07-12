@@ -300,19 +300,38 @@ fn validate_surface_paths(surface: &Surface, path: &str, issues: &mut Vec<Issue>
     if surface.class != CONTRACTED_CLASS {
         return;
     }
-    for artifact_path in contracted_artifact_paths(surface) {
-        if !safe_repo_relative_path(artifact_path) || !artifact_path.starts_with("schemas/machine-contracts/") {
-            push_issue(
-                issues,
-                Issue::surface(
-                    &surface.id,
-                    "reference",
-                    format!("{path}/artifacts"),
-                    format!("contract artifact must stay under schemas/machine-contracts: {artifact_path}"),
-                ),
-            );
-        }
+    for artifact_path in [
+        surface.artifacts.schema.as_str(),
+        surface.artifacts.generated_contract.as_str(),
+        surface.artifacts.negative_fixture_set.as_str(),
+    ] {
+        validate_artifact_path(surface, path, artifact_path, false, issues);
     }
+    for fixture_path in surface
+        .artifacts
+        .positive_fixtures
+        .iter()
+        .chain(surface.version_policy.compatibility_fixtures.iter())
+    {
+        validate_artifact_path(surface, path, fixture_path, true, issues);
+    }
+}
+
+fn validate_artifact_path(surface: &Surface, path: &str, artifact_path: &str, fixture: bool, issues: &mut Vec<Issue>) {
+    let allowed_root = artifact_path.starts_with("schemas/machine-contracts/")
+        || (fixture && artifact_path.starts_with("tests/fixtures/"));
+    if safe_repo_relative_path(artifact_path) && allowed_root {
+        return;
+    }
+    push_issue(
+        issues,
+        Issue::surface(
+            &surface.id,
+            "reference",
+            format!("{path}/artifacts"),
+            format!("contract artifact path is outside an allowed review fixture root: {artifact_path}"),
+        ),
+    );
 }
 
 fn safe_repo_relative_path(value: &str) -> bool {

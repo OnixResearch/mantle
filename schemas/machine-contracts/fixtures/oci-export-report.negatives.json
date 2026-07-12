@@ -1,0 +1,82 @@
+{
+  "surface_id": "oci.export-report",
+  "cases": [
+    {
+      "id": "unsupported-schema",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": { "schema": "mantle-oci-export-report-v2" }
+    },
+    {
+      "id": "unsupported-compression",
+      "issue_class": "enum",
+      "expected_path": "/projection/archive_policy/compression",
+      "artifact": { "projection": { "archive_policy": { "compression": "ambient-gzip" } } }
+    },
+    {
+      "id": "malformed-receipt-digest",
+      "issue_class": "digest",
+      "expected_path": "/receipt_blake3",
+      "artifact": { "receipt_blake3": "not-a-blake3-digest" }
+    },
+    {
+      "id": "null-skipped-projection-digest",
+      "issue_class": "schema",
+      "expected_path": "/projection/admission/projection_blake3",
+      "artifact": {
+        "projection": {
+          "admission": { "projection_blake3": null }
+        }
+      }
+    },
+    {
+      "id": "unsafe-object-reference",
+      "issue_class": "reference",
+      "expected_path": "/projection/object_admissions/0/artifact_ref",
+      "artifact": {
+        "projection": {
+          "object_admissions": [
+            { "artifact_ref": "../escape" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "admission-count-over-bound",
+      "issue_class": "bounds",
+      "expected_path": "/admission_count",
+      "artifact": { "admission_count": 16385 }
+    },
+    {
+      "id": "unknown-root-field",
+      "issue_class": "unknown-field",
+      "expected_path": "/ambient_owner",
+      "artifact": { "ambient_owner": "root" }
+    },
+    {
+      "id": "missing-non-claim-boundary",
+      "issue_class": "bounds",
+      "expected_path": "/non_claims",
+      "artifact": { "non_claims": [] }
+    },
+    {
+      "id": "redaction-leak",
+      "issue_class": "redaction",
+      "expected_path": "/issues/0/message",
+      "artifact": {
+        "issues": [
+          { "code": "unsafe-diagnostic", "path": "report", "message": "Bearer secret-token" }
+        ]
+      }
+    },
+    {
+      "id": "admission-count-disagrees",
+      "issue_class": "cross-field",
+      "expected_path": "/",
+      "artifact": {
+        "admission_count": 2,
+        "projection": { "object_admissions": [] }
+      }
+    }
+  ]
+}

@@ -52,10 +52,72 @@
     "output": { "type": "object", "required": ["name", "path", "artifact_attestation"], "properties": { "name": { "type": "string", "x-mantle-semantic": "non-empty" }, "path": { "type": "string", "x-mantle-semantic": "safe-reference" }, "artifact_attestation": { "$ref": "#/$defs/attestation_ref" }, "substitution": { "type": ["object", "null"], "required": ["mode", "transferred_bytes", "reused_bytes"], "properties": { "mode": { "type": "string", "x-mantle-semantic": "non-empty" }, "transferred_bytes": { "type": "integer", "minimum": 0, "maximum": 18446744073709551615, "x-mantle-bound-name": { "minimum": "MIN_TRANSFER_BYTES", "maximum": "MAX_U64" } }, "reused_bytes": { "type": "integer", "minimum": 0, "maximum": 18446744073709551615, "x-mantle-bound-name": { "minimum": "MIN_REUSED_BYTES", "maximum": "MAX_U64" } }, "fallback_reason": { "type": ["string", "null"], "x-mantle-semantic": "redaction-safe" } }, "additionalProperties": false }, "cache_admission": { "type": ["object", "null"], "required": ["reason"], "properties": { "reason": { "type": "string", "x-mantle-semantic": "non-empty" } }, "additionalProperties": false } }, "additionalProperties": false },
     "outcome": { "type": "object", "required": ["drv_key", "label", "cached", "log_file", "outputs"], "properties": { "drv_key": { "type": "string", "x-mantle-semantic": "safe-reference" }, "label": { "type": "string", "x-mantle-semantic": "non-empty" }, "cached": { "type": "boolean" }, "log_file": { "type": ["string", "null"], "x-mantle-semantic": "safe-reference" }, "outputs": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_BUILD_REPORT_ROWS" }, "items": { "$ref": "#/$defs/output" } } }, "additionalProperties": false },
     "failure": { "type": "object", "required": ["root", "drv_key", "phase", "error_class", "message"], "properties": { "root": { "type": "string", "x-mantle-semantic": "non-empty" }, "drv_key": { "type": "string", "x-mantle-semantic": "safe-reference" }, "phase": { "type": "string", "enum": ["preflight", "build"] }, "error_class": { "type": "string", "enum": ["preflight", "fixed-output-hash-mismatch", "sandbox", "missing-output", "missing-source-input", "cache-verification", "unsupported-platform", "builder"] }, "message": { "type": "string", "x-mantle-semantic": "redaction-safe" }, "saved_log_path": { "type": ["string", "null"], "x-mantle-semantic": "safe-reference" } }, "additionalProperties": false },
+    "ast_grep_finding_summary": { "type": "object", "required": ["rule_count", "finding_count", "test_case_count", "passed_test_count", "failed_test_count"], "properties": {
+      "rule_count": { "type": "integer", "minimum": 1, "maximum": 1000000, "x-mantle-bound-name": { "minimum": "MIN_AST_GREP_RULE_COUNT", "maximum": "MAX_AST_GREP_FINDING_SUMMARY_COUNT" } },
+      "finding_count": { "type": "integer", "minimum": 0, "maximum": 1000000, "x-mantle-bound-name": { "minimum": "MIN_AST_GREP_FINDING_COUNT", "maximum": "MAX_AST_GREP_FINDING_SUMMARY_COUNT" } },
+      "test_case_count": { "type": "integer", "minimum": 0, "maximum": 1000000, "x-mantle-bound-name": { "minimum": "MIN_AST_GREP_TEST_COUNT", "maximum": "MAX_AST_GREP_FINDING_SUMMARY_COUNT" } },
+      "passed_test_count": { "type": "integer", "minimum": 0, "maximum": 1000000, "x-mantle-bound-name": { "minimum": "MIN_AST_GREP_TEST_COUNT", "maximum": "MAX_AST_GREP_FINDING_SUMMARY_COUNT" } },
+      "failed_test_count": { "type": "integer", "minimum": 0, "maximum": 1000000, "x-mantle-bound-name": { "minimum": "MIN_AST_GREP_TEST_COUNT", "maximum": "MAX_AST_GREP_FINDING_SUMMARY_COUNT" } }
+    }, "additionalProperties": false, "x-mantle-invariants": [{ "kind": "sum-equals", "terms": ["/passed_test_count", "/failed_test_count"], "target": "/test_case_count" }] },
+    "ast_grep_tool": { "type": "object", "required": ["package", "version", "expected_version", "binary_digest_blake3", "expected_binary_digest_blake3"], "properties": {
+      "package": { "type": "string", "const": "ast-grep" },
+      "version": { "type": "string", "maxLength": 128, "x-mantle-bound-name": { "maxLength": "MAX_AST_GREP_VERSION_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "non-empty" },
+      "expected_version": { "type": "string", "const": "0.42.1" },
+      "binary_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+      "expected_binary_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+    }, "additionalProperties": false },
+    "ast_grep_command": { "type": "object", "required": ["kind", "argv_digest_blake3"], "properties": {
+      "kind": { "type": "string", "enum": ["scan", "rule-test"] },
+      "argv_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+    }, "additionalProperties": false },
+    "ast_grep_rule_bundle": { "type": "object", "required": ["digest_blake3", "expected_digest_blake3"], "properties": {
+      "digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+      "expected_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+    }, "additionalProperties": false },
+    "ast_grep_scan_scope": { "type": "object", "required": ["description", "input_digest_blake3", "expected_input_digest_blake3"], "properties": {
+      "description": { "type": "string", "maxLength": 4096, "x-mantle-bound-name": { "maxLength": "MAX_AST_GREP_TEXT_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "redaction-safe" },
+      "input_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+      "expected_input_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+    }, "additionalProperties": false },
+    "ast_grep_output": { "type": "object", "required": ["format", "finding_summary"], "properties": {
+      "format": { "type": "string", "enum": ["json-compact", "json-pretty", "json-stream", "text-color-never"] },
+      "finding_summary": { "$ref": "#/$defs/ast_grep_finding_summary" }
+    }, "additionalProperties": false },
+    "ast_grep_receipt": { "type": "object", "required": ["digest_blake3"], "properties": {
+      "digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+    }, "additionalProperties": false },
+    "ast_grep_evidence_payload": { "type": "object", "required": ["schema", "claim_scope", "claim_labels", "tool", "command", "rule_bundle", "scan_scope", "output", "receipt", "non_claims"], "properties": {
+      "schema": { "type": "string", "const": "mantle-ast-grep-structural-evidence-v1" },
+      "claim_scope": { "type": "string", "const": "structural-tool-evidence-only" },
+      "claim_labels": { "type": "array", "minItems": 1, "maxItems": 8, "x-mantle-bound-name": { "minItems": "MIN_AST_GREP_CLAIM_LABEL_COUNT", "maxItems": "MAX_AST_GREP_CLAIM_LABEL_COUNT" }, "items": { "type": "string", "const": "structural-tool-evidence" } },
+      "tool": { "$ref": "#/$defs/ast_grep_tool" },
+      "command": { "$ref": "#/$defs/ast_grep_command" },
+      "rule_bundle": { "$ref": "#/$defs/ast_grep_rule_bundle" },
+      "scan_scope": { "$ref": "#/$defs/ast_grep_scan_scope" },
+      "output": { "$ref": "#/$defs/ast_grep_output" },
+      "receipt": { "$ref": "#/$defs/ast_grep_receipt" },
+      "non_claims": { "type": "array", "minItems": 4, "maxItems": 16, "x-mantle-bound-name": { "minItems": "MIN_AST_GREP_NON_CLAIM_COUNT", "maxItems": "MAX_AST_GREP_NON_CLAIM_COUNT" }, "items": { "type": "string", "maxLength": 4096, "x-mantle-bound-name": { "maxLength": "MAX_AST_GREP_TEXT_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "redaction-safe" } }
+    }, "additionalProperties": false },
+    "ast_grep_evidence": { "type": "object", "required": ["label", "output_name", "evidence_path", "sidecar_digest_blake3", "canonical_digest_blake3", "evidence"], "properties": {
+      "label": { "type": "string", "x-mantle-semantic": "non-empty" },
+      "output_name": { "type": "string", "x-mantle-semantic": "non-empty" },
+      "evidence_path": { "type": "string", "x-mantle-semantic": "safe-reference" },
+      "sidecar_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+      "canonical_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+      "evidence": { "$ref": "#/$defs/ast_grep_evidence_payload" }
+    }, "additionalProperties": false },
+    "ast_grep_diagnostic": { "type": "object", "required": ["label", "output_name", "evidence_path", "blocker_class", "message", "next_action"], "properties": {
+      "label": { "type": "string", "x-mantle-semantic": "non-empty" },
+      "output_name": { "type": "string", "x-mantle-semantic": "non-empty" },
+      "evidence_path": { "type": "string", "x-mantle-semantic": "safe-reference" },
+      "blocker_class": { "type": "string", "x-mantle-semantic": "non-empty" },
+      "message": { "type": "string", "x-mantle-semantic": "redaction-safe" },
+      "next_action": { "type": "string", "x-mantle-semantic": "redaction-safe" }
+    }, "additionalProperties": false },
     "fod": { "type": "object", "required": ["name", "expected_sri", "actual_sri"], "properties": { "name": { "type": "string", "x-mantle-semantic": "non-empty" }, "expected_sri": { "type": "string", "x-mantle-semantic": "non-empty" }, "actual_sri": { "type": "string", "x-mantle-semantic": "non-empty" } }, "additionalProperties": false }
   },
   "type": "object",
-  "required": ["schema", "file", "output_dir", "state_dir", "store_dir", "hermeticity_mode", "hermeticity_audit_events", "build_environment_reports", "network_policy_reports", "native_dynamic_plans", "frontend_artifact_attestations", "cargo_build_evidence", "cargo_build_evidence_diagnostics", "diagnostic_persistence_failures", "counts", "outcomes", "failed", "fod_mismatches"],
+  "required": ["schema", "file", "output_dir", "state_dir", "store_dir", "hermeticity_mode", "hermeticity_audit_events", "build_environment_reports", "network_policy_reports", "native_dynamic_plans", "frontend_artifact_attestations", "cargo_build_evidence", "cargo_build_evidence_diagnostics", "ast_grep_structural_evidence", "ast_grep_structural_evidence_diagnostics", "diagnostic_persistence_failures", "counts", "outcomes", "failed", "fod_mismatches"],
   "properties": {
     "schema": { "type": "string", "const": "crunch-build-report-v1", "x-mantle-issue-class": "version" },
     "file": { "type": "string", "x-mantle-semantic": "safe-reference" },
@@ -70,6 +132,8 @@
     "frontend_artifact_attestations": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_BUILD_REPORT_ROWS" }, "items": { "$ref": "#/$defs/frontend" } },
     "cargo_build_evidence": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_BUILD_REPORT_ROWS" }, "items": { "$ref": "#/$defs/cargo_evidence" } },
     "cargo_build_evidence_diagnostics": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_BUILD_REPORT_ROWS" }, "items": { "$ref": "#/$defs/cargo_diagnostic" } },
+    "ast_grep_structural_evidence": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_BUILD_REPORT_ROWS" }, "items": { "$ref": "#/$defs/ast_grep_evidence" } },
+    "ast_grep_structural_evidence_diagnostics": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_BUILD_REPORT_ROWS" }, "items": { "$ref": "#/$defs/ast_grep_diagnostic" } },
     "diagnostic_persistence_failures": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_BUILD_REPORT_ROWS" }, "items": { "$ref": "#/$defs/persistence_failure" } },
     "counts": { "type": "object", "required": ["succeeded_total", "built_total", "cached_total", "failed_total"], "properties": { "succeeded_total": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-mantle-bound-name": { "minimum": "MIN_BUILD_COUNT", "maximum": "MAX_U32" } }, "built_total": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-mantle-bound-name": { "minimum": "MIN_BUILD_COUNT", "maximum": "MAX_U32" } }, "cached_total": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-mantle-bound-name": { "minimum": "MIN_BUILD_COUNT", "maximum": "MAX_U32" } }, "failed_total": { "type": "integer", "minimum": 0, "maximum": 4294967295, "x-mantle-bound-name": { "minimum": "MIN_BUILD_COUNT", "maximum": "MAX_U32" } } }, "additionalProperties": false, "x-mantle-invariants": [{ "kind": "sum-equals", "terms": ["/built_total", "/cached_total"], "target": "/succeeded_total" }] },
     "outcomes": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_BUILD_REPORT_ROWS" }, "items": { "$ref": "#/$defs/outcome" } },

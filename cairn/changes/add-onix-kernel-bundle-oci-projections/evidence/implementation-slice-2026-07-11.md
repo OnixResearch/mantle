@@ -70,20 +70,47 @@ The commands used
 because Mantle's local generated policy remains older than the canonical Cairn
 binary.
 
-## Deliberate blocker
+## Resolved registry dependency
 
-The stable export/import report registration task remains unchecked behind
-`mantle.expand-machine-artifact-contract-registry`. That active change still
-owns the data-driven inventory, exact schema authority, generated Nickel
-contracts, fixture classification, BLAKE3 freshness, version policy, and
-consumer-policy rail. This change does not duplicate or preempt that work.
+The stable report-registration dependency is now implemented through
+`mantle.expand-machine-artifact-contract-registry`; no OCI-specific checker
+branch was added. The generic rail owns both `oci.export-report` and
+`oci.import-report`, their exact Rust DTO roots, schemas, generated Nickel
+contracts, version policy, reviewed golden fixtures, categorized negative
+fixtures, BLAKE3 freshness, consumer policy, and non-claims.
 
-Consequently this package is intentionally **not** synced into accepted specs
-or archived, and downstream ChaosControl implementation remains blocked on the
-accepted Mantle package. Once the registry dependency lands, register both
-report families, run its positive/negative schema-contract rail, rerun the
-focused and Cairn checks, then sync/archive this change.
+Integration caught and repaired concurrent `BuildJsonReport` contract drift,
+then passed with 15 contracted surfaces and 44 classified families. Adversarial
+review also tightened nested skipped `Option` fields to optional non-null schema
+properties and repaired Nickel recursive-record shadowing of the new SHA-256
+and Mantle-reference raw predicates.
 
+```text
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --generate
+machine schema contract generation: PASS (15 contracted, 44 classified)
+
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --self-test
+machine schema contract self-test: PASS
+
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (15 contracted, 44 classified)
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-registry-target cargo test -q -p mantle --test machine_schema_contracts -- --nocapture
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.59s
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-registry-target cargo test -q -p mantle --bin mantle oci_projection::tests::golden_reports_cover_full_minimal_and_both_import_states -- --exact --nocapture
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1360 filtered out; finished in 0.01s
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-registry-target cargo check -q -p mantle --bin mantle
+(exit 0)
+```
+
+The package remains unsynced and unarchived only until the final current-tree
+Cairn validation and proposal/design/tasks gates are recorded below.
 ## Claim boundary
 
 This evidence proves the bounded local projection and import/export behavior

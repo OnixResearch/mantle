@@ -3,6 +3,7 @@
 let Predicate = fun predicate => std.contract.from_predicate predicate in
 let DigestHexCharacters = 64 in
 let DigestAlgorithmPrefixCharacters = 7 in
+let MantleReferencePrefixCharacters = 16 in
 let Base64DecodedBytesPerQuantum = 3 in
 let Base64EncodedCharactersPerQuantum = 4 in
 let SafeReferenceBytesMax = 4096 in
@@ -16,6 +17,16 @@ let PrefixedLowerHex64 = fun value =>
   std.is_string value
   && std.string.length value == DigestAlgorithmPrefixCharacters + DigestHexCharacters
   && std.string.is_match "^(blake3|sha256):[0-9a-f]+$" value
+in
+let Sha256DigestPredicate = fun value =>
+  std.is_string value
+  && std.string.length value == DigestAlgorithmPrefixCharacters + DigestHexCharacters
+  && std.string.is_match "^sha256:[0-9a-f]+$" value
+in
+let MantleReferencePredicate = fun value =>
+  std.is_string value
+  && std.string.length value == MantleReferencePrefixCharacters + DigestHexCharacters
+  && std.string.is_match "^mantle://blake3/[0-9a-f]+$" value
 in
 let utf8_byte_length = fun value =>
   let encoded_length = std.string.length (std.string.base64_encode 'NoPad value) in
@@ -44,7 +55,9 @@ in
   IsNonEmptyString = fun value => std.is_string value && std.string.length value > 0,
   IsBlake3Hex = LowerHex64,
   IsSha256Hex = LowerHex64,
+  IsSha256Digest = Sha256DigestPredicate,
   IsMantleDigest = fun value => LowerHex64 value || PrefixedLowerHex64 value,
+  IsMantleReference = MantleReferencePredicate,
   IsSafeReference = SafeReferencePredicate,
   IsRedactionSafe = RedactionSafePredicate,
   Null = Predicate (fun value => value == null),
@@ -64,7 +77,9 @@ in
   NonEmptyString = Predicate (fun value => std.is_string value && std.string.length value > 0),
   Blake3Hex = Predicate LowerHex64,
   Sha256Hex = Predicate LowerHex64,
+  Sha256Digest = Predicate Sha256DigestPredicate,
   MantleDigest = Predicate (fun value => LowerHex64 value || PrefixedLowerHex64 value),
+  MantleReference = Predicate MantleReferencePredicate,
   SafeReference = Predicate SafeReferencePredicate,
   RedactionSafe = Predicate RedactionSafePredicate,
   CrossField = fun predicate => Predicate predicate,

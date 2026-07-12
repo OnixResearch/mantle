@@ -8,6 +8,8 @@
 //! r[impl kernel_bundle_oci.import]
 //! r[related kernel_bundle_oci.reports]
 
+// machine-artifact-public: oci.export-report
+// machine-artifact-public: oci.import-report
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 

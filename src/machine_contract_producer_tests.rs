@@ -85,6 +85,8 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
         frontend_artifact_attestations: Vec::new(),
         cargo_build_evidence: Vec::new(),
         cargo_build_evidence_diagnostics: Vec::new(),
+        ast_grep_structural_evidence: Vec::new(),
+        ast_grep_structural_evidence_diagnostics: Vec::new(),
         diagnostic_persistence_failures: Vec::new(),
         counts: BuildJsonCounts {
             succeeded_total: 0,

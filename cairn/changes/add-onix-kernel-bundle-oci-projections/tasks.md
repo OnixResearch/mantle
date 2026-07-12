@@ -14,7 +14,7 @@
 
 - [x] [serial] Implement pure OCI layout/descriptor graph validation and import classification before any CAS commit. r[kernel_bundle_oci.import]
 - [x] [serial] Implement the thin descriptor-first import shell, exact blob verification, atomic CAS admission, rollback/unreferenced-partial handling, and reconstruction response. r[kernel_bundle_oci.import]
-- [ ] [depends:mantle.expand-machine-artifact-contract-registry] Register export/import reports with Rust DTO ownership, exact schemas, generated Nickel contracts, version policy, BLAKE3 freshness, and non-claims. r[kernel_bundle_oci.reports]
+- [x] [depends:mantle.expand-machine-artifact-contract-registry] Register export/import reports with Rust DTO ownership, exact schemas, generated Nickel contracts, version policy, BLAKE3 freshness, and non-claims. r[kernel_bundle_oci.reports]
 
 ## Phase 4: Positive and negative evidence
 
@@ -25,5 +25,5 @@
 ## Phase 5: Documentation and closeout
 
 - [x] [parallel] Document CLI use, local-layout scope, canonical archive profile, Onix/Mantle ownership, digest roles, KBI preservation, external import states, and registry non-goals. r[kernel_bundle_oci.reports]
-- [ ] [serial] Run focused pure-core, artifact CLI, CAS, schema/contract, round-trip, dependency-audit, formatting, clippy, and first-party tests. r[kernel_bundle_oci.verification]
+- [x] [serial] Run focused pure-core, artifact CLI, CAS, schema/contract, round-trip, dependency-audit, formatting, clippy, and first-party tests. r[kernel_bundle_oci.verification]
 - [ ] [serial] Run Cairn validation and proposal/design/tasks gates; sync and archive only after cross-repo round-trip and positive/negative evidence are recorded. r[kernel_bundle_oci.verification]

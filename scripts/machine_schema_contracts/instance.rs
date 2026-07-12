@@ -251,6 +251,8 @@ fn validate_string_instance(
         "blake3" => is_blake3_hex(text),
         "mantle-digest" => is_mantle_digest(text),
         "sha256" => is_lower_hex(text, BLAKE3_HEX_LENGTH_CHARS),
+        "sha256-digest" => text.strip_prefix("sha256:").is_some_and(is_blake3_hex),
+        "mantle-reference" => text.strip_prefix("mantle://blake3/").is_some_and(is_blake3_hex),
         "safe-reference" => is_safe_reference(text),
         "redaction-safe" => is_redaction_safe(text),
         "non-empty" => !text.is_empty(),
@@ -260,8 +262,8 @@ fn validate_string_instance(
         return;
     }
     let class = match semantic {
-        "blake3" | "mantle-digest" | "sha256" => "digest",
-        "safe-reference" => "reference",
+        "blake3" | "mantle-digest" | "sha256" | "sha256-digest" => "digest",
+        "mantle-reference" | "safe-reference" => "reference",
         "redaction-safe" => "redaction",
         _ => "schema",
     };
