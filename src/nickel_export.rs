@@ -1,3 +1,5 @@
+// machine-artifact-public: nickel-export.report
+// machine-artifact-public: nickel-export.receipt
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;

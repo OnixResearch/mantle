@@ -1,3 +1,4 @@
+// machine-artifact-public: bootstrap.parity-reports
 use std::fmt;
 use std::fs;
 use std::path::Path;

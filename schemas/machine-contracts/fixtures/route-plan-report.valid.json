@@ -1,0 +1,18 @@
+{
+  "schema": "mantle-realization-route-plan-v1",
+  "selected_route": "local-build",
+  "selected_reason_code": "local-build-eligible",
+  "selected_detail": "local sandbox is available",
+  "policy": {
+    "network": "offline",
+    "requested_claim_strength": "practical"
+  },
+  "tie_breaker": "local-cache,trusted-substitute,archive-import,source-bundle,p2p-remote-builder,local-build,preflight-error",
+  "rejected_routes": [
+    {
+      "route": "trusted-substitute",
+      "reason_code": "network-disabled"
+    }
+  ],
+  "non_claim": "route planning is advisory and does not prove transport execution or artifact correctness"
+}

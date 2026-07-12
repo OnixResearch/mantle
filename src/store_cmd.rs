@@ -1,3 +1,4 @@
+// machine-artifact-public: store.command-reports
 use std::path::Path;
 
 use serde::Serialize;

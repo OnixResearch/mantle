@@ -1,0 +1,18 @@
+{
+  "schema": "mantle-nickel-export-receipt-v1",
+  "root_source": {
+    "path": "config/root.ncl",
+    "digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "deps": [],
+  "import_paths": ["lib"],
+  "format": "json",
+  "output_target": "stdout",
+  "output_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "evaluator": {
+    "identity": "mantle-embedded-crunch-eval",
+    "version": "1",
+    "options": ["format=json", "import-paths=1"]
+  },
+  "non_claim": "Nickel export success proves only the declared evaluation output digest under the recorded evaluator descriptor; it does not prove deployability, frontend correctness, or build success"
+}

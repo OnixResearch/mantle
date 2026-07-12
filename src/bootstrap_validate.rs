@@ -1,3 +1,4 @@
+// machine-artifact-public: bootstrap.validation-reports
 use std::fs;
 use std::io::Read;
 use std::io::Write as _;

@@ -3,6 +3,7 @@
 //! `RunError` classifies all failures into eval, build, or internal errors.
 //! Each variant maps to a fixed exit code and produces actionable output.
 
+// machine-artifact-public: cli.error-envelope
 use std::fmt;
 use std::process::ExitCode;
 

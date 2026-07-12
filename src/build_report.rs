@@ -1,3 +1,4 @@
+// machine-artifact-public: build.build-json-report
 use std::path::Path;
 
 use crunch_pipeline::BuildConfig;

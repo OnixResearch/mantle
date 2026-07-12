@@ -1,0 +1,26 @@
+{
+  "surface_id": "source-bundle.offline-preflight-report",
+  "cases": [
+    {
+      "id": "unsafe-record-reference",
+      "issue_class": "reference",
+      "expected_path": "/missing_records/0",
+      "artifact": {
+        "format": "mantle-source-offline-preflight-v1",
+        "manifest_blake3": null,
+        "source_state_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ready_class": "missing",
+        "record_count": 0,
+        "missing_records": ["../escape"],
+        "stale_records": [],
+        "unsupported_records": [],
+        "untrusted_records": [],
+        "network_required_records": [],
+        "unpinned_records": [],
+        "next_actions": [],
+        "records": [],
+        "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+      }
+    }
+  ]
+}

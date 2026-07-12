@@ -1,3 +1,4 @@
+// machine-artifact-public: attestation.verification-reports
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;

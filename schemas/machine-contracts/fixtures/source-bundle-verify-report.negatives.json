@@ -1,0 +1,19 @@
+{
+  "surface_id": "source-bundle.verify-report",
+  "cases": [
+    {
+      "id": "ready-with-missing-record",
+      "issue_class": "cross-field",
+      "expected_path": "/",
+      "artifact": {
+        "manifest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "ready_class": "ready",
+        "missing_records": ["source/missing"],
+        "stale_records": [],
+        "unsupported_records": [],
+        "untrusted_records": [],
+        "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+      }
+    }
+  ]
+}

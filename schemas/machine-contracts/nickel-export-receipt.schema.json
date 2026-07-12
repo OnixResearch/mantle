@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/nickel-export/receipt-v1",
+  "title": "Mantle Nickel export receipt",
+  "x-mantle-rust-owner": "src/nickel_export.rs::NickelExportReceipt",
+  "$defs": {
+    "source_ref": {
+      "type": "object",
+      "required": ["path", "digest_blake3"],
+      "properties": {
+        "path": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+      },
+      "additionalProperties": false
+    },
+    "evaluator": {
+      "type": "object",
+      "required": ["identity", "version", "options"],
+      "properties": {
+        "identity": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "version": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "options": { "type": "array", "maxItems": 4096, "x-mantle-bound-name": { "maxItems": "MAX_EXPORT_PATHS" }, "items": { "type": "string", "x-mantle-semantic": "redaction-safe" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["schema", "root_source", "deps", "import_paths", "format", "output_target", "output_digest_blake3", "evaluator", "non_claim"],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-nickel-export-receipt-v1", "x-mantle-issue-class": "version" },
+    "root_source": { "$ref": "#/$defs/source_ref" },
+    "deps": { "type": "array", "maxItems": 4096, "x-mantle-bound-name": { "maxItems": "MAX_EXPORT_PATHS" }, "items": { "$ref": "#/$defs/source_ref" } },
+    "import_paths": { "type": "array", "maxItems": 4096, "x-mantle-bound-name": { "maxItems": "MAX_EXPORT_PATHS" }, "items": { "type": "string", "x-mantle-semantic": "safe-reference" } },
+    "format": { "type": "string", "const": "json" },
+    "output_target": { "type": "string", "x-mantle-semantic": "safe-reference" },
+    "output_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "evaluator": { "$ref": "#/$defs/evaluator" },
+    "non_claim": { "type": "string", "const": "Nickel export success proves only the declared evaluation output digest under the recorded evaluator descriptor; it does not prove deployability, frontend correctness, or build success" }
+  },
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "unique-by", "array": "/deps", "item_field": "/path" },
+    { "kind": "unique-by", "array": "/import_paths", "item_field": "" }
+  ]
+}

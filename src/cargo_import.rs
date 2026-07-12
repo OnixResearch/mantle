@@ -1,3 +1,4 @@
+// machine-artifact-public: import.command-reports
 use std::path::Path;
 use std::path::PathBuf;
 

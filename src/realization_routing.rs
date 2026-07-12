@@ -1,3 +1,4 @@
+// machine-artifact-public: realization.route-plan-report
 use serde::Serialize;
 
 pub const ROUTE_REPORT_SCHEMA: &str = "mantle-realization-route-plan-v1";

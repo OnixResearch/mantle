@@ -1,0 +1,41 @@
+{
+  "surface_id": "operator-diagnostics.doctor-report",
+  "cases": [
+    {
+      "id": "closed-status-enum",
+      "issue_class": "enum",
+      "expected_path": "/checks/0/status",
+      "artifact": {
+        "schema": "crunch-doctor-report-v1",
+        "command": "doctor",
+        "profile": "build",
+        "ok": false,
+        "checks": [{ "id": "bwrap", "status": "maybe", "summary": "unknown" }]
+      }
+    },
+    {
+      "id": "redacted-summary",
+      "issue_class": "redaction",
+      "expected_path": "/checks/0/summary",
+      "artifact": {
+        "schema": "crunch-doctor-report-v1",
+        "command": "doctor",
+        "profile": "build",
+        "ok": true,
+        "checks": [{ "id": "bwrap", "status": "ok", "summary": "Bearer secret-token" }]
+      }
+    },
+    {
+      "id": "ok-disagrees-with-checks",
+      "issue_class": "cross-field",
+      "expected_path": "/",
+      "artifact": {
+        "schema": "crunch-doctor-report-v1",
+        "command": "doctor",
+        "profile": "build",
+        "ok": true,
+        "checks": [{ "id": "bwrap", "status": "failed", "summary": "not visible" }]
+      }
+    }
+  ]
+}

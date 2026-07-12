@@ -1,0 +1,24 @@
+{
+  "format": "mantle-source-offline-preflight-v1",
+  "manifest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_state_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "ready_class": "ready",
+  "record_count": 1,
+  "missing_records": [],
+  "stale_records": [],
+  "unsupported_records": [],
+  "untrusted_records": [],
+  "network_required_records": [],
+  "unpinned_records": [],
+  "next_actions": [],
+  "records": [
+    {
+      "kind": "local-path",
+      "identity": "source/example",
+      "payload_bytes": 12,
+      "content_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "file_count": 1
+    }
+  ],
+  "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+}

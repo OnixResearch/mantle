@@ -1,4 +1,6 @@
 #![feature(register_tool)]
+
+// machine-artifact-public: eval.raw-json-output
 #![register_tool(tigerstyle)]
 mod artifact_cmd;
 mod ast_grep_evidence;
@@ -29,6 +31,8 @@ mod frontend_artifact_store;
 mod global_reproducibility_cmd;
 mod global_reproducibility_release;
 mod log_cmd;
+#[cfg(test)]
+mod machine_contract_producer_tests;
 mod native_toolchain_closure;
 mod nickel_export;
 mod nix_evidence_core;

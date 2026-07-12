@@ -1,0 +1,21 @@
+{
+  "surface_id": "receipt.import-report",
+  "cases": [
+    {
+      "id": "imported-and-idempotent",
+      "issue_class": "cross-field",
+      "expected_path": "/",
+      "artifact": {
+        "imported": true,
+        "idempotent": true,
+        "bundle_imported": true,
+        "graph_imported": true,
+        "graph_nodes_imported": 1,
+        "graph_edges_imported": 0,
+        "attestation_sidecars_imported": 0,
+        "bundle_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "non_claim": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
+      }
+    }
+  ]
+}

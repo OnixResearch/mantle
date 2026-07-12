@@ -2,28 +2,34 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "mantle://schemas/operator-diagnostics/doctor-report-v1",
   "title": "Mantle doctor report",
+  "x-mantle-rust-owner": "src/operator_diagnostics.rs::PreflightReport",
   "type": "object",
   "required": ["schema", "command", "profile", "ok", "checks"],
   "properties": {
-    "schema": { "const": "crunch-doctor-report-v1" },
-    "command": { "const": "doctor" },
-    "profile": { "enum": ["build", "self-build"] },
+    "schema": { "type": "string", "const": "crunch-doctor-report-v1", "x-mantle-issue-class": "version" },
+    "command": { "type": "string", "const": "doctor" },
+    "profile": { "type": "string", "enum": ["build", "self-build"] },
     "ok": { "type": "boolean" },
     "checks": {
       "type": "array",
       "minItems": 1,
+      "maxItems": 32,
+      "x-mantle-bound-name": { "minItems": "MIN_DOCTOR_CHECKS", "maxItems": "MAX_DOCTOR_CHECKS" },
       "items": {
         "type": "object",
         "required": ["id", "status", "summary"],
         "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "status": { "enum": ["ok", "failed"] },
-          "summary": { "type": "string", "minLength": 1 },
-          "detail": { "type": "string" }
+          "id": { "type": "string", "x-mantle-semantic": "non-empty" },
+          "status": { "type": "string", "enum": ["ok", "failed"] },
+          "summary": { "type": "string", "x-mantle-semantic": "redaction-safe" },
+          "detail": { "type": ["string", "null"], "x-mantle-semantic": "redaction-safe" }
         },
         "additionalProperties": false
       }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "all-item-equals-iff", "array": "/checks", "item_field": "/status", "value": "ok", "boolean": "/ok" }
+  ]
 }

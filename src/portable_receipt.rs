@@ -1,3 +1,7 @@
+// machine-artifact-public: receipt.bundle-report
+// machine-artifact-public: receipt.verify-report
+// machine-artifact-public: receipt.import-report
+// machine-artifact-public: receipt.bundle-artifacts
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;

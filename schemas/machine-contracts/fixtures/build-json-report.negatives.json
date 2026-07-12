@@ -1,0 +1,61 @@
+{
+  "surface_id": "build.build-json-report",
+  "cases": [
+    {
+      "id": "missing-schema-tag",
+      "issue_class": "schema",
+      "expected_path": "/schema",
+      "artifact": {}
+    },
+    {
+      "id": "missing-counts",
+      "issue_class": "schema",
+      "expected_path": "/counts",
+      "artifact": {
+        "schema": "crunch-build-report-v1",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "hermeticity_mode": "strict",
+        "hermeticity_audit_events": [],
+        "build_environment_reports": [],
+        "network_policy_reports": [],
+        "native_dynamic_plans": [],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
+        "diagnostic_persistence_failures": [],
+        "outcomes": [],
+        "failed": [],
+        "fod_mismatches": []
+      }
+    },
+    {
+      "id": "unknown-root-field",
+      "issue_class": "unknown-field",
+      "expected_path": "/token",
+      "artifact": {
+        "schema": "crunch-build-report-v1",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "hermeticity_mode": "strict",
+        "hermeticity_audit_events": [],
+        "build_environment_reports": [],
+        "network_policy_reports": [],
+        "native_dynamic_plans": [],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
+        "diagnostic_persistence_failures": [],
+        "counts": { "succeeded_total": 0, "built_total": 0, "cached_total": 0, "failed_total": 0 },
+        "outcomes": [],
+        "failed": [],
+        "fod_mismatches": [],
+        "token": "should-not-exist"
+      }
+    }
+  ]
+}

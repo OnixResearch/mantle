@@ -1,3 +1,5 @@
+// machine-artifact-public: attestation.release-envelope
+// machine-artifact-public: attestation.general-envelopes
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -896,5 +898,65 @@ impl AttestationDocument {
             Self::Release(_) => "mantle-release-attestation",
             Self::Witness(_) => "mantle-witness-attestation",
         }
+    }
+}
+
+#[cfg(test)]
+mod machine_contract_tests {
+    use super::*;
+
+    const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    const FIXTURE_PATH: &str = "schemas/machine-contracts/fixtures/release-attestation-envelope.valid.json";
+    const NO_STORED_PATH_FIXTURE: &str =
+        "schemas/machine-contracts/fixtures/release-attestation-envelope-without-stored-path.valid.json";
+    const STORED_PATH: &str = "release-verification/example/release-attestation.json";
+
+    fn digest(value: &str) -> crunch_attestation::AttestationDigest {
+        crunch_attestation::AttestationDigest::parse_hex(value.to_string()).expect("valid fixture digest")
+    }
+
+    fn release_attestation() -> ReleaseAttestation {
+        ReleaseAttestation {
+            schema: "mantle-release-attestation-v1".to_string(),
+            release_id: "release-example".to_string(),
+            release_evidence_manifest_digest_blake3: digest(DIGEST_B),
+            proof_bundle_digest_blake3: digest(DIGEST_C),
+            proof_mode: "fixed-point".to_string(),
+            declared_effect_claims: None,
+            observed_effect_facts: None,
+            workflow: crunch_attestation::Workflow {
+                command: "scripts/prove-self-hosting.sh".to_string(),
+                version: "crunch-self-hosting-proof-v2".to_string(),
+            },
+            binary_digests: vec![crunch_attestation::BinaryDigest {
+                name: "mantle".to_string(),
+                algorithm: "blake3".to_string(),
+                digest: DIGEST_D.to_string(),
+            }],
+        }
+    }
+
+    fn fixture(path: &str) -> Value {
+        serde_json::from_str(
+            &std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).expect("read release fixture"),
+        )
+        .expect("parse release fixture")
+    }
+
+    #[test]
+    fn release_envelope_serializes_to_registered_positive_fixtures() {
+        let with_path =
+            render_document(&AttestationDocument::Release(release_attestation()), Some(Path::new(STORED_PATH)))
+                .expect("serialize release envelope with stored path");
+        let with_path: Value = serde_json::from_str(&with_path).expect("parse release envelope with stored path");
+        assert_eq!(with_path, fixture(FIXTURE_PATH));
+
+        let without_path = render_document(&AttestationDocument::Release(release_attestation()), None)
+            .expect("serialize release envelope without stored path");
+        let without_path: Value =
+            serde_json::from_str(&without_path).expect("parse release envelope without stored path");
+        assert_eq!(without_path, fixture(NO_STORED_PATH_FIXTURE));
     }
 }

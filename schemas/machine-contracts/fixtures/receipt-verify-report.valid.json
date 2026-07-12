@@ -1,0 +1,18 @@
+{
+  "format": "mantle-build-receipt-bundle-v1",
+  "store_prefix": "/mantle/store",
+  "policy_hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expected_policy_hash": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "policy_hash_matched": true,
+  "valid_at_unix_s": 1,
+  "trust_window_valid": true,
+  "public_key_digests": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+  "revocation_ref": null,
+  "bundle_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "evidence_complete": true,
+  "missing_evidence": [],
+  "output_matches": [],
+  "source_matches": [],
+  "signature_matches": [],
+  "non_claim": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
+}

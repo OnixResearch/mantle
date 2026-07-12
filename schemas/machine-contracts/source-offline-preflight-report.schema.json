@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/source-bundle/offline-preflight-report-v1",
+  "title": "Mantle source offline preflight report",
+  "x-mantle-rust-owner": "src/source_bundle.rs::SourceOfflinePreflightReport",
+  "$defs": {
+    "kind": { "type": "string", "enum": ["fixed-url", "local-path", "vcs-snapshot", "package-mirror", "bootstrap-archive", "provider-manifest", "toolchain-source-root", "proof-input"] },
+    "readiness": { "type": "string", "enum": ["ready", "missing", "stale", "unsupported", "untrusted", "network-required", "unpinned"] },
+    "identity_array": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_SOURCE_RECORDS" }, "items": { "type": "string", "maxLength": 512, "x-mantle-bound-name": { "maxLength": "MAX_SOURCE_ID_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "safe-reference" } },
+    "record": {
+      "type": "object",
+      "required": ["kind", "identity", "payload_bytes", "content_blake3", "file_count"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/kind" },
+        "identity": { "type": "string", "maxLength": 512, "x-mantle-bound-name": { "maxLength": "MAX_SOURCE_ID_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "safe-reference" },
+        "payload_bytes": { "type": "integer", "minimum": 0, "maximum": 1099511627776, "x-mantle-bound-name": { "minimum": "MIN_SOURCE_BYTES", "maximum": "MAX_SOURCE_TOTAL_BYTES" } },
+        "content_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "file_count": { "type": "integer", "minimum": 0, "maximum": 262144, "x-mantle-bound-name": { "minimum": "MIN_SOURCE_FILES", "maximum": "MAX_SOURCE_FILES_PER_RECORD" } }
+      },
+      "additionalProperties": false
+    },
+    "next_action": {
+      "type": "object",
+      "required": ["blocker_class", "command_hint", "description"],
+      "properties": {
+        "blocker_class": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "command_hint": { "type": "string", "x-mantle-semantic": "redaction-safe" },
+        "description": { "type": "string", "x-mantle-semantic": "redaction-safe" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["format", "source_state_blake3", "ready_class", "record_count", "missing_records", "stale_records", "unsupported_records", "untrusted_records", "network_required_records", "unpinned_records", "next_actions", "records", "non_claim"],
+  "properties": {
+    "format": { "type": "string", "const": "mantle-source-offline-preflight-v1", "x-mantle-issue-class": "version" },
+    "manifest_blake3": { "type": ["string", "null"], "x-mantle-semantic": "blake3" },
+    "source_state_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "ready_class": { "$ref": "#/$defs/readiness" },
+    "record_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_SOURCE_RECORDS", "maximum": "MAX_SOURCE_RECORDS" } },
+    "missing_records": { "$ref": "#/$defs/identity_array" },
+    "stale_records": { "$ref": "#/$defs/identity_array" },
+    "unsupported_records": { "$ref": "#/$defs/identity_array" },
+    "untrusted_records": { "$ref": "#/$defs/identity_array" },
+    "network_required_records": { "$ref": "#/$defs/identity_array" },
+    "unpinned_records": { "$ref": "#/$defs/identity_array" },
+    "next_actions": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_SOURCE_RECORDS" }, "items": { "$ref": "#/$defs/next_action" } },
+    "records": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_SOURCE_RECORDS" }, "items": { "$ref": "#/$defs/record" } },
+    "non_claim": { "type": "string", "const": "source bundle evidence proves declared source/input availability and identity only" }
+  },
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "length-equals", "array": "/records", "integer": "/record_count" },
+    { "kind": "arrays-empty-iff-enum", "target": "/ready_class", "value": "ready", "fields": ["/missing_records", "/stale_records", "/unsupported_records", "/untrusted_records", "/network_required_records", "/unpinned_records"] },
+    { "kind": "unique-by", "array": "/records", "item_field": "/identity" }
+  ]
+}

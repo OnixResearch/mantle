@@ -1,3 +1,7 @@
+// machine-artifact-public: source-bundle.plan-report
+// machine-artifact-public: source-bundle.verify-report
+// machine-artifact-public: source-bundle.offline-preflight-report
+// machine-artifact-public: source-bundle.manifest-artifacts
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::ffi::OsString;

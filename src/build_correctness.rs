@@ -1,3 +1,5 @@
+// machine-artifact-public: wasm.component-future
+// machine-artifact-public: build.correctness-primitives
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 

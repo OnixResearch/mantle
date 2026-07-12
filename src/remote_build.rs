@@ -1,3 +1,7 @@
+// machine-artifact-public: remote.execution-reports
+// machine-artifact-public: remote.attempt-future
+// machine-artifact-public: remote.observability-future
+// machine-artifact-public: remote.transfer-future
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;

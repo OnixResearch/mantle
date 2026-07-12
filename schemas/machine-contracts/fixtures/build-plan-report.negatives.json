@@ -1,0 +1,18 @@
+{
+  "surface_id": "build.build-plan-report",
+  "cases": [
+    {
+      "id": "unknown-report-version",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": {
+        "schema": "crunch-build-plan-v2",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "entries": []
+      }
+    }
+  ]
+}

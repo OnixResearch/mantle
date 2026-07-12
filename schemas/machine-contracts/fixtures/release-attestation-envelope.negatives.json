@@ -1,0 +1,24 @@
+{
+  "surface_id": "attestation.release-envelope",
+  "cases": [
+    {
+      "id": "malformed-release-binary-digest",
+      "issue_class": "digest",
+      "expected_path": "/attestation/binary_digests/0/digest",
+      "artifact": {
+        "kind": "mantle-release-attestation",
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "stored_path": "release-verification/example/release-attestation.json",
+        "attestation": {
+          "schema": "mantle-release-attestation-v1",
+          "release_id": "release-example",
+          "release_evidence_manifest_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "proof_bundle_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "proof_mode": "fixed-point",
+          "workflow": { "command": "scripts/prove-self-hosting.sh", "version": "crunch-self-hosting-proof-v2" },
+          "binary_digests": [{ "name": "mantle", "algorithm": "blake3", "digest": "bad" }]
+        }
+      }
+    }
+  ]
+}

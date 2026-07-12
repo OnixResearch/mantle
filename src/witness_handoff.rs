@@ -1,3 +1,4 @@
+// machine-artifact-public: release.witness-handoff
 use std::path::Path;
 use std::path::PathBuf;
 

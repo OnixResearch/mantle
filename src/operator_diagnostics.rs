@@ -1,3 +1,5 @@
+// machine-artifact-public: operator-diagnostics.doctor-report
+// machine-artifact-public: runtime.diagnostic-fingerprint
 use std::ffi::CString;
 use std::fmt::Write as _;
 use std::os::unix::ffi::OsStrExt;

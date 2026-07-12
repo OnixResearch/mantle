@@ -1,3 +1,4 @@
+// machine-artifact-public: structured-refactor.command-reports
 use std::fmt;
 use std::fs;
 use std::path::Path;

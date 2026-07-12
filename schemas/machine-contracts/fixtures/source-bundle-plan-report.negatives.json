@@ -1,0 +1,19 @@
+{
+  "surface_id": "source-bundle.plan-report",
+  "cases": [
+    {
+      "id": "record-count-over-limit",
+      "issue_class": "bounds",
+      "expected_path": "/record_count",
+      "artifact": {
+        "format": "mantle-source-bundle-v1",
+        "store_prefix": "/mantle/store",
+        "record_count": 65537,
+        "payload_bytes": 12,
+        "ready_class": "ready",
+        "records": [{ "kind": "local-path", "identity": "source/example", "payload_bytes": 12, "content_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "file_count": 1 }],
+        "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+      }
+    }
+  ]
+}

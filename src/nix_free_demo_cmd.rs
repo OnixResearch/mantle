@@ -1,3 +1,4 @@
+// machine-artifact-public: nix-free-demo.reports
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;

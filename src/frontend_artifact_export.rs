@@ -1,3 +1,4 @@
+// machine-artifact-public: frontend.artifact-reports
 use std::collections::BTreeMap;
 
 use serde::Deserialize;

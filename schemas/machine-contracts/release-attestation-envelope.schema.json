@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/attestation/release-envelope-v1",
+  "title": "Mantle release attestation handoff envelope",
+  "x-mantle-rust-owner": "src/attest_cmd.rs::AttestationEnvelopeOutput",
+  "$defs": {
+    "string_array": { "type": "array", "maxItems": 256, "x-mantle-bound-name": { "maxItems": "MAX_RELEASE_CLAIMS" }, "items": { "type": "string", "x-mantle-semantic": "redaction-safe" } },
+    "workflow": {
+      "type": "object",
+      "required": ["command", "version"],
+      "properties": {
+        "command": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "version": { "type": "string", "x-mantle-semantic": "non-empty" }
+      },
+      "additionalProperties": false
+    },
+    "binary_digest": {
+      "type": "object",
+      "required": ["name", "algorithm", "digest"],
+      "properties": {
+        "name": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "algorithm": { "type": "string", "enum": ["blake3"] },
+        "digest": { "type": "string", "x-mantle-semantic": "blake3" }
+      },
+      "additionalProperties": false
+    },
+    "release_attestation": {
+      "type": "object",
+      "required": ["schema", "release_id", "release_evidence_manifest_digest_blake3", "proof_bundle_digest_blake3", "proof_mode", "workflow", "binary_digests"],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-release-attestation-v1" },
+        "release_id": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "release_evidence_manifest_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "proof_bundle_digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "proof_mode": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "declared_effect_claims": { "type": ["array", "null"], "maxItems": 256, "x-mantle-bound-name": { "maxItems": "MAX_RELEASE_CLAIMS" }, "items": { "type": "string", "x-mantle-semantic": "redaction-safe" } },
+        "observed_effect_facts": { "type": ["array", "null"], "maxItems": 256, "x-mantle-bound-name": { "maxItems": "MAX_RELEASE_FACTS" }, "items": { "type": "string", "x-mantle-semantic": "redaction-safe" } },
+        "workflow": { "$ref": "#/$defs/workflow" },
+        "binary_digests": { "type": "array", "minItems": 1, "maxItems": 256, "x-mantle-bound-name": { "minItems": "MIN_BINARY_DIGEST_COUNT", "maxItems": "MAX_BINARY_DIGEST_COUNT" }, "items": { "$ref": "#/$defs/binary_digest" } }
+      },
+      "additionalProperties": false,
+      "x-mantle-invariants": [
+        { "kind": "unique-by", "array": "/binary_digests", "item_field": "/name" }
+      ]
+    }
+  },
+  "type": "object",
+  "required": ["kind", "digest", "attestation"],
+  "properties": {
+    "kind": { "type": "string", "const": "mantle-release-attestation" },
+    "digest": { "type": "string", "x-mantle-semantic": "blake3" },
+    "stored_path": { "type": "string", "x-mantle-semantic": "safe-reference" },
+    "attestation": { "$ref": "#/$defs/release_attestation" }
+  },
+  "additionalProperties": false
+}

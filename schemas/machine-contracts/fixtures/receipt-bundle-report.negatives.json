@@ -1,0 +1,22 @@
+{
+  "surface_id": "receipt.bundle-report",
+  "cases": [
+    {
+      "id": "malformed-bundle-digest",
+      "issue_class": "digest",
+      "expected_path": "/bundle_blake3",
+      "artifact": {
+        "format": "mantle-build-receipt-bundle-v1",
+        "store_prefix": "/mantle/store",
+        "claim_strength": "diagnostic",
+        "evidence_complete": false,
+        "missing_evidence": ["action-ref"],
+        "output_identities": [],
+        "records": [{ "kind": "source-ref", "identity": "source/example", "digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }],
+        "record_count": 1,
+        "bundle_blake3": "UPPERCASE",
+        "non_claim": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
+      }
+    }
+  ]
+}

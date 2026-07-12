@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/receipt/verify-report-v1",
+  "title": "Mantle portable receipt verification report",
+  "x-mantle-rust-owner": "src/portable_receipt.rs::ReceiptVerifyReport",
+  "$defs": {
+    "kind": { "type": "string", "enum": ["source-ref", "action-ref", "sandbox-report", "network-policy", "reference-scan", "output-ref", "artifact-attestation", "closure-attestation", "semantic-graph-edge", "trust-basis", "signature"] },
+    "output_match": {
+      "type": "object",
+      "required": ["identity", "record_digest", "local_digest", "nar_sha256", "nar_size_bytes"],
+      "properties": {
+        "identity": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "record_digest": { "type": "string", "x-mantle-semantic": "mantle-digest" },
+        "local_digest": { "type": "string", "x-mantle-semantic": "mantle-digest" },
+        "nar_sha256": { "type": "string", "x-mantle-semantic": "sha256" },
+        "nar_size_bytes": { "type": "integer", "minimum": 0, "maximum": 1099511627776, "x-mantle-bound-name": { "minimum": "MIN_NAR_BYTES", "maximum": "MAX_RECEIPT_PAYLOAD_BYTES" } }
+      },
+      "additionalProperties": false
+    },
+    "source_match": {
+      "type": "object",
+      "required": ["identity", "record_digest", "source_blake3", "payload_bytes", "file_count"],
+      "properties": {
+        "identity": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "record_digest": { "type": "string", "x-mantle-semantic": "mantle-digest" },
+        "source_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "payload_bytes": { "type": "integer", "minimum": 0, "maximum": 1099511627776, "x-mantle-bound-name": { "minimum": "MIN_SOURCE_BYTES", "maximum": "MAX_RECEIPT_PAYLOAD_BYTES" } },
+        "file_count": { "type": "integer", "minimum": 0, "maximum": 262144, "x-mantle-bound-name": { "minimum": "MIN_SOURCE_FILES", "maximum": "MAX_SOURCE_FILES_PER_RECORD" } }
+      },
+      "additionalProperties": false
+    },
+    "signature_match": {
+      "type": "object",
+      "required": ["identity", "trusted_signature_count", "total_signature_count", "trusted_public_key_digests"],
+      "properties": {
+        "identity": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "trusted_signature_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_SIGNATURES", "maximum": "MAX_RECEIPT_RECORDS" } },
+        "total_signature_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_SIGNATURES", "maximum": "MAX_RECEIPT_RECORDS" } },
+        "trusted_public_key_digests": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_RECEIPT_RECORDS" }, "items": { "type": "string", "x-mantle-semantic": "blake3" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["format", "store_prefix", "policy_hash", "expected_policy_hash", "policy_hash_matched", "valid_at_unix_s", "trust_window_valid", "public_key_digests", "revocation_ref", "bundle_blake3", "evidence_complete", "missing_evidence", "output_matches", "source_matches", "signature_matches", "non_claim"],
+  "properties": {
+    "format": { "type": "string", "const": "mantle-build-receipt-bundle-v1", "x-mantle-issue-class": "version" },
+    "store_prefix": { "type": "string", "x-mantle-semantic": "safe-reference" },
+    "policy_hash": { "type": "string", "x-mantle-semantic": "mantle-digest" },
+    "expected_policy_hash": { "type": "string", "x-mantle-semantic": "mantle-digest" },
+    "policy_hash_matched": { "type": "boolean" },
+    "valid_at_unix_s": { "type": "integer", "minimum": 0, "maximum": 18446744073709551615, "x-mantle-bound-name": { "minimum": "TRUST_WINDOW_START_UNIX_S", "maximum": "MAX_UNIX_SECONDS" } },
+    "trust_window_valid": { "type": "boolean" },
+    "public_key_digests": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_RECEIPT_RECORDS" }, "items": { "type": "string", "x-mantle-semantic": "blake3" } },
+    "revocation_ref": { "type": ["string", "null"], "x-mantle-semantic": "safe-reference" },
+    "bundle_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "evidence_complete": { "type": "boolean" },
+    "missing_evidence": { "type": "array", "maxItems": 11, "x-mantle-bound-name": { "maxItems": "RECEIPT_RECORD_KIND_COUNT" }, "items": { "$ref": "#/$defs/kind" } },
+    "output_matches": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_RECEIPT_RECORDS" }, "items": { "$ref": "#/$defs/output_match" } },
+    "source_matches": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_RECEIPT_RECORDS" }, "items": { "$ref": "#/$defs/source_match" } },
+    "signature_matches": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_RECEIPT_RECORDS" }, "items": { "$ref": "#/$defs/signature_match" } },
+    "non_claim": { "type": "string", "const": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts" }
+  },
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "empty-iff", "array": "/missing_evidence", "boolean": "/evidence_complete" },
+    { "kind": "unique-by", "array": "/output_matches", "item_field": "/identity" },
+    { "kind": "unique-by", "array": "/source_matches", "item_field": "/identity" },
+    { "kind": "unique-by", "array": "/signature_matches", "item_field": "/identity" }
+  ]
+}

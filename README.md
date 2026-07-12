@@ -60,6 +60,25 @@ Human output reports same facts inline on cached outputs, for example:
 …/result-path (cached, substitution=full, transferred_bytes=55, reused_bytes=0, fallback_reason=stream_application_failed)
 ```
 
+### Machine artifact contracts
+
+Public machine-JSON families are explicitly classified in the typed Nickel
+registry under `schemas/machine-contracts/`. Stable contracted surfaces bind
+the Rust owner, exact schema snapshot, generated Nickel review contract,
+fixtures, consumer/version policy, non-claims, and freshness with BLAKE3.
+Runtime commands remain Rust-only; Nickel contract evaluation is test evidence,
+not a product dependency.
+
+```bash
+nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --self-test
+```
+
+Contract conformance proves shape and declared linkage only—not build
+correctness, cache trust, reproducibility, release eligibility, attestation
+truth, or deployability. See
+[Machine artifact contracts](docs/machine-artifact-contracts.md).
+
 ## Operator diagnostics
 
 Use `mantle doctor` before a fresh build host or self-build run:

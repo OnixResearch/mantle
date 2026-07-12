@@ -1,3 +1,4 @@
+// machine-artifact-public: build.build-plan-report
 use std::ffi::OsString;
 use std::num::NonZeroUsize;
 use std::path::Path;

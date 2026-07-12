@@ -1,3 +1,4 @@
+// machine-artifact-public: rust-plan.receipts
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;

@@ -21,3 +21,4 @@ compatibility surface, crate name, or historical decision.
 | [0012](0012-overlay-store-composition.md) | Overlay store composition | Proposed |
 | [0013](0013-remote-execution-hardening.md) | Harden remote execution without replacing Mantle foundations | Proposed |
 | [0014](0014-package-ast-grep-as-bounded-structural-evidence.md) | Package ast-grep as bounded structural evidence | Proposed |
+| [0015](0015-rust-owned-machine-contract-generation.md) | Keep machine artifacts Rust-owned and generate Nickel review contracts | Accepted |

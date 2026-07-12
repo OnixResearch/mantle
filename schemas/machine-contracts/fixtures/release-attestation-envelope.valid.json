@@ -1,0 +1,23 @@
+{
+  "kind": "mantle-release-attestation",
+  "digest": "efdb6a6a52bf5b5d11c85597f51bbb4b015e1be54366b92773cf8eb99545c578",
+  "stored_path": "release-verification/example/release-attestation.json",
+  "attestation": {
+    "schema": "mantle-release-attestation-v1",
+    "release_id": "release-example",
+    "release_evidence_manifest_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "proof_bundle_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "proof_mode": "fixed-point",
+    "workflow": {
+      "command": "scripts/prove-self-hosting.sh",
+      "version": "crunch-self-hosting-proof-v2"
+    },
+    "binary_digests": [
+      {
+        "name": "mantle",
+        "algorithm": "blake3",
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    ]
+  }
+}

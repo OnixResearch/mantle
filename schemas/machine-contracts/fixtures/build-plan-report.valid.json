@@ -1,0 +1,8 @@
+{
+  "schema": "crunch-build-plan-v1",
+  "file": "examples/hello.ncl",
+  "output_dir": "/mantle/store",
+  "state_dir": ".mantle/state",
+  "store_dir": "/mantle/store",
+  "entries": []
+}

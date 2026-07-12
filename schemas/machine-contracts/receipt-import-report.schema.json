@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/receipt/import-report-v1",
+  "title": "Mantle portable receipt import report",
+  "x-mantle-rust-owner": "src/portable_receipt.rs::ReceiptImportReport",
+  "type": "object",
+  "required": ["imported", "idempotent", "bundle_imported", "graph_imported", "graph_nodes_imported", "graph_edges_imported", "attestation_sidecars_imported", "bundle_blake3", "non_claim"],
+  "properties": {
+    "imported": { "type": "boolean" },
+    "idempotent": { "type": "boolean" },
+    "bundle_imported": { "type": "boolean" },
+    "graph_imported": { "type": "boolean" },
+    "graph_nodes_imported": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_IMPORTED_GRAPH_NODES", "maximum": "MAX_RECEIPT_RECORDS" } },
+    "graph_edges_imported": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_IMPORTED_GRAPH_EDGES", "maximum": "MAX_RECEIPT_RECORDS" } },
+    "attestation_sidecars_imported": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_IMPORTED_SIDECARS", "maximum": "MAX_RECEIPT_RECORDS" } },
+    "bundle_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "non_claim": { "type": "string", "const": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts" }
+  },
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "boolean-not", "boolean": "/idempotent", "target": "/imported" }
+  ]
+}

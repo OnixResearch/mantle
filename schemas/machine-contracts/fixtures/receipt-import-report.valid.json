@@ -1,0 +1,11 @@
+{
+  "imported": true,
+  "idempotent": false,
+  "bundle_imported": true,
+  "graph_imported": true,
+  "graph_nodes_imported": 1,
+  "graph_edges_imported": 0,
+  "attestation_sidecars_imported": 0,
+  "bundle_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "non_claim": "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
+}

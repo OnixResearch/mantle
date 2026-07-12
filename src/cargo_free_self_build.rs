@@ -1,3 +1,4 @@
+// machine-artifact-public: self-build.cargo-free-reports
 use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsStr;

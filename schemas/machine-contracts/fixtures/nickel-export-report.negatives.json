@@ -1,0 +1,31 @@
+{
+  "surface_id": "nickel-export.report",
+  "cases": [
+    {
+      "id": "success-with-diagnostics",
+      "issue_class": "cross-field",
+      "expected_path": "/",
+      "artifact": {
+        "schema": "mantle-nickel-export-report-v1",
+        "success": true,
+        "format": "json",
+        "output_target": "stdout",
+        "receipt_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "output_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "failure_class": null,
+        "diagnostics": [{ "class": "eval", "subject": "config/root.ncl", "message": "unexpected diagnostic" }],
+        "receipt": {
+          "schema": "mantle-nickel-export-receipt-v1",
+          "root_source": { "path": "config/root.ncl", "digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+          "deps": [],
+          "import_paths": ["lib"],
+          "format": "json",
+          "output_target": "stdout",
+          "output_digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "evaluator": { "identity": "mantle-embedded-crunch-eval", "version": "1", "options": [] },
+          "non_claim": "Nickel export success proves only the declared evaluation output digest under the recorded evaluator descriptor; it does not prove deployability, frontend correctness, or build success"
+        }
+      }
+    }
+  ]
+}

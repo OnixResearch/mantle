@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/source-bundle/verify-report-v1",
+  "title": "Mantle source bundle verification report",
+  "x-mantle-rust-owner": "src/source_bundle.rs::SourceBundleVerifyReport",
+  "$defs": {
+    "readiness": { "type": "string", "enum": ["ready", "missing", "stale", "unsupported", "untrusted", "network-required", "unpinned"] },
+    "identity_array": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_SOURCE_RECORDS" }, "items": { "type": "string", "maxLength": 512, "x-mantle-bound-name": { "maxLength": "MAX_SOURCE_ID_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "safe-reference" } }
+  },
+  "type": "object",
+  "required": ["manifest_blake3", "ready_class", "missing_records", "stale_records", "unsupported_records", "untrusted_records", "non_claim"],
+  "properties": {
+    "manifest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "ready_class": { "$ref": "#/$defs/readiness" },
+    "missing_records": { "$ref": "#/$defs/identity_array" },
+    "stale_records": { "$ref": "#/$defs/identity_array" },
+    "unsupported_records": { "$ref": "#/$defs/identity_array" },
+    "untrusted_records": { "$ref": "#/$defs/identity_array" },
+    "non_claim": { "type": "string", "const": "source bundle evidence proves declared source/input availability and identity only" }
+  },
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "arrays-empty-iff-enum", "target": "/ready_class", "value": "ready", "fields": ["/missing_records", "/stale_records", "/unsupported_records", "/untrusted_records"] },
+    { "kind": "unique-by", "array": "/missing_records", "item_field": "" },
+    { "kind": "unique-by", "array": "/stale_records", "item_field": "" },
+    { "kind": "unique-by", "array": "/unsupported_records", "item_field": "" },
+    { "kind": "unique-by", "array": "/untrusted_records", "item_field": "" }
+  ]
+}

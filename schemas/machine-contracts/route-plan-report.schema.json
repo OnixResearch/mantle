@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/realization/route-plan-report-v1",
+  "title": "Mantle realization route plan",
+  "x-mantle-rust-owner": "src/realization_routing.rs::RoutePlanReport",
+  "$defs": {
+    "route": {
+      "type": "string",
+      "enum": ["cached-local", "trusted-substitute", "archive-import", "source-bundle", "p2p-remote-builder", "local-build", "preflight-error"]
+    },
+    "rejection": {
+      "type": "object",
+      "required": ["route", "reason_code"],
+      "properties": {
+        "route": { "$ref": "#/$defs/route" },
+        "reason_code": { "type": "string", "maxLength": 96, "x-mantle-bound-name": { "maxLength": "MAX_REASON_CODE_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "non-empty" },
+        "detail": { "type": ["string", "null"], "maxLength": 256, "x-mantle-bound-name": { "maxLength": "MAX_DETAIL_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "redaction-safe" }
+      },
+      "additionalProperties": false
+    },
+    "upload_summary": {
+      "type": "object",
+      "required": ["classes", "object_count", "byte_count"],
+      "properties": {
+        "classes": {
+          "type": "array",
+          "maxItems": 4,
+          "x-mantle-bound-name": { "maxItems": "MAX_UPLOAD_CLASSES" },
+          "items": { "type": "string", "enum": ["source", "store-object", "proof", "secret-descriptor"] }
+        },
+        "object_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_UPLOAD_OBJECTS", "maximum": "MAX_UPLOAD_OBJECTS" } },
+        "byte_count": { "type": "integer", "minimum": 0, "maximum": 1099511627776, "x-mantle-bound-name": { "minimum": "MIN_UPLOAD_BYTES", "maximum": "MAX_UPLOAD_BYTES" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["schema", "selected_route", "selected_reason_code", "policy", "tie_breaker", "rejected_routes", "non_claim"],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-realization-route-plan-v1", "x-mantle-issue-class": "version" },
+    "selected_route": { "$ref": "#/$defs/route" },
+    "selected_reason_code": { "type": "string", "maxLength": 96, "x-mantle-bound-name": { "maxLength": "MAX_REASON_CODE_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "non-empty" },
+    "selected_detail": { "type": ["string", "null"], "maxLength": 256, "x-mantle-bound-name": { "maxLength": "MAX_DETAIL_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "redaction-safe" },
+    "policy": {
+      "type": "object",
+      "required": ["network", "requested_claim_strength"],
+      "properties": {
+        "network": { "type": "string", "enum": ["online", "offline"] },
+        "requested_claim_strength": { "type": "string", "enum": ["practical", "strong-action-correctness", "release-facing"] }
+      },
+      "additionalProperties": false
+    },
+    "tie_breaker": { "type": "string", "const": "local-cache,trusted-substitute,archive-import,source-bundle,p2p-remote-builder,local-build,preflight-error" },
+    "rejected_routes": {
+      "type": "array",
+      "maxItems": 7,
+      "x-mantle-bound-name": { "maxItems": "MAX_REJECTED_ROUTES" },
+      "items": { "$ref": "#/$defs/rejection" }
+    },
+    "upload_summary": { "type": ["object", "null"], "required": ["classes", "object_count", "byte_count"], "properties": { "classes": { "type": "array", "maxItems": 4, "x-mantle-bound-name": { "maxItems": "MAX_UPLOAD_CLASSES" }, "items": { "type": "string", "enum": ["source", "store-object", "proof", "secret-descriptor"] } }, "object_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_UPLOAD_OBJECTS", "maximum": "MAX_UPLOAD_OBJECTS" } }, "byte_count": { "type": "integer", "minimum": 0, "maximum": 1099511627776, "x-mantle-bound-name": { "minimum": "MIN_UPLOAD_BYTES", "maximum": "MAX_UPLOAD_BYTES" } } }, "additionalProperties": false },
+    "non_claim": { "type": "string", "const": "route planning is advisory and does not prove transport execution or artifact correctness" }
+  },
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "selected-not-in-array", "target": "/selected_route", "array": "/rejected_routes", "item_field": "/route" },
+    { "kind": "unique-by", "array": "/rejected_routes", "item_field": "/route" }
+  ]
+}

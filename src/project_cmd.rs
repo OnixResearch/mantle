@@ -1,4 +1,5 @@
 //! CLI handlers for project management commands.
+// machine-artifact-public: project.command-reports
 //!
 //! Each function handles one subcommand, delegating to crunch-project
 //! for the real logic. This module owns argument parsing, file I/O,

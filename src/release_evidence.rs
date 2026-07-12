@@ -1,3 +1,4 @@
+// machine-artifact-public: release.evidence-reports
 use std::path::Path;
 use std::path::PathBuf;
 

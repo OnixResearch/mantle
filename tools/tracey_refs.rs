@@ -446,3 +446,50 @@
 // Authorization, retry, transition, idempotency, and fence decisions consume
 // immutable facts in the `crunch-build` core. Table, proptest, and Kani harnesses
 // cover deterministic decisions, monotonic fences, and terminal-state closure.
+
+// Machine artifact contract registry bridge.
+//
+// r[impl mantle.machine_artifact_contracts.inventory]
+// r[verify mantle.machine_artifact_contracts.inventory]
+// The typed registry and producer annotations classify public JSON families;
+// checker tests reject duplicate IDs, stale markers, and unclassified root JSON.
+//
+// r[impl mantle.machine_artifact_contracts.authority]
+// r[verify mantle.machine_artifact_contracts.authority]
+// Rust DTO snapshots own emitted facts; generated eager Nickel predicates and
+// Rust-serialized fixtures provide review/test authority without runtime Nickel.
+//
+// r[impl mantle.machine_artifact_contracts.registry_rail]
+// r[verify mantle.machine_artifact_contracts.registry_rail]
+// Pure modules under `scripts/machine_schema_contracts/` feed the thin checker
+// shell; mutation-free self-tests cover positive and negative rail behavior.
+//
+// r[impl mantle.machine_artifact_contracts.contract_vocabulary]
+// r[verify mantle.machine_artifact_contracts.contract_vocabulary]
+// The shared prelude and deterministic renderer enforce exact versions, closed
+// shapes, bounds, digests, references, redaction, and cross-field invariants.
+//
+// r[impl mantle.machine_artifact_contracts.freshness]
+// r[verify mantle.machine_artifact_contracts.freshness]
+// BLAKE3 binds owner identity, source bytes, schemas, generated contracts,
+// prelude, fixtures, consumer policy, version policy, and non-claims.
+//
+// r[impl mantle.machine_artifact_contracts.initial_cohort]
+// r[verify mantle.machine_artifact_contracts.initial_cohort]
+// Thirteen contracted build, plan, route, receipt, source-bundle, Nickel-export,
+// doctor, and release-envelope surfaces carry schemas and generated contracts.
+//
+// r[impl mantle.machine_artifact_contracts.fixtures]
+// r[verify mantle.machine_artifact_contracts.fixtures]
+// Every contracted surface has positive fixtures and categorized negative sets;
+// producer parity and embedded Nickel tests exercise both directions.
+//
+// r[impl mantle.machine_artifact_contracts.versioning]
+// r[verify mantle.machine_artifact_contracts.versioning]
+// Registry validation rejects undeclared compatibility; no prior versions are
+// supported without an explicit converter and migration fixtures.
+//
+// r[impl mantle.machine_artifact_contracts.runtime_boundary]
+// r[verify mantle.machine_artifact_contracts.runtime_boundary]
+// Product sources contain no machine-contract Nickel execution path; source
+// guards and producer tests keep validation confined to review/test tooling.

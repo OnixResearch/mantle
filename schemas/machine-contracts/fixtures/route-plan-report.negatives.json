@@ -1,0 +1,19 @@
+{
+  "surface_id": "realization.route-plan-report",
+  "cases": [
+    {
+      "id": "selected-route-also-rejected",
+      "issue_class": "cross-field",
+      "expected_path": "/",
+      "artifact": {
+        "schema": "mantle-realization-route-plan-v1",
+        "selected_route": "local-build",
+        "selected_reason_code": "local-build-eligible",
+        "policy": { "network": "offline", "requested_claim_strength": "practical" },
+        "tie_breaker": "local-cache,trusted-substitute,archive-import,source-bundle,p2p-remote-builder,local-build,preflight-error",
+        "rejected_routes": [{ "route": "local-build", "reason_code": "contradiction" }],
+        "non_claim": "route planning is advisory and does not prove transport execution or artifact correctness"
+      }
+    }
+  ]
+}
