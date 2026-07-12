@@ -286,3 +286,30 @@ Pueue task 1677 validated the accepted specs after sync. Exact output:
   "valid": true
 }
 ```
+
+## Archive evidence
+
+```text
+change: defer-release-verification-success
+archive path: ./cairn/archive/2026-07-12-defer-release-verification-success
+input_hash: a14a86e57e46c9562938d311d6fb0fcd5217f2d93a2711a6f3071770d38f2c7f
+plan_hash: 4311c2f095e16607b81bb385308a9b89edaaf0986813da54f75b0df032f2d26a
+receipt_hash: ba8fe918c4573fc97b06d7b2489e4b42ec2f1a35aeff47c7e1d1b4c10d10c033
+mutated: true
+blocked: false
+```
+
+Pueue task 1682 ran the authoritative validation command after archive. Exact output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 16,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 40,
+  "valid": true
+}
+```
