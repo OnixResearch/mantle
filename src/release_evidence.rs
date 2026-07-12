@@ -579,6 +579,15 @@ fn commit_verified_stage(
     shell: &mut dyn PublicationShellAdapter,
 ) -> Result<ReleaseEvidenceManifest, PublicationAttemptFailure> {
     let state = observe_publication_phase(shell, stage, plan, state, PublicationShellPhase::PreCommit)?;
+    let final_verified = verify_release_evidence_bundle(stage.stage_path())
+        .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::PreCommit, error))?;
+    if final_verified != manifest {
+        return Err(fail_publication(
+            state,
+            PublicationFailurePhase::PreCommit,
+            RunError::Internal("pre-commit release verification returned a different manifest".to_string()),
+        ));
+    }
     stage
         .remove_ownership_marker()
         .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::PreCommit, error))?;
@@ -1889,6 +1898,7 @@ mod tests {
     struct TestPublicationShell {
         fail_phases: Vec<PublicationShellPhase>,
         corrupt_before_verification: bool,
+        corrupt_before_commit: bool,
         concurrent_winner: Option<ConcurrentWinnerKind>,
         mutate_source_after_plan: Option<PathBuf>,
         observations: Vec<PublicationPhaseObservation>,
@@ -1909,6 +1919,10 @@ mod tests {
                 std::fs::write(context.stage_path.join(TEST_BUNDLED_BINARY_RELATIVE_PATH), b"tampered-stage").unwrap();
             }
             if phase == PublicationShellPhase::PreCommit {
+                if self.corrupt_before_commit {
+                    std::fs::write(context.stage_path.join(TEST_BUNDLED_BINARY_RELATIVE_PATH), b"tampered-pre-commit")
+                        .unwrap();
+                }
                 if let Some(winner) = self.concurrent_winner {
                     install_concurrent_winner(context.final_path, winner);
                 }
@@ -2144,6 +2158,22 @@ mod tests {
 
         assert!(error.to_string().contains("Verification"), "{error}");
         assert!(error.to_string().contains("does not match manifest"), "{error}");
+        assert!(!request.bundle_dir.exists());
+        assert!(shell.observations.iter().all(|row| !row.final_exists));
+    }
+
+    #[test]
+    fn precommit_replacement_fails_before_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let request = publication_fixture(temp.path(), "mantle-precommit-replacement", "release-bundle");
+        let mut shell = TestPublicationShell {
+            corrupt_before_commit: true,
+            ..TestPublicationShell::default()
+        };
+
+        let error = create_release_evidence_bundle_with_adapter(&request, &mut shell).unwrap_err();
+
+        assert!(error.to_string().contains("PreCommit"));
         assert!(!request.bundle_dir.exists());
         assert!(shell.observations.iter().all(|row| !row.final_exists));
     }

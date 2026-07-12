@@ -78,3 +78,13 @@ These are not changed by implementation commit `6d860f8c` and do not block the f
 
 - `cargo fmt --check -p mantle -p crunch-release-core` reaches unrelated pre-existing formatting diffs, including `tests/trust_policy_offline_rail.rs:300`. The exact touched-file rustfmt check above passes.
 - `cargo clippy -p mantle --lib --no-deps -- -D warnings` is blocked in unchanged `src/build_correctness.rs:495` (`result_large_err`) and `src/build_correctness.rs:543` (`collapsible_if`). The no-std publication core clippy gate passes with warnings denied.
+
+## Integration hardening
+
+The atomic-publication ADR was renumbered from 0020 to 0021 during integration because ADR 0020 already records the Trellis acceptance boundary.
+
+Adversarial integration review identified a post-verification replacement window in the test adapter: a stage artifact could change during the `PreCommit` callback after the first production verification and then be renamed publicly. The shell now reruns production bundle verification after `PreCommit` and before removing the ownership marker or attempting the no-replace rename. A negative fixture mutates the staged binary in that window and proves the final path remains absent.
+
+Pueue task `697` ran the focused pre-commit replacement test plus all 13 release-create CLI tests. Pueue task `710` then ran the full root release-evidence lane (36 passed, 0 failed), the complete release core (194 passed, 0 failed), and strict core Clippy with warnings denied.
+
+Pueue task `713` ran repository validation and proposal, design, and tasks gates with the generated Mantle policy. Validation reported 9 active changes, 36 specs, no issues, and `valid: true`; all three gates returned no issues, `valid: true`, and `verdict: PASS` under policy hash `d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c`.

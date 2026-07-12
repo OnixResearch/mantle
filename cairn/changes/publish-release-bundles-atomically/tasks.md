@@ -28,6 +28,6 @@
 
 - [x] [serial] Document absent-destination semantics, atomic visibility, safe retry/cleanup, no-clobber behavior, and the durability non-claim. r[mantle.release_provenance.bundle_publication.atomic_commit] r[mantle.release_provenance.bundle_publication.failure_isolation]
 - [x] [serial] Run focused release evidence unit/integration tests and the full publication failure matrix. r[mantle.release_provenance.bundle_publication.validation]
-  - Evidence: `188` no-std core tests, `35` focused root release tests, `13` release-create CLI tests, wasm check, core clippy with warnings denied, and touched-file rustfmt all pass; see `evidence/validation.md`.
+  - Evidence: `194` no-std core tests, `36` focused root release tests, `13` release-create CLI tests, wasm check, core clippy with warnings denied, and touched-file rustfmt all pass; see `evidence/validation.md`.
 - [x] [serial] Run Cairn validation and proposal, design, and tasks gates before sync/archive. r[mantle.release_provenance.bundle_publication.validation]
   - Evidence: Cairn validation and all three gates pass against the active change; final post-checkbox receipts are recorded in `evidence/validation.md`. No sync or archive was run.
