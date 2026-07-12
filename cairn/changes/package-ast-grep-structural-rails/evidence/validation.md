@@ -134,4 +134,44 @@ design: PASS, issues=[], receipt_hash=b12afac2abcb5b4638e20550b6ca46523609aef70b
 tasks: PASS, issues=[], receipt_hash=fc9954753f319f5f003e583c83359dc2957c2160c64da83a25662be90bbfa8a3
 ```
 
-No Cairn sync or archive command has run at this point.
+No Cairn sync or archive command had run at this point.
+
+## Delta-marker repair before sync
+
+The implementation packet used main-spec headings, which would make native sync a no-op. Before lifecycle completion, the change-local spec was repaired to `# Verification Evidence Specification Delta` with `## ADDED Requirements`. The authoritative validation and all three gates passed again:
+
+```text
+validate: valid=true, issues=[], changes=16, specs_validated=40
+proposal: PASS, issues=[], receipt_hash=f81f83ab5b3be029eed6465a1fd0fc8acc52a93671f0de4655f334ba81080439
+design: PASS, issues=[], receipt_hash=93fff3d21ab58233ad6f9bb43046484929cc32295bde340243995dd25ac08235
+tasks: PASS, issues=[], receipt_hash=ca8c6aaee454d112bbddac98c43ca9b45d501582f53057eb0868e7c3f8d337dd
+```
+
+The native sync dry run now planned one `sync_delta_spec` action for `cairn/specs/verification-evidence/spec.md` with plan hash `b10159816c678db263dab0a1fc440b39ee62c132872adfbc21387fc7ab451ff7`. No mutation or archive had run at this point.
+
+## Executed sync evidence
+
+```text
+change: package-ast-grep-structural-rails
+verification-evidence before: c48bc581eda865d43d3b310055a511e59a8a4b03abd39974327f6cb56f237219
+verification-evidence after: f35ad9ca7a90b6d39ef02c0f5398aa075e76c6c5e7a46552c5c2f741234e14f8
+plan_hash: 4b707880e69a75835e100e6c2fdcd189e9f55c1a5abdf9860970e6efce6d92e1
+receipt_hash: c58cff8dd6c3d38c53ae1457c05c1dc4e2f1417eca38e40b7a4b8df174b2dadc
+mutated: true
+blocked: false
+```
+
+Pueue task 1894 ran authoritative validation after sync. Exact output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 16,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 40,
+  "valid": true
+}
+```

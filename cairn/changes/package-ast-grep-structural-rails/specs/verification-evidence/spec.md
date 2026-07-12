@@ -1,10 +1,10 @@
-# Verification Evidence Specification
+# Verification Evidence Specification Delta
 
 ## Purpose
 
 Define Mantle's package and evidence boundaries for pinned ast-grep structural rails.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Pinned ast-grep toolchain
 r[mantle.ast_grep_structural_rails.toolchain] Mantle MUST expose ast-grep through a pinned toolchain or package profile with reproducible binary identity.
