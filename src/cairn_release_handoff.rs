@@ -1,241 +1,295 @@
-use std::collections::BTreeSet;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 
-const MAX_HANDOFF_ROWS: usize = 128;
-const MAX_COVERS: usize = 256;
-const BLAKE3_HEX_LENGTH: usize = 64;
-const REQUIRED_NON_CLAIM: &str = "not release correctness";
-const CAIRN_BOUNDARY_NON_CLAIM: &str = "Cairn owns lifecycle readiness";
-const SUPPORTED_ROLES: &[&str] = &[
-    "cairn-release-readiness-receipt",
-    "cairn-change-validation-receipt",
-    "cairn-archive-evidence-index",
-];
-const SUPPORTED_SCHEMAS: &[&str] = &[
-    "cairn.release-readiness.v1",
-    "cairn.change-validation.v1",
-    "cairn.archive-index.v1",
-];
-const OVERCLAIM_FRAGMENTS: &[&str] = &[
-    "proves release correctness",
-    "proves build correctness",
-    "proves source correctness",
-    "proves artifact correctness",
-    "proves deployment safety",
-];
+use crunch_release_core::CAIRN_HANDOFF_INPUT_SCHEMA;
+use crunch_release_core::CairnMeasuredArtifact;
+use crunch_release_core::CairnReleaseEvidenceHandoff;
+use crunch_release_core::CairnReleaseEvidenceRow;
+use crunch_release_core::CairnReleaseEvidenceValidationReceipt;
+use crunch_release_core::MAX_CAIRN_HANDOFF_ROWS_COUNT;
+use crunch_release_core::MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT;
+use serde::Deserialize;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CairnReleaseEvidenceRow {
-    pub artifact_id: String,
-    pub role: String,
-    pub schema_id: String,
-    pub artifact_digest_blake3: String,
-    pub cairn_policy_digest_blake3: String,
-    pub release_readiness_id: String,
-    pub covers: Vec<String>,
-    pub non_claims: Vec<String>,
+use crate::errors::RunError;
+
+const MAX_CAIRN_HANDOFF_DESCRIPTOR_BYTES: u64 = 1_048_576;
+const MAX_CAIRN_HANDOFF_ARTIFACT_BYTES: u64 = 67_108_864;
+const CAIRN_HANDOFF_BUNDLE_DIRECTORY: &str = "cairn-handoff";
+const CAIRN_HANDOFF_ARTIFACT_FILE: &str = "artifact";
+const CAIRN_HANDOFF_POLICY_FILE: &str = "policy";
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CairnHandoffDescriptor {
+    schema: String,
+    rows: Vec<CairnHandoffDescriptorRow>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CairnReleaseEvidenceHandoff {
-    pub rows: Vec<CairnReleaseEvidenceRow>,
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CairnHandoffDescriptorRow {
+    artifact_id: String,
+    role: String,
+    schema_id: String,
+    artifact_path: PathBuf,
+    artifact_digest_blake3: String,
+    cairn_policy_path: PathBuf,
+    cairn_policy_digest_blake3: String,
+    release_readiness_id: String,
+    covers: Vec<String>,
+    non_claims: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CairnReleaseEvidenceReport {
-    pub valid: bool,
-    pub diagnostics: Vec<String>,
+// r[impl mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.production_wiring]
+pub fn prepare_cairn_handoff_for_bundle(
+    descriptor_path: &Path,
+    bundle_dir: &Path,
+) -> Result<CairnReleaseEvidenceHandoff, RunError> {
+    let descriptor_bytes =
+        read_bounded_file(descriptor_path, MAX_CAIRN_HANDOFF_DESCRIPTOR_BYTES, "Cairn handoff descriptor")?;
+    let descriptor: CairnHandoffDescriptor = serde_json::from_slice(&descriptor_bytes).map_err(|error| {
+        RunError::Internal(format!("parsing Cairn handoff descriptor {}: {error}", descriptor_path.display()))
+    })?;
+    validate_descriptor_header(&descriptor)?;
+    let descriptor_parent = descriptor_path.parent().unwrap_or_else(|| Path::new("."));
+    let mut rows = Vec::with_capacity(descriptor.rows.len());
+    for (index, row) in descriptor.rows.into_iter().enumerate() {
+        let index_u32 = u32::try_from(index)
+            .map_err(|_| RunError::Internal("Cairn handoff row index overflowed u32".to_string()))?;
+        rows.push(prepare_row(row, index_u32, descriptor_parent, bundle_dir)?);
+    }
+    let handoff = CairnReleaseEvidenceHandoff { rows };
+    let report = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    if !report.valid {
+        return Err(RunError::Internal(format!(
+            "Cairn handoff descriptor failed measured validation: {}",
+            report.diagnostics.join("; ")
+        )));
+    }
+    debug_assert!(!handoff.rows.is_empty());
+    debug_assert!(handoff.rows.len() <= MAX_CAIRN_HANDOFF_ROWS_COUNT as usize);
+    Ok(handoff)
 }
 
-// r[impl mantle.release_provenance.cairn_evidence_handoff.contract]
-// r[impl mantle.release_provenance.cairn_evidence_handoff.validation]
-pub(crate) fn validate_cairn_release_evidence_handoff(
-    handoff: &CairnReleaseEvidenceHandoff,
-) -> CairnReleaseEvidenceReport {
-    let mut diagnostics = Vec::new();
-    if handoff.rows.len() > MAX_HANDOFF_ROWS {
-        diagnostics.push(format!("Cairn handoff row count exceeds {MAX_HANDOFF_ROWS}"));
+pub fn remeasure_cairn_handoff_from_bundle(
+    bundle_dir: &Path,
+    receipt: &CairnReleaseEvidenceValidationReceipt,
+) -> Result<CairnReleaseEvidenceHandoff, RunError> {
+    let mut handoff = receipt.handoff.clone();
+    for row in &mut handoff.rows {
+        row.artifact = remeasure_artifact(bundle_dir, &row.artifact)?;
+        row.cairn_policy = remeasure_artifact(bundle_dir, &row.cairn_policy)?;
     }
-    let mut artifact_ids = BTreeSet::new();
-    for row in &handoff.rows {
-        validate_row(row, &mut artifact_ids, &mut diagnostics);
+    let report = crunch_release_core::validate_cairn_release_evidence_handoff(&handoff);
+    if !report.valid {
+        return Err(RunError::Internal(format!(
+            "bundle-local Cairn handoff bytes failed validation: {}",
+            report.diagnostics.join("; ")
+        )));
     }
-    CairnReleaseEvidenceReport {
-        valid: diagnostics.is_empty(),
-        diagnostics,
-    }
+    debug_assert!(!handoff.rows.is_empty());
+    debug_assert_eq!(handoff.rows.len(), receipt.handoff.rows.len());
+    Ok(handoff)
 }
 
-fn validate_row(row: &CairnReleaseEvidenceRow, artifact_ids: &mut BTreeSet<String>, diagnostics: &mut Vec<String>) {
-    push_nonempty(&row.artifact_id, "artifact_id", diagnostics);
-    validate_role(&row.role, diagnostics);
-    validate_schema(&row.schema_id, diagnostics);
-    validate_digest(&row.artifact_digest_blake3, "artifact_digest_blake3", diagnostics);
-    validate_digest(&row.cairn_policy_digest_blake3, "cairn_policy_digest_blake3", diagnostics);
-    push_nonempty(&row.release_readiness_id, "release_readiness_id", diagnostics);
-    validate_covers(&row.covers, diagnostics);
-    validate_non_claims(&row.non_claims, diagnostics);
-    if !artifact_ids.insert(row.artifact_id.clone()) {
-        diagnostics.push(format!("duplicate Cairn handoff artifact id: {}", row.artifact_id));
-    }
+fn prepare_row(
+    row: CairnHandoffDescriptorRow,
+    index: u32,
+    descriptor_parent: &Path,
+    bundle_dir: &Path,
+) -> Result<CairnReleaseEvidenceRow, RunError> {
+    let artifact_source = resolve_descriptor_path(descriptor_parent, &row.artifact_path);
+    let policy_source = resolve_descriptor_path(descriptor_parent, &row.cairn_policy_path);
+    reject_bundle_local_source(&artifact_source, bundle_dir)?;
+    reject_bundle_local_source(&policy_source, bundle_dir)?;
+    let row_directory = PathBuf::from(CAIRN_HANDOFF_BUNDLE_DIRECTORY).join(index.to_string());
+    let artifact = copy_and_measure(
+        &artifact_source,
+        bundle_dir,
+        &row_directory.join(CAIRN_HANDOFF_ARTIFACT_FILE),
+        row.artifact_digest_blake3,
+    )?;
+    let cairn_policy = copy_and_measure(
+        &policy_source,
+        bundle_dir,
+        &row_directory.join(CAIRN_HANDOFF_POLICY_FILE),
+        row.cairn_policy_digest_blake3,
+    )?;
+    Ok(CairnReleaseEvidenceRow {
+        artifact_id: row.artifact_id,
+        role: row.role,
+        schema_id: row.schema_id,
+        artifact,
+        cairn_policy,
+        release_readiness_id: row.release_readiness_id,
+        covers: row.covers,
+        non_claims: row.non_claims,
+    })
 }
 
-fn validate_role(role: &str, diagnostics: &mut Vec<String>) {
-    if !SUPPORTED_ROLES.contains(&role) {
-        diagnostics.push(format!("unsupported Cairn handoff role: {role}"));
+fn copy_and_measure(
+    source: &Path,
+    bundle_dir: &Path,
+    relative_path: &Path,
+    declared_digest_blake3: String,
+) -> Result<CairnMeasuredArtifact, RunError> {
+    let bytes = read_bounded_file(source, MAX_CAIRN_HANDOFF_ARTIFACT_BYTES, "Cairn handoff artifact")?;
+    let measured_digest_blake3 = blake3::hash(&bytes).to_hex().to_string();
+    let size_bytes = u64::try_from(bytes.len())
+        .map_err(|_| RunError::Internal("Cairn handoff artifact length overflowed u64".to_string()))?;
+    let bundled = crate::release_evidence::copy_file_into_bundle(source, bundle_dir, relative_path)?;
+    if bundled.size_bytes != size_bytes || bundled.digest_blake3 != measured_digest_blake3 {
+        return Err(RunError::Internal(format!(
+            "Cairn handoff source changed while being copied: {}",
+            source.display()
+        )));
     }
+    Ok(CairnMeasuredArtifact {
+        relative_path: bundled.relative_path,
+        size_bytes,
+        declared_digest_blake3,
+        measured_digest_blake3,
+    })
 }
 
-fn validate_schema(schema: &str, diagnostics: &mut Vec<String>) {
-    if !SUPPORTED_SCHEMAS.contains(&schema) {
-        diagnostics.push(format!("unsupported Cairn handoff schema: {schema}"));
-    }
+fn remeasure_artifact(bundle_dir: &Path, artifact: &CairnMeasuredArtifact) -> Result<CairnMeasuredArtifact, RunError> {
+    let path = bundle_dir.join(&artifact.relative_path);
+    let bytes = read_bounded_file(&path, MAX_CAIRN_HANDOFF_ARTIFACT_BYTES, "bundled Cairn handoff artifact")?;
+    Ok(CairnMeasuredArtifact {
+        relative_path: artifact.relative_path.clone(),
+        size_bytes: u64::try_from(bytes.len())
+            .map_err(|_| RunError::Internal("bundled Cairn artifact length overflowed u64".to_string()))?,
+        declared_digest_blake3: artifact.declared_digest_blake3.clone(),
+        measured_digest_blake3: blake3::hash(&bytes).to_hex().to_string(),
+    })
 }
 
-fn validate_covers(covers: &[String], diagnostics: &mut Vec<String>) {
-    if covers.is_empty() {
-        diagnostics.push("Cairn handoff covers must not be empty".to_string());
+fn read_bounded_file(path: &Path, maximum_bytes: u64, label: &str) -> Result<Vec<u8>, RunError> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| RunError::Internal(format!("reading {label} metadata {}: {error}", path.display())))?;
+    if !metadata.file_type().is_file() {
+        return Err(RunError::Internal(format!("{label} must be a regular non-symlink file: {}", path.display())));
     }
-    if covers.len() > MAX_COVERS {
-        diagnostics.push(format!("Cairn handoff covers exceed {MAX_COVERS}"));
+    if metadata.len() > maximum_bytes {
+        return Err(RunError::Internal(format!(
+            "{label} {} is {} bytes, limit is {maximum_bytes}",
+            path.display(),
+            metadata.len()
+        )));
     }
-    let mut unique = BTreeSet::new();
-    for cover in covers {
-        push_nonempty(cover, "covers", diagnostics);
-        if !unique.insert(cover) {
-            diagnostics.push(format!("duplicate Cairn handoff cover id: {cover}"));
+    fs::read(path).map_err(|error| RunError::Internal(format!("reading {label} {}: {error}", path.display())))
+}
+
+fn validate_descriptor_header(descriptor: &CairnHandoffDescriptor) -> Result<(), RunError> {
+    if descriptor.schema != CAIRN_HANDOFF_INPUT_SCHEMA {
+        return Err(RunError::Internal(format!("unsupported Cairn handoff descriptor schema: {}", descriptor.schema)));
+    }
+    if descriptor.rows.is_empty() || descriptor.rows.len() > MAX_CAIRN_HANDOFF_ROWS_COUNT as usize {
+        return Err(RunError::Internal(format!(
+            "Cairn handoff descriptor row count must be between 1 and {MAX_CAIRN_HANDOFF_ROWS_COUNT}"
+        )));
+    }
+    for row in &descriptor.rows {
+        if row.artifact_id.len() > MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT as usize {
+            return Err(RunError::Internal("Cairn handoff artifact_id is oversized".to_string()));
         }
     }
+    Ok(())
 }
 
-fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
-    let has_release_non_claim = non_claims.iter().any(|value| value.contains(REQUIRED_NON_CLAIM));
-    let has_cairn_boundary = non_claims.iter().any(|value| value.contains(CAIRN_BOUNDARY_NON_CLAIM));
-    if !has_release_non_claim || !has_cairn_boundary {
-        diagnostics.push("Cairn handoff missing release/Cairn ownership non-claims".to_string());
-    }
-    for non_claim in non_claims {
-        push_no_overclaim(non_claim, "non_claims", diagnostics);
-    }
-}
-
-fn validate_digest(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    if value.len() != BLAKE3_HEX_LENGTH || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        diagnostics.push(format!("{field_name} is not BLAKE3 hex"));
+fn resolve_descriptor_path(parent: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        parent.join(path)
     }
 }
 
-fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    if value.trim().is_empty() {
-        diagnostics.push(format!("{field_name} must not be empty"));
+fn reject_bundle_local_source(source: &Path, bundle_dir: &Path) -> Result<(), RunError> {
+    let bundle_dir = bundle_dir.canonicalize().unwrap_or_else(|_| bundle_dir.to_path_buf());
+    let source = source
+        .canonicalize()
+        .map_err(|error| RunError::Internal(format!("resolving Cairn handoff source {}: {error}", source.display())))?;
+    if source.starts_with(&bundle_dir) {
+        return Err(RunError::Internal(format!(
+            "Cairn handoff source cannot point into the bundle being assembled: {}",
+            source.display()
+        )));
     }
-}
-
-fn push_no_overclaim(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
-    let lower = value.to_ascii_lowercase();
-    for fragment in OVERCLAIM_FRAGMENTS {
-        if lower.contains(fragment) {
-            diagnostics.push(format!("{field_name} contains overclaim fragment {fragment:?}"));
-        }
-    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn accepts_complete_cairn_handoff_fixture() {
-        let handoff = CairnReleaseEvidenceHandoff {
-            rows: vec![release_readiness_row(), archive_index_row()],
-        };
+    const ARTIFACT_BYTES: &[u8] = b"receipt";
+    const POLICY_BYTES: &[u8] = b"policy";
 
-        let report = validate_cairn_release_evidence_handoff(&handoff);
-
-        assert!(report.valid);
-        assert!(report.diagnostics.is_empty());
+    fn write_descriptor(root: &Path, declared_artifact_digest: &str) -> PathBuf {
+        fs::write(root.join("receipt.json"), ARTIFACT_BYTES).unwrap();
+        fs::write(root.join("policy.ncl"), POLICY_BYTES).unwrap();
+        let policy_digest = blake3::hash(POLICY_BYTES).to_hex().to_string();
+        let descriptor = serde_json::json!({
+            "schema": CAIRN_HANDOFF_INPUT_SCHEMA,
+            "rows": [{
+                "artifact_id": "readiness",
+                "role": "cairn-release-readiness-receipt",
+                "schema_id": "cairn.release-readiness.v1",
+                "artifact_path": "receipt.json",
+                "artifact_digest_blake3": declared_artifact_digest,
+                "cairn_policy_path": "policy.ncl",
+                "cairn_policy_digest_blake3": policy_digest,
+                "release_readiness_id": "release-1",
+                "covers": ["mantle.release"],
+                "non_claims": ["not release correctness"]
+            }]
+        });
+        let path = root.join("handoff.json");
+        fs::write(&path, serde_json::to_vec(&descriptor).unwrap()).unwrap();
+        path
     }
 
     #[test]
-    fn rejects_invalid_cairn_handoff_fixture_matrix() {
-        let cases: [(&str, fn(&mut CairnReleaseEvidenceRow), &str); 5] = [
-            ("missing artifact", missing_artifact, "artifact_id"),
-            ("stale digest", stale_digest, "BLAKE3"),
-            ("wrong role", wrong_role, "unsupported"),
-            ("wrong schema", wrong_schema, "unsupported"),
-            ("weakened non claims", weakened_non_claims, "non-claims"),
-        ];
+    fn shell_measures_and_bundles_declared_bytes() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle = temp.path().join("bundle");
+        fs::create_dir(&bundle).unwrap();
+        let digest = blake3::hash(ARTIFACT_BYTES).to_hex().to_string();
+        let descriptor = write_descriptor(temp.path(), &digest);
+        let handoff = prepare_cairn_handoff_for_bundle(&descriptor, &bundle).unwrap();
+        assert_eq!(handoff.rows.len(), 1);
+        assert_eq!(handoff.rows[0].artifact.measured_digest_blake3, digest);
+    }
 
-        for (name, mutate, expected) in cases {
-            let mut row = release_readiness_row();
-            mutate(&mut row);
-            let handoff = CairnReleaseEvidenceHandoff { rows: vec![row] };
+    #[test]
+    fn shell_rejects_fabricated_declared_digest() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle = temp.path().join("bundle");
+        fs::create_dir(&bundle).unwrap();
+        let fabricated = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let descriptor = write_descriptor(temp.path(), fabricated);
+        let error = prepare_cairn_handoff_for_bundle(&descriptor, &bundle).unwrap_err();
+        assert!(error.to_string().contains("declared digest"));
+        assert!(!error.to_string().contains("release correctness proven"));
+    }
 
-            let report = validate_cairn_release_evidence_handoff(&handoff);
+    #[test]
+    fn checked_fixtures_cover_positive_and_negative_handoffs() {
+        let fixture_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cairn-handoff");
+        let positive_bundle = tempfile::tempdir().unwrap();
+        let handoff =
+            prepare_cairn_handoff_for_bundle(&fixture_root.join("positive/handoff.json"), positive_bundle.path())
+                .unwrap();
+        assert_eq!(handoff.rows.len(), 1);
 
-            assert!(!report.valid, "{name} should fail");
-            assert!(
-                report.diagnostics.iter().any(|diagnostic| diagnostic.contains(expected)),
-                "{name} diagnostics should contain {expected:?}: {:?}",
-                report.diagnostics
-            );
+        for fixture in ["fabricated-digest.json", "wrong-role-schema.json", "empty-bypass.json"] {
+            let bundle = tempfile::tempdir().unwrap();
+            let error = prepare_cairn_handoff_for_bundle(&fixture_root.join("negative").join(fixture), bundle.path())
+                .unwrap_err();
+            assert!(!error.to_string().is_empty(), "fixture {fixture} must fail closed");
         }
-    }
-
-    fn release_readiness_row() -> CairnReleaseEvidenceRow {
-        CairnReleaseEvidenceRow {
-            artifact_id: "cairn-release-readiness-main".to_string(),
-            role: "cairn-release-readiness-receipt".to_string(),
-            schema_id: "cairn.release-readiness.v1".to_string(),
-            artifact_digest_blake3: digest('a'),
-            cairn_policy_digest_blake3: digest('b'),
-            release_readiness_id: "release-2026-07-09".to_string(),
-            covers: vec!["mantle.release_provenance.cairn_evidence_handoff.contract".to_string()],
-            non_claims: standard_non_claims(),
-        }
-    }
-
-    fn archive_index_row() -> CairnReleaseEvidenceRow {
-        CairnReleaseEvidenceRow {
-            artifact_id: "cairn-archive-index".to_string(),
-            role: "cairn-archive-evidence-index".to_string(),
-            schema_id: "cairn.archive-index.v1".to_string(),
-            artifact_digest_blake3: digest('c'),
-            cairn_policy_digest_blake3: digest('d'),
-            release_readiness_id: "release-2026-07-09".to_string(),
-            covers: vec!["mantle.release_provenance.cairn_evidence_handoff.validation".to_string()],
-            non_claims: standard_non_claims(),
-        }
-    }
-
-    fn standard_non_claims() -> Vec<String> {
-        vec![
-            "Cairn owns lifecycle readiness; Mantle only binds bundle-local evidence".to_string(),
-            "not release correctness".to_string(),
-            "not build correctness".to_string(),
-        ]
-    }
-
-    fn digest(ch: char) -> String {
-        ch.to_string().repeat(BLAKE3_HEX_LENGTH)
-    }
-
-    fn missing_artifact(row: &mut CairnReleaseEvidenceRow) {
-        row.artifact_id.clear();
-    }
-
-    fn stale_digest(row: &mut CairnReleaseEvidenceRow) {
-        row.artifact_digest_blake3 = "bad".to_string();
-    }
-
-    fn wrong_role(row: &mut CairnReleaseEvidenceRow) {
-        row.role = "mantle-release-correctness-proof".to_string();
-    }
-
-    fn wrong_schema(row: &mut CairnReleaseEvidenceRow) {
-        row.schema_id = "mantle.release.v1".to_string();
-    }
-
-    fn weakened_non_claims(row: &mut CairnReleaseEvidenceRow) {
-        row.non_claims = vec!["not release correctness".to_string()];
     }
 }

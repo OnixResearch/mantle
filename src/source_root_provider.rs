@@ -444,6 +444,10 @@ fn available_parallelism() -> u32 {
     std::thread::available_parallelism().map(|n| n.get() as u32).unwrap_or(1).min(32).max(1)
 }
 
+pub(crate) fn host_compiler_available_for_source_root() -> bool {
+    find_host_cc().is_ok()
+}
+
 /// Discover a 64-bit host C compiler and build a clean PATH for provider
 /// builds. The caller's PATH may contain a 32-bit gcc wrapper or clang/mold
 /// that interfere with cross-compiler configure scripts.
@@ -1336,6 +1340,13 @@ fn write_source_root_provider_json(staging: &Path, manifest_digest: &str) -> Res
     let provider_json = serde_json::json!({
         "provider_id": "source-root-v1",
         "name": PROVIDER_NAME,
+        "capability_class": crunch_bootstrap_core::SOURCE_ROOT_CAPABILITY_CLASS,
+        "full_source_bootstrap_eligible": false,
+        "host_influences": [
+            "host C compiler and linker",
+            "host make and archive extraction tools",
+            "host kernel and runtime libraries during materialization",
+        ],
         "target": PROVIDER_TARGET,
         "dynamic_linker": PROVIDER_DYNAMIC_LINKER,
         "source_root": {
@@ -1352,9 +1363,9 @@ fn write_source_root_provider_json(staging: &Path, manifest_digest: &str) -> Res
             ],
         },
         "notes": [
-            "Built from source using the full-source bootstrap root manifest.",
+            "Built from declared sources through host-assisted materialization; this is not a full-source bootstrap.",
             "No pre-built musl.cc binary toolchain tarball was used.",
-            "Host compiler and make are declared trust notes in the manifest.",
+            "Host compiler, build tools, kernel, and runtime are materialization influences.",
         ],
     });
 
@@ -1591,6 +1602,8 @@ mod tests {
         assert_eq!(content["target"].as_str().unwrap(), PROVIDER_TARGET);
         assert_eq!(content["dynamic_linker"].as_str().unwrap(), PROVIDER_DYNAMIC_LINKER);
         assert_eq!(content["provider_id"].as_str().unwrap(), "source-root-v1");
+        assert_eq!(content["capability_class"].as_str().unwrap(), crunch_bootstrap_core::SOURCE_ROOT_CAPABILITY_CLASS);
+        assert_eq!(content["full_source_bootstrap_eligible"].as_bool(), Some(false));
         assert!(content["reduction"].is_object());
         assert!(content["reduction"]["retained_tools"].is_array());
         assert!(content["reduction"]["dropped_components"].is_array());

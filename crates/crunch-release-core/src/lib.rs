@@ -2,6 +2,7 @@
 extern crate alloc;
 
 mod ast_grep;
+mod cairn_handoff;
 mod determinism;
 mod error;
 mod function_address_binding;
@@ -47,6 +48,7 @@ pub use ast_grep::ast_grep_structural_evidence_digest_blake3;
 pub use ast_grep::parse_ast_grep_structural_evidence_json;
 pub use ast_grep::validate_ast_grep_release_attachment;
 pub use ast_grep::validate_ast_grep_structural_evidence;
+pub use cairn_handoff::*;
 pub use determinism::BUILD_EFFECT_POLICY_VERSION;
 pub use determinism::BuildEffect;
 pub use determinism::DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA;
@@ -264,6 +266,7 @@ pub use manifest::evaluate_function_address_release_evidence;
 pub use manifest::evaluate_stack_provenance_release_evidence;
 pub use manifest::extract_full_self_hosting_proof_identity_fields;
 pub use manifest::function_address_evidence_mode_for_release_profile;
+pub use manifest::release_evidence_cairn_bundle_binding;
 pub use manifest::stack_provenance_mode_for_release_profile;
 pub use manifest::validate_bundled_artifact_record;
 pub use manifest::validate_provider_fixed_point_release_artifact_binding;

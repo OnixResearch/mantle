@@ -1028,6 +1028,14 @@ pinned fetched artifacts, mantle-built outputs, and host-convenience probes.
 
 ## Self-Build
 
+Source-root support is operation-specific. `mantle bootstrap capabilities`
+reports live support: `mantle bootstrap --source-root <manifest.json>` is a
+host-assisted source materialization path, while `mantle self-build
+--source-root` is intentionally not accepted because no executable full-source
+self-build provider chain exists. See
+[`docs/source-root-capabilities.md`](docs/source-root-capabilities.md) for the
+host influences and non-claims.
+
 mantle can rebuild itself from source once the stage0 prerequisites are already present:
 
 ```bash
@@ -1266,6 +1274,25 @@ alone.
 The top-level `manifest.json` records BLAKE3 digests for the source archive,
 bundled binary or binaries, proof-bundle directory, prerequisite inventory, and
 the proof-linkage facts copied from the full self-hosting proof.
+
+Cairn lifecycle evidence can be measured and bound to that exact bundle with
+`--cairn-handoff <descriptor.json>`. Assembly copies the measured artifact and
+policy bytes under `cairn-handoff/`; verification remeasures them and rejects
+stale bytes, role/schema swaps, removed required receipts, or receipts copied to
+another bundle. The Onix release profile additionally requires this handoff and
+strict deterministic/sandbox proof evidence:
+
+```bash
+mantle release verify target/release-evidence/<release-id> \
+  --release-profile onix-stack \
+  --deterministic-proof <receipt.json> \
+  --deterministic-sandbox-isolation-evidence <isolation.json>
+```
+
+This handoff is explicitly `not-authenticated` until Cairn's active
+`authenticate-stack-provenance-inputs` change is archived. It does not prove
+release, build, source, or deployment correctness. See
+[`docs/cairn-release-handoff.md`](docs/cairn-release-handoff.md).
 
 <!-- r[related mantle.release_provenance.opaque_boundary.visible] -->
 <!-- r[related mantle.release_provenance.valence_required_policy] -->

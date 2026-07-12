@@ -475,14 +475,22 @@ fn sample_byte_digest(seed: u8) -> String {
 }
 
 fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
-    make_release_bundle(false)
+    make_release_bundle(false, None)
 }
 
 fn make_valid_bundle_with_provider() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
-    make_release_bundle(true)
+    make_release_bundle(true, None)
 }
 
-fn make_release_bundle(include_provider_fixed_point: bool) -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
+fn make_valid_bundle_with_cairn() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
+    let descriptor = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cairn-handoff/positive/handoff.json");
+    make_release_bundle(false, Some(&descriptor))
+}
+
+fn make_release_bundle(
+    include_provider_fixed_point: bool,
+    cairn_handoff: Option<&Path>,
+) -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
     let temp = tempfile::tempdir().unwrap();
     create_minimal_release_repo(temp.path());
 
@@ -519,10 +527,52 @@ fn make_release_bundle(include_provider_fixed_point: bool) -> (TempDir, PathBuf,
     if include_provider_fixed_point {
         command.arg("--provider-fixed-point-proof").arg(&provider_proof_dir);
     }
+    if let Some(descriptor) = cairn_handoff {
+        command.arg("--cairn-handoff").arg(descriptor);
+    }
     command.assert().success().stdout(predicate::str::contains("release id: mantle-0.1.0-rc1"));
 
     let manifest: ReleaseEvidenceManifest =
         serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
+    (temp, bundle_dir, manifest)
+}
+
+fn make_onix_release_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    write_file(&binary_path, b"crunch-binary");
+    let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+    let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+    let proof_dir = temp.path().join("proof-input");
+    write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    let sidecar_path = temp.path().join("stack-provenance-sidecar.json");
+    let valence_path = temp.path().join("valence-stack-provenance-graph-report.json");
+    write_file(&sidecar_path, br#"{"schema":"valence.stack-provenance-sidecar.v1"}"#);
+    write_file(&valence_path, br#"{"schema":"valence.stack-provenance-graph-report.v1","valid":true}"#);
+    let descriptor = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cairn-handoff/positive/handoff.json");
+    let bundle_dir = temp.path().join("bundle-onix");
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-onix-fixture")
+        .arg("--bundle-dir")
+        .arg(&bundle_dir)
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .arg("--cairn-handoff")
+        .arg(&descriptor)
+        .arg("--stack-provenance-sidecar")
+        .arg(&sidecar_path)
+        .arg("--stack-provenance-valence-receipt")
+        .arg(&valence_path)
+        .assert()
+        .success();
+    let manifest = serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
     (temp, bundle_dir, manifest)
 }
 
@@ -1089,6 +1139,107 @@ fn function_address_preserves_binding_cli_negative_fixture_matrix_fails_closed()
             .stderr(predicate::str::contains(&case.expected_error));
         assert!(!receipt_out.exists(), "negative Preserves fixture wrote output: {}", case.name);
     }
+}
+
+// r[verify mantle.release_provenance.cairn_evidence_handoff.production_wiring]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.final_validation]
+#[test]
+fn release_create_and_verify_cairn_handoff_through_cli() {
+    let (_temp, bundle_dir, manifest) = make_valid_bundle_with_cairn();
+    let receipt = manifest.cairn_handoff_validation.as_ref().expect("Cairn handoff receipt");
+    let output = crunch().arg("release").arg("verify").arg(&bundle_dir).output().unwrap();
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert_eq!(receipt.authentication_status, crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_STATUS);
+    assert!(bundle_dir.join(&receipt.handoff.rows[0].artifact.relative_path).is_file());
+}
+
+// r[verify mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+#[test]
+fn release_verify_rejects_tampered_cairn_handoff_through_cli() {
+    let (_temp, bundle_dir, manifest) = make_valid_bundle_with_cairn();
+    let receipt = manifest.cairn_handoff_validation.as_ref().expect("Cairn handoff receipt");
+    write_file(&bundle_dir.join(&receipt.handoff.rows[0].artifact.relative_path), b"tampered-cairn-receipt");
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("declared digest"));
+}
+
+// r[verify mantle.build_correctness.hermetic_handoff.fixtures.positive]
+#[test]
+fn onix_release_profile_accepts_measured_handoff_and_strict_deterministic_evidence() {
+    let (temp, bundle_dir, manifest) = make_onix_release_bundle();
+    let proof_dir = temp.path().join("strict-deterministic-proof");
+    let (proof_path, isolation_path, _proof_digest, _isolation_digest) =
+        write_deterministic_verify_artifacts(&proof_dir, &manifest);
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--release-profile")
+        .arg("onix-stack")
+        .arg("--deterministic-proof")
+        .arg(&proof_path)
+        .arg("--deterministic-sandbox-isolation-evidence")
+        .arg(&isolation_path)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("release evidence verified"))
+        .stdout(predicate::str::contains("Cairn handoff: present"));
+}
+
+// r[verify mantle.build_correctness.hermetic_handoff.fixtures.negative]
+#[test]
+fn onix_release_profile_rejects_practical_deterministic_receipt() {
+    let (temp, bundle_dir, manifest) = make_onix_release_bundle();
+    let proof_dir = temp.path().join("practical-deterministic-proof");
+    let (proof_path, isolation_path, _proof_digest, _isolation_digest) = write_deterministic_verify_artifacts_with_mode(
+        &proof_dir,
+        &manifest,
+        crunch_release_core::PRACTICAL_HERMETICITY_MODE,
+    );
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--release-profile")
+        .arg("onix-stack")
+        .arg("--deterministic-proof")
+        .arg(&proof_path)
+        .arg("--deterministic-sandbox-isolation-evidence")
+        .arg(&isolation_path)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("deterministic release evidence required"));
+}
+
+// r[verify mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
+// r[verify mantle.build_correctness.onix_release_strict_hermeticity]
+// r[verify mantle.build_correctness.hermetic_handoff.fixtures.negative]
+#[test]
+fn onix_release_profile_rejects_missing_cairn_and_strict_deterministic_evidence() {
+    let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+    let output = crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--release-profile")
+        .arg("onix-stack")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("Cairn handoff"));
+    assert!(stderr.contains("deterministic release evidence required"));
+    assert!(!stderr.contains("authenticated provenance proven"));
 }
 
 #[test]
@@ -1991,6 +2142,14 @@ fn write_deterministic_verify_artifacts(
     dir: &Path,
     manifest: &ReleaseEvidenceManifest,
 ) -> (PathBuf, PathBuf, String, String) {
+    write_deterministic_verify_artifacts_with_mode(dir, manifest, crunch_release_core::STRICT_HERMETICITY_MODE)
+}
+
+fn write_deterministic_verify_artifacts_with_mode(
+    dir: &Path,
+    manifest: &ReleaseEvidenceManifest,
+    hermeticity_mode: &str,
+) -> (PathBuf, PathBuf, String, String) {
     let proof_path = dir.join("deterministic-build-proof.json");
     let evidence_path = dir.join("deterministic-sandbox-isolation-evidence.json");
     let profile = format!("{SUPPORTED_SANDBOX_PROFILE_FAMILY}:test-profile");
@@ -2023,7 +2182,7 @@ fn write_deterministic_verify_artifacts(
             output_identities: vec![output_name.clone()],
         },
         derivation_identity: format!("release:{}", manifest.release_id),
-        hermeticity_mode: "strict".to_string(),
+        hermeticity_mode: hermeticity_mode.to_string(),
         workflow_version: DETERMINISTIC_BUILD_PROOF_RECEIPT_SCHEMA.to_string(),
         selected_provider_kind: manifest.proof_linkage.selected_provider_kind.clone(),
         source_blake3: manifest.source_archive.digest_blake3.clone(),

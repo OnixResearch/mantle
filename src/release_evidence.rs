@@ -54,14 +54,17 @@ use crunch_release_core::STACK_PROVENANCE_SIDECAR_SCHEMA;
 pub(crate) use crunch_release_core::SourceAcquisition;
 use crunch_release_core::StackProvenanceReleaseEvidence;
 use crunch_release_core::VALENCE_STACK_PROVENANCE_RECEIPT_ROLE;
+use crunch_release_core::cairn_release_evidence_validation_receipt;
 use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
 use crunch_release_core::initial_publication_state;
 use crunch_release_core::plan_release_publication;
 use crunch_release_core::publication_commit_eligible;
+use crunch_release_core::release_evidence_cairn_bundle_binding;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use crunch_release_core::transition_publication_state;
 use crunch_release_core::validate_bundled_artifact_record;
+use crunch_release_core::validate_cairn_release_evidence_validation_receipt;
 use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
 use crunch_release_core::validate_release_reproducibility_report_artifact_names;
 use crunch_release_core::validate_release_reproducibility_report_linkage;
@@ -146,6 +149,7 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub external_evidence: Vec<ExternalEvidenceCreateRequest>,
     pub kani_toolchain_evidence: Vec<KaniToolchainEvidenceCreateRequest>,
     pub stack_provenance: Option<StackProvenanceCreateRequest>,
+    pub cairn_handoff_descriptor_path: Option<PathBuf>,
 }
 
 impl ReleaseBundleCreateRequest {
@@ -172,6 +176,7 @@ impl ReleaseBundleCreateRequest {
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
+            cairn_handoff_descriptor_path: None,
         }
     }
 }
@@ -665,8 +670,16 @@ fn build_release_manifest(
     let stack_provenance =
         copy_optional_stack_provenance_evidence(request, stage_root, &mut external_evidence, &binaries)?;
     let kani_toolchain_evidence = build_kani_toolchain_evidence(request, &external_evidence)?;
+    let cairn_handoff = request
+        .cairn_handoff_descriptor_path
+        .as_deref()
+        .map(|descriptor| {
+            crate::cairn_release_handoff::prepare_cairn_handoff_for_bundle(descriptor, &request.bundle_dir)
+        })
+        .transpose()?;
     let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
-    Ok(ReleaseEvidenceManifest {
+    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
+    let mut manifest = ReleaseEvidenceManifest {
         schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
         release_id: request.release_id.clone(),
         claim_scope: CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
@@ -675,7 +688,7 @@ fn build_release_manifest(
             version: request.workflow_version.clone(),
         },
         source_archive,
-        source_acquisition: build_source_acquisition(request, &source_archive_digest_blake3),
+        source_acquisition,
         binaries,
         proof_bundle,
         prerequisite_inventory,
@@ -688,6 +701,7 @@ fn build_release_manifest(
         kani_toolchain_evidence,
         stack_provenance,
         opaque_evidence_sidecar_bindings: vec![],
+        cairn_handoff_validation: None,
         function_address_evidence: None,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
@@ -701,7 +715,13 @@ fn build_release_manifest(
             proof_manifest_digest_blake3: proof_identity.proof_manifest_digest_blake3,
         },
         provenance_coverage: None,
-    })
+    };
+    if let Some(handoff) = cairn_handoff {
+        let binding = release_evidence_cairn_bundle_binding(&manifest).map_err(core_error_to_run_error)?;
+        manifest.cairn_handoff_validation =
+            Some(cairn_release_evidence_validation_receipt(binding, handoff).map_err(core_error_to_run_error)?);
+    }
+    Ok(manifest)
 }
 
 fn manifest_publication_artifacts(
@@ -848,7 +868,17 @@ pub(crate) fn verify_release_evidence_bundle(bundle_dir: &Path) -> Result<Releas
 
     verify_manifest_artifacts(&manifest, bundle_dir)?;
     verify_manifest_proof_linkage(&manifest, bundle_dir)?;
+    verify_cairn_handoff_bundle_bytes(&manifest, bundle_dir)?;
     Ok(manifest)
+}
+
+fn verify_cairn_handoff_bundle_bytes(manifest: &ReleaseEvidenceManifest, bundle_dir: &Path) -> Result<(), RunError> {
+    let Some(receipt) = &manifest.cairn_handoff_validation else {
+        return Ok(());
+    };
+    let measured = crate::cairn_release_handoff::remeasure_cairn_handoff_from_bundle(bundle_dir, receipt)?;
+    let binding = release_evidence_cairn_bundle_binding(manifest).map_err(core_error_to_run_error)?;
+    validate_cairn_release_evidence_validation_receipt(receipt, &binding, &measured).map_err(core_error_to_run_error)
 }
 
 pub(crate) fn load_full_self_hosting_proof_identity(
@@ -947,6 +977,14 @@ fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), R
     }
     if let Some(stack_provenance) = &request.stack_provenance {
         validate_stack_provenance_create_request(stack_provenance)?;
+    }
+    if let Some(descriptor) = &request.cairn_handoff_descriptor_path {
+        if !descriptor.is_file() {
+            return Err(RunError::Internal(format!(
+                "release evidence Cairn handoff descriptor is missing: {}",
+                descriptor.display()
+            )));
+        }
     }
     Ok(())
 }
@@ -1364,7 +1402,7 @@ fn validate_reproducibility_report_for_bundle(
     Ok(())
 }
 
-fn copy_file_into_bundle(
+pub(crate) fn copy_file_into_bundle(
     source_path: &Path,
     bundle_root: &ReleaseCapabilityRoot,
     bundle_dir: &Path,
@@ -1667,6 +1705,7 @@ mod tests {
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
             opaque_evidence_sidecar_bindings: vec![],
+            cairn_handoff_validation: None,
             function_address_evidence: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
@@ -2991,5 +3030,69 @@ mod tests {
 
         let err = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
         assert!(err.to_string().contains("binaries[0] does not match manifest"));
+    }
+
+    // r[verify mantle.release_provenance.cairn_evidence_handoff.production_wiring]
+    // r[verify mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
+    #[test]
+    fn create_and_verify_bundle_with_measured_cairn_handoff() {
+        let (temp, output_bundle_dir, created) = create_cairn_handoff_bundle();
+        let verified = verify_release_evidence_bundle(&output_bundle_dir).unwrap();
+        let receipt = created.cairn_handoff_validation.as_ref().expect("Cairn receipt");
+
+        assert_eq!(created, verified);
+        assert_eq!(receipt.validation_status, crunch_release_core::CAIRN_HANDOFF_VALIDATION_STATUS);
+        assert_eq!(receipt.authentication_status, crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_STATUS);
+        assert!(temp.path().exists());
+    }
+
+    // r[verify mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+    #[test]
+    fn verify_rejects_tampered_bundle_local_cairn_bytes() {
+        let (_temp, output_bundle_dir, created) = create_cairn_handoff_bundle();
+        let receipt = created.cairn_handoff_validation.as_ref().expect("Cairn receipt");
+        let artifact_path = output_bundle_dir.join(&receipt.handoff.rows[0].artifact.relative_path);
+        write_file(&artifact_path, b"tampered-cairn-receipt");
+
+        let error = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
+        assert!(error.to_string().contains("declared digest"));
+        assert!(!error.to_string().contains("release correctness proven"));
+    }
+
+    // r[verify mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
+    #[test]
+    fn verify_rejects_cairn_receipt_reused_after_manifest_projection_changes() {
+        let (_temp, output_bundle_dir, mut created) = create_cairn_handoff_bundle();
+        created.workflow.version = "changed-after-handoff-validation".to_string();
+        let bytes = serde_json::to_vec(&created).unwrap();
+        write_file(&output_bundle_dir.join("manifest.json"), &bytes);
+
+        let error = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
+        assert!(error.to_string().contains("bound to another release bundle"));
+        assert!(!error.to_string().contains("release correctness proven"));
+    }
+
+    fn create_cairn_handoff_bundle() -> (tempfile::TempDir, PathBuf, ReleaseEvidenceManifest) {
+        let temp = tempfile::tempdir().unwrap();
+        let source_archive = temp.path().join("mantle-src.tar");
+        let binary_path = temp.path().join("mantle");
+        let proof_bundle_dir = temp.path().join("proof-input");
+        let output_bundle_dir = temp.path().join("release-bundle");
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+        let mut request = ReleaseBundleCreateRequest::with_defaults(
+            "mantle-cairn-fixture".to_string(),
+            output_bundle_dir.clone(),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        );
+        request.cairn_handoff_descriptor_path =
+            Some(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cairn-handoff/positive/handoff.json"));
+        let created = create_release_evidence_bundle(&request).unwrap();
+        (temp, output_bundle_dir, created)
     }
 }

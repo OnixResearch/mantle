@@ -5,6 +5,7 @@ mod error;
 mod lineage;
 mod profile;
 mod provider_boundary;
+mod source_root_capability;
 mod validate;
 
 pub use error::LineageError;
@@ -37,6 +38,7 @@ pub use provider_boundary::REQUIRED_PROVIDER_ROLES;
 pub use provider_boundary::RawLayoutViolation;
 pub use provider_boundary::classify_legacy_provider_evidence;
 pub use provider_boundary::validate_provider_boundary;
+pub use source_root_capability::*;
 pub use validate::ValidationDiagnostic;
 pub use validate::ValidationResult;
 pub use validate::validate_lineage;

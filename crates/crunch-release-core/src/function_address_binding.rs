@@ -1027,6 +1027,7 @@ mod tests {
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
             opaque_evidence_sidecar_bindings: vec![],
+            cairn_handoff_validation: None,
             function_address_evidence: None,
             proof_linkage: crate::ReleaseProofLinkage {
                 release_id: "mantle-function-address-test".to_string(),

@@ -13,8 +13,6 @@ pub(crate) const PROVIDER_NAME: &str = "musl-seed-toolchain";
 pub(crate) const PROVIDER_TARGET: &str = "x86_64-linux-musl";
 pub(crate) const PROVIDER_DYNAMIC_LINKER: &str = "ld-musl-x86_64.so.1";
 pub(crate) const PROVIDER_METADATA_ROLE: &str = "share/crunch-bootstrap/provider.json";
-pub(crate) const SOURCE_ROOT_BLOCKED_REASON: &str =
-    "source-built provider materialization is not implemented; full-source claim blocked";
 
 const MIN_REQUIRED_ITEM_COUNT: usize = 1;
 const MAX_MANIFEST_ITEM_COUNT: usize = 4_096;

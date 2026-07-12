@@ -1,5 +1,40 @@
 // Mantle Tracey coverage bridge.
 //
+// Hermetic Cairn release handoff bridge.
+//
+// r[impl mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.production_wiring]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.cross_repo_dependency]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.docs]
+// r[impl mantle.release_provenance.cairn_evidence_handoff.flake_check_ci]
+// r[impl mantle.build_correctness.onix_release_strict_hermeticity]
+// r[impl mantle.build_correctness.hermetic_handoff.docs]
+// r[impl mantle.build_correctness.source_root_capability]
+// r[impl mantle.build_correctness.source_root_capability.boundary]
+// The pure handoff/bundle-binding core lives in
+// `crates/crunch-release-core/src/cairn_handoff.rs`; release assembly,
+// remeasurement, CLI policy, and source-root host probes live under root `src/`.
+//
+// r[verify mantle.release_provenance.cairn_evidence_handoff.production_wiring]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.fixtures.positive]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.fixtures.negative]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.final_validation]
+// r[verify mantle.release_provenance.cairn_evidence_handoff.flake_check_ci]
+// r[verify mantle.build_correctness.onix_release_strict_hermeticity]
+// r[verify mantle.build_correctness.hermetic_handoff.fixtures.positive]
+// r[verify mantle.build_correctness.hermetic_handoff.fixtures.negative]
+// r[verify mantle.build_correctness.hermetic_handoff.docs]
+// r[verify mantle.build_correctness.source_root_capability]
+// r[verify mantle.build_correctness.source_root_capability.boundary]
+// Positive/negative core and root-package tests cover measured bytes,
+// cross-bundle reuse, tampering, missing required handoffs, strict Onix
+// requirements, and honest unsupported source-root self-build reporting.
+// Authentication remains a non-claim while Cairn's external
+// `authenticate-stack-provenance-inputs` change is active.
+//
 // Cairn's built-in tracey coverage rail currently scans `crates/` and `tools/`.
 // Mantle's CLI/root-package implementation lives under top-level `src/`, so
 // synced requirements implemented there need a small bridge until the coverage

@@ -1,0 +1,17 @@
+{
+  "schema": "mantle-cairn-release-handoff-input-v1",
+  "rows": [
+    {
+      "artifact_id": "mantle-fixture-readiness",
+      "role": "cairn-release-readiness-receipt",
+      "schema_id": "cairn.release-readiness.v1",
+      "artifact_path": "readiness.json",
+      "artifact_digest_blake3": "676837c4ac63497e7462b4834b6453e8110d0e40ee8647284b058af0a630fd41",
+      "cairn_policy_path": "policy.ncl",
+      "cairn_policy_digest_blake3": "2a33db77b40e8e03424c27a1367b020a93ec0a5bfe04998f25389ee0c9a5531a",
+      "release_readiness_id": "mantle-fixture-ready",
+      "covers": ["mantle.release_provenance.cairn_evidence_handoff.production_wiring"],
+      "non_claims": ["not release correctness", "not build correctness"]
+    }
+  ]
+}

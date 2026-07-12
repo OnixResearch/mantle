@@ -78,6 +78,7 @@ mod self_build;
 mod semantic_graph;
 mod shell_cmd;
 mod source_bundle;
+mod source_root_capability;
 mod source_root_provider;
 mod source_toolchain_closure;
 mod store_cmd;
@@ -538,10 +539,6 @@ enum Command {
         #[arg(long, conflicts_with = "strict_hermetic")]
         impure: bool,
 
-        /// Validate a full-source root manifest and bind self-build proof to source-root provider.
-        #[arg(long)]
-        source_root: Option<PathBuf>,
-
         /// Require stage0 to use only declared inventory seed tools.
         #[arg(long)]
         no_host_tools: bool,
@@ -995,6 +992,9 @@ enum TranscriptAction {
 
 #[derive(Subcommand, Debug)]
 enum BootstrapAction {
+    /// Report executable and unsupported source-root operations from live host observations
+    Capabilities,
+
     /// Produce the deterministic whole-bootstrap parity gap report
     ParityReport {
         /// Fail closed unless the requested parity axes are complete
@@ -1137,6 +1137,11 @@ pub enum ReleaseAction {
         /// Workflow command identity recorded in the manifest
         #[arg(long, default_value = "./scripts/prove-self-hosting.sh")]
         workflow_command: String,
+
+        /// Cairn handoff descriptor whose referenced artifact and policy bytes are measured,
+        /// bundled, and bound to this exact release
+        #[arg(long = "cairn-handoff")]
+        cairn_handoff: Option<PathBuf>,
 
         /// External evidence sidecar file to bundle opaquely (repeat with matching
         /// role/schema/scope)
@@ -2431,6 +2436,7 @@ fn filegen_command_label(action: &FilegenCommandAction) -> &'static str {
 
 fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
     match action {
+        Some(BootstrapAction::Capabilities) => "bootstrap.capabilities",
         Some(BootstrapAction::ParityReport { .. }) => "bootstrap.parity-report",
         Some(BootstrapAction::RustSourceProvider { .. }) => "bootstrap.rust-source-provider",
         Some(BootstrapAction::NativeToolchainClosure { .. }) => "bootstrap.native-toolchain-closure",
@@ -4059,6 +4065,7 @@ fn run_bootstrap_from_command(ctx: &RunContext, command: &Command) -> Result<(),
 
 fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<(), RunError> {
     match action {
+        BootstrapAction::Capabilities => source_root_capability::cmd_source_root_capabilities(ctx.json),
         BootstrapAction::ParityReport { require } => {
             bootstrap_parity::cmd_bootstrap_parity_report(&current_dir_or_error()?, require, ctx.json)
         }
@@ -4657,7 +4664,6 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             trust_unsigned,
             strict_hermetic,
             impure,
-            source_root,
             no_host_tools,
             stage0_inventory,
             source_store_path,
@@ -4680,7 +4686,6 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             *trust_unsigned,
             *strict_hermetic,
             *impure,
-            source_root.as_deref(),
             *no_host_tools,
             stage0_inventory.as_deref(),
             source_store_path.as_deref(),
@@ -4709,7 +4714,6 @@ fn run_self_build_command(
     trust_unsigned: bool,
     strict_hermetic: bool,
     impure: bool,
-    source_root: Option<&std::path::Path>,
     no_host_tools: bool,
     stage0_inventory: Option<&std::path::Path>,
     source_store_path: Option<&std::path::Path>,
@@ -4733,7 +4737,6 @@ fn run_self_build_command(
             trust_unsigned,
             strict_hermetic,
             impure,
-            source_root,
             no_host_tools,
             stage0_inventory,
             source_store_path,
@@ -4760,15 +4763,6 @@ fn run_self_build_command(
 
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
     let hermeticity_mode = select_hermeticity_mode(strict_hermetic, impure)?;
-    if let Some(manifest_path) = source_root {
-        let checked = validate_source_root_manifest_file(manifest_path)?;
-        return Err(RunError::Build(format!(
-            "{}: manifest_digest={} expected_output_roles={}",
-            bootstrap_source_root::SOURCE_ROOT_BLOCKED_REASON,
-            checked.manifest_digest,
-            checked.expected_output_role_count
-        )));
-    }
     validate_stage0_inventory_args(no_host_tools, stage0_inventory)?;
     let loaded_stage0_policy = stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
 
@@ -4805,7 +4799,6 @@ fn validate_cargo_free_legacy_self_build_args(
     trust_unsigned: bool,
     _strict_hermetic: bool,
     impure: bool,
-    source_root: Option<&Path>,
     no_host_tools: bool,
     stage0_inventory: Option<&Path>,
     source_store_path: Option<&Path>,
@@ -4819,7 +4812,6 @@ fn validate_cargo_free_legacy_self_build_args(
         || !trusted_public_keys.is_empty()
         || trust_unsigned
         || impure
-        || source_root.is_some()
         || no_host_tools
         || stage0_inventory.is_some()
         || source_store_path.is_some()
@@ -5695,7 +5687,6 @@ mod tests {
         assert!(err.contains("source-root provider materialization failed"));
         assert!(err.contains("patch"));
         assert!(err.contains("not implemented") || err.contains("placeholder"));
-        assert!(!err.contains(bootstrap_source_root::SOURCE_ROOT_BLOCKED_REASON));
         assert!(!output.exists());
     }
 
@@ -6083,6 +6074,49 @@ let Plan = {
             "trust_notes": [],
             "expected_outputs": expected_outputs,
         })
+    }
+
+    #[test]
+    fn flake_check_workflow_has_one_verification_command() {
+        let workflow = include_str!("../.github/workflows/flake-check.yml");
+        let run_lines = workflow.lines().map(str::trim).filter(|line| line.starts_with("run:")).collect::<Vec<_>>();
+
+        assert_eq!(run_lines, vec!["run: nix flake check"]);
+        assert!(!workflow.contains("cargo test"));
+    }
+
+    #[test]
+    fn bootstrap_capabilities_is_discoverable_and_self_build_source_root_is_not_advertised() {
+        let capabilities = parse_args_with_cli_test_stack(vec!["mantle", "bootstrap", "capabilities"]);
+        let unsupported =
+            parse_args_with_cli_test_stack(vec!["mantle", "self-build", "--source-root", "/tmp/source-root.json"]);
+
+        assert!(capabilities.is_ok());
+        assert!(unsupported.is_err());
+    }
+
+    #[test]
+    fn release_create_accepts_cairn_handoff_flag() {
+        let args = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "release",
+            "create",
+            "--release-id",
+            "mantle-0.1.0-rc1",
+            "--binary",
+            "/tmp/mantle",
+            "--proof-bundle",
+            "/tmp/self-hosting-proof",
+            "--cairn-handoff",
+            "/tmp/cairn-handoff.json",
+        ])
+        .unwrap();
+        assert!(matches!(args.command, Command::Release {
+            action: ReleaseAction::Create {
+                cairn_handoff: Some(_),
+                ..
+            }
+        }));
     }
 
     #[test]
@@ -6738,7 +6772,6 @@ let Plan = {
             false,
             false,
             false,
-            None,
             false,
             None,
             None,

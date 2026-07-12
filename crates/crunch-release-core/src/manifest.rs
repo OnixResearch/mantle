@@ -68,6 +68,7 @@ use crate::source_archive::RELEASE_SOURCE_ARCHIVE_PROFILE;
 use crate::source_archive::RELEASE_SOURCE_ARCHIVE_VERSION;
 
 pub const RELEASE_EVIDENCE_SCHEMA: &str = "mantle-release-evidence-v1";
+const CAIRN_RELEASE_MANIFEST_PROJECTION_DOMAIN: &[u8] = b"mantle.cairn-handoff.release-manifest.v1\0";
 pub const FULL_SELF_HOSTING_PROOF_SCHEMA: &str = "mantle-self-hosting-proof-v2";
 pub const CLAIM_SCOPE_PACKAGED_INTEGRITY: &str = "packaged-integrity-evidence";
 pub const DEFAULT_PROOF_WORKFLOW_COMMAND: &str = "./scripts/prove-self-hosting.sh";
@@ -437,6 +438,8 @@ pub struct ReleaseEvidenceManifest {
     )]
     pub opaque_evidence_sidecar_bindings: Vec<OpaqueEvidenceSidecarBindingReceipt>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cairn_handoff_validation: Option<crate::CairnReleaseEvidenceValidationReceipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_address_evidence: Option<FunctionAddressReleaseEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -495,7 +498,41 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_stack_provenance_manifest_evidence(manifest)?;
     validate_opaque_evidence_sidecar_bindings(manifest)?;
     validate_function_address_manifest_evidence(manifest)?;
+    validate_cairn_handoff_manifest(manifest)?;
     Ok(())
+}
+
+pub fn release_evidence_cairn_bundle_binding(
+    manifest: &ReleaseEvidenceManifest,
+) -> Result<crate::CairnReleaseBundleBinding, ReleaseEvidenceError> {
+    let mut projection = manifest.clone();
+    projection.cairn_handoff_validation = None;
+    let projection_bytes = serde_json::to_vec(&projection)
+        .map_err(|error| parse_error(format!("serializing Cairn release manifest projection: {error}")))?;
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(CAIRN_RELEASE_MANIFEST_PROJECTION_DOMAIN);
+    hasher.update(&projection_bytes);
+    Ok(crate::CairnReleaseBundleBinding {
+        release_id: manifest.release_id.clone(),
+        source_archive_digest_blake3: manifest.source_archive.digest_blake3.clone(),
+        binary_digests_blake3: manifest.binaries.iter().map(|artifact| artifact.digest_blake3.clone()).collect(),
+        proof_bundle_digest_blake3: manifest.proof_bundle.digest_blake3.clone(),
+        prerequisite_inventory_digest_blake3: manifest.prerequisite_inventory.digest_blake3.clone(),
+        release_manifest_projection_blake3: hasher.finalize().to_hex().to_string(),
+    })
+}
+
+fn validate_cairn_handoff_manifest(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let binding = release_evidence_cairn_bundle_binding(manifest)?;
+    let verification =
+        crate::evaluate_cairn_handoff_release_evidence(manifest.cairn_handoff_validation.as_ref(), &binding, false);
+    if verification.valid {
+        return Ok(());
+    }
+    Err(validation_error(format!(
+        "release evidence Cairn handoff validation failed: {}",
+        verification.diagnostics.join("; ")
+    )))
 }
 
 fn validate_opaque_evidence_sidecar_bindings(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
@@ -2733,6 +2770,7 @@ mod tests {
             kani_toolchain_evidence: vec![],
             stack_provenance: None,
             opaque_evidence_sidecar_bindings: vec![],
+            cairn_handoff_validation: None,
             function_address_evidence: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),
