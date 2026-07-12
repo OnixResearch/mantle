@@ -620,6 +620,34 @@ via `JoinSet` + `Semaphore`. Roots arrive over an mpsc channel, so the
 Worker can start building leaf deps while later roots are still being
 processed.
 
+Eligible ready goals are not dispatched by arrival-order FIFO. Mantle ranks a
+validated snapshot through a deterministic lexicographic policy: operator
+class, bounded starvation class, known-graph blocked-root/critical-path
+pressure, provider-neutral resource fit, verified content locality/transfer
+cost, then stable goal identity. The path estimate is deliberately limited to
+the graph known at that scheduling epoch; it is not a global critical path and
+does not assume future streamed or dynamic goals. Hard capability, trust,
+upload, network, store-prefix, and resource constraints run before preference,
+so age or locality can never make an ineligible route dispatchable.
+
+The runtime default is typed by [`lib/scheduling.ncl`](lib/scheduling.ncl) and
+carried explicitly in `BuildConfig`. JSON build reports include the selected
+`scheduler_policy` plus bounded, redacted `scheduler_priority_decisions`;
+`--verbose` human output prints a
+bounded summary. Evidence identifies policy and history digests, normalized
+classes, epoch/age, known-graph pressure, and stable reason codes while omitting
+raw goal paths and provider secrets. It proves only the configured known-fact
+ordering—not global makespan optimality, future-graph knowledge, execution
+success, output trust, or release reproducibility. See
+[ADR 0001](adr/0001-lazy-goals-vs-eager-dag.md) and
+[ADR 0014](adr/0014-deterministic-lazy-goal-priority.md). A comparative debug
+fixture report (chain, diamond, shared dependency, locality, fairness, and
+bounded ready-set stress) is produced with
+`cargo run -p mantle --example benchmark_scheduler_priority`; its timings are
+ready-selection overhead evidence for those fixtures (excluding graph snapshot
+and pressure recomputation), not production-throughput or global optimality
+claims.
+
 The goal system is extensible: substitution goals, native dynamic plans,
 and remote build dispatch can be added without restructuring the scheduler.
 

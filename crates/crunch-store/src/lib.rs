@@ -1,4 +1,4 @@
-#![feature(register_tool)]
+#![cfg_attr(not(kani), feature(register_tool))]
 #![register_tool(tigerstyle)]
 //! crunch-store: Store operations for crunch.
 //!

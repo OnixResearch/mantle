@@ -119,3 +119,12 @@ build hooks, per-build timeout monitoring).
 - crunch's scheduler is its own design, not a port of Nix or snix.
   It uses the same conceptual model (lazy goals, waiter notification,
   slot-limited dispatch) but with a Rust/tokio implementation.
+
+## Follow-up: deterministic ready ordering
+
+The original implementation used FIFO insertion order for goals already in
+`Ready`. [ADR 0014](0014-deterministic-lazy-goal-priority.md) replaces only that
+ready ordering with Mantle's pure bounded priority kernel over explicit
+known-graph, policy, age, resource, locality, and stable-identity facts. It does
+not revisit this ADR's lazy graph, streaming evaluation, dynamic insertion,
+waiter notification, deduplication, or slot-limited dispatch decision.

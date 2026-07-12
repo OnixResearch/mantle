@@ -23,6 +23,7 @@ const STDLIB_FILES: &[(&str, &str)] = &[
     ("seed.ncl", include_str!("../../../lib/seed.ncl")),
     ("remote-builders.ncl", include_str!("../../../lib/remote-builders.ncl")),
     ("wasm_component.ncl", include_str!("../../../lib/wasm_component.ncl")),
+    ("scheduling.ncl", include_str!("../../../lib/scheduling.ncl")),
 ];
 
 /// Write the embedded stdlib to a directory. Returns the path that
@@ -210,6 +211,7 @@ mod tests {
 
         assert_eq!(actual, expected);
         assert!(actual.contains("fetch.ncl"));
+        assert!(actual.contains("scheduling.ncl"));
     }
 
     #[test]

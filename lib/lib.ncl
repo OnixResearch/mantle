@@ -8,6 +8,7 @@ let helpers = import "helpers.ncl" in
 let fetch = import "fetch.ncl" in
 let offline_cargo = import "offline_cargo.ncl" in
 let wasm_component = import "wasm_component.ncl" in
+let scheduling = import "scheduling.ncl" in
 
 {
   # The main derivation contract. Apply with: record | crunch.Derivation
@@ -53,6 +54,12 @@ let wasm_component = import "wasm_component.ncl" in
   WasmComponentExportRequest = wasm_component.ComponentExportRequest,
   exportWasmComponentBuild = wasm_component.exportComponentBuild,
   WasmComponentOutputClass = wasm_component.OutputClass,
+
+  # Deterministic lazy build-goal scheduling policy and defaults.
+  SchedulingPolicy = scheduling.SchedulingPolicy,
+  schedulingPolicy = scheduling.default_policy,
+  schedulingKnownGraphBounds = scheduling.default_known_graph_bounds,
+  schedulingHistoryPolicy = scheduling.default_history_policy,
 
   # Output selection
   select

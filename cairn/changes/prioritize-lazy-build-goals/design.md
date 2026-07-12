@@ -12,7 +12,7 @@
 
 ### 2. Use a named lexicographic priority tuple
 
-**Choice:** The pure kernel returns an ordered tuple with named fields: operator policy class, starvation class, known critical-path pressure, resource-fit class, locality/transfer class, and stable realization-key tie-breaker. Policy may change field precedence explicitly, but Mantle does not use opaque weighted sums or unexplained numeric literals.
+**Choice:** The pure kernel returns an ordered tuple with named fields: operator policy class, starvation class, known critical-path pressure, resource-fit class, locality/transfer class, and stable goal-or-realization-identity tie-breaker. Operator and starvation classes remain the fixed leading gates; policy may explicitly reorder the three graph/resource/locality preference groups. Mantle does not use opaque weighted sums or unexplained numeric literals.
 
 **Rationale:** Lexicographic fields are reviewable, deterministic, and easier to explain than a magic score.
 
@@ -24,7 +24,7 @@
 
 ### 4. Admit historical estimates only as explicit snapshots
 
-**Choice:** Optional duration/resource history is canonicalized, bounded, BLAKE3-identified, and supplied as an input snapshot. Missing, stale, incompatible, or oversized history falls back to structural classes with a diagnostic; arrival timing never mutates priority implicitly.
+**Choice:** Optional duration/resource history is preflight-bounded, then canonicalized, BLAKE3-identified, and supplied as an input snapshot. Only snapshots that pass the byte/count preflight are hashed or admitted. Missing, stale, incompatible, or oversized history falls back to structural classes with a diagnostic; arrival timing never mutates priority implicitly.
 
 **Rationale:** Replayability requires the scheduler's data dependencies to be visible.
 
@@ -36,7 +36,7 @@
 
 ### 6. Prevent starvation with deterministic scheduling epochs
 
-**Choice:** Every policy-defined ready-set event advances an explicit scheduling epoch. Waiting goals progress through bounded age classes, eventually outranking ordinary critical-path/locality preferences while still respecting hard eligibility and resource constraints.
+**Choice:** Every selected ready goal advances an explicit scheduling epoch. Waiting goals progress through bounded age classes, eventually outranking ordinary critical-path/locality preferences within the same operator policy class while still respecting hard eligibility and resource constraints.
 
 **Rationale:** Wall-clock aging is difficult to replay and test; event epochs give a deterministic liveness policy.
 
@@ -48,7 +48,7 @@
 
 ### 8. Explain priority without leaking sensitive data
 
-**Choice:** Build/status reports may include stable priority classes, known-path basis, history snapshot digest, age class, and tie-break class. They omit raw environment, bearer material, private paths, unbounded input lists, and provider credentials.
+**Choice:** Build/status reports may include stable priority classes, known-path basis, history snapshot digest, age class, tie-break class, a BLAKE3 digest of the ordered redacted candidate snapshot, and a redacted runner-up tuple. They omit raw environment, bearer material, private paths, unbounded input lists, and provider credentials.
 
 **Rationale:** Operators need replayable decisions, not sensitive scheduler internals.
 

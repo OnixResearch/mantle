@@ -86,6 +86,10 @@ path = "examples/benchmark_lazy_eval.rs"
 name = "benchmark_suite"
 path = "examples/benchmark_suite.rs"
 
+[[example]]
+name = "benchmark_scheduler_priority"
+path = "examples/benchmark_scheduler_priority.rs"
+
 [dependencies]
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }

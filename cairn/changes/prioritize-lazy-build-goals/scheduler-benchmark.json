@@ -1,0 +1,89 @@
+{
+  "schema": "mantle-scheduler-benchmark-v1",
+  "default_iterations": 20000,
+  "measurement": "debug-build-ready-selection-monotonic-total-nanoseconds",
+  "policy_id": "mantle-lazy-priority-v1",
+  "policy_digest_blake3": "93aa5a487a960b14e51707f3c8d230253db9562dafc7b314b5ecc056a07ddd58",
+  "claim_scope": "comparative-fixture-ordering-and-runtime",
+  "non_claims": [
+    "global-optimality",
+    "production-throughput",
+    "future-graph-knowledge",
+    "execution-success",
+    "graph-snapshot-or-pressure-recomputation-overhead"
+  ],
+  "fixtures": [
+    {
+      "name": "chain-vs-short-root",
+      "comparison_basis": "known-critical-path",
+      "iterations": 20000,
+      "ready_goal_count": 2,
+      "fifo_first": "short-root",
+      "priority_first": "long-chain-leaf",
+      "fifo_first_blocked_roots": 1,
+      "priority_first_blocked_roots": 1,
+      "fifo_runtime_ns_total": 410981,
+      "priority_runtime_ns_total": 37902877
+    },
+    {
+      "name": "diamond-deep-branch-vs-shallow",
+      "comparison_basis": "diamond-known-critical-path",
+      "iterations": 20000,
+      "ready_goal_count": 2,
+      "fifo_first": "diamond-shallow-leaf",
+      "priority_first": "diamond-deep-leaf",
+      "fifo_first_blocked_roots": 1,
+      "priority_first_blocked_roots": 1,
+      "fifo_runtime_ns_total": 396054,
+      "priority_runtime_ns_total": 38791114
+    },
+    {
+      "name": "shared-dependency-vs-independent",
+      "comparison_basis": "shared-blocked-root-pressure",
+      "iterations": 20000,
+      "ready_goal_count": 2,
+      "fifo_first": "independent-leaf",
+      "priority_first": "diamond-shared-leaf",
+      "fifo_first_blocked_roots": 1,
+      "priority_first_blocked_roots": 3,
+      "fifo_runtime_ns_total": 448071,
+      "priority_runtime_ns_total": 40367191
+    },
+    {
+      "name": "verified-locality-vs-unknown",
+      "comparison_basis": "resource-locality-transfer",
+      "iterations": 20000,
+      "ready_goal_count": 2,
+      "fifo_first": "remote-unknown",
+      "priority_first": "local-compatible",
+      "fifo_first_blocked_roots": 1,
+      "priority_first_blocked_roots": 1,
+      "fifo_runtime_ns_total": 418275,
+      "priority_runtime_ns_total": 41324018
+    },
+    {
+      "name": "aged-goal-vs-recurring-pressure",
+      "comparison_basis": "deterministic-starvation-class",
+      "iterations": 20000,
+      "ready_goal_count": 2,
+      "fifo_first": "new-high-pressure",
+      "priority_first": "continuously-ready",
+      "fifo_first_blocked_roots": 3,
+      "priority_first_blocked_roots": 1,
+      "fifo_runtime_ns_total": 419607,
+      "priority_runtime_ns_total": 37362704
+    },
+    {
+      "name": "bounded-ready-set-stress",
+      "comparison_basis": "bounded-ready-set-stress",
+      "iterations": 200,
+      "ready_goal_count": 1024,
+      "fifo_first": "stress-ordinary-0",
+      "priority_first": "stress-priority",
+      "fifo_first_blocked_roots": 1,
+      "priority_first_blocked_roots": 3,
+      "fifo_runtime_ns_total": 4889,
+      "priority_runtime_ns_total": 270370960
+    }
+  ]
+}

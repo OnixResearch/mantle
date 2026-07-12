@@ -12,6 +12,14 @@ use serde::Serialize;
 mod remote_attempt;
 pub use remote_attempt::*;
 
+use crate::scheduling::ContentLocalityClass;
+use crate::scheduling::EligiblePreferenceFacts;
+use crate::scheduling::HardEligibilityFacts;
+use crate::scheduling::IneligibleReason;
+use crate::scheduling::ResourceFitClass;
+use crate::scheduling::TransferCostClass;
+use crate::scheduling::normalize_eligible_preference;
+
 const REALIZATION_KEY_SCHEMA: &str = "crunch-realization-key-v1";
 const MAX_READY_REMOTE_GOALS: usize = 4096;
 const REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION: &str = "request-validation";
@@ -918,12 +926,62 @@ pub struct ReadyDerivationGoal {
     pub request: RealizationKeyRequest,
 }
 
+/// Results of the existing hard route checks, normalized without provider
+/// names or transport-specific state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteRouteEligibilityChecks {
+    pub capability_allowed: bool,
+    pub output_trust_allowed: bool,
+    pub upload_allowed: bool,
+    pub network_allowed: bool,
+    pub store_prefix_matches: bool,
+    pub hard_resource_fit: bool,
+}
+
+/// Provider-neutral preference facts admitted only after all hard route checks.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RemoteRoutePreferenceFacts {
+    pub resource_fit: ResourceFitClass,
+    pub content_locality: ContentLocalityClass,
+    pub transfer_cost: TransferCostClass,
+}
+
+/// Keep route eligibility as a hard gate before scheduler preference.
+///
+/// r[impl build_scheduling.resource_locality_preference]
+pub fn normalize_remote_route_scheduling_facts(
+    checks: RemoteRouteEligibilityChecks,
+    preference: RemoteRoutePreferenceFacts,
+) -> Result<EligiblePreferenceFacts, IneligibleReason> {
+    let eligibility = HardEligibilityFacts {
+        capability_allowed: checks.capability_allowed,
+        output_trust_allowed: checks.output_trust_allowed,
+        upload_allowed: checks.upload_allowed,
+        network_allowed: checks.network_allowed,
+        store_prefix_matches: checks.store_prefix_matches,
+        hard_resource_fit: checks.hard_resource_fit,
+    };
+    let normalized = normalize_eligible_preference(
+        eligibility,
+        preference.resource_fit,
+        preference.content_locality,
+        preference.transfer_cost,
+    )?;
+    debug_assert_eq!(normalized.resource_fit, preference.resource_fit);
+    debug_assert_eq!(normalized.content_locality, preference.content_locality);
+    Ok(normalized)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScheduledRealization {
     pub goal_key: String,
     pub plan: RealizationPlan,
 }
 
+/// Apply max-job and dedup ownership to a priority-ranked ready snapshot.
+///
+/// The caller owns deterministic priority ordering; this route seam preserves
+/// that order and cannot make an ineligible route eligible.
 pub fn select_ready_realizations<P>(
     policy: &P,
     ready: &[ReadyDerivationGoal],
@@ -1044,6 +1102,7 @@ mod tests {
     use super::*;
 
     const TEST_PROFILE_VERSION: u32 = 1;
+    const TEST_HARD_BLOCKER_CASE_COUNT: usize = 6;
 
     fn base_request() -> RealizationKeyRequest {
         RealizationKeyRequest {
@@ -1473,6 +1532,97 @@ mod tests {
             remote_candidate(key.clone()).verify_for_persistence(&key, &["dev".to_string()]).unwrap_err(),
             RemoteVerificationError::OutputMismatch
         );
+    }
+
+    // r[verify build_scheduling.resource_locality_preference]
+    #[test]
+    fn scheduler_route_facts_normalize_only_after_every_hard_check() {
+        let eligible = RemoteRouteEligibilityChecks {
+            capability_allowed: true,
+            output_trust_allowed: true,
+            upload_allowed: true,
+            network_allowed: true,
+            store_prefix_matches: true,
+            hard_resource_fit: true,
+        };
+        let preferred = RemoteRoutePreferenceFacts {
+            resource_fit: ResourceFitClass::Exact,
+            content_locality: ContentLocalityClass::FullyPresent,
+            transfer_cost: TransferCostClass::None,
+        };
+
+        let normalized = normalize_remote_route_scheduling_facts(eligible, preferred).unwrap();
+
+        assert_eq!(normalized.resource_fit, ResourceFitClass::Exact);
+        assert_eq!(normalized.content_locality, ContentLocalityClass::FullyPresent);
+        assert_eq!(normalized.transfer_cost, TransferCostClass::None);
+    }
+
+    // r[verify build_scheduling.resource_locality_preference]
+    #[test]
+    fn scheduler_route_preference_cannot_bypass_any_hard_blocker() {
+        let eligible = RemoteRouteEligibilityChecks {
+            capability_allowed: true,
+            output_trust_allowed: true,
+            upload_allowed: true,
+            network_allowed: true,
+            store_prefix_matches: true,
+            hard_resource_fit: true,
+        };
+        let preferred = RemoteRoutePreferenceFacts {
+            resource_fit: ResourceFitClass::Exact,
+            content_locality: ContentLocalityClass::FullyPresent,
+            transfer_cost: TransferCostClass::None,
+        };
+        let cases = [
+            (
+                RemoteRouteEligibilityChecks {
+                    capability_allowed: false,
+                    ..eligible
+                },
+                IneligibleReason::MissingCapability,
+            ),
+            (
+                RemoteRouteEligibilityChecks {
+                    output_trust_allowed: false,
+                    ..eligible
+                },
+                IneligibleReason::OutputTrustRejected,
+            ),
+            (
+                RemoteRouteEligibilityChecks {
+                    upload_allowed: false,
+                    ..eligible
+                },
+                IneligibleReason::UploadPolicyRejected,
+            ),
+            (
+                RemoteRouteEligibilityChecks {
+                    network_allowed: false,
+                    ..eligible
+                },
+                IneligibleReason::NetworkPolicyRejected,
+            ),
+            (
+                RemoteRouteEligibilityChecks {
+                    store_prefix_matches: false,
+                    ..eligible
+                },
+                IneligibleReason::StorePrefixMismatch,
+            ),
+            (
+                RemoteRouteEligibilityChecks {
+                    hard_resource_fit: false,
+                    ..eligible
+                },
+                IneligibleReason::HardResourceMismatch,
+            ),
+        ];
+
+        for (checks, expected) in cases {
+            assert_eq!(normalize_remote_route_scheduling_facts(checks, preferred), Err(expected));
+        }
+        assert_eq!(cases.len(), TEST_HARD_BLOCKER_CASE_COUNT);
     }
 
     #[test]

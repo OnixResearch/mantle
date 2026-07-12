@@ -51,6 +51,22 @@ use crate::orchestrate::Builder;
 use crate::orchestrate::PrepareResult;
 use crate::orchestrate::PreparedBuild;
 use crate::registry::DerivationRegistry;
+use crate::scheduling::EligiblePreferenceFacts;
+use crate::scheduling::HistoryBasis;
+use crate::scheduling::HistoryInput;
+use crate::scheduling::KnownGoalFacts;
+use crate::scheduling::KnownGraphFacts;
+use crate::scheduling::KnownGraphPressure;
+use crate::scheduling::MAX_KNOWN_GRAPH_EDGES;
+use crate::scheduling::MAX_PRIORITY_DECISIONS;
+use crate::scheduling::OperatorPolicyClass;
+use crate::scheduling::PriorityDecisionEvidence;
+use crate::scheduling::ReadyGoalFacts;
+use crate::scheduling::SchedulingPolicy;
+use crate::scheduling::advance_scheduling_epoch;
+use crate::scheduling::priority_decision_evidence;
+use crate::scheduling::rank_ready_goals;
+use crate::scheduling::recompute_affected_pressure;
 
 type PendingRegistryEntry = (
     StorePath<String>,
@@ -83,9 +99,10 @@ pub struct EvalMessage {
     pub new_entries: Vec<PendingRegistryEntry>,
 }
 
-/// Maximum concurrent in-flight builds. Clamped by the semaphore but
-/// tracked here for assertions.
+/// Maximum supported concurrent in-flight build budget. The constructor,
+/// dispatch shell, and semaphore all enforce this bound.
 const MAX_IN_FLIGHT: u32 = 64;
+const BLAKE3_HEX_CHARS_PER_BYTE: usize = 2;
 
 /// A root goal that failed, with error context.
 #[derive(Debug, Clone)]
@@ -105,6 +122,8 @@ pub struct WorkerResult {
     pub failed: Vec<FailedGoal>,
     /// Native dynamic-plan accepted/rejected rows discovered during the run.
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
+    /// Bounded, redacted evidence for each selected ready goal.
+    pub priority_decisions: Vec<PriorityDecisionEvidence>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -256,12 +275,20 @@ fn finish_worker_result(
     outcomes: Vec<BuildOutcome>,
     failed: Vec<FailedGoal>,
     mut native_dynamic_plans: Vec<NativeDynamicPlanReport>,
+    priority_decisions: Vec<PriorityDecisionEvidence>,
 ) -> WorkerResult {
     sort_native_dynamic_plan_reports(&mut native_dynamic_plans);
+    debug_assert!(u32::try_from(priority_decisions.len()).is_ok_and(|count| count <= MAX_PRIORITY_DECISIONS));
+    debug_assert!(
+        priority_decisions
+            .iter()
+            .all(|decision| decision.known_graph_basis == crate::scheduling::KNOWN_GRAPH_BASIS)
+    );
     WorkerResult {
         outcomes,
         failed,
         native_dynamic_plans,
+        priority_decisions,
     }
 }
 
@@ -550,25 +577,210 @@ struct WorkerLoopState<'a> {
 /// Build scheduler that drives Goal state machines.
 ///
 /// The Worker is the imperative shell. It holds mutable state
-/// (goal registry, ready queue, in-flight tracking) and borrows
-/// the Builder for all I/O. Goal is the functional core.
+/// (goal registry, deterministic priority-ready set, in-flight tracking) and borrows
+/// the Builder for all I/O. Goal transitions and scheduling are functional cores.
 pub struct Worker {
     registry: GoalRegistry,
-    ready_queue: VecDeque<String>,
+    ready_goals: BTreeMap<String, ReadyGoalFacts>,
+    goal_preferences: BTreeMap<String, (OperatorPolicyClass, EligiblePreferenceFacts)>,
+    scheduling_policy: SchedulingPolicy,
+    scheduling_history: HistoryInput,
+    scheduling_epoch: u32,
+    pressure_cache: BTreeMap<String, KnownGraphPressure>,
+    pressure_dirty_goals: BTreeSet<String>,
+    priority_decisions: Vec<PriorityDecisionEvidence>,
     max_jobs: u32,
+}
+
+fn redacted_goal_identity(goal_key: &str) -> String {
+    let digest = blake3::hash(goal_key.as_bytes()).to_hex().to_string();
+    debug_assert_eq!(digest.len(), blake3::OUT_LEN * BLAKE3_HEX_CHARS_PER_BYTE);
+    debug_assert!(!digest.chars().any(char::is_control));
+    digest
 }
 
 impl Worker {
     /// Create a new Worker with the given concurrency limit.
     pub fn new(max_jobs: u32) -> Self {
+        Self::with_scheduling_policy(max_jobs, SchedulingPolicy::default())
+            .expect("default scheduling policy must be valid")
+    }
+
+    /// Create a Worker with an explicit, validated scheduling policy.
+    pub fn with_scheduling_policy(max_jobs: u32, scheduling_policy: SchedulingPolicy) -> Result<Self, Error> {
+        if max_jobs == 0 || max_jobs > MAX_IN_FLIGHT {
+            return Err(Error::Store(format!("max_jobs must be between 1 and {MAX_IN_FLIGHT}; got {max_jobs}")));
+        }
         debug_assert!(max_jobs >= 1, "max_jobs must be >= 1");
         debug_assert!(max_jobs <= MAX_IN_FLIGHT, "max_jobs exceeds MAX_IN_FLIGHT");
+        scheduling_policy
+            .validate()
+            .map_err(|error| Error::Store(format!("invalid scheduling policy: {error}")))?;
 
-        Self {
+        Ok(Self {
             registry: GoalRegistry::new(),
-            ready_queue: VecDeque::new(),
+            ready_goals: BTreeMap::new(),
+            goal_preferences: BTreeMap::new(),
+            scheduling_policy,
+            scheduling_history: HistoryInput::Missing,
+            scheduling_epoch: 0,
+            pressure_cache: BTreeMap::new(),
+            pressure_dirty_goals: BTreeSet::new(),
+            priority_decisions: Vec::new(),
             max_jobs,
+        })
+    }
+
+    /// Replace optional duration-class history and invalidate only known graph
+    /// components when the next priority snapshot is taken.
+    pub fn set_scheduling_history(&mut self, scheduling_history: HistoryInput) {
+        self.scheduling_history = scheduling_history;
+        self.pressure_dirty_goals.extend(self.registry.iter().map(|(key, _)| key.to_string()));
+        debug_assert_eq!(self.pressure_dirty_goals.len(), self.registry.iter().count());
+        debug_assert!(u32::try_from(self.pressure_dirty_goals.len()).is_ok_and(|count| count <= MAX_GOALS));
+    }
+
+    /// Set provider-neutral preference facts for a known goal.
+    pub fn set_goal_scheduling_preference(
+        &mut self,
+        goal_key: &str,
+        operator_policy_class: OperatorPolicyClass,
+        preference: EligiblePreferenceFacts,
+    ) -> Result<(), Error> {
+        if !self.registry.contains(goal_key) {
+            return Err(Error::Store(format!(
+                "scheduler preference references unknown goal identity blake3:{}",
+                redacted_goal_identity(goal_key)
+            )));
         }
+        self.goal_preferences.insert(goal_key.to_string(), (operator_policy_class, preference));
+        if let Some(ready) = self.ready_goals.get_mut(goal_key) {
+            ready.operator_policy_class = operator_policy_class;
+            ready.preference = preference;
+        }
+        debug_assert!(self.goal_preferences.contains_key(goal_key));
+        debug_assert!(self.ready_goals.get(goal_key).is_none_or(|ready| {
+            ready.operator_policy_class == operator_policy_class && ready.preference == preference
+        }));
+        Ok(())
+    }
+
+    fn enqueue_ready_goal(&mut self, goal_key: &str) -> Result<(), Error> {
+        if self.ready_goals.contains_key(goal_key) {
+            return Ok(());
+        }
+        let ready_goal_count = u32::try_from(self.ready_goals.len())
+            .map_err(|_| Error::Store("ready goal count exceeds u32".to_string()))?;
+        if ready_goal_count >= MAX_GOALS {
+            return Err(Error::Store(format!("ready goal limit exceeded ({MAX_GOALS})")));
+        }
+        let goal = self.registry.get(goal_key).ok_or_else(|| {
+            Error::Store(format!("ready goal identity is unknown: blake3:{}", redacted_goal_identity(goal_key)))
+        })?;
+        if goal.state != GoalState::Ready {
+            return Err(Error::Store(format!(
+                "cannot enqueue goal identity blake3:{} in state {:?}",
+                redacted_goal_identity(goal_key),
+                goal.state
+            )));
+        }
+        let (operator_policy_class, preference) = self.goal_preferences.get(goal_key).copied().unwrap_or_default();
+        let mut ready = ReadyGoalFacts::ordinary(goal_key.to_string(), self.scheduling_epoch);
+        ready.operator_policy_class = operator_policy_class;
+        ready.preference = preference;
+        self.ready_goals.insert(goal_key.to_string(), ready);
+        debug_assert!(self.ready_goals.contains_key(goal_key));
+        debug_assert!(u32::try_from(self.ready_goals.len()).is_ok_and(|count| count <= MAX_GOALS));
+        Ok(())
+    }
+
+    fn known_graph_facts(&self) -> Result<KnownGraphFacts, Error> {
+        let mut nodes: BTreeMap<String, (Vec<String>, BTreeSet<String>, bool)> = BTreeMap::new();
+        let mut edge_count = 0_u32;
+        for (goal_key, goal) in self.registry.iter() {
+            let goal_edge_count = u32::try_from(goal.waitees.len())
+                .map_err(|_| Error::Store("goal dependency count exceeds u32".to_string()))?;
+            edge_count = edge_count
+                .checked_add(goal_edge_count)
+                .ok_or_else(|| Error::Store("known graph edge count overflow".to_string()))?;
+            if edge_count > MAX_KNOWN_GRAPH_EDGES {
+                return Err(Error::Store(format!("known graph edge limit exceeded ({MAX_KNOWN_GRAPH_EDGES})")));
+            }
+            let mut waitees = goal.waitees.clone();
+            waitees.sort();
+            nodes.insert(goal_key.to_string(), (waitees, BTreeSet::new(), goal.is_root));
+        }
+        let dependency_edges: Vec<(String, String)> = nodes
+            .iter()
+            .flat_map(|(goal_key, (waitees, _, _))| {
+                waitees.iter().map(|waitee| (goal_key.clone(), waitee.clone())).collect::<Vec<_>>()
+            })
+            .collect();
+        for (waiter, waitee) in dependency_edges {
+            if let Some((_, waiters, _)) = nodes.get_mut(&waitee) {
+                waiters.insert(waiter);
+            }
+        }
+        let goals: Vec<KnownGoalFacts> = nodes
+            .into_iter()
+            .map(|(goal_key, (waitees, waiters, requested_root))| KnownGoalFacts {
+                goal_key,
+                waitees,
+                waiters: waiters.into_iter().collect(),
+                requested_root,
+            })
+            .collect();
+        debug_assert_eq!(self.registry.iter().count(), goals.len());
+        debug_assert!(u32::try_from(goals.len()).is_ok_and(|count| count <= MAX_GOALS));
+        debug_assert!(edge_count <= MAX_KNOWN_GRAPH_EDGES);
+        Ok(KnownGraphFacts { goals })
+    }
+
+    fn refresh_pressure_cache(&mut self) -> Result<(HistoryBasis, Option<String>), Error> {
+        let graph = self.known_graph_facts()?;
+        let update = recompute_affected_pressure(
+            &graph,
+            &self.pressure_cache,
+            &self.pressure_dirty_goals,
+            &self.scheduling_policy,
+            &self.scheduling_history,
+        )
+        .map_err(|error| Error::Store(format!("priority pressure: {error}")))?;
+        self.pressure_cache = update.pressures;
+        self.pressure_dirty_goals.clear();
+        debug_assert_eq!(self.pressure_cache.len(), self.registry.iter().count());
+        debug_assert!(self.pressure_dirty_goals.is_empty());
+        Ok((update.history_basis, update.history_snapshot_digest_blake3))
+    }
+
+    fn select_next_ready_goal(&mut self) -> Result<Option<String>, Error> {
+        if self.ready_goals.is_empty() {
+            return Ok(None);
+        }
+        let next_epoch = advance_scheduling_epoch(self.scheduling_epoch)
+            .map_err(|error| Error::Store(format!("priority epoch: {error}")))?;
+        let (history_basis, history_digest) = self.refresh_pressure_cache()?;
+        let ready_facts: Vec<ReadyGoalFacts> = self.ready_goals.values().cloned().collect();
+        let ranked = rank_ready_goals(&self.scheduling_policy, next_epoch, &ready_facts, &self.pressure_cache)
+            .map_err(|error| Error::Store(format!("priority ranking: {error}")))?;
+        let evidence =
+            priority_decision_evidence(&self.scheduling_policy, next_epoch, &ranked, history_basis, history_digest)
+                .map_err(|error| Error::Store(format!("priority evidence: {error}")))?;
+        let priority_decision_count = u32::try_from(self.priority_decisions.len())
+            .map_err(|_| Error::Store("priority decision count exceeds u32".to_string()))?;
+        if priority_decision_count >= MAX_PRIORITY_DECISIONS {
+            return Err(Error::Store(format!("priority decision limit exceeded ({MAX_PRIORITY_DECISIONS})")));
+        }
+        let selected = ranked
+            .first()
+            .map(|candidate| candidate.goal_key.clone())
+            .ok_or_else(|| Error::Store("ranked ready set was unexpectedly empty".to_string()))?;
+        self.ready_goals.remove(&selected);
+        self.priority_decisions.push(evidence);
+        self.scheduling_epoch = next_epoch;
+        debug_assert!(!self.ready_goals.contains_key(&selected));
+        debug_assert_eq!(self.priority_decisions.len() as u32, next_epoch);
+        Ok(Some(selected))
     }
 
     /// Lazily create a goal for a derivation. If the goal already
@@ -626,8 +838,9 @@ impl Worker {
 
             // Already tracked — just upgrade to root if needed.
             if let Some(goal) = self.registry.get_mut(&key) {
-                if root {
+                if root && !goal.is_root {
                     goal.is_root = true;
+                    self.pressure_dirty_goals.insert(key);
                 }
                 continue;
             }
@@ -646,6 +859,7 @@ impl Worker {
                 Goal::new(sp, derivation)
             };
             self.registry.insert(key.clone(), goal)?;
+            self.pressure_dirty_goals.insert(key.clone());
 
             // Enqueue deps for creation.
             for dep_sp in &dep_drv_paths {
@@ -674,7 +888,9 @@ impl Worker {
             if let Some(dep_goal) = self.registry.get_mut(dep_key) {
                 dep_goal.waiters.push(key.to_string());
             }
+            self.pressure_dirty_goals.insert(dep_key.clone());
         }
+        self.pressure_dirty_goals.insert(key.to_string());
 
         let goal = self
             .registry
@@ -682,10 +898,12 @@ impl Worker {
             .ok_or_else(|| Error::Store(format!("worker: goal not found in registry: {key}")))?;
         let state = goal.inspect(unbuilt_dep_keys)?;
 
-        if *state == GoalState::Ready {
-            self.ready_queue.push_back(key.to_string());
+        let became_ready = *state == GoalState::Ready;
+        if became_ready {
+            self.enqueue_ready_goal(key)?;
         }
 
+        debug_assert_eq!(became_ready, self.ready_goals.contains_key(key));
         Ok(())
     }
 
@@ -735,7 +953,8 @@ impl Worker {
                     failed = state.failed.len(),
                     "worker finished"
                 );
-                return Ok(finish_worker_result(outcomes, failed, native_dynamic_plans));
+                let priority_decisions = std::mem::take(&mut self.priority_decisions);
+                return Ok(finish_worker_result(outcomes, failed, native_dynamic_plans, priority_decisions));
             }
 
             if state.join_set.is_empty() {
@@ -807,7 +1026,8 @@ impl Worker {
                     roots = self.registry.root_count(),
                     "worker streaming finished"
                 );
-                return Ok(finish_worker_result(outcomes, failed, native_dynamic_plans));
+                let priority_decisions = std::mem::take(&mut self.priority_decisions);
+                return Ok(finish_worker_result(outcomes, failed, native_dynamic_plans, priority_decisions));
             }
 
             self.wait_for_event(&mut is_eval_done, rx, builder, known_paths, &mut state).await?;
@@ -1236,6 +1456,7 @@ impl Worker {
                     if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
                         let dep_goal = crate::goal::Goal::new(dep_sp.clone(), entry.derivation.clone());
                         self.registry.insert(dep_key.clone(), dep_goal)?;
+                        self.pressure_dirty_goals.insert(dep_key.clone());
                     }
                 }
             }
@@ -1274,13 +1495,29 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
+        let running_jobs = u32::try_from(state.join_set.len())
+            .map_err(|_| Error::Store("running job count exceeds u32".to_string()))?;
+        let mut available_build_slots = self.max_jobs.checked_sub(running_jobs).ok_or_else(|| {
+            Error::Store(format!("running job count {running_jobs} exceeds configured max_jobs {}", self.max_jobs))
+        })?;
         let mut dispatched: u32 = 0;
-        while let Some(drv_key) = self.ready_queue.pop_front() {
+        while available_build_slots > 0 {
+            let Some(drv_key) = self.select_next_ready_goal()? else {
+                break;
+            };
             let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
             let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root).await;
-            self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
-            dispatched = dispatched.saturating_add(1);
+            let spawned = self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
+            if spawned {
+                available_build_slots = available_build_slots
+                    .checked_sub(1)
+                    .ok_or_else(|| Error::Store("available build slot underflow".to_string()))?;
+            }
+            dispatched =
+                dispatched.checked_add(1).ok_or_else(|| Error::Store("dispatch count overflow".to_string()))?;
         }
+        debug_assert!(dispatched <= MAX_GOALS);
+        debug_assert!(u32::try_from(state.join_set.len()).is_ok_and(|count| count <= self.max_jobs));
         Ok(dispatched)
     }
 
@@ -1292,7 +1529,7 @@ impl Worker {
             .registry
             .get(drv_key)
             .ok_or_else(|| Error::Store(format!("ready goal missing from registry: {drv_key}")))?;
-        debug_assert_eq!(goal.state, GoalState::Ready, "goal in ready queue but state is {:?}", goal.state);
+        debug_assert_eq!(goal.state, GoalState::Ready, "goal selected from ready set but state is {:?}", goal.state);
         let derivation = goal
             .derivation
             .as_ref()
@@ -1308,23 +1545,28 @@ impl Worker {
         builder: &Builder<BServ>,
         known_paths: &mut DerivationRegistry,
         state: &mut WorkerLoopState<'_>,
-    ) -> Result<(), Error>
+    ) -> Result<bool, Error>
     where
         BServ: BuildService + 'static,
     {
         match prepare_result {
             Ok(PrepareResult::Done(outcome)) => {
-                self.handle_completed_outcome(drv_key, outcome, builder, known_paths, state).await
+                self.handle_completed_outcome(drv_key, outcome, builder, known_paths, state).await?;
+                Ok(false)
             }
             Err(err) => {
                 let err_msg = format!("{err}");
                 tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
-                self.fail_goal(drv_key, &err_msg, state.failed)
+                self.fail_goal(drv_key, &err_msg, state.failed)?;
+                Ok(false)
             }
             Ok(PrepareResult::NeedsBuild {
                 prepared,
                 build_request,
-            }) => self.spawn_prepared_build(drv_key, prepared, *build_request, builder, state),
+            }) => {
+                self.spawn_prepared_build(drv_key, prepared, *build_request, builder, state)?;
+                Ok(true)
+            }
         }
     }
 
@@ -1363,7 +1605,7 @@ impl Worker {
     }
 
     /// Mark a goal as Done, collect its outcome, and notify waiters.
-    /// If a waiter becomes Ready, push it to the ready queue.
+    /// If a waiter becomes Ready, admit it to the priority-ready set.
     fn complete_goal(
         &mut self,
         drv_key: &str,
@@ -1410,10 +1652,11 @@ impl Worker {
 
             let is_now_ready = waiter.notify_dep_done()?;
             if is_now_ready {
-                self.ready_queue.push_back(waiter_key.clone());
+                self.enqueue_ready_goal(waiter_key)?;
             }
         }
 
+        debug_assert!(u32::try_from(self.ready_goals.len()).is_ok_and(|count| count <= MAX_GOALS));
         Ok(())
     }
 
@@ -1562,6 +1805,30 @@ mod tests {
     // ── want() tests ────────────────────────────────────────────
 
     #[test]
+    fn worker_rejects_zero_and_over_limit_job_budgets() {
+        let over_limit = MAX_IN_FLIGHT.checked_add(1).unwrap();
+
+        assert!(Worker::with_scheduling_policy(0, SchedulingPolicy::default()).is_err());
+        assert!(Worker::with_scheduling_policy(over_limit, SchedulingPolicy::default()).is_err());
+    }
+
+    #[test]
+    fn unknown_scheduling_preference_rejects_without_raw_identity_or_mutation() {
+        let raw_goal = "/private/token=worker-secret/root.drv";
+        let mut worker = Worker::new(1);
+
+        let error = worker
+            .set_goal_scheduling_preference(raw_goal, OperatorPolicyClass::Ordinary, EligiblePreferenceFacts::default())
+            .unwrap_err();
+        let diagnostic = error.to_string();
+
+        assert!(!diagnostic.contains(raw_goal));
+        assert!(!diagnostic.contains("worker-secret"));
+        assert!(diagnostic.contains("blake3:"));
+        assert!(worker.goal_preferences.is_empty());
+    }
+
+    #[test]
     fn want_single_leaf() {
         let mut kp = DerivationRegistry::default();
         let drv = make_drv();
@@ -1574,7 +1841,7 @@ mod tests {
         let goal = w.registry.get(&sp.to_absolute_path()).unwrap();
         assert_eq!(goal.state, GoalState::Ready);
         assert!(goal.is_root);
-        assert_eq!(w.ready_queue.len(), 1);
+        assert_eq!(w.ready_goals.len(), 1);
     }
 
     #[test]
@@ -1608,8 +1875,8 @@ mod tests {
         assert_eq!(top.state, GoalState::Waiting { remaining_deps: 1 });
         assert!(top.is_root);
 
-        // Only leaf is in ready queue.
-        assert_eq!(w.ready_queue.len(), 1);
+        // Only leaf is in the ready set.
+        assert_eq!(w.ready_goals.len(), 1);
     }
 
     #[test]
@@ -1654,6 +1921,24 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_ready_admission_preserves_oldest_epoch() {
+        let mut kp = DerivationRegistry::default();
+        let drv = make_drv();
+        let sp = register_drv(&mut kp, "dedup-ready.drv", &drv);
+        let key = sp.to_absolute_path();
+        let mut worker = Worker::new(1);
+        worker.want(&sp, &kp, true).unwrap();
+        let original_epoch = worker.ready_goals[&key].ready_since_epoch;
+        worker.scheduling_epoch = crate::scheduling::DEFAULT_AGED_AFTER_EPOCHS;
+
+        worker.enqueue_ready_goal(&key).unwrap();
+
+        assert_eq!(worker.ready_goals.len(), 1);
+        assert_eq!(worker.ready_goals[&key].ready_since_epoch, original_epoch);
+        assert!(original_epoch < worker.scheduling_epoch);
+    }
+
+    #[test]
     fn want_upgrades_to_root() {
         let mut kp = DerivationRegistry::default();
         let drv = make_drv();
@@ -1695,7 +1980,7 @@ mod tests {
         w.want(&b_sp, &kp, true).unwrap();
 
         assert_eq!(w.registry.len(), 2);
-        assert_eq!(w.ready_queue.len(), 2);
+        assert_eq!(w.ready_goals.len(), 2);
         assert_eq!(w.registry.root_count(), 2);
     }
 
@@ -1737,8 +2022,8 @@ mod tests {
         assert!(w.registry.get(&leaf_key).unwrap().waiters.is_empty());
         // Top should now be Ready (its sole dep completed).
         assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Ready);
-        // Top should be in the ready queue.
-        assert!(w.ready_queue.contains(&top_key));
+        // Top should be in the ready set.
+        assert!(w.ready_goals.contains_key(&top_key));
         // Leaf is not a root, so outcomes should be empty.
         assert!(outcomes.is_empty());
     }
@@ -1848,7 +2133,7 @@ mod tests {
 
         // Leaf is Ready — simulate it being dispatched and starting.
         let leaf_key = leaf_sp.to_absolute_path();
-        w.ready_queue.pop_front(); // remove leaf from ready queue
+        w.ready_goals.remove(&leaf_key); // remove leaf from ready set
         w.registry.get_mut(&leaf_key).unwrap().mark_building().unwrap();
 
         // Fail the leaf.
@@ -1888,7 +2173,7 @@ mod tests {
 
         // bad is Ready, shared is Ready, good is Waiting.
         let bad_key = bad_sp.to_absolute_path();
-        w.ready_queue.retain(|k| k != &bad_key); // remove bad from ready queue
+        w.ready_goals.remove(&bad_key); // remove bad from ready set
         w.registry.get_mut(&bad_key).unwrap().mark_building().unwrap();
 
         // Fail bad. It has no waiters, so good (waiting on shared) should be unaffected.
@@ -1925,6 +2210,15 @@ mod tests {
     use crate::test_support::tmp_ds;
 
     const TEST_NATIVE_PLAN_STORE_PATH: &str = "/nix/store/00000000000000000000000000000000-dynplan";
+    const TEST_CHAIN_GOAL_COUNT: usize = 3;
+    const TEST_CHAIN_LEAF_PATH_NODES: u32 = 3;
+    const TEST_CHAIN_MID_PATH_NODES: u32 = 2;
+    const TEST_SHARED_BLOCKED_ROOTS: u32 = 2;
+    const TEST_PRIORITY_ROOT_OUTCOME_COUNT: usize = 3;
+    const TEST_MAX_JOB_BUDGET: u32 = 2;
+    const TEST_MAX_JOB_READY_ROOTS: usize = 3;
+    const TEST_READY_ROOTS_AFTER_DISPATCH: usize = 1;
+    const TEST_RUNNING_OVER_BUDGET: u32 = TEST_MAX_JOB_BUDGET + 1;
 
     fn make_test_builder(bs: MemoryBlobService) -> Builder<MockBuildService> {
         let ds = tmp_ds();
@@ -2079,6 +2373,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dispatch_at_capacity_retains_undispatched_ready_goal() {
+        let bs = MemoryBlobService::default();
+        let mut builder = make_test_builder(bs);
+        let mut known_paths = DerivationRegistry::default();
+        let roots: Vec<StorePath<String>> = (0..TEST_MAX_JOB_READY_ROOTS)
+            .map(|index| build_and_register(&format!("capacity-{index}"), &[], &mut known_paths).0)
+            .collect();
+        let mut worker = Worker::new(TEST_MAX_JOB_BUDGET);
+        for root in &roots {
+            worker.want(root, &known_paths, true).unwrap();
+        }
+        let mut outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut native_dynamic_plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(usize::try_from(TEST_MAX_JOB_BUDGET).unwrap())),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
+            completed_count: 0,
+        };
+
+        let dispatched = worker.dispatch_ready(&mut builder, &mut known_paths, &mut state).await.unwrap();
+
+        assert_eq!(dispatched, TEST_MAX_JOB_BUDGET);
+        assert_eq!(state.join_set.len(), usize::try_from(TEST_MAX_JOB_BUDGET).unwrap());
+        assert_eq!(worker.ready_goals.len(), TEST_READY_ROOTS_AFTER_DISPATCH);
+        state.join_set.abort_all();
+        for _ in 0..TEST_MAX_JOB_BUDGET {
+            let _ = state.join_set.join_next().await;
+        }
+        assert!(state.join_set.is_empty());
+    }
+
+    #[tokio::test]
+    async fn dispatch_rejects_running_count_over_budget_before_ready_mutation() {
+        let bs = MemoryBlobService::default();
+        let mut builder = make_test_builder(bs);
+        let mut known_paths = DerivationRegistry::default();
+        let (root, _) = build_and_register("over-capacity", &[], &mut known_paths);
+        let mut worker = Worker::new(TEST_MAX_JOB_BUDGET);
+        worker.want(&root, &known_paths, true).unwrap();
+        let ready_before = worker.ready_goals.clone();
+        let mut outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut native_dynamic_plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(usize::try_from(TEST_MAX_JOB_BUDGET).unwrap())),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
+            completed_count: 0,
+        };
+        for _ in 0..TEST_RUNNING_OVER_BUDGET {
+            state.join_set.spawn(async { std::future::pending().await });
+        }
+
+        let result = worker.dispatch_ready(&mut builder, &mut known_paths, &mut state).await;
+
+        assert!(result.unwrap_err().to_string().contains("exceeds configured max_jobs"));
+        assert_eq!(worker.ready_goals, ready_before);
+        assert!(worker.priority_decisions.is_empty());
+        state.join_set.abort_all();
+        while state.join_set.join_next().await.is_some() {}
+        assert!(state.join_set.is_empty());
+    }
+
+    #[tokio::test]
     async fn run_single_leaf_builds_once() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
@@ -2142,6 +2508,10 @@ mod tests {
 
         assert_eq!(result.outcomes.len(), 1);
         assert!(result.outcomes[0].drv_path.name().contains("top"));
+        assert_eq!(result.priority_decisions.len(), TEST_CHAIN_GOAL_COUNT);
+        let path_nodes: Vec<u32> =
+            result.priority_decisions.iter().map(|decision| decision.known_critical_path_nodes).collect();
+        assert_eq!(path_nodes, vec![TEST_CHAIN_LEAF_PATH_NODES, TEST_CHAIN_MID_PATH_NODES, 1]);
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 3);
@@ -2184,11 +2554,128 @@ mod tests {
         let result = w.run(&mut builder, &mut kp).await.unwrap();
 
         assert_eq!(result.outcomes.len(), 2);
+        assert_eq!(result.priority_decisions.len(), TEST_CHAIN_GOAL_COUNT);
+        assert_eq!(result.priority_decisions[0].blocked_root_count, TEST_SHARED_BLOCKED_ROOTS);
+        assert_eq!(
+            result.priority_decisions[0].selection_reason,
+            crate::scheduling::PrioritySelectionReason::SoleCandidate
+        );
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 3, "shared + left + right");
         let shared_builds = recorded.iter().filter(|a| a.iter().any(|s| s.contains("shared"))).count();
         assert_eq!(shared_builds, 1, "shared built exactly once");
+    }
+
+    // r[verify build_scheduling.lazy_known_critical_path]
+    #[tokio::test]
+    async fn worker_selects_shared_root_pressure_before_fifo_insertion() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (short, _) = build_and_register("fifo-first-short", &[], &mut kp);
+        let (shared, _) = build_and_register("pressure-shared", &[], &mut kp);
+        let (left, _) = build_and_register("pressure-left", &[(shared.clone(), "out")], &mut kp);
+        let (right, _) = build_and_register("pressure-right", &[(shared.clone(), "out")], &mut kp);
+
+        let mut worker = Worker::new(1);
+        worker.want(&short, &kp, true).unwrap();
+        worker.want(&left, &kp, true).unwrap();
+        worker.want(&right, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        let recorded = calls.lock().unwrap();
+
+        assert_eq!(result.outcomes.len(), TEST_PRIORITY_ROOT_OUTCOME_COUNT);
+        assert!(recorded[0].iter().any(|argument| argument.contains("pressure-shared")));
+        assert_eq!(result.priority_decisions[0].blocked_root_count, TEST_SHARED_BLOCKED_ROOTS);
+        assert_eq!(
+            result.priority_decisions[0].selection_reason,
+            crate::scheduling::PrioritySelectionReason::KnownGraphPressure
+        );
+    }
+
+    // r[verify build_scheduling.lazy_known_critical_path]
+    #[test]
+    fn later_graph_arrival_does_not_relabel_prior_priority_evidence() {
+        let mut kp = DerivationRegistry::default();
+        let (first, _) = build_and_register("first-root", &[], &mut kp);
+        let (later_leaf, _) = build_and_register("later-leaf", &[], &mut kp);
+        let (later_root, _) = build_and_register("later-root", &[(later_leaf, "out")], &mut kp);
+        let mut worker = Worker::new(1);
+        worker.want(&first, &kp, true).unwrap();
+        let selected = worker.select_next_ready_goal().unwrap();
+        let prior = worker.priority_decisions[0].clone();
+
+        worker.want(&later_root, &kp, true).unwrap();
+
+        assert_eq!(selected, Some(first.to_absolute_path()));
+        assert_eq!(worker.priority_decisions[0], prior);
+        assert_eq!(worker.priority_decisions[0].competing_goal_count, 1);
+    }
+
+    #[test]
+    fn worker_consumes_only_normalized_eligible_preference_facts() {
+        let mut known_paths = DerivationRegistry::default();
+        let (unknown, _) = build_and_register("unknown-route", &[], &mut known_paths);
+        let (local, _) = build_and_register("local-route", &[], &mut known_paths);
+        let local_key = local.to_absolute_path();
+        let mut worker = Worker::new(1);
+        worker.want(&unknown, &known_paths, true).unwrap();
+        worker.want(&local, &known_paths, true).unwrap();
+        let preference = crate::scheduling::normalize_eligible_preference(
+            crate::scheduling::HardEligibilityFacts::ELIGIBLE,
+            crate::scheduling::ResourceFitClass::Exact,
+            crate::scheduling::ContentLocalityClass::FullyPresent,
+            crate::scheduling::TransferCostClass::None,
+        )
+        .unwrap();
+        worker
+            .set_goal_scheduling_preference(&local_key, OperatorPolicyClass::Ordinary, preference)
+            .unwrap();
+
+        let selected = worker.select_next_ready_goal().unwrap();
+
+        assert_eq!(selected, Some(local_key));
+        assert_eq!(
+            worker.priority_decisions[0].selection_reason,
+            crate::scheduling::PrioritySelectionReason::ResourceFitClass
+        );
+    }
+
+    #[test]
+    fn malformed_graph_rejects_before_ready_set_mutation() {
+        let mut kp = DerivationRegistry::default();
+        let (root, _) = build_and_register("malformed-root", &[], &mut kp);
+        let root_key = root.to_absolute_path();
+        let mut worker = Worker::new(1);
+        worker.want(&root, &kp, true).unwrap();
+        worker
+            .registry
+            .get_mut(&root_key)
+            .unwrap()
+            .waitees
+            .push("/nix/store/missing-malformed.drv".to_string());
+        let ready_before = worker.ready_goals.clone();
+
+        let error = worker.select_next_ready_goal().unwrap_err();
+
+        assert!(error.to_string().contains("unknown goal"));
+        assert_eq!(worker.ready_goals, ready_before);
+        assert_eq!(worker.scheduling_epoch, 0);
+        assert!(worker.priority_decisions.is_empty());
     }
 
     #[tokio::test]
@@ -2301,6 +2788,8 @@ mod tests {
 
         assert_eq!(result.outcomes.len(), 1);
         assert!(result.failed.is_empty());
+        assert_eq!(result.priority_decisions.len(), 1);
+        assert_eq!(result.priority_decisions[0].scheduling_epoch, 1);
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 1);
@@ -2773,10 +3262,15 @@ mod tests {
 
     #[test]
     fn native_dynamic_plan_reports_are_deterministically_sorted() {
-        let result = finish_worker_result(Vec::new(), Vec::new(), vec![
-            native_report_row("/store/z.drv", "plan-b"),
-            native_report_row("/store/a.drv", "plan-a"),
-        ]);
+        let result = finish_worker_result(
+            Vec::new(),
+            Vec::new(),
+            vec![
+                native_report_row("/store/z.drv", "plan-b"),
+                native_report_row("/store/a.drv", "plan-a"),
+            ],
+            Vec::new(),
+        );
 
         assert_eq!(result.native_dynamic_plans[0].producer_key, "/store/a.drv");
         assert_eq!(result.native_dynamic_plans[0].output_name, "plan-a");

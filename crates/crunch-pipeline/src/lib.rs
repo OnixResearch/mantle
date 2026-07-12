@@ -33,6 +33,9 @@ pub use crunch_build::HermeticityAuditKind;
 pub use crunch_build::HermeticityMode;
 use crunch_build::KeyPair;
 use crunch_build::NativeDynamicPlanReport;
+pub use crunch_build::PriorityCandidateEvidence;
+pub use crunch_build::PriorityDecisionEvidence;
+pub use crunch_build::SchedulingPolicy;
 pub use crunch_build::SEARCH_PATH_DIGEST_ALGORITHM;
 use crunch_build::Worker;
 use crunch_eval::session::RootForceExecutionPolicy;
@@ -54,6 +57,8 @@ pub struct BuildConfig {
     pub store_dir: String,
     pub verbose: bool,
     pub max_jobs: u32,
+    /// Explicit typed policy for deterministic ready-goal ordering.
+    pub scheduling_policy: SchedulingPolicy,
     /// Ordered list of substituter URLs. Empty = no remote substitution.
     pub substituter_urls: Vec<String>,
     pub hermeticity_mode: HermeticityMode,
@@ -86,6 +91,7 @@ pub struct PipelineResult {
     pub build_environment_reports: Vec<BuildEnvironmentReport>,
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
+    pub priority_decisions: Vec<PriorityDecisionEvidence>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,7 +277,8 @@ async fn build_linux(
 
     let (tx, mut rx) = mpsc::channel::<EvalMessage>(16);
     let mut known_paths = DerivationRegistry::new(&config.store_dir);
-    let mut worker = Worker::new(config.max_jobs);
+    let mut worker = Worker::with_scheduling_policy(config.max_jobs, config.scheduling_policy.clone())
+        .map_err(|error| Error::Build(format!("scheduler policy: {error}")))?;
     let worker_run = worker.run_streaming(&mut builder, &mut known_paths, &mut rx);
     let eval_stream = stream_roots_into_worker(
         config.max_jobs,
@@ -311,6 +318,7 @@ async fn build_linux(
         build_environment_reports,
         network_policy_reports,
         native_dynamic_plans: worker_result.native_dynamic_plans,
+        priority_decisions: worker_result.priority_decisions,
     })
 }
 
@@ -515,6 +523,7 @@ fn build_preflight_failure(
         build_environment_reports: Vec::new(),
         network_policy_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
+        priority_decisions: Vec::new(),
     })
 }
 

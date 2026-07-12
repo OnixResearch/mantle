@@ -22,6 +22,10 @@ use crate::build_log::write_log_file;
 use crate::build_report::render_build_json_report;
 use crate::errors::RunError;
 
+const MAX_HUMAN_PRIORITY_ROWS: usize = 64;
+const PRIORITY_DIGEST_PREFIX_BYTES: usize = 12;
+const PRIORITY_SUMMARY_EXTRA_LINES: usize = 2;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuildOutputMode {
     Human,
@@ -106,6 +110,7 @@ pub fn cmd_build_with_source_fetch_overrides(
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
+        scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
         substituter_urls: substituter_urls.to_vec(),
         hermeticity_mode,
         keypair,
@@ -147,6 +152,9 @@ pub fn report_build_result(
     }
     if output_mode.is_human() {
         print_hermeticity_summary(result);
+        if config.verbose {
+            print_priority_summary(result);
+        }
         print_success_outputs(config, result);
     }
 
@@ -292,6 +300,64 @@ fn print_hermeticity_summary(result: &PipelineResult) {
     for line in format_hermeticity_summary(result.hermeticity_mode, &result.hermeticity_audit_events) {
         eprintln!("{line}");
     }
+}
+
+fn print_priority_summary(result: &PipelineResult) {
+    for line in format_priority_summary(&result.priority_decisions) {
+        eprintln!("{line}");
+    }
+}
+
+fn format_priority_summary(decisions: &[crunch_pipeline::PriorityDecisionEvidence]) -> Vec<String> {
+    if decisions.is_empty() {
+        return Vec::new();
+    }
+    let rendered_count = decisions.len().min(MAX_HUMAN_PRIORITY_ROWS);
+    let mut lines = Vec::with_capacity(rendered_count.saturating_add(PRIORITY_SUMMARY_EXTRA_LINES));
+    lines.push(format!(
+        "scheduler priority: decisions={} scope={} non-claims={}",
+        decisions.len(),
+        decisions[0].claim_scope,
+        decisions[0].non_claims.join(",")
+    ));
+    for decision in decisions.iter().take(rendered_count) {
+        let selected = decision
+            .selected_goal_key_blake3
+            .get(..PRIORITY_DIGEST_PREFIX_BYTES)
+            .unwrap_or(&decision.selected_goal_key_blake3);
+        let snapshot = decision
+            .candidate_snapshot_digest_blake3
+            .get(..PRIORITY_DIGEST_PREFIX_BYTES)
+            .unwrap_or(&decision.candidate_snapshot_digest_blake3);
+        lines.push(format!(
+            "  - epoch={} selected={} snapshot={} policy={} reason={} operator={} age={}/{} graph={}:path={},work={},roots={} resource={} locality={} transfer={} history={}",
+            decision.scheduling_epoch,
+            selected,
+            snapshot,
+            decision.policy_id,
+            decision.selection_reason.as_str(),
+            decision.operator_policy_class.as_str(),
+            decision.starvation_class.as_str(),
+            decision.age_epochs,
+            decision.known_graph_basis,
+            decision.known_critical_path_nodes,
+            decision.known_critical_path_work_units,
+            decision.blocked_root_count,
+            decision.resource_fit_class.as_str(),
+            decision.content_locality_class.as_str(),
+            decision.transfer_cost_class.as_str(),
+            decision.history_basis.as_str(),
+        ));
+    }
+    if rendered_count < decisions.len() {
+        lines.push(format!(
+            "  - omitted={} (machine report retains all bounded decisions)",
+            decisions.len().saturating_sub(rendered_count)
+        ));
+    }
+    debug_assert!(lines.len() <= MAX_HUMAN_PRIORITY_ROWS.saturating_add(PRIORITY_SUMMARY_EXTRA_LINES));
+    debug_assert!(lines.iter().all(|line| !line.contains("token=")));
+    lines
 }
 
 fn format_hermeticity_summary(mode: HermeticityMode, events: &[HermeticityAuditEvent]) -> Vec<String> {
@@ -543,6 +609,63 @@ mod tests {
     use crunch_pipeline::HermeticityAuditKind;
 
     use super::*;
+
+    const TEST_PRIORITY_GOAL: &str = "/private/priority-secret/root.drv";
+    const TEST_PRIORITY_EPOCH: u32 = 1;
+    const TEST_PRIORITY_PATH_NODES: u32 = 2;
+    const TEST_PRIORITY_SUMMARY_LINE_COUNT: usize = 2;
+
+    fn sample_priority_decision() -> crunch_pipeline::PriorityDecisionEvidence {
+        let policy = crunch_build::SchedulingPolicy::default();
+        let ready = crunch_build::ReadyGoalFacts::ordinary(TEST_PRIORITY_GOAL.to_string(), 0);
+        let pressures =
+            std::collections::BTreeMap::from([(TEST_PRIORITY_GOAL.to_string(), crunch_build::KnownGraphPressure {
+                known_critical_path_nodes: TEST_PRIORITY_PATH_NODES,
+                known_critical_path_work_units: TEST_PRIORITY_PATH_NODES,
+                blocked_root_count: TEST_PRIORITY_EPOCH,
+                blocked_root_count_saturated: false,
+            })]);
+        let ranked = crunch_build::rank_ready_goals(&policy, TEST_PRIORITY_EPOCH, &[ready], &pressures).unwrap();
+        crunch_build::priority_decision_evidence(
+            &policy,
+            TEST_PRIORITY_EPOCH,
+            &ranked,
+            crunch_build::HistoryBasis::StructuralFallbackMissing,
+            None,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn format_priority_summary_is_bounded_and_redacted() {
+        let decisions = vec![sample_priority_decision()];
+        let lines = format_priority_summary(&decisions);
+        let rendered = lines.join("\n");
+
+        assert_eq!(lines.len(), TEST_PRIORITY_SUMMARY_LINE_COUNT);
+        assert!(rendered.contains("scope=configured-known-fact-ordering"));
+        assert!(rendered.contains("graph=known-graph:path=2"));
+        assert!(!rendered.contains(TEST_PRIORITY_GOAL));
+        assert!(!rendered.contains("priority-secret/root.drv"));
+    }
+
+    #[test]
+    fn format_priority_summary_caps_human_rows_without_dropping_machine_evidence() {
+        let decision_count = MAX_HUMAN_PRIORITY_ROWS.saturating_add(1);
+        let decisions = vec![sample_priority_decision(); decision_count];
+
+        let lines = format_priority_summary(&decisions);
+
+        assert_eq!(lines.len(), MAX_HUMAN_PRIORITY_ROWS.saturating_add(PRIORITY_SUMMARY_EXTRA_LINES));
+        assert!(lines.last().is_some_and(|line| line.contains("omitted=1")));
+        assert_eq!(decisions.len(), decision_count);
+    }
+
+    #[test]
+    fn format_priority_summary_omits_empty_evidence() {
+        assert!(format_priority_summary(&[]).is_empty());
+        assert_eq!(format_priority_summary(&[]).len(), 0);
+    }
 
     #[test]
     fn format_hermeticity_summary_reports_clean_mode() {

@@ -31,11 +31,13 @@ pub struct BuildJsonReport {
     pub output_dir: String,
     pub state_dir: String,
     pub store_dir: String,
+    pub scheduler_policy: crunch_pipeline::SchedulingPolicy,
     pub hermeticity_mode: String,
     pub hermeticity_audit_events: Vec<BuildJsonHermeticityAuditEvent>,
     pub build_environment_reports: Vec<BuildJsonEnvironmentReport>,
     pub network_policy_reports: Vec<BuildJsonNetworkPolicyReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
+    pub scheduler_priority_decisions: Vec<crunch_pipeline::PriorityDecisionEvidence>,
     pub frontend_artifact_attestations: Vec<FrontendArtifactAdmissionAttestation>,
     pub ast_grep_structural_evidence: Vec<BuildJsonAstGrepStructuralEvidence>,
     pub ast_grep_structural_evidence_diagnostics: Vec<BuildJsonAstGrepStructuralEvidenceDiagnostic>,
@@ -373,6 +375,7 @@ fn build_json_report(
     let build_environment_reports = build_environment_reports(result);
     let network_policy_reports = build_network_policy_reports(result);
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
+    let scheduler_priority_decisions = result.priority_decisions.clone();
 
     BuildJsonReport {
         schema: "crunch-build-report-v1",
@@ -380,11 +383,13 @@ fn build_json_report(
         output_dir: config.output_dir.display().to_string(),
         state_dir: config.state_dir.display().to_string(),
         store_dir: config.store_dir.clone(),
+        scheduler_policy: config.scheduling_policy.clone(),
         hermeticity_mode: result.hermeticity_mode.as_str().to_string(),
         hermeticity_audit_events,
         build_environment_reports,
         network_policy_reports,
         native_dynamic_plans,
+        scheduler_priority_decisions,
         frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
         ast_grep_structural_evidence,
         ast_grep_structural_evidence_diagnostics,
@@ -930,6 +935,33 @@ mod tests {
 
     use super::*;
 
+    const SENSITIVE_PRIORITY_GOAL: &str = "/private/report-secret/root.drv";
+    const SAMPLE_PRIORITY_EPOCH: u32 = 1;
+    const SAMPLE_PRIORITY_PATH_NODES: u32 = 2;
+
+    fn sample_priority_decision() -> crunch_pipeline::PriorityDecisionEvidence {
+        let policy = crunch_build::SchedulingPolicy::default();
+        let ready = crunch_build::ReadyGoalFacts::ordinary(SENSITIVE_PRIORITY_GOAL.to_string(), 0);
+        let pressures = std::collections::BTreeMap::from([(
+            SENSITIVE_PRIORITY_GOAL.to_string(),
+            crunch_build::KnownGraphPressure {
+                known_critical_path_nodes: SAMPLE_PRIORITY_PATH_NODES,
+                known_critical_path_work_units: SAMPLE_PRIORITY_PATH_NODES,
+                blocked_root_count: SAMPLE_PRIORITY_EPOCH,
+                blocked_root_count_saturated: false,
+            },
+        )]);
+        let ranked = crunch_build::rank_ready_goals(&policy, SAMPLE_PRIORITY_EPOCH, &[ready], &pressures).unwrap();
+        crunch_build::priority_decision_evidence(
+            &policy,
+            SAMPLE_PRIORITY_EPOCH,
+            &ranked,
+            crunch_build::HistoryBasis::StructuralFallbackMissing,
+            None,
+        )
+        .unwrap()
+    }
+
     #[test]
     fn count_as_u32_round_trips_small_values() {
         assert_eq!(count_as_u32(0), 0);
@@ -1002,6 +1034,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
             substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
@@ -1031,6 +1064,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            priority_decisions: Vec::new(),
         };
 
         let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
@@ -1067,6 +1101,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
             substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
@@ -1091,6 +1126,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            priority_decisions: Vec::new(),
         };
 
         let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
@@ -1117,6 +1153,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
             substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
@@ -1215,6 +1252,7 @@ mod tests {
                 rejection_reason: None,
                 scheduler_action: "registered-roots".to_string(),
             }],
+            priority_decisions: vec![sample_priority_decision()],
         };
 
         let report = build_json_report(&config, &result, logs_dir.path(), &[], &[]);
@@ -1238,6 +1276,7 @@ mod tests {
         assert_eq!(determinism.policy_digest_blake3, "determinism-digest");
         assert_eq!(determinism.controls[0].surface, "time");
         assert!(!determinism.strong_claim_blocked);
+        assert_eq!(report.scheduler_policy, crunch_pipeline::SchedulingPolicy::default());
         assert_eq!(report.network_policy_reports.len(), 1);
         assert_eq!(report.network_policy_reports[0].action_name, "demo");
         assert_eq!(report.network_policy_reports[0].mode, "offline");
@@ -1247,6 +1286,10 @@ mod tests {
         assert_eq!(report.native_dynamic_plans[0].output_name, "plan");
         assert_eq!(report.native_dynamic_plans[0].scheduler_action, "registered-roots");
         assert_eq!(report.native_dynamic_plans[0].accepted_unit_ids, vec!["unit.build".to_string()]);
+        assert_eq!(report.scheduler_priority_decisions.len(), 1);
+        let priority_json = serde_json::to_string(&report.scheduler_priority_decisions).unwrap();
+        assert!(!priority_json.contains(SENSITIVE_PRIORITY_GOAL));
+        assert!(priority_json.contains("configured-known-fact-ordering"));
         assert_eq!(
             report.native_dynamic_plans[0].plan_artifact_path.as_deref(),
             Some(output_path.to_absolute_path_with_prefix(&config.store_dir).as_str())
@@ -1285,6 +1328,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: MIN_MAX_JOBS,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
             substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
@@ -1355,6 +1399,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            priority_decisions: Vec::new(),
         };
 
         let report = build_json_report(&config, &result, logs_dir.path(), &[], &[]);
@@ -1735,6 +1780,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: MIN_MAX_JOBS,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
             substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
             keypair: signing_key,
@@ -1754,6 +1800,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            priority_decisions: Vec::new(),
         };
         let spec_hash = blake3::hash(SPEC_MATERIAL).to_hex().to_string();
         let spec = crate::frontend_artifact_spec::FrontendArtifactSpecRef {
@@ -1833,6 +1880,7 @@ mod tests {
             store_dir: "/crunch/store".to_string(),
             verbose: false,
             max_jobs: 1,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
             substituter_urls: Vec::new(),
             hermeticity_mode: crunch_pipeline::HermeticityMode::Impure,
             keypair: signing_key,
@@ -1891,6 +1939,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            priority_decisions: Vec::new(),
         };
 
         let diagnostic_failures = vec![crate::build_log::DiagnosticPersistenceFailure::write_build_log(
@@ -1909,6 +1958,13 @@ mod tests {
                 "output_dir": config.output_dir.display().to_string(),
                 "state_dir": config.state_dir.display().to_string(),
                 "store_dir": config.store_dir.clone(),
+                "scheduler_policy": {
+                    "schema": "mantle-scheduling-policy-v1",
+                    "policy_id": "mantle-lazy-priority-v1",
+                    "preference_order": ["known-graph", "resource-fit", "locality-transfer"],
+                    "aged_after_epochs": crunch_build::scheduling::DEFAULT_AGED_AFTER_EPOCHS,
+                    "protected_after_epochs": crunch_build::scheduling::DEFAULT_PROTECTED_AFTER_EPOCHS
+                },
                 "hermeticity_mode": "impure",
                 "hermeticity_audit_events": [{
                     "kind": "impure-mode-selected",
@@ -1917,6 +1973,7 @@ mod tests {
                 "build_environment_reports": [],
                 "network_policy_reports": [],
                 "native_dynamic_plans": [],
+                "scheduler_priority_decisions": [],
                 "frontend_artifact_attestations": [],
                 "ast_grep_structural_evidence": [],
                 "ast_grep_structural_evidence_diagnostics": [],

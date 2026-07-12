@@ -59,6 +59,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         store_dir: nix_compat::store_path::STORE_DIR.to_string(),
         verbose: false,
         max_jobs: 2,
+        scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
         substituter_urls: Vec::new(),
         hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
         keypair,

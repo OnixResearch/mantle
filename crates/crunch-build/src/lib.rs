@@ -1,4 +1,4 @@
-#![feature(register_tool)]
+#![cfg_attr(not(kani), feature(register_tool))]
 #![register_tool(tigerstyle)]
 //! crunch-build: Build pipeline for crunch.
 //!
@@ -28,6 +28,7 @@ mod orchestrate;
 mod references;
 pub mod registry;
 pub mod rewrite;
+pub mod scheduling;
 pub mod signing;
 #[cfg(test)]
 pub(crate) mod test_support;
@@ -105,6 +106,34 @@ pub use orchestrate::Builder;
 pub use registry::DerivationRegistry;
 pub use registry::RegistryEntry;
 pub use registry::populate_registry;
+pub use scheduling::ContentLocalityClass;
+pub use scheduling::DurationClass;
+pub use scheduling::DurationHistorySnapshot;
+pub use scheduling::EligiblePreferenceFacts;
+pub use scheduling::HardEligibilityFacts;
+pub use scheduling::HistoryBasis;
+pub use scheduling::HistoryInput;
+pub use scheduling::IneligibleReason;
+pub use scheduling::KnownGoalFacts;
+pub use scheduling::KnownGraphFacts;
+pub use scheduling::KnownGraphPressure;
+pub use scheduling::OperatorPolicyClass;
+pub use scheduling::PreferenceField;
+pub use scheduling::PressureUpdate;
+pub use scheduling::PriorityCandidateEvidence;
+pub use scheduling::PriorityDecisionEvidence;
+pub use scheduling::PrioritySelectionReason;
+pub use scheduling::ReadyGoalFacts;
+pub use scheduling::ResourceFitClass;
+pub use scheduling::SchedulingError;
+pub use scheduling::SchedulingPolicy;
+pub use scheduling::StarvationClass;
+pub use scheduling::TransferCostClass;
+pub use scheduling::advance_scheduling_epoch;
+pub use scheduling::normalize_eligible_preference;
+pub use scheduling::priority_decision_evidence;
+pub use scheduling::rank_ready_goals;
+pub use scheduling::recompute_affected_pressure;
 pub use signing::KeyPair;
 pub use signing::VerifyResult;
 pub use signing::build_trusted_keys;

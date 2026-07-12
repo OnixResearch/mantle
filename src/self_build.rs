@@ -2276,6 +2276,7 @@ fn build_crunch_binary(
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
+        scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
         substituter_urls: if no_substitute {
             Vec::new()
         } else {
@@ -2332,6 +2333,7 @@ fn build_bootstrap_tool(
         store_dir: store_dir.to_string(),
         verbose,
         max_jobs,
+        scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
         substituter_urls: if no_substitute {
             Vec::new()
         } else {
@@ -3394,6 +3396,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            priority_decisions: Vec::new(),
         };
 
         let actual =
@@ -3434,6 +3437,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
+            priority_decisions: Vec::new(),
         };
 
         let err =

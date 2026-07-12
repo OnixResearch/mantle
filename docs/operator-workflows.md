@@ -392,6 +392,34 @@ worker profile, realization key, and output digests. SSH, REAPI, S3, HTTP, or
 cluster-control details stay inside future adapters and are not part of the core
 scheduler contract.
 
+## Explain ready-goal priority
+
+Mantle preserves its lazy goal graph while ranking eligible ready goals from
+explicit bounded facts. Run a human build with `--verbose` to print the bounded
+priority summary, or use JSON mode for complete machine-readable rows:
+
+```sh
+mantle --verbose build package.ncl
+mantle --json build package.ncl > build-report.json
+```
+
+Inspect top-level `scheduler_policy` for the selected typed defaults and
+`scheduler_priority_decisions[]` for `policy_id`,
+`policy_digest_blake3`, `scheduling_epoch`, the redacted
+`selected_goal_key_blake3`, `candidate_snapshot_digest_blake3`, redacted
+`runner_up`, `starvation_class`, known-graph path/work/root pressure, normalized
+resource/locality/transfer classes, history basis/digest, and
+`selection_reason`. Priority-decision rows never contain the selected raw goal
+path or provider credentials. `claim_scope = "configured-known-fact-ordering"` and the
+`non_claims` list are normative: a priority row does not prove global makespan
+optimality, knowledge of future dynamic goals, execution success, output trust,
+or release reproducibility.
+
+Route eligibility remains separate. Capability, output-trust, upload privacy,
+network, store-prefix, and hard-resource rejection must be resolved before a
+candidate enters preference ranking; neither locality nor age can bypass one of
+those blockers.
+
 ## Enter a dev shell or run a package
 
 `mantle shell` resolves a `devShells` target from the compatibility-named
