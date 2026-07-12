@@ -2227,7 +2227,11 @@ mod kani_proofs {
         let next_cursor: u64 = kani::any();
         let requested_cursor: u64 = kani::any();
         kani::assume(retained_start_cursor <= next_cursor);
-        let decision = classify_cursor_position(retained_start_cursor, next_cursor, requested_cursor);
+        let decision = classify_cursor_position(RemoteAttemptLogCursorBounds {
+            retained_start_cursor,
+            next_cursor,
+            requested_cursor,
+        });
         if requested_cursor > next_cursor {
             assert_eq!(decision, Err(RemoteAttemptLogReasonCode::CursorAfterHead));
         } else if requested_cursor < retained_start_cursor {
