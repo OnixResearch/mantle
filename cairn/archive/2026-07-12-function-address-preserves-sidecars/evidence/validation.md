@@ -79,3 +79,25 @@ Pueue task `114` ran repository validation and proposal, design, and tasks gates
 Pueue task `171` dry-ran and executed Cairn sync with no blockers. The execute receipt claimed mutation, but its before and after accepted-spec content hashes were both `30200e8bbcfb1ce907a6953575d052601f5cecbeb9e912b926402911f352d901`, and the new requirement IDs were absent. The reviewed delta requirement suffix was therefore appended manually to `cairn/specs/release-provenance/spec.md`.
 
 Pueue task `178` compared the accepted suffix byte-for-byte with the reviewed delta: `2714` bytes, BLAKE3 `18b83810a1a80d3b52860d0817e64cdb57cd4bc707b2c0cde741d2988952df18`. Pueue task `181` then reran validation and all three gates; validation remained `valid: true` with 10 active changes and 37 specs, and proposal/design/tasks remained `PASS` with no issues.
+
+## Archive and post-archive validation
+
+Pueue task `187` dry-ran and executed the archive with no blockers. Cairn created `cairn/archive/1970-01-01-function-address-preserves-sidecars`; this was manually renamed to the session date, `cairn/archive/2026-07-12-function-address-preserves-sidecars`, as required by the repo-local archive-date workaround.
+
+The post-archive validation leg captured in task `190` reported 9 active changes, 36 validated specs, no issues, and `valid: true`. Its chained first equality probe used the now-removed active-change path and is not evidence. Pueue task `194` reran the correct archived-delta comparison and proved the accepted requirement suffix remains byte-for-byte equal: `2714` bytes, BLAKE3 `18b83810a1a80d3b52860d0817e64cdb57cd4bc707b2c0cde741d2988952df18`.
+
+Pueue task `197` reran the final post-archive validation after the archive evidence update:
+
+```text
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 9,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 36,
+  "valid": true
+}
+```
