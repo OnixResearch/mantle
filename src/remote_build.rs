@@ -25,6 +25,14 @@ pub use crunch_build::distributed::RemoteAttemptApplyDisposition;
 pub use crunch_build::distributed::RemoteAttemptAuthorizationFacts;
 pub use crunch_build::distributed::RemoteAttemptFailureClass;
 pub use crunch_build::distributed::RemoteAttemptId;
+pub use crunch_build::distributed::RemoteAttemptLogCurrentAttemptFacts;
+pub use crunch_build::distributed::RemoteAttemptLogDigest;
+pub use crunch_build::distributed::RemoteAttemptLogManifest;
+pub use crunch_build::distributed::RemoteAttemptLogPolicy;
+pub use crunch_build::distributed::RemoteAttemptLogReasonCode;
+pub use crunch_build::distributed::RemoteAttemptLogReplayPlan;
+pub use crunch_build::distributed::RemoteAttemptLogReplayRequest;
+pub use crunch_build::distributed::RemoteAttemptLogScope;
 pub use crunch_build::distributed::RemoteAttemptPhase;
 pub use crunch_build::distributed::RemoteAttemptReasonCode;
 pub use crunch_build::distributed::RemoteAttemptReport;
@@ -120,7 +128,11 @@ const REMOTE_TRANSFER_ARTIFACTS_PER_PATHINFO_OUTPUT: usize = 2;
 const MAX_REMOTE_WORKER_CONCURRENCY: u32 = 1_024;
 const MAX_REMOTE_LOG_CHUNKS: usize = 1_024;
 const MAX_REMOTE_LOG_BYTES: u64 = 1_048_576;
+const MIN_REMOTE_ATTEMPT_LOG_SHELL_PAYLOAD_BYTES: u64 = 10;
 const MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES: usize = 512;
+const LEGACY_LOG_MIGRATION_CLASSIFICATION: &str = "legacy-unbound-diagnostics-discarded";
+const LEGACY_LOG_MIGRATION_NON_CLAIM: &str =
+    "legacy mutable log vectors are not immutable attempt-log history and were not rehashed or promoted";
 const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
 const REMOTE_ASSIGNMENT_NONCE_LABEL: &str = "remote-assignment-nonce";
@@ -1161,8 +1173,8 @@ pub struct RemoteCoordinatorJobSummary {
     pub live_output_claims: Vec<String>,
     pub result_available: bool,
     pub lost_phase: Option<RemoteFailurePhase>,
-    pub log_start_cursor: u64,
-    pub log_next_cursor: u64,
+    #[serde(default)]
+    pub immutable_log: Option<RemoteAttemptLogControlSummary>,
     pub short_error: Option<String>,
     #[serde(default)]
     pub current_attempt: Option<RemoteAttemptState>,
@@ -1181,7 +1193,8 @@ pub struct RemoteCoordinatorState {
     pub workers: BTreeMap<String, RemoteWorkerRegistration>,
     pub jobs: BTreeMap<RemoteJobId, RemoteCoordinatorJobSummary>,
     pub live_output_claims: BTreeMap<String, String>,
-    pub logs: BTreeMap<RemoteJobId, Vec<RemoteCoordinatorLogChunk>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub legacy_log_migration: Option<RemoteLegacyLogMigrationSummary>,
     /// When set, mutations auto-save to this directory for durability.
     #[serde(skip)]
     pub state_dir: Option<PathBuf>,
@@ -1197,7 +1210,7 @@ impl Default for RemoteCoordinatorState {
             workers: BTreeMap::new(),
             jobs: BTreeMap::new(),
             live_output_claims: BTreeMap::new(),
-            logs: BTreeMap::new(),
+            legacy_log_migration: None,
             state_dir: None,
             allow_volatile_test_state: cfg!(test),
         }
@@ -1249,13 +1262,28 @@ pub enum RemoteFencedOutputAdmissionDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RemoteCoordinatorLogChunk {
-    pub cursor: u64,
-    pub bytes: String,
-    #[serde(default)]
-    pub event_id: Option<RemoteEventId>,
-    #[serde(default)]
-    pub payload_digest: Option<RemotePayloadDigest>,
+pub struct RemoteAttemptLogControlSummary {
+    pub scope: RemoteAttemptLogScope,
+    pub retention_policy: RemoteLogRetentionPolicy,
+    pub retained_start_cursor: u64,
+    pub next_cursor: u64,
+    pub retained_record_count: u32,
+    pub retained_payload_bytes: u64,
+    pub head_record_blake3: Option<RemoteAttemptLogDigest>,
+    pub head_segment_blake3: Option<RemoteAttemptLogDigest>,
+    pub manifest_blake3: RemoteAttemptLogDigest,
+    pub truncation_anchor_blake3: Option<RemoteAttemptLogDigest>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteLegacyLogMigrationSummary {
+    pub legacy_job_count: u32,
+    pub legacy_chunk_count: u32,
+    pub legacy_payload_bytes: u64,
+    pub count_saturated: bool,
+    pub classification: String,
+    pub non_claim: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1274,21 +1302,12 @@ impl Default for RemoteLogRetentionPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RemoteLogReplayPlan {
-    pub replay_chunks: Vec<RemoteCoordinatorLogChunk>,
-    pub retained_chunks: Vec<RemoteCoordinatorLogChunk>,
-    pub truncated: bool,
-    pub dropped_bytes: u64,
-    pub next_cursor: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteCoordinatorJobStatus {
     pub job_id: RemoteJobId,
     pub phase: RemoteCoordinatorJobPhase,
     pub worker_endpoint_id: Option<String>,
     pub short_error: Option<String>,
-    pub log_bytes_retained: u64,
+    pub immutable_log: Option<RemoteAttemptLogControlSummary>,
     pub attempt_id: Option<RemoteAttemptId>,
     pub fence_generation: Option<RemoteFenceGeneration>,
     pub attempt_phase: Option<RemoteAttemptPhase>,
@@ -1321,9 +1340,17 @@ pub struct RemoteFailureStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RemoteLogCursorStatus {
     pub job_id: RemoteJobId,
-    pub start_cursor: u64,
+    pub attempt_id: Option<RemoteAttemptId>,
+    pub fence_generation: Option<RemoteFenceGeneration>,
+    pub retained_start_cursor: u64,
     pub next_cursor: u64,
-    pub retained_bytes: u64,
+    pub retained_record_count: u32,
+    pub retained_payload_bytes: u64,
+    pub head_record_blake3: Option<RemoteAttemptLogDigest>,
+    pub head_segment_blake3: Option<RemoteAttemptLogDigest>,
+    pub manifest_blake3: Option<RemoteAttemptLogDigest>,
+    pub truncation_anchor_blake3: Option<RemoteAttemptLogDigest>,
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -3967,9 +3994,10 @@ fn validate_worker_resume_claim(
     if attempt.attempt_id != summary.attempt_id || attempt.fence_generation != summary.fence_generation {
         return Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string());
     }
+    let log_next_cursor = job.immutable_log.as_ref().map_or(0, |log| log.next_cursor);
     if job.phase != summary.phase
         || job.result_available != summary.result_available
-        || job.log_next_cursor != summary.log_next_cursor
+        || log_next_cursor != summary.log_next_cursor
     {
         return Err(RemoteAttemptReasonCode::ResumeStateConflict.as_str().to_string());
     }
@@ -4095,8 +4123,7 @@ fn queued_job_summary(
         live_output_claims: request.live_output_claims.clone(),
         result_available: false,
         lost_phase: None,
-        log_start_cursor: 0,
-        log_next_cursor: 0,
+        immutable_log: None,
         short_error: None,
         current_attempt: Some(current_attempt),
         transfer_checkpoint: None,
@@ -4197,6 +4224,7 @@ fn install_reassigned_attempt(
     job.phase = RemoteCoordinatorJobPhase::Queued;
     job.result_available = false;
     job.lost_phase = None;
+    job.immutable_log = None;
     job.short_error = None;
     job.current_attempt = Some(attempt);
     job.transfer_checkpoint = None;
@@ -4271,22 +4299,83 @@ fn apply_fenced_log_append(
     bytes: &str,
     log_policy: RemoteLogRetentionPolicy,
 ) -> Result<(), String> {
-    let existing = state.logs.get(&report.identity.job_id).cloned().unwrap_or_default();
-    let chunk = RemoteCoordinatorLogChunk {
-        cursor,
-        bytes: bytes.to_string(),
-        event_id: Some(report.identity.event_id.clone()),
-        payload_digest: Some(report.identity.payload_digest.clone()),
+    let state_dir = state
+        .state_dir
+        .as_deref()
+        .ok_or_else(|| RemoteAttemptReasonCode::PersistenceUnconfigured.as_str().to_string())?;
+    let current_attempt = state
+        .jobs
+        .get(&report.identity.job_id)
+        .and_then(|job| job.current_attempt.as_ref())
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    let current = RemoteAttemptLogCurrentAttemptFacts {
+        scope: RemoteAttemptLogScope {
+            job_id: current_attempt.job_id.clone(),
+            attempt_id: current_attempt.attempt_id.clone(),
+            fence_generation: current_attempt.fence_generation,
+        },
+        phase: current_attempt.phase,
     };
-    let replay = retain_remote_log_chunks(&existing, chunk, 0, log_policy)?;
+    let immutable_policy = immutable_attempt_log_policy(log_policy)?;
+    let stored = crate::remote_attempt_log_store::append_remote_attempt_log(
+        state_dir,
+        &current,
+        report.identity.event_id.clone(),
+        cursor,
+        bytes.as_bytes(),
+        immutable_policy,
+    )?;
+    let summary = remote_attempt_log_control_summary(&stored.manifest, log_policy);
     let job = state
         .jobs
         .get_mut(&report.identity.job_id)
         .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
-    job.log_start_cursor = replay.retained_chunks.first().map(|chunk| chunk.cursor).unwrap_or(replay.next_cursor);
-    job.log_next_cursor = replay.next_cursor;
-    state.logs.insert(report.identity.job_id.clone(), replay.retained_chunks);
+    job.immutable_log = Some(summary);
     Ok(())
+}
+
+fn immutable_attempt_log_policy(log_policy: RemoteLogRetentionPolicy) -> Result<RemoteAttemptLogPolicy, String> {
+    validate_log_policy(log_policy)?;
+    let retained_count =
+        u32::try_from(log_policy.max_chunks).map_err(|_| "remote-log-chunk-limit-overflow".to_string())?;
+    let payload_bytes_max = log_policy.max_bytes.max(MIN_REMOTE_ATTEMPT_LOG_SHELL_PAYLOAD_BYTES);
+    let record_payload_bytes_max =
+        u32::try_from(payload_bytes_max.min(u64::from(RemoteAttemptLogPolicy::default().record_payload_bytes_max)))
+            .map_err(|_| "remote-log-record-payload-limit-overflow".to_string())?;
+    let policy = RemoteAttemptLogPolicy {
+        record_payload_bytes_max,
+        segment_record_count_max: 1,
+        segment_payload_bytes_max: payload_bytes_max,
+        retained_segment_count_max: retained_count,
+        retained_record_count_max: retained_count,
+        retained_payload_bytes_max: payload_bytes_max,
+        replay_record_count_max: retained_count,
+        replay_payload_bytes_max: payload_bytes_max,
+        ..RemoteAttemptLogPolicy::default()
+    };
+    policy.validate().map_err(|reason| reason.as_str().to_string())?;
+    debug_assert_eq!(policy.segment_record_count_max, 1);
+    debug_assert!(policy.retained_segment_count_max <= policy.manifest_segment_count_max);
+    Ok(policy)
+}
+
+fn remote_attempt_log_control_summary(
+    manifest: &RemoteAttemptLogManifest,
+    retention_policy: RemoteLogRetentionPolicy,
+) -> RemoteAttemptLogControlSummary {
+    RemoteAttemptLogControlSummary {
+        scope: manifest.scope.clone(),
+        retention_policy,
+        retained_start_cursor: manifest.retained_start_cursor,
+        next_cursor: manifest.next_cursor,
+        retained_record_count: manifest.retained_record_count,
+        retained_payload_bytes: manifest.retained_payload_bytes,
+        head_record_blake3: manifest.head_record_blake3.clone(),
+        head_segment_blake3: manifest.head_segment_blake3.clone(),
+        manifest_blake3: manifest.manifest_blake3.clone(),
+        truncation_anchor_blake3: manifest.truncation_anchor.as_ref().map(|anchor| anchor.anchor_blake3.clone()),
+        truncated: manifest.truncation_anchor.is_some(),
+    }
 }
 
 fn apply_attempt_payload_to_job(
@@ -4489,26 +4578,26 @@ fn coordinator_job_id(normalized_key: &str, assignment_nonce: &RemoteAssignmentN
     RemoteJobId::new(digest).expect("BLAKE3 coordinator job id is a valid bounded identity")
 }
 
-pub fn retain_remote_log_chunks(
-    existing: &[RemoteCoordinatorLogChunk],
-    next_chunk: RemoteCoordinatorLogChunk,
-    from_cursor: u64,
-    policy: RemoteLogRetentionPolicy,
-) -> Result<RemoteLogReplayPlan, String> {
-    validate_log_policy(policy)?;
-    validate_next_log_chunk(existing, &next_chunk)?;
-    let mut retained = existing.to_vec();
-    retained.push(next_chunk);
-    let dropped_bytes = trim_remote_log_chunks(&mut retained, policy)?;
-    let replay_chunks = retained.iter().filter(|chunk| chunk.cursor >= from_cursor).cloned().collect::<Vec<_>>();
-    let next_cursor = retained.last().map(|chunk| chunk.cursor.saturating_add(1)).unwrap_or(0);
-    Ok(RemoteLogReplayPlan {
-        replay_chunks,
-        retained_chunks: retained,
-        truncated: dropped_bytes > 0,
-        dropped_bytes,
-        next_cursor,
-    })
+pub fn replay_coordinator_attempt_log(
+    state: &RemoteCoordinatorState,
+    job_id: &RemoteJobId,
+    request: RemoteAttemptLogReplayRequest,
+) -> Result<RemoteAttemptLogReplayPlan, String> {
+    let state_dir = state
+        .state_dir
+        .as_deref()
+        .ok_or_else(|| RemoteAttemptReasonCode::PersistenceUnconfigured.as_str().to_string())?;
+    let job = state.jobs.get(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let summary = job.immutable_log.as_ref().ok_or_else(|| "attempt-log-not-recorded".to_string())?;
+    let policy = immutable_attempt_log_policy(summary.retention_policy)?;
+    let replay =
+        crate::remote_attempt_log_store::replay_remote_attempt_log(state_dir, &summary.scope, request, policy)?;
+    let manifest =
+        crate::remote_attempt_log_store::load_remote_attempt_log_manifest(state_dir, &summary.scope, policy)?;
+    if remote_attempt_log_control_summary(&manifest, summary.retention_policy) != *summary {
+        return Err("attempt-log-coordinator-summary-mismatch".to_string());
+    }
+    Ok(replay)
 }
 
 fn validate_log_policy(policy: RemoteLogRetentionPolicy) -> Result<(), String> {
@@ -4519,49 +4608,6 @@ fn validate_log_policy(policy: RemoteLogRetentionPolicy) -> Result<(), String> {
         return Err("remote-log-byte-limit-invalid".to_string());
     }
     Ok(())
-}
-
-fn validate_next_log_chunk(
-    existing: &[RemoteCoordinatorLogChunk],
-    next: &RemoteCoordinatorLogChunk,
-) -> Result<(), String> {
-    if let Some(last) = existing.last()
-        && next.cursor <= last.cursor
-    {
-        return Err("remote-log-cursor-not-monotonic".to_string());
-    }
-    if remote_log_chunk_bytes(next)? > MAX_REMOTE_LOG_BYTES {
-        return Err("remote-log-chunk-too-large".to_string());
-    }
-    Ok(())
-}
-
-fn trim_remote_log_chunks(
-    retained: &mut Vec<RemoteCoordinatorLogChunk>,
-    policy: RemoteLogRetentionPolicy,
-) -> Result<u64, String> {
-    let mut dropped_bytes = 0_u64;
-    while retained.len() > policy.max_chunks || remote_log_bytes(retained)? > policy.max_bytes {
-        let dropped = retained.remove(0);
-        dropped_bytes = dropped_bytes
-            .checked_add(remote_log_chunk_bytes(&dropped)?)
-            .ok_or_else(|| "remote-log-dropped-bytes-overflow".to_string())?;
-    }
-    Ok(dropped_bytes)
-}
-
-fn remote_log_bytes(chunks: &[RemoteCoordinatorLogChunk]) -> Result<u64, String> {
-    let mut total = 0_u64;
-    for chunk in chunks {
-        total = total
-            .checked_add(remote_log_chunk_bytes(chunk)?)
-            .ok_or_else(|| "remote-log-bytes-overflow".to_string())?;
-    }
-    Ok(total)
-}
-
-fn remote_log_chunk_bytes(chunk: &RemoteCoordinatorLogChunk) -> Result<u64, String> {
-    u64::try_from(chunk.bytes.len()).map_err(|_| "remote-log-chunk-size-overflow".to_string())
 }
 
 pub fn coordinator_status_snapshot(
@@ -4643,15 +4689,23 @@ fn push_status_failure(recent_failures: &mut Vec<RemoteFailureStatus>, job: &Rem
 }
 
 fn coordinator_log_cursor_status(
-    state: &RemoteCoordinatorState,
+    _state: &RemoteCoordinatorState,
     job: &RemoteCoordinatorJobSummary,
 ) -> Result<RemoteLogCursorStatus, String> {
-    let retained = state.logs.get(&job.job_id).map(Vec::as_slice).unwrap_or(&[]);
+    let summary = job.immutable_log.as_ref();
     Ok(RemoteLogCursorStatus {
         job_id: job.job_id.clone(),
-        start_cursor: job.log_start_cursor,
-        next_cursor: job.log_next_cursor,
-        retained_bytes: remote_log_bytes(retained)?,
+        attempt_id: summary.map(|value| value.scope.attempt_id.clone()),
+        fence_generation: summary.map(|value| value.scope.fence_generation),
+        retained_start_cursor: summary.map_or(0, |value| value.retained_start_cursor),
+        next_cursor: summary.map_or(0, |value| value.next_cursor),
+        retained_record_count: summary.map_or(0, |value| value.retained_record_count),
+        retained_payload_bytes: summary.map_or(0, |value| value.retained_payload_bytes),
+        head_record_blake3: summary.and_then(|value| value.head_record_blake3.clone()),
+        head_segment_blake3: summary.and_then(|value| value.head_segment_blake3.clone()),
+        manifest_blake3: summary.map(|value| value.manifest_blake3.clone()),
+        truncation_anchor_blake3: summary.and_then(|value| value.truncation_anchor_blake3.clone()),
+        truncated: summary.is_some_and(|value| value.truncated),
     })
 }
 
@@ -4700,16 +4754,15 @@ fn push_status_job(
 }
 
 fn coordinator_job_status(
-    state: &RemoteCoordinatorState,
+    _state: &RemoteCoordinatorState,
     job: &RemoteCoordinatorJobSummary,
 ) -> Result<RemoteCoordinatorJobStatus, String> {
-    let retained = state.logs.get(&job.job_id).map(Vec::as_slice).unwrap_or(&[]);
     Ok(RemoteCoordinatorJobStatus {
         job_id: job.job_id.clone(),
         phase: job.phase,
         worker_endpoint_id: job.assigned_worker_endpoint_id.clone(),
         short_error: job.short_error.as_deref().map(bounded_untrusted_text),
-        log_bytes_retained: remote_log_bytes(retained)?,
+        immutable_log: job.immutable_log.clone(),
         attempt_id: job.current_attempt.as_ref().map(|attempt| attempt.attempt_id.clone()),
         fence_generation: job.current_attempt.as_ref().map(|attempt| attempt.fence_generation),
         attempt_phase: job.current_attempt.as_ref().map(|attempt| attempt.phase),
@@ -6026,11 +6079,7 @@ pub fn plan_output_transfer(
         } else {
             None
         };
-        return Ok(full_transfer_report(
-            output_size_bytes,
-            verified_builder_key,
-            fallback_reason,
-        ));
+        return Ok(full_transfer_report(output_size_bytes, verified_builder_key, fallback_reason));
     }
     if client.streaming && builder.streaming {
         return Err("streaming-runtime-evidence-required".to_string());
@@ -7594,13 +7643,101 @@ pub fn load_coordinator_state(state_dir: &Path) -> Result<RemoteCoordinatorState
     }
     let bytes = fs::read(&path)
         .map_err(|err| RunError::Internal(format!("reading coordinator state {}: {err}", path.display())))?;
+    let legacy_log_migration = legacy_log_migration_summary(&bytes, &path)?;
     let mut state: RemoteCoordinatorState = serde_json::from_slice(&bytes)
         .map_err(|err| RunError::Internal(format!("parsing coordinator state {}: {err}", path.display())))?;
     state.state_dir = Some(state_dir.to_path_buf());
-    if migrate_legacy_coordinator_state(&mut state) {
+    let mut migrated = migrate_legacy_coordinator_state(&mut state);
+    if let Some(summary) = legacy_log_migration {
+        state.legacy_log_migration = Some(summary);
+        migrated = true;
+    }
+    if reconcile_coordinator_log_summaries(state_dir, &mut state)? {
+        migrated = true;
+    }
+    if migrated {
         save_coordinator_state(state_dir, &state)?;
     }
     Ok(state)
+}
+
+fn legacy_log_migration_summary(
+    bytes: &[u8],
+    path: &Path,
+) -> Result<Option<RemoteLegacyLogMigrationSummary>, RunError> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|error| RunError::Internal(format!("parsing coordinator state {}: {error}", path.display())))?;
+    let Some(logs) = value.get("logs").and_then(serde_json::Value::as_object) else {
+        return Ok(None);
+    };
+    if logs.is_empty() {
+        return Ok(None);
+    }
+    let mut chunk_count = 0_u64;
+    let mut payload_bytes = 0_u64;
+    let mut count_saturated = false;
+    for chunks in logs.values().filter_map(serde_json::Value::as_array) {
+        let observed_chunks = u64::try_from(chunks.len()).unwrap_or(u64::MAX);
+        match chunk_count.checked_add(observed_chunks) {
+            Some(next) => chunk_count = next,
+            None => {
+                chunk_count = u64::MAX;
+                count_saturated = true;
+            }
+        }
+        for chunk in chunks {
+            let observed_bytes = chunk
+                .get("bytes")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|text| u64::try_from(text.len()).ok())
+                .unwrap_or(0);
+            match payload_bytes.checked_add(observed_bytes) {
+                Some(next) => payload_bytes = next,
+                None => {
+                    payload_bytes = u64::MAX;
+                    count_saturated = true;
+                }
+            }
+        }
+    }
+    let legacy_job_count = u32::try_from(logs.len()).unwrap_or(u32::MAX);
+    let legacy_chunk_count = u32::try_from(chunk_count).unwrap_or_else(|_| {
+        count_saturated = true;
+        u32::MAX
+    });
+    Ok(Some(RemoteLegacyLogMigrationSummary {
+        legacy_job_count,
+        legacy_chunk_count,
+        legacy_payload_bytes: payload_bytes,
+        count_saturated,
+        classification: LEGACY_LOG_MIGRATION_CLASSIFICATION.to_string(),
+        non_claim: LEGACY_LOG_MIGRATION_NON_CLAIM.to_string(),
+    }))
+}
+
+fn reconcile_coordinator_log_summaries(state_dir: &Path, state: &mut RemoteCoordinatorState) -> Result<bool, RunError> {
+    let mut changed = false;
+    for job in state.jobs.values_mut() {
+        let Some(attempt) = job.current_attempt.as_ref() else {
+            continue;
+        };
+        let retention_policy = job.immutable_log.as_ref().map(|summary| summary.retention_policy).unwrap_or_default();
+        let policy = immutable_attempt_log_policy(retention_policy)
+            .map_err(|error| RunError::Internal(format!("reconciling attempt-log policy: {error}")))?;
+        let scope = RemoteAttemptLogScope {
+            job_id: attempt.job_id.clone(),
+            attempt_id: attempt.attempt_id.clone(),
+            fence_generation: attempt.fence_generation,
+        };
+        let manifest = crate::remote_attempt_log_store::load_remote_attempt_log_manifest(state_dir, &scope, policy)
+            .map_err(|error| RunError::Internal(format!("reconciling immutable attempt log: {error}")))?;
+        let observed = remote_attempt_log_control_summary(&manifest, retention_policy);
+        if job.immutable_log.as_ref() != Some(&observed) {
+            job.immutable_log = Some(observed);
+            changed = true;
+        }
+    }
+    Ok(changed)
 }
 
 fn migrate_legacy_coordinator_state(state: &mut RemoteCoordinatorState) -> bool {
@@ -7738,6 +7875,7 @@ fn fail_closed_coordinator_job(job: &mut RemoteCoordinatorJobSummary, reason_cod
     job.assigned_worker_endpoint_id = None;
     job.phase = RemoteCoordinatorJobPhase::Lost;
     job.result_available = false;
+    job.immutable_log = None;
     job.current_attempt = None;
     job.transfer_checkpoint = None;
     job.transferred_bytes = 0;
@@ -8352,21 +8490,46 @@ mod tests {
     const IMPORT_NAR_SHA256_FILL_BYTE: u8 = 7;
     const IMPORT_NAR_SIZE_BYTES: u64 = 1;
     const CORRUPTED_TRANSFER_PAYLOAD_BYTE: u8 = b'X';
-    const OPERATOR_RAIL_LOG_START_CURSOR: u64 = 1;
-    const OPERATOR_RAIL_LOG_NEXT_CURSOR: u64 = 2;
+    const OPERATOR_RAIL_LOG_START_CURSOR: u64 = 0;
+    const OPERATOR_RAIL_LOG_NEXT_CURSOR: u64 = 1;
     const TEST_ATTEMPT_NOW_UNIX_S: u64 = 100;
     const TEST_ATTEMPT_DEADLINE_UNIX_S: u64 = 10_000;
     const TEST_ATTEMPT_OUTPUT_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const TEST_RETRY_NOW_UNIX_S: u64 = 110;
     const TEST_RETRY_FAILURE_UNIX_S: u64 = 100;
     const TEST_HEARTBEAT_OBSERVED_UNIX_S: u64 = 101;
-    const TEST_LOG_CURSOR: u64 = 1;
+    const TEST_LOG_CURSOR: u64 = 0;
     const TEST_INTERACTIVE_TRANSFER_BYTES: usize = 32_768;
     const TEST_INTERACTIVE_PATTERN_MODULUS: usize = 251;
     const TEST_INTERACTIVE_NOW_UNIX_S: u64 = 1_000;
     const TEST_INTERACTIVE_LEASE_EXPIRES_UNIX_S: u64 = 2_000;
     const TEST_TRANSFER_CHECKPOINT: u64 = 1;
     const TEST_TRANSFERRED_BYTES: u64 = 64;
+
+    fn fixture_log_control_summary(
+        retained_start_cursor: u64,
+        next_cursor: u64,
+        truncated: bool,
+    ) -> RemoteAttemptLogControlSummary {
+        let digest = RemoteAttemptLogDigest::new("a".repeat(BLAKE3_HEX_LENGTH_CHARS)).unwrap();
+        RemoteAttemptLogControlSummary {
+            scope: RemoteAttemptLogScope {
+                job_id: RemoteJobId::new("diagnostic-log-job").unwrap(),
+                attempt_id: RemoteAttemptId::new("diagnostic-log-attempt").unwrap(),
+                fence_generation: RemoteFenceGeneration::INITIAL,
+            },
+            retention_policy: RemoteLogRetentionPolicy::default(),
+            retained_start_cursor,
+            next_cursor,
+            retained_record_count: 1,
+            retained_payload_bytes: 3,
+            head_record_blake3: Some(digest.clone()),
+            head_segment_blake3: Some(digest.clone()),
+            manifest_blake3: digest.clone(),
+            truncation_anchor_blake3: truncated.then_some(digest),
+            truncated,
+        }
+    }
 
     fn fixture_attempt_time(now_unix_s: u64) -> RemoteAttemptTimeFacts {
         RemoteAttemptTimeFacts {
@@ -8425,6 +8588,80 @@ mod tests {
             RemoteLogRetentionPolicy::default(),
         )
         .expect("fixture report applies")
+    }
+
+    fn persisted_log_fixture(
+        payloads: &[&str],
+        retention: RemoteLogRetentionPolicy,
+    ) -> (tempfile::TempDir, RemoteCoordinatorState, RemoteJobId) {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let dispatch = admit_fixture_dispatch(&mut state, &fixture_coordinator_request()).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let start = fixture_attempt_report(&state, &job_id, "persisted-log-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(&mut state, &start);
+        for (cursor, payload) in payloads.iter().enumerate() {
+            let cursor = u64::try_from(cursor).expect("bounded fixture cursor fits u64");
+            let report = fixture_attempt_report(
+                &state,
+                &job_id,
+                &format!("persisted-log-{cursor}"),
+                RemoteAttemptReportPayload::LogAppend {
+                    cursor,
+                    bytes: (*payload).to_string(),
+                },
+            );
+            apply_coordinator_attempt_report(
+                &mut state,
+                &report,
+                RemoteAttemptAuthorizationFacts {
+                    worker_authorized: true,
+                    output_admission_authorized: true,
+                },
+                retention,
+            )
+            .expect("persisted log append applies");
+        }
+        (temp, state, job_id)
+    }
+
+    fn assert_persisted_segment_tamper_rejected(mutate: impl FnOnce(&mut serde_json::Value)) {
+        const REPLAY_BYTES_MAX: u64 = 1_024;
+        let (temp, state, job_id) = persisted_log_fixture(&["diagnostic"], RemoteLogRetentionPolicy::default());
+        let summary = state.jobs[&job_id].immutable_log.as_ref().expect("log summary exists");
+        let manifest = crate::remote_attempt_log_store::load_remote_attempt_log_manifest(
+            temp.path(),
+            &summary.scope,
+            immutable_attempt_log_policy(summary.retention_policy).unwrap(),
+        )
+        .unwrap();
+        let segment = manifest.segments.first().expect("retained segment exists");
+        let path = crate::remote_attempt_log_store::remote_attempt_log_segment_path(
+            temp.path(),
+            &summary.scope,
+            &segment.segment_blake3,
+        );
+        let mut value: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        mutate(&mut value);
+        fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+        let state_before = state.clone();
+        let control_before = fs::read(coordinator_state_path(temp.path())).unwrap();
+        let error = replay_coordinator_attempt_log(&state, &job_id, RemoteAttemptLogReplayRequest {
+            from_cursor: summary.retained_start_cursor,
+            record_count_max: 1,
+            payload_bytes_max: REPLAY_BYTES_MAX,
+        })
+        .expect_err("tampered immutable segment fails closed");
+
+        assert!(error.starts_with("attempt-log-"));
+        assert_eq!(state, state_before);
+        assert_eq!(fs::read(coordinator_state_path(temp.path())).unwrap(), control_before);
     }
 
     fn fixture_report_for_attempt(
@@ -10530,7 +10767,11 @@ mod tests {
 
     #[test]
     fn coordinator_conflicting_event_digest_changes_no_mutable_surface() {
-        let mut state = RemoteCoordinatorState::default();
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
         apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
         let request = fixture_coordinator_request();
         let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
@@ -10830,7 +11071,14 @@ mod tests {
                 }
             },
             "live_output_claims": { "legacy-output": "a".repeat(BLAKE3_HEX_LENGTH_CHARS) },
-            "logs": {}
+            "logs": {
+                (job_id): [{
+                    "cursor": 7,
+                    "bytes": "legacy diagnostic bytes",
+                    "event_id": null,
+                    "payload_digest": null
+                }]
+            }
         });
         fs::write(
             coordinator_state_path(temp.path()),
@@ -10846,8 +11094,16 @@ mod tests {
         assert!(!job.result_available);
         assert!(job.current_attempt.is_none());
         assert_eq!(job.last_attempt_reason_code, Some(RemoteAttemptReasonCode::LegacyStateRejected));
+        let migration = state.legacy_log_migration.as_ref().expect("legacy logs receive a bounded non-claim summary");
+        let persisted_json: serde_json::Value = serde_json::from_str(&persisted).expect("migrated state parses");
         assert!(state.live_output_claims.is_empty());
         assert!(persisted.contains("legacy-state-rejected"));
+        assert_eq!(migration.legacy_job_count, 1);
+        assert_eq!(migration.legacy_chunk_count, 1);
+        assert_eq!(migration.classification, LEGACY_LOG_MIGRATION_CLASSIFICATION);
+        assert_eq!(migration.non_claim, LEGACY_LOG_MIGRATION_NON_CLAIM);
+        assert!(persisted_json.get("logs").is_none());
+        assert!(job.immutable_log.is_none());
     }
 
     #[test]
@@ -11021,38 +11277,150 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_log_replay_stays_bounded_for_slow_subscribers() {
-        let existing = vec![
-            RemoteCoordinatorLogChunk {
-                cursor: 1,
-                bytes: "aa".to_string(),
-                event_id: None,
-                payload_digest: None,
-            },
-            RemoteCoordinatorLogChunk {
-                cursor: 2,
-                bytes: "bb".to_string(),
-                event_id: None,
-                payload_digest: None,
-            },
-        ];
-        let next = RemoteCoordinatorLogChunk {
-            cursor: 3,
-            bytes: "cc".to_string(),
-            event_id: None,
-            payload_digest: None,
+    fn coordinator_immutable_log_restarts_replays_and_retains_bounded_segments() {
+        const APPEND_COUNT: u64 = 4;
+        const RETAINED_COUNT: usize = 2;
+        const RETAINED_BYTES: u64 = 64;
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
         };
-        let policy = RemoteLogRetentionPolicy {
-            max_chunks: 2,
-            max_bytes: 4,
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let dispatch = admit_fixture_dispatch(&mut state, &fixture_coordinator_request()).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
         };
-        let plan = retain_remote_log_chunks(&existing, next, 1, policy).expect("bounded log plan");
+        let start = fixture_attempt_report(&state, &job_id, "immutable-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(&mut state, &start);
+        let retention = RemoteLogRetentionPolicy {
+            max_chunks: RETAINED_COUNT,
+            max_bytes: RETAINED_BYTES,
+        };
+        for cursor in 0..APPEND_COUNT {
+            let report = fixture_attempt_report(
+                &state,
+                &job_id,
+                &format!("immutable-log-{cursor}"),
+                RemoteAttemptReportPayload::LogAppend {
+                    cursor,
+                    bytes: format!("line-{cursor}"),
+                },
+            );
+            let applied = apply_coordinator_attempt_report(
+                &mut state,
+                &report,
+                RemoteAttemptAuthorizationFacts {
+                    worker_authorized: true,
+                    output_admission_authorized: true,
+                },
+                retention,
+            )
+            .expect("immutable log report applies");
+            assert_eq!(applied.disposition, RemoteAttemptApplyDisposition::Applied);
+        }
+        let restarted = load_coordinator_state(temp.path()).expect("coordinator and immutable log restart");
+        let summary = restarted.jobs[&job_id].immutable_log.as_ref().expect("immutable log summary persists");
+        let replay = replay_coordinator_attempt_log(&restarted, &job_id, RemoteAttemptLogReplayRequest {
+            from_cursor: summary.retained_start_cursor,
+            record_count_max: u32::try_from(RETAINED_COUNT).unwrap(),
+            payload_bytes_max: RETAINED_BYTES,
+        })
+        .expect("retained immutable log replays");
 
-        assert!(plan.truncated);
-        assert_eq!(plan.dropped_bytes, 2);
-        assert_eq!(plan.retained_chunks.len(), 2);
-        assert_eq!(plan.replay_chunks[0].cursor, 2);
-        assert_eq!(plan.next_cursor, 4);
+        assert_eq!(summary.next_cursor, APPEND_COUNT);
+        assert_eq!(summary.retained_start_cursor, APPEND_COUNT - u64::try_from(RETAINED_COUNT).unwrap());
+        assert_eq!(summary.retained_record_count, u32::try_from(RETAINED_COUNT).unwrap());
+        assert!(summary.truncated);
+        assert!(summary.truncation_anchor_blake3.is_some());
+        assert_eq!(replay.records.len(), RETAINED_COUNT);
+        assert_eq!(replay.next_cursor, APPEND_COUNT);
+        assert!(!replay.has_more);
+    }
+
+    #[test]
+    fn coordinator_replay_rejects_sequence_cursor_previous_digest_event_and_payload_tamper() {
+        let digest = "b".repeat(BLAKE3_HEX_LENGTH_CHARS);
+        assert_persisted_segment_tamper_rejected(|value| {
+            value["records"][0]["sequence"] = serde_json::Value::from(1_u64);
+        });
+        assert_persisted_segment_tamper_rejected(|value| {
+            value["records"][0]["cursor"] = serde_json::Value::from(1_u64);
+        });
+        assert_persisted_segment_tamper_rejected(|value| {
+            value["records"][0]["previous_record_blake3"] = serde_json::Value::String(digest);
+        });
+        assert_persisted_segment_tamper_rejected(|value| {
+            value["records"][0]["event_id"] = serde_json::Value::String("changed-event".to_string());
+        });
+        assert_persisted_segment_tamper_rejected(|value| {
+            value["records"][0]["payload"] = serde_json::json!([116, 97, 109, 112, 101, 114]);
+        });
+    }
+
+    #[test]
+    fn coordinator_replay_rejects_tampered_anchor_and_after_head_cursor_without_state_mutation() {
+        const RETAINED_CHUNKS: usize = 2;
+        const RETAINED_BYTES: u64 = 128;
+        let retention = RemoteLogRetentionPolicy {
+            max_chunks: RETAINED_CHUNKS,
+            max_bytes: RETAINED_BYTES,
+        };
+        let (temp, state, job_id) = persisted_log_fixture(&["one", "two", "three"], retention);
+        let summary = state.jobs[&job_id].immutable_log.as_ref().expect("log summary exists");
+        let anchor_digest = summary.truncation_anchor_blake3.as_ref().expect("retention anchor exists");
+        let anchor_path =
+            crate::remote_attempt_log_store::remote_attempt_log_anchor_path(temp.path(), &summary.scope, anchor_digest);
+        let state_before = state.clone();
+        let control_before = fs::read(coordinator_state_path(temp.path())).unwrap();
+        let after_head = replay_coordinator_attempt_log(&state, &job_id, RemoteAttemptLogReplayRequest {
+            from_cursor: summary.next_cursor.checked_add(1).unwrap(),
+            record_count_max: u32::try_from(RETAINED_CHUNKS).unwrap(),
+            payload_bytes_max: RETAINED_BYTES,
+        })
+        .expect_err("after-head cursor fails closed");
+        fs::write(&anchor_path, b"{}").unwrap();
+        let anchor_error = replay_coordinator_attempt_log(&state, &job_id, RemoteAttemptLogReplayRequest {
+            from_cursor: summary.retained_start_cursor,
+            record_count_max: u32::try_from(RETAINED_CHUNKS).unwrap(),
+            payload_bytes_max: RETAINED_BYTES,
+        })
+        .expect_err("tampered anchor fails closed");
+
+        assert_eq!(after_head, RemoteAttemptLogReasonCode::CursorAfterHead.as_str());
+        assert!(anchor_error.contains("anchor-parse-failed") || anchor_error.contains("anchor-content-mismatch"));
+        assert_eq!(state, state_before);
+        assert_eq!(fs::read(coordinator_state_path(temp.path())).unwrap(), control_before);
+    }
+
+    #[test]
+    fn stale_fence_log_append_never_touches_superseded_attempt_manifest() {
+        let (temp, mut state, job_id) = persisted_log_fixture(&["current"], RemoteLogRetentionPolicy::default());
+        register_second_fixture_worker(&mut state);
+        let superseded = state.jobs[&job_id].current_attempt.as_ref().unwrap().clone();
+        let old_scope = state.jobs[&job_id].immutable_log.as_ref().unwrap().scope.clone();
+        let manifest_path = crate::remote_attempt_log_store::remote_attempt_log_manifest_path(temp.path(), &old_scope);
+        let manifest_before = fs::read(&manifest_path).unwrap();
+        reassign_coordinator_attempt(
+            &mut state,
+            &job_id,
+            "builder-2",
+            RemoteAttemptFailureClass::Retryable,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_retry_time(),
+        )
+        .expect("replacement attempt persists");
+        let stale = fixture_report_for_attempt(&superseded, "stale-fence-log", RemoteAttemptReportPayload::LogAppend {
+            cursor: 1,
+            bytes: "must-not-append".to_string(),
+        });
+        let state_before = state.clone();
+        let rejected = apply_fixture_attempt_report(&mut state, &stale);
+
+        assert_eq!(rejected.disposition, RemoteAttemptApplyDisposition::Rejected);
+        assert_eq!(rejected.reason_code, RemoteAttemptReasonCode::StaleReportRejected);
+        assert_eq!(fs::read(&manifest_path).unwrap(), manifest_before);
+        assert_eq!(state, state_before);
     }
 
     #[test]
@@ -11091,8 +11459,7 @@ mod tests {
             live_output_claims: Vec::new(),
             result_available: false,
             lost_phase: Some(RemoteFailurePhase::TransportSetup),
-            log_start_cursor: 7,
-            log_next_cursor: 9,
+            immutable_log: Some(fixture_log_control_summary(7, 9, true)),
             short_error: Some(format!("diagnostic\u{0007}{}", "x".repeat(MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES))),
             current_attempt: None,
             transfer_checkpoint: None,
@@ -11100,20 +11467,15 @@ mod tests {
             output_admission_completed: false,
             last_attempt_reason_code: Some(RemoteAttemptReasonCode::LegacyStateRejected),
         });
-        state.logs.insert(job_id, vec![RemoteCoordinatorLogChunk {
-            cursor: 8,
-            bytes: "log".to_string(),
-            event_id: None,
-            payload_digest: None,
-        }]);
         let snapshot =
             coordinator_status_snapshot("coordinator-1", 1, &state, &[], &[]).expect("status snapshot renders");
         let rendered = serde_json::to_string(&snapshot).expect("status serializes");
 
         assert_eq!(snapshot.recent_failures.len(), 1);
         assert_eq!(snapshot.recent_failures[0].lost_phase, Some(RemoteFailurePhase::TransportSetup));
-        assert_eq!(snapshot.log_cursors[0].start_cursor, 7);
+        assert_eq!(snapshot.log_cursors[0].retained_start_cursor, 7);
         assert_eq!(snapshot.log_cursors[0].next_cursor, 9);
+        assert!(snapshot.log_cursors[0].truncated);
         assert!(snapshot.recent_failures[0].short_error.as_ref().unwrap().contains("<truncated>"));
         assert!(!rendered.contains('\u{0007}'));
         assert_eq!(bounded_untrusted_text("authorization bearer SHOULD_NOT_LEAK"), SECRET_REDACTION);
@@ -11355,8 +11717,7 @@ mod tests {
             live_output_claims: Vec::new(),
             result_available: false,
             lost_phase: Some(RemoteFailurePhase::BuildExecution),
-            log_start_cursor: 0,
-            log_next_cursor: 0,
+            immutable_log: None,
             short_error: Some("worker restart lost job".to_string()),
             current_attempt: None,
             transfer_checkpoint: None,
@@ -12067,7 +12428,11 @@ mod tests {
     }
 
     fn fixture_remote_operator_status(client: &RemoteLoopbackClient) -> RemoteCoordinatorStatusSnapshot {
-        let mut state = RemoteCoordinatorState::default();
+        let temp = tempfile::tempdir().expect("operator rail state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
         apply_worker_registration(&mut state, fixture_worker_registration()).expect("operator rail worker registers");
         let request = fixture_remote_operator_coordinator_request(client);
         let decision = admit_fixture_dispatch(&mut state, &request).expect("operator rail dispatch admits");
@@ -12087,7 +12452,10 @@ mod tests {
                 output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
             });
         apply_fixture_attempt_report(&mut state, &ready);
-        assert_eq!(state.jobs[&job_id].log_next_cursor, OPERATOR_RAIL_LOG_NEXT_CURSOR);
+        assert_eq!(
+            state.jobs[&job_id].immutable_log.as_ref().map(|log| log.next_cursor),
+            Some(OPERATOR_RAIL_LOG_NEXT_CURSOR)
+        );
         coordinator_status_snapshot("builder-1", DEFAULT_REMOTE_CONCURRENCY, &state, &[], &[fixture_ticket()])
             .expect("operator rail status renders")
     }
