@@ -28,7 +28,7 @@ During the later live-consumer audit, the pre-edit `scripts/check-real-release-d
 - Pueue task 1201: receipt checker and summarizer `--self-test` commands — **PASS** for both, including negative rejection of false final validity and reordered checks.
 - Pueue task 1099: `rustfmt --check` over all touched Rust files plus `git diff --check` — **PASS**.
 
-A broader substring run (pueue task 1045) selected the unrelated attestation test `attest_witness_show_and_release_verify_report_quorum_satisfied`; 51 release-command tests passed and that attestation test failed because it observed `source_acquisition_mode = "unspecified"` instead of its expected `"manual-operator-supplied"`. The requested release-command slice is proven by tasks 1058 and 1059; this unrelated attestation assertion remains a non-claim and was not changed here.
+A broader substring run (pueue task 1045) selected the unrelated attestation test `attest_witness_show_and_release_verify_report_quorum_satisfied`; 51 release-command tests passed and that attestation test initially failed because its manually authored witness fixture retained the constructor's explicit `source_acquisition_mode = "unspecified"`. Integration commit `f1f4e9a7` now marks manually authored fixtures as `manual-operator-supplied`; the full release CLI suite subsequently passed in pueue task 1600.
 
 ## Cairn validation and gates
 
@@ -46,4 +46,113 @@ After every task was checked and linked to this evidence file, the completed pac
 - Pueue task 1155: design gate — **PASS**, receipt `382775b91259b40494975b81aea6216dc7487010ee3abd0438fd1e8fa47fbe27`.
 - Pueue task 1160: tasks gate — **PASS**, receipt `a6421407b30a56ad9d9b2b2ec4541b1e70ca69dfeae93f1ed78b69b484ff4f5e`.
 
-No sync or archive command was run, by request.
+No sync or archive command was run in the implementation worktree.
+
+## Main-branch integration validation
+
+All Cargo commands below used isolated target directory `/tmp/mantle-main-release-target` with `SNIX_BUILD_SANDBOX_SHELL=/bin/sh`.
+
+- Pueue task 1604: `cargo test -p crunch-release-core --lib` — **PASS**, `161 passed; 0 failed`.
+- Pueue task 1559: `cargo test -p mantle --bin mantle release_evidence::` and `release_cmd::tests` — **PASS**, respectively `26 passed; 0 failed` and `16 passed; 0 failed`.
+- Pueue task 1600: `cargo test -p mantle --test release_cli` — **PASS**, `118 passed; 0 failed`; this includes every final-decision positive/negative fixture and the previously stale witness fixture.
+- Pueue task 1591: `cargo test -p mantle --bin mantle release_reproducibility::tests` — **PASS**, `12 passed; 0 failed` after binding the pre-existing determinism-normalization policy before proof promotion.
+- Pueue task 1569: strict first-party core clippy (`cargo clippy -p crunch-release-core --lib --no-deps -- -D warnings`) — **PASS**.
+- Pueue task 1606: root binary clippy completed at the repository warning baseline with **zero diagnostics in the touched release files**.
+- Pueue task 1610: `cargo check -p mantle --bin mantle`, targeted rustfmt check, and `git diff --check` — **PASS**.
+
+## Final pre-sync Cairn evidence
+
+Pueue task 1649 ran the authoritative Cairn CLI with `--root . --policy cairn-policy/generated/cairn-policy.json`.
+
+### Validation
+
+```text
+{
+  "change_issues": [],
+  "changes": 17,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 42,
+  "valid": true
+}
+```
+
+### Proposal gate
+
+```text
+{
+  "change": "defer-release-verification-success",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "46ed7afa34910fceb2c0d1dbbbdaab4be4ba454d97d7ae7d90dede06016491fc",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "ed81ae88929399aeca328e5189798c52b1395cb268ffe05f6cb129b60e4f2c6a",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+### Design gate
+
+```text
+{
+  "change": "defer-release-verification-success",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "24f3208ecba16e33f400f3a9662bb3077c242486a8df16a5c775cdd6e1aa070f",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "b6471e287a55bab3a502d761d522ef7cb7fcc4530e9ffa760d45b08cea03841e",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+### Tasks gate
+
+```text
+{
+  "change": "defer-release-verification-success",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "5eee9ee04a0006dfd9c7bb0901eef6e04ab8a86cdab54a42daea913c77c71995",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "7175c05ef6a0bce394ea2423d8ad8d13213de238feb9935638af395b4b277774",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
