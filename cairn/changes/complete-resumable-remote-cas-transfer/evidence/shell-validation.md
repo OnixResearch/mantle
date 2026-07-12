@@ -14,15 +14,15 @@ Date: 2026-07-12
 
 ## Focused evidence
 
-Pueue task 684:
+Pueue task 691:
 
 ```text
 cargo test -p mantle --bin mantle remote_transfer::tests:: -- --nocapture
 
-test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1374 filtered out; finished in 0.04s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1374 filtered out; finished in 0.21s
 ```
 
-This includes positive multi-chunk upload/download interruption, current-fence resume, process restart, no duplicate resend, complete-content zero-byte cutoff, socket data framing, and delta/full fallback. Negative coverage includes tampered acknowledged chunks, stale fence scope, expired leases, missing admission, oversized control/total/inline inputs, and digest/identity rejection. The child-process rails each also reported `1 passed; 0 failed`.
+This includes positive multi-chunk upload/download interruption, an 8 MiB bounded local output rail, current-fence resume, process restart, no duplicate resend, complete-content zero-byte cutoff, socket data framing, and delta/full fallback. Negative coverage includes tampered acknowledged chunks, stale fence scope, expired leases, missing admission, oversized control/total/inline inputs, and digest/identity rejection. The child-process rails each also reported `1 passed; 0 failed`.
 
 Pueue task 673:
 

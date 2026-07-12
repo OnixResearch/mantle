@@ -1326,17 +1326,34 @@ mod tests {
     use super::*;
 
     const TEST_DATA_BYTES: usize = 150_000;
+    const TEST_LARGE_OUTPUT_BYTES: usize = 8_388_608;
+    const TEST_PATTERN_MODULUS: usize = 251;
+    const TEST_FILE_BUFFER_BYTES: usize = 65_536;
     const TEST_NOW_UNIX_S: u64 = 1_000;
     const TEST_LEASE_EXPIRES_UNIX_S: u64 = 2_000;
     const TEST_EXPIRED_UNIX_S: u64 = 2_001;
     const CHILD_SENTINEL_ENV: &str = "MANTLE_REMOTE_TRANSFER_RESUME_CHILD";
     const CHILD_ROOT_ENV: &str = "MANTLE_REMOTE_TRANSFER_RESUME_ROOT";
     const CHILD_DIRECTION_ENV: &str = "MANTLE_REMOTE_TRANSFER_RESUME_DIRECTION";
+    const CHILD_DATA_BYTES_ENV: &str = "MANTLE_REMOTE_TRANSFER_RESUME_DATA_BYTES";
     const CHILD_DOWNLOAD_DIRECTION: &str = "download";
     const CHILD_REPORT_FILE: &str = "child-report.json";
 
-    fn test_bytes() -> Vec<u8> {
-        (0..TEST_DATA_BYTES).map(|index| (index % 251) as u8).collect()
+    fn write_test_pattern(path: &Path, total_bytes: usize) {
+        let mut file = File::create(path).unwrap();
+        let mut buffer = [0_u8; TEST_FILE_BUFFER_BYTES];
+        let mut offset = 0_usize;
+        while offset < total_bytes {
+            let write_bytes = std::cmp::min(TEST_FILE_BUFFER_BYTES, total_bytes - offset);
+            for (index, byte) in buffer[..write_bytes].iter_mut().enumerate() {
+                *byte = u8::try_from((offset + index) % TEST_PATTERN_MODULUS).unwrap();
+            }
+            file.write_all(&buffer[..write_bytes]).unwrap();
+            offset += write_bytes;
+        }
+        file.sync_all().unwrap();
+        assert_eq!(fs::metadata(path).unwrap().len(), u64::try_from(total_bytes).unwrap());
+        assert!(total_bytes > 0);
     }
 
     fn admitted_options(interrupt_after_chunks: Option<u32>) -> RemoteTransferRunOptions {
@@ -1353,9 +1370,13 @@ mod tests {
     }
 
     fn prepared_fixture(root: &Path) -> PreparedRemoteTransfer {
+        prepared_fixture_with_size(root, TEST_DATA_BYTES)
+    }
+
+    fn prepared_fixture_with_size(root: &Path, data_bytes: usize) -> PreparedRemoteTransfer {
         fs::create_dir_all(root).unwrap();
         let source = root.join("source.bin");
-        fs::write(&source, test_bytes()).unwrap();
+        write_test_pattern(&source, data_bytes);
         let policy = RemoteTransferPolicy::default();
         let artifact = prepare_file_transfer_artifact(
             RemoteTransferArtifactId::new("fixture:root").unwrap(),
@@ -1772,7 +1793,7 @@ mod tests {
     #[test]
     fn download_resume_across_process_reuses_verified_receiver_chunks() {
         let root = tempfile::tempdir().unwrap();
-        let prepared = prepared_fixture(root.path());
+        let prepared = prepared_fixture_with_size(root.path(), TEST_LARGE_OUTPUT_BYTES);
         let state_dir = root.path().join("state");
         let receiver = remote_transfer_receiver_root(&state_dir, &prepared.manifest.manifest.session_id);
         let mut options = admitted_options(Some(FIRST_CHUNK_COUNT));
@@ -1793,6 +1814,7 @@ mod tests {
             .env(CHILD_SENTINEL_ENV, "1")
             .env(CHILD_ROOT_ENV, root.path())
             .env(CHILD_DIRECTION_ENV, CHILD_DOWNLOAD_DIRECTION)
+            .env(CHILD_DATA_BYTES_ENV, TEST_LARGE_OUTPUT_BYTES.to_string())
             .status()
             .unwrap();
         assert!(status.success());
@@ -1809,7 +1831,11 @@ mod tests {
             return;
         }
         let root = PathBuf::from(std::env::var_os(CHILD_ROOT_ENV).unwrap());
-        let prepared = prepared_fixture(&root);
+        let data_bytes = std::env::var(CHILD_DATA_BYTES_ENV)
+            .ok()
+            .map(|value| value.parse::<usize>().unwrap())
+            .unwrap_or(TEST_DATA_BYTES);
+        let prepared = prepared_fixture_with_size(&root, data_bytes);
         let state_dir = root.join("state");
         let receiver = remote_transfer_receiver_root(&state_dir, &prepared.manifest.manifest.session_id);
         let mut options = admitted_options(None);
