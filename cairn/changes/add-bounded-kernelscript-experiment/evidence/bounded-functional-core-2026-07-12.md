@@ -190,6 +190,10 @@ verdict: PASS
 
 No spec sync, archive, pull request, or push was performed.
 
+## Main-branch integration checkpoint
+
+After integration and ADR renumbering to 0022, pueue task `59` successfully reran the focused core tests, Mantle integration test, strict core Clippy, and `git diff --check` with an isolated `/tmp` Cargo target. Pueue task `88` then reran Cairn validation plus proposal/design/tasks gates against the integrated main tree; the final tasks gate remained `PASS` with no issues. These checks do not remove the authority blockers below.
+
 ## Exact blockers
 
 1. **`compiler-dependency-lock-unavailable`** — no authoritative immutable opam
