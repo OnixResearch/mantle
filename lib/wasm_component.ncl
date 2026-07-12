@@ -46,6 +46,18 @@ let PackageKind = [| 'wit, 'component-library |] in
 let RustProfile = [| 'debug, 'release |] in
 let WizerMode = [| 'disabled, 'diagnostic, 'deterministic |] in
 let AotMode = [| 'disabled, 'trusted-native |] in
+let WasiSubsystem = [|
+  'cli,
+  'clocks,
+  'environment,
+  'filesystem,
+  'http,
+  'network,
+  'poll,
+  'random,
+  'sockets,
+  'stdio,
+|] in
 let VirtualizationMode = [| 'deny, 'allow, 'ignore, 'fixed-value, 'virtual-mount, 'passthrough |] in
 let OutputClass = [|
   'tool-input,
@@ -128,11 +140,17 @@ let RustImplementation = {
   profile | RustProfile | default = 'release,
 } in
 
+let RequiredImport = {
+  name | NonEmptyString,
+  world | NonEmptyString,
+} in
+
 let CompositionNode = {
   id | NonEmptyString,
   package | NonEmptyString,
   world | NonEmptyString,
   artifact | StoreObject,
+  required_imports | Array RequiredImport | default = [],
 } in
 
 let CompositionEdge = {
@@ -153,9 +171,10 @@ let Composition = {
 } in
 
 let VirtualizationRule = {
-  subsystem | NonEmptyString,
+  subsystem | WasiSubsystem,
   mode | VirtualizationMode,
   value | String | optional,
+  value_identity_blake3 | Blake3Hex | optional,
   input | StoreObject | optional,
   guest_path | String | optional,
   review_id | String | optional,
@@ -219,12 +238,20 @@ let render_registry_mapping = fun mapping =>
   "%{quote mapping.namespace} = { registry = %{quote mapping.registry}, metadata = { preferredProtocol = \"oci\", oci = { registry = %{quote mapping.oci_registry}, namespacePrefix = %{quote mapping.namespace_prefix} } } }"
 in
 
+let render_registry_transport = fun mapping =>
+  "[registry.%{quote mapping.registry}.oci]\nprotocol = %{quote mapping.protocol}\n"
+in
+
 let render_wkg_config = fun manifest =>
   let namespace_lines = manifest.package_resolution.registries
     |> std.array.map render_registry_mapping
     |> std.string.join "\n"
   in
-  "default_registry = %{quote manifest.package_resolution.default_registry}\n\n[namespace_registries]\n%{namespace_lines}\n"
+  let transport_sections = manifest.package_resolution.registries
+    |> std.array.map render_registry_transport
+    |> std.string.join "\n"
+  in
+  "default_registry = %{quote manifest.package_resolution.default_registry}\n\n[namespace_registries]\n%{namespace_lines}\n\n%{transport_sections}"
 in
 
 let render_wkg_manifest = fun manifest =>
@@ -326,6 +353,7 @@ let wit_selection_contract = WitSelection in
 let rust_implementation_contract = RustImplementation in
 let composition_contract = Composition in
 let virtualization_contract = Virtualization in
+let wasi_subsystem_contract = WasiSubsystem in
 let validation_profiles_contract = ValidationProfiles in
 let wizer_contract = Wizer in
 let aot_contract = Aot in
@@ -348,6 +376,7 @@ let component_export_request_contract = ComponentExportRequest in
   RustImplementation = rust_implementation_contract,
   Composition = composition_contract,
   Virtualization = virtualization_contract,
+  WasiSubsystem = wasi_subsystem_contract,
   ValidationProfiles = validation_profiles_contract,
   Wizer = wizer_contract,
   Aot = aot_contract,

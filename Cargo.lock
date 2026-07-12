@@ -1492,6 +1492,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-wasm-component-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4371,6 +4380,7 @@ dependencies = [
  "crunch-release-core",
  "crunch-shell",
  "crunch-store",
+ "crunch-wasm-component-core",
  "data-encoding",
  "digest 0.10.7",
  "flate2",

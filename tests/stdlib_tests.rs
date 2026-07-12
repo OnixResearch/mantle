@@ -419,6 +419,11 @@ fn select_round_trip_through_glue() {
 const WASM_COMPONENT_GENERATED_INPUT_COUNT: usize = 5;
 const WASM_COMPONENT_BLAKE3_HEX_LENGTH: usize = 64;
 
+#[derive(serde::Deserialize)]
+struct WasmComponentGeneratedExport {
+    generated_inputs: Vec<crunch_wasm_component_core::GeneratedInputCandidate>,
+}
+
 fn wasm_component_export_expression() -> String {
     let digest = "a".repeat(WASM_COMPONENT_BLAKE3_HEX_LENGTH);
     format!(
@@ -511,6 +516,9 @@ fn wasm_component_manifest_exports_owned_tool_inputs() {
         crunch_eval::evaluate_str_and_deserialize(&expression, &stdlib_import_path()).unwrap();
     let generated = export["generated_inputs"].as_array().unwrap();
     let serialized = serde_json::to_string(&export).unwrap();
+    let typed: WasmComponentGeneratedExport =
+        crunch_eval::evaluate_str_and_deserialize(&expression, &stdlib_import_path()).unwrap();
+    let receipt_plan = crunch_wasm_component_core::finalize_generated_inputs(typed.generated_inputs);
 
     assert_eq!(export["schema"], "mantle-wasm-component-export-v1");
     assert_eq!(generated.len(), WASM_COMPONENT_GENERATED_INPUT_COUNT);
@@ -520,8 +528,12 @@ fn wasm_component_manifest_exports_owned_tool_inputs() {
             && item["owner"]["export_name"] == item["name"]
     }));
     assert!(serialized.contains("[namespace_registries]"));
+    assert!(serialized.contains("[registry.\\\"wasi.dev\\\".oci]"));
+    assert!(serialized.contains("protocol = \\\"https\\\""));
     assert!(serialized.contains("package demo:composition"));
     assert!(!serialized.contains("secret://registry/ghcr"));
+    assert!(receipt_plan.blockers.is_empty());
+    assert_eq!(receipt_plan.plan.unwrap().inputs.len(), WASM_COMPONENT_GENERATED_INPUT_COUNT);
 }
 
 #[test]

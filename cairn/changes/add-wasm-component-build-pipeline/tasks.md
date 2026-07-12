@@ -1,7 +1,9 @@
 ## Tasks
 
-- [ ] [serial] Define the typed Nickel component-build manifest, contracts, deterministic exports, generated-file ownership, output classes, and architecture decision record for the build-only boundary. r[mantle.wasm_component.config] r[mantle.wasm_component.evidence]
-- [ ] [depends:wasm-component-config] Implement pure manifest/lock validation, cohort identity, digest-role separation, source acquisition plans, composition graph checks, deny-all virtualization plans, transform/AOT admission, and report DTOs. r[mantle.wasm_component.functional_core] r[mantle.wasm_component.digest_roles]
+- [x] [serial] Define the typed Nickel component-build manifest, contracts, deterministic exports, generated-file ownership, output classes, and architecture decision record for the build-only boundary. r[mantle.wasm_component.config] r[mantle.wasm_component.evidence]
+  Evidence: `lib/wasm_component.ncl`, ADR 0014, embedded-stdlib parity, typed Nickel/core receipt handoff, and positive/negative `wasm_component` stdlib tests.
+- [x] [depends:wasm-component-config] Implement pure manifest/lock validation, cohort identity, digest-role separation, source acquisition plans, composition graph checks, deny-all virtualization plans, transform/AOT admission, and report DTOs. r[mantle.wasm_component.functional_core] r[mantle.wasm_component.digest_roles]
+  Evidence: no-std `crunch-wasm-component-core` with host/wasm checks, 28 positive/negative unit tests, strict Clippy, and Tiger Style validation.
 - [ ] [depends:wasm-component-config] Add explicit wkg registry configuration, fixed package resolution, checked `wkg.lock`, immutable store inputs, credential-handle redaction, offline build handoff, and stale/tampered lock denials. r[mantle.wasm_component.package_resolution]
 - [ ] [serial] Pin and package one Rust wasm32-wasip2, wit-bindgen, wasm-component-ld, wasm-tools, WAC, WASI-Virt, Wizer, and Wasmtime cohort with BLAKE3 cohort identity. r[mantle.wasm_component.cohort]
 - [ ] [depends:wasm-component-package-resolution] Add offline component compilation and exact local WAC composition without Warg or implicit live registry resolution. r[mantle.wasm_component.build] r[mantle.wasm_component.composition]

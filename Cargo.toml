@@ -16,6 +16,7 @@ members = [
   "crates/crunch-shell-core",
   "crates/crunch-release-core",
   "crates/crunch-bootstrap-core",
+  "crates/crunch-wasm-component-core",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
   "vendor/snix-build",
@@ -46,6 +47,7 @@ default_scope = [
   "-p", "crunch-shell",
   "-p", "crunch-shell-core",
   "-p", "crunch-store",
+  "-p", "crunch-wasm-component-core",
 ]
 cargo_check_args = ["--lib"]
 
@@ -126,6 +128,7 @@ fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 
 [dev-dependencies]
 crunch-delta = { path = "crates/crunch-delta" }
+crunch-wasm-component-core = { path = "crates/crunch-wasm-component-core" }
 pretty_assertions = "1.0"
 tempfile = "3"
 assert_cmd = "2"
