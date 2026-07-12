@@ -190,6 +190,33 @@ tasks: PASS, issues=[], receipt_hash=4d104181253a9415aecd75164a8f1f7a03a7483e90d
 
 The native sync dry run planned one `sync_delta_spec` action for `cairn/specs/remote-builds/spec.md` with plan hash `ccd557aa309302bf53fa7b349b77dde71af876136f5aeb7a55c6e23e68bcfec7`. It was non-mutating.
 
+## Executed sync evidence
+
+```text
+change: fence-durable-remote-attempts
+remote-builds before: d01a674a58991f0017c6d8036ce5ce9efb9242a9ec2ecb4edef72b1a92991c69
+remote-builds after: 6a5ec2df5afdfe1abbf480c026f61ea21ede3768b292e9a66b1c36e6db21e455
+plan_hash: 0c6e009294f4c4dbd4248263f713c59cb5ebf9342ccc4de113bdccc30792234b
+receipt_hash: a01612709b34f205dfa2a333311442a1e90aa4bc9864d84e71ca171f24e05567
+mutated: true
+blocked: false
+```
+
+Pueue task 2001 ran authoritative validation after sync. Exact output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 15,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 39,
+  "valid": true
+}
+```
+
 ## Scope guard
 
-No accepted spec has been synced and the active change has not been archived.
+The accepted remote-builds spec has been synced. The active change has not yet been archived.
