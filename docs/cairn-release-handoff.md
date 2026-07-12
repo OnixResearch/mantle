@@ -1,9 +1,11 @@
 # Cairn release handoff
 
 Mantle can package Cairn lifecycle evidence without claiming to own Cairn's
-readiness semantics. Release assembly measures the referenced artifact and Cairn
-policy bytes with BLAKE3, checks their declared typed identities, copies them
-under `cairn-handoff/`, and records a
+readiness semantics. Release assembly opens the descriptor and every referenced
+artifact through no-follow capability roots, enforces a 1 MiB descriptor bound
+and a 64 MiB per-artifact bound while reading, and measures the exact bytes with
+BLAKE3. It checks their declared typed identities, writes those already-measured
+bytes under `cairn-handoff/` without reopening the source path, and records a
 `mantle-cairn-release-handoff-validation-v1` receipt in `manifest.json`.
 
 Create a descriptor with schema `mantle-cairn-release-handoff-input-v1`:
@@ -44,10 +46,11 @@ mantle release create \
 The validation receipt binds the measured handoff to the exact release id,
 source archive digest, complete binary digest set, self-hosting proof-bundle
 digest, prerequisite-inventory digest, and a domain-separated BLAKE3 identity
-of the complete non-Cairn manifest projection. `mantle release verify` remeasures
-the bundle-local Cairn files and revalidates that binding. Copying a receipt to
-another bundle, removing it under a required profile, or changing any bound
-bytes is rejected.
+of the complete non-Cairn manifest projection. `mantle release verify` reopens
+the bundle-local Cairn files with the same bounded no-follow policy, remeasures
+them, and revalidates that binding. Copying a receipt to another release or
+bundle, removing it under a required profile, replacing a path with a symlink,
+or changing artifact or policy bytes is rejected.
 
 ## Onix admission
 

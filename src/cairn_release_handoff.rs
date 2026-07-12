@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -12,6 +13,9 @@ use crunch_release_core::MAX_CAIRN_HANDOFF_TEXT_BYTES_COUNT;
 use serde::Deserialize;
 
 use crate::errors::RunError;
+use crate::release_capability::ReleaseCapabilityRoot;
+use crate::release_capability::ReleaseRootKind;
+use crate::release_capability::ValidatedReleasePath;
 
 const MAX_CAIRN_HANDOFF_DESCRIPTOR_BYTES: u64 = 1_048_576;
 const MAX_CAIRN_HANDOFF_ARTIFACT_BYTES: u64 = 67_108_864;
@@ -47,8 +51,12 @@ pub fn prepare_cairn_handoff_for_bundle(
     descriptor_path: &Path,
     bundle_dir: &Path,
 ) -> Result<CairnReleaseEvidenceHandoff, RunError> {
-    let descriptor_bytes =
-        read_bounded_file(descriptor_path, MAX_CAIRN_HANDOFF_DESCRIPTOR_BYTES, "Cairn handoff descriptor")?;
+    let descriptor_bytes = read_bounded_file(
+        descriptor_path,
+        MAX_CAIRN_HANDOFF_DESCRIPTOR_BYTES,
+        "Cairn handoff descriptor",
+        ReleaseRootKind::BuildArtifact,
+    )?;
     let descriptor: CairnHandoffDescriptor = serde_json::from_slice(&descriptor_bytes).map_err(|error| {
         RunError::Internal(format!("parsing Cairn handoff descriptor {}: {error}", descriptor_path.display()))
     })?;
@@ -135,28 +143,71 @@ fn copy_and_measure(
     relative_path: &Path,
     declared_digest_blake3: String,
 ) -> Result<CairnMeasuredArtifact, RunError> {
-    let bytes = read_bounded_file(source, MAX_CAIRN_HANDOFF_ARTIFACT_BYTES, "Cairn handoff artifact")?;
+    let bytes = read_bounded_file(
+        source,
+        MAX_CAIRN_HANDOFF_ARTIFACT_BYTES,
+        "Cairn handoff artifact",
+        ReleaseRootKind::BuildArtifact,
+    )?;
+    if bytes.is_empty() {
+        return Err(RunError::Internal(format!("Cairn handoff artifact must be non-empty: {}", source.display())));
+    }
     let measured_digest_blake3 = blake3::hash(&bytes).to_hex().to_string();
     let size_bytes = u64::try_from(bytes.len())
         .map_err(|_| RunError::Internal("Cairn handoff artifact length overflowed u64".to_string()))?;
-    let bundled = crate::release_evidence::copy_file_into_bundle(source, bundle_dir, relative_path)?;
-    if bundled.size_bytes != size_bytes || bundled.digest_blake3 != measured_digest_blake3 {
-        return Err(RunError::Internal(format!(
-            "Cairn handoff source changed while being copied: {}",
-            source.display()
-        )));
-    }
+    let bundled_relative_path = write_measured_bundle_bytes(bundle_dir, relative_path, &bytes)?;
+    debug_assert!(size_bytes <= MAX_CAIRN_HANDOFF_ARTIFACT_BYTES);
+    debug_assert_eq!(measured_digest_blake3, blake3::hash(&bytes).to_hex().to_string());
     Ok(CairnMeasuredArtifact {
-        relative_path: bundled.relative_path,
+        relative_path: bundled_relative_path,
         size_bytes,
         declared_digest_blake3,
         measured_digest_blake3,
     })
 }
 
+fn write_measured_bundle_bytes(bundle_dir: &Path, relative_path: &Path, bytes: &[u8]) -> Result<String, RunError> {
+    let destination = bundle_dir.join(relative_path);
+    let parent = destination.parent().ok_or_else(|| {
+        RunError::Internal(format!("Cairn handoff bundle path has no parent: {}", destination.display()))
+    })?;
+    fs::create_dir_all(parent).map_err(|error| {
+        RunError::Internal(format!("creating Cairn handoff bundle directory {}: {error}", parent.display()))
+    })?;
+    fs::write(&destination, bytes).map_err(|error| {
+        RunError::Internal(format!("writing measured Cairn handoff bytes {}: {error}", destination.display()))
+    })?;
+    let written = read_bounded_file(
+        &destination,
+        MAX_CAIRN_HANDOFF_ARTIFACT_BYTES,
+        "bundled Cairn handoff artifact",
+        ReleaseRootKind::ReleaseEvidence,
+    )?;
+    if written != bytes {
+        return Err(RunError::Internal(format!(
+            "bundled Cairn handoff bytes changed while being written: {}",
+            destination.display()
+        )));
+    }
+    let relative_path = relative_path
+        .to_str()
+        .ok_or_else(|| RunError::Internal("Cairn handoff bundle path is not UTF-8".to_string()))?
+        .replace(std::path::MAIN_SEPARATOR, "/");
+    debug_assert!(!relative_path.is_empty());
+    debug_assert!(!Path::new(&relative_path).is_absolute());
+    Ok(relative_path)
+}
+
 fn remeasure_artifact(bundle_dir: &Path, artifact: &CairnMeasuredArtifact) -> Result<CairnMeasuredArtifact, RunError> {
     let path = bundle_dir.join(&artifact.relative_path);
-    let bytes = read_bounded_file(&path, MAX_CAIRN_HANDOFF_ARTIFACT_BYTES, "bundled Cairn handoff artifact")?;
+    let bytes = read_bounded_file(
+        &path,
+        MAX_CAIRN_HANDOFF_ARTIFACT_BYTES,
+        "bundled Cairn handoff artifact",
+        ReleaseRootKind::ReleaseEvidence,
+    )?;
+    debug_assert!(bytes.len() <= MAX_CAIRN_HANDOFF_ARTIFACT_BYTES as usize);
+    debug_assert!(!artifact.relative_path.is_empty());
     Ok(CairnMeasuredArtifact {
         relative_path: artifact.relative_path.clone(),
         size_bytes: u64::try_from(bytes.len())
@@ -166,20 +217,63 @@ fn remeasure_artifact(bundle_dir: &Path, artifact: &CairnMeasuredArtifact) -> Re
     })
 }
 
-fn read_bounded_file(path: &Path, maximum_bytes: u64, label: &str) -> Result<Vec<u8>, RunError> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| RunError::Internal(format!("reading {label} metadata {}: {error}", path.display())))?;
-    if !metadata.file_type().is_file() {
-        return Err(RunError::Internal(format!("{label} must be a regular non-symlink file: {}", path.display())));
+fn read_bounded_file(
+    path: &Path,
+    maximum_bytes: u64,
+    label: &str,
+    root_kind: ReleaseRootKind,
+) -> Result<Vec<u8>, RunError> {
+    let absolute = std::path::absolute(path)
+        .map_err(|error| RunError::Internal(format!("resolving {label} path {}: {error}", path.display())))?;
+    let parent = absolute
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("{label} path has no parent: {}", absolute.display())))?;
+    let file_name = absolute
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| RunError::Internal(format!("{label} file name is not UTF-8: {}", absolute.display())))?;
+    let relative_path = ValidatedReleasePath::new(file_name).map_err(|error| {
+        RunError::Internal(format!("validating {label} file name {}: {error:?}", absolute.display()))
+    })?;
+    let root = ReleaseCapabilityRoot::open_ambient_nofollow(root_kind, parent).map_err(|error| {
+        RunError::Internal(format!("opening no-follow {label} parent {}: {error}", parent.display()))
+    })?;
+    let file = root
+        .open_file_read_nofollow(&relative_path)
+        .map_err(|error| RunError::Internal(format!("opening no-follow {label} {}: {error}", absolute.display())))?;
+    let metadata = file.metadata().map_err(|error| {
+        RunError::Internal(format!("reading opened {label} metadata {}: {error}", absolute.display()))
+    })?;
+    if !metadata.is_file() {
+        return Err(RunError::Internal(format!("{label} must be a regular non-symlink file: {}", absolute.display())));
     }
     if metadata.len() > maximum_bytes {
         return Err(RunError::Internal(format!(
             "{label} {} is {} bytes, limit is {maximum_bytes}",
-            path.display(),
+            absolute.display(),
             metadata.len()
         )));
     }
-    fs::read(path).map_err(|error| RunError::Internal(format!("reading {label} {}: {error}", path.display())))
+    let capacity = usize::try_from(metadata.len())
+        .map_err(|_| RunError::Internal(format!("{label} byte length does not fit usize: {}", absolute.display())))?;
+    let read_limit = maximum_bytes
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal(format!("{label} read limit overflowed u64")))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    file.take(read_limit)
+        .read_to_end(&mut bytes)
+        .map_err(|error| RunError::Internal(format!("reading bounded {label} {}: {error}", absolute.display())))?;
+    let observed_bytes = u64::try_from(bytes.len())
+        .map_err(|_| RunError::Internal(format!("{label} observed byte length overflowed u64")))?;
+    if observed_bytes > maximum_bytes {
+        return Err(RunError::Internal(format!(
+            "{label} {} grew beyond the {maximum_bytes}-byte limit while being read",
+            absolute.display()
+        )));
+    }
+    debug_assert!(observed_bytes <= maximum_bytes);
+    debug_assert!(bytes.capacity() >= bytes.len());
+    Ok(bytes)
 }
 
 fn validate_descriptor_header(descriptor: &CairnHandoffDescriptor) -> Result<(), RunError> {
@@ -274,6 +368,82 @@ mod tests {
         let error = prepare_cairn_handoff_for_bundle(&descriptor, &bundle).unwrap_err();
         assert!(error.to_string().contains("declared digest"));
         assert!(!error.to_string().contains("release correctness proven"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shell_rejects_symlinked_descriptor_and_artifact_inputs() {
+        use std::os::unix::fs::symlink;
+
+        let descriptor_case = tempfile::tempdir().unwrap();
+        let descriptor_bundle = descriptor_case.path().join("bundle");
+        fs::create_dir(&descriptor_bundle).unwrap();
+        let digest = blake3::hash(ARTIFACT_BYTES).to_hex().to_string();
+        let descriptor_target = write_descriptor(descriptor_case.path(), &digest);
+        let descriptor_link = descriptor_case.path().join("handoff-link.json");
+        symlink(&descriptor_target, &descriptor_link).unwrap();
+        let descriptor_error = prepare_cairn_handoff_for_bundle(&descriptor_link, &descriptor_bundle).unwrap_err();
+
+        let artifact_case = tempfile::tempdir().unwrap();
+        let artifact_bundle = artifact_case.path().join("bundle");
+        fs::create_dir(&artifact_bundle).unwrap();
+        let descriptor = write_descriptor(artifact_case.path(), &digest);
+        let artifact_path = artifact_case.path().join("receipt.json");
+        let artifact_target = artifact_case.path().join("receipt-target.json");
+        fs::rename(&artifact_path, &artifact_target).unwrap();
+        symlink(&artifact_target, &artifact_path).unwrap();
+        let artifact_error = prepare_cairn_handoff_for_bundle(&descriptor, &artifact_bundle).unwrap_err();
+
+        assert!(descriptor_error.to_string().contains("no-follow"));
+        assert!(artifact_error.to_string().contains("no-follow"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shell_rejects_symlinked_input_parent() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let actual_parent = temp.path().join("actual");
+        let linked_parent = temp.path().join("linked");
+        let bundle = temp.path().join("bundle");
+        fs::create_dir(&actual_parent).unwrap();
+        fs::create_dir(&bundle).unwrap();
+        let digest = blake3::hash(ARTIFACT_BYTES).to_hex().to_string();
+        write_descriptor(&actual_parent, &digest);
+        symlink(&actual_parent, &linked_parent).unwrap();
+
+        let error = prepare_cairn_handoff_for_bundle(&linked_parent.join("handoff.json"), &bundle).unwrap_err();
+        assert!(error.to_string().contains("no-follow"));
+        assert!(!bundle.join(CAIRN_HANDOFF_BUNDLE_DIRECTORY).exists());
+    }
+
+    #[test]
+    fn shell_rejects_empty_artifact() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle = temp.path().join("bundle");
+        fs::create_dir(&bundle).unwrap();
+        let empty_digest = blake3::hash(b"").to_hex().to_string();
+        let descriptor = write_descriptor(temp.path(), &empty_digest);
+        fs::write(temp.path().join("receipt.json"), b"").unwrap();
+
+        let error = prepare_cairn_handoff_for_bundle(&descriptor, &bundle).unwrap_err();
+        assert!(error.to_string().contains("non-empty"));
+        assert!(!bundle.join(CAIRN_HANDOFF_BUNDLE_DIRECTORY).exists());
+    }
+
+    #[test]
+    fn shell_rejects_descriptor_over_byte_limit() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle = temp.path().join("bundle");
+        let descriptor = temp.path().join("oversized.json");
+        fs::create_dir(&bundle).unwrap();
+        let file = fs::File::create(&descriptor).unwrap();
+        file.set_len(MAX_CAIRN_HANDOFF_DESCRIPTOR_BYTES.checked_add(1).unwrap()).unwrap();
+
+        let error = prepare_cairn_handoff_for_bundle(&descriptor, &bundle).unwrap_err();
+        assert!(error.to_string().contains("limit"));
+        assert!(!bundle.join(CAIRN_HANDOFF_BUNDLE_DIRECTORY).exists());
     }
 
     #[test]

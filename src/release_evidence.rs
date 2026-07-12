@@ -3059,11 +3059,58 @@ mod tests {
         assert!(!error.to_string().contains("release correctness proven"));
     }
 
+    // r[verify mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+    #[cfg(unix)]
+    #[test]
+    fn verify_rejects_symlinked_bundle_local_cairn_bytes() {
+        use std::os::unix::fs::symlink;
+
+        let (temp, output_bundle_dir, created) = create_cairn_handoff_bundle();
+        let receipt = created.cairn_handoff_validation.as_ref().expect("Cairn receipt");
+        let artifact_path = output_bundle_dir.join(&receipt.handoff.rows[0].artifact.relative_path);
+        let replacement_target = temp.path().join("replacement-cairn-receipt.json");
+        let original_bytes = std::fs::read(&artifact_path).unwrap();
+        write_file(&replacement_target, &original_bytes);
+        std::fs::remove_file(&artifact_path).unwrap();
+        symlink(&replacement_target, &artifact_path).unwrap();
+
+        let error = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
+        assert!(error.to_string().contains("no-follow"));
+        assert!(!error.to_string().contains("release correctness proven"));
+    }
+
+    // r[verify mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+    #[test]
+    fn verify_rejects_stale_bundle_local_cairn_policy_bytes() {
+        let (_temp, output_bundle_dir, created) = create_cairn_handoff_bundle();
+        let receipt = created.cairn_handoff_validation.as_ref().expect("Cairn receipt");
+        let policy_path = output_bundle_dir.join(&receipt.handoff.rows[0].cairn_policy.relative_path);
+        write_file(&policy_path, b"stale-cairn-policy");
+
+        let error = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
+        assert!(error.to_string().contains("declared digest"));
+        assert!(!error.to_string().contains("source correctness proven"));
+    }
+
     // r[verify mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
     #[test]
     fn verify_rejects_cairn_receipt_reused_after_manifest_projection_changes() {
         let (_temp, output_bundle_dir, mut created) = create_cairn_handoff_bundle();
         created.workflow.version = "changed-after-handoff-validation".to_string();
+        let bytes = serde_json::to_vec(&created).unwrap();
+        write_file(&output_bundle_dir.join("manifest.json"), &bytes);
+
+        let error = verify_release_evidence_bundle(&output_bundle_dir).unwrap_err();
+        assert!(error.to_string().contains("bound to another release bundle"));
+        assert!(!error.to_string().contains("release correctness proven"));
+    }
+
+    // r[verify mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
+    #[test]
+    fn verify_rejects_cairn_receipt_reused_for_another_release_identity() {
+        let (_temp, output_bundle_dir, mut created) = create_cairn_handoff_bundle();
+        created.release_id = "another-release".to_string();
+        created.proof_linkage.release_id = created.release_id.clone();
         let bytes = serde_json::to_vec(&created).unwrap();
         write_file(&output_bundle_dir.join("manifest.json"), &bytes);
 

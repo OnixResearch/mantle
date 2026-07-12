@@ -1170,6 +1170,54 @@ fn release_verify_rejects_tampered_cairn_handoff_through_cli() {
         .stderr(predicate::str::contains("declared digest"));
 }
 
+// r[verify mantle.release_provenance.cairn_evidence_handoff.measured_inputs]
+#[test]
+fn release_verify_rejects_stale_cairn_policy_through_cli() {
+    let (_temp, bundle_dir, manifest) = make_valid_bundle_with_cairn();
+    let receipt = manifest.cairn_handoff_validation.as_ref().expect("Cairn handoff receipt");
+    write_file(&bundle_dir.join(&receipt.handoff.rows[0].cairn_policy.relative_path), b"stale-cairn-policy");
+
+    crunch()
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("declared digest"));
+}
+
+// r[verify mantle.build_correctness.source_root_capability]
+// r[verify mantle.build_correctness.source_root_capability.boundary]
+#[test]
+fn bootstrap_capabilities_reports_honest_public_status() {
+    let output = crunch().arg("--json").arg("bootstrap").arg("capabilities").output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let operations = report["operations"].as_array().expect("capability operations");
+    let bootstrap = operations
+        .iter()
+        .find(|operation| operation["operation"] == "bootstrap-source-root-materialization")
+        .expect("bootstrap source-root capability");
+    let self_build = operations
+        .iter()
+        .find(|operation| operation["operation"] == "self-build-source-root")
+        .expect("self-build source-root capability");
+
+    assert_eq!(report["schema"], "mantle-source-root-capability-report-v1");
+    assert_eq!(self_build["status"], "unsupported");
+    assert!(self_build["command"].is_null());
+    assert!(!self_build["blockers"].as_array().unwrap().is_empty());
+    if bootstrap["status"] == "supported-host-assisted" {
+        assert!(bootstrap["command"].is_array());
+        assert_eq!(bootstrap["capability_class"], "host-assisted-source-materialization");
+    } else {
+        assert_eq!(bootstrap["status"], "unsupported");
+        assert!(bootstrap["command"].is_null());
+        assert!(!bootstrap["blockers"].as_array().unwrap().is_empty());
+    }
+    assert!(bootstrap["non_claims"][0].as_str().unwrap().contains("not a full-source bootstrap"));
+}
+
 // r[verify mantle.build_correctness.hermetic_handoff.fixtures.positive]
 #[test]
 fn onix_release_profile_accepts_measured_handoff_and_strict_deterministic_evidence() {
@@ -1196,28 +1244,30 @@ fn onix_release_profile_accepts_measured_handoff_and_strict_deterministic_eviden
 
 // r[verify mantle.build_correctness.hermetic_handoff.fixtures.negative]
 #[test]
-fn onix_release_profile_rejects_practical_deterministic_receipt() {
+fn onix_release_profile_rejects_practical_and_impure_deterministic_receipts() {
     let (temp, bundle_dir, manifest) = make_onix_release_bundle();
-    let proof_dir = temp.path().join("practical-deterministic-proof");
-    let (proof_path, isolation_path, _proof_digest, _isolation_digest) = write_deterministic_verify_artifacts_with_mode(
-        &proof_dir,
-        &manifest,
-        crunch_release_core::PRACTICAL_HERMETICITY_MODE,
-    );
+    for (label, mode) in [
+        ("practical", crunch_release_core::PRACTICAL_HERMETICITY_MODE),
+        ("impure", crunch_release_core::IMPURE_HERMETICITY_MODE),
+    ] {
+        let proof_dir = temp.path().join(format!("{label}-deterministic-proof"));
+        let (proof_path, isolation_path, _proof_digest, _isolation_digest) =
+            write_deterministic_verify_artifacts_with_mode(&proof_dir, &manifest, mode);
 
-    crunch()
-        .arg("release")
-        .arg("verify")
-        .arg(&bundle_dir)
-        .arg("--release-profile")
-        .arg("onix-stack")
-        .arg("--deterministic-proof")
-        .arg(&proof_path)
-        .arg("--deterministic-sandbox-isolation-evidence")
-        .arg(&isolation_path)
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("deterministic release evidence required"));
+        crunch()
+            .arg("release")
+            .arg("verify")
+            .arg(&bundle_dir)
+            .arg("--release-profile")
+            .arg("onix-stack")
+            .arg("--deterministic-proof")
+            .arg(&proof_path)
+            .arg("--deterministic-sandbox-isolation-evidence")
+            .arg(&isolation_path)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("deterministic release evidence required"));
+    }
 }
 
 // r[verify mantle.release_provenance.cairn_evidence_handoff.bypass_protection]
