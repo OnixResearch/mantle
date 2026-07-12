@@ -264,6 +264,37 @@ The Cargo commands above ran through `nix develop -c env` with the isolated
 `CARGO_TARGET_DIR` shown. Existing workspace warnings were captured separately
 and are not promoted to clean-lint evidence.
 
+## Current-tree lifecycle validation
+
+```text
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 15,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 39,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal expand-machine-artifact-contract-registry --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=45cc9a0cfdfc45f3bc877359c5ae077f23ba3879affaf944030c5994edc7e4c1
+receipt_hash=8ffb021f8dae691a0f12e82b7f72e0f128e5a1d47a47f0328c1175f78570da8a
+issues=[] valid=true verdict=PASS
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design expand-machine-artifact-contract-registry --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=29507ac028708bd22f00bf3715ab66d86200943397d8869374166eb0b24ef0d4
+receipt_hash=ac5a2600fa563c5dd57bc0da78ff9f9d4c4ff4dfbda1f51ed4da5f90d89c6132
+issues=[] valid=true verdict=PASS
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks expand-machine-artifact-contract-registry --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=5092e48537e5e7b77051334dd1701bacd410892c0786a8f2226e7349fe8d5a2f
+receipt_hash=7c08573032e431a025e8625923bec1314e813f8e379bcf828be488007cc757ca
+issues=[] valid=true verdict=PASS
+```
+
 ## Claim boundary
 
 Contract conformance proves only the declared JSON shape, bounds, linkage, and version policy. It does not prove build correctness, cache trust, reproducibility, release eligibility, attestation truth, provenance, deployability, or the truth of facts carried by a conforming artifact.
