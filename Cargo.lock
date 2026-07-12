@@ -4384,6 +4384,7 @@ dependencies = [
  "data-encoding",
  "digest 0.10.7",
  "flate2",
+ "fs2",
  "futures",
  "libc",
  "nix-compat",

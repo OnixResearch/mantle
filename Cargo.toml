@@ -109,6 +109,7 @@ snix-store = { path = "vendor/snix-store" }
 cap-std = "4.0.2"
 cap-fs-ext = "4.0.2"
 futures = "0.3"
+fs2 = "0.4"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

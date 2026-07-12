@@ -10,7 +10,9 @@
 //! r[impl store_transports.content_presence_early_cutoff]
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::fs::{self};
 use std::io::Read;
 use std::io::Seek;
@@ -20,6 +22,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_build::distributed::*;
+use fs2::FileExt;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_castore::blobservice::BlobService;
@@ -153,13 +156,15 @@ pub fn write_remote_transfer_data_chunk(
     policy: RemoteTransferPolicy,
     demand: &RemoteTransferDemand,
     state: &RemoteTransferCreditState,
+    receiver_grant: RemoteTransferCreditGrant,
     missing: &RemoteTransferChunkDemand,
 ) -> Result<RemoteTransferCreditState, String> {
-    let grant = RemoteTransferCreditGrant {
-        bytes: u64::from(missing.chunk.size_bytes),
-        chunks: FIRST_CHUNK_COUNT,
-    };
-    let granted = grant_remote_transfer_credit(policy, state, grant.clone(), grant.bytes).map_err(reason)?;
+    validate_prepared_remote_transfer(prepared, policy)?;
+    if receiver_grant.bytes != u64::from(missing.chunk.size_bytes) || receiver_grant.chunks != FIRST_CHUNK_COUNT {
+        return Err(reason(RemoteTransferReasonCode::CreditGrantInvalid));
+    }
+    let granted =
+        grant_remote_transfer_credit(policy, state, receiver_grant.clone(), receiver_grant.bytes).map_err(reason)?;
     let chunk = RemoteTransferChunkHeader {
         scope: demand.scope.clone(),
         artifact_id: missing.artifact_id.clone(),
@@ -201,6 +206,7 @@ pub fn receive_remote_transfer_data_chunk(
     state: &RemoteTransferCreditState,
     progress_step: u64,
 ) -> Result<(RemoteTransferCreditState, RemoteTransferAcknowledgement), String> {
+    validate_canonical_remote_transfer_manifest(manifest, policy)?;
     let mut length_bytes = [0_u8; REMOTE_TRANSFER_DATA_HEADER_BYTES];
     reader
         .read_exact(&mut length_bytes)
@@ -221,7 +227,8 @@ pub fn receive_remote_transfer_data_chunk(
         bytes: u64::from(data_header.chunk.chunk.size_bytes),
         chunks: FIRST_CHUNK_COUNT,
     };
-    let granted = grant_remote_transfer_credit(policy, state, grant.clone(), grant.bytes).map_err(reason)?;
+    let available_storage_bytes = available_storage_bytes(receiver_root)?;
+    let granted = grant_remote_transfer_credit(policy, state, grant, available_storage_bytes).map_err(reason)?;
     let reserved =
         reserve_remote_transfer_chunk(manifest, policy, demand, &granted, &data_header.chunk).map_err(reason)?;
     let payload_len = usize::try_from(data_header.chunk.chunk.size_bytes)
@@ -651,7 +658,9 @@ pub fn execute_prepared_remote_transfer(
 ) -> Result<RemoteTransferShellReport, String> {
     policy.validate().map_err(reason)?;
     validate_run_options(options)?;
+    validate_prepared_remote_transfer(prepared, policy)?;
     let scope = remote_transfer_scope(&prepared.manifest);
+    let _session_lock = acquire_remote_transfer_session_lock(state_dir, &scope.session_id)?;
     let checkpoint_path = remote_transfer_state_path(state_dir, &scope.session_id);
     let previous = match load_remote_transfer_state(state_dir, &scope, policy, options.now_unix_s)? {
         RemoteTransferStateLoad::Loaded(state) => Some(state),
@@ -792,7 +801,8 @@ fn transfer_one_chunk(
         bytes: u64::from(missing.chunk.size_bytes),
         chunks: FIRST_CHUNK_COUNT,
     };
-    let granted = grant_remote_transfer_credit(policy, &state, grant.clone(), grant.bytes).map_err(reason)?;
+    let available_storage_bytes = available_storage_bytes(receiver_root)?;
+    let granted = grant_remote_transfer_credit(policy, &state, grant, available_storage_bytes).map_err(reason)?;
     let header = RemoteTransferChunkHeader {
         scope: demand.scope.clone(),
         artifact_id: missing.artifact_id.clone(),
@@ -916,6 +926,78 @@ pub fn remote_transfer_state_path(state_dir: &Path, session: &RemoteTransferSess
 
 pub fn remote_transfer_receiver_root(state_dir: &Path, session: &RemoteTransferSessionId) -> PathBuf {
     state_dir.join(REMOTE_TRANSFER_RECEIVER_DIR).join(session.as_str())
+}
+
+struct RemoteTransferSessionLock {
+    _file: File,
+}
+
+fn acquire_remote_transfer_session_lock(
+    state_dir: &Path,
+    session: &RemoteTransferSessionId,
+) -> Result<RemoteTransferSessionLock, String> {
+    let lock_dir = state_dir.join(REMOTE_TRANSFER_STATE_DIR);
+    fs::create_dir_all(&lock_dir).map_err(|err| format!("creating transfer lock directory: {err}"))?;
+    let path = lock_dir.join(format!("{}.lock", session.as_str()));
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .map_err(|err| format!("opening transfer session lock: {err}"))?;
+    FileExt::try_lock_exclusive(&file).map_err(|err| format!("remote-transfer-session-lock-busy: {err}"))?;
+    assert!(path.is_file());
+    assert_eq!(path.parent(), Some(lock_dir.as_path()));
+    Ok(RemoteTransferSessionLock { _file: file })
+}
+
+fn available_storage_bytes(receiver_root: &Path) -> Result<u64, String> {
+    let existing = receiver_root
+        .ancestors()
+        .find(|candidate| candidate.exists())
+        .ok_or_else(|| "remote-transfer-storage-root-missing".to_string())?;
+    let bytes = fs2::available_space(existing)
+        .map_err(|err| format!("probing receiver storage capacity {}: {err}", existing.display()))?;
+    if bytes == 0 {
+        return Err(reason(RemoteTransferReasonCode::CreditExceeded));
+    }
+    assert!(existing.exists());
+    assert!(bytes > 0);
+    Ok(bytes)
+}
+
+fn validate_prepared_remote_transfer(
+    prepared: &PreparedRemoteTransfer,
+    policy: RemoteTransferPolicy,
+) -> Result<(), String> {
+    validate_canonical_remote_transfer_manifest(&prepared.manifest, policy)?;
+    let artifact_ids = prepared
+        .manifest
+        .manifest
+        .artifacts
+        .iter()
+        .map(|artifact| artifact.artifact_id.clone())
+        .collect::<BTreeSet<_>>();
+    let source_ids = prepared.sources.keys().cloned().collect::<BTreeSet<_>>();
+    if source_ids != artifact_ids {
+        return Err("remote-transfer-source-binding-mismatch".to_string());
+    }
+    assert_eq!(prepared.sources.len(), artifact_ids.len());
+    assert!(!prepared.sources.is_empty());
+    Ok(())
+}
+
+fn validate_canonical_remote_transfer_manifest(
+    manifest: &CanonicalRemoteTransferManifest,
+    policy: RemoteTransferPolicy,
+) -> Result<(), String> {
+    let rebuilt = canonicalize_remote_transfer_manifest(manifest.manifest.clone(), policy).map_err(reason)?;
+    if rebuilt != *manifest {
+        return Err(reason(RemoteTransferReasonCode::ManifestIdentityMismatch));
+    }
+    assert_eq!(rebuilt.digest_blake3, manifest.digest_blake3);
+    assert_eq!(rebuilt.canonical_bytes, manifest.canonical_bytes);
+    Ok(())
 }
 
 fn transfer_lease(
@@ -1423,6 +1505,10 @@ mod tests {
                     policy,
                     &sender_demand,
                     &RemoteTransferCreditState::default(),
+                    RemoteTransferCreditGrant {
+                        bytes: u64::from(sender_missing.chunk.size_bytes),
+                        chunks: FIRST_CHUNK_COUNT,
+                    },
                     &sender_missing,
                 )
                 .unwrap()
@@ -1516,6 +1602,40 @@ mod tests {
         .unwrap_err();
         assert_eq!(error, RemoteTransferReasonCode::AcknowledgedChunkMissing.as_str());
         assert_ne!(error, RemoteTransferReasonCode::TransferDemandSatisfied.as_str());
+    }
+
+    #[test]
+    fn forged_manifest_and_concurrent_session_writer_fail_before_progress() {
+        let root = tempfile::tempdir().unwrap();
+        let prepared = prepared_fixture(root.path());
+        let state_dir = root.path().join("state");
+        let receiver = remote_transfer_receiver_root(&state_dir, &prepared.manifest.manifest.session_id);
+        let mut forged = prepared.clone();
+        forged.manifest.manifest.store_prefix = "/forged/store".to_string();
+        let error = execute_prepared_remote_transfer(
+            &forged,
+            RemoteTransferPolicy::default(),
+            &state_dir,
+            &receiver,
+            admitted_options(None),
+        )
+        .unwrap_err();
+        assert_eq!(error, RemoteTransferReasonCode::ManifestIdentityMismatch.as_str());
+        assert!(!state_dir.exists());
+
+        let scope = remote_transfer_scope(&prepared.manifest);
+        let guard = acquire_remote_transfer_session_lock(&state_dir, &scope.session_id).unwrap();
+        let error = execute_prepared_remote_transfer(
+            &prepared,
+            RemoteTransferPolicy::default(),
+            &state_dir,
+            &receiver,
+            admitted_options(None),
+        )
+        .unwrap_err();
+        assert!(error.starts_with("remote-transfer-session-lock-busy:"));
+        assert!(!receiver.exists());
+        drop(guard);
     }
 
     #[test]

@@ -22,7 +22,7 @@ A canonical manifest binds the session to the job, attempt, fence generation, po
 <state-dir>/remote-transfers/<session-id>.json
 ```
 
-On reconnect, Mantle probes receiver-owned bytes and recomputes demand. A checkpoint cursor is never proof of content. Wrong-session, wrong-manifest, stale-attempt/fence, expired, regressed, forged, or content-missing checkpoints fail closed. Reassignment invalidates session authority while already verified content remains reusable through ordinary digest probing and GC ownership.
+A per-session exclusive lock rejects concurrent writers before progress. On reconnect, Mantle probes receiver-owned bytes and recomputes demand. A checkpoint cursor is never proof of content. Wrong-session, wrong-manifest, stale-attempt/fence, expired, regressed, forged, or content-missing checkpoints fail closed. Reassignment invalidates session authority while already verified content remains reusable through ordinary digest probing and GC ownership.
 
 ## Data plane and fallback
 
