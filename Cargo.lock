@@ -4387,6 +4387,7 @@ dependencies = [
  "futures",
  "libc",
  "nix-compat",
+ "postcard",
  "predicates",
  "pretty_assertions",
  "rand 0.8.6",

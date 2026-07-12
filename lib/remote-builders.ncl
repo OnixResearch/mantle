@@ -38,6 +38,31 @@ let DefaultRemoteBuildTimeSecs = 3600 in
 let DefaultRemoteRetryAttempts = 3 in
 let DefaultRemoteRetryDelaySecs = 5 in
 let DefaultRemoteAttemptTimeoutSecs = DefaultRemoteBuildTimeSecs in
+let DefaultTransferChunkBytes = 65536 in
+let DefaultTransferInFlightBytes = 1048576 in
+let DefaultTransferInFlightChunks = 16 in
+let DefaultTransferBufferedChunks = 16 in
+let DefaultTransferArtifacts = 4096 in
+let DefaultTransferChunks = 65536 in
+let DefaultTransferTotalBytes = DefaultRemoteUploadBytes in
+let DefaultTransferCheckpointBytes = 262144 in
+let DefaultTransferIdleProgressSteps = 1024 in
+let DefaultTransferReplayRounds = 4 in
+let DefaultTransferControlBytes = 1048576 in
+
+let RemoteTransferPolicy = {
+  chunk_bytes_max | Number | default = DefaultTransferChunkBytes,
+  in_flight_bytes_max | Number | default = DefaultTransferInFlightBytes,
+  in_flight_chunks_max | Number | default = DefaultTransferInFlightChunks,
+  buffered_chunks_max | Number | default = DefaultTransferBufferedChunks,
+  artifact_count_max | Number | default = DefaultTransferArtifacts,
+  chunk_count_max | Number | default = DefaultTransferChunks,
+  total_bytes_max | Number | default = DefaultTransferTotalBytes,
+  checkpoint_bytes_max | Number | default = DefaultTransferCheckpointBytes,
+  idle_progress_steps_max | Number | default = DefaultTransferIdleProgressSteps,
+  replay_rounds_max | Number | default = DefaultTransferReplayRounds,
+  control_bytes_max | Number | default = DefaultTransferControlBytes,
+} in
 
 let RemoteRetryPolicy = {
   max_attempts
@@ -82,6 +107,10 @@ let RemoteCapabilityProfile = {
     | default = DefaultRemoteBuildTimeSecs,
   retry_policy
     | RemoteRetryPolicy
+    | default = {},
+  transfer_policy
+    | doc "Bounded resumable transfer, receiver credit, checkpoint, and replay policy"
+    | RemoteTransferPolicy
     | default = {},
 } in
 

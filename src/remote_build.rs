@@ -476,6 +476,9 @@ pub enum RemoteInputUploadArtifactKind {
     Nar,
 }
 
+/// Compatibility full-NAR fallback artifact. This whole-payload DTO is never
+/// evidence for `RemoteTransferMode::Streaming`; production streaming uses the
+/// bounded socket/stdio data plane in `crate::remote_transfer`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteInputUploadArtifact {
     pub request_id: String,
@@ -551,6 +554,8 @@ pub enum RemoteOutputTransferArtifactKind {
     Nar,
 }
 
+/// Compatibility full-NAR/PathInfo fallback artifact. Streaming reports may
+/// only be built from a completed `RemoteTransferShellReport`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteOutputTransferArtifact {
     pub request_id: String,
@@ -4840,10 +4845,8 @@ pub fn plan_output_transfer(
     output_size_bytes: u64,
     verified_builder_key: &str,
 ) -> Result<RemoteTransferReport, String> {
-    // Prefer streaming transfer when both sides support it.
-    if client.streaming && builder.streaming {
-        return Ok(streaming_transfer_report(output_size_bytes, verified_builder_key));
-    }
+    // A negotiated label is not runtime evidence. Only
+    // `streaming_transfer_report_from_runtime` may report streaming mode.
     if client.delta && builder.delta && !client.simulate_delta_failure && !builder.simulate_delta_failure {
         return Ok(delta_transfer_report(output_size_bytes, verified_builder_key));
     }
@@ -4858,7 +4861,19 @@ pub fn plan_output_transfer(
         return Err("delta-transfer-failed-and-full-unavailable".to_string());
     }
     if client.full && builder.full {
-        return Ok(full_transfer_report(output_size_bytes, verified_builder_key, None));
+        let fallback_reason = if client.streaming && builder.streaming {
+            Some("streaming-runtime-not-bound".to_string())
+        } else {
+            None
+        };
+        return Ok(full_transfer_report(
+            output_size_bytes,
+            verified_builder_key,
+            fallback_reason,
+        ));
+    }
+    if client.streaming && builder.streaming {
+        return Err("streaming-runtime-evidence-required".to_string());
     }
     Err("no-compatible-output-transfer-mode".to_string())
 }
@@ -5443,15 +5458,32 @@ fn full_transfer_report(
     }
 }
 
-fn streaming_transfer_report(output_size_bytes: u64, verified_builder_key: &str) -> RemoteTransferReport {
-    RemoteTransferReport {
+pub fn streaming_transfer_report_from_runtime(
+    runtime: &crate::remote_transfer::RemoteTransferShellReport,
+    verified_builder_key: &str,
+) -> Result<RemoteTransferReport, String> {
+    use crate::remote_transfer::RemoteTransferShellDisposition;
+
+    if runtime.output_admission_claimed {
+        return Err("remote-streaming-runtime-admission-overclaim".to_string());
+    }
+    if !matches!(
+        runtime.disposition,
+        RemoteTransferShellDisposition::Completed | RemoteTransferShellDisposition::AlreadyPresent
+    ) {
+        return Err("remote-streaming-runtime-incomplete".to_string());
+    }
+    if verified_builder_key.is_empty() {
+        return Err("remote-streaming-runtime-builder-key-empty".to_string());
+    }
+    Ok(RemoteTransferReport {
         mode: RemoteTransferMode::Streaming,
         mode_label: RemoteTransferMode::Streaming.as_str().to_string(),
-        transferred_bytes: output_size_bytes,
-        reused_bytes: 0,
+        transferred_bytes: runtime.transferred_bytes,
+        reused_bytes: runtime.reused_bytes,
         fallback_reason: None,
         verified_builder_key: verified_builder_key.to_string(),
-    }
+    })
 }
 
 fn validate_loopback_participants(
@@ -5803,9 +5835,14 @@ fn validate_transfer_report(report: &RemoteTransferReport) -> Result<(), String>
                 return Err("remote-transfer-delta-has-fallback-reason".to_string());
             }
         }
-        RemoteTransferMode::Full | RemoteTransferMode::Streaming => {
+        RemoteTransferMode::Full => {
             if report.reused_bytes != 0 {
                 return Err("remote-transfer-full-reused-bytes-nonzero".to_string());
+            }
+        }
+        RemoteTransferMode::Streaming => {
+            if report.fallback_reason.is_some() {
+                return Err("remote-transfer-streaming-has-fallback-reason".to_string());
             }
         }
     }

@@ -7,6 +7,7 @@
 //! r[impl remote_builds.production_operator_configuration]
 
 use crunch_build::distributed::RemoteAttemptRetryPolicy;
+use crunch_build::distributed::RemoteTransferPolicy;
 use serde::Deserialize;
 
 const DEFAULT_REMOTE_SYSTEM: &str = "x86_64-linux";
@@ -72,6 +73,8 @@ pub struct RemoteCapabilityProfile {
     pub max_build_time_secs: u64,
     #[serde(default)]
     pub retry_policy: RemoteAttemptRetryPolicy,
+    #[serde(default)]
+    pub transfer_policy: RemoteTransferPolicy,
 }
 
 fn default_sandbox_mode() -> RemoteSandboxMode {
@@ -104,6 +107,7 @@ impl Default for RemoteCapabilityProfile {
             max_upload_bytes: DEFAULT_REMOTE_MAX_UPLOAD_BYTES,
             max_build_time_secs: DEFAULT_REMOTE_MAX_BUILD_TIME_SECS,
             retry_policy: RemoteAttemptRetryPolicy::default(),
+            transfer_policy: RemoteTransferPolicy::default(),
         }
     }
 }
@@ -209,6 +213,9 @@ impl RemoteBuildFarmConfig {
                 endpoint.profile.retry_policy.validate().map_err(|reason| {
                     format!("endpoint '{}' retry policy: {}", endpoint.endpoint_id, reason.as_str())
                 })?;
+                endpoint.profile.transfer_policy.validate().map_err(|reason| {
+                    format!("endpoint '{}' transfer policy: {}", endpoint.endpoint_id, reason.as_str())
+                })?;
             }
             // Check for duplicate endpoint IDs within a pool.
             let mut seen = std::collections::BTreeSet::new();
@@ -264,6 +271,7 @@ mod tests {
                             retry_delay_secs: SAMPLE_RETRY_DELAY_SECS,
                             attempt_timeout_secs: SAMPLE_MAX_BUILD_TIME_SECS,
                         },
+                        transfer_policy: RemoteTransferPolicy::default(),
                     },
                 }],
                 fallback_policy: RemoteFallbackPolicy::Always,
@@ -434,6 +442,7 @@ let configured_attempt_timeout_secs = 7200 in
         assert!(config.validate().is_ok());
         assert_eq!(config.pools[0].endpoints[0].profile.retry_policy.max_attempts, SAMPLE_MAX_ATTEMPTS);
         assert_eq!(config.pools[0].endpoints[0].profile.retry_policy.attempt_timeout_secs, SAMPLE_MAX_BUILD_TIME_SECS);
+        assert_eq!(config.pools[0].endpoints[0].profile.transfer_policy, RemoteTransferPolicy::default(),);
     }
 
     #[test]
@@ -467,6 +476,34 @@ let remote = import "remote-builders.ncl" in
     }
 
     #[test]
+    fn nickel_transfer_policy_contract_rejects_type_mismatch() {
+        let temp = tempfile::tempdir().expect("temporary Nickel config dir");
+        let config_path = temp.path().join("invalid-transfer-policy.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+{
+  pools = [({
+    pool_id = "invalid-transfer-pool",
+    endpoints = [{
+      endpoint_id = "invalid-transfer-worker",
+      profile.transfer_policy.chunk_bytes_max = "unbounded",
+    }],
+  } | remote.RemoteBuilderPool)],
+}
+"#,
+        )
+        .expect("invalid Nickel transfer config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let error = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(&config_path, &import_paths)
+            .expect_err("typed Nickel transfer policy rejects a string chunk budget");
+
+        assert!(error.to_string().contains("contract"));
+        assert!(error.to_string().contains("chunk_bytes_max"));
+    }
+
+    #[test]
     fn config_defaults_are_safe() {
         // A pool with minimal fields should get safe defaults.
         let json = r#"{
@@ -486,6 +523,7 @@ let remote = import "remote-builders.ncl" in
         assert_eq!(endpoint.profile.network_mode, RemoteNetworkMode::None);
         assert_eq!(endpoint.profile.max_concurrency, DEFAULT_REMOTE_MAX_CONCURRENCY);
         assert_eq!(endpoint.profile.retry_policy, RemoteAttemptRetryPolicy::default());
+        assert_eq!(endpoint.profile.transfer_policy, RemoteTransferPolicy::default());
     }
 
     #[test]
@@ -494,6 +532,15 @@ let remote = import "remote-builders.ncl" in
         config.pools[0].endpoints[0].profile.retry_policy.max_attempts = 0;
         let error = config.validate().expect_err("zero retry attempts fail closed");
         assert!(error.contains("retry-policy-invalid"));
+        assert!(error.contains("builder-01"));
+    }
+
+    #[test]
+    fn invalid_transfer_policy_is_rejected() {
+        let mut config = sample_config();
+        config.pools[0].endpoints[0].profile.transfer_policy.chunk_bytes_max = 0;
+        let error = config.validate().expect_err("zero chunk budget fails closed");
+        assert!(error.contains("transfer-policy-invalid"));
         assert!(error.contains("builder-01"));
     }
 }

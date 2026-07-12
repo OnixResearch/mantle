@@ -60,6 +60,10 @@ Human output reports same facts inline on cached outputs, for example:
 …/result-path (cached, substitution=full, transferred_bytes=55, reused_bytes=0, fallback_reason=stream_application_failed)
 ```
 
+Remote build data uses receiver-driven bounded chunks, durable fenced resume,
+and ordinary output admission. See [Resumable remote transfer](docs/remote-transfer.md)
+for policy, checkpoint, fallback, completion, and non-claim semantics.
+
 ### Machine artifact contracts
 
 Public machine-JSON families are explicitly classified in the typed Nickel

@@ -101,6 +101,7 @@ crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }
 crunch-bootstrap-core = { path = "crates/crunch-bootstrap-core" }
 crunch-release-core = { path = "crates/crunch-release-core" }
+crunch-delta = { path = "crates/crunch-delta" }
 nix-compat = { path = "vendor/nix-compat" }
 snix-build = { path = "vendor/snix-build" }
 snix-castore = { path = "vendor/snix-castore" }
@@ -121,6 +122,7 @@ sha2 = "0.10.8"
 ureq = { version = "3.0", default-features = false, features = ["rustls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+postcard = { version = "1", default-features = false, features = ["use-std"] }
 toml = "0.8.19"
 libc = "0.2"
 url = "2"
@@ -131,7 +133,6 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 
 [dev-dependencies]
-crunch-delta = { path = "crates/crunch-delta" }
 crunch-wasm-component-core = { path = "crates/crunch-wasm-component-core" }
 pretty_assertions = "1.0"
 tempfile = "3"
