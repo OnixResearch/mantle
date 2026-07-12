@@ -143,6 +143,26 @@ issues=[] valid=true verdict=PASS
 All tasks are now checked. Sync and archive remain separate recorded lifecycle
 mutations and do not strengthen the bounded implementation claim.
 
+## Accepted-spec sync
+
+```text
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- sync add-onix-kernel-bundle-oci-projections --root . --policy cairn-policy/generated/cairn-policy.json
+dry_run=true blocked=false mutated=false reasons=[]
+input_hash=c6acbecef15e91275e3b4afa404443adeeba2116b8fe31d530109387662766e3
+receipt_hash=37b641999205081779d3502c90680d028cb74ab8045661b7b9fb00e847180d22
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- sync add-onix-kernel-bundle-oci-projections --root . --policy cairn-policy/generated/cairn-policy.json --execute
+dry_run=false blocked=false mutated=true reasons=[]
+input_hash=c6acbecef15e91275e3b4afa404443adeeba2116b8fe31d530109387662766e3
+before_manifest_hash=c34cb39ba43b17431e734690022b0f5c060b3778cbb303e236bd59b985f6e5e6
+after_manifest_hash=1b7cea950d75550846638a77147afc1090a15d600625ecdb95ca7e5acfe311b3
+mutation_manifest_hash=9cc7b887662e32d2c9c9185ae81ae13ea7f37114e4e1ba6a87497bd9cc8af1fa
+receipt_hash=121229d6315c63c079799fa739826a37d915156be30c982aeb66615db01ec28f
+```
+
+The sync created `cairn/specs/kernel-bundle-oci/spec.md`; inspection confirmed
+that all eight requirements and their scenarios were retained.
+
 ## Claim boundary
 
 This evidence proves the bounded local projection and import/export behavior
