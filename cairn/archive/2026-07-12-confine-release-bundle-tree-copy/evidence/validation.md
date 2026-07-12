@@ -105,3 +105,104 @@ PASS: verdict=PASS; receipt_hash=7cf9f26950d07566f0fd7704ccb1c5599032a6a5bbaa991
 cairn gate tasks confine-release-bundle-tree-copy --root .
 PASS: verdict=PASS; receipt_hash=7c018f6e15a29f9f648f3991abcc35c58f708f69cf1a249f13c7b2a691110bcb
 ```
+
+## Main-branch pre-archive transcript
+
+```text
+$ cairn validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 19,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 44,
+  "valid": true
+}
+
+$ cairn gate proposal confine-release-bundle-tree-copy --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change": "confine-release-bundle-tree-copy",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "73d9563550216d29b850fefa5611cbc2a020e04771991abe11e3277ffa28388e",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "27b9b5f7b4b40abdd43f749ce2793f7d8df7d7f76635e3efb46aa2b18e268f8c",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ cairn gate design confine-release-bundle-tree-copy --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change": "confine-release-bundle-tree-copy",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "7c36a1795a395e951af54771b113bf9c4abd09f260ab9af253c27c85bf38ec5e",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "7cf9f26950d07566f0fd7704ccb1c5599032a6a5bbaa991f39b3a0e0375b565b",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ cairn gate tasks confine-release-bundle-tree-copy --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change": "confine-release-bundle-tree-copy",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "7235de62a63f707e67e5ed58438fa85fb40eefa35761eb379c6d6938ebea9221",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "e9f037a736c3f825ee710e14aa53097540f2215ebbbd5bae239d3eac8179c1f9",
+  "receipt_hash": "7c018f6e15a29f9f648f3991abcc35c58f708f69cf1a249f13c7b2a691110bcb",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+```
+
+## Post-archive validation transcript
+
+```text
+$ cairn validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 18,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 43,
+  "valid": true
+}
+```
