@@ -60,32 +60,6 @@ pub enum TreeCopyOperation {
     },
 }
 
-impl TreeCopyOperation {
-    pub fn relative_path(&self) -> &str {
-        match self {
-            Self::CreateDirectory { relative_path, .. }
-            | Self::CopyFile { relative_path, .. }
-            | Self::CreateSymlink { relative_path, .. } => relative_path,
-        }
-    }
-
-    pub const fn expected_kind(&self) -> TreeEntryKind {
-        match self {
-            Self::CreateDirectory { .. } => TreeEntryKind::Directory,
-            Self::CopyFile { .. } => TreeEntryKind::File,
-            Self::CreateSymlink { .. } => TreeEntryKind::Symlink,
-        }
-    }
-
-    pub const fn mode(&self) -> u32 {
-        match self {
-            Self::CreateDirectory { mode, .. } | Self::CopyFile { mode, .. } | Self::CreateSymlink { mode, .. } => {
-                *mode
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TreeCopyPlan {
     pub entries: Vec<TreeEntryObservation>,
