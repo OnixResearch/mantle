@@ -127,3 +127,26 @@ Using `cairn-policy/generated/cairn-policy.json`, the final pre-sync rerun passe
 - tasks gate: PASS.
 
 Receipt hashes are intentionally retained in the external command transcripts rather than embedded here because active-package evidence participates in gate identity.
+
+## Post-archive validation
+
+Command:
+
+```text
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+```
+
+Pueue task `262` output:
+
+```json
+{
+  "change_issues": [],
+  "changes": 12,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 39,
+  "valid": true
+}
+```
