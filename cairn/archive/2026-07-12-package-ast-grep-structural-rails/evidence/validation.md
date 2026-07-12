@@ -175,3 +175,30 @@ Pueue task 1894 ran authoritative validation after sync. Exact output:
   "valid": true
 }
 ```
+
+## Archive evidence
+
+```text
+change: package-ast-grep-structural-rails
+archive path: ./cairn/archive/2026-07-12-package-ast-grep-structural-rails
+input_hash: 0391a70f0307569a464437015ddcc897144eabaed00448995e5b1124981f4e84
+plan_hash: 80d2f1f4009784dc2709a2bfa942582fc9f94be73ca3d12ef3c66cb894c93fea
+receipt_hash: 22f64a3d665d125ea31c2c4289ce90e2e1e471ce06ecb9b4ee1c69e881365d60
+mutated: true
+blocked: false
+```
+
+Pueue task 1901 ran authoritative validation after archive. Exact output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 15,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 39,
+  "valid": true
+}
+```
