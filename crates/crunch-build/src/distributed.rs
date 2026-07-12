@@ -10,7 +10,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 mod remote_attempt;
+mod remote_transfer;
 pub use remote_attempt::*;
+pub use remote_transfer::*;
 
 use crate::scheduling::ContentLocalityClass;
 use crate::scheduling::EligiblePreferenceFacts;

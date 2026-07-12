@@ -5,10 +5,10 @@
 
 ## Implementation
 
-- [ ] [depends:fence-durable-remote-attempts] r[remote_builds.attempt_scoped_transfer_resume] Add typed transfer-session, attempt/fence, manifest, demand, chunk, acknowledgement, checkpoint, credit, and completion DTOs with named bounds.
-- [ ] [depends:transfer-dtos] r[store_transports.resumable_castore_sessions] Implement a pure canonical-manifest validator and deterministic receiver-missing-set/resume planner over existing castore, PathInfo, source-bundle, attestation, NAR, and delta identities.
-- [ ] [depends:transfer-planner] r[store_transports.receiver_driven_backpressure] Implement pure quota arithmetic and receiver-credit decisions that reject before disallowed allocation or buffering.
-- [ ] [depends:transfer-planner] r[store_transports.content_presence_early_cutoff] Implement pure `already-present`, `demand-satisfied`, `continue`, and `reject` cutoff decisions from verified receiver facts.
+- [x] [depends:fence-durable-remote-attempts] r[remote_builds.attempt_scoped_transfer_resume] Add typed transfer-session, attempt/fence, manifest, demand, chunk, acknowledgement, checkpoint, credit, and completion DTOs with named bounds. Evidence: `evidence/core-validation.md`.
+- [x] [depends:transfer-dtos] r[store_transports.resumable_castore_sessions] Implement a pure canonical-manifest validator and deterministic receiver-missing-set/resume planner over existing castore, PathInfo, source-bundle, attestation, NAR, and delta identities. Evidence: `evidence/core-validation.md`.
+- [x] [depends:transfer-planner] r[store_transports.receiver_driven_backpressure] Implement pure quota arithmetic and receiver-credit decisions that reject before disallowed allocation or buffering. Evidence: `evidence/core-validation.md`.
+- [x] [depends:transfer-planner] r[store_transports.content_presence_early_cutoff] Implement pure `already-present`, `demand-satisfied`, `continue`, and `reject` cutoff decisions from verified receiver facts. Evidence: `evidence/core-validation.md`.
 - [ ] [depends:transfer-core] r[store_transports.resumable_castore_sessions] Add shell streaming adapters for castore objects, NAR bytes, source bundles, PathInfo/attestations, and existing delta frames without adding another CAS.
 - [ ] [depends:transfer-shell] r[remote_builds.attempt_scoped_transfer_resume] Persist bounded checkpoints and session leases, revalidate receiver state after reconnect, and invalidate stale attempt/fence checkpoints while retaining reusable verified castore objects.
 - [ ] [depends:transfer-shell] r[store_transports.receiver_driven_backpressure] Thread typed Nickel transfer/backpressure/quota policy into runtime Rust and enforce credits on both upload and download paths.
@@ -18,7 +18,7 @@
 
 ## Verification
 
-- [ ] [depends:transfer-core] r[store_transports.resumable_castore_sessions] Add table/property/Kani tests for canonical ordering, permutation-invariant missing sets, monotonic acknowledgement, replay-safe checkpoints, and overflow-safe quota accounting.
+- [x] [depends:transfer-core] r[store_transports.resumable_castore_sessions] Add table/property/Kani tests for canonical ordering, permutation-invariant missing sets, monotonic acknowledgement, replay-safe checkpoints, and overflow-safe quota accounting. Evidence: `evidence/core-validation.md`; Kani harnesses are present but execution is explicitly unclaimed because cargo-kani is unavailable.
 - [ ] [depends:transfer-shell] r[remote_builds.attempt_scoped_transfer_resume] Positive: interrupt a multi-chunk input and output transfer, restart the transport/coordinator, resume the current fenced session, and verify only missing content is resent before ordinary output admission.
 - [ ] [depends:transfer-shell] r[store_transports.content_presence_early_cutoff] Positive: preseed complete receiver content and prove transfer cuts off with verified `already-present`, zero unrequested payload bytes, and no output-trust overclaim.
 - [ ] [depends:transfer-shell] r[store_transports.receiver_driven_backpressure] Negative: exceed chunk, credit, object, total-byte, checkpoint, and idle-progress policy and prove rejection occurs before unbounded allocation, persistence, sandbox start, or output import.
