@@ -187,11 +187,7 @@ pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
 ///
 /// Whitespace around each URL is trimmed. Empty entries are skipped.
 pub fn split_substituter_urls(input: &str) -> Vec<String> {
-    input
-        .split(',')
-        .map(|part| part.trim().to_string())
-        .filter(|part| !part.is_empty())
-        .collect()
+    input.split(',').map(|part| part.trim().to_string()).filter(|part| !part.is_empty()).collect()
 }
 
 /// Check whether two candidates share the same identity but different trust material.
@@ -249,22 +245,20 @@ impl std::error::Error for CacheCandidateError {}
 // Pure core types live in crunch-store. Re-export for callers of
 // cache_substitution.
 
-pub use crunch_store::metadata_cache::{
-    AdmissionSummary,
-    MetadataCacheEntry,
-    MetadataCacheKey,
-    MetadataClass,
-    MetadataSchemaVersion,
-    MetadataValidity,
-    RefreshPolicy,
-    build_metadata_cache_key,
-    check_metadata_validity,
-    metadata_ttl_for_class,
-    new_metadata_entry,
-    DEFAULT_METADATA_TTL_SECS,
-    MAX_METADATA_CACHE_ENTRIES,
-    NEGATIVE_MISS_TTL_SECS,
-};
+pub use crunch_store::metadata_cache::AdmissionSummary;
+pub use crunch_store::metadata_cache::DEFAULT_METADATA_TTL_SECS;
+pub use crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES;
+pub use crunch_store::metadata_cache::MetadataCacheEntry;
+pub use crunch_store::metadata_cache::MetadataCacheKey;
+pub use crunch_store::metadata_cache::MetadataClass;
+pub use crunch_store::metadata_cache::MetadataSchemaVersion;
+pub use crunch_store::metadata_cache::MetadataValidity;
+pub use crunch_store::metadata_cache::NEGATIVE_MISS_TTL_SECS;
+pub use crunch_store::metadata_cache::RefreshPolicy;
+pub use crunch_store::metadata_cache::build_metadata_cache_key;
+pub use crunch_store::metadata_cache::check_metadata_validity;
+pub use crunch_store::metadata_cache::metadata_ttl_for_class;
+pub use crunch_store::metadata_cache::new_metadata_entry;
 
 /// Convenience wrapper: build a [`MetadataCacheKey`] from a [`CacheCandidate`].
 pub fn build_metadata_cache_key_from_candidate(
@@ -537,7 +531,8 @@ mod tests {
     fn check_metadata_validity_returns_fresh_for_matching_entry() {
         let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
         let entry = new_metadata_entry(key.clone(), 1000, String::new());
-        let validity = check_metadata_validity(&entry, &key, 1000 + DEFAULT_METADATA_TTL_SECS - 1, RefreshPolicy::Normal);
+        let validity =
+            check_metadata_validity(&entry, &key, 1000 + DEFAULT_METADATA_TTL_SECS - 1, RefreshPolicy::Normal);
         assert_eq!(validity, MetadataValidity::Fresh);
         assert!(validity.is_reusable());
     }
@@ -546,7 +541,8 @@ mod tests {
     fn check_metadata_validity_expired_when_past_expiry() {
         let key = build_metadata_cache_key_from_candidate(&meta_candidate(), "dig", MetadataClass::Narinfo);
         let entry = new_metadata_entry(key.clone(), 1000, String::new());
-        let validity = check_metadata_validity(&entry, &key, 1000 + DEFAULT_METADATA_TTL_SECS + 1, RefreshPolicy::Normal);
+        let validity =
+            check_metadata_validity(&entry, &key, 1000 + DEFAULT_METADATA_TTL_SECS + 1, RefreshPolicy::Normal);
         assert_eq!(validity, MetadataValidity::Expired);
         assert!(!validity.is_reusable());
     }
@@ -615,10 +611,7 @@ mod tests {
 
     #[test]
     fn admission_summary_with_reused_metadata_records_validity() {
-        let summary = AdmissionSummary::with_reused_metadata(
-            "remote-hit",
-            MetadataValidity::Fresh,
-        );
+        let summary = AdmissionSummary::with_reused_metadata("remote-hit", MetadataValidity::Fresh);
         assert_eq!(summary.reason, "remote-hit");
         assert!(summary.metadata_reused);
         assert_eq!(summary.metadata_validity, Some(MetadataValidity::Fresh));

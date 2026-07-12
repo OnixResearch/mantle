@@ -29,8 +29,8 @@ use snix_store::pathinfoservice::RedbPathInfoService;
 use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
 use crate::build_cmd::BuildOutputMode;
-use crate::build_report::BuildJsonCacheAdmission;
 use crate::build_cmd::load_configured_trusted_public_keys;
+use crate::build_report::BuildJsonCacheAdmission;
 use crate::errors::RunError;
 use crate::operator_diagnostics::DoctorProfile;
 use crate::operator_diagnostics::DoctorRequest;

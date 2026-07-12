@@ -8668,7 +8668,10 @@ mod tests {
 
         let err = import_rust_source_provider(&import_dir, &output_dir).unwrap_err();
 
-        assert!(err.to_string().contains("disallowed Rust provider marker") || err.to_string().contains("uses prebuilt Rust"));
+        assert!(
+            err.to_string().contains("disallowed Rust provider marker")
+                || err.to_string().contains("uses prebuilt Rust")
+        );
         assert!(!output_dir.exists());
     }
 
@@ -9096,7 +9099,10 @@ mod tests {
 
         let err = smoke_rust_source_provider(&provider_dir, &scratch_dir).unwrap_err();
 
-        assert!(err.to_string().contains("disallowed Rust provider marker") || err.to_string().contains("uses prebuilt Rust"));
+        assert!(
+            err.to_string().contains("disallowed Rust provider marker")
+                || err.to_string().contains("uses prebuilt Rust")
+        );
         assert!(!sentinel_path.exists());
         assert!(!scratch_dir.join(SMOKE_OUTPUT_FILE).exists());
     }

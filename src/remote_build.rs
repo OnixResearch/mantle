@@ -3284,8 +3284,7 @@ pub fn admit_coordinator_dispatch(
     }
     // Auto-save after mutation for durability.
     if let Some(ref sd) = state.state_dir {
-        let _ = save_coordinator_state(sd, state)
-            .map_err(|e| tracing::warn!("coordinator state save failed: {e}"));
+        let _ = save_coordinator_state(sd, state).map_err(|e| tracing::warn!("coordinator state save failed: {e}"));
     }
     Ok(decision)
 }
@@ -4914,10 +4913,7 @@ fn full_transfer_report(
     }
 }
 
-fn streaming_transfer_report(
-    output_size_bytes: u64,
-    verified_builder_key: &str,
-) -> RemoteTransferReport {
+fn streaming_transfer_report(output_size_bytes: u64, verified_builder_key: &str) -> RemoteTransferReport {
     RemoteTransferReport {
         mode: RemoteTransferMode::Streaming,
         mode_label: RemoteTransferMode::Streaming.as_str().to_string(),
@@ -5736,8 +5732,10 @@ mod tests {
             ..fixture_request()
         };
         let err = validate_concrete_request(&request, &ticket).unwrap_err();
-        assert!(err.contains("contains-raw-frontend-eval") || err.contains("raw-frontend-evaluation-rejected"),
-            "expected frontend eval rejection, got: {err}");
+        assert!(
+            err.contains("contains-raw-frontend-eval") || err.contains("raw-frontend-evaluation-rejected"),
+            "expected frontend eval rejection, got: {err}"
+        );
     }
 
     #[test]

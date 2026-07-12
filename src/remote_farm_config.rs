@@ -66,12 +66,24 @@ pub struct RemoteCapabilityProfile {
     pub max_build_time_secs: u64,
 }
 
-fn default_sandbox_mode() -> RemoteSandboxMode { RemoteSandboxMode::Practical }
-fn default_system() -> String { "x86_64-linux".to_string() }
-fn default_network_mode() -> RemoteNetworkMode { RemoteNetworkMode::None }
-fn default_concurrency() -> u32 { 1 }
-fn default_upload_bytes() -> u64 { 1_073_741_824 }
-fn default_build_time_secs() -> u64 { 3_600 }
+fn default_sandbox_mode() -> RemoteSandboxMode {
+    RemoteSandboxMode::Practical
+}
+fn default_system() -> String {
+    "x86_64-linux".to_string()
+}
+fn default_network_mode() -> RemoteNetworkMode {
+    RemoteNetworkMode::None
+}
+fn default_concurrency() -> u32 {
+    1
+}
+fn default_upload_bytes() -> u64 {
+    1_073_741_824
+}
+fn default_build_time_secs() -> u64 {
+    3_600
+}
 
 impl Default for RemoteCapabilityProfile {
     fn default() -> Self {
@@ -97,7 +109,9 @@ pub struct RemoteEndpoint {
     pub profile: RemoteCapabilityProfile,
 }
 
-fn default_transport() -> RemoteTransportMode { RemoteTransportMode::Stdio }
+fn default_transport() -> RemoteTransportMode {
+    RemoteTransportMode::Stdio
+}
 
 /// A cryptographic trust root for verifying remote outputs.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
@@ -116,7 +130,9 @@ pub enum PublisherMode {
     S3,
 }
 
-fn default_publisher_mode() -> PublisherMode { PublisherMode::NixCache }
+fn default_publisher_mode() -> PublisherMode {
+    PublisherMode::NixCache
+}
 
 /// Publisher profile configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
@@ -143,7 +159,9 @@ pub struct RemoteBuilderPool {
     pub publishers: Vec<PublisherProfile>,
 }
 
-fn default_fallback_policy() -> RemoteFallbackPolicy { RemoteFallbackPolicy::TrustedOnly }
+fn default_fallback_policy() -> RemoteFallbackPolicy {
+    RemoteFallbackPolicy::TrustedOnly
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct RemoteBuildFarmConfig {
@@ -211,34 +229,32 @@ mod tests {
 
     fn sample_config() -> RemoteBuildFarmConfig {
         RemoteBuildFarmConfig {
-            pools: vec![
-                RemoteBuilderPool {
-                    pool_id: "build-farm-1".to_string(),
-                    endpoints: vec![RemoteEndpoint {
-                        endpoint_id: "builder-01".to_string(),
-                        transport: RemoteTransportMode::SshStdio,
-                        profile: RemoteCapabilityProfile {
-                            system: "x86_64-linux".to_string(),
-                            sandbox_mode: RemoteSandboxMode::Strict,
-                            network_mode: RemoteNetworkMode::None,
-                            features: vec!["tigerstyle".to_string()],
-                            max_concurrency: 4,
-                            max_upload_bytes: 1_073_741_824,
-                            max_build_time_secs: 7_200,
-                        },
-                    }],
-                    fallback_policy: RemoteFallbackPolicy::Always,
-                    output_trust_roots: vec![TrustRoot {
-                        public_key_name: "builder-01".to_string(),
-                        public_key_base64: "dGVzdC1rZXk=".to_string(),
-                    }],
-                    publishers: vec![PublisherProfile {
-                        mode: PublisherMode::NixCache,
-                        target_url: "https://cache.example.com".to_string(),
-                        trusted_public_keys: Vec::new(),
-                    }],
-                },
-            ],
+            pools: vec![RemoteBuilderPool {
+                pool_id: "build-farm-1".to_string(),
+                endpoints: vec![RemoteEndpoint {
+                    endpoint_id: "builder-01".to_string(),
+                    transport: RemoteTransportMode::SshStdio,
+                    profile: RemoteCapabilityProfile {
+                        system: "x86_64-linux".to_string(),
+                        sandbox_mode: RemoteSandboxMode::Strict,
+                        network_mode: RemoteNetworkMode::None,
+                        features: vec!["tigerstyle".to_string()],
+                        max_concurrency: 4,
+                        max_upload_bytes: 1_073_741_824,
+                        max_build_time_secs: 7_200,
+                    },
+                }],
+                fallback_policy: RemoteFallbackPolicy::Always,
+                output_trust_roots: vec![TrustRoot {
+                    public_key_name: "builder-01".to_string(),
+                    public_key_base64: "dGVzdC1rZXk=".to_string(),
+                }],
+                publishers: vec![PublisherProfile {
+                    mode: PublisherMode::NixCache,
+                    target_url: "https://cache.example.com".to_string(),
+                    trusted_public_keys: Vec::new(),
+                }],
+            }],
         }
     }
 
@@ -251,14 +267,12 @@ mod tests {
     #[test]
     fn too_many_pools_rejected() {
         let pools = (0..RemoteBuildFarmConfig::MAX_POOLS + 1)
-            .map(|i| {
-                RemoteBuilderPool {
-                    pool_id: format!("pool-{i}"),
-                    endpoints: Vec::new(),
-                    fallback_policy: RemoteFallbackPolicy::Never,
-                    output_trust_roots: Vec::new(),
-                    publishers: Vec::new(),
-                }
+            .map(|i| RemoteBuilderPool {
+                pool_id: format!("pool-{i}"),
+                endpoints: Vec::new(),
+                fallback_policy: RemoteFallbackPolicy::Never,
+                output_trust_roots: Vec::new(),
+                publishers: Vec::new(),
             })
             .collect();
         let config = RemoteBuildFarmConfig { pools };
@@ -285,22 +299,20 @@ mod tests {
     #[test]
     fn duplicate_endpoint_id_rejected_in_pool() {
         let config = RemoteBuildFarmConfig {
-            pools: vec![
-                RemoteBuilderPool {
-                    pool_id: "pool-1".to_string(),
-                    endpoints: vec![
-                        RemoteEndpoint {
-                            endpoint_id: "builder-a".to_string(),
-                            ..Default::default()
-                        },
-                        RemoteEndpoint {
-                            endpoint_id: "builder-a".to_string(),
-                            ..Default::default()
-                        },
-                    ],
-                    ..Default::default()
-                },
-            ],
+            pools: vec![RemoteBuilderPool {
+                pool_id: "pool-1".to_string(),
+                endpoints: vec![
+                    RemoteEndpoint {
+                        endpoint_id: "builder-a".to_string(),
+                        ..Default::default()
+                    },
+                    RemoteEndpoint {
+                        endpoint_id: "builder-a".to_string(),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
         };
         assert!(config.validate().is_err());
     }
@@ -308,16 +320,14 @@ mod tests {
     #[test]
     fn empty_endpoint_id_rejected() {
         let config = RemoteBuildFarmConfig {
-            pools: vec![
-                RemoteBuilderPool {
-                    pool_id: "pool-1".to_string(),
-                    endpoints: vec![RemoteEndpoint {
-                        endpoint_id: "".to_string(),
-                        ..Default::default()
-                    }],
+            pools: vec![RemoteBuilderPool {
+                pool_id: "pool-1".to_string(),
+                endpoints: vec![RemoteEndpoint {
+                    endpoint_id: "".to_string(),
                     ..Default::default()
-                },
-            ],
+                }],
+                ..Default::default()
+            }],
         };
         assert!(config.validate().is_err());
     }
@@ -325,12 +335,10 @@ mod tests {
     #[test]
     fn empty_pool_id_rejected() {
         let config = RemoteBuildFarmConfig {
-            pools: vec![
-                RemoteBuilderPool {
-                    pool_id: "".to_string(),
-                    ..Default::default()
-                },
-            ],
+            pools: vec![RemoteBuilderPool {
+                pool_id: "".to_string(),
+                ..Default::default()
+            }],
         };
         assert!(config.validate().is_err());
     }
