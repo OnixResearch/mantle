@@ -48,8 +48,8 @@ let is_receipt = fun value => ((std.is_record (value)
   && (std.record.has_field "root_source" (value) && (is_source_ref (std.record.get "root_source" (value))))
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-nickel-export-receipt-v1"
   && (std.is_string (std.record.get "schema" (value))))))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "path" other == std.record.get "path" item) (std.record.get "deps" (value))) == 1) (std.record.get "deps" (value))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => other == item) (std.record.get "import_paths" (value))) == 1) (std.record.get "import_paths" (value)))) in
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "path" other == std.record.get "path" item) (std.record.get "deps" (value))) == 1) (std.record.get "deps" (value)))
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => other == item) (std.record.get "import_paths" (value))) == 1) (std.record.get "import_paths" (value))))) in
 C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["diagnostics","failure_class","format","output_digest_blake3","output_target","output_text","receipt","receipt_digest_blake3","schema","success"]) (std.record.fields (value))
   && (std.record.has_field "diagnostics" (value) && (((std.is_array (std.record.get "diagnostics" (value))
@@ -91,5 +91,5 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-nickel-export-report-v1"
   && (std.is_string (std.record.get "schema" (value))))))
   && (std.record.has_field "success" (value) && (((std.is_bool (std.record.get "success" (value))))))
-  && (std.array.length (std.record.get "diagnostics" (value)) == 0) == (std.record.get "success" (value))
-  && ((std.record.has_field "receipt_digest_blake3" ((value))) && (std.record.get "receipt_digest_blake3" ((value)) != null)) == (std.record.get "success" (value)) && ((std.record.has_field "output_digest_blake3" ((value))) && (std.record.get "output_digest_blake3" ((value)) != null)) == (std.record.get "success" (value)) && ((std.record.has_field "receipt" ((value))) && (std.record.get "receipt" ((value)) != null)) == (std.record.get "success" (value)))))
+  && ((std.array.length (std.record.get "diagnostics" (value)) == 0) == (std.record.get "success" (value)))
+  && (((std.record.has_field "receipt_digest_blake3" ((value))) && (std.record.get "receipt_digest_blake3" ((value)) != null)) == (std.record.get "success" (value)) && ((std.record.has_field "output_digest_blake3" ((value))) && (std.record.get "output_digest_blake3" ((value)) != null)) == (std.record.get "success" (value)) && ((std.record.has_field "receipt" ((value))) && (std.record.get "receipt" ((value)) != null)) == (std.record.get "success" (value))))))

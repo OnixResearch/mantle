@@ -39,5 +39,5 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && (std.record.has_field "root_source" (value) && (is_source_ref (std.record.get "root_source" (value))))
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-nickel-export-receipt-v1"
   && (std.is_string (std.record.get "schema" (value))))))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "path" other == std.record.get "path" item) (std.record.get "deps" (value))) == 1) (std.record.get "deps" (value))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => other == item) (std.record.get "import_paths" (value))) == 1) (std.record.get "import_paths" (value)))))
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "path" other == std.record.get "path" item) (std.record.get "deps" (value))) == 1) (std.record.get "deps" (value)))
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => other == item) (std.record.get "import_paths" (value))) == 1) (std.record.get "import_paths" (value))))))

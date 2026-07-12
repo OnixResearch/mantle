@@ -53,8 +53,8 @@ let is_route_plan = fun value => ((std.is_record (value)
   && std.number.is_integer (std.record.get "object_count" (std.record.get "upload_summary" (value)))
   && (std.record.get "object_count" (std.record.get "upload_summary" (value))) >= MIN_UPLOAD_OBJECTS
   && (std.record.get "object_count" (std.record.get "upload_summary" (value))) <= MAX_UPLOAD_OBJECTS))))))))))
-  && std.array.all (fun item => std.record.get "route" item != (std.record.get "selected_route" (value))) (std.record.get "rejected_routes" (value))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "route" other == std.record.get "route" item) (std.record.get "rejected_routes" (value))) == 1) (std.record.get "rejected_routes" (value)))) in
+  && (std.array.all (fun item => std.record.get "route" item != (std.record.get "selected_route" (value))) (std.record.get "rejected_routes" (value)))
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "route" other == std.record.get "route" item) (std.record.get "rejected_routes" (value))) == 1) (std.record.get "rejected_routes" (value))))) in
 let is_entry = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["action","cache_admission","detail","drv_key","label","route_plan"]) (std.record.fields (value))
   && (std.record.has_field "action" (value) && ((std.array.elem (std.record.get "action" (value)) ["cached","substitute","build","preflight-error"]
@@ -85,4 +85,4 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && C.IsSafeReference (std.record.get "state_dir" (value))))))
   && (std.record.has_field "store_dir" (value) && (((std.is_string (std.record.get "store_dir" (value))
   && C.IsSafeReference (std.record.get "store_dir" (value))))))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "drv_key" other == std.record.get "drv_key" item) (std.record.get "entries" (value))) == 1) (std.record.get "entries" (value)))))
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "drv_key" other == std.record.get "drv_key" item) (std.record.get "entries" (value))) == 1) (std.record.get "entries" (value))))))

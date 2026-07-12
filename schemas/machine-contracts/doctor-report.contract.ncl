@@ -25,4 +25,4 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && (std.is_string (std.record.get "profile" (value))))))
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "crunch-doctor-report-v1"
   && (std.is_string (std.record.get "schema" (value))))))
-  && (std.array.all (fun item => std.record.get "status" item == "ok") (std.record.get "checks" (value))) == (std.record.get "ok" (value)))))
+  && ((std.array.all (fun item => std.record.get "status" item == "ok") (std.record.get "checks" (value))) == (std.record.get "ok" (value))))))

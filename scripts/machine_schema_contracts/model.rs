@@ -162,6 +162,10 @@ pub struct Invariant {
     #[serde(default)]
     pub target: String,
     #[serde(default)]
+    pub left: String,
+    #[serde(default)]
+    pub right: String,
+    #[serde(default)]
     pub terms: Vec<String>,
     #[serde(default)]
     pub fields: Vec<String>,

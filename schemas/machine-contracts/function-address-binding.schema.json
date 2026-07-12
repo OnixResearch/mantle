@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/function-address-binding-v1",
+  "x-mantle-rust-owner": "crates/crunch-release-core/src/function_address_binding.rs::FunctionAddressBindingReceipt",
+  "$defs": {
+    "verification_summary": {
+      "type": "object",
+      "required": [
+        "mode",
+        "required",
+        "valid",
+        "disposition",
+        "sidecar_role",
+        "sidecar_schema",
+        "sidecar_claim_scope",
+        "sidecar_digest_blake3",
+        "valence_receipt_role",
+        "valence_receipt_schema",
+        "valence_receipt_digest_blake3",
+        "kamacite_receipt_role",
+        "kamacite_receipt_schema",
+        "kamacite_receipt_digest_blake3",
+        "source_archive_digest_blake3",
+        "release_binary_relative_path",
+        "release_binary_digest_blake3",
+        "boundary",
+        "diagnostics"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["optional", "required"]
+        },
+        "required": { "type": "boolean" },
+        "valid": { "type": "boolean" },
+        "disposition": {
+          "type": "string",
+          "enum": ["present", "invalid"]
+        },
+        "sidecar_role": {
+          "type": "string",
+          "const": "function-address-evidence-sidecar"
+        },
+        "sidecar_schema": {
+          "type": "string",
+          "const": "valence.function-address-evidence.v1"
+        },
+        "sidecar_claim_scope": {
+          "type": "string",
+          "const": "function-address-identity-linkage-only"
+        },
+        "sidecar_digest_blake3": {
+          "type": "string",
+          "x-mantle-semantic": "blake3"
+        },
+        "valence_receipt_role": {
+          "type": "string",
+          "const": "valence-function-address-evidence-profile"
+        },
+        "valence_receipt_schema": {
+          "type": "string",
+          "const": "function-address-evidence-v1"
+        },
+        "valence_receipt_digest_blake3": {
+          "type": "string",
+          "x-mantle-semantic": "blake3"
+        },
+        "kamacite_receipt_role": {
+          "type": ["string", "null"],
+          "enum": [null, "kamacite-function-address-receipt"]
+        },
+        "kamacite_receipt_schema": {
+          "type": ["string", "null"],
+          "enum": [null, "kamacite.function-address-receipt.v1"]
+        },
+        "kamacite_receipt_digest_blake3": {
+          "type": ["string", "null"],
+          "x-mantle-semantic": "blake3"
+        },
+        "source_archive_digest_blake3": {
+          "type": "string",
+          "x-mantle-semantic": "blake3"
+        },
+        "release_binary_relative_path": {
+          "type": "string",
+          "x-mantle-semantic": "safe-reference"
+        },
+        "release_binary_digest_blake3": {
+          "type": "string",
+          "x-mantle-semantic": "blake3"
+        },
+        "boundary": {
+          "type": "string",
+          "const": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics"
+        },
+        "diagnostics": {
+          "type": "array",
+          "maxItems": 64,
+          "x-mantle-bound-name": {
+            "maxItems": "MAX_FUNCTION_ADDRESS_BINDING_DIAGNOSTICS_COUNT"
+          },
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "x-mantle-bound-name": {
+              "minLength": "MIN_FUNCTION_ADDRESS_BINDING_TEXT_BYTES",
+              "maxLength": "MAX_FUNCTION_ADDRESS_BINDING_TEXT_BYTES"
+            },
+            "x-mantle-length-unit": "utf8-bytes",
+            "x-mantle-semantic": "redaction-safe"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema_version",
+    "disposition",
+    "valid",
+    "verdict",
+    "receipt_hash",
+    "claim_scope",
+    "sidecar_digest",
+    "valence_receipt_digest",
+    "source_archive_digest",
+    "release_binary_digest",
+    "kamacite_receipt_digest",
+    "roles",
+    "schemas",
+    "mantle_non_claim_boundary",
+    "non_claim_boundary",
+    "verification_summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "mantle.function-address-binding.v1",
+      "x-mantle-issue-class": "version"
+    },
+    "disposition": {
+      "type": "string",
+      "enum": ["present", "invalid"]
+    },
+    "valid": { "type": "boolean" },
+    "verdict": {
+      "type": "string",
+      "enum": ["PASS", "FAIL"]
+    },
+    "receipt_hash": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "claim_scope": {
+      "type": "string",
+      "const": "function_address.v1.lifecycle_policy_conformance",
+      "x-mantle-issue-class": "enum"
+    },
+    "sidecar_digest": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "valence_receipt_digest": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "source_archive_digest": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "release_binary_digest": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "kamacite_receipt_digest": {
+      "type": ["string", "null"],
+      "x-mantle-semantic": "blake3"
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "x-mantle-bound-name": {
+        "minItems": "MIN_FUNCTION_ADDRESS_BINDING_ROLES_COUNT",
+        "maxItems": "MAX_FUNCTION_ADDRESS_BINDING_ROLES_COUNT"
+      },
+      "items": {
+        "type": "string",
+        "enum": [
+          "function-address-evidence-sidecar",
+          "valence-function-address-evidence-profile",
+          "kamacite-function-address-receipt"
+        ]
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "x-mantle-bound-name": {
+        "minItems": "MIN_FUNCTION_ADDRESS_BINDING_ROLES_COUNT",
+        "maxItems": "MAX_FUNCTION_ADDRESS_BINDING_ROLES_COUNT"
+      },
+      "items": {
+        "type": "string",
+        "enum": [
+          "valence.function-address-evidence.v1",
+          "function-address-evidence-v1",
+          "kamacite.function-address-receipt.v1"
+        ]
+      }
+    },
+    "mantle_non_claim_boundary": {
+      "type": "string",
+      "const": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+      "x-mantle-issue-class": "enum"
+    },
+    "non_claim_boundary": {
+      "type": "string",
+      "const": "Cairn function-address evidence proves lifecycle policy conformance over supplied receipts only; it does not prove Rust semantic correctness, compiler correctness, build correctness, verifier soundness, or release eligibility outside the configured policy",
+      "x-mantle-issue-class": "enum"
+    },
+    "verification_summary": { "$ref": "#/$defs/verification_summary" }
+  },
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "field-equals", "left": "/valid", "right": "/verification_summary/valid" },
+    { "kind": "field-equals", "left": "/disposition", "right": "/verification_summary/disposition" },
+    { "kind": "field-equals", "left": "/sidecar_digest", "right": "/verification_summary/sidecar_digest_blake3" },
+    { "kind": "field-equals", "left": "/valence_receipt_digest", "right": "/verification_summary/valence_receipt_digest_blake3" },
+    { "kind": "field-equals", "left": "/source_archive_digest", "right": "/verification_summary/source_archive_digest_blake3" },
+    { "kind": "field-equals", "left": "/release_binary_digest", "right": "/verification_summary/release_binary_digest_blake3" },
+    { "kind": "field-equals", "left": "/kamacite_receipt_digest", "right": "/verification_summary/kamacite_receipt_digest_blake3" },
+    { "kind": "field-equals", "left": "/mantle_non_claim_boundary", "right": "/verification_summary/boundary" },
+    { "kind": "field-equals-const-when", "boolean": "/valid", "target": "/verdict", "value": "PASS" },
+    { "kind": "field-equals-const-when", "boolean": "/valid", "target": "/disposition", "value": "present" }
+  ]
+}

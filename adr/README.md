@@ -24,3 +24,4 @@ compatibility surface, crate name, or historical decision.
 | [0015](0015-rust-owned-machine-contract-generation.md) | Keep machine artifacts Rust-owned and generate Nickel review contracts | Accepted |
 | [0016](0016-materialize-wasm-components-as-build-artifacts.md) | Materialize WebAssembly components as build artifacts | Proposed |
 | [0017](0017-deterministic-lazy-goal-priority.md) | Deterministic priority for lazy ready goals | Accepted |
+| [0018](0018-mantle-owned-function-address-release-binding.md) | Own the function-address release binding at the Mantle boundary | Accepted |

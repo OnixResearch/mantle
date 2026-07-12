@@ -1,0 +1,368 @@
+{
+  "cases": [
+    {
+      "artifact": {},
+      "expected_path": "/valence_receipt_digest",
+      "id": "missing-required-valence-digest",
+      "issue_class": "schema"
+    },
+    {
+      "artifact": {
+        "claim_scope": "function_address.v1.lifecycle_policy_conformance",
+        "disposition": "present",
+        "kamacite_receipt_digest": "0303030303030303030303030303030303030303030303030303030303030303",
+        "mantle_non_claim_boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+        "non_claim_boundary": "Cairn function-address evidence proves lifecycle policy conformance over supplied receipts only; it does not prove Rust semantic correctness, compiler correctness, build correctness, verifier soundness, or release eligibility outside the configured policy",
+        "receipt_hash": "818f2c4230b6ba141417b36bc21a1f61419029cc82741fa974498e4d4bdfaf92",
+        "release_binary_digest": "0505050505050505050505050505050505050505050505050505050505050505",
+        "roles": [
+          "function-address-evidence-sidecar",
+          "valence-function-address-evidence-profile",
+          "kamacite-function-address-receipt"
+        ],
+        "schema_version": "mantle.function-address-binding.v2",
+        "schemas": [
+          "valence.function-address-evidence.v1",
+          "function-address-evidence-v1",
+          "kamacite.function-address-receipt.v1"
+        ],
+        "sidecar_digest": "0101010101010101010101010101010101010101010101010101010101010101",
+        "source_archive_digest": "0404040404040404040404040404040404040404040404040404040404040404",
+        "valence_receipt_digest": "0202020202020202020202020202020202020202020202020202020202020202",
+        "valid": true,
+        "verdict": "PASS",
+        "verification_summary": {
+          "boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+          "diagnostics": [],
+          "disposition": "present",
+          "kamacite_receipt_digest_blake3": "0303030303030303030303030303030303030303030303030303030303030303",
+          "kamacite_receipt_role": "kamacite-function-address-receipt",
+          "kamacite_receipt_schema": "kamacite.function-address-receipt.v1",
+          "mode": "required",
+          "release_binary_digest_blake3": "0505050505050505050505050505050505050505050505050505050505050505",
+          "release_binary_relative_path": "binaries/mantle",
+          "required": true,
+          "sidecar_claim_scope": "function-address-identity-linkage-only",
+          "sidecar_digest_blake3": "0101010101010101010101010101010101010101010101010101010101010101",
+          "sidecar_role": "function-address-evidence-sidecar",
+          "sidecar_schema": "valence.function-address-evidence.v1",
+          "source_archive_digest_blake3": "0404040404040404040404040404040404040404040404040404040404040404",
+          "valence_receipt_digest_blake3": "0202020202020202020202020202020202020202020202020202020202020202",
+          "valence_receipt_role": "valence-function-address-evidence-profile",
+          "valence_receipt_schema": "function-address-evidence-v1",
+          "valid": true
+        }
+      },
+      "expected_path": "/schema_version",
+      "id": "unsupported-schema-version",
+      "issue_class": "version"
+    },
+    {
+      "artifact": {
+        "claim_scope": "function_address.v1.lifecycle_policy_conformance",
+        "disposition": "present",
+        "kamacite_receipt_digest": "0303030303030303030303030303030303030303030303030303030303030303",
+        "mantle_non_claim_boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+        "non_claim_boundary": "Cairn function-address evidence proves lifecycle policy conformance over supplied receipts only; it does not prove Rust semantic correctness, compiler correctness, build correctness, verifier soundness, or release eligibility outside the configured policy",
+        "receipt_hash": "not-a-blake3-digest",
+        "release_binary_digest": "0505050505050505050505050505050505050505050505050505050505050505",
+        "roles": [
+          "function-address-evidence-sidecar",
+          "valence-function-address-evidence-profile",
+          "kamacite-function-address-receipt"
+        ],
+        "schema_version": "mantle.function-address-binding.v1",
+        "schemas": [
+          "valence.function-address-evidence.v1",
+          "function-address-evidence-v1",
+          "kamacite.function-address-receipt.v1"
+        ],
+        "sidecar_digest": "0101010101010101010101010101010101010101010101010101010101010101",
+        "source_archive_digest": "0404040404040404040404040404040404040404040404040404040404040404",
+        "valence_receipt_digest": "0202020202020202020202020202020202020202020202020202020202020202",
+        "valid": true,
+        "verdict": "PASS",
+        "verification_summary": {
+          "boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+          "diagnostics": [],
+          "disposition": "present",
+          "kamacite_receipt_digest_blake3": "0303030303030303030303030303030303030303030303030303030303030303",
+          "kamacite_receipt_role": "kamacite-function-address-receipt",
+          "kamacite_receipt_schema": "kamacite.function-address-receipt.v1",
+          "mode": "required",
+          "release_binary_digest_blake3": "0505050505050505050505050505050505050505050505050505050505050505",
+          "release_binary_relative_path": "binaries/mantle",
+          "required": true,
+          "sidecar_claim_scope": "function-address-identity-linkage-only",
+          "sidecar_digest_blake3": "0101010101010101010101010101010101010101010101010101010101010101",
+          "sidecar_role": "function-address-evidence-sidecar",
+          "sidecar_schema": "valence.function-address-evidence.v1",
+          "source_archive_digest_blake3": "0404040404040404040404040404040404040404040404040404040404040404",
+          "valence_receipt_digest_blake3": "0202020202020202020202020202020202020202020202020202020202020202",
+          "valence_receipt_role": "valence-function-address-evidence-profile",
+          "valence_receipt_schema": "function-address-evidence-v1",
+          "valid": true
+        }
+      },
+      "expected_path": "/receipt_hash",
+      "id": "malformed-receipt-hash",
+      "issue_class": "digest"
+    },
+    {
+      "artifact": {
+        "claim_scope": "function_address.v1.lifecycle_policy_conformance",
+        "disposition": "present",
+        "kamacite_receipt_digest": "0303030303030303030303030303030303030303030303030303030303030303",
+        "mantle_non_claim_boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+        "non_claim_boundary": "Cairn function-address evidence proves lifecycle policy conformance over supplied receipts only; it does not prove Rust semantic correctness, compiler correctness, build correctness, verifier soundness, or release eligibility outside the configured policy",
+        "receipt_hash": "818f2c4230b6ba141417b36bc21a1f61419029cc82741fa974498e4d4bdfaf92",
+        "release_binary_digest": "0505050505050505050505050505050505050505050505050505050505050505",
+        "roles": [
+          "function-address-evidence-sidecar",
+          "valence-function-address-evidence-profile",
+          "kamacite-function-address-receipt"
+        ],
+        "schema_version": "mantle.function-address-binding.v1",
+        "schemas": [
+          "valence.function-address-evidence.v1",
+          "function-address-evidence-v1",
+          "kamacite.function-address-receipt.v1"
+        ],
+        "sidecar_digest": "0101010101010101010101010101010101010101010101010101010101010101",
+        "source_archive_digest": "0404040404040404040404040404040404040404040404040404040404040404",
+        "valence_receipt_digest": "9999999999999999999999999999999999999999999999999999999999999999",
+        "valid": true,
+        "verdict": "PASS",
+        "verification_summary": {
+          "boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+          "diagnostics": [],
+          "disposition": "present",
+          "kamacite_receipt_digest_blake3": "0303030303030303030303030303030303030303030303030303030303030303",
+          "kamacite_receipt_role": "kamacite-function-address-receipt",
+          "kamacite_receipt_schema": "kamacite.function-address-receipt.v1",
+          "mode": "required",
+          "release_binary_digest_blake3": "0505050505050505050505050505050505050505050505050505050505050505",
+          "release_binary_relative_path": "binaries/mantle",
+          "required": true,
+          "sidecar_claim_scope": "function-address-identity-linkage-only",
+          "sidecar_digest_blake3": "0101010101010101010101010101010101010101010101010101010101010101",
+          "sidecar_role": "function-address-evidence-sidecar",
+          "sidecar_schema": "valence.function-address-evidence.v1",
+          "source_archive_digest_blake3": "0404040404040404040404040404040404040404040404040404040404040404",
+          "valence_receipt_digest_blake3": "0202020202020202020202020202020202020202020202020202020202020202",
+          "valence_receipt_role": "valence-function-address-evidence-profile",
+          "valence_receipt_schema": "function-address-evidence-v1",
+          "valid": true
+        }
+      },
+      "expected_path": "/",
+      "id": "stale-valence-digest",
+      "issue_class": "cross-field"
+    },
+    {
+      "artifact": {
+        "claim_scope": "function_address.v1.lifecycle_policy_conformance",
+        "disposition": "present",
+        "kamacite_receipt_digest": "9999999999999999999999999999999999999999999999999999999999999999",
+        "mantle_non_claim_boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+        "non_claim_boundary": "Cairn function-address evidence proves lifecycle policy conformance over supplied receipts only; it does not prove Rust semantic correctness, compiler correctness, build correctness, verifier soundness, or release eligibility outside the configured policy",
+        "receipt_hash": "818f2c4230b6ba141417b36bc21a1f61419029cc82741fa974498e4d4bdfaf92",
+        "release_binary_digest": "0505050505050505050505050505050505050505050505050505050505050505",
+        "roles": [
+          "function-address-evidence-sidecar",
+          "valence-function-address-evidence-profile",
+          "kamacite-function-address-receipt"
+        ],
+        "schema_version": "mantle.function-address-binding.v1",
+        "schemas": [
+          "valence.function-address-evidence.v1",
+          "function-address-evidence-v1",
+          "kamacite.function-address-receipt.v1"
+        ],
+        "sidecar_digest": "0101010101010101010101010101010101010101010101010101010101010101",
+        "source_archive_digest": "0404040404040404040404040404040404040404040404040404040404040404",
+        "valence_receipt_digest": "0202020202020202020202020202020202020202020202020202020202020202",
+        "valid": true,
+        "verdict": "PASS",
+        "verification_summary": {
+          "boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+          "diagnostics": [],
+          "disposition": "present",
+          "kamacite_receipt_digest_blake3": "0303030303030303030303030303030303030303030303030303030303030303",
+          "kamacite_receipt_role": "kamacite-function-address-receipt",
+          "kamacite_receipt_schema": "kamacite.function-address-receipt.v1",
+          "mode": "required",
+          "release_binary_digest_blake3": "0505050505050505050505050505050505050505050505050505050505050505",
+          "release_binary_relative_path": "binaries/mantle",
+          "required": true,
+          "sidecar_claim_scope": "function-address-identity-linkage-only",
+          "sidecar_digest_blake3": "0101010101010101010101010101010101010101010101010101010101010101",
+          "sidecar_role": "function-address-evidence-sidecar",
+          "sidecar_schema": "valence.function-address-evidence.v1",
+          "source_archive_digest_blake3": "0404040404040404040404040404040404040404040404040404040404040404",
+          "valence_receipt_digest_blake3": "0202020202020202020202020202020202020202020202020202020202020202",
+          "valence_receipt_role": "valence-function-address-evidence-profile",
+          "valence_receipt_schema": "function-address-evidence-v1",
+          "valid": true
+        }
+      },
+      "expected_path": "/",
+      "id": "stale-kamacite-digest",
+      "issue_class": "cross-field"
+    },
+    {
+      "artifact": {
+        "claim_scope": "function-address-semantic-correctness",
+        "disposition": "present",
+        "kamacite_receipt_digest": "0303030303030303030303030303030303030303030303030303030303030303",
+        "mantle_non_claim_boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+        "non_claim_boundary": "Cairn function-address evidence proves lifecycle policy conformance over supplied receipts only; it does not prove Rust semantic correctness, compiler correctness, build correctness, verifier soundness, or release eligibility outside the configured policy",
+        "receipt_hash": "818f2c4230b6ba141417b36bc21a1f61419029cc82741fa974498e4d4bdfaf92",
+        "release_binary_digest": "0505050505050505050505050505050505050505050505050505050505050505",
+        "roles": [
+          "function-address-evidence-sidecar",
+          "valence-function-address-evidence-profile",
+          "kamacite-function-address-receipt"
+        ],
+        "schema_version": "mantle.function-address-binding.v1",
+        "schemas": [
+          "valence.function-address-evidence.v1",
+          "function-address-evidence-v1",
+          "kamacite.function-address-receipt.v1"
+        ],
+        "sidecar_digest": "0101010101010101010101010101010101010101010101010101010101010101",
+        "source_archive_digest": "0404040404040404040404040404040404040404040404040404040404040404",
+        "valence_receipt_digest": "0202020202020202020202020202020202020202020202020202020202020202",
+        "valid": true,
+        "verdict": "PASS",
+        "verification_summary": {
+          "boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+          "diagnostics": [],
+          "disposition": "present",
+          "kamacite_receipt_digest_blake3": "0303030303030303030303030303030303030303030303030303030303030303",
+          "kamacite_receipt_role": "kamacite-function-address-receipt",
+          "kamacite_receipt_schema": "kamacite.function-address-receipt.v1",
+          "mode": "required",
+          "release_binary_digest_blake3": "0505050505050505050505050505050505050505050505050505050505050505",
+          "release_binary_relative_path": "binaries/mantle",
+          "required": true,
+          "sidecar_claim_scope": "function-address-identity-linkage-only",
+          "sidecar_digest_blake3": "0101010101010101010101010101010101010101010101010101010101010101",
+          "sidecar_role": "function-address-evidence-sidecar",
+          "sidecar_schema": "valence.function-address-evidence.v1",
+          "source_archive_digest_blake3": "0404040404040404040404040404040404040404040404040404040404040404",
+          "valence_receipt_digest_blake3": "0202020202020202020202020202020202020202020202020202020202020202",
+          "valence_receipt_role": "valence-function-address-evidence-profile",
+          "valence_receipt_schema": "function-address-evidence-v1",
+          "valid": true
+        }
+      },
+      "expected_path": "/claim_scope",
+      "id": "unsupported-claim-scope",
+      "issue_class": "enum"
+    },
+    {
+      "artifact": {
+        "claim_scope": "function_address.v1.lifecycle_policy_conformance",
+        "disposition": "present",
+        "kamacite_receipt_digest": "0303030303030303030303030303030303030303030303030303030303030303",
+        "mantle_non_claim_boundary": "identity only",
+        "non_claim_boundary": "Cairn function-address evidence proves lifecycle policy conformance over supplied receipts only; it does not prove Rust semantic correctness, compiler correctness, build correctness, verifier soundness, or release eligibility outside the configured policy",
+        "receipt_hash": "818f2c4230b6ba141417b36bc21a1f61419029cc82741fa974498e4d4bdfaf92",
+        "release_binary_digest": "0505050505050505050505050505050505050505050505050505050505050505",
+        "roles": [
+          "function-address-evidence-sidecar",
+          "valence-function-address-evidence-profile",
+          "kamacite-function-address-receipt"
+        ],
+        "schema_version": "mantle.function-address-binding.v1",
+        "schemas": [
+          "valence.function-address-evidence.v1",
+          "function-address-evidence-v1",
+          "kamacite.function-address-receipt.v1"
+        ],
+        "sidecar_digest": "0101010101010101010101010101010101010101010101010101010101010101",
+        "source_archive_digest": "0404040404040404040404040404040404040404040404040404040404040404",
+        "valence_receipt_digest": "0202020202020202020202020202020202020202020202020202020202020202",
+        "valid": true,
+        "verdict": "PASS",
+        "verification_summary": {
+          "boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+          "diagnostics": [],
+          "disposition": "present",
+          "kamacite_receipt_digest_blake3": "0303030303030303030303030303030303030303030303030303030303030303",
+          "kamacite_receipt_role": "kamacite-function-address-receipt",
+          "kamacite_receipt_schema": "kamacite.function-address-receipt.v1",
+          "mode": "required",
+          "release_binary_digest_blake3": "0505050505050505050505050505050505050505050505050505050505050505",
+          "release_binary_relative_path": "binaries/mantle",
+          "required": true,
+          "sidecar_claim_scope": "function-address-identity-linkage-only",
+          "sidecar_digest_blake3": "0101010101010101010101010101010101010101010101010101010101010101",
+          "sidecar_role": "function-address-evidence-sidecar",
+          "sidecar_schema": "valence.function-address-evidence.v1",
+          "source_archive_digest_blake3": "0404040404040404040404040404040404040404040404040404040404040404",
+          "valence_receipt_digest_blake3": "0202020202020202020202020202020202020202020202020202020202020202",
+          "valence_receipt_role": "valence-function-address-evidence-profile",
+          "valence_receipt_schema": "function-address-evidence-v1",
+          "valid": true
+        }
+      },
+      "expected_path": "/mantle_non_claim_boundary",
+      "id": "weakened-mantle-boundary",
+      "issue_class": "enum"
+    },
+    {
+      "artifact": {
+        "claim_scope": "function_address.v1.lifecycle_policy_conformance",
+        "disposition": "present",
+        "kamacite_receipt_digest": "0303030303030303030303030303030303030303030303030303030303030303",
+        "mantle_non_claim_boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+        "non_claim_boundary": "lifecycle passed",
+        "receipt_hash": "818f2c4230b6ba141417b36bc21a1f61419029cc82741fa974498e4d4bdfaf92",
+        "release_binary_digest": "0505050505050505050505050505050505050505050505050505050505050505",
+        "roles": [
+          "function-address-evidence-sidecar",
+          "valence-function-address-evidence-profile",
+          "kamacite-function-address-receipt"
+        ],
+        "schema_version": "mantle.function-address-binding.v1",
+        "schemas": [
+          "valence.function-address-evidence.v1",
+          "function-address-evidence-v1",
+          "kamacite.function-address-receipt.v1"
+        ],
+        "sidecar_digest": "0101010101010101010101010101010101010101010101010101010101010101",
+        "source_archive_digest": "0404040404040404040404040404040404040404040404040404040404040404",
+        "valence_receipt_digest": "0202020202020202020202020202020202020202020202020202020202020202",
+        "valid": true,
+        "verdict": "PASS",
+        "verification_summary": {
+          "boundary": "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics",
+          "diagnostics": [],
+          "disposition": "present",
+          "kamacite_receipt_digest_blake3": "0303030303030303030303030303030303030303030303030303030303030303",
+          "kamacite_receipt_role": "kamacite-function-address-receipt",
+          "kamacite_receipt_schema": "kamacite.function-address-receipt.v1",
+          "mode": "required",
+          "release_binary_digest_blake3": "0505050505050505050505050505050505050505050505050505050505050505",
+          "release_binary_relative_path": "binaries/mantle",
+          "required": true,
+          "sidecar_claim_scope": "function-address-identity-linkage-only",
+          "sidecar_digest_blake3": "0101010101010101010101010101010101010101010101010101010101010101",
+          "sidecar_role": "function-address-evidence-sidecar",
+          "sidecar_schema": "valence.function-address-evidence.v1",
+          "source_archive_digest_blake3": "0404040404040404040404040404040404040404040404040404040404040404",
+          "valence_receipt_digest_blake3": "0202020202020202020202020202020202020202020202020202020202020202",
+          "valence_receipt_role": "valence-function-address-evidence-profile",
+          "valence_receipt_schema": "function-address-evidence-v1",
+          "valid": true
+        }
+      },
+      "expected_path": "/non_claim_boundary",
+      "id": "weakened-cairn-boundary",
+      "issue_class": "enum"
+    }
+  ],
+  "surface_id": "release.function-address-binding"
+}

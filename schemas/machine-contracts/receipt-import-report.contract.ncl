@@ -27,4 +27,4 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && (std.record.has_field "imported" (value) && (((std.is_bool (std.record.get "imported" (value))))))
   && (std.record.has_field "non_claim" (value) && (((std.record.get "non_claim" (value)) == "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
   && (std.is_string (std.record.get "non_claim" (value))))))
-  && (std.record.get "idempotent" (value)) != (std.record.get "imported" (value)))))
+  && ((std.record.get "idempotent" (value)) != (std.record.get "imported" (value))))))

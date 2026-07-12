@@ -1192,6 +1192,11 @@ This confinement proves bounded path and byte handling for bundle assembly. It
 does not validate the semantics, correctness, or trustworthiness of copied proof
 or release artifacts.
 
+Function-address evidence uses the versioned Mantle-to-Cairn binding described
+in [`docs/function-address-release-binding.md`](docs/function-address-release-binding.md).
+The receipt binds typed sidecar, Valence, optional Kamacite, source, and binary
+identities without promoting them to Rust semantic or release-eligibility claims.
+
 A successful proof bundle can be packaged as release evidence:
 
 ```bash

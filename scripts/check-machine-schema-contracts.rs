@@ -444,17 +444,20 @@ fn run_invariant_parity_self_test() -> Result<(), String> {
         "$schema": JSON_SCHEMA_DRAFT,
         "$id": "mantle://schemas/self-test-invariant-v1",
         "type": "object",
-        "required": ["target", "lower", "upper"],
+        "required": ["target", "lower", "lower_copy", "upper"],
         "properties": {
             "target": {"type": "boolean"},
             "optional": {"type": "boolean"},
             "lower": {"type": "integer"},
+            "lower_copy": {"type": "integer"},
             "upper": {"type": "integer"}
         },
         "additionalProperties": false,
         "x-mantle-invariants": [
             {"kind": "boolean-or", "terms": ["/optional"], "target": "/target"},
-            {"kind": "integer-less-than", "integer": "/lower", "target": "/upper"}
+            {"kind": "integer-less-than", "integer": "/lower", "target": "/upper"},
+            {"kind": "field-equals", "left": "/lower", "right": "/lower_copy"},
+            {"kind": "field-equals-const-when", "boolean": "/target", "target": "/lower", "value": 1}
         ]
     });
     reject_issues("self-test invariant schema", validate_schema("self-test.invariant", &schema))?;
@@ -463,24 +466,37 @@ fn run_invariant_parity_self_test() -> Result<(), String> {
         validate_instance(
             "self-test.invariant",
             &schema,
-            &serde_json::json!({"target": false, "optional": false, "lower": 1, "upper": 2}),
+            &serde_json::json!({"target": false, "optional": false, "lower": 1, "lower_copy": 1, "upper": 2}),
         ),
     )?;
     let inverted = validate_instance(
         "self-test.invariant",
         &schema,
-        &serde_json::json!({"target": false, "optional": false, "lower": 2, "upper": 1}),
+        &serde_json::json!({"target": false, "optional": false, "lower": 2, "lower_copy": 2, "upper": 1}),
     );
     if !inverted.iter().any(|issue| issue.class == "cross-field") {
         return Err(format!("self-test accepted an inverted integer ordering: {inverted:?}"));
     }
+    let unequal = validate_instance(
+        "self-test.invariant",
+        &schema,
+        &serde_json::json!({"target": false, "optional": false, "lower": 1, "lower_copy": 2, "upper": 3}),
+    );
+    if !unequal.iter().any(|issue| issue.class == "cross-field") {
+        return Err(format!("self-test accepted unequal linked fields: {unequal:?}"));
+    }
     let missing = validate_instance(
         "self-test.invariant",
         &schema,
-        &serde_json::json!({"target": false, "lower": 1, "upper": 2}),
+        &serde_json::json!({"target": false, "lower": 1, "lower_copy": 1, "upper": 2}),
     );
     if !missing.iter().any(|issue| issue.class == "cross-field") {
         return Err(format!("self-test ignored a missing invariant operand: {missing:?}"));
+    }
+
+    let rendered = render_contract("self-test.invariant", &schema)?;
+    if !rendered.contains("&& ((!(std.record.get") {
+        return Err("self-test invariant with disjunction was not grouped before conjunction".to_string());
     }
 
     let mut malformed = schema;

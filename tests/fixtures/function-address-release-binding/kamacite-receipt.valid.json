@@ -1,0 +1,6 @@
+{
+  "schema_version": "kamacite.function-address-receipt.v1",
+  "valid": true,
+  "receipt_hash": "0303030303030303030303030303030303030303030303030303030303030303",
+  "non_claim_boundary": "Kamacite preserves typed receipt identity only; it does not prove Rust semantic correctness or release eligibility"
+}

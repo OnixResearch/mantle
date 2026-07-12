@@ -72,7 +72,8 @@ let Registry = {
     "nickel-export.receipt",
     "attestation.release-envelope",
     "oci.export-report",
-    "oci.import-report"
+    "oci.import-report",
+    "release.function-address-binding"
   ],
   "surfaces"= [
     {
@@ -120,7 +121,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
       "freshness"= {
         "schema_blake3"= "27e36c9c867910b2358b8c9520d6bb1075a7aab7744db3eff7719f6f644e640e",
-        "contract_blake3"= "c0021386177a6791a848a95a1740926cb3c44e9fb345a8e70cdff361f26da667",
+        "contract_blake3"= "1e26a6fd898d7bb8091f51b15baed11d1f0779399f21bcd3f03e839ab2bf78b3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "b2c0eee0dfbf01929d3f4b3aca13cab3695a693053e5249ca5d79c186966b586",
         "producer_identity_blake3"= "c16c10e8d1cee02eff583fed1a5baa898be17a7088bcb9cd7252a231637a85a0",
@@ -182,7 +183,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds the full report projection and all directly serialized owner modules",
       "freshness"= {
         "schema_blake3"= "79330945095623f6cd64268fbe81595a1c3fc24ad368477b2aff582bd1cd9432",
-        "contract_blake3"= "b37b10e0f3295d3659b86ae6c257fc445566a9513c76cd4227542d7dfa2d6e04",
+        "contract_blake3"= "69373a47a7fda43789da12cafa221c45a97e29b6c03ca28f188a40f11e7a4ae6",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "8f89cdb1a709a03a5c6afe81a7386f20c310f4f116e96f02dfdd53fa16bf8402",
         "producer_identity_blake3"= "7e0a84bc6de0ee402a92747410355d04cd6624e7563a19d98cc33a12dd49f915",
@@ -236,7 +237,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds plan owner, schema, contract, fixtures, and policy",
       "freshness"= {
         "schema_blake3"= "bb5e5fb41273e20dceb422b7dcb3e448f81fa7b262201011ba7603eae6274fbd",
-        "contract_blake3"= "fa172e4f74cf9605bd211ac683c628a83917b623554554b38538b58f49d56829",
+        "contract_blake3"= "16ccc6644e6a2b74b1b4db20014818bb73028343e9c3da8a92a0711ed520d434",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "576b0cc4dbed5d3c850a408c032411c180e9a0446507ec333606c25c4b15f719",
         "producer_identity_blake3"= "dbe731a57496166bd4c44ccc86bed96f07f85389b5526e5e50743ade646e4e04",
@@ -290,7 +291,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds routing policy projection and tie-break semantics",
       "freshness"= {
         "schema_blake3"= "6264c981a69074be3666b86282a1e9dcc8e7d87132e39cb4d2595cea6940d308",
-        "contract_blake3"= "cd20cb1f42f9c0b91267ba44ba449dfab772996cc5f7efc98c643b7134676546",
+        "contract_blake3"= "f09c325341006353625ff640041cfbdcbad15f13e22e1a3e1dc1f6fa282aff5c",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "326f83bf601b7aaf442cadcde8c09e8274e606b510e83a7b327cb8e1debc45a0",
         "producer_identity_blake3"= "660917bd30d3d28571b6f522822866d8d613d119ee15bfe2bea0cffe038e864e",
@@ -344,7 +345,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds portable receipt report shape and evidence policy",
       "freshness"= {
         "schema_blake3"= "e6af958159a48f87e3b1a1ba21e4891091ad0ac358d405648ba5e8fd23e4867e",
-        "contract_blake3"= "2dbee0e6faf2eaa07243e7be7b1ad4f8e415efd0bf60bc3db72348ee1115d1fa",
+        "contract_blake3"= "5b922a6b7066bce68131419ccfb95619022698e170375d2669c21d9408165129",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "f8efd884abc9b6beffd9527db139ab53356b198331c91adb4b41259ca6684c88",
         "producer_identity_blake3"= "b26610924a3c05af55c432d2a3a9377ce2edd3e89cd38fe37a3b723d95c685c1",
@@ -398,7 +399,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds verification projection, trust fields, fixtures, and policy",
       "freshness"= {
         "schema_blake3"= "a1e0b82024f62b39d917514de7585e2e6dd9365d564a5e58feb23484b2305aec",
-        "contract_blake3"= "eaab54bca79c41b817f96c198ebb511a4d1710602395e5cd704ca02e73363d35",
+        "contract_blake3"= "ebdd22a938ddc93c38f7fd0d27594be7456374e379227206e7a357fe46d4a00d",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "a9cd57d937da9107de66d87888629c51f19a07dc585beda5192baa817bf77ec9",
         "producer_identity_blake3"= "5a2e8649734f8d0ccaa3d293beff4741426d17e9c20e7f9040d9e45d86c7bfff",
@@ -451,7 +452,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds import result and idempotency semantics",
       "freshness"= {
         "schema_blake3"= "fa5a902ed68036aa6e1bb1472b10b845c60980cb2cb34665f6cb6625e7fb0355",
-        "contract_blake3"= "54fbc926003092124a7a4a88eb1fc29c43a274dab9e72fe082230138163e570a",
+        "contract_blake3"= "acef59d7e93e39b8b3be1d791e5a3615cec92dbae6735153b0fc1aa9147be32e",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "6788977d15737936e07f67f8cc3ee1c5fd7acbe275762801e54e680681de19d2",
         "producer_identity_blake3"= "22dd4da2bf0f447d98e3ddc9b66da79e684f89aa3e2f2e55266e526a56e9339e",
@@ -505,7 +506,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds source-plan projection and bounded record policy",
       "freshness"= {
         "schema_blake3"= "89b0785a736e8c4854c41d54c1fe75e22ba43b0cae90399d4aff1c863dc9deed",
-        "contract_blake3"= "1b298a1327e9ab47c6bdb31c1b0efe373bcc77dbb868e94b004e956593e80bbd",
+        "contract_blake3"= "d3b07cd0d3396e6798ec94d68d37cf06a5ee35f81866016fbf1f18e0f401c7ae",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "996d0ea5521663d8180e90e955fcba9c92b4570b8935e13b2e57af45c81260e2",
         "producer_identity_blake3"= "53dfeaa242f411594a037e984610c6751f84d077a01e95a6ca72b53140300a17",
@@ -559,7 +560,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds readiness classes and blocker arrays",
       "freshness"= {
         "schema_blake3"= "5350efbbd43f29ff26bf6ccdf64cdfff33c6cc7f17ea90252dc679a6fb2c524c",
-        "contract_blake3"= "82d26b857396ae116cc3d245dc6f3f6edd37fcad4417a02e65f69f11b4a86339",
+        "contract_blake3"= "1c816681434e8114cd6c4bab4a48fd5c5f86ce7c9f33c187ab609ec73f814fd8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1ad119357b7d7217396fe2f47598b14cb8d87bc105982a428e3924e7c3213c11",
         "producer_identity_blake3"= "9f44162362c6a2b01f67d2b84d96b9170130330edd3ed78189a8d9aea1e7786c",
@@ -613,7 +614,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds preflight state, remediation, and source summaries",
       "freshness"= {
         "schema_blake3"= "40aaec6972d156951612eee123c5878b829f7a822a5eb8a4a3dc32c23dd7c059",
-        "contract_blake3"= "b3cbddb94afb0b1d25aeacee4dc02932548be98c2d32d551a2579ea17d18938b",
+        "contract_blake3"= "d7b30efe0e40442383eb7c654a3bb0c88b508f059b88008085fd59f0a88b0f23",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "74b65baffbfcfb59d5557a99ea0ed63c02711ee4c865c5f7be1eb14ad57071c8",
         "producer_identity_blake3"= "6467468a25dd31623a415dffc06c6e3ce7d559c0310a17436b3fbce8744fc6af",
@@ -667,7 +668,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds export status, receipt projection, diagnostics, and policy",
       "freshness"= {
         "schema_blake3"= "c42a0b70093997a3d741882d93be44f43e732e59a6ecbfee232bb86feceef564",
-        "contract_blake3"= "4ff8d00ce8180be6207e7a87bb53b210b4eb8420826c75cbf1977ebd5a33c5c4",
+        "contract_blake3"= "c476dbe914a257fd0f752bd7036ceb9e3361898761a025d77c191654bc6065e0",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "3cf4824049a7e2294fe7aa79115d67f79739889171e3e022cb7c07da622af610",
         "producer_identity_blake3"= "73b784a1b0c2b3408ddebc585bbf41357ae177d109455ed1cd799d47c635d570",
@@ -721,7 +722,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds source references, evaluator identity, output digest, and non-claim",
       "freshness"= {
         "schema_blake3"= "5f4fe9ff3df4c34fe20480caaaa0e810ec6715b543c740173a9fe4f100b472d4",
-        "contract_blake3"= "0ebfa8dc10228f19a76f97e5afd406b55c2c5df5ba8358a02d58bc77f1485e7d",
+        "contract_blake3"= "3810c6aaa46851ddef9d4288ebb83e6fca65fea69b82c45ab4d19b9614dddfbb",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "e39044713ad33d6d6153018742b25fa6b1da7c3b5b013537854684078292a2c8",
         "producer_identity_blake3"= "28e141869781254076884f49dbab779120a2c004b5b4289080868aaf71c7064c",
@@ -777,7 +778,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds envelope, release attestation owner, fixture, contract, and consumer trust policy",
       "freshness"= {
         "schema_blake3"= "24541155258a9ec67af44b95848176c35e9823fa977ebd64fa24bbe762c9f271",
-        "contract_blake3"= "4f12c53d77531fcac374d86b0bf5df1e1c9d6b854b22d1a73a5bbd177abae980",
+        "contract_blake3"= "be18229bed1953b7b3e36b535acd910192ff9759a54cc0b7c6fd2b38132fd9a4",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "67d9e9232706f73f157c68abea93383ffa5af8ef83a924ecc2fb8fadce10a357",
         "producer_identity_blake3"= "da3cb30f7be5aeba2634b3f6b3afc0aa73063722b9c26b97bded402723839045",
@@ -843,7 +844,7 @@ let Registry = {
       "freshness_strategy"= "BLAKE3 binds the frontend-neutral Rust report owner, exact digest-role schema, generated contract, reviewed fixtures, and consumer non-claims",
       "freshness"= {
         "schema_blake3"= "0db24b0f3f4952c80b074eed1d7ff8e03d3685a57deeb51ad2d318d31f27de85",
-        "contract_blake3"= "2e330d8d92559ab8d45c5b54b67f12f17720d65558b0328b3db4201d4fe196a4",
+        "contract_blake3"= "43a06bea0e9950c5d9e4e1ee7f84eaa3d716f8386d02003f655dda393707f644",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "76599ed52294ac203020c80c063c840e475c0d41e66841650c3e26192be9d259",
         "producer_identity_blake3"= "da8216a8ab056d522179ed29dc0daeac19041dbbfd3236670fd85c02d8a70fe9",
@@ -918,6 +919,67 @@ let Registry = {
         "report conformance does not recover frontend semantics or prove signature trust, kernel compatibility, bootability, deployability, publication, or release eligibility"
       ],
       "rationale"= "The stable import report distinguishes admitted and compatibility-only layouts without granting frontend semantic authority to Mantle."
+    },
+    {
+      "id"= "release.function-address-binding",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-release-core/src/function_address_binding.rs::FunctionAddressBindingReceipt",
+      "producer"= {
+        "command_or_api"= "render_function_address_binding_receipt",
+        "marker"= "release.function-address-binding",
+        "source_paths"= [
+          "crates/crunch-release-core/src/function_address_binding.rs",
+          "crates/crunch-release-core/src/manifest.rs",
+          "crates/crunch-release-core/src/opaque_evidence.rs"
+        ]
+      },
+      "consumers"= [
+        "Cairn release readiness",
+        "Mantle release binding CLI",
+        "release audit tooling"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/function-address-binding.schema.json",
+        "generated_contract"= "schemas/machine-contracts/function-address-binding.contract.ncl",
+        "positive_fixtures"= [
+          "tests/fixtures/function-address-release-binding/mantle-binding.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/function-address-binding.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle.function-address-binding.v1",
+        "supported"= [
+          "mantle.function-address-binding.v1"
+        ],
+        "unknown_version_behavior"= "reject before function-address readiness or release-policy consumption",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p crunch-release-core function_address_binding",
+        "cairn release-readiness --function-address-mantle <binding.json>"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "schema",
+        "digest",
+        "enum",
+        "cross-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the Rust receipt owner, exact linkage schema, generated contract, adversarial fixtures, verification summary, and Cairn-facing non-claims",
+      "freshness"= {
+        "schema_blake3"= "9b28bd8bc48191b45bae4d1ea48cf1eb1c8b55e9704585598d8987c69d820a23",
+        "contract_blake3"= "877f091f76fe28888e32a55a6e33a7cc386030b2e00912b0ee65f49455a779fe",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "fe4f4e1e7382cd140d695a9c7ae41ab167da25eea336c5f6459ccf2f74d1d1e0",
+        "producer_identity_blake3"= "b7515ae6862ff2b4760a1a54bfbc5eba8ec0032d6890c63d2ed7a347fdce2d26",
+        "consumer_policy_blake3"= "f1fe25ad7bf31510a0d970cabe8f0eea37b17342b7743bcd39c3858a4e5adb0a"
+      },
+      "non_claims"= [
+        "binding conformance proves typed identity and linkage plus supplied lifecycle-policy facts only; it does not prove Rust semantics, compiler correctness, build correctness, verifier soundness, or release eligibility"
+      ],
+      "rationale"= "The direct Mantle-to-Cairn release boundary requires a versioned receipt rather than smoke-specific wrapper fields."
     },
     {
       "id"= "cli.error-envelope",

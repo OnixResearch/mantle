@@ -135,7 +135,8 @@ fn render_object_predicates(
         let dynamic_predicate = render_predicate_node(root, additional, &dynamic_value, next_depth)?;
         predicates.push(format!("std.array.all (fun {field_variable} => {dynamic_predicate}) ({fields_expression})"));
     }
-    predicates.extend(render_invariant_predicates(object, value)?);
+    predicates
+        .extend(render_invariant_predicates(object, value)?.into_iter().map(|predicate| format!("({predicate})")));
     Ok(predicates)
 }
 
@@ -267,6 +268,7 @@ fn render_invariant_predicate(invariant: &Invariant, root: &str) -> Result<Strin
         "length-equals" => render_length_equals(invariant, root),
         "sum-equals" => render_sum_equals(invariant, root),
         "integer-less-than" => render_integer_less_than(invariant, root),
+        "field-equals" => render_field_equals(invariant, root),
         "empty-iff" => render_empty_iff(invariant, root),
         "present-iff" => render_present_iff(invariant, root),
         "boolean-not" => render_boolean_not(invariant, root),
@@ -299,6 +301,10 @@ fn render_sum_equals(invariant: &Invariant, root: &str) -> Result<String, String
 
 fn render_integer_less_than(invariant: &Invariant, root: &str) -> Result<String, String> {
     Ok(format!("{} < {}", nickel_path(root, &invariant.integer)?, nickel_path(root, &invariant.target)?))
+}
+
+fn render_field_equals(invariant: &Invariant, root: &str) -> Result<String, String> {
+    Ok(format!("{} == {}", nickel_path(root, &invariant.left)?, nickel_path(root, &invariant.right)?))
 }
 
 fn render_empty_iff(invariant: &Invariant, root: &str) -> Result<String, String> {

@@ -78,7 +78,7 @@ let is_ast_grep_finding_summary = fun value => ((std.is_record (value)
   && std.number.is_integer (std.record.get "test_case_count" (value))
   && (std.record.get "test_case_count" (value)) >= MIN_AST_GREP_TEST_COUNT
   && (std.record.get "test_case_count" (value)) <= MAX_AST_GREP_FINDING_SUMMARY_COUNT))))
-  && ((std.record.get "passed_test_count" (value)) + (std.record.get "failed_test_count" (value))) == (std.record.get "test_case_count" (value)))) in
+  && (((std.record.get "passed_test_count" (value)) + (std.record.get "failed_test_count" (value))) == (std.record.get "test_case_count" (value))))) in
 let is_ast_grep_output = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["finding_summary","format"]) (std.record.fields (value))
   && (std.record.has_field "finding_summary" (value) && (is_ast_grep_finding_summary (std.record.get "finding_summary" (value))))
@@ -701,7 +701,7 @@ let is_scheduling_policy = fun value => ((std.is_record (value)
   && (std.record.get "protected_after_epochs" (value)) <= MAX_SCHEDULING_EPOCH))))
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-scheduling-policy-v1"
   && (std.is_string (std.record.get "schema" (value))))))
-  && (std.record.get "aged_after_epochs" (value)) < (std.record.get "protected_after_epochs" (value)))) in
+  && ((std.record.get "aged_after_epochs" (value)) < (std.record.get "protected_after_epochs" (value))))) in
 let is_search_path = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["aliases","digest_algorithm","digest_blake3","entries","real_tool_refs"]) (std.record.fields (value))
   && (std.record.has_field "aliases" (value) && (((std.is_array (std.record.get "aliases" (value))
@@ -767,7 +767,7 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && std.number.is_integer (std.record.get "succeeded_total" (std.record.get "counts" (value)))
   && (std.record.get "succeeded_total" (std.record.get "counts" (value))) >= MIN_BUILD_COUNT
   && (std.record.get "succeeded_total" (std.record.get "counts" (value))) <= MAX_U32))))
-  && ((std.record.get "built_total" (std.record.get "counts" (value))) + (std.record.get "cached_total" (std.record.get "counts" (value)))) == (std.record.get "succeeded_total" (std.record.get "counts" (value)))))))
+  && (((std.record.get "built_total" (std.record.get "counts" (value))) + (std.record.get "cached_total" (std.record.get "counts" (value)))) == (std.record.get "succeeded_total" (std.record.get "counts" (value))))))))
   && (std.record.has_field "diagnostic_persistence_failures" (value) && (((std.is_array (std.record.get "diagnostic_persistence_failures" (value))
   && std.array.length (std.record.get "diagnostic_persistence_failures" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_persistence_failure (item_2)) (std.record.get "diagnostic_persistence_failures" (value))))))
@@ -808,6 +808,6 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && C.IsSafeReference (std.record.get "state_dir" (value))))))
   && (std.record.has_field "store_dir" (value) && (((std.is_string (std.record.get "store_dir" (value))
   && C.IsSafeReference (std.record.get "store_dir" (value))))))
-  && std.array.length (std.record.get "outcomes" (value)) == (std.record.get "succeeded_total" (std.record.get "counts" (value)))
-  && std.array.length (std.record.get "failed" (value)) == (std.record.get "failed_total" (std.record.get "counts" (value)))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "drv_key" other == std.record.get "drv_key" item) (std.record.get "outcomes" (value))) == 1) (std.record.get "outcomes" (value)))))
+  && (std.array.length (std.record.get "outcomes" (value)) == (std.record.get "succeeded_total" (std.record.get "counts" (value))))
+  && (std.array.length (std.record.get "failed" (value)) == (std.record.get "failed_total" (std.record.get "counts" (value))))
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "drv_key" other == std.record.get "drv_key" item) (std.record.get "outcomes" (value))) == 1) (std.record.get "outcomes" (value))))))

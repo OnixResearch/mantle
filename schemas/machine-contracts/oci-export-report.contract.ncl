@@ -294,4 +294,4 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && (std.record.has_field "schema_version" (value) && (((std.record.get "schema_version" (value)) == 1
   && (std.is_number (std.record.get "schema_version" (value))
   && std.number.is_integer (std.record.get "schema_version" (value))))))
-  && std.array.length (std.record.get "object_admissions" (std.record.get "projection" (value))) == (std.record.get "admission_count" (value)))))
+  && (std.array.length (std.record.get "object_admissions" (std.record.get "projection" (value))) == (std.record.get "admission_count" (value))))))

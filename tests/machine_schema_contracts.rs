@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 const INVENTORY_PATH: &str = "schemas/machine-contracts/inventory.ncl";
-const CONTRACTED_SURFACE_COUNT: u32 = 15;
+const CONTRACTED_SURFACE_COUNT: u32 = 16;
 const UTF8_EXACT_BYTES: u32 = 4;
 
 #[derive(Debug, Deserialize)]

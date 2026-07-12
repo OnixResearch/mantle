@@ -72,5 +72,5 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && std.number.is_integer (std.record.get "object_count" (std.record.get "upload_summary" (value)))
   && (std.record.get "object_count" (std.record.get "upload_summary" (value))) >= MIN_UPLOAD_OBJECTS
   && (std.record.get "object_count" (std.record.get "upload_summary" (value))) <= MAX_UPLOAD_OBJECTS))))))))))
-  && std.array.all (fun item => std.record.get "route" item != (std.record.get "selected_route" (value))) (std.record.get "rejected_routes" (value))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "route" other == std.record.get "route" item) (std.record.get "rejected_routes" (value))) == 1) (std.record.get "rejected_routes" (value)))))
+  && (std.array.all (fun item => std.record.get "route" item != (std.record.get "selected_route" (value))) (std.record.get "rejected_routes" (value)))
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "route" other == std.record.get "route" item) (std.record.get "rejected_routes" (value))) == 1) (std.record.get "rejected_routes" (value))))))

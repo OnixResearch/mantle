@@ -44,7 +44,7 @@ let is_release_attestation = fun value => ((std.is_record (value)
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-release-attestation-v1"
   && (std.is_string (std.record.get "schema" (value))))))
   && (std.record.has_field "workflow" (value) && (is_workflow (std.record.get "workflow" (value))))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "name" other == std.record.get "name" item) (std.record.get "binary_digests" (value))) == 1) (std.record.get "binary_digests" (value)))) in
+  && (std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "name" other == std.record.get "name" item) (std.record.get "binary_digests" (value))) == 1) (std.record.get "binary_digests" (value))))) in
 let is_string_array = fun value => ((std.is_array (value)
   && std.array.length (value) <= MAX_RELEASE_CLAIMS
   && std.array.all (fun item_1 => ((std.is_string (item_1)
