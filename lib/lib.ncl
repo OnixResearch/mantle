@@ -8,6 +8,7 @@ let helpers = import "helpers.ncl" in
 let fetch = import "fetch.ncl" in
 let offline_cargo = import "offline_cargo.ncl" in
 let wasm_component = import "wasm_component.ncl" in
+let kernelscript_experiment = import "kernelscript_experiment.ncl" in
 let scheduling = import "scheduling.ncl" in
 
 {
@@ -54,6 +55,11 @@ let scheduling = import "scheduling.ncl" in
   WasmComponentExportRequest = wasm_component.ComponentExportRequest,
   exportWasmComponentBuild = wasm_component.exportComponentBuild,
   WasmComponentOutputClass = wasm_component.OutputClass,
+
+  # Explicitly beta, non-default KernelScript experiment profile.
+  KernelScriptExperimentProfile = kernelscript_experiment.KernelScriptExperimentProfile,
+  KernelScriptExperimentOutputClass = kernelscript_experiment.ArtifactOutputClass,
+  KernelScriptGeneratedFileClass = kernelscript_experiment.GeneratedFileClass,
 
   # Deterministic lazy build-goal scheduling policy and defaults.
   SchedulingPolicy = scheduling.SchedulingPolicy,

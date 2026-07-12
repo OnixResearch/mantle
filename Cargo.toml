@@ -16,6 +16,7 @@ members = [
   "crates/crunch-shell-core",
   "crates/crunch-release-core",
   "crates/crunch-bootstrap-core",
+  "crates/crunch-kernelscript-core",
   "crates/crunch-wasm-component-core",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
@@ -40,6 +41,7 @@ default_scope = [
   "-p", "crunch-delta-core",
   "-p", "crunch-eval",
   "-p", "crunch-glue",
+  "-p", "crunch-kernelscript-core",
   "-p", "crunch-pipeline",
   "-p", "crunch-project",
   "-p", "crunch-project-core",
@@ -134,6 +136,7 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 
 [dev-dependencies]
+crunch-kernelscript-core = { path = "crates/crunch-kernelscript-core" }
 crunch-wasm-component-core = { path = "crates/crunch-wasm-component-core" }
 pretty_assertions = "1.0"
 tempfile = "3"

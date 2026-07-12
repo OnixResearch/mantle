@@ -17,6 +17,7 @@ const STDLIB_FILES: &[(&str, &str)] = &[
     ("fetch.ncl", include_str!("../../../lib/fetch.ncl")),
     ("fixed_output.ncl", include_str!("../../../lib/fixed_output.ncl")),
     ("helpers.ncl", include_str!("../../../lib/helpers.ncl")),
+    ("kernelscript_experiment.ncl", include_str!("../../../lib/kernelscript_experiment.ncl")),
     ("offline_cargo.ncl", include_str!("../../../lib/offline_cargo.ncl")),
     ("project.ncl", include_str!("../../../lib/project.ncl")),
     ("project_outputs.ncl", include_str!("../../../lib/project_outputs.ncl")),
@@ -211,6 +212,7 @@ mod tests {
 
         assert_eq!(actual, expected);
         assert!(actual.contains("fetch.ncl"));
+        assert!(actual.contains("kernelscript_experiment.ncl"));
         assert!(actual.contains("scheduling.ncl"));
     }
 
@@ -223,6 +225,7 @@ mod tests {
         let expr = crate::evaluate_str(r#"let lib = import "lib.ncl" in "ok""#, &import_paths).unwrap();
         assert_eq!(expr.as_str(), Some("ok"));
         assert!(dir.path().join("fetch.ncl").exists());
+        assert!(dir.path().join("kernelscript_experiment.ncl").exists());
     }
 
     #[test]

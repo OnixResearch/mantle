@@ -1,0 +1,2 @@
+# Retained evidence only. Mantle creates its own bounded module recipe.
+obj-m += demo.mod.o
