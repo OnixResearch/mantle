@@ -82,3 +82,26 @@ Post-implementation secondary review examined false-pass, overclaim, stale-link,
 ## Lifecycle gates
 
 Pueue task `426` ran the repository-policy `cairn validate`, proposal gate, design gate, and tasks gate serially. The command chain completed successfully; every stage returned no issues, `valid: true`, and `verdict: PASS` where the gate receipt defines a verdict.
+
+## Post-archive validation
+
+Command:
+
+```text
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+```
+
+Pueue task `440` output:
+
+```json
+{
+  "change_issues": [],
+  "changes": 11,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 38,
+  "valid": true
+}
+```
