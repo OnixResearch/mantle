@@ -278,6 +278,7 @@ fn render_invariant_predicate(invariant: &Invariant, root: &str) -> Result<Strin
         "unique-by" => render_unique_by(invariant, root),
         "disjoint-by" => render_disjoint_by(invariant, root),
         "field-equals-const-when" => render_field_equals_const_when(invariant, root),
+        "field-equals-when" => render_field_equals_when(invariant, root),
         "arrays-empty-iff-enum" => render_arrays_empty_iff_enum(invariant, root),
         other => Err(format!("unsupported invariant rendering kind {other}")),
     }
@@ -390,6 +391,18 @@ fn render_field_equals_const_when(invariant: &Invariant, root: &str) -> Result<S
     Ok(format!(
         "(!{}) || ({} == {})",
         nickel_path(root, &invariant.boolean)?,
+        nickel_path(root, &invariant.target)?,
+        json_literal(&invariant.value)?
+    ))
+}
+
+fn render_field_equals_when(invariant: &Invariant, root: &str) -> Result<String, String> {
+    let expected_discriminator =
+        invariant.when.as_ref().ok_or_else(|| "field-equals-when invariant is missing when".to_string())?;
+    Ok(format!(
+        "({} != {}) || ({} == {})",
+        nickel_path(root, &invariant.left)?,
+        json_literal(expected_discriminator)?,
         nickel_path(root, &invariant.target)?,
         json_literal(&invariant.value)?
     ))

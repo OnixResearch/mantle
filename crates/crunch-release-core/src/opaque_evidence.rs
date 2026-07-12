@@ -33,11 +33,17 @@ pub const OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM: &str =
 pub const FUNCTION_ADDRESS_EVIDENCE_ROLE: &str = "function-address-evidence-sidecar";
 pub const FUNCTION_ADDRESS_EVIDENCE_SCHEMA: &str = "valence.function-address-evidence.v1";
 pub const FUNCTION_ADDRESS_PROFILE_VERSION: &str = "function-address-evidence-v1";
+pub const FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION: &str = "function-address-preserves-v1";
 pub const FUNCTION_ADDRESS_CLAIM_SCOPE: &str = "function-address-identity-linkage-only";
 pub const VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE: &str = "valence-function-address-evidence-profile";
 pub const VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA: &str = "function-address-evidence-v1";
 pub const KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE: &str = "kamacite-function-address-receipt";
 pub const KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA: &str = "kamacite.function-address-receipt.v1";
+pub const KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE: &str = "kamacite-function-address-preserves-receipt";
+pub const KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA: &str = "kamacite.function-address-preserves-receipt.v1";
+pub const KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE: &str = "kamacite-function-address-json-projection";
+pub const KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA: &str = "kamacite.function-address-receipt.v1";
+pub const MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES: u64 = 1_048_576;
 pub const FUNCTION_ADDRESS_MODE_OPTIONAL: &str = "optional";
 pub const FUNCTION_ADDRESS_MODE_REQUIRED: &str = "required";
 pub const FUNCTION_ADDRESS_DISPOSITION_ABSENT: &str = "absent";
@@ -81,6 +87,8 @@ pub struct OpaqueEvidenceCanonicalEnvelopeLink {
     pub schema: String,
     pub relative_path: String,
     pub digest_blake3: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +97,8 @@ pub struct OpaqueEvidenceUpstreamValidationLink {
     pub schema: String,
     pub relative_path: String,
     pub digest_blake3: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt_hash_blake3: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,6 +172,12 @@ struct ExternalArtifactFields<'a> {
     relative_path: &'a str,
     digest_blake3: &'a str,
     field_name: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct ExpectedFunctionAddressArtifact<'a> {
+    role: &'a str,
+    schema: &'a str,
 }
 
 struct CollectionCountBounds<'a> {
@@ -361,18 +377,78 @@ fn validate_evidence_kind_and_profile(binding: &OpaqueEvidenceSidecarBinding, di
 }
 
 fn validate_function_address_profile(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
-    push_literal_diagnostic(
-        LiteralDiagnosticField {
-            actual: &binding.profile_version,
-            expected: FUNCTION_ADDRESS_PROFILE_VERSION,
-            field_name: "binding.profile_version",
+    match binding.profile_version.as_str() {
+        FUNCTION_ADDRESS_PROFILE_VERSION => validate_legacy_function_address_profile(binding, diagnostics),
+        FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION => validate_preserves_function_address_profile(binding, diagnostics),
+        _ => diagnostics.push(format!(
+            "binding.profile_version is unsupported for function-address evidence: {}",
+            binding.profile_version
+        )),
+    }
+    debug_assert!(
+        matches!(
+            binding.profile_version.as_str(),
+            FUNCTION_ADDRESS_PROFILE_VERSION | FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION
+        ) || diagnostics.iter().any(|diagnostic| diagnostic.contains("binding.profile_version"))
+    );
+    debug_assert!(
+        binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS
+            || diagnostics.iter().any(|diagnostic| diagnostic.contains("evidence_kind"))
+    );
+}
+
+fn validate_legacy_function_address_profile(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
+    validate_function_address_base_links(
+        binding,
+        ExpectedFunctionAddressArtifact {
+            role: FUNCTION_ADDRESS_EVIDENCE_ROLE,
+            schema: FUNCTION_ADDRESS_EVIDENCE_SCHEMA,
         },
         diagnostics,
     );
+    validate_function_address_projections(
+        &binding.compatibility_projections,
+        ExpectedFunctionAddressArtifact {
+            role: KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+            schema: KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+        },
+        diagnostics,
+    );
+}
+
+// r[impl mantle.release_provenance.function_address_preserves_sidecars.contract]
+// r[impl mantle.release_provenance.function_address_preserves_sidecars.opaque]
+fn validate_preserves_function_address_profile(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
+    validate_function_address_base_links(
+        binding,
+        ExpectedFunctionAddressArtifact {
+            role: KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE,
+            schema: KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA,
+        },
+        diagnostics,
+    );
+    validate_required_preserves_metadata(binding, diagnostics);
+    validate_function_address_projections(
+        &binding.compatibility_projections,
+        ExpectedFunctionAddressArtifact {
+            role: KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE,
+            schema: KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA,
+        },
+        diagnostics,
+    );
+}
+
+fn validate_function_address_base_links(
+    binding: &OpaqueEvidenceSidecarBinding,
+    expected: ExpectedFunctionAddressArtifact<'_>,
+    diagnostics: &mut Vec<String>,
+) {
+    debug_assert!(!expected.role.is_empty());
+    debug_assert!(!expected.schema.is_empty());
     push_literal_diagnostic(
         LiteralDiagnosticField {
             actual: &binding.canonical_envelope.role,
-            expected: FUNCTION_ADDRESS_EVIDENCE_ROLE,
+            expected: expected.role,
             field_name: "binding.canonical_envelope.role",
         },
         diagnostics,
@@ -380,7 +456,7 @@ fn validate_function_address_profile(binding: &OpaqueEvidenceSidecarBinding, dia
     push_literal_diagnostic(
         LiteralDiagnosticField {
             actual: &binding.canonical_envelope.schema,
-            expected: FUNCTION_ADDRESS_EVIDENCE_SCHEMA,
+            expected: expected.schema,
             field_name: "binding.canonical_envelope.schema",
         },
         diagnostics,
@@ -401,26 +477,30 @@ fn validate_function_address_profile(binding: &OpaqueEvidenceSidecarBinding, dia
         },
         diagnostics,
     );
-    validate_function_address_projections(&binding.compatibility_projections, diagnostics);
-    debug_assert!(
-        binding.profile_version == FUNCTION_ADDRESS_PROFILE_VERSION
-            || diagnostics.iter().any(|diagnostic| diagnostic.contains("binding.profile_version"))
-    );
-    debug_assert!(
-        binding.canonical_envelope.role == FUNCTION_ADDRESS_EVIDENCE_ROLE
-            || diagnostics.iter().any(|diagnostic| diagnostic.contains("binding.canonical_envelope.role"))
-    );
+}
+
+fn validate_required_preserves_metadata(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
+    if binding.canonical_envelope.size_bytes.is_none() {
+        diagnostics.push("binding.canonical_envelope.size_bytes is required for Preserves evidence".to_string());
+    }
+    if binding.upstream_validation.receipt_hash_blake3.is_none() {
+        diagnostics
+            .push("binding.upstream_validation.receipt_hash_blake3 is required for Preserves evidence".to_string());
+    }
 }
 
 fn validate_function_address_projections(
     projections: &[OpaqueEvidenceCompatibilityProjection],
+    expected: ExpectedFunctionAddressArtifact<'_>,
     diagnostics: &mut Vec<String>,
 ) {
+    debug_assert!(!expected.role.is_empty());
+    debug_assert!(!expected.schema.is_empty());
     for projection in projections {
         push_literal_diagnostic(
             LiteralDiagnosticField {
                 actual: &projection.role,
-                expected: KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+                expected: expected.role,
                 field_name: "binding.compatibility_projections.role",
             },
             diagnostics,
@@ -428,7 +508,7 @@ fn validate_function_address_projections(
         push_literal_diagnostic(
             LiteralDiagnosticField {
                 actual: &projection.schema,
-                expected: KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+                expected: expected.schema,
                 field_name: "binding.compatibility_projections.schema",
             },
             diagnostics,
@@ -467,6 +547,13 @@ fn validate_canonical_envelope_link(link: &OpaqueEvidenceCanonicalEnvelopeLink, 
         },
         diagnostics,
     );
+    if let Some(size_bytes) = link.size_bytes
+        && !(1..=MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES).contains(&size_bytes)
+    {
+        diagnostics.push(format!(
+            "binding.canonical_envelope.size_bytes must be in 1..={MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES}, got {size_bytes}"
+        ));
+    }
 }
 
 fn validate_upstream_validation_link(link: &OpaqueEvidenceUpstreamValidationLink, diagnostics: &mut Vec<String>) {
@@ -479,6 +566,23 @@ fn validate_upstream_validation_link(link: &OpaqueEvidenceUpstreamValidationLink
             field_name: "binding.upstream_validation",
         },
         diagnostics,
+    );
+    if let Some(receipt_hash) = link.receipt_hash_blake3.as_deref() {
+        push_blake3_diagnostic(
+            DiagnosticField {
+                value: receipt_hash,
+                field_name: "binding.upstream_validation.receipt_hash_blake3",
+            },
+            diagnostics,
+        );
+    }
+    debug_assert!(
+        !link.role.is_empty()
+            || diagnostics.iter().any(|diagnostic| diagnostic.contains("binding.upstream_validation.role"))
+    );
+    debug_assert!(
+        !link.schema.is_empty()
+            || diagnostics.iter().any(|diagnostic| diagnostic.contains("binding.upstream_validation.schema"))
     );
 }
 

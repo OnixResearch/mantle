@@ -156,6 +156,7 @@ pub(crate) fn cmd_release(
         crate::ReleaseAction::FunctionAddressBind {
             bundle_dir,
             mode,
+            from_preserves_binding,
             sidecar,
             valence_receipt,
             kamacite_receipt,
@@ -164,6 +165,7 @@ pub(crate) fn cmd_release(
         } => cmd_function_address_binding(current_dir, json, FunctionAddressBindingCommand {
             bundle_dir,
             mode,
+            from_preserves_binding,
             sidecar_relative_path: sidecar,
             valence_receipt_relative_path: valence_receipt,
             kamacite_receipt_relative_path: kamacite_receipt,

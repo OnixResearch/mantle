@@ -24,6 +24,11 @@ use crate::opaque_evidence::FUNCTION_ADDRESS_EVIDENCE_SCHEMA;
 use crate::opaque_evidence::FUNCTION_ADDRESS_MODE_OPTIONAL;
 use crate::opaque_evidence::FUNCTION_ADDRESS_MODE_REQUIRED;
 use crate::opaque_evidence::FUNCTION_ADDRESS_OPAQUE_BOUNDARY;
+use crate::opaque_evidence::FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION;
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE;
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA;
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE;
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA;
 use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE;
 use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA;
 use crate::opaque_evidence::VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE;
@@ -157,6 +162,39 @@ pub fn render_function_address_binding_from_manifest(
     verification.valence_receipt_hash_blake3 = Some(selection.valence_receipt_identity.receipt_hash_blake3);
     verification.kamacite_receipt_hash_blake3 =
         selection.kamacite_receipt_identity.map(|identity| identity.receipt_hash_blake3);
+    render_function_address_binding_receipt(verification)
+}
+
+// r[impl mantle.release_provenance.function_address_preserves_sidecars.contract]
+// r[impl mantle.release_provenance.function_address_preserves_sidecars.opaque]
+pub fn render_function_address_binding_from_preserves_manifest(
+    manifest: ReleaseEvidenceManifest,
+    mode: String,
+) -> Result<FunctionAddressBindingReceipt, ReleaseEvidenceError> {
+    let _canonical_manifest = canonical_release_evidence_manifest(manifest.clone())?;
+    if manifest.function_address_evidence.is_some() {
+        return Err(validation_error(
+            "Preserves function-address binding cannot coexist with legacy function_address_evidence",
+        ));
+    }
+    debug_assert!(manifest.function_address_evidence.is_none());
+    let mut candidates = manifest
+        .opaque_evidence_sidecar_bindings
+        .iter()
+        .filter(|receipt| receipt.binding.evidence_kind == crate::OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS);
+    let Some(receipt) = candidates.next() else {
+        return Err(validation_error("Preserves function-address binding is missing from the release manifest"));
+    };
+    if candidates.next().is_some() {
+        return Err(validation_error("multiple function-address bindings are present in the release manifest"));
+    }
+    if receipt.binding.profile_version != FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION {
+        return Err(validation_error(format!(
+            "function-address binding profile must be {FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION}"
+        )));
+    }
+    debug_assert_eq!(receipt.binding.profile_version, FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION);
+    let verification = evaluate_function_address_release_evidence(&manifest, &mode);
     render_function_address_binding_receipt(verification)
 }
 
@@ -664,7 +702,14 @@ fn validate_binding_metadata(receipt: &FunctionAddressBindingReceipt) -> Result<
     if receipt.schemas != links.schemas {
         return Err(validation_error("function-address binding schemas do not match verification_summary"));
     }
-    validate_expected_metadata(&receipt.roles, &receipt.schemas, receipt.kamacite_receipt_digest.is_some())?;
+    debug_assert_eq!(receipt.roles, links.roles);
+    debug_assert_eq!(receipt.schemas, links.schemas);
+    validate_expected_metadata(
+        &receipt.roles,
+        &receipt.schemas,
+        receipt.kamacite_receipt_digest.is_some(),
+        &receipt.verification_summary,
+    )?;
     if receipt.verification_summary.sidecar_claim_scope.as_deref() != Some(FUNCTION_ADDRESS_CLAIM_SCOPE) {
         return Err(validation_error(format!(
             "function-address binding verification_summary.sidecar_claim_scope must be {FUNCTION_ADDRESS_CLAIM_SCOPE}"
@@ -680,6 +725,7 @@ fn validate_expected_metadata(
     roles: &[String],
     schemas: &[String],
     has_kamacite: bool,
+    summary: &FunctionAddressReleaseVerification,
 ) -> Result<(), ReleaseEvidenceError> {
     let expected_role_count = if has_kamacite {
         MAX_FUNCTION_ADDRESS_BINDING_ROLES_COUNT
@@ -693,23 +739,44 @@ fn validate_expected_metadata(
     if role_count != expected_role_count || schema_count != expected_role_count {
         return Err(validation_error("function-address binding role/schema count is inconsistent"));
     }
-    if roles.first().map(String::as_str) != Some(FUNCTION_ADDRESS_EVIDENCE_ROLE) {
+    let is_preserves = summary.sidecar_role.as_deref() == Some(KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE);
+    let expected_sidecar_role = if is_preserves {
+        KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE
+    } else {
+        FUNCTION_ADDRESS_EVIDENCE_ROLE
+    };
+    let expected_sidecar_schema = if is_preserves {
+        KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA
+    } else {
+        FUNCTION_ADDRESS_EVIDENCE_SCHEMA
+    };
+    if roles.first().map(String::as_str) != Some(expected_sidecar_role) {
         return Err(validation_error("function-address binding sidecar role metadata is invalid"));
     }
     if roles.get(1).map(String::as_str) != Some(VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE) {
         return Err(validation_error("function-address binding Valence role metadata is invalid"));
     }
-    if schemas.first().map(String::as_str) != Some(FUNCTION_ADDRESS_EVIDENCE_SCHEMA) {
+    if schemas.first().map(String::as_str) != Some(expected_sidecar_schema) {
         return Err(validation_error("function-address binding sidecar schema metadata is invalid"));
     }
     if schemas.get(1).map(String::as_str) != Some(VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA) {
         return Err(validation_error("function-address binding Valence schema metadata is invalid"));
     }
     if has_kamacite {
-        if roles.get(KAMACITE_METADATA_INDEX).map(String::as_str) != Some(KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE) {
+        let expected_kamacite_role = if is_preserves {
+            KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE
+        } else {
+            KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE
+        };
+        let expected_kamacite_schema = if is_preserves {
+            KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA
+        } else {
+            KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA
+        };
+        if roles.get(KAMACITE_METADATA_INDEX).map(String::as_str) != Some(expected_kamacite_role) {
             return Err(validation_error("function-address binding Kamacite role metadata is invalid"));
         }
-        if schemas.get(KAMACITE_METADATA_INDEX).map(String::as_str) != Some(KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA) {
+        if schemas.get(KAMACITE_METADATA_INDEX).map(String::as_str) != Some(expected_kamacite_schema) {
             return Err(validation_error("function-address binding Kamacite schema metadata is invalid"));
         }
     }
@@ -834,6 +901,8 @@ mod tests {
     const PROOF_MANIFEST_DIGEST_SEED: u8 = 11;
     const STALE_DIGEST_SEED: u8 = 9;
     const HEX_CHARS_PER_BYTE: usize = 2;
+    const PRESERVES_RECEIPT_HASH: &str = "d06edddb8ae92cce6719c5d57b3c10f697a620f821c7e3989888a5af2855d5cf";
+    const PRESERVES_PROJECTION_ARTIFACT_HASH: &str = "870af553863f5366f2185f14767cf5f3953ac425806341ffa69f70d113510e14";
 
     fn digest(seed: u8) -> String {
         format!("{seed:02x}").repeat(BLAKE3_HEX_LENGTH_CHARS / HEX_CHARS_PER_BYTE)
@@ -1064,6 +1133,26 @@ mod tests {
 
         assert_eq!(actual, expected);
         assert_eq!(actual["receipt_hash"].as_str().map(str::len), Some(BLAKE3_HEX_LENGTH_CHARS));
+    }
+
+    #[test]
+    fn rust_renderer_matches_registered_preserves_positive_fixture() {
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/function-address-preserves-sidecars/mantle-binding.valid.json"
+        ))
+        .expect("parse registered Preserves positive fixture");
+        let mut summary = verification(true);
+        summary.sidecar_role = Some(KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE.to_string());
+        summary.sidecar_schema = Some(KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA.to_string());
+        summary.sidecar_digest_blake3 = Some(PRESERVES_RECEIPT_HASH.to_string());
+        summary.kamacite_receipt_role = Some(KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE.to_string());
+        summary.kamacite_receipt_digest_blake3 = Some(PRESERVES_PROJECTION_ARTIFACT_HASH.to_string());
+        summary.kamacite_receipt_hash_blake3 = Some(PRESERVES_RECEIPT_HASH.to_string());
+        let receipt = render_function_address_binding_receipt(summary).expect("render Preserves receipt");
+        let actual = serde_json::to_value(receipt).expect("serialize Preserves receipt");
+
+        assert_eq!(actual, expected);
+        assert_eq!(actual["sidecar_digest"], PRESERVES_RECEIPT_HASH);
     }
 
     #[test]

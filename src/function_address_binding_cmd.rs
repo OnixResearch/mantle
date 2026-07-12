@@ -3,13 +3,20 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crunch_release_core::FUNCTION_ADDRESS_KAMACITE_RECEIPT_IDENTITY_SCHEMA;
+use crunch_release_core::FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION;
+use crunch_release_core::FUNCTION_ADDRESS_VALENCE_RECEIPT_IDENTITY_SCHEMA;
 use crunch_release_core::FunctionAddressBindingReceipt;
 use crunch_release_core::FunctionAddressBindingSelection;
 use crunch_release_core::FunctionAddressKamaciteReceiptIdentity;
 use crunch_release_core::FunctionAddressValenceReceiptIdentity;
+use crunch_release_core::MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES;
+use crunch_release_core::OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS;
+use crunch_release_core::OpaqueEvidenceSidecarBindingReceipt;
 use crunch_release_core::ReleaseEvidenceManifest;
 use crunch_release_core::function_address_binding_receipt_canonical_bytes;
 use crunch_release_core::render_function_address_binding_from_manifest;
+use crunch_release_core::render_function_address_binding_from_preserves_manifest;
 use serde::Deserialize;
 use tempfile::NamedTempFile;
 
@@ -21,14 +28,15 @@ use crate::release_capability::authorize_release_path;
 use crate::release_evidence::verify_release_evidence_bundle;
 
 const MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES: usize = 1_048_576;
-const MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_READ_BYTES: u64 = 1_048_577;
+const MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_READ_BYTES: u64 = MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES + 1;
 
 #[derive(Debug)]
 pub(crate) struct FunctionAddressBindingCommand {
     pub bundle_dir: PathBuf,
     pub mode: String,
-    pub sidecar_relative_path: String,
-    pub valence_receipt_relative_path: String,
+    pub from_preserves_binding: bool,
+    pub sidecar_relative_path: Option<String>,
+    pub valence_receipt_relative_path: Option<String>,
     pub kamacite_receipt_relative_path: Option<String>,
     pub release_binary_relative_path: Option<String>,
     pub receipt_out: PathBuf,
@@ -66,6 +74,17 @@ struct DeclaredReceiptDigests {
     kamacite: Option<String>,
 }
 
+struct ExplicitBindingPaths<'a> {
+    sidecar: &'a str,
+    valence: &'a str,
+}
+
+struct IdentityEquality<'a> {
+    actual: &'a str,
+    expected: &'a str,
+    label: &'static str,
+}
+
 // r[impl mantle.release_provenance.function_address_binding_cli.command]
 // r[impl mantle.release_provenance.function_address_binding_cli.shell]
 pub(crate) fn cmd_function_address_binding(
@@ -78,13 +97,20 @@ pub(crate) fn cmd_function_address_binding(
     let bundle_dir = resolve_operator_path(current_dir, &command.bundle_dir);
     let receipt_out = resolve_operator_path(current_dir, &command.receipt_out);
     let manifest = verify_release_evidence_bundle(&bundle_dir)?;
-    let declared_digests = preflight_declared_receipt_paths(&manifest, &command)?;
     let root = ReleaseCapabilityRoot::open_ambient_nofollow(ReleaseRootKind::ReleaseEvidence, &bundle_dir).map_err(
         |error| RunError::Internal(format!("opening release evidence root {}: {error}", bundle_dir.display())),
     )?;
-    let selection = binding_selection(&root, command, &declared_digests)?;
-    let receipt = render_function_address_binding_from_manifest(manifest, selection)
-        .map_err(|error| RunError::Internal(error.to_string()))?;
+    let receipt = if command.from_preserves_binding {
+        validate_preserves_manifest_identities(&manifest, &root)?;
+        render_function_address_binding_from_preserves_manifest(manifest, command.mode.clone())
+            .map_err(|error| RunError::Internal(error.to_string()))?
+    } else {
+        let paths = explicit_binding_paths(&command)?;
+        let declared_digests = preflight_declared_receipt_paths(&manifest, &command, &paths)?;
+        let selection = binding_selection(&root, &command, &paths, &declared_digests)?;
+        render_function_address_binding_from_manifest(manifest, selection)
+            .map_err(|error| RunError::Internal(error.to_string()))?
+    };
     let bytes = function_address_binding_receipt_canonical_bytes(receipt.clone())
         .map_err(|error| RunError::Internal(error.to_string()))?;
     write_receipt_noclobber(&receipt_out, &bytes)?;
@@ -92,13 +118,24 @@ pub(crate) fn cmd_function_address_binding(
     reject_invalid_binding(&receipt)
 }
 
+fn explicit_binding_paths(command: &FunctionAddressBindingCommand) -> Result<ExplicitBindingPaths<'_>, RunError> {
+    let Some(sidecar) = command.sidecar_relative_path.as_deref() else {
+        return Err(RunError::Internal("explicit function-address binding requires --sidecar".to_string()));
+    };
+    let Some(valence) = command.valence_receipt_relative_path.as_deref() else {
+        return Err(RunError::Internal("explicit function-address binding requires --valence-receipt".to_string()));
+    };
+    Ok(ExplicitBindingPaths { sidecar, valence })
+}
+
 fn preflight_declared_receipt_paths(
     manifest: &ReleaseEvidenceManifest,
     command: &FunctionAddressBindingCommand,
+    paths: &ExplicitBindingPaths<'_>,
 ) -> Result<DeclaredReceiptDigests, RunError> {
     let valence = declared_external_digest(DeclaredExternalPath {
         manifest,
-        relative_path: &command.valence_receipt_relative_path,
+        relative_path: paths.valence,
         label: "Valence receipt",
     })?;
     let kamacite = command
@@ -130,13 +167,121 @@ fn declared_external_digest(request: DeclaredExternalPath<'_>) -> Result<String,
     Ok(evidence.digest_blake3.clone())
 }
 
+// r[impl mantle.release_provenance.function_address_preserves_sidecars.opaque]
+// r[impl mantle.release_provenance.function_address_preserves_sidecars.json_projection]
+fn validate_preserves_manifest_identities(
+    manifest: &ReleaseEvidenceManifest,
+    root: &ReleaseCapabilityRoot,
+) -> Result<(), RunError> {
+    debug_assert_eq!(
+        u64::try_from(MAX_FUNCTION_ADDRESS_UPSTREAM_RECEIPT_BYTES).ok(),
+        Some(MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES)
+    );
+    let receipt = preserves_binding_receipt(manifest)?;
+    let binding = &receipt.binding;
+    let preserves_bytes = read_bounded_receipt(ReceiptReadRequest {
+        root,
+        relative_path: &binding.canonical_envelope.relative_path,
+        expected_digest_blake3: &binding.canonical_envelope.digest_blake3,
+        label: "Kamacite Preserves sidecar",
+    })?;
+    let actual_size = u64::try_from(preserves_bytes.len())
+        .map_err(|_| RunError::Internal("Kamacite Preserves sidecar size does not fit u64".to_string()))?;
+    let expected_size = binding
+        .canonical_envelope
+        .size_bytes
+        .ok_or_else(|| RunError::Internal("Kamacite Preserves sidecar metadata is missing size_bytes".to_string()))?;
+    if actual_size != expected_size {
+        return Err(RunError::Internal(format!(
+            "Kamacite Preserves sidecar size changed after release bundle verification: expected {expected_size}, got {actual_size}"
+        )));
+    }
+    let valence = read_valence_identity(
+        root,
+        &binding.upstream_validation.relative_path,
+        &binding.upstream_validation.digest_blake3,
+    )?;
+    require_identity_match(IdentityEquality {
+        actual: &valence.schema_version,
+        expected: FUNCTION_ADDRESS_VALENCE_RECEIPT_IDENTITY_SCHEMA,
+        label: "Valence receipt schema",
+    })?;
+    let expected_valence_hash = binding.upstream_validation.receipt_hash_blake3.as_deref().ok_or_else(|| {
+        RunError::Internal("Preserves binding is missing the Valence logical receipt hash".to_string())
+    })?;
+    require_identity_match(IdentityEquality {
+        actual: &valence.receipt_hash_blake3,
+        expected: expected_valence_hash,
+        label: "Valence logical receipt hash",
+    })?;
+    let linked_preserves_hash = valence.kamacite_receipt_hash_blake3.as_deref().ok_or_else(|| {
+        RunError::Internal("Valence receipt is missing the canonical Preserves receipt hash link".to_string())
+    })?;
+    require_identity_match(IdentityEquality {
+        actual: linked_preserves_hash,
+        expected: &binding.canonical_envelope.digest_blake3,
+        label: "Valence-to-Preserves receipt hash",
+    })?;
+    validate_preserves_json_projection(root, receipt)
+}
+
+fn preserves_binding_receipt(
+    manifest: &ReleaseEvidenceManifest,
+) -> Result<&OpaqueEvidenceSidecarBindingReceipt, RunError> {
+    let mut candidates = manifest.opaque_evidence_sidecar_bindings.iter().filter(|receipt| {
+        receipt.binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS
+            && receipt.binding.profile_version == FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION
+    });
+    let Some(receipt) = candidates.next() else {
+        return Err(RunError::Internal("release manifest has no Preserves function-address binding".to_string()));
+    };
+    if candidates.next().is_some() {
+        return Err(RunError::Internal(
+            "release manifest has multiple Preserves function-address bindings".to_string(),
+        ));
+    }
+    Ok(receipt)
+}
+
+fn validate_preserves_json_projection(
+    root: &ReleaseCapabilityRoot,
+    receipt: &OpaqueEvidenceSidecarBindingReceipt,
+) -> Result<(), RunError> {
+    let canonical_digest = &receipt.binding.canonical_envelope.digest_blake3;
+    for projection in &receipt.binding.compatibility_projections {
+        let identity = read_kamacite_identity(root, &projection.relative_path, &projection.digest_blake3)?;
+        require_identity_match(IdentityEquality {
+            actual: &identity.schema_version,
+            expected: FUNCTION_ADDRESS_KAMACITE_RECEIPT_IDENTITY_SCHEMA,
+            label: "Kamacite JSON projection schema",
+        })?;
+        require_identity_match(IdentityEquality {
+            actual: &identity.receipt_hash_blake3,
+            expected: canonical_digest,
+            label: "Kamacite JSON projection canonical receipt hash",
+        })?;
+    }
+    Ok(())
+}
+
+fn require_identity_match(fields: IdentityEquality<'_>) -> Result<(), RunError> {
+    if fields.actual == fields.expected {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!(
+        "function-address {} mismatch: expected {}, got {}",
+        fields.label, fields.expected, fields.actual
+    )))
+}
+
 fn binding_selection(
     root: &ReleaseCapabilityRoot,
-    command: FunctionAddressBindingCommand,
+    command: &FunctionAddressBindingCommand,
+    paths: &ExplicitBindingPaths<'_>,
     declared_digests: &DeclaredReceiptDigests,
 ) -> Result<FunctionAddressBindingSelection, RunError> {
     debug_assert_eq!(command.kamacite_receipt_relative_path.is_some(), declared_digests.kamacite.is_some());
-    let valence = read_valence_identity(root, &command.valence_receipt_relative_path, &declared_digests.valence)?;
+    let valence = read_valence_identity(root, paths.valence, &declared_digests.valence)?;
     let kamacite = command
         .kamacite_receipt_relative_path
         .as_deref()
@@ -144,11 +289,11 @@ fn binding_selection(
         .map(|(path, digest)| read_kamacite_identity(root, path, digest))
         .transpose()?;
     Ok(FunctionAddressBindingSelection {
-        mode: command.mode,
-        sidecar_relative_path: command.sidecar_relative_path,
-        valence_receipt_relative_path: command.valence_receipt_relative_path,
-        kamacite_receipt_relative_path: command.kamacite_receipt_relative_path,
-        release_binary_relative_path: command.release_binary_relative_path,
+        mode: command.mode.clone(),
+        sidecar_relative_path: paths.sidecar.to_string(),
+        valence_receipt_relative_path: paths.valence.to_string(),
+        kamacite_receipt_relative_path: command.kamacite_receipt_relative_path.clone(),
+        release_binary_relative_path: command.release_binary_relative_path.clone(),
         valence_receipt_identity: valence,
         kamacite_receipt_identity: kamacite,
     })

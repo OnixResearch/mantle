@@ -17,7 +17,15 @@ use crate::opaque_evidence::FUNCTION_ADDRESS_EVIDENCE_SCHEMA;
 use crate::opaque_evidence::FUNCTION_ADDRESS_MODE_OPTIONAL;
 use crate::opaque_evidence::FUNCTION_ADDRESS_MODE_REQUIRED;
 use crate::opaque_evidence::FUNCTION_ADDRESS_OPAQUE_BOUNDARY;
+use crate::opaque_evidence::FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION;
 use crate::opaque_evidence::FUNCTION_ADDRESS_PROFILE_VERSION;
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE;
+#[cfg(test)]
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA;
+#[cfg(test)]
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE;
+#[cfg(test)]
+use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA;
 use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE;
 use crate::opaque_evidence::KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA;
 use crate::opaque_evidence::MAX_OPAQUE_EVIDENCE_BINDINGS_COUNT;
@@ -659,7 +667,9 @@ fn opaque_binding_is_function_address_candidate(receipt: &OpaqueEvidenceSidecarB
     if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS {
         return true;
     }
-    if binding.profile_version == FUNCTION_ADDRESS_PROFILE_VERSION {
+    if binding.profile_version == FUNCTION_ADDRESS_PROFILE_VERSION
+        || binding.profile_version == FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION
+    {
         return true;
     }
     binding.canonical_envelope.role == FUNCTION_ADDRESS_EVIDENCE_ROLE
@@ -681,10 +691,13 @@ fn generic_function_address_verification(
         &manifest.external_evidence,
     ));
     let binding = &receipt.binding;
-    let kamacite = binding
-        .compatibility_projections
-        .iter()
-        .find(|projection| projection.role == KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+    let is_preserves = binding.profile_version == FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION;
+    let projection_role = if is_preserves {
+        KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE
+    } else {
+        KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE
+    };
+    let kamacite = binding.compatibility_projections.iter().find(|projection| projection.role == projection_role);
     present_function_address_verification(mode, is_required, diagnostics, FunctionAddressVerificationLinks {
         sidecar_role: binding.canonical_envelope.role.clone(),
         sidecar_schema: binding.canonical_envelope.schema.clone(),
@@ -693,9 +706,11 @@ fn generic_function_address_verification(
         valence_receipt_role: binding.upstream_validation.role.clone(),
         valence_receipt_schema: binding.upstream_validation.schema.clone(),
         valence_receipt_digest_blake3: binding.upstream_validation.digest_blake3.clone(),
+        valence_receipt_hash_blake3: binding.upstream_validation.receipt_hash_blake3.clone(),
         kamacite_receipt_role: kamacite.map(|projection| projection.role.clone()),
         kamacite_receipt_schema: kamacite.map(|projection| projection.schema.clone()),
         kamacite_receipt_digest_blake3: kamacite.map(|projection| projection.digest_blake3.clone()),
+        kamacite_receipt_hash_blake3: kamacite.map(|projection| projection.canonical_envelope_digest_blake3.clone()),
         source_archive_digest_blake3: binding.source_artifact.digest_blake3.clone(),
         release_binary_relative_path: binding.release_binary.relative_path.clone(),
         release_binary_digest_blake3: binding.release_binary.digest_blake3.clone(),
@@ -718,9 +733,11 @@ fn legacy_function_address_verification(
         valence_receipt_role: evidence.valence_receipt_role.clone(),
         valence_receipt_schema: evidence.valence_receipt_schema.clone(),
         valence_receipt_digest_blake3: evidence.valence_receipt_digest_blake3.clone(),
+        valence_receipt_hash_blake3: None,
         kamacite_receipt_role: evidence.kamacite_receipt_role.clone(),
         kamacite_receipt_schema: evidence.kamacite_receipt_schema.clone(),
         kamacite_receipt_digest_blake3: evidence.kamacite_receipt_digest_blake3.clone(),
+        kamacite_receipt_hash_blake3: None,
         source_archive_digest_blake3: evidence.source_archive_digest_blake3.clone(),
         release_binary_relative_path: evidence.release_binary_relative_path.clone(),
         release_binary_digest_blake3: evidence.release_binary_digest_blake3.clone(),
@@ -735,9 +752,11 @@ struct FunctionAddressVerificationLinks {
     valence_receipt_role: String,
     valence_receipt_schema: String,
     valence_receipt_digest_blake3: String,
+    valence_receipt_hash_blake3: Option<String>,
     kamacite_receipt_role: Option<String>,
     kamacite_receipt_schema: Option<String>,
     kamacite_receipt_digest_blake3: Option<String>,
+    kamacite_receipt_hash_blake3: Option<String>,
     source_archive_digest_blake3: String,
     release_binary_relative_path: String,
     release_binary_digest_blake3: String,
@@ -766,11 +785,11 @@ fn present_function_address_verification(
         valence_receipt_role: Some(links.valence_receipt_role),
         valence_receipt_schema: Some(links.valence_receipt_schema),
         valence_receipt_digest_blake3: Some(links.valence_receipt_digest_blake3),
-        valence_receipt_hash_blake3: None,
+        valence_receipt_hash_blake3: links.valence_receipt_hash_blake3,
         kamacite_receipt_role: links.kamacite_receipt_role,
         kamacite_receipt_schema: links.kamacite_receipt_schema,
         kamacite_receipt_digest_blake3: links.kamacite_receipt_digest_blake3,
-        kamacite_receipt_hash_blake3: None,
+        kamacite_receipt_hash_blake3: links.kamacite_receipt_hash_blake3,
         source_archive_digest_blake3: Some(links.source_archive_digest_blake3),
         release_binary_relative_path: Some(links.release_binary_relative_path),
         release_binary_digest_blake3: Some(links.release_binary_digest_blake3),
@@ -2118,6 +2137,10 @@ mod tests {
     const FUNCTION_ADDRESS_STALE_DIGEST_SEED: u8 = 34;
     const FUNCTION_ADDRESS_UPSTREAM_POLICY_DIGEST_SEED: u8 = 35;
     const FUNCTION_ADDRESS_MANTLE_POLICY_DIGEST_SEED: u8 = 36;
+    const FUNCTION_ADDRESS_PRESERVES_DIGEST_SEED: u8 = 41;
+    const FUNCTION_ADDRESS_JSON_PROJECTION_DIGEST_SEED: u8 = 42;
+    const FUNCTION_ADDRESS_VALENCE_LOGICAL_HASH_SEED: u8 = 43;
+    const FUNCTION_ADDRESS_PRESERVES_SIZE_BYTES: u64 = 256;
     const LIFECYCLE_ENVELOPE_DIGEST_SEED: u8 = 37;
     const LIFECYCLE_VALIDATION_DIGEST_SEED: u8 = 38;
     const LIFECYCLE_UPSTREAM_POLICY_DIGEST_SEED: u8 = 39;
@@ -2331,12 +2354,14 @@ mod tests {
                 schema: sidecar.schema,
                 relative_path: sidecar.relative_path,
                 digest_blake3: sidecar.digest_blake3,
+                size_bytes: None,
             },
             upstream_validation: OpaqueEvidenceUpstreamValidationLink {
                 role: valence.role,
                 schema: valence.schema,
                 relative_path: valence.relative_path,
                 digest_blake3: valence.digest_blake3,
+                receipt_hash_blake3: None,
             },
             source_artifact: OpaqueEvidenceSourceArtifactLink {
                 relative_path: "source/mantle-src.tar".to_string(),
@@ -2401,6 +2426,104 @@ mod tests {
         manifest
     }
 
+    fn sample_preserves_sidecar_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE.to_string(),
+            schema: KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA.to_string(),
+            relative_path: "external-evidence/05-kamacite-function-address-receipt.preserves".to_string(),
+            digest_blake3: sample_digest(FUNCTION_ADDRESS_PRESERVES_DIGEST_SEED),
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+            non_claims: sample_function_address_non_claims(),
+        }
+    }
+
+    fn sample_preserves_json_projection_evidence() -> ExternalEvidence {
+        ExternalEvidence {
+            role: KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE.to_string(),
+            schema: KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA.to_string(),
+            relative_path: "external-evidence/06-kamacite-function-address-projection.json".to_string(),
+            digest_blake3: sample_digest(FUNCTION_ADDRESS_JSON_PROJECTION_DIGEST_SEED),
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+            non_claims: sample_function_address_non_claims(),
+        }
+    }
+
+    fn sample_preserves_function_address_binding(with_json_projection: bool) -> OpaqueEvidenceSidecarBinding {
+        let preserves = sample_preserves_sidecar_evidence();
+        let valence = sample_function_address_valence_receipt_evidence();
+        assert_eq!(preserves.role, KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE);
+        assert_eq!(valence.role, VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+        let compatibility_projections = with_json_projection
+            .then(|| {
+                let projection = sample_preserves_json_projection_evidence();
+                OpaqueEvidenceCompatibilityProjection {
+                    role: projection.role,
+                    schema: projection.schema,
+                    relative_path: projection.relative_path,
+                    digest_blake3: projection.digest_blake3,
+                    canonical_envelope_digest_blake3: preserves.digest_blake3.clone(),
+                }
+            })
+            .into_iter()
+            .collect();
+        OpaqueEvidenceSidecarBinding {
+            schema: OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA.to_string(),
+            evidence_kind: OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS.to_string(),
+            profile_version: FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION.to_string(),
+            canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink {
+                role: preserves.role,
+                schema: preserves.schema,
+                relative_path: preserves.relative_path,
+                digest_blake3: preserves.digest_blake3,
+                size_bytes: Some(FUNCTION_ADDRESS_PRESERVES_SIZE_BYTES),
+            },
+            upstream_validation: OpaqueEvidenceUpstreamValidationLink {
+                role: valence.role,
+                schema: valence.schema,
+                relative_path: valence.relative_path,
+                digest_blake3: valence.digest_blake3,
+                receipt_hash_blake3: Some(sample_digest(FUNCTION_ADDRESS_VALENCE_LOGICAL_HASH_SEED)),
+            },
+            source_artifact: OpaqueEvidenceSourceArtifactLink {
+                relative_path: "source/mantle-src.tar".to_string(),
+                digest_blake3: sample_digest(SOURCE_ARCHIVE_DIGEST_SEED),
+            },
+            release_binary: OpaqueEvidenceReleaseBinaryLink {
+                relative_path: "binaries/01-mantle".to_string(),
+                digest_blake3: sample_digest(RELEASE_BINARY_DIGEST_SEED),
+            },
+            policy_hashes: vec![
+                OpaqueEvidencePolicyHash {
+                    policy_kind: OPAQUE_EVIDENCE_POLICY_KIND_UPSTREAM_PROFILE.to_string(),
+                    digest_blake3: sample_digest(FUNCTION_ADDRESS_UPSTREAM_POLICY_DIGEST_SEED),
+                },
+                OpaqueEvidencePolicyHash {
+                    policy_kind: OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE.to_string(),
+                    digest_blake3: sample_digest(FUNCTION_ADDRESS_MANTLE_POLICY_DIGEST_SEED),
+                },
+            ],
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+            compatibility_projections,
+            non_claims: sample_function_address_non_claims(),
+        }
+    }
+
+    fn sample_preserves_function_address_manifest(with_json_projection: bool) -> ReleaseEvidenceManifest {
+        let mut manifest = sample_manifest();
+        manifest.external_evidence = vec![
+            sample_preserves_sidecar_evidence(),
+            sample_function_address_valence_receipt_evidence(),
+        ];
+        if with_json_projection {
+            manifest.external_evidence.push(sample_preserves_json_projection_evidence());
+        }
+        manifest.opaque_evidence_sidecar_bindings = vec![
+            opaque_evidence_sidecar_binding_receipt(sample_preserves_function_address_binding(with_json_projection))
+                .unwrap(),
+        ];
+        manifest
+    }
+
     fn sample_legacy_function_address_manifest(with_kamacite: bool) -> ReleaseEvidenceManifest {
         let mut manifest = sample_manifest();
         manifest.external_evidence = vec![
@@ -2442,12 +2565,14 @@ mod tests {
                 schema: envelope.schema.clone(),
                 relative_path: envelope.relative_path.clone(),
                 digest_blake3: envelope.digest_blake3.clone(),
+                size_bytes: None,
             },
             upstream_validation: OpaqueEvidenceUpstreamValidationLink {
                 role: validation.role.clone(),
                 schema: validation.schema.clone(),
                 relative_path: validation.relative_path.clone(),
                 digest_blake3: validation.digest_blake3.clone(),
+                receipt_hash_blake3: None,
             },
             source_artifact: OpaqueEvidenceSourceArtifactLink {
                 relative_path: manifest.source_archive.relative_path.clone(),
@@ -3402,6 +3527,134 @@ mod tests {
         assert!(required.valid);
         assert_eq!(FUNCTION_ADDRESS_DISPOSITION_PRESENT, optional.disposition);
         assert_eq!(FUNCTION_ADDRESS_DISPOSITION_PRESENT, required.disposition);
+    }
+
+    // r[verify mantle.release_provenance.function_address_preserves_sidecars.positive]
+    // r[verify mantle.release_provenance.function_address_preserves_sidecars.validation]
+    #[test]
+    fn function_address_preserves_binding_passes_optional_and_required_modes() {
+        let optional_manifest = sample_preserves_function_address_manifest(false);
+        let required_manifest = sample_preserves_function_address_manifest(true);
+
+        let optional = evaluate_function_address_release_evidence(&optional_manifest, FUNCTION_ADDRESS_MODE_OPTIONAL);
+        let required_without_projection =
+            evaluate_function_address_release_evidence(&optional_manifest, FUNCTION_ADDRESS_MODE_REQUIRED);
+        let required = evaluate_function_address_release_evidence(&required_manifest, FUNCTION_ADDRESS_MODE_REQUIRED);
+        let direct = crate::render_function_address_binding_from_preserves_manifest(
+            required_manifest.clone(),
+            FUNCTION_ADDRESS_MODE_REQUIRED.to_string(),
+        )
+        .expect("render Preserves-backed direct binding");
+        let direct_without_projection = crate::render_function_address_binding_from_preserves_manifest(
+            optional_manifest.clone(),
+            FUNCTION_ADDRESS_MODE_REQUIRED.to_string(),
+        )
+        .expect("render Preserves-backed binding without JSON projection");
+
+        assert!(canonical_release_evidence_manifest(optional_manifest).is_ok());
+        assert!(canonical_release_evidence_manifest(required_manifest).is_ok());
+        assert!(optional.valid);
+        assert!(required_without_projection.valid);
+        assert!(required.valid);
+        assert_eq!(required.sidecar_role.as_deref(), Some(KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE));
+        assert_eq!(
+            required.valence_receipt_hash_blake3,
+            Some(sample_digest(FUNCTION_ADDRESS_VALENCE_LOGICAL_HASH_SEED))
+        );
+        assert_eq!(required.kamacite_receipt_hash_blake3, Some(sample_digest(FUNCTION_ADDRESS_PRESERVES_DIGEST_SEED)));
+        assert!(direct.valid);
+        assert_eq!(direct.sidecar_digest, sample_digest(FUNCTION_ADDRESS_PRESERVES_DIGEST_SEED));
+        assert_eq!(direct.valence_receipt_digest, sample_digest(FUNCTION_ADDRESS_VALENCE_LOGICAL_HASH_SEED));
+        assert_eq!(direct.kamacite_receipt_digest, Some(sample_digest(FUNCTION_ADDRESS_PRESERVES_DIGEST_SEED)));
+        assert!(direct_without_projection.valid);
+        assert!(direct_without_projection.kamacite_receipt_digest.is_none());
+    }
+
+    type PreservesBindingMutator = fn(&mut OpaqueEvidenceSidecarBinding);
+
+    const PRESERVES_INVALID_METADATA_CASES: [(&str, PreservesBindingMutator, &str); 12] = [
+        ("missing size", |binding| binding.canonical_envelope.size_bytes = None, "size_bytes is required"),
+        (
+            "oversized canonical sidecar",
+            |binding| {
+                binding.canonical_envelope.size_bytes =
+                    Some(crate::MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES.saturating_add(1))
+            },
+            "canonical_envelope.size_bytes must be in",
+        ),
+        (
+            "missing Valence logical hash",
+            |binding| binding.upstream_validation.receipt_hash_blake3 = None,
+            "receipt_hash_blake3 is required",
+        ),
+        (
+            "stale canonical hash",
+            |binding| binding.canonical_envelope.digest_blake3 = sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED),
+            "canonical envelope digest does not match declared metadata",
+        ),
+        (
+            "projection drift",
+            |binding| {
+                binding.compatibility_projections[0].canonical_envelope_digest_blake3 =
+                    sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED)
+            },
+            "canonical envelope digest drifted",
+        ),
+        (
+            "wrong role",
+            |binding| binding.canonical_envelope.role = "kamacite-semantic-proof".to_string(),
+            "canonical_envelope.role",
+        ),
+        (
+            "wrong schema",
+            |binding| binding.canonical_envelope.schema = "kamacite.function-address.unknown".to_string(),
+            "canonical_envelope.schema",
+        ),
+        (
+            "wrong scope",
+            |binding| binding.claim_scope = "function-address-semantic-correctness".to_string(),
+            "binding.claim_scope",
+        ),
+        (
+            "malformed hash",
+            |binding| binding.canonical_envelope.digest_blake3 = "not-a-blake3".to_string(),
+            "canonical_envelope.digest_blake3",
+        ),
+        (
+            "source mismatch",
+            |binding| binding.source_artifact.digest_blake3 = sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED),
+            "source_artifact.digest_blake3 does not match",
+        ),
+        (
+            "binary mismatch",
+            |binding| binding.release_binary.digest_blake3 = sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED),
+            "release_binary.digest_blake3 does not match",
+        ),
+        (
+            "semantic overclaim",
+            |binding| binding.non_claims.push("Mantle proves function correctness".to_string()),
+            "opaque evidence overclaim",
+        ),
+    ];
+
+    // r[verify mantle.release_provenance.function_address_preserves_sidecars.negative]
+    #[test]
+    fn function_address_preserves_binding_rejects_invalid_metadata_matrix() {
+        for (name, mutate, expected) in PRESERVES_INVALID_METADATA_CASES {
+            let mut manifest = sample_preserves_function_address_manifest(true);
+            mutate(&mut manifest.opaque_evidence_sidecar_bindings[0].binding);
+            let verification = evaluate_function_address_release_evidence(&manifest, FUNCTION_ADDRESS_MODE_REQUIRED);
+            let canonical_error = canonical_release_evidence_manifest(manifest)
+                .expect_err("invalid Preserves binding must not canonicalize");
+
+            assert!(!verification.valid, "{name} unexpectedly passed");
+            assert!(
+                verification.diagnostics.iter().any(|diagnostic| diagnostic.contains(expected)),
+                "{name} diagnostics missing {expected:?}: {:?}",
+                verification.diagnostics
+            );
+            assert!(canonical_error.to_string().contains("opaque_evidence_sidecar_bindings"));
+        }
     }
 
     #[test]

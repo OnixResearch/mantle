@@ -1194,6 +1194,8 @@ or release artifacts.
 
 Function-address evidence uses the versioned Mantle-to-Cairn binding described
 in [`docs/function-address-release-binding.md`](docs/function-address-release-binding.md).
+Canonical Preserves sidecars use the opaque profile and manifest-driven CLI flow
+documented in [`docs/function-address-preserves-sidecars.md`](docs/function-address-preserves-sidecars.md).
 The receipt binds typed sidecar, Valence, optional Kamacite, source, and binary
 identities without promoting them to Rust semantic or release-eligibility claims.
 

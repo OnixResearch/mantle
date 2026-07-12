@@ -793,6 +793,9 @@ fn valid_invariant_declaration(invariant: &Invariant) -> bool {
         "field-equals-const-when" => {
             valid_pointer(&invariant.boolean, false) && valid_pointer(&invariant.target, false)
         }
+        "field-equals-when" => {
+            valid_pointer(&invariant.left, false) && valid_pointer(&invariant.target, false) && invariant.when.is_some()
+        }
         "arrays-empty-iff-enum" => valid_pointer(&invariant.target, false) && valid_pointer_list(&invariant.fields),
         _ => false,
     };
@@ -846,6 +849,7 @@ pub fn supported_invariant_kind(kind: &str) -> bool {
             | "unique-by"
             | "disjoint-by"
             | "field-equals-const-when"
+            | "field-equals-when"
             | "arrays-empty-iff-enum"
     )
 }

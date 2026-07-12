@@ -49,6 +49,8 @@ to `schemas/machine-contracts/`. The generator never falls back to `Dyn`.
 The shared generated-contract vocabulary covers exact versions, closed enums,
 integer and collection bounds, BLAKE3 and protocol-required SHA-256 syntax,
 safe references, redaction-safe text, and declared cross-field invariants.
+The `field-equals-when` invariant expresses closed discriminator/value pairs,
+so versioned profile roles cannot be combined with a sibling profile's schema.
 Every numeric bound carries an `x-mantle-bound-name` and is emitted as a named
 Nickel `let`, so generated predicates contain no unexplained limit literals.
 String bounds also carry `x-mantle-length-unit = "utf8-bytes"`; the Nickel

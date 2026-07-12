@@ -943,7 +943,8 @@ let Registry = {
         "schema"= "schemas/machine-contracts/function-address-binding.schema.json",
         "generated_contract"= "schemas/machine-contracts/function-address-binding.contract.ncl",
         "positive_fixtures"= [
-          "tests/fixtures/function-address-release-binding/mantle-binding.valid.json"
+          "tests/fixtures/function-address-release-binding/mantle-binding.valid.json",
+          "tests/fixtures/function-address-preserves-sidecars/mantle-binding.valid.json"
         ],
         "negative_fixture_set"= "schemas/machine-contracts/fixtures/function-address-binding.negatives.json"
       },
@@ -970,11 +971,11 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds the Rust receipt owner, exact linkage schema, generated contract, adversarial fixtures, verification summary, and Cairn-facing non-claims",
       "freshness"= {
-        "schema_blake3"= "52ccd5aab8c4cba4f7839bdcec283edbfa301dcd59f44bd4ac94b8b6fac6d61f",
-        "contract_blake3"= "bf00663a5c3eb18491c1d432743a4b12984ecefe9898c3e864ffd4437d8eec48",
+        "schema_blake3"= "d6590e3214fc24f4036c8acd4f33833b20f0f87402fa0f4687cd012f1df3e1c0",
+        "contract_blake3"= "ca290b374f6b2987e6bd56f541a4ac2539df2fcc55878eb9572e25734783f16f",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "c78bddaf4a657f5e059b4fa8494fe00beecbd84e8bb57463fd2a44c334378d07",
-        "producer_identity_blake3"= "7b37015c8ccfc9fe7fe15c630ef5c75b4697e18c7cc8a3f1ecafbe3a567be5a6",
+        "fixture_set_blake3"= "3d447dccbcf05cc8bdf1875896266084327a7ae352416e319d7408125dd9cd41",
+        "producer_identity_blake3"= "bda116082077170cb91b8273d8e6a5b18c20deca22a44f10fc36ad23c51f9643",
         "consumer_policy_blake3"= "f1fe25ad7bf31510a0d970cabe8f0eea37b17342b7743bcd39c3858a4e5adb0a"
       },
       "non_claims"= [

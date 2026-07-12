@@ -40,8 +40,27 @@ use crunch_release_core::DeterministicOutputDigest;
 use crunch_release_core::DeterministicProofUnit;
 use crunch_release_core::DeterministicSandboxIsolationEvidence;
 use crunch_release_core::DeterministicSandboxIsolationEvidenceStatus;
+use crunch_release_core::FUNCTION_ADDRESS_CLAIM_SCOPE;
+use crunch_release_core::FUNCTION_ADDRESS_OPAQUE_BOUNDARY;
+use crunch_release_core::FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION;
+use crunch_release_core::KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE;
+use crunch_release_core::KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA;
+use crunch_release_core::KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE;
+use crunch_release_core::KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA;
 use crunch_release_core::NIX_CROSS_BUILDER_WITNESS_PROOF_CLASS;
 use crunch_release_core::NIX_CROSS_BUILDER_WITNESS_RECEIPT_SCHEMA;
+use crunch_release_core::OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS;
+use crunch_release_core::OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE;
+use crunch_release_core::OPAQUE_EVIDENCE_POLICY_KIND_UPSTREAM_PROFILE;
+use crunch_release_core::OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM;
+use crunch_release_core::OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA;
+use crunch_release_core::OpaqueEvidenceCanonicalEnvelopeLink;
+use crunch_release_core::OpaqueEvidenceCompatibilityProjection;
+use crunch_release_core::OpaqueEvidencePolicyHash;
+use crunch_release_core::OpaqueEvidenceReleaseBinaryLink;
+use crunch_release_core::OpaqueEvidenceSidecarBinding;
+use crunch_release_core::OpaqueEvidenceSourceArtifactLink;
+use crunch_release_core::OpaqueEvidenceUpstreamValidationLink;
 use crunch_release_core::PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE;
 use crunch_release_core::PURE_LOCAL_BUILD_EFFECTS;
 use crunch_release_core::REQUIRED_ISOLATION_CHECKS;
@@ -49,6 +68,7 @@ use crunch_release_core::ReleaseReproducibilityReport;
 use crunch_release_core::SUPPORTED_SANDBOX_PROFILE_FAMILY;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
+use crunch_release_core::opaque_evidence_sidecar_binding_receipt;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
 use predicates::prelude::*;
 use serde::Deserialize;
@@ -82,6 +102,14 @@ const FUNCTION_ADDRESS_KAMACITE_RECEIPT_PATH: &str = "external-evidence/05-kamac
 const FUNCTION_ADDRESS_CLI_RECEIPT_OUT_ENV: &str = "MANTLE_FUNCTION_ADDRESS_CLI_RECEIPT_OUT";
 const FUNCTION_ADDRESS_CLI_RECEIPT_FILE: &str = "mantle-binding.json";
 const FUNCTION_ADDRESS_NEGATIVE_CASE_COUNT: usize = 6;
+const FUNCTION_ADDRESS_PRESERVES_NEGATIVE_CASE_COUNT: usize = 5;
+const FUNCTION_ADDRESS_PRESERVES_PATH: &str = "external-evidence/05-kamacite-function-address-receipt.preserves";
+const FUNCTION_ADDRESS_PRESERVES_PROJECTION_PATH: &str =
+    "external-evidence/06-kamacite-function-address-projection.json";
+const FUNCTION_ADDRESS_PRESERVES_HASH: &str = "d06edddb8ae92cce6719c5d57b3c10f697a620f821c7e3989888a5af2855d5cf";
+const FUNCTION_ADDRESS_PRESERVES_SIZE_BYTES: u64 = 63;
+const FUNCTION_ADDRESS_PRESERVES_UPSTREAM_POLICY_SEED: u8 = 44;
+const FUNCTION_ADDRESS_PRESERVES_MANTLE_POLICY_SEED: u8 = 45;
 const RELEASE_VERIFY_JSON_KIND: &str = "mantle-release-verify-v2";
 const RELEASE_VERIFY_DECISION_SCHEMA: &str = "mantle-release-verification-decision-v1";
 const RELEASE_VERIFY_SUCCESS_MARKER: &str = "release evidence verified";
@@ -571,7 +599,10 @@ fn function_address_external_evidence(
         relative_path: fixture.relative_path.to_string(),
         digest_blake3: blake3::hash(fixture.bytes).to_hex().to_string(),
         claim_scope: crunch_release_core::FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
-        non_claims: vec![crunch_release_core::FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string()],
+        non_claims: vec![
+            crunch_release_core::FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
+            crunch_release_core::OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM.to_string(),
+        ],
     }
 }
 
@@ -584,6 +615,12 @@ fn function_address_fixture_path(file_name: &str) -> PathBuf {
 fn function_address_cli_fixture_path(file_name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/function-address-release-binding-cli")
+        .join(file_name)
+}
+
+fn function_address_preserves_fixture_path(file_name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/function-address-preserves-sidecars")
         .join(file_name)
 }
 
@@ -648,6 +685,186 @@ fn apply_function_address_negative_mutation(mutation: &str, manifest: &mut Relea
 fn function_address_negative_cases() -> Vec<FunctionAddressCliNegativeCase> {
     serde_json::from_str(include_str!("fixtures/function-address-release-binding-cli/negative-cases.json"))
         .expect("parse function-address CLI negative cases")
+}
+
+#[derive(Debug, Deserialize)]
+struct FunctionAddressPreservesNegativeCase {
+    name: String,
+    mutation: String,
+    expected_error: String,
+}
+
+fn install_function_address_preserves_fixture(
+    bundle_dir: &Path,
+    manifest: &mut ReleaseEvidenceManifest,
+    with_json_projection: bool,
+) {
+    let preserves_bytes =
+        std::fs::read(function_address_preserves_fixture_path("kamacite-receipt.valid.preserves")).unwrap();
+    let valence_bytes = std::fs::read(function_address_preserves_fixture_path("valence-receipt.valid.json")).unwrap();
+    let projection_bytes =
+        std::fs::read(function_address_preserves_fixture_path("kamacite-projection.valid.json")).unwrap();
+    let preserves_digest = blake3::hash(&preserves_bytes).to_hex().to_string();
+    let preserves_size = u64::try_from(preserves_bytes.len()).expect("Preserves fixture size fits u64");
+    assert_eq!(preserves_digest, FUNCTION_ADDRESS_PRESERVES_HASH);
+    assert_eq!(preserves_size, FUNCTION_ADDRESS_PRESERVES_SIZE_BYTES);
+
+    write_file(&bundle_dir.join(FUNCTION_ADDRESS_PRESERVES_PATH), &preserves_bytes);
+    write_file(&bundle_dir.join(FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH), &valence_bytes);
+    manifest
+        .external_evidence
+        .push(function_address_external_evidence(FunctionAddressExternalEvidenceFixture {
+            relative_path: FUNCTION_ADDRESS_PRESERVES_PATH,
+            bytes: &preserves_bytes,
+            role: KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE,
+            schema: KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA,
+        }));
+    manifest
+        .external_evidence
+        .push(function_address_external_evidence(FunctionAddressExternalEvidenceFixture {
+            relative_path: FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH,
+            bytes: &valence_bytes,
+            role: crunch_release_core::VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+            schema: crunch_release_core::VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+        }));
+    let compatibility_projections = if with_json_projection {
+        write_file(&bundle_dir.join(FUNCTION_ADDRESS_PRESERVES_PROJECTION_PATH), &projection_bytes);
+        manifest
+            .external_evidence
+            .push(function_address_external_evidence(FunctionAddressExternalEvidenceFixture {
+                relative_path: FUNCTION_ADDRESS_PRESERVES_PROJECTION_PATH,
+                bytes: &projection_bytes,
+                role: KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE,
+                schema: KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA,
+            }));
+        vec![OpaqueEvidenceCompatibilityProjection {
+            role: KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE.to_string(),
+            schema: KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA.to_string(),
+            relative_path: FUNCTION_ADDRESS_PRESERVES_PROJECTION_PATH.to_string(),
+            digest_blake3: blake3::hash(&projection_bytes).to_hex().to_string(),
+            canonical_envelope_digest_blake3: preserves_digest.clone(),
+        }]
+    } else {
+        vec![]
+    };
+    let binary = manifest.binaries.first().expect("release binary");
+    let binding = OpaqueEvidenceSidecarBinding {
+        schema: OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA.to_string(),
+        evidence_kind: OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS.to_string(),
+        profile_version: FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION.to_string(),
+        canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink {
+            role: KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE.to_string(),
+            schema: KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA.to_string(),
+            relative_path: FUNCTION_ADDRESS_PRESERVES_PATH.to_string(),
+            digest_blake3: preserves_digest,
+            size_bytes: Some(preserves_size),
+        },
+        upstream_validation: OpaqueEvidenceUpstreamValidationLink {
+            role: crunch_release_core::VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE.to_string(),
+            schema: crunch_release_core::VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA.to_string(),
+            relative_path: FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH.to_string(),
+            digest_blake3: blake3::hash(&valence_bytes).to_hex().to_string(),
+            receipt_hash_blake3: Some(sample_byte_digest(FUNCTION_ADDRESS_VALENCE_RECEIPT_HASH_SEED)),
+        },
+        source_artifact: OpaqueEvidenceSourceArtifactLink {
+            relative_path: manifest.source_archive.relative_path.clone(),
+            digest_blake3: manifest.source_archive.digest_blake3.clone(),
+        },
+        release_binary: OpaqueEvidenceReleaseBinaryLink {
+            relative_path: binary.relative_path.clone(),
+            digest_blake3: binary.digest_blake3.clone(),
+        },
+        policy_hashes: vec![
+            OpaqueEvidencePolicyHash {
+                policy_kind: OPAQUE_EVIDENCE_POLICY_KIND_UPSTREAM_PROFILE.to_string(),
+                digest_blake3: sample_digest(FUNCTION_ADDRESS_PRESERVES_UPSTREAM_POLICY_SEED),
+            },
+            OpaqueEvidencePolicyHash {
+                policy_kind: OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE.to_string(),
+                digest_blake3: sample_digest(FUNCTION_ADDRESS_PRESERVES_MANTLE_POLICY_SEED),
+            },
+        ],
+        claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+        compatibility_projections,
+        non_claims: vec![
+            OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM.to_string(),
+            FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
+        ],
+    };
+    manifest.opaque_evidence_sidecar_bindings = vec![opaque_evidence_sidecar_binding_receipt(binding).unwrap()];
+    write_canonical_manifest(bundle_dir, manifest);
+}
+
+fn function_address_preserves_bind_command(bundle_dir: &Path, mode: &str, receipt_out: &Path) -> Command {
+    let mut command = crunch();
+    command
+        .arg("--json")
+        .arg("release")
+        .arg("function-address-bind")
+        .arg(bundle_dir)
+        .arg("--mode")
+        .arg(mode)
+        .arg("--from-preserves-binding")
+        .arg("--receipt-out")
+        .arg(receipt_out);
+    command
+}
+
+fn apply_function_address_preserves_negative_mutation(
+    bundle_dir: &Path,
+    manifest: &mut ReleaseEvidenceManifest,
+    mutation: &str,
+) {
+    let (relative_path, field_name, replacement) = match mutation {
+        "stale-valence-logical-hash" => (
+            FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH,
+            "receipt_hash",
+            Some(sample_byte_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED)),
+        ),
+        "stale-valence-preserves-link" => (
+            FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH,
+            "kamacite_receipt_hash",
+            Some(sample_byte_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED)),
+        ),
+        "missing-valence-preserves-link" => (FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH, "kamacite_receipt_hash", None),
+        "stale-json-projection-link" => (
+            FUNCTION_ADDRESS_PRESERVES_PROJECTION_PATH,
+            "receipt_hash",
+            Some(sample_byte_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED)),
+        ),
+        "missing-json-projection-link" => (FUNCTION_ADDRESS_PRESERVES_PROJECTION_PATH, "receipt_hash", None),
+        other => panic!("unsupported Preserves function-address mutation: {other}"),
+    };
+    let path = bundle_dir.join(relative_path);
+    let mut value: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let object = value.as_object_mut().expect("function-address identity envelope object");
+    if let Some(replacement) = replacement {
+        object.insert(field_name.to_string(), serde_json::Value::String(replacement));
+    } else {
+        object.remove(field_name);
+    }
+    let bytes = serde_json::to_vec(&value).unwrap();
+    write_file(&path, &bytes);
+    let digest = blake3::hash(&bytes).to_hex().to_string();
+    manifest
+        .external_evidence
+        .iter_mut()
+        .find(|row| row.relative_path == relative_path)
+        .expect("mutated external evidence row")
+        .digest_blake3 = digest.clone();
+    let binding = &mut manifest.opaque_evidence_sidecar_bindings[0].binding;
+    if relative_path == FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH {
+        binding.upstream_validation.digest_blake3 = digest;
+    } else {
+        binding.compatibility_projections[0].digest_blake3 = digest;
+    }
+    manifest.opaque_evidence_sidecar_bindings[0] = opaque_evidence_sidecar_binding_receipt(binding.clone()).unwrap();
+    write_canonical_manifest(bundle_dir, manifest);
+}
+
+fn function_address_preserves_negative_cases() -> Vec<FunctionAddressPreservesNegativeCase> {
+    serde_json::from_str(include_str!("fixtures/function-address-preserves-sidecars/negative-cases.json"))
+        .expect("parse Preserves function-address negative cases")
 }
 
 // r[verify mantle.release_provenance.function_address_binding_cli.command]
@@ -787,6 +1004,75 @@ fn function_address_binding_cli_preserves_overclaim_rejection_receipt() {
     assert!(!receipt.valid);
     assert_eq!(receipt.verdict, crunch_release_core::FUNCTION_ADDRESS_BINDING_VERDICT_FAIL);
     assert!(receipt.verification_summary.diagnostics.iter().any(|diagnostic| diagnostic.contains("overclaim")));
+}
+
+// r[verify mantle.release_provenance.function_address_preserves_sidecars.contract]
+// r[verify mantle.release_provenance.function_address_preserves_sidecars.positive]
+// r[verify mantle.release_provenance.function_address_preserves_sidecars.validation]
+#[test]
+fn function_address_preserves_binding_cli_emits_required_receipt() {
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    install_function_address_preserves_fixture(&bundle_dir, &mut manifest, true);
+    let receipt_out = function_address_cli_receipt_out(&temp);
+    let _ = std::fs::remove_file(&receipt_out);
+
+    let assert = function_address_preserves_bind_command(&bundle_dir, "required", &receipt_out).assert().success();
+    let receipt: crunch_release_core::FunctionAddressBindingReceipt =
+        serde_json::from_slice(&assert.get_output().stdout).expect("parse Preserves-backed binding receipt");
+    let written = std::fs::read(&receipt_out).expect("read Preserves-backed binding receipt");
+    let canonical = crunch_release_core::function_address_binding_receipt_canonical_bytes(receipt.clone())
+        .expect("canonical Preserves-backed binding receipt");
+
+    assert_eq!(written, canonical);
+    assert!(receipt.valid);
+    assert!(receipt.verification_summary.required);
+    assert_eq!(receipt.sidecar_digest, FUNCTION_ADDRESS_PRESERVES_HASH);
+    assert_eq!(receipt.valence_receipt_digest, sample_byte_digest(FUNCTION_ADDRESS_VALENCE_RECEIPT_HASH_SEED));
+    assert_eq!(receipt.kamacite_receipt_digest.as_deref(), Some(FUNCTION_ADDRESS_PRESERVES_HASH));
+    assert_eq!(receipt.verification_summary.sidecar_role.as_deref(), Some(KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE));
+    assert_ne!(
+        receipt.verification_summary.kamacite_receipt_digest_blake3,
+        receipt.verification_summary.kamacite_receipt_hash_blake3
+    );
+}
+
+// r[verify mantle.release_provenance.function_address_preserves_sidecars.positive]
+#[test]
+fn function_address_preserves_binding_cli_accepts_optional_without_json_projection() {
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    install_function_address_preserves_fixture(&bundle_dir, &mut manifest, false);
+    let receipt_out = temp.path().join("preserves-optional-binding.json");
+
+    let assert = function_address_preserves_bind_command(&bundle_dir, "optional", &receipt_out).assert().success();
+    let receipt: crunch_release_core::FunctionAddressBindingReceipt =
+        serde_json::from_slice(&assert.get_output().stdout).expect("parse optional Preserves binding receipt");
+
+    assert!(receipt.valid);
+    assert!(!receipt.verification_summary.required);
+    assert!(receipt.kamacite_receipt_digest.is_none());
+    assert_eq!(receipt.sidecar_digest, FUNCTION_ADDRESS_PRESERVES_HASH);
+    assert!(receipt_out.is_file());
+}
+
+// r[verify mantle.release_provenance.function_address_preserves_sidecars.json_projection]
+// r[verify mantle.release_provenance.function_address_preserves_sidecars.negative]
+#[test]
+fn function_address_preserves_binding_cli_negative_fixture_matrix_fails_closed() {
+    let cases = function_address_preserves_negative_cases();
+    assert_eq!(cases.len(), FUNCTION_ADDRESS_PRESERVES_NEGATIVE_CASE_COUNT);
+    assert!(cases.iter().all(|case| !case.expected_error.is_empty()));
+    for case in cases {
+        let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+        install_function_address_preserves_fixture(&bundle_dir, &mut manifest, true);
+        apply_function_address_preserves_negative_mutation(&bundle_dir, &mut manifest, &case.mutation);
+        let receipt_out = temp.path().join(format!("{}.json", case.name));
+
+        function_address_preserves_bind_command(&bundle_dir, "required", &receipt_out)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(&case.expected_error));
+        assert!(!receipt_out.exists(), "negative Preserves fixture wrote output: {}", case.name);
+    }
 }
 
 #[test]

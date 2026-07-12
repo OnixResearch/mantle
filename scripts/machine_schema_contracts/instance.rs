@@ -415,6 +415,7 @@ fn evaluate_invariant(invariant: &Invariant, value: &Value) -> bool {
         "unique-by" => invariant_unique_by(invariant, value),
         "disjoint-by" => invariant_disjoint_by(invariant, value),
         "field-equals-const-when" => invariant_field_equals_const_when(invariant, value),
+        "field-equals-when" => invariant_field_equals_when(invariant, value),
         "arrays-empty-iff-enum" => invariant_arrays_empty_iff_enum(invariant, value),
         _ => false,
     }
@@ -559,6 +560,19 @@ fn invariant_field_equals_const_when(invariant: &Invariant, value: &Value) -> bo
         return false;
     };
     !discriminator || pointer(value, &invariant.target).is_some_and(|actual| actual == &invariant.value)
+}
+
+fn invariant_field_equals_when(invariant: &Invariant, value: &Value) -> bool {
+    let Some(expected_discriminator) = invariant.when.as_ref() else {
+        return false;
+    };
+    let Some(discriminator) = pointer(value, &invariant.left) else {
+        return false;
+    };
+    if discriminator != expected_discriminator {
+        return true;
+    }
+    pointer(value, &invariant.target).is_some_and(|actual| actual == &invariant.value)
 }
 
 fn invariant_arrays_empty_iff_enum(invariant: &Invariant, value: &Value) -> bool {

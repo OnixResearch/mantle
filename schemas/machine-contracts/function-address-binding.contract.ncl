@@ -22,7 +22,7 @@ let is_verification_summary = fun value => ((std.is_record (value)
   && C.IsBlake3Hex (std.record.get "kamacite_receipt_digest_blake3" (value))))))))
   && (std.record.has_field "kamacite_receipt_hash_blake3" (value) && ((((std.record.get "kamacite_receipt_hash_blake3" (value)) == null || ((std.is_string (std.record.get "kamacite_receipt_hash_blake3" (value))
   && C.IsBlake3Hex (std.record.get "kamacite_receipt_hash_blake3" (value))))))))
-  && (std.record.has_field "kamacite_receipt_role" (value) && ((std.array.elem (std.record.get "kamacite_receipt_role" (value)) [null,"kamacite-function-address-receipt"]
+  && (std.record.has_field "kamacite_receipt_role" (value) && ((std.array.elem (std.record.get "kamacite_receipt_role" (value)) [null,"kamacite-function-address-receipt","kamacite-function-address-json-projection"]
   && ((std.record.get "kamacite_receipt_role" (value)) == null || ((std.is_string (std.record.get "kamacite_receipt_role" (value))))))))
   && (std.record.has_field "kamacite_receipt_schema" (value) && ((std.array.elem (std.record.get "kamacite_receipt_schema" (value)) [null,"kamacite.function-address-receipt.v1"]
   && ((std.record.get "kamacite_receipt_schema" (value)) == null || ((std.is_string (std.record.get "kamacite_receipt_schema" (value))))))))
@@ -37,9 +37,9 @@ let is_verification_summary = fun value => ((std.is_record (value)
   && (std.is_string (std.record.get "sidecar_claim_scope" (value))))))
   && (std.record.has_field "sidecar_digest_blake3" (value) && (((std.is_string (std.record.get "sidecar_digest_blake3" (value))
   && C.IsBlake3Hex (std.record.get "sidecar_digest_blake3" (value))))))
-  && (std.record.has_field "sidecar_role" (value) && (((std.record.get "sidecar_role" (value)) == "function-address-evidence-sidecar"
+  && (std.record.has_field "sidecar_role" (value) && ((std.array.elem (std.record.get "sidecar_role" (value)) ["function-address-evidence-sidecar","kamacite-function-address-preserves-receipt"]
   && (std.is_string (std.record.get "sidecar_role" (value))))))
-  && (std.record.has_field "sidecar_schema" (value) && (((std.record.get "sidecar_schema" (value)) == "valence.function-address-evidence.v1"
+  && (std.record.has_field "sidecar_schema" (value) && ((std.array.elem (std.record.get "sidecar_schema" (value)) ["valence.function-address-evidence.v1","kamacite.function-address-preserves-receipt.v1"]
   && (std.is_string (std.record.get "sidecar_schema" (value))))))
   && (std.record.has_field "source_archive_digest_blake3" (value) && (((std.is_string (std.record.get "source_archive_digest_blake3" (value))
   && C.IsBlake3Hex (std.record.get "source_archive_digest_blake3" (value))))))
@@ -71,14 +71,14 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && (std.record.has_field "roles" (value) && (((std.is_array (std.record.get "roles" (value))
   && std.array.length (std.record.get "roles" (value)) >= MIN_FUNCTION_ADDRESS_BINDING_ROLES_COUNT
   && std.array.length (std.record.get "roles" (value)) <= MAX_FUNCTION_ADDRESS_BINDING_ROLES_COUNT
-  && std.array.all (fun item_2 => (std.array.elem (item_2) ["function-address-evidence-sidecar","valence-function-address-evidence-profile","kamacite-function-address-receipt"]
+  && std.array.all (fun item_2 => (std.array.elem (item_2) ["function-address-evidence-sidecar","kamacite-function-address-preserves-receipt","valence-function-address-evidence-profile","kamacite-function-address-receipt","kamacite-function-address-json-projection"]
   && (std.is_string (item_2)))) (std.record.get "roles" (value))))))
   && (std.record.has_field "schema_version" (value) && (((std.record.get "schema_version" (value)) == "mantle.function-address-binding.v1"
   && (std.is_string (std.record.get "schema_version" (value))))))
   && (std.record.has_field "schemas" (value) && (((std.is_array (std.record.get "schemas" (value))
   && std.array.length (std.record.get "schemas" (value)) >= MIN_FUNCTION_ADDRESS_BINDING_ROLES_COUNT
   && std.array.length (std.record.get "schemas" (value)) <= MAX_FUNCTION_ADDRESS_BINDING_ROLES_COUNT
-  && std.array.all (fun item_2 => (std.array.elem (item_2) ["valence.function-address-evidence.v1","function-address-evidence-v1","kamacite.function-address-receipt.v1"]
+  && std.array.all (fun item_2 => (std.array.elem (item_2) ["valence.function-address-evidence.v1","kamacite.function-address-preserves-receipt.v1","function-address-evidence-v1","kamacite.function-address-receipt.v1"]
   && (std.is_string (item_2)))) (std.record.get "schemas" (value))))))
   && (std.record.has_field "sidecar_digest" (value) && (((std.is_string (std.record.get "sidecar_digest" (value))
   && C.IsBlake3Hex (std.record.get "sidecar_digest" (value))))))
@@ -98,5 +98,9 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && ((std.record.get "release_binary_digest" (value)) == (std.record.get "release_binary_digest_blake3" (std.record.get "verification_summary" (value))))
   && ((std.record.get "kamacite_receipt_digest" (value)) == (std.record.get "kamacite_receipt_hash_blake3" (std.record.get "verification_summary" (value))))
   && ((std.record.get "mantle_non_claim_boundary" (value)) == (std.record.get "boundary" (std.record.get "verification_summary" (value))))
+  && (((std.record.get "sidecar_role" (std.record.get "verification_summary" (value))) != "function-address-evidence-sidecar") || ((std.record.get "sidecar_schema" (std.record.get "verification_summary" (value))) == "valence.function-address-evidence.v1"))
+  && (((std.record.get "sidecar_role" (std.record.get "verification_summary" (value))) != "kamacite-function-address-preserves-receipt") || ((std.record.get "sidecar_schema" (std.record.get "verification_summary" (value))) == "kamacite.function-address-preserves-receipt.v1"))
+  && (((std.record.get "kamacite_receipt_role" (std.record.get "verification_summary" (value))) != "kamacite-function-address-receipt") || ((std.record.get "sidecar_role" (std.record.get "verification_summary" (value))) == "function-address-evidence-sidecar"))
+  && (((std.record.get "kamacite_receipt_role" (std.record.get "verification_summary" (value))) != "kamacite-function-address-json-projection") || ((std.record.get "sidecar_role" (std.record.get "verification_summary" (value))) == "kamacite-function-address-preserves-receipt"))
   && ((!(std.record.get "valid" (value))) || ((std.record.get "verdict" (value)) == "PASS"))
   && ((!(std.record.get "valid" (value))) || ((std.record.get "disposition" (value)) == "present")))))

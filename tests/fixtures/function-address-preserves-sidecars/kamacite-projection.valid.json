@@ -1,0 +1,8 @@
+{
+  "schema_version": "kamacite.function-address-receipt.v1",
+  "valid": true,
+  "receipt_hash": "d06edddb8ae92cce6719c5d57b3c10f697a620f821c7e3989888a5af2855d5cf",
+  "projection_kind": "json-compatibility-only",
+  "non_claim_boundary": "Kamacite preserves typed receipt identity only; it does not prove Rust semantic correctness or release eligibility",
+  "non_claim": "The JSON projection does not replace canonical Preserves identity"
+}

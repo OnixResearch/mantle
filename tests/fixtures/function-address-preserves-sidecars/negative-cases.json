@@ -1,0 +1,27 @@
+[
+  {
+    "name": "stale-valence-logical-hash",
+    "mutation": "stale-valence-logical-hash",
+    "expected_error": "Valence logical receipt hash mismatch"
+  },
+  {
+    "name": "stale-valence-preserves-link",
+    "mutation": "stale-valence-preserves-link",
+    "expected_error": "Valence-to-Preserves receipt hash mismatch"
+  },
+  {
+    "name": "missing-valence-preserves-link",
+    "mutation": "missing-valence-preserves-link",
+    "expected_error": "Valence receipt is missing the canonical Preserves receipt hash link"
+  },
+  {
+    "name": "stale-json-projection-link",
+    "mutation": "stale-json-projection-link",
+    "expected_error": "Kamacite JSON projection canonical receipt hash mismatch"
+  },
+  {
+    "name": "missing-json-projection-link",
+    "mutation": "missing-json-projection-link",
+    "expected_error": "missing field `receipt_hash`"
+  }
+]

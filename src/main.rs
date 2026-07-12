@@ -1233,20 +1233,33 @@ pub enum ReleaseAction {
         #[arg(long, value_parser = ["optional", "required"], default_value = "optional")]
         mode: String,
 
+        /// Render the canonical Preserves-backed function-address binding already declared by the
+        /// manifest
+        #[arg(long = "from-preserves-binding")]
+        from_preserves_binding: bool,
+
         /// Bundle-relative function-address sidecar path declared in external evidence
-        #[arg(long)]
-        sidecar: String,
+        #[arg(
+            long,
+            required_unless_present = "from_preserves_binding",
+            conflicts_with = "from_preserves_binding"
+        )]
+        sidecar: Option<String>,
 
         /// Bundle-relative Valence receipt path declared in external evidence
-        #[arg(long = "valence-receipt")]
-        valence_receipt: String,
+        #[arg(
+            long = "valence-receipt",
+            required_unless_present = "from_preserves_binding",
+            conflicts_with = "from_preserves_binding"
+        )]
+        valence_receipt: Option<String>,
 
         /// Bundle-relative Kamacite receipt path declared in external evidence
-        #[arg(long = "kamacite-receipt")]
+        #[arg(long = "kamacite-receipt", conflicts_with = "from_preserves_binding")]
         kamacite_receipt: Option<String>,
 
         /// Bundle-relative release binary path; required when the bundle has multiple binaries
-        #[arg(long = "release-binary")]
+        #[arg(long = "release-binary", conflicts_with = "from_preserves_binding")]
         release_binary: Option<String>,
 
         /// New output path for the canonical Mantle binding receipt
@@ -6240,6 +6253,7 @@ let Plan = {
             action:
                 ReleaseAction::FunctionAddressBind {
                     mode,
+                    from_preserves_binding,
                     sidecar,
                     valence_receipt,
                     kamacite_receipt,
@@ -6252,11 +6266,66 @@ let Plan = {
             panic!("expected release function-address-bind");
         };
         assert_eq!(mode, "required");
-        assert_eq!(sidecar, "external/sidecar.json");
-        assert_eq!(valence_receipt, "external/valence.json");
+        assert!(!from_preserves_binding);
+        assert_eq!(sidecar.as_deref(), Some("external/sidecar.json"));
+        assert_eq!(valence_receipt.as_deref(), Some("external/valence.json"));
         assert_eq!(kamacite_receipt.as_deref(), Some("external/kamacite.json"));
         assert_eq!(release_binary.as_deref(), Some("binaries/mantle"));
         assert_eq!(receipt_out, PathBuf::from("/tmp/mantle-binding.json"));
+    }
+
+    #[test]
+    fn release_function_address_bind_accepts_preserves_manifest_selection() {
+        let args = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "release",
+            "function-address-bind",
+            "/tmp/release-bundle",
+            "--mode",
+            "required",
+            "--from-preserves-binding",
+            "--receipt-out",
+            "/tmp/mantle-preserves-binding.json",
+        ])
+        .expect("Preserves binding arguments must parse");
+        let Command::Release {
+            action:
+                ReleaseAction::FunctionAddressBind {
+                    from_preserves_binding,
+                    sidecar,
+                    valence_receipt,
+                    kamacite_receipt,
+                    release_binary,
+                    ..
+                },
+        } = args.command
+        else {
+            panic!("expected Preserves release function-address binding");
+        };
+
+        assert!(from_preserves_binding);
+        assert!(sidecar.is_none());
+        assert!(valence_receipt.is_none());
+        assert!(kamacite_receipt.is_none());
+        assert!(release_binary.is_none());
+    }
+
+    #[test]
+    fn release_function_address_bind_rejects_mixed_preserves_and_explicit_selection() {
+        let rendered = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "release",
+            "function-address-bind",
+            "/tmp/release-bundle",
+            "--from-preserves-binding",
+            "--sidecar",
+            "external/sidecar.json",
+            "--receipt-out",
+            "/tmp/mantle-binding.json",
+        ])
+        .expect_err("mixed Preserves and explicit selection was accepted");
+        assert!(rendered.contains("--from-preserves-binding"));
+        assert!(rendered.contains("--sidecar"));
     }
 
     #[test]

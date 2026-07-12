@@ -41,11 +41,17 @@
         },
         "sidecar_role": {
           "type": "string",
-          "const": "function-address-evidence-sidecar"
+          "enum": [
+            "function-address-evidence-sidecar",
+            "kamacite-function-address-preserves-receipt"
+          ]
         },
         "sidecar_schema": {
           "type": "string",
-          "const": "valence.function-address-evidence.v1"
+          "enum": [
+            "valence.function-address-evidence.v1",
+            "kamacite.function-address-preserves-receipt.v1"
+          ]
         },
         "sidecar_claim_scope": {
           "type": "string",
@@ -73,7 +79,11 @@
         },
         "kamacite_receipt_role": {
           "type": ["string", "null"],
-          "enum": [null, "kamacite-function-address-receipt"]
+          "enum": [
+            null,
+            "kamacite-function-address-receipt",
+            "kamacite-function-address-json-projection"
+          ]
         },
         "kamacite_receipt_schema": {
           "type": ["string", "null"],
@@ -200,8 +210,10 @@
         "type": "string",
         "enum": [
           "function-address-evidence-sidecar",
+          "kamacite-function-address-preserves-receipt",
           "valence-function-address-evidence-profile",
-          "kamacite-function-address-receipt"
+          "kamacite-function-address-receipt",
+          "kamacite-function-address-json-projection"
         ]
       }
     },
@@ -217,6 +229,7 @@
         "type": "string",
         "enum": [
           "valence.function-address-evidence.v1",
+          "kamacite.function-address-preserves-receipt.v1",
           "function-address-evidence-v1",
           "kamacite.function-address-receipt.v1"
         ]
@@ -244,6 +257,34 @@
     { "kind": "field-equals", "left": "/release_binary_digest", "right": "/verification_summary/release_binary_digest_blake3" },
     { "kind": "field-equals", "left": "/kamacite_receipt_digest", "right": "/verification_summary/kamacite_receipt_hash_blake3" },
     { "kind": "field-equals", "left": "/mantle_non_claim_boundary", "right": "/verification_summary/boundary" },
+    {
+      "kind": "field-equals-when",
+      "left": "/verification_summary/sidecar_role",
+      "when": "function-address-evidence-sidecar",
+      "target": "/verification_summary/sidecar_schema",
+      "value": "valence.function-address-evidence.v1"
+    },
+    {
+      "kind": "field-equals-when",
+      "left": "/verification_summary/sidecar_role",
+      "when": "kamacite-function-address-preserves-receipt",
+      "target": "/verification_summary/sidecar_schema",
+      "value": "kamacite.function-address-preserves-receipt.v1"
+    },
+    {
+      "kind": "field-equals-when",
+      "left": "/verification_summary/kamacite_receipt_role",
+      "when": "kamacite-function-address-receipt",
+      "target": "/verification_summary/sidecar_role",
+      "value": "function-address-evidence-sidecar"
+    },
+    {
+      "kind": "field-equals-when",
+      "left": "/verification_summary/kamacite_receipt_role",
+      "when": "kamacite-function-address-json-projection",
+      "target": "/verification_summary/sidecar_role",
+      "value": "kamacite-function-address-preserves-receipt"
+    },
     { "kind": "field-equals-const-when", "boolean": "/valid", "target": "/verdict", "value": "PASS" },
     { "kind": "field-equals-const-when", "boolean": "/valid", "target": "/disposition", "value": "present" }
   ]

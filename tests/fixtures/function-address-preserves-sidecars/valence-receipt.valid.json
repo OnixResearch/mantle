@@ -1,0 +1,25 @@
+{
+  "schema_version": "valence.function-address-evidence.v1",
+  "valid": true,
+  "verdict": "PASS",
+  "receipt_hash": "0202020202020202020202020202020202020202020202020202020202020202",
+  "valence_policy_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "claim_scope": "function_address.v1.lifecycle_policy_conformance",
+  "kamacite_receipt_hash": "d06edddb8ae92cce6719c5d57b3c10f697a620f821c7e3989888a5af2855d5cf",
+  "roles": [
+    "function-address-evidence-sidecar",
+    "valence-function-address-evidence-profile",
+    "kamacite-function-address-receipt"
+  ],
+  "schemas": [
+    "valence.function-address-evidence.v1",
+    "function-address-evidence-v1",
+    "kamacite.function-address-receipt.v1"
+  ],
+  "verification_role_summary": {
+    "property_count": 0,
+    "recorded_only_count": 1,
+    "verified_count": 0
+  },
+  "non_claim_boundary": "Cairn function-address evidence proves lifecycle policy conformance over supplied receipts only; it does not prove Rust semantic correctness, compiler correctness, build correctness, verifier soundness, or release eligibility outside the configured policy"
+}

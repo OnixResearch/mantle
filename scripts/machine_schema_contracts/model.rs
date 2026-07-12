@@ -175,6 +175,8 @@ pub struct Invariant {
     pub other_item_field: String,
     #[serde(default)]
     pub value: Value,
+    #[serde(default)]
+    pub when: Option<Value>,
 }
 
 pub fn push_issue(issues: &mut Vec<Issue>, issue: Issue) {
