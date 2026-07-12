@@ -82,6 +82,16 @@ define_release_verification_contributors!(
 
 pub const RELEASE_VERIFICATION_CONTRIBUTOR_COUNT: usize = ReleaseVerificationContributor::ALL.len();
 
+const _: () = assert!(
+    MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR > 0,
+    "release verification diagnostic limit must be positive"
+);
+const _: () = assert!(
+    MAX_RELEASE_VERIFICATION_REQUIRED_EXTERNAL_ROLES > 0,
+    "release verification external-role limit must be positive"
+);
+const _: () = assert!(RELEASE_VERIFICATION_CONTRIBUTOR_COUNT > 0, "release verification needs contributors");
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReleaseVerificationRequirement {
@@ -206,12 +216,6 @@ pub fn aggregate_release_verification(
     facts: ReleaseVerificationFacts,
     requirements: ReleaseVerificationRequirements,
 ) -> ReleaseVerificationDecision {
-    assert!(!ReleaseVerificationContributor::ALL.is_empty(), "release verification needs contributors");
-    assert!(
-        MAX_RELEASE_VERIFICATION_DIAGNOSTICS_PER_CONTRIBUTOR > 0,
-        "release verification diagnostic limit must be positive"
-    );
-
     let mut checks = Vec::with_capacity(RELEASE_VERIFICATION_CONTRIBUTOR_COUNT);
     let mut diagnostics = Vec::new();
     for contributor in ReleaseVerificationContributor::ALL {

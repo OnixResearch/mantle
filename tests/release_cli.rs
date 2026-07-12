@@ -77,6 +77,9 @@ const RELEASE_VERIFY_DECISION_SCHEMA: &str = "mantle-release-verification-decisi
 const RELEASE_VERIFY_SUCCESS_MARKER: &str = "release evidence verified";
 const RELEASE_VERIFY_REJECTION_MARKER: &str = "release evidence rejected";
 const RELEASE_VERIFY_REJECTED_DISPOSITION: &str = "policy-rejected";
+const TEST_WITNESS_SOURCE_ACQUISITION_MODE: &str = "manual-operator-supplied";
+const TEST_PROOF_FIXED_UMASK: &str = "0022\n";
+const TEST_PROOF_NORMALIZATION_ENV: &str = "1|UTC|C.UTF-8|C.UTF-8|/tmp|/tmp|/tmp|/tmp|nobody|nobody\n";
 #[cfg(unix)]
 const TEST_SCRIPT_MODE: u32 = 0o755;
 
@@ -834,7 +837,8 @@ fn write_witness_material_with_release_digest(
             toolchain: "rust-1.91.1".to_string(),
             host_class: "nixos-25.05".to_string(),
         },
-    );
+    )
+    .with_source_acquisition_mode(TEST_WITNESS_SOURCE_ACQUISITION_MODE.to_string());
     let witness_bytes = witness.canonical_bytes().unwrap();
     write_file(&verification_dir.join("witnesses").join(format!("{identity}.json")), witness_bytes.as_slice());
 
@@ -879,7 +883,8 @@ fn build_matching_agreement_report(
             toolchain: "rust-1.91.1".to_string(),
             host_class: "nixos-25.05".to_string(),
         },
-    );
+    )
+    .with_source_acquisition_mode(TEST_WITNESS_SOURCE_ACQUISITION_MODE.to_string());
     let policy_digest = AttestationDigest::from_canonical_bytes(serde_json::to_vec(policy).unwrap());
     IndependentAgreementReport::new(IndependentAgreementReportInit {
         release_attestation_digest_blake3: release_digest,
@@ -921,7 +926,8 @@ fn write_witness_material_with_host_class(
             toolchain: "rust-1.91.1".to_string(),
             host_class: host_class.to_string(),
         },
-    );
+    )
+    .with_source_acquisition_mode(TEST_WITNESS_SOURCE_ACQUISITION_MODE.to_string());
     let witness_bytes = witness.canonical_bytes().unwrap();
     write_file(&verification_dir.join("witnesses").join(format!("{identity}.json")), witness_bytes.as_slice());
 
@@ -1321,10 +1327,14 @@ fn install_bundled_deterministic_artifacts(
     updated
 }
 
-fn role_bounded_fixture_artifact(path: &Path, relative_path: &str, role: &str) -> ProviderFixedPointProofArtifact {
+fn role_bounded_fixture_artifact(
+    path: &Path,
+    relative_path: &str,
+    role: &str,
+) -> crunch_release_core::RoleBoundedReleaseArtifact {
     let bytes = std::fs::read(path).unwrap();
-    ProviderFixedPointProofArtifact {
-        kind: BundledArtifactKind::File,
+    crunch_release_core::RoleBoundedReleaseArtifact {
+        kind: crunch_release_core::BundledArtifactKind::File,
         relative_path: relative_path.to_string(),
         size_bytes: bytes.len().try_into().unwrap(),
         digest_blake3: blake3::hash(&bytes).to_hex().to_string(),
@@ -1976,7 +1986,7 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     write_rebuild_script(
         &rebuild_script,
         &format!(
-            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$MANTLE_REPRODUCE_BUNDLE_DIR/{relative_path}\" \"$MANTLE_REPRODUCE_OUTPUT_DIR/{relative_path}\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then mkdir -p \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\"; printf '%s\\n' \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt\"; fi\n"
+            "mkdir -p \"$MANTLE_REPRODUCE_OUTPUT_DIR/binaries\"\ncp \"$MANTLE_REPRODUCE_BUNDLE_DIR/{relative_path}\" \"$MANTLE_REPRODUCE_OUTPUT_DIR/{relative_path}\"\nif [ -n \"${{MANTLE_DETERMINISTIC_PROOF_STORE_DIR:-}}\" ]; then\n  mkdir -p \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\"\n  printf '%s\\n' \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/store-marker.txt\"\n  umask > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/umask.txt\"\n  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n' \"$SOURCE_DATE_EPOCH\" \"$TZ\" \"$LANG\" \"$LC_ALL\" \"$TEMP\" \"$TEMPDIR\" \"$TMP\" \"$TMPDIR\" \"$USER\" \"$LOGNAME\" > \"$MANTLE_DETERMINISTIC_PROOF_STORE_DIR/normalization-env.txt\"\nfi\n"
         ),
     );
 
@@ -2047,6 +2057,14 @@ fn release_reproduce_writes_deterministic_proof_from_repeated_clean_runs() {
     assert!(proof_dir.join("run-000/store/store-marker.txt").is_file());
     assert!(proof_dir.join("run-001/store/store-marker.txt").is_file());
     assert!(rebuild_output_dir.join(relative_path).is_file());
+    for run_id in ["run-000", "run-001"] {
+        let store_dir = proof_dir.join(run_id).join("store");
+        assert_eq!(std::fs::read_to_string(store_dir.join("umask.txt")).unwrap(), TEST_PROOF_FIXED_UMASK);
+        assert_eq!(
+            std::fs::read_to_string(store_dir.join("normalization-env.txt")).unwrap(),
+            TEST_PROOF_NORMALIZATION_ENV
+        );
+    }
 
     let proof = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&proof_path).unwrap()).unwrap();
     let isolation_evidence_bytes = std::fs::read(&isolation_evidence_path).unwrap();
@@ -2148,7 +2166,7 @@ fn release_reproduce_generated_two_clean_store_proof_verifies_deterministic_rele
     let proof = serde_json::from_slice::<serde_json::Value>(&std::fs::read(&proof_path).unwrap()).unwrap();
     let runs = proof["runs"].as_array().unwrap();
     assert_eq!(proof["schema"], "mantle-deterministic-proof-receipt-v1");
-    assert_eq!(proof["verdict"], "self-rebuild-match");
+    assert_eq!(proof["verdict"], "self-rebuild-match", "proof was: {proof}");
     assert_eq!(runs.len(), 2);
     assert_ne!(runs[0]["output_store_paths"][0], runs[1]["output_store_paths"][0]);
     assert_ne!(runs[0]["output_root_identity"], runs[1]["output_root_identity"]);
@@ -5648,7 +5666,12 @@ fn hash_directory(path: &Path) -> Result<(u64, String), String> {
         return Err(format!("expected directory artifact: {}", path.display()));
     }
     let mut entries = Vec::new();
-    collect_paths_sorted(path, &mut entries)?;
+    collect_paths_nofollow(path, &mut entries)?;
+    entries.sort_by(|left, right| {
+        let left_relative = left.strip_prefix(path).expect("collected tree entry is below the root");
+        let right_relative = right.strip_prefix(path).expect("collected tree entry is below the root");
+        left_relative.as_os_str().as_encoded_bytes().cmp(right_relative.as_os_str().as_encoded_bytes())
+    });
     let mut hasher = blake3::Hasher::new();
     let mut total_file_bytes: u64 = 0;
     for entry in &entries {
@@ -5660,17 +5683,15 @@ fn hash_directory(path: &Path) -> Result<(u64, String), String> {
     Ok((total_file_bytes, hasher.finalize().to_hex().to_string()))
 }
 
-fn collect_paths_sorted(root: &Path, entries: &mut Vec<PathBuf>) -> Result<(), String> {
-    let mut children = Vec::new();
+fn collect_paths_nofollow(root: &Path, entries: &mut Vec<PathBuf>) -> Result<(), String> {
     for child_result in std::fs::read_dir(root).map_err(|err| format!("read_dir {}: {err}", root.display()))? {
         let child = child_result.map_err(|err| format!("read_dir entry {}: {err}", root.display()))?;
-        children.push(child.path());
-    }
-    children.sort();
-    for child in children {
-        entries.push(child.clone());
-        if child.is_dir() {
-            collect_paths_sorted(&child, entries)?;
+        let child_path = child.path();
+        let metadata = std::fs::symlink_metadata(&child_path)
+            .map_err(|err| format!("symlink_metadata {}: {err}", child_path.display()))?;
+        entries.push(child_path.clone());
+        if metadata.is_dir() {
+            collect_paths_nofollow(&child_path, entries)?;
         }
     }
     Ok(())
@@ -5718,8 +5739,8 @@ fn hash_tree_entry(root: &Path, entry: &Path, hasher: &mut blake3::Hasher) -> Re
 
 #[cfg(unix)]
 fn entry_mode_bits(metadata: &std::fs::Metadata) -> u32 {
-    use std::os::unix::fs::PermissionsExt;
-    metadata.permissions().mode()
+    use std::os::unix::fs::MetadataExt;
+    metadata.mode()
 }
 
 #[cfg(not(unix))]
@@ -5727,98 +5748,7 @@ fn entry_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
     0
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum BundledArtifactKind {
-    File,
-    Directory,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct BundledArtifact {
-    kind: BundledArtifactKind,
-    relative_path: String,
-    size_bytes: u64,
-    digest_blake3: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ReleaseWorkflowIdentity {
-    command: String,
-    version: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ProviderFixedPointProofArtifact {
-    kind: BundledArtifactKind,
-    relative_path: String,
-    size_bytes: u64,
-    digest_blake3: String,
-    evidence_role: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ReleaseProofLinkage {
-    release_id: String,
-    source_archive_digest_blake3: String,
-    proof_bundle_schema: String,
-    proof_mode: String,
-    selected_provider_kind: String,
-    staged_source: String,
-    stage2_binary_digest_blake3: String,
-    prerequisite_inventory_digest_blake3: String,
-    proof_manifest_digest_blake3: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ExternalEvidence {
-    role: String,
-    schema: String,
-    relative_path: String,
-    digest_blake3: String,
-    claim_scope: String,
-    non_claims: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct SourceAcquisition {
-    kind: String,
-    url: String,
-    digest_blake3: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    commit: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    reference: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    tag: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    archive_profile: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    archive_version: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ReleaseEvidenceManifest {
-    schema: String,
-    release_id: String,
-    claim_scope: String,
-    workflow: ReleaseWorkflowIdentity,
-    source_archive: BundledArtifact,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    source_acquisition: Option<SourceAcquisition>,
-    binaries: Vec<BundledArtifact>,
-    proof_bundle: BundledArtifact,
-    prerequisite_inventory: BundledArtifact,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    provider_fixed_point_proof: Option<ProviderFixedPointProofArtifact>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    deterministic_build_proof: Option<ProviderFixedPointProofArtifact>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    deterministic_sandbox_isolation_evidence: Option<ProviderFixedPointProofArtifact>,
-    #[serde(default)]
-    external_evidence: Vec<ExternalEvidence>,
-    proof_linkage: ReleaseProofLinkage,
-}
+type ReleaseEvidenceManifest = crunch_release_core::ReleaseEvidenceManifest;
 
 #[test]
 fn release_manifest_schema_constant_matches_fixture_expectation() {

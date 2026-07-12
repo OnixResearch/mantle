@@ -88,7 +88,8 @@ pub(crate) fn copy_prepared_tree(prepared: PreparedTreeCopy, dest_dir: &Path) ->
 }
 
 pub(crate) fn hash_directory_tree(path: &Path) -> Result<(u64, String), RunError> {
-    let prepared = prepare_tree_copy(path)?;
+    let prepared = prepare_tree_copy(path)
+        .map_err(|error| RunError::Internal(format!("expected directory artifact {}: {error}", path.display())))?;
     hash_prepared_tree(&prepared)
 }
 

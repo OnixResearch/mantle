@@ -3,6 +3,8 @@ use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::Read;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
@@ -62,6 +64,39 @@ const PROOF_SANDBOX_BWRAP_ENV: &str = "MANTLE_DETERMINISTIC_PROOF_BWRAP";
 const PROOF_SANDBOX_PROFILE_PREFIX: &str = "mantle-proof-sandbox-v1";
 const PROOF_SANDBOX_SYSTEM_TOOLS_DIR: &str = "/run/current-system/sw";
 const PROOF_SANDBOX_PATH: &str = "/run/current-system/sw/bin:/usr/bin:/bin";
+const PROOF_SANDBOX_TEMP_ROOT: &str = "/tmp";
+const PROOF_SANDBOX_USER: &str = "nobody";
+const PROOF_SANDBOX_LOCALE: &str = "C.UTF-8";
+const PROOF_SANDBOX_TIMEZONE: &str = "UTC";
+const PROOF_SOURCE_DATE_EPOCH: &str = "1";
+const PROOF_MODELED_RANDOMNESS: &str = "no-modeled-random-seed";
+const PROOF_OUTPUT_ORDERING: &str = "lexicographic-output-processing";
+const PROOF_SANDBOX_UMASK_TEXT: &str = "0022";
+const PROOF_NORMALIZATION_CONTROL_COUNT: usize = 8;
+#[cfg(unix)]
+const PROOF_SANDBOX_UMASK: libc::mode_t = 0o022;
+#[cfg(unix)]
+const UNIX_PERMISSION_MODE_MASK: libc::mode_t = 0o777;
+const PROOF_EXECUTOR_TEST_ENV_ALLOWLIST: &[&str] = &[
+    "MANTLE_FAKE_BWRAP_TRANSCRIPT",
+    "MANTLE_FAKE_BWRAP_FORBIDDEN_BIND",
+    "MANTLE_FAKE_BWRAP_FORBIDDEN_HOST_PATH",
+    "MANTLE_FAKE_BWRAP_HOST_PATH",
+];
+const PROOF_SANDBOX_FIXED_ENV: &[(&str, &str)] = &[
+    ("HOME", PROOF_SANDBOX_TEMP_ROOT),
+    ("USER", PROOF_SANDBOX_USER),
+    ("LOGNAME", PROOF_SANDBOX_USER),
+    ("PATH", PROOF_SANDBOX_PATH),
+    ("LANG", PROOF_SANDBOX_LOCALE),
+    ("LC_ALL", PROOF_SANDBOX_LOCALE),
+    ("TZ", PROOF_SANDBOX_TIMEZONE),
+    ("TEMP", PROOF_SANDBOX_TEMP_ROOT),
+    ("TEMPDIR", PROOF_SANDBOX_TEMP_ROOT),
+    ("TMP", PROOF_SANDBOX_TEMP_ROOT),
+    ("TMPDIR", PROOF_SANDBOX_TEMP_ROOT),
+    ("SOURCE_DATE_EPOCH", PROOF_SOURCE_DATE_EPOCH),
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProofSandboxProfile {
@@ -77,9 +112,9 @@ struct ProofSandboxProfile {
 
 impl ProofSandboxProfile {
     fn canonical_facts(&self) -> Vec<String> {
-        vec![
+        let mut facts = vec![
             format!("profile={PROOF_SANDBOX_PROFILE_PREFIX}"),
-            format!("executor=bwrap"),
+            "executor=bwrap".to_string(),
             format!("executor_path={}", self.executor.display()),
             format!("executor_version={}", self.executor_version),
             format!("network={}", self.network_policy),
@@ -87,8 +122,13 @@ impl ProofSandboxProfile {
             format!("recipe_ro={}", self.command_identity),
             format!("output_rw={}", self.output_dir.display()),
             format!("store_rw={}", self.store_dir.display()),
-            "env_allowlist=MANTLE_REPRODUCE_BUNDLE_DIR,MANTLE_REPRODUCE_OUTPUT_DIR,MANTLE_REPRODUCE_RELEASE_ID,MANTLE_DETERMINISTIC_PROOF_STORE_DIR".to_string(),
-        ]
+            "executor_env_policy=clear-with-bounded-test-seam".to_string(),
+            "rebuild_env_policy=clear-then-fixed".to_string(),
+        ];
+        facts.extend(deterministic_normalization_envelope());
+        debug_assert!(facts.iter().any(|fact| fact.starts_with("normalization:time=")));
+        debug_assert!(facts.iter().any(|fact| fact.starts_with("normalization:umask=")));
+        facts
     }
 }
 
@@ -600,13 +640,14 @@ fn sandboxed_rebuild_command(
     })?;
     let command_path = absolutize_existing_path(&request.rebuild_command, "release reproducibility command")?;
     let mut command = ProcessCommand::new(&profile.executor);
+    configure_executor_environment(&mut command);
     command
         .arg("--unshare-all")
         .arg("--die-with-parent")
         .arg("--new-session")
         .arg("--clearenv")
         .arg("--tmpfs")
-        .arg("/tmp");
+        .arg(PROOF_SANDBOX_TEMP_ROOT);
     let system_tools_dir = Path::new(PROOF_SANDBOX_SYSTEM_TOOLS_DIR);
     let existing_arg_paths = existing_absolute_rebuild_arg_paths(&request.rebuild_args);
     let mut parent_paths = vec![&profile.bundle_dir, &command_path, output_dir, store_dir];
@@ -628,46 +669,66 @@ fn sandboxed_rebuild_command(
     for arg_path in &existing_arg_paths {
         command.arg("--ro-bind").arg(arg_path).arg(arg_path);
     }
-    command
-        .arg("--bind")
-        .arg(output_dir)
-        .arg(output_dir)
-        .arg("--bind")
-        .arg(store_dir)
-        .arg(store_dir)
-        .arg("--setenv")
-        .arg(REPRODUCE_BUNDLE_DIR_ENV)
-        .arg(&profile.bundle_dir)
-        .arg("--setenv")
-        .arg(REPRODUCE_OUTPUT_DIR_ENV)
-        .arg(output_dir)
-        .arg("--setenv")
-        .arg(REPRODUCE_RELEASE_ID_ENV)
-        .arg(release_id)
-        .arg("--setenv")
-        .arg(DETERMINISTIC_PROOF_STORE_DIR_ENV)
-        .arg(store_dir)
-        .arg("--setenv")
-        .arg("HOME")
-        .arg("/tmp")
-        .arg("--setenv")
-        .arg("PATH")
-        .arg(PROOF_SANDBOX_PATH)
-        .arg("--setenv")
-        .arg("LANG")
-        .arg("C.UTF-8")
-        .arg("--setenv")
-        .arg("LC_ALL")
-        .arg("C.UTF-8")
-        .arg("--setenv")
-        .arg("TZ")
-        .arg("UTC")
-        .arg("--chdir")
-        .arg("/tmp")
-        .arg(&command_path)
-        .args(&request.rebuild_args);
+    command.arg("--bind").arg(output_dir).arg(output_dir).arg("--bind").arg(store_dir).arg(store_dir);
+    append_rebuild_sandbox_environment(&mut command, release_id, profile, output_dir, store_dir);
+    configure_sandbox_umask(&mut command);
+    command.arg("--chdir").arg(PROOF_SANDBOX_TEMP_ROOT).arg(&command_path).args(&request.rebuild_args);
     Ok(command)
 }
+
+fn configure_executor_environment(command: &mut ProcessCommand) {
+    let test_environment = PROOF_EXECUTOR_TEST_ENV_ALLOWLIST
+        .iter()
+        .filter_map(|name| std::env::var_os(name).map(|value| (*name, value)))
+        .collect::<Vec<_>>();
+    command.env_clear();
+    for (name, value) in test_environment {
+        debug_assert!(!name.is_empty());
+        debug_assert!(!value.is_empty());
+        command.env(name, value);
+    }
+}
+
+fn append_rebuild_sandbox_environment(
+    command: &mut ProcessCommand,
+    release_id: &str,
+    profile: &ProofSandboxProfile,
+    output_dir: &Path,
+    store_dir: &Path,
+) {
+    let dynamic_environment = [
+        (REPRODUCE_BUNDLE_DIR_ENV, profile.bundle_dir.as_os_str()),
+        (REPRODUCE_OUTPUT_DIR_ENV, output_dir.as_os_str()),
+        (REPRODUCE_RELEASE_ID_ENV, OsStr::new(release_id)),
+        (DETERMINISTIC_PROOF_STORE_DIR_ENV, store_dir.as_os_str()),
+    ];
+    for (name, value) in dynamic_environment {
+        debug_assert!(!name.is_empty());
+        debug_assert!(!value.is_empty());
+        command.arg("--setenv").arg(name).arg(value);
+    }
+    for (name, value) in PROOF_SANDBOX_FIXED_ENV {
+        debug_assert!(!name.is_empty());
+        debug_assert!(!value.is_empty());
+        command.arg("--setenv").arg(name).arg(value);
+    }
+}
+
+#[cfg(unix)]
+fn configure_sandbox_umask(command: &mut ProcessCommand) {
+    debug_assert_ne!(PROOF_SANDBOX_UMASK, 0);
+    debug_assert_eq!(PROOF_SANDBOX_UMASK & !UNIX_PERMISSION_MODE_MASK, 0);
+    // SAFETY: `umask` is async-signal-safe and the closure performs no allocation or I/O after fork.
+    unsafe {
+        command.pre_exec(|| {
+            libc::umask(PROOF_SANDBOX_UMASK);
+            Ok(())
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn configure_sandbox_umask(_command: &mut ProcessCommand) {}
 
 fn existing_absolute_rebuild_arg_paths(args: &[OsString]) -> Vec<PathBuf> {
     args.iter().map(PathBuf::from).filter(|path| path.is_absolute() && path.exists()).collect()
@@ -810,12 +871,52 @@ fn deterministic_perturbation_case(run_index: u32) -> String {
     }
 }
 
+fn deterministic_normalization_controls() -> Vec<(&'static str, String)> {
+    let controls = vec![
+        ("time", format!("SOURCE_DATE_EPOCH={PROOF_SOURCE_DATE_EPOCH}")),
+        ("timezone", format!("TZ={PROOF_SANDBOX_TIMEZONE}")),
+        ("locale", format!("LANG={PROOF_SANDBOX_LOCALE};LC_ALL={PROOF_SANDBOX_LOCALE}")),
+        (
+            "temp-roots",
+            format!(
+                "TEMP={PROOF_SANDBOX_TEMP_ROOT};TEMPDIR={PROOF_SANDBOX_TEMP_ROOT};TMP={PROOF_SANDBOX_TEMP_ROOT};TMPDIR={PROOF_SANDBOX_TEMP_ROOT}"
+            ),
+        ),
+        (
+            "host-user-metadata",
+            format!("HOME={PROOF_SANDBOX_TEMP_ROOT};LOGNAME={PROOF_SANDBOX_USER};USER={PROOF_SANDBOX_USER}"),
+        ),
+        ("umask", PROOF_SANDBOX_UMASK_TEXT.to_string()),
+        ("modeled-randomness", PROOF_MODELED_RANDOMNESS.to_string()),
+        ("order-sensitive-output-processing", PROOF_OUTPUT_ORDERING.to_string()),
+    ];
+    debug_assert_eq!(controls.len(), PROOF_NORMALIZATION_CONTROL_COUNT);
+    debug_assert!(controls.iter().all(|(surface, _)| !surface.is_empty()));
+    debug_assert!(controls.iter().all(|(_, value)| !value.is_empty()));
+    controls
+}
+
+fn deterministic_normalization_envelope() -> Vec<String> {
+    let controls = deterministic_normalization_controls()
+        .into_iter()
+        .map(|(surface, value)| format!("normalization:{surface}={value}"))
+        .collect::<Vec<_>>();
+    debug_assert_eq!(controls.len(), PROOF_NORMALIZATION_CONTROL_COUNT);
+    debug_assert!(controls.iter().all(|control| control.starts_with("normalization:")));
+    controls
+}
+
 fn deterministic_execution_envelope(sandbox_profile_identities: &[String]) -> Vec<String> {
     let mut envelope = reproducibility_environment_assumptions();
     envelope.push("sandbox=bwrap".to_string());
     envelope.push("network=none".to_string());
+    envelope.extend(deterministic_normalization_envelope());
     for identity in sandbox_profile_identities {
         envelope.push(format!("sandbox-profile={identity}"));
+    }
+    debug_assert!(envelope.iter().any(|entry| entry == "normalization:umask=0022"));
+    if !sandbox_profile_identities.is_empty() {
+        debug_assert!(envelope.iter().any(|entry| entry.starts_with("sandbox-profile=")));
     }
     envelope
 }
@@ -1206,6 +1307,7 @@ mod tests {
 
     const EXPECTED_SIZE_BYTES: u64 = 4;
     const OBSERVED_SIZE_BYTES: u64 = 5;
+    const BWRAP_SETENV_ARGUMENT_COUNT: usize = 3;
 
     fn sample_digest(seed: u8) -> String {
         let nibble = format!("{:x}", seed % 16);
@@ -1253,6 +1355,69 @@ mod tests {
 
         assert_eq!(paths, vec![temp_path.clone()]);
         std::fs::remove_file(temp_path).unwrap();
+    }
+
+    #[test]
+    fn deterministic_envelope_binds_every_normalization_control() {
+        let profile_identity = "mantle-proof-sandbox-v1:test".to_string();
+        let envelope = deterministic_execution_envelope(core::slice::from_ref(&profile_identity));
+        let controls = deterministic_normalization_envelope();
+
+        assert_eq!(controls.len(), PROOF_NORMALIZATION_CONTROL_COUNT);
+        assert!(controls.iter().all(|control| envelope.contains(control)));
+        assert!(envelope.contains(&format!("sandbox-profile={profile_identity}")));
+        assert!(envelope.contains(&"normalization:umask=0022".to_string()));
+        assert!(envelope.contains(&"normalization:time=SOURCE_DATE_EPOCH=1".to_string()));
+    }
+
+    #[test]
+    fn sandbox_environment_plan_is_fixed_and_excludes_ambient_variables() {
+        let mut command = ProcessCommand::new("bwrap");
+        let profile = ProofSandboxProfile {
+            identity: "mantle-proof-sandbox-v1:test".to_string(),
+            executor: PathBuf::from("bwrap"),
+            executor_version: "test".to_string(),
+            network_policy: "none".to_string(),
+            command_identity: "test-command".to_string(),
+            bundle_dir: PathBuf::from("/bundle"),
+            output_dir: PathBuf::from("/output"),
+            store_dir: PathBuf::from("/store"),
+        };
+        append_rebuild_sandbox_environment(
+            &mut command,
+            "release-test",
+            &profile,
+            &profile.output_dir,
+            &profile.store_dir,
+        );
+        let args = command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>();
+
+        for (name, value) in PROOF_SANDBOX_FIXED_ENV {
+            assert!(
+                args.windows(BWRAP_SETENV_ARGUMENT_COUNT).any(|window| window == ["--setenv", *name, *value]),
+                "missing fixed environment {name}={value}: {args:?}"
+            );
+        }
+        assert!(
+            args.windows(BWRAP_SETENV_ARGUMENT_COUNT)
+                .any(|window| { window == ["--setenv", REPRODUCE_RELEASE_ID_ENV, "release-test"] })
+        );
+        assert!(!args.iter().any(|arg| arg == "LD_PRELOAD"));
+        assert!(!args.iter().any(|arg| arg == "AWS_SECRET_ACCESS_KEY"));
+    }
+
+    #[test]
+    fn executor_environment_plan_removes_ambient_loader_and_secret_inputs() {
+        let mut command = ProcessCommand::new("bwrap");
+        command.env("LD_PRELOAD", "/tmp/hostile.so");
+        command.env("AWS_SECRET_ACCESS_KEY", "secret");
+
+        configure_executor_environment(&mut command);
+
+        let keys = command.get_envs().map(|(name, _)| name.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        assert!(!keys.iter().any(|name| name == "LD_PRELOAD"));
+        assert!(!keys.iter().any(|name| name == "AWS_SECRET_ACCESS_KEY"));
+        assert!(keys.iter().all(|name| PROOF_EXECUTOR_TEST_ENV_ALLOWLIST.contains(&name.as_str())));
     }
 
     #[test]
