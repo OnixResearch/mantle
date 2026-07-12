@@ -122,3 +122,32 @@ Pueue task 1627 ran the authoritative Cairn CLI with `--root . --policy cairn-po
   "verdict": "PASS"
 }
 ```
+
+## Archive evidence
+
+The executed sync was idempotent: its before/after canonical `release-provenance` spec content hash was `639debe228164d42a9f95865530ec8dd8d6a1c160fef1b52c781214daf082a1c`, proving the accepted spec already contained the delta. The executed archive receipt was:
+
+```text
+change: opaque-evidence-sidecar-binding
+archive path: ./cairn/archive/2026-07-12-opaque-evidence-sidecar-binding
+input_hash: 3c412e1bf1424704b276edcab0d8be4918c53b438370663f40bc108bf521fbf8
+plan_hash: a560fb12472ade5bfaedc4978e1ca80e43376f8386d69b463b3b9985f82eb52c
+receipt_hash: 6d3cd1b0c5f10391bbfa5839dd1739d3e8caf6d85dc35447bca068c9608cc8f4
+mutated: true
+blocked: false
+```
+
+Pueue task 1643 ran the authoritative validation command after archive. Exact output:
+
+```text
+{
+  "change_issues": [],
+  "changes": 17,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 42,
+  "valid": true
+}
+```
