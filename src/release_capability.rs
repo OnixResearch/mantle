@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::io;
+use std::io::Write;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -16,6 +17,8 @@ use cap_std::fs::OpenOptionsExt;
 
 const MAX_RELEASE_RELATIVE_PATH_BYTES: usize = 4_096;
 const MAX_RELEASE_PATH_COMPONENTS: usize = 128;
+#[cfg(unix)]
+const PRIVATE_STAGING_FILE_MODE: u32 = 0o600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReleaseRootKind {
@@ -85,6 +88,10 @@ impl ReleaseCapabilityRoot {
         Ok(Self { kind, dir })
     }
 
+    pub(crate) fn from_open_dir(kind: ReleaseRootKind, dir: Dir) -> Self {
+        Self { kind, dir }
+    }
+
     pub(crate) fn kind(&self) -> ReleaseRootKind {
         self.kind
     }
@@ -115,6 +122,88 @@ impl ReleaseCapabilityRoot {
     pub(crate) fn write(&self, path: &ValidatedReleasePath, bytes: &[u8]) -> io::Result<()> {
         self.dir.write(path.as_str(), bytes)
     }
+
+    pub(crate) fn create_dir_all_relative_nofollow(
+        &self,
+        kind: ReleaseRootKind,
+        path: &ValidatedReleasePath,
+    ) -> io::Result<Self> {
+        let dir = walk_relative_directory_nofollow(&self.dir, path, true)?;
+        Ok(Self::from_open_dir(kind, dir))
+    }
+
+    pub(crate) fn open_new_file_nofollow(&self, path: &ValidatedReleasePath) -> io::Result<File> {
+        let (parent, name) = open_or_create_relative_parent(&self.dir, path)?;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        options.follow(FollowSymlinks::No);
+        #[cfg(unix)]
+        options.mode(PRIVATE_STAGING_FILE_MODE);
+        parent.open_with(name, &options)
+    }
+
+    pub(crate) fn write_new_file_nofollow(&self, path: &ValidatedReleasePath, bytes: &[u8]) -> io::Result<()> {
+        let mut file = self.open_new_file_nofollow(path)?;
+        file.write_all(bytes)?;
+        file.flush()?;
+        Ok(())
+    }
+
+    pub(crate) fn remove_file_nofollow(&self, path: &ValidatedReleasePath) -> io::Result<()> {
+        let (parent, name) = open_existing_relative_parent(&self.dir, path)?;
+        parent.remove_file(name)
+    }
+}
+
+fn walk_relative_directory_nofollow(root: &Dir, path: &ValidatedReleasePath, create_missing: bool) -> io::Result<Dir> {
+    let mut current = root.try_clone()?;
+    let components = validated_normal_components(path)?;
+    for component in components {
+        current = open_or_create_child_directory(&current, &component, create_missing)?;
+    }
+    Ok(current)
+}
+
+fn open_or_create_relative_parent(root: &Dir, path: &ValidatedReleasePath) -> io::Result<(Dir, OsString)> {
+    let mut components = validated_normal_components(path)?;
+    let name = components
+        .pop()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "release path is empty"))?;
+    let mut parent = root.try_clone()?;
+    for component in components {
+        parent = open_or_create_child_directory(&parent, &component, true)?;
+    }
+    Ok((parent, name))
+}
+
+fn open_existing_relative_parent(root: &Dir, path: &ValidatedReleasePath) -> io::Result<(Dir, OsString)> {
+    let mut components = validated_normal_components(path)?;
+    let name = components
+        .pop()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "release path is empty"))?;
+    let mut parent = root.try_clone()?;
+    for component in components {
+        parent = open_or_create_child_directory(&parent, &component, false)?;
+    }
+    Ok((parent, name))
+}
+
+fn validated_normal_components(path: &ValidatedReleasePath) -> io::Result<Vec<OsString>> {
+    let components = Path::new(path.as_str())
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(name) => Some(Ok(name.to_os_string())),
+            Component::CurDir => None,
+            _ => Some(Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("release path is not normalized: {}", path.as_str()),
+            ))),
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    if components.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "release path has no normal components"));
+    }
+    Ok(components)
 }
 
 // r[impl mantle.release_provenance.cap_std_boundary.root_wrappers]

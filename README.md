@@ -1232,9 +1232,27 @@ the stage0 inventory document it consumes, the self-hosting test target/support
 files needed by that driver, and verified vendored Cargo inputs, then copies the
 release binary, proof bundle, and prerequisite inventory into a
 new release-evidence bundle under `target/release-evidence/<release-id>/` by
-default. The top-level `manifest.json` records BLAKE3 digests for the source
-archive, bundled binary or binaries, proof-bundle directory, prerequisite
-inventory, and the proof-linkage facts copied from the full self-hosting proof.
+default. The requested final directory must be absent: even a pre-created empty
+directory is rejected. Mantle plans the deterministic artifact layout and input
+BLAKE3 identities before mutation, assembles under a private capability-scoped
+sibling, writes `manifest.json` last, runs normal production verification against
+the stage, and publishes with one same-parent atomic no-clobber rename. Readers
+therefore see no Mantle-created final path before commit and one complete verified
+bundle afterward. A preexisting or concurrent file, symlink, empty directory, or
+nonempty directory remains unchanged.
+
+Failed attempts clean their current private stage when possible. A later retry
+may quarantine only a sibling with the exact Mantle ownership marker, matching
+publication-plan BLAKE3 identity, and matching final-name binding; similarly named
+or malformed siblings are left untouched. Retry always uses fresh random staging
+state, while that randomness is excluded from the deterministic plan identity.
+Atomic rename establishes local no-clobber visibility, not filesystem crash
+persistence or power-loss durability; no durability claim follows from rename
+alone.
+
+The top-level `manifest.json` records BLAKE3 digests for the source archive,
+bundled binary or binaries, proof-bundle directory, prerequisite inventory, and
+the proof-linkage facts copied from the full self-hosting proof.
 
 <!-- r[related mantle.release_provenance.opaque_boundary.visible] -->
 <!-- r[related mantle.release_provenance.valence_required_policy] -->

@@ -2100,6 +2100,40 @@ fn release_nix_witness_rejects_missing_mantle_deterministic_proof() {
     assert!(!receipt_path.exists());
 }
 
+// r[verify mantle.release_provenance.bundle_publication.fixtures.negative.race]
+#[test]
+fn release_create_rejects_precreated_empty_destination_without_mutation() {
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    let proof_dir = temp.path().join("proof-input");
+    let bundle_dir = temp.path().join("precreated-bundle");
+    write_file(&binary_path, b"crunch-binary");
+    let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+    let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+    write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    std::fs::create_dir(&bundle_dir).unwrap();
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-atomic-empty-destination")
+        .arg("--bundle-dir")
+        .arg(&bundle_dir)
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("destination must be absent"));
+
+    assert!(bundle_dir.is_dir());
+    assert_eq!(std::fs::read_dir(&bundle_dir).unwrap().count(), 0);
+}
+
 #[test]
 fn release_create_fails_when_proof_bundle_is_missing() {
     let temp = tempfile::tempdir().unwrap();

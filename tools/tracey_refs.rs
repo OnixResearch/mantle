@@ -5,6 +5,33 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Atomic release publication bridge.
+//
+// r[impl mantle.release_provenance.bundle_publication.atomic_commit]
+// r[impl mantle.release_provenance.bundle_publication.staging_validation]
+// r[impl mantle.release_provenance.bundle_publication.failure_isolation]
+// r[impl mantle.release_provenance.bundle_publication.stale_stage]
+// r[impl mantle.release_provenance.bundle_publication.retry]
+// The deterministic publication plan/state machine lives in
+// `crates/crunch-release-core/src/publication.rs`. Capability-scoped sibling
+// staging, manifest-last assembly, production verification, exact ownership
+// marker quarantine, and Linux atomic no-replace commit live in
+// `src/{release_evidence,release_publication,release_capability,release_tree_copy}.rs`.
+//
+// r[verify mantle.release_provenance.bundle_publication.fixtures.positive]
+// r[verify mantle.release_provenance.bundle_publication.fixtures.negative.verification]
+// r[verify mantle.release_provenance.bundle_publication.fixtures.negative.race]
+// r[verify mantle.release_provenance.bundle_publication.validation.visibility]
+// Verified by named core and production-path tests in
+// `crates/crunch-release-core/src/publication.rs` and `src/release_evidence.rs`.
+// Those tests cover deterministic identity, legal/illegal transitions,
+// manifest-last visibility, source drift, verifier rejection, every named
+// failpoint, current cleanup, exact stale-stage quarantine, unrecognized
+// sibling preservation, fresh retry, and file/directory/symlink commit races.
+// The evidence proves local visibility and no-clobber behavior, not filesystem
+// crash durability, power-loss persistence, artifact correctness, or release
+// eligibility.
+
 // Function-address binding CLI bridge.
 //
 // r[impl mantle.release_provenance.function_address_binding_cli.command]

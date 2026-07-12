@@ -59,6 +59,7 @@ mod release_capability;
 mod release_cmd;
 mod release_evidence;
 mod release_nix_witness;
+mod release_publication;
 mod release_reproducibility;
 mod release_source;
 mod release_tree_copy;

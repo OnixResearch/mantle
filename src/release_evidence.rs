@@ -25,6 +25,13 @@ use crunch_release_core::KaniSolverIdentity;
 use crunch_release_core::KaniToolchainEvidence;
 use crunch_release_core::PROVIDER_FIXED_POINT_PROOF_EVIDENCE_ROLE;
 use crunch_release_core::ProviderFixedPointProofArtifact;
+use crunch_release_core::PublicationArtifactInput;
+use crunch_release_core::PublicationEvent;
+use crunch_release_core::PublicationFailurePhase;
+use crunch_release_core::PublicationPlan;
+use crunch_release_core::PublicationPlanRequest;
+use crunch_release_core::PublicationPolicyFact;
+use crunch_release_core::PublicationState;
 pub(crate) use crunch_release_core::RELEASE_EVIDENCE_SCHEMA;
 #[cfg(test)]
 pub(crate) use crunch_release_core::RELEASE_SOURCE_ARCHIVE_PROFILE;
@@ -49,17 +56,29 @@ use crunch_release_core::StackProvenanceReleaseEvidence;
 use crunch_release_core::VALENCE_STACK_PROVENANCE_RECEIPT_ROLE;
 use crunch_release_core::canonical_release_evidence_manifest;
 use crunch_release_core::extract_full_self_hosting_proof_identity_fields;
+use crunch_release_core::initial_publication_state;
+use crunch_release_core::plan_release_publication;
+use crunch_release_core::publication_commit_eligible;
 use crunch_release_core::release_reproducibility_report_canonical_bytes;
+use crunch_release_core::transition_publication_state;
 use crunch_release_core::validate_bundled_artifact_record;
 use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
 use crunch_release_core::validate_release_reproducibility_report_artifact_names;
 use crunch_release_core::validate_release_reproducibility_report_linkage;
+use crunch_release_core::validate_staged_publication_artifacts;
 
 use crate::errors::RunError;
+use crate::release_capability::ReleaseCapabilityRoot;
+use crate::release_capability::ValidatedReleasePath;
+use crate::release_publication::PublicationCommitError;
+use crate::release_publication::ReleasePublicationStage;
+use crate::release_publication::create_release_publication_stage;
+use crate::release_publication::observe_publication_destination;
 use crate::release_tree_copy::PreparedTreeCopy;
 
 const PROOF_INVENTORY_RELATIVE_PATH: &str = "stage0-prerequisites/inventory.md";
 const MAX_BINARY_ARTIFACTS: u32 = 16;
+const PUBLICATION_POLICY_INDEX_WIDTH: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FullSelfHostingProofIdentity {
@@ -161,9 +180,83 @@ fn core_error_to_run_error(err: ReleaseEvidenceError) -> RunError {
     RunError::Internal(err.to_string())
 }
 
+const PUBLICATION_DIAGNOSTIC_BLOCKERS_MAX: usize = 16;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PublicationShellPhase {
+    StageCreated,
+    InputsCopied,
+    ArtifactsHashed,
+    ManifestSerialized,
+    ManifestWritten,
+    StagedVerified,
+    PreCommit,
+    Cleanup,
+}
+
+pub(crate) struct PublicationShellContext<'a> {
+    pub stage_path: &'a Path,
+    pub final_path: &'a Path,
+    pub plan_identity_blake3: &'a str,
+}
+
+pub(crate) trait PublicationShellAdapter {
+    fn after_phase(
+        &mut self,
+        phase: PublicationShellPhase,
+        context: &PublicationShellContext<'_>,
+    ) -> Result<(), RunError>;
+}
+
+struct ProductionPublicationShell;
+
+impl PublicationShellAdapter for ProductionPublicationShell {
+    fn after_phase(
+        &mut self,
+        _phase: PublicationShellPhase,
+        _context: &PublicationShellContext<'_>,
+    ) -> Result<(), RunError> {
+        Ok(())
+    }
+}
+
+struct PreparedReleasePublication {
+    plan: PublicationPlan,
+    proof_identity: FullSelfHostingProofIdentity,
+    prepared_proof_bundle: PreparedTreeCopy,
+    prepared_provider_fixed_point: Option<PreparedTreeCopy>,
+}
+
+struct PublicationAttemptFailure {
+    state: PublicationState,
+    error: RunError,
+}
+
 pub(crate) fn create_release_evidence_bundle(
     request: &ReleaseBundleCreateRequest,
 ) -> Result<ReleaseEvidenceManifest, RunError> {
+    let mut shell = ProductionPublicationShell;
+    create_release_evidence_bundle_with_adapter(request, &mut shell)
+}
+
+// r[impl mantle.release_provenance.bundle_publication.atomic_commit]
+// r[impl mantle.release_provenance.bundle_publication.failure_isolation]
+pub(crate) fn create_release_evidence_bundle_with_adapter(
+    request: &ReleaseBundleCreateRequest,
+    shell: &mut dyn PublicationShellAdapter,
+) -> Result<ReleaseEvidenceManifest, RunError> {
+    let prepared = prepare_release_publication(request)?;
+    let initial_state = initial_publication_state(&prepared.plan);
+    let stage = create_release_publication_stage(&request.bundle_dir, &prepared.plan)
+        .map_err(|error| publication_phase_error(PublicationFailurePhase::StageCreation, error))?;
+    let result = publish_prepared_release(request, prepared, &stage, initial_state, shell);
+    match result {
+        Ok(manifest) => Ok(manifest),
+        Err(failure) => cleanup_failed_publication(&stage, failure, shell),
+    }
+}
+
+fn prepare_release_publication(request: &ReleaseBundleCreateRequest) -> Result<PreparedReleasePublication, RunError> {
     validate_create_request(request)?;
     validate_optional_provider_fixed_point_proof(request)?;
     let proof_identity = load_full_self_hosting_proof_identity(&request.proof_bundle_dir)?;
@@ -173,32 +266,398 @@ pub(crate) fn create_release_evidence_bundle(
         .as_deref()
         .map(crate::release_tree_copy::prepare_tree_copy)
         .transpose()?;
-    prepare_output_bundle_dir(&request.bundle_dir)?;
+    let expected =
+        expected_publication_artifacts(request, &prepared_proof_bundle, prepared_provider_fixed_point.as_ref())?;
+    validate_pre_mutation_dependencies(request, &expected)?;
+    let destination = observe_publication_destination(&request.bundle_dir)?;
+    let plan = plan_release_publication(PublicationPlanRequest {
+        release_id: request.release_id.clone(),
+        destination,
+        artifacts: expected.iter().map(publication_artifact_input).collect(),
+        policy: publication_policy_facts(request, &expected)?,
+    })
+    .map_err(publication_plan_error)?;
+    assert!(!plan.artifacts.is_empty(), "release publication plan must include artifacts");
+    assert_eq!(plan.release_id, request.release_id);
+    Ok(PreparedReleasePublication {
+        plan,
+        proof_identity,
+        prepared_proof_bundle,
+        prepared_provider_fixed_point,
+    })
+}
 
+fn expected_publication_artifacts(
+    request: &ReleaseBundleCreateRequest,
+    prepared_proof_bundle: &PreparedTreeCopy,
+    prepared_provider_fixed_point: Option<&PreparedTreeCopy>,
+) -> Result<Vec<BundledArtifact>, RunError> {
+    let source_relative = bundle_file_destination("source", &request.source_archive_path, 0)?;
+    let source_archive =
+        build_artifact_record(&request.source_archive_path, &source_relative, BundledArtifactKind::File)?;
+    let binaries = build_input_binary_artifacts(&request.binary_paths)?;
+    let proof_bundle = prepared_directory_artifact(prepared_proof_bundle, Path::new("proof/self-hosting"))?;
+    let inventory_path = request.proof_bundle_dir.join(PROOF_INVENTORY_RELATIVE_PATH);
+    let inventory = build_artifact_record(&inventory_path, Path::new("proof/inventory.md"), BundledArtifactKind::File)?;
+    let mut artifacts = vec![source_archive.clone()];
+    artifacts.extend(binaries.clone());
+    artifacts.push(proof_bundle.clone());
+    artifacts.push(inventory);
+    append_optional_expected_artifacts(
+        request,
+        prepared_provider_fixed_point,
+        &source_archive,
+        &binaries,
+        &proof_bundle,
+        &mut artifacts,
+    )?;
+    append_expected_external_artifacts(request, &mut artifacts)?;
+    Ok(artifacts)
+}
+
+fn append_optional_expected_artifacts(
+    request: &ReleaseBundleCreateRequest,
+    prepared_provider: Option<&PreparedTreeCopy>,
+    source_archive: &BundledArtifact,
+    binaries: &[BundledArtifact],
+    proof_bundle: &BundledArtifact,
+    artifacts: &mut Vec<BundledArtifact>,
+) -> Result<(), RunError> {
+    if let Some(prepared) = prepared_provider {
+        artifacts.push(prepared_directory_artifact(prepared, Path::new("proof/provider-fixed-point"))?);
+    }
+    if let Some(report_path) = &request.reproducibility_report_path {
+        validate_reproducibility_report_for_bundle(request, report_path, source_archive, binaries, proof_bundle)?;
+        artifacts.push(build_artifact_record(
+            report_path,
+            Path::new("reproducibility/reproducibility-report.json"),
+            BundledArtifactKind::File,
+        )?);
+    }
+    Ok(())
+}
+
+fn append_expected_external_artifacts(
+    request: &ReleaseBundleCreateRequest,
+    artifacts: &mut Vec<BundledArtifact>,
+) -> Result<(), RunError> {
+    let mut external_count = 0_u32;
+    for evidence in &request.external_evidence {
+        external_count = external_count
+            .checked_add(1)
+            .ok_or_else(|| RunError::Internal("release external evidence count overflowed u32".to_string()))?;
+        let relative = bundle_file_destination("external-evidence", &evidence.path, external_count)?;
+        artifacts.push(build_artifact_record(&evidence.path, &relative, BundledArtifactKind::File)?);
+    }
+    if let Some(stack) = &request.stack_provenance {
+        for path in [&stack.sidecar_path, &stack.valence_receipt_path] {
+            external_count = external_count
+                .checked_add(1)
+                .ok_or_else(|| RunError::Internal("release stack evidence count overflowed u32".to_string()))?;
+            let relative = bundle_file_destination("external-evidence", path, external_count)?;
+            artifacts.push(build_artifact_record(path, &relative, BundledArtifactKind::File)?);
+        }
+    }
+    Ok(())
+}
+
+fn prepared_directory_artifact(prepared: &PreparedTreeCopy, relative_path: &Path) -> Result<BundledArtifact, RunError> {
+    let (size_bytes, digest_blake3) = prepared.artifact_identity()?;
+    let artifact = BundledArtifact {
+        kind: BundledArtifactKind::Directory,
+        relative_path: path_to_forward_slash_string(relative_path)?,
+        size_bytes,
+        digest_blake3,
+    };
+    validate_bundled_artifact_record(artifact, "publication-plan-artifact".to_string()).map_err(core_error_to_run_error)
+}
+
+fn validate_pre_mutation_dependencies(
+    request: &ReleaseBundleCreateRequest,
+    expected: &[BundledArtifact],
+) -> Result<(), RunError> {
+    let binaries = expected
+        .iter()
+        .filter(|artifact| artifact.relative_path.starts_with("binaries/"))
+        .cloned()
+        .collect::<Vec<_>>();
+    if request.stack_provenance.is_some() {
+        select_stack_provenance_binary_artifact(request, &binaries)?;
+    }
+    let mut available_roles =
+        request.external_evidence.iter().map(|evidence| evidence.role.as_str()).collect::<Vec<_>>();
+    if request.stack_provenance.is_some() {
+        available_roles.push(STACK_PROVENANCE_EVIDENCE_ROLE);
+        available_roles.push(VALENCE_STACK_PROVENANCE_RECEIPT_ROLE);
+    }
+    for evidence in &request.kani_toolchain_evidence {
+        if !available_roles.contains(&evidence.receipt_role.as_str()) {
+            return Err(RunError::Internal(format!(
+                "release evidence Kani receipt role required but missing from external evidence: {}",
+                evidence.receipt_role
+            )));
+        }
+    }
+    assert_eq!(binaries.len(), request.binary_paths.len());
+    assert!(!binaries.is_empty(), "validated release publication must include binaries");
+    Ok(())
+}
+
+fn publication_artifact_input(artifact: &BundledArtifact) -> PublicationArtifactInput {
+    PublicationArtifactInput {
+        relative_path: artifact.relative_path.clone(),
+        kind: artifact.kind,
+        size_bytes: artifact.size_bytes,
+        digest_blake3: artifact.digest_blake3.clone(),
+    }
+}
+
+fn publication_policy_facts(
+    request: &ReleaseBundleCreateRequest,
+    expected: &[BundledArtifact],
+) -> Result<Vec<PublicationPolicyFact>, RunError> {
+    let mut facts = vec![
+        policy_fact("manifest-schema", RELEASE_EVIDENCE_SCHEMA),
+        policy_fact("claim-scope", CLAIM_SCOPE_PACKAGED_INTEGRITY),
+        policy_fact("workflow-command", &request.workflow_command),
+        policy_fact("workflow-version", &request.workflow_version),
+        policy_fact("provider-fixed-point-present", boolean_text(request.provider_fixed_point_proof_dir.is_some())),
+        policy_fact("reproducibility-report-present", boolean_text(request.reproducibility_report_path.is_some())),
+        policy_fact("stack-provenance-present", boolean_text(request.stack_provenance.is_some())),
+        policy_fact("artifact-count", &expected.len().to_string()),
+    ];
+    append_source_policy_facts(request, &mut facts);
+    append_external_policy_facts(request, &mut facts)?;
+    assert!(!facts.is_empty(), "release publication policy facts must not be empty");
+    assert!(facts.iter().all(|fact| !fact.name.is_empty()));
+    Ok(facts)
+}
+
+fn append_source_policy_facts(request: &ReleaseBundleCreateRequest, facts: &mut Vec<PublicationPolicyFact>) {
+    facts.push(policy_fact("source-acquisition-url", request.source_acquisition_url.as_deref().unwrap_or("absent")));
+    if let Some(git) = &request.git_source {
+        facts.push(policy_fact("git-source-url", &git.remote_url));
+        facts.push(policy_fact("git-source-commit", &git.commit));
+        facts.push(policy_fact("git-source-ref", git.reference.as_deref().unwrap_or("absent")));
+        facts.push(policy_fact("git-source-tag", git.tag.as_deref().unwrap_or("absent")));
+    }
+}
+
+fn append_external_policy_facts(
+    request: &ReleaseBundleCreateRequest,
+    facts: &mut Vec<PublicationPolicyFact>,
+) -> Result<(), RunError> {
+    for (index, evidence) in request.external_evidence.iter().enumerate() {
+        let index_u32 = u32::try_from(index)
+            .map_err(|_| RunError::Internal("release external policy index overflowed u32".to_string()))?;
+        let value =
+            serde_json::to_string(&(&evidence.role, &evidence.schema, &evidence.claim_scope, &evidence.non_claims))
+                .map_err(|error| RunError::Internal(format!("serializing release external policy fact: {error}")))?;
+        facts.push(policy_fact(
+            &format!("external-evidence-{index_u32:0width$}", width = PUBLICATION_POLICY_INDEX_WIDTH),
+            &value,
+        ));
+    }
+    for (index, evidence) in request.kani_toolchain_evidence.iter().enumerate() {
+        let index_u32 = u32::try_from(index)
+            .map_err(|_| RunError::Internal("release Kani policy index overflowed u32".to_string()))?;
+        let value = serde_json::to_string(&(
+            &evidence.receipt_role,
+            &evidence.kani_version,
+            &evidence.rust_toolchain,
+            &evidence.cbmc_version,
+            &evidence.invocation_wrapper,
+            &evidence.closure_identity_blake3,
+            &evidence.expected_closure_identity_blake3,
+            &evidence.non_claims,
+        ))
+        .map_err(|error| RunError::Internal(format!("serializing release Kani policy fact: {error}")))?;
+        facts.push(policy_fact(
+            &format!("kani-evidence-{index_u32:0width$}", width = PUBLICATION_POLICY_INDEX_WIDTH),
+            &value,
+        ));
+    }
+    Ok(())
+}
+
+fn policy_fact(name: &str, value: &str) -> PublicationPolicyFact {
+    PublicationPolicyFact {
+        name: name.to_string(),
+        value: value.to_string(),
+    }
+}
+
+const fn boolean_text(value: bool) -> &'static str {
+    if value { "true" } else { "false" }
+}
+
+fn publication_plan_error(blockers: Vec<crunch_release_core::PublicationPlanBlocker>) -> RunError {
+    let total_count = blockers.len();
+    let rendered = blockers
+        .iter()
+        .take(PUBLICATION_DIAGNOSTIC_BLOCKERS_MAX)
+        .map(|blocker| blocker.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ");
+    RunError::Internal(format!("release publication plan rejected with {total_count} blocker(s): {rendered}"))
+}
+
+fn publish_prepared_release(
+    request: &ReleaseBundleCreateRequest,
+    prepared: PreparedReleasePublication,
+    stage: &ReleasePublicationStage,
+    state: PublicationState,
+    shell: &mut dyn PublicationShellAdapter,
+) -> Result<ReleaseEvidenceManifest, PublicationAttemptFailure> {
+    let state = advance_publication(state, PublicationEvent::StageCreated)?;
+    let state = observe_publication_phase(shell, stage, &prepared.plan, state, PublicationShellPhase::StageCreated)?;
+    let mut staged_request = request.clone();
+    staged_request.bundle_dir = stage.stage_path().to_path_buf();
+    let manifest = assemble_release_manifest(
+        &staged_request,
+        stage.root(),
+        prepared.proof_identity,
+        prepared.prepared_proof_bundle,
+        prepared.prepared_provider_fixed_point,
+    )
+    .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::InputCopy, error))?;
+    let state = advance_publication(state, PublicationEvent::InputsCopied)?;
+    let state = observe_publication_phase(shell, stage, &prepared.plan, state, PublicationShellPhase::InputsCopied)?;
+    let staged_artifacts = manifest_publication_artifacts(&manifest, stage.stage_path())
+        .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::ArtifactHashing, error))?;
+    validate_staged_publication_artifacts(&prepared.plan, staged_artifacts)
+        .map_err(publication_plan_error)
+        .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::ArtifactHashing, error))?;
+    let state = advance_publication(state, PublicationEvent::ArtifactsHashed)?;
+    let state = observe_publication_phase(shell, stage, &prepared.plan, state, PublicationShellPhase::ArtifactsHashed)?;
+    serialize_verify_and_commit(manifest, stage, &prepared.plan, state, shell)
+}
+
+fn serialize_verify_and_commit(
+    manifest: ReleaseEvidenceManifest,
+    stage: &ReleasePublicationStage,
+    plan: &PublicationPlan,
+    state: PublicationState,
+    shell: &mut dyn PublicationShellAdapter,
+) -> Result<ReleaseEvidenceManifest, PublicationAttemptFailure> {
+    let bytes = canonical_release_evidence_manifest(manifest.clone())
+        .map_err(core_error_to_run_error)
+        .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::ManifestSerialization, error))?;
+    let state = advance_publication(state, PublicationEvent::ManifestSerialized)?;
+    let state = observe_publication_phase(shell, stage, plan, state, PublicationShellPhase::ManifestSerialized)?;
+    write_manifest_bytes(stage.root(), &bytes)
+        .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::ManifestWrite, error))?;
+    let state = advance_publication(state, PublicationEvent::ManifestWritten)?;
+    let state = observe_publication_phase(shell, stage, plan, state, PublicationShellPhase::ManifestWritten)?;
+    let verified = match verify_release_evidence_bundle(stage.stage_path()) {
+        Ok(verified) => verified,
+        Err(error) => {
+            let failed = advance_publication(state, PublicationEvent::VerificationRejected)?;
+            return Err(PublicationAttemptFailure {
+                state: failed,
+                error: publication_phase_error(PublicationFailurePhase::Verification, error),
+            });
+        }
+    };
+    if verified != manifest {
+        return Err(fail_publication(
+            state,
+            PublicationFailurePhase::Verification,
+            RunError::Internal("staged release verification returned a different manifest".to_string()),
+        ));
+    }
+    let state = advance_publication(state, PublicationEvent::VerificationAccepted)?;
+    let state = observe_publication_phase(shell, stage, plan, state, PublicationShellPhase::StagedVerified)?;
+    commit_verified_stage(manifest, stage, plan, state, shell)
+}
+
+fn commit_verified_stage(
+    manifest: ReleaseEvidenceManifest,
+    stage: &ReleasePublicationStage,
+    plan: &PublicationPlan,
+    state: PublicationState,
+    shell: &mut dyn PublicationShellAdapter,
+) -> Result<ReleaseEvidenceManifest, PublicationAttemptFailure> {
+    let state = observe_publication_phase(shell, stage, plan, state, PublicationShellPhase::PreCommit)?;
+    stage
+        .remove_ownership_marker()
+        .map_err(|error| fail_publication(state.clone(), PublicationFailurePhase::PreCommit, error))?;
+    assert!(publication_commit_eligible(&state), "only verified release stages may commit");
+    assert_ne!(stage.stage_path(), stage.final_path(), "release stage and destination must differ");
+    let state = match stage.commit_no_replace() {
+        Ok(()) => advance_publication(state, PublicationEvent::CommitSucceeded)?,
+        Err(PublicationCommitError::DestinationExists(message)) => {
+            let failed = advance_publication(state, PublicationEvent::CommitLostRace)?;
+            return Err(PublicationAttemptFailure {
+                state: failed,
+                error: RunError::Internal(message),
+            });
+        }
+        Err(PublicationCommitError::Other(message)) => {
+            return Err(fail_publication(state, PublicationFailurePhase::Commit, RunError::Internal(message)));
+        }
+    };
+    assert_eq!(state.phase, crunch_release_core::PublicationPhase::Committed);
+    assert!(state.failures.is_empty(), "committed release publication cannot carry failures");
+    Ok(manifest)
+}
+
+fn assemble_release_manifest(
+    request: &ReleaseBundleCreateRequest,
+    stage_root: &ReleaseCapabilityRoot,
+    proof_identity: FullSelfHostingProofIdentity,
+    prepared_proof_bundle: PreparedTreeCopy,
+    prepared_provider_fixed_point: Option<PreparedTreeCopy>,
+) -> Result<ReleaseEvidenceManifest, RunError> {
     let source_archive = copy_file_into_bundle(
         &request.source_archive_path,
+        stage_root,
         &request.bundle_dir,
         &bundle_file_destination("source", &request.source_archive_path, 0)?,
     )?;
-    let binaries = copy_binary_set_into_bundle(&request.binary_paths, &request.bundle_dir)?;
+    let binaries = copy_binary_set_into_bundle(&request.binary_paths, stage_root, &request.bundle_dir)?;
     let proof_bundle = copy_prepared_directory_into_bundle(
         prepared_proof_bundle,
+        stage_root,
         &request.bundle_dir,
         Path::new("proof/self-hosting"),
     )?;
     let inventory_path = request.proof_bundle_dir.join(PROOF_INVENTORY_RELATIVE_PATH);
     let prerequisite_inventory =
-        copy_file_into_bundle(&inventory_path, &request.bundle_dir, Path::new("proof/inventory.md"))?;
-    let provider_fixed_point_proof = copy_optional_provider_fixed_point_proof(request, prepared_provider_fixed_point)?;
+        copy_file_into_bundle(&inventory_path, stage_root, &request.bundle_dir, Path::new("proof/inventory.md"))?;
+    build_release_manifest(
+        request,
+        stage_root,
+        proof_identity,
+        prepared_provider_fixed_point,
+        source_archive,
+        binaries,
+        proof_bundle,
+        prerequisite_inventory,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_release_manifest(
+    request: &ReleaseBundleCreateRequest,
+    stage_root: &ReleaseCapabilityRoot,
+    proof_identity: FullSelfHostingProofIdentity,
+    prepared_provider_fixed_point: Option<PreparedTreeCopy>,
+    source_archive: BundledArtifact,
+    binaries: Vec<BundledArtifact>,
+    proof_bundle: BundledArtifact,
+    prerequisite_inventory: BundledArtifact,
+) -> Result<ReleaseEvidenceManifest, RunError> {
+    let provider_fixed_point_proof =
+        copy_optional_provider_fixed_point_proof(request, stage_root, prepared_provider_fixed_point)?;
     let reproducibility_report =
-        copy_optional_reproducibility_report(request, &source_archive, &binaries, &proof_bundle)?;
-    let mut external_evidence = copy_external_evidence(request)?;
-    let stack_provenance = copy_optional_stack_provenance_evidence(request, &mut external_evidence, &binaries)?;
+        copy_optional_reproducibility_report(request, stage_root, &source_archive, &binaries, &proof_bundle)?;
+    let mut external_evidence = copy_external_evidence(request, stage_root)?;
+    let stack_provenance =
+        copy_optional_stack_provenance_evidence(request, stage_root, &mut external_evidence, &binaries)?;
     let kani_toolchain_evidence = build_kani_toolchain_evidence(request, &external_evidence)?;
     let source_archive_digest_blake3 = source_archive.digest_blake3.clone();
-    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
-
-    let manifest = ReleaseEvidenceManifest {
+    Ok(ReleaseEvidenceManifest {
         schema: RELEASE_EVIDENCE_SCHEMA.to_string(),
         release_id: request.release_id.clone(),
         claim_scope: CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
@@ -207,10 +666,10 @@ pub(crate) fn create_release_evidence_bundle(
             version: request.workflow_version.clone(),
         },
         source_archive,
-        source_acquisition,
+        source_acquisition: build_source_acquisition(request, &source_archive_digest_blake3),
         binaries,
         proof_bundle,
-        prerequisite_inventory: prerequisite_inventory.clone(),
+        prerequisite_inventory,
         provider_fixed_point_proof,
         reproducibility_report,
         deterministic_build_proof: None,
@@ -233,9 +692,138 @@ pub(crate) fn create_release_evidence_bundle(
             proof_manifest_digest_blake3: proof_identity.proof_manifest_digest_blake3,
         },
         provenance_coverage: None,
+    })
+}
+
+fn manifest_publication_artifacts(
+    manifest: &ReleaseEvidenceManifest,
+    bundle_dir: &Path,
+) -> Result<Vec<PublicationArtifactInput>, RunError> {
+    let mut artifacts = vec![publication_artifact_input(&manifest.source_archive)];
+    artifacts.extend(manifest.binaries.iter().map(publication_artifact_input));
+    artifacts.push(publication_artifact_input(&manifest.proof_bundle));
+    artifacts.push(publication_artifact_input(&manifest.prerequisite_inventory));
+    if let Some(provider) = &manifest.provider_fixed_point_proof {
+        artifacts.push(PublicationArtifactInput {
+            relative_path: provider.relative_path.clone(),
+            kind: provider.kind,
+            size_bytes: provider.size_bytes,
+            digest_blake3: provider.digest_blake3.clone(),
+        });
+    }
+    if let Some(report) = &manifest.reproducibility_report {
+        artifacts.push(publication_artifact_input(report));
+    }
+    for evidence in &manifest.external_evidence {
+        let path = bundle_dir.join(&evidence.relative_path);
+        let measured = build_artifact_record(&path, Path::new(&evidence.relative_path), BundledArtifactKind::File)?;
+        artifacts.push(publication_artifact_input(&measured));
+    }
+    Ok(artifacts)
+}
+
+fn write_manifest_bytes(stage_root: &ReleaseCapabilityRoot, bytes: &[u8]) -> Result<(), RunError> {
+    let path = ValidatedReleasePath::new("manifest.json")
+        .map_err(|error| RunError::Internal(format!("invalid release manifest path: {error:?}")))?;
+    stage_root
+        .write_new_file_nofollow(&path, bytes)
+        .map_err(|error| RunError::Internal(format!("writing capability-scoped release manifest: {error}")))?;
+    assert!(!bytes.is_empty(), "canonical release manifest must not be empty");
+    assert!(stage_root.kind() == crate::release_capability::ReleaseRootKind::ReleaseEvidence);
+    Ok(())
+}
+
+fn observe_publication_phase(
+    shell: &mut dyn PublicationShellAdapter,
+    stage: &ReleasePublicationStage,
+    plan: &PublicationPlan,
+    state: PublicationState,
+    phase: PublicationShellPhase,
+) -> Result<PublicationState, PublicationAttemptFailure> {
+    let context = PublicationShellContext {
+        stage_path: stage.stage_path(),
+        final_path: stage.final_path(),
+        plan_identity_blake3: &plan.plan_identity_blake3,
     };
-    write_manifest_file(&request.bundle_dir, &manifest)?;
-    Ok(manifest)
+    let failure_phase = shell_failure_phase(phase);
+    shell
+        .after_phase(phase, &context)
+        .map_err(|error| fail_publication(state.clone(), failure_phase, error))?;
+    Ok(state)
+}
+
+fn shell_failure_phase(phase: PublicationShellPhase) -> PublicationFailurePhase {
+    match phase {
+        PublicationShellPhase::StageCreated => PublicationFailurePhase::StageCreation,
+        PublicationShellPhase::InputsCopied => PublicationFailurePhase::InputCopy,
+        PublicationShellPhase::ArtifactsHashed => PublicationFailurePhase::ArtifactHashing,
+        PublicationShellPhase::ManifestSerialized => PublicationFailurePhase::ManifestSerialization,
+        PublicationShellPhase::ManifestWritten => PublicationFailurePhase::ManifestWrite,
+        PublicationShellPhase::StagedVerified => PublicationFailurePhase::Verification,
+        PublicationShellPhase::PreCommit => PublicationFailurePhase::PreCommit,
+        PublicationShellPhase::Cleanup => PublicationFailurePhase::Cleanup,
+    }
+}
+
+fn advance_publication(
+    state: PublicationState,
+    event: PublicationEvent,
+) -> Result<PublicationState, PublicationAttemptFailure> {
+    transition_publication_state(state.clone(), event).map_err(|error| PublicationAttemptFailure {
+        state,
+        error: RunError::Internal(format!(
+            "release publication state transition rejected at {:?} for {:?}",
+            error.phase, error.event
+        )),
+    })
+}
+
+fn fail_publication(
+    state: PublicationState,
+    phase: PublicationFailurePhase,
+    error: RunError,
+) -> PublicationAttemptFailure {
+    let failed = transition_publication_state(state, PublicationEvent::Failed(phase))
+        .expect("non-committed publication failure transition must be valid");
+    PublicationAttemptFailure {
+        state: failed,
+        error: publication_phase_error(phase, error),
+    }
+}
+
+fn publication_phase_error(phase: PublicationFailurePhase, error: RunError) -> RunError {
+    RunError::Internal(format!("release publication phase {phase:?} failed: {error}"))
+}
+
+fn cleanup_failed_publication(
+    stage: &ReleasePublicationStage,
+    failure: PublicationAttemptFailure,
+    shell: &mut dyn PublicationShellAdapter,
+) -> Result<ReleaseEvidenceManifest, RunError> {
+    let context = PublicationShellContext {
+        stage_path: stage.stage_path(),
+        final_path: stage.final_path(),
+        plan_identity_blake3: &failure.state.plan_identity_blake3,
+    };
+    if let Err(cleanup_error) = shell.after_phase(PublicationShellPhase::Cleanup, &context) {
+        let cleanup_state =
+            transition_publication_state(failure.state, PublicationEvent::Failed(PublicationFailurePhase::Cleanup))
+                .expect("cleanup failure must extend one publication failure");
+        assert_eq!(cleanup_state.phase, crunch_release_core::PublicationPhase::Failed);
+        assert_eq!(cleanup_state.failures.last(), Some(&PublicationFailurePhase::Cleanup));
+        let combined = format!("{}; release publication cleanup failed: {cleanup_error}", failure.error);
+        return Err(RunError::Internal(combined));
+    }
+    if let Err(cleanup_error) = stage.cleanup_current_stage() {
+        let cleanup_state =
+            transition_publication_state(failure.state, PublicationEvent::Failed(PublicationFailurePhase::Cleanup))
+                .expect("filesystem cleanup failure must extend one publication failure");
+        assert_eq!(cleanup_state.phase, crunch_release_core::PublicationPhase::Failed);
+        assert_eq!(cleanup_state.failures.last(), Some(&PublicationFailurePhase::Cleanup));
+        let combined = format!("{}; release publication cleanup failed: {cleanup_error}", failure.error);
+        return Err(RunError::Internal(combined));
+    }
+    Err(failure.error)
 }
 
 pub(crate) fn verify_release_evidence_bundle(bundle_dir: &Path) -> Result<ReleaseEvidenceManifest, RunError> {
@@ -465,27 +1053,6 @@ fn validate_git_source_create_request(git_source: &GitSourceCreateRequest) -> Re
     Ok(())
 }
 
-fn prepare_output_bundle_dir(bundle_dir: &Path) -> Result<(), RunError> {
-    let root = crate::release_capability::ReleaseCapabilityRoot::create_ambient_dir_all_nofollow(
-        crate::release_capability::ReleaseRootKind::ReleaseEvidence,
-        bundle_dir,
-    )
-    .map_err(|error| {
-        RunError::Internal(format!("opening no-follow release bundle root {}: {error}", bundle_dir.display()))
-    })?;
-    if !root
-        .is_empty()
-        .map_err(|error| RunError::Internal(format!("reading release bundle root {}: {error}", bundle_dir.display())))?
-    {
-        return Err(RunError::Internal(format!(
-            "release evidence bundle directory must be empty: {}",
-            bundle_dir.display()
-        )));
-    }
-    assert_eq!(root.kind(), crate::release_capability::ReleaseRootKind::ReleaseEvidence);
-    Ok(())
-}
-
 fn bundle_file_destination(prefix: &str, source_path: &Path, index_u32: u32) -> Result<PathBuf, RunError> {
     let file_name = source_path.file_name().ok_or_else(|| {
         RunError::Internal(format!("release evidence input has no file name: {}", source_path.display()))
@@ -499,16 +1066,24 @@ fn bundle_file_destination(prefix: &str, source_path: &Path, index_u32: u32) -> 
     Ok(relative)
 }
 
-fn copy_binary_set_into_bundle(binary_paths: &[PathBuf], bundle_dir: &Path) -> Result<Vec<BundledArtifact>, RunError> {
+fn copy_binary_set_into_bundle(
+    binary_paths: &[PathBuf],
+    bundle_root: &ReleaseCapabilityRoot,
+    bundle_dir: &Path,
+) -> Result<Vec<BundledArtifact>, RunError> {
     let mut bundled = Vec::with_capacity(binary_paths.len());
     for (index_usize, binary_path) in binary_paths.iter().enumerate() {
         let index_u32: u32 = index_usize
             .try_into()
             .map_err(|_| RunError::Internal("release evidence binary index overflowed u32".to_string()))?;
-        let relative = bundle_file_destination("binaries", binary_path, index_u32.saturating_add(1))?;
-        bundled.push(copy_file_into_bundle(binary_path, bundle_dir, &relative)?);
+        let artifact_index = index_u32
+            .checked_add(1)
+            .ok_or_else(|| RunError::Internal("release evidence binary artifact index overflowed u32".to_string()))?;
+        let relative = bundle_file_destination("binaries", binary_path, artifact_index)?;
+        bundled.push(copy_file_into_bundle(binary_path, bundle_root, bundle_dir, &relative)?);
     }
     assert!(!bundled.is_empty(), "binary bundle copy must emit at least one artifact");
+    assert_eq!(bundled.len(), binary_paths.len());
     Ok(bundled)
 }
 
@@ -546,7 +1121,10 @@ fn build_input_binary_artifacts(binary_paths: &[PathBuf]) -> Result<Vec<BundledA
         let index_u32: u32 = index_usize
             .try_into()
             .map_err(|_| RunError::Internal("release evidence binary index overflowed u32".to_string()))?;
-        let relative = bundle_file_destination("binaries", binary_path, index_u32.saturating_add(1))?;
+        let artifact_index = index_u32
+            .checked_add(1)
+            .ok_or_else(|| RunError::Internal("release evidence binary artifact index overflowed u32".to_string()))?;
+        let relative = bundle_file_destination("binaries", binary_path, artifact_index)?;
         artifacts.push(build_artifact_record(binary_path, &relative, BundledArtifactKind::File)?);
     }
     Ok(artifacts)
@@ -554,6 +1132,7 @@ fn build_input_binary_artifacts(binary_paths: &[PathBuf]) -> Result<Vec<BundledA
 
 fn copy_optional_provider_fixed_point_proof(
     request: &ReleaseBundleCreateRequest,
+    bundle_root: &ReleaseCapabilityRoot,
     prepared: Option<PreparedTreeCopy>,
 ) -> Result<Option<ProviderFixedPointProofArtifact>, RunError> {
     if request.provider_fixed_point_proof_dir.is_none() {
@@ -563,8 +1142,12 @@ fn copy_optional_provider_fixed_point_proof(
     let prepared = prepared.ok_or_else(|| {
         RunError::Internal("provider fixed-point proof copy plan was not prepared before mutation".to_string())
     })?;
-    let artifact =
-        copy_prepared_directory_into_bundle(prepared, &request.bundle_dir, Path::new("proof/provider-fixed-point"))?;
+    let artifact = copy_prepared_directory_into_bundle(
+        prepared,
+        bundle_root,
+        &request.bundle_dir,
+        Path::new("proof/provider-fixed-point"),
+    )?;
     Ok(Some(ProviderFixedPointProofArtifact {
         kind: artifact.kind,
         relative_path: artifact.relative_path,
@@ -576,6 +1159,7 @@ fn copy_optional_provider_fixed_point_proof(
 
 fn copy_optional_reproducibility_report(
     request: &ReleaseBundleCreateRequest,
+    bundle_root: &ReleaseCapabilityRoot,
     source_archive: &BundledArtifact,
     binaries: &[BundledArtifact],
     proof_bundle: &BundledArtifact,
@@ -585,14 +1169,17 @@ fn copy_optional_reproducibility_report(
     };
     validate_reproducibility_report_for_bundle(request, report_path, source_archive, binaries, proof_bundle)?;
     let relative = Path::new("reproducibility").join("reproducibility-report.json");
-    copy_file_into_bundle(report_path, &request.bundle_dir, &relative).map(Some)
+    copy_file_into_bundle(report_path, bundle_root, &request.bundle_dir, &relative).map(Some)
 }
 
-fn copy_external_evidence(request: &ReleaseBundleCreateRequest) -> Result<Vec<ExternalEvidence>, RunError> {
+fn copy_external_evidence(
+    request: &ReleaseBundleCreateRequest,
+    bundle_root: &ReleaseCapabilityRoot,
+) -> Result<Vec<ExternalEvidence>, RunError> {
     let mut records = Vec::with_capacity(request.external_evidence.len());
     for evidence in &request.external_evidence {
         let next_index = next_external_evidence_index(records.len())?;
-        records.push(copy_external_evidence_record(request, evidence, next_index)?);
+        records.push(copy_external_evidence_record(request, bundle_root, evidence, next_index)?);
     }
     Ok(records)
 }
@@ -601,16 +1188,19 @@ fn next_external_evidence_index(existing_count: usize) -> Result<u32, RunError> 
     let index: u32 = existing_count
         .try_into()
         .map_err(|_| RunError::Internal("release evidence external evidence index overflowed u32".to_string()))?;
-    Ok(index.saturating_add(1))
+    index
+        .checked_add(1)
+        .ok_or_else(|| RunError::Internal("release evidence external artifact index overflowed u32".to_string()))
 }
 
 fn copy_external_evidence_record(
     request: &ReleaseBundleCreateRequest,
+    bundle_root: &ReleaseCapabilityRoot,
     evidence: &ExternalEvidenceCreateRequest,
     index: u32,
 ) -> Result<ExternalEvidence, RunError> {
     let relative = bundle_file_destination("external-evidence", &evidence.path, index)?;
-    let artifact = copy_file_into_bundle(&evidence.path, &request.bundle_dir, &relative)?;
+    let artifact = copy_file_into_bundle(&evidence.path, bundle_root, &request.bundle_dir, &relative)?;
     Ok(ExternalEvidence {
         role: evidence.role.clone(),
         schema: evidence.schema.clone(),
@@ -627,6 +1217,7 @@ fn copy_external_evidence_record(
 // r[impl mantle.release_provenance.valence_receipt_binding.stale]
 fn copy_optional_stack_provenance_evidence(
     request: &ReleaseBundleCreateRequest,
+    bundle_root: &ReleaseCapabilityRoot,
     external_evidence: &mut Vec<ExternalEvidence>,
     binaries: &[BundledArtifact],
 ) -> Result<Option<StackProvenanceReleaseEvidence>, RunError> {
@@ -647,11 +1238,16 @@ fn copy_optional_stack_provenance_evidence(
         claim_scope: STACK_PROVENANCE_CLAIM_SCOPE.to_string(),
         non_claims: vec![STACK_PROVENANCE_OPAQUE_BOUNDARY.to_string()],
     };
-    let sidecar_artifact =
-        copy_external_evidence_record(request, &sidecar, next_external_evidence_index(external_evidence.len())?)?;
+    let sidecar_artifact = copy_external_evidence_record(
+        request,
+        bundle_root,
+        &sidecar,
+        next_external_evidence_index(external_evidence.len())?,
+    )?;
     external_evidence.push(sidecar_artifact.clone());
     let receipt_artifact = copy_external_evidence_record(
         request,
+        bundle_root,
         &valence_receipt,
         next_external_evidence_index(external_evidence.len())?,
     )?;
@@ -761,31 +1357,30 @@ fn validate_reproducibility_report_for_bundle(
 
 fn copy_file_into_bundle(
     source_path: &Path,
+    bundle_root: &ReleaseCapabilityRoot,
     bundle_dir: &Path,
     relative_path: &Path,
 ) -> Result<BundledArtifact, RunError> {
-    if !source_path.is_file() {
-        return Err(RunError::Internal(format!("bundle input file missing: {}", source_path.display())));
-    }
+    crate::release_tree_copy::copy_file_into_capability(source_path, bundle_root, relative_path)?;
     let dest_path = bundle_dir.join(relative_path);
-    if let Some(parent) = dest_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|err| RunError::Internal(format!("creating {}: {err}", parent.display())))?;
-    }
-    std::fs::copy(source_path, &dest_path).map_err(|err| {
-        RunError::Internal(format!("copying {} to {}: {err}", source_path.display(), dest_path.display()))
-    })?;
-    build_artifact_record(&dest_path, relative_path, BundledArtifactKind::File)
+    let artifact = build_artifact_record(&dest_path, relative_path, BundledArtifactKind::File)?;
+    assert_eq!(bundle_root.kind(), crate::release_capability::ReleaseRootKind::ReleaseEvidence);
+    assert_eq!(artifact.relative_path, path_to_forward_slash_string(relative_path)?);
+    Ok(artifact)
 }
 
 fn copy_prepared_directory_into_bundle(
     prepared: PreparedTreeCopy,
+    bundle_root: &ReleaseCapabilityRoot,
     bundle_dir: &Path,
     relative_path: &Path,
 ) -> Result<BundledArtifact, RunError> {
     let dest_dir = bundle_dir.join(relative_path);
-    crate::release_tree_copy::copy_prepared_tree(prepared, &dest_dir)?;
-    build_artifact_record(&dest_dir, relative_path, BundledArtifactKind::Directory)
+    crate::release_tree_copy::copy_prepared_tree_into_capability(prepared, bundle_root, relative_path)?;
+    let artifact = build_artifact_record(&dest_dir, relative_path, BundledArtifactKind::Directory)?;
+    assert_eq!(bundle_root.kind(), crate::release_capability::ReleaseRootKind::ReleaseEvidence);
+    assert_eq!(artifact.kind, BundledArtifactKind::Directory);
+    Ok(artifact)
 }
 
 pub(crate) fn copy_directory_tree(source_dir: &Path, dest_dir: &Path) -> Result<(), RunError> {
@@ -1268,6 +1863,107 @@ mod tests {
         })
     }
 
+    const TEST_BUNDLED_BINARY_RELATIVE_PATH: &str = "binaries/01-mantle";
+    const TEST_QUARANTINE_PREFIX: &str = ".mantle-release-quarantine-";
+    const TEST_UNRECOGNIZED_STAGE_MARKER_BYTES: &[u8] = b"not-a-valid-ownership-marker";
+    const TEST_FAILPOINTS_COUNT: usize = 5;
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct PublicationPhaseObservation {
+        phase: PublicationShellPhase,
+        stage_path: PathBuf,
+        final_exists: bool,
+        stage_manifest_exists: bool,
+        plan_identity_blake3: String,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum ConcurrentWinnerKind {
+        File,
+        Directory,
+        #[cfg(unix)]
+        Symlink,
+    }
+
+    #[derive(Default)]
+    struct TestPublicationShell {
+        fail_phases: Vec<PublicationShellPhase>,
+        corrupt_before_verification: bool,
+        concurrent_winner: Option<ConcurrentWinnerKind>,
+        mutate_source_after_plan: Option<PathBuf>,
+        observations: Vec<PublicationPhaseObservation>,
+    }
+
+    impl PublicationShellAdapter for TestPublicationShell {
+        fn after_phase(
+            &mut self,
+            phase: PublicationShellPhase,
+            context: &PublicationShellContext<'_>,
+        ) -> Result<(), RunError> {
+            if phase == PublicationShellPhase::StageCreated {
+                if let Some(source) = &self.mutate_source_after_plan {
+                    std::fs::write(source, b"source-changed-after-plan").unwrap();
+                }
+            }
+            if phase == PublicationShellPhase::ManifestWritten && self.corrupt_before_verification {
+                std::fs::write(context.stage_path.join(TEST_BUNDLED_BINARY_RELATIVE_PATH), b"tampered-stage").unwrap();
+            }
+            if phase == PublicationShellPhase::PreCommit {
+                if let Some(winner) = self.concurrent_winner {
+                    install_concurrent_winner(context.final_path, winner);
+                }
+            }
+            self.observations.push(PublicationPhaseObservation {
+                phase,
+                stage_path: context.stage_path.to_path_buf(),
+                final_exists: context.final_path.exists(),
+                stage_manifest_exists: context.stage_path.join("manifest.json").is_file(),
+                plan_identity_blake3: context.plan_identity_blake3.to_string(),
+            });
+            if self.fail_phases.contains(&phase) {
+                return Err(RunError::Internal(format!("injected release publication failure after {phase:?}")));
+            }
+            Ok(())
+        }
+    }
+
+    fn install_concurrent_winner(path: &Path, winner: ConcurrentWinnerKind) {
+        match winner {
+            ConcurrentWinnerKind::File => std::fs::write(path, b"concurrent-winner-file").unwrap(),
+            ConcurrentWinnerKind::Directory => std::fs::create_dir(path).unwrap(),
+            #[cfg(unix)]
+            ConcurrentWinnerKind::Symlink => std::os::unix::fs::symlink("concurrent-winner-target", path).unwrap(),
+        }
+    }
+
+    fn publication_fixture(temp: &Path, release_id: &str, bundle_name: &str) -> ReleaseBundleCreateRequest {
+        let input_root = temp.join(format!("inputs-{bundle_name}"));
+        let source_archive = input_root.join("mantle-src.tar");
+        let binary_path = input_root.join("mantle");
+        let proof_bundle_dir = input_root.join("proof-input");
+        write_file(&source_archive, b"source-archive");
+        write_file(&binary_path, b"mantle-binary");
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+        write_full_proof_manifest(&proof_bundle_dir, &inventory_digest, &stage2_digest);
+        ReleaseBundleCreateRequest::with_defaults(
+            release_id.to_string(),
+            temp.join(bundle_name),
+            source_archive,
+            vec![binary_path],
+            proof_bundle_dir,
+        )
+    }
+
+    fn parent_entry_names(path: &Path) -> Vec<String> {
+        let mut names = std::fs::read_dir(path)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
     #[test]
     fn canonical_bytes_are_stable_and_compact() {
         let manifest = sample_manifest();
@@ -1352,6 +2048,241 @@ mod tests {
         assert!(output_bundle_dir.join("proof/self-hosting/manifest.json").exists());
         assert!(output_bundle_dir.join("proof/inventory.md").exists());
         assert!(output_bundle_dir.join("manifest.json").exists());
+    }
+
+    // r[verify mantle.release_provenance.bundle_publication.fixtures.positive]
+    // r[verify mantle.release_provenance.bundle_publication.validation.visibility]
+    #[test]
+    fn publication_production_path_is_manifest_last_and_atomically_visible() {
+        let temp = tempfile::tempdir().unwrap();
+        let request = publication_fixture(temp.path(), "mantle-atomic-positive", "release-bundle");
+        let mut shell = TestPublicationShell::default();
+
+        let created = create_release_evidence_bundle_with_adapter(&request, &mut shell).unwrap();
+        let verified = verify_release_evidence_bundle(&request.bundle_dir).unwrap();
+        let identity_count = shell
+            .observations
+            .iter()
+            .map(|observation| &observation.plan_identity_blake3)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+
+        assert_eq!(created, verified);
+        assert_eq!(identity_count, 1);
+        assert!(shell.observations.iter().all(|row| !row.final_exists));
+        assert_eq!(shell.observations.last().unwrap().phase, PublicationShellPhase::PreCommit);
+        assert!(request.bundle_dir.is_dir());
+        assert!(
+            !shell
+                .observations
+                .iter()
+                .find(|row| row.phase == PublicationShellPhase::ManifestSerialized)
+                .unwrap()
+                .stage_manifest_exists
+        );
+        assert!(
+            shell
+                .observations
+                .iter()
+                .find(|row| row.phase == PublicationShellPhase::ManifestWritten)
+                .unwrap()
+                .stage_manifest_exists
+        );
+        assert!(!request.bundle_dir.join(crate::release_publication::RELEASE_STAGE_MARKER_FILENAME).exists());
+    }
+
+    // r[verify mantle.release_provenance.bundle_publication.failure_isolation]
+    // r[verify mantle.release_provenance.bundle_publication.retry]
+    #[test]
+    fn named_phase_failpoints_leave_final_absent_and_fresh_retry_succeeds() {
+        let phases: [PublicationShellPhase; TEST_FAILPOINTS_COUNT] = [
+            PublicationShellPhase::InputsCopied,
+            PublicationShellPhase::ArtifactsHashed,
+            PublicationShellPhase::ManifestSerialized,
+            PublicationShellPhase::StagedVerified,
+            PublicationShellPhase::PreCommit,
+        ];
+
+        for (index, phase) in phases.into_iter().enumerate() {
+            let temp = tempfile::tempdir().unwrap();
+            let request = publication_fixture(temp.path(), &format!("mantle-failpoint-{index}"), "release-bundle");
+            let mut failed_shell = TestPublicationShell {
+                fail_phases: vec![phase],
+                ..TestPublicationShell::default()
+            };
+            let error = create_release_evidence_bundle_with_adapter(&request, &mut failed_shell).unwrap_err();
+            let failed_stage = failed_shell.observations[0].stage_path.clone();
+            let failed_identity = failed_shell.observations[0].plan_identity_blake3.clone();
+
+            assert!(error.to_string().contains("injected release publication failure"), "{phase:?}: {error}");
+            assert!(!request.bundle_dir.exists(), "{phase:?}");
+            assert!(!failed_stage.exists(), "{phase:?}");
+
+            let mut retry_shell = TestPublicationShell::default();
+            let retried = create_release_evidence_bundle_with_adapter(&request, &mut retry_shell).unwrap();
+            let retry_stage = retry_shell.observations[0].stage_path.clone();
+            let retry_identity = retry_shell.observations[0].plan_identity_blake3.clone();
+
+            assert_eq!(retried.release_id, format!("mantle-failpoint-{index}"));
+            assert_ne!(failed_stage, retry_stage, "retry must use a fresh random stage");
+            assert_eq!(failed_identity, retry_identity, "random stage names must not affect plan identity");
+            assert!(verify_release_evidence_bundle(&request.bundle_dir).is_ok());
+        }
+    }
+
+    // r[verify mantle.release_provenance.bundle_publication.fixtures.negative.verification]
+    #[test]
+    fn staged_verification_failure_never_publishes_tampered_artifacts() {
+        let temp = tempfile::tempdir().unwrap();
+        let request = publication_fixture(temp.path(), "mantle-verification-failure", "release-bundle");
+        let mut shell = TestPublicationShell {
+            corrupt_before_verification: true,
+            ..TestPublicationShell::default()
+        };
+
+        let error = create_release_evidence_bundle_with_adapter(&request, &mut shell).unwrap_err();
+
+        assert!(error.to_string().contains("Verification"), "{error}");
+        assert!(error.to_string().contains("does not match manifest"), "{error}");
+        assert!(!request.bundle_dir.exists());
+        assert!(shell.observations.iter().all(|row| !row.final_exists));
+    }
+
+    #[test]
+    fn source_identity_drift_after_planning_fails_before_manifest_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let request = publication_fixture(temp.path(), "mantle-source-drift", "release-bundle");
+        let mut shell = TestPublicationShell {
+            mutate_source_after_plan: Some(request.source_archive_path.clone()),
+            ..TestPublicationShell::default()
+        };
+
+        let error = create_release_evidence_bundle_with_adapter(&request, &mut shell).unwrap_err();
+
+        assert!(error.to_string().contains("ArtifactHashing"), "{error}");
+        assert!(error.to_string().contains("do not match the pre-mutation publication plan"), "{error}");
+        assert!(!request.bundle_dir.exists());
+    }
+
+    // r[verify mantle.release_provenance.bundle_publication.fixtures.negative.race]
+    #[test]
+    fn preexisting_files_and_directories_are_unchanged_and_block_staging() {
+        for destination_kind in ["file", "empty-directory", "nonempty-directory"] {
+            let temp = tempfile::tempdir().unwrap();
+            let request = publication_fixture(temp.path(), "mantle-preexisting", "release-bundle");
+            match destination_kind {
+                "file" => write_file(&request.bundle_dir, b"preexisting-file"),
+                "empty-directory" => std::fs::create_dir(&request.bundle_dir).unwrap(),
+                "nonempty-directory" => write_file(&request.bundle_dir.join("sentinel"), b"preexisting-directory"),
+                _ => unreachable!(),
+            }
+
+            let error = create_release_evidence_bundle(&request).unwrap_err();
+
+            assert!(error.to_string().contains("destination must be absent"), "{destination_kind}: {error}");
+            match destination_kind {
+                "file" => assert_eq!(std::fs::read(&request.bundle_dir).unwrap(), b"preexisting-file"),
+                "empty-directory" => assert_eq!(std::fs::read_dir(&request.bundle_dir).unwrap().count(), 0),
+                "nonempty-directory" => {
+                    assert_eq!(std::fs::read(request.bundle_dir.join("sentinel")).unwrap(), b"preexisting-directory")
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn preexisting_destination_symlink_is_unchanged_and_never_followed() {
+        let temp = tempfile::tempdir().unwrap();
+        let request = publication_fixture(temp.path(), "mantle-preexisting-symlink", "release-bundle");
+        let target = temp.path().join("outside-target");
+        write_file(&target.join("sentinel"), b"outside-sentinel");
+        std::os::unix::fs::symlink(&target, &request.bundle_dir).unwrap();
+
+        let error = create_release_evidence_bundle(&request).unwrap_err();
+
+        assert!(error.to_string().contains("destination must be absent"), "{error}");
+        assert_eq!(std::fs::read_link(&request.bundle_dir).unwrap(), target);
+        assert_eq!(std::fs::read(target.join("sentinel")).unwrap(), b"outside-sentinel");
+    }
+
+    #[test]
+    fn concurrent_file_and_directory_winners_are_never_clobbered() {
+        for winner in [ConcurrentWinnerKind::File, ConcurrentWinnerKind::Directory] {
+            let temp = tempfile::tempdir().unwrap();
+            let request = publication_fixture(temp.path(), "mantle-commit-race", "release-bundle");
+            let mut shell = TestPublicationShell {
+                concurrent_winner: Some(winner),
+                ..TestPublicationShell::default()
+            };
+
+            let error = create_release_evidence_bundle_with_adapter(&request, &mut shell).unwrap_err();
+
+            assert!(error.to_string().contains("destination appeared before commit"), "{winner:?}: {error}");
+            match winner {
+                ConcurrentWinnerKind::File => {
+                    assert_eq!(std::fs::read(&request.bundle_dir).unwrap(), b"concurrent-winner-file")
+                }
+                ConcurrentWinnerKind::Directory => {
+                    assert_eq!(std::fs::read_dir(&request.bundle_dir).unwrap().count(), 0)
+                }
+                #[cfg(unix)]
+                ConcurrentWinnerKind::Symlink => unreachable!(),
+            }
+            assert!(!request.bundle_dir.join("manifest.json").exists());
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn concurrent_symlink_winner_is_never_replaced_or_followed() {
+        let temp = tempfile::tempdir().unwrap();
+        let request = publication_fixture(temp.path(), "mantle-symlink-race", "release-bundle");
+        let mut shell = TestPublicationShell {
+            concurrent_winner: Some(ConcurrentWinnerKind::Symlink),
+            ..TestPublicationShell::default()
+        };
+
+        let error = create_release_evidence_bundle_with_adapter(&request, &mut shell).unwrap_err();
+
+        assert!(error.to_string().contains("destination appeared before commit"), "{error}");
+        assert_eq!(std::fs::read_link(&request.bundle_dir).unwrap(), Path::new("concurrent-winner-target"));
+        assert!(std::fs::symlink_metadata(&request.bundle_dir).unwrap().file_type().is_symlink());
+    }
+
+    // r[verify mantle.release_provenance.bundle_publication.stale_stage]
+    // r[verify mantle.release_provenance.bundle_publication.retry]
+    #[test]
+    fn cleanup_failure_is_retried_via_owned_stage_quarantine_only() {
+        let temp = tempfile::tempdir().unwrap();
+        let request = publication_fixture(temp.path(), "mantle-stale-stage", "release-bundle");
+        let mut failed_shell = TestPublicationShell {
+            fail_phases: vec![PublicationShellPhase::ArtifactsHashed, PublicationShellPhase::Cleanup],
+            ..TestPublicationShell::default()
+        };
+        let error = create_release_evidence_bundle_with_adapter(&request, &mut failed_shell).unwrap_err();
+        let stale_stage = failed_shell.observations[0].stage_path.clone();
+        let stale_name = stale_stage.file_name().unwrap().to_string_lossy().to_string();
+        let unrecognized = stale_stage.with_file_name(format!("{stale_name}-unrecognized"));
+        std::fs::create_dir(&unrecognized).unwrap();
+        write_file(
+            &unrecognized.join(crate::release_publication::RELEASE_STAGE_MARKER_FILENAME),
+            TEST_UNRECOGNIZED_STAGE_MARKER_BYTES,
+        );
+
+        assert!(error.to_string().contains("cleanup failed"), "{error}");
+        assert!(stale_stage.is_dir());
+        assert!(!request.bundle_dir.exists());
+
+        let retried = create_release_evidence_bundle(&request).unwrap();
+        let names = parent_entry_names(temp.path());
+
+        assert_eq!(retried.release_id, "mantle-stale-stage");
+        assert!(!stale_stage.exists(), "recognized stale stage should move to quarantine");
+        assert!(unrecognized.is_dir(), "unrecognized stale sibling must stay untouched");
+        assert!(names.iter().any(|name| name.starts_with(TEST_QUARANTINE_PREFIX)));
+        assert!(verify_release_evidence_bundle(&request.bundle_dir).is_ok());
     }
 
     // r[verify mantle.release_provenance.bundle_tree_copy.fixtures.positive]

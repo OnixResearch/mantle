@@ -567,6 +567,23 @@ The checked-in proof bundle keeps durable copies of stage1 and stage2 under
 `binaries/`, so the packaged release binary can be the proven stage2 output
 rather than a scratch-store path that disappears when the proof exits.
 
+`mantle release create --bundle-dir <path>` requires `<path>` to be absent. Do
+not pre-create an empty destination. Mantle computes a deterministic BLAKE3
+publication plan before mutation, stages through a private capability root under
+the destination's real parent, writes the canonical manifest after every planned
+artifact, verifies that complete stage with the production verifier, and then
+uses one atomic no-replace rename. Existing and concurrently created files,
+symlinks, empty directories, and nonempty directories are never overwritten.
+
+A failed pre-commit attempt leaves the final path absent and normally removes its
+current stage. If cleanup was interrupted, retry may quarantine only a sibling
+whose bounded ownership marker matches both the publication-plan identity and
+final destination name. Unrecognized siblings stay untouched. Staging names are
+fresh for each attempt and are excluded from plan identity. This is an atomic
+local visibility and no-clobber guarantee; rename alone is not evidence of
+filesystem crash durability, power-loss persistence, artifact correctness, or
+release eligibility.
+
 Generic release verification leaves Valence stack provenance optional unless
 `--stack-provenance required` is selected. The `onix-stack` release profile makes
 that requirement profile-declared: verification fails closed unless the bundle

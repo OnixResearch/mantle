@@ -52,6 +52,10 @@ struct PendingDirectory {
 }
 
 impl PreparedTreeCopy {
+    pub(crate) fn artifact_identity(&self) -> Result<(u64, String), RunError> {
+        hash_prepared_tree(self)
+    }
+
     #[cfg(test)]
     fn plan(&self) -> &TreeCopyPlan {
         &self.plan
@@ -85,6 +89,82 @@ pub(crate) fn copy_directory_tree(source_dir: &Path, dest_dir: &Path) -> Result<
 pub(crate) fn copy_prepared_tree(prepared: PreparedTreeCopy, dest_dir: &Path) -> Result<(), RunError> {
     let destination_root = prepare_empty_destination_root(dest_dir)?;
     execute_tree_copy_plan(&prepared, &destination_root)
+}
+
+pub(crate) fn copy_prepared_tree_into_capability(
+    prepared: PreparedTreeCopy,
+    destination_root: &ReleaseCapabilityRoot,
+    relative_path: &Path,
+) -> Result<(), RunError> {
+    let relative = relative_path.to_str().ok_or_else(|| {
+        RunError::Internal(format!("tree copy destination is not valid UTF-8: {}", relative_path.display()))
+    })?;
+    let validated = ValidatedReleasePath::new(relative)
+        .map_err(|error| RunError::Internal(format!("invalid tree copy destination path {relative}: {error:?}")))?;
+    let child_root = destination_root
+        .create_dir_all_relative_nofollow(ReleaseRootKind::ReleaseTreeDestination, &validated)
+        .map_err(|error| tree_io_error("creating capability-scoped destination root", relative, error))?;
+    if !child_root
+        .is_empty()
+        .map_err(|error| tree_io_error("reading capability-scoped destination root", relative, error))?
+    {
+        return Err(RunError::Internal(format!("tree copy destination root must be empty: {relative}")));
+    }
+    assert_eq!(destination_root.kind(), ReleaseRootKind::ReleaseEvidence);
+    assert_eq!(child_root.kind(), ReleaseRootKind::ReleaseTreeDestination);
+    execute_tree_copy_plan(&prepared, &child_root)
+}
+
+pub(crate) fn copy_file_into_capability(
+    source_path: &Path,
+    destination_root: &ReleaseCapabilityRoot,
+    relative_path: &Path,
+) -> Result<(), RunError> {
+    let absolute = std::path::absolute(source_path)
+        .map_err(|error| RunError::Internal(format!("resolving file path {}: {error}", source_path.display())))?;
+    let file_name = absolute
+        .file_name()
+        .ok_or_else(|| RunError::Internal(format!("file path has no final component: {}", source_path.display())))?;
+    let parent_path = absolute
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("file path has no parent: {}", source_path.display())))?;
+    let source_root = ReleaseCapabilityRoot::open_ambient_nofollow(ReleaseRootKind::ReleaseTreeSource, parent_path)
+        .map_err(|error| RunError::Internal(format!("opening file parent {}: {error}", parent_path.display())))?;
+    copy_capability_file(&source_root, file_name, destination_root, relative_path)
+}
+
+fn copy_capability_file(
+    source_root: &ReleaseCapabilityRoot,
+    file_name: &std::ffi::OsStr,
+    destination_root: &ReleaseCapabilityRoot,
+    relative_path: &Path,
+) -> Result<(), RunError> {
+    let observed = source_root.dir().symlink_metadata(file_name).map_err(|error| {
+        tree_io_error("reading no-follow source file metadata", &source_label(relative_path), error)
+    })?;
+    let expected_mode = metadata_mode(&observed);
+    validate_source_metadata(&source_label(relative_path), &observed, TreeEntryKind::File, expected_mode)?;
+    let mut source = open_file_nofollow(source_root.dir(), file_name, false, 0)
+        .map_err(|error| tree_io_error("opening no-follow source file", &source_label(relative_path), error))?;
+    let opened = source
+        .metadata()
+        .map_err(|error| tree_io_error("reading opened source file metadata", &source_label(relative_path), error))?;
+    validate_source_metadata(&source_label(relative_path), &opened, TreeEntryKind::File, expected_mode)?;
+    let relative = source_label(relative_path);
+    let validated = ValidatedReleasePath::new(&relative)
+        .map_err(|error| RunError::Internal(format!("invalid bundle file destination {relative}: {error:?}")))?;
+    let mut destination = destination_root
+        .open_new_file_nofollow(&validated)
+        .map_err(|error| tree_io_error("creating no-follow bundle file", &relative, error))?;
+    copy_open_file_bytes(&mut source, &mut destination, &relative)?;
+    set_file_mode(&destination, expected_mode, &relative)?;
+    assert_eq!(source_root.kind(), ReleaseRootKind::ReleaseTreeSource);
+    assert_eq!(destination_root.kind(), ReleaseRootKind::ReleaseEvidence);
+    Ok(())
+}
+
+fn source_label(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 pub(crate) fn hash_directory_tree(path: &Path) -> Result<(u64, String), RunError> {

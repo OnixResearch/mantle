@@ -27,3 +27,4 @@ compatibility surface, crate name, or historical decision.
 | [0018](0018-mantle-owned-function-address-release-binding.md) | Own the function-address release binding at the Mantle boundary | Accepted |
 | [0019](0019-treat-preserves-function-receipts-as-opaque-canonical-sidecars.md) | Treat Preserves function-address receipts as opaque canonical sidecars | Accepted |
 | [0020](0020-keep-trellis-proof-evidence-recorded-only-until-valence-accepts.md) | Keep Trellis proof evidence recorded-only until Valence accepts it | Accepted |
+| [0021](0021-publish-release-bundles-with-an-atomic-no-clobber-commit.md) | Publish release bundles with an atomic no-clobber commit | Accepted |
