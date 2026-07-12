@@ -1199,6 +1199,12 @@ documented in [`docs/function-address-preserves-sidecars.md`](docs/function-addr
 The receipt binds typed sidecar, Valence, optional Kamacite, source, and binary
 identities without promoting them to Rust semantic or release-eligibility claims.
 
+Trellis proof evidence uses the recorded-only opaque profile documented in
+[`docs/trellis-proof-release-sidecars.md`](docs/trellis-proof-release-sidecars.md).
+Mantle preserves Kamacite's `recorded-only` and `formal-proof-candidate` producer
+roles, but current Valence authority counts Trellis imports only as
+`recorded_only`; required accepted-proof mode therefore fails closed.
+
 A successful proof bundle can be packaged as release evidence:
 
 ```bash

@@ -6,8 +6,8 @@ Trellis proof evidence can support release review only if Mantle binds it to the
 
 - Add Trellis proof evidence as a supported profile of Mantle's generic opaque evidence sidecar binding.
 - Bind canonical Kamacite envelope hash, Valence proof evidence validation hash, source archive hash, release binary hash, proof-scope metadata, policy hashes, claim scope, and non-claims.
-- Preserve reference-only versus accepted formal-proof role metadata without deciding theorem truth.
-- Add positive and negative release-evidence fixtures.
+- Preserve authoritative producer and validation role metadata without deciding theorem truth or manufacturing accepted formal-proof authority.
+- Add positive recorded-only and adversarial negative release-evidence fixtures; defer accepted-proof evidence until Valence ships the required validator and receipt.
 
 ## Impact
 
