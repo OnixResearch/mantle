@@ -555,17 +555,41 @@ fn materialize_approved_inputs(
         })?;
         let destination = destination_dir.join(basename);
         copy_regular_file(original, &destination)?;
-        let original_digest = hash_file(original)?.1;
-        let copied_digest = hash_file(&destination)?.1;
-        if original_digest != copied_digest {
-            return Err(RunError::Internal(format!(
-                "materialized rebuild input digest drifted while copying {}",
-                original.display()
-            )));
-        }
+        validate_materialized_copy(original, &destination, observations)?;
         materialized.insert(original.clone(), destination);
     }
     Ok(materialized)
+}
+
+fn validate_materialized_copy(
+    original: &Path,
+    destination: &Path,
+    observations: &[PathObservation],
+) -> Result<(), RunError> {
+    let (copied_size_bytes, copied_digest_blake3) = hash_file(destination)?;
+    let expected = observations
+        .iter()
+        .filter(|item| item.original_path.as_deref() == Some(original))
+        .filter(|item| is_declared_rebuild_input(item.observation.identity.role))
+        .collect::<Vec<_>>();
+    if expected.is_empty() {
+        return Err(RunError::Internal(format!(
+            "materialized rebuild input has no measured identity: {}",
+            original.display()
+        )));
+    }
+    for item in expected {
+        let identity = &item.observation.identity;
+        if copied_size_bytes != identity.size_bytes || copied_digest_blake3 != identity.digest_blake3 {
+            return Err(RunError::Internal(format!(
+                "materialized rebuild input changed after authority measurement: {}",
+                original.display()
+            )));
+        }
+    }
+    debug_assert!(!copied_digest_blake3.is_empty());
+    debug_assert!(destination.is_file());
+    Ok(())
 }
 
 fn remap_observations(
@@ -832,5 +856,27 @@ mod tests {
 
         assert_eq!(std::fs::read(copied).unwrap(), b"source-bytes");
         assert_ne!(filesystem_object_identity(&source).unwrap(), filesystem_object_identity(copied).unwrap());
+    }
+
+    #[test]
+    fn materialization_rejects_same_size_replacement_after_measurement() {
+        let dir = tempfile::tempdir().unwrap();
+        let proof = dir.path().join("proof");
+        std::fs::create_dir(&proof).unwrap();
+        let source = dir.path().join("source");
+        std::fs::write(&source, b"measured-data").unwrap();
+        let observations = vec![path_observation(
+            measure_regular_file(&source, "source", RebuildInputRole::Source).unwrap(),
+            &source,
+        )];
+        std::fs::write(&source, b"replaced-data").unwrap();
+
+        let error = materialize_approved_inputs(&proof, &observations).unwrap_err();
+
+        assert!(error.to_string().contains("changed after authority measurement"));
+        assert_ne!(
+            observations[0].observation.identity.digest_blake3,
+            blake3::hash(b"replaced-data").to_hex().to_string()
+        );
     }
 }

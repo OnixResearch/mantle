@@ -317,6 +317,7 @@ fn expected_publication_artifacts(
         &mut artifacts,
     )?;
     append_expected_external_artifacts(request, &mut artifacts)?;
+    append_expected_cairn_handoff_artifacts(request, &mut artifacts)?;
     Ok(artifacts)
 }
 
@@ -363,6 +364,27 @@ fn append_expected_external_artifacts(
             artifacts.push(build_artifact_record(path, &relative, BundledArtifactKind::File)?);
         }
     }
+    Ok(())
+}
+
+fn append_expected_cairn_handoff_artifacts(
+    request: &ReleaseBundleCreateRequest,
+    artifacts: &mut Vec<BundledArtifact>,
+) -> Result<(), RunError> {
+    let Some(descriptor_path) = request.cairn_handoff_descriptor_path.as_deref() else {
+        return Ok(());
+    };
+    let measured = crate::cairn_release_handoff::plan_cairn_handoff_artifacts(descriptor_path, &request.bundle_dir)?;
+    for artifact in measured {
+        artifacts.push(BundledArtifact {
+            kind: BundledArtifactKind::File,
+            relative_path: artifact.relative_path,
+            size_bytes: artifact.size_bytes,
+            digest_blake3: artifact.measured_digest_blake3,
+        });
+    }
+    debug_assert!(!artifacts.is_empty());
+    debug_assert!(request.cairn_handoff_descriptor_path.is_some());
     Ok(())
 }
 
@@ -429,6 +451,7 @@ fn publication_policy_facts(
         policy_fact("provider-fixed-point-present", boolean_text(request.provider_fixed_point_proof_dir.is_some())),
         policy_fact("reproducibility-report-present", boolean_text(request.reproducibility_report_path.is_some())),
         policy_fact("stack-provenance-present", boolean_text(request.stack_provenance.is_some())),
+        policy_fact("cairn-handoff-present", boolean_text(request.cairn_handoff_descriptor_path.is_some())),
         policy_fact("artifact-count", &expected.len().to_string()),
     ];
     append_source_policy_facts(request, &mut facts);
@@ -743,12 +766,29 @@ fn manifest_publication_artifacts(
     if let Some(report) = &manifest.reproducibility_report {
         artifacts.push(publication_artifact_input(report));
     }
+    if let Some(receipt) = &manifest.cairn_handoff_validation {
+        for row in &receipt.handoff.rows {
+            artifacts.push(publication_input_from_cairn_artifact(&row.artifact));
+            artifacts.push(publication_input_from_cairn_artifact(&row.cairn_policy));
+        }
+    }
     for evidence in &manifest.external_evidence {
         let path = bundle_dir.join(&evidence.relative_path);
         let measured = build_artifact_record(&path, Path::new(&evidence.relative_path), BundledArtifactKind::File)?;
         artifacts.push(publication_artifact_input(&measured));
     }
     Ok(artifacts)
+}
+
+fn publication_input_from_cairn_artifact(
+    artifact: &crunch_release_core::CairnMeasuredArtifact,
+) -> PublicationArtifactInput {
+    PublicationArtifactInput {
+        relative_path: artifact.relative_path.clone(),
+        kind: BundledArtifactKind::File,
+        size_bytes: artifact.size_bytes,
+        digest_blake3: artifact.measured_digest_blake3.clone(),
+    }
 }
 
 fn write_manifest_bytes(stage_root: &ReleaseCapabilityRoot, bytes: &[u8]) -> Result<(), RunError> {

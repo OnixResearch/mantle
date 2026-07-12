@@ -2,9 +2,7 @@
 
 ## Outcome
 
-The focused implementation rail passes for commit `dd79b120` and the current
-uncommitted lifecycle/documentation update. Exact command output is recorded in
-[`validation.txt`](validation.txt).
+The focused implementation rail passed on the isolated implementation branch and again after main-branch integration. Exact branch command output is recorded in [`validation.txt`](validation.txt).
 
 Observed focused results:
 
@@ -19,12 +17,15 @@ Observed focused results:
   self/drift checks passed.
 - Focused Rust formatting, `crunch-release-core` Clippy with warnings denied,
   Mantle binary check, Cairn validation, and proposal/design/tasks gates passed.
+- Main-branch pueue task `341` reran release core, bootstrap core, Cairn handoff, release-evidence, release CLI handoff, and all 13 `release_reproduce_` tests as one successful chain in an isolated target. Task `346` reran Cairn validation and proposal/design/tasks gates; the final tasks gate remained `PASS` with no issues.
 
 ## Decision evidence
 
 - The v2 receipt binds the accepted content descriptor and authority-plan BLAKE3.
 - Only separately materialized regular-file capabilities enter proof sandboxes;
   the complete release bundle is absent.
+- Post-integration adversarial review found and closed a measurement-to-copy replacement window: each materialized input is now checked against the originally measured size and BLAKE3 identity, with a same-size replacement negative test.
+- Cairn handoff bytes introduced by the concurrent release change are measured into the atomic publication plan before staging and checked again from the staged manifest before commit; no handoff file bypasses the no-partial-publication boundary.
 - Published target bytes, content-identical aliases, hardlinks, symlinks, prior
   proof outputs, and ordinary outputs are non-authorities.
 - Release verification, standalone checking, summaries, Nix witnesses, and

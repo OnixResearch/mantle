@@ -22,6 +22,7 @@ const MAX_CAIRN_HANDOFF_ARTIFACT_BYTES: u64 = 67_108_864;
 const CAIRN_HANDOFF_BUNDLE_DIRECTORY: &str = "cairn-handoff";
 const CAIRN_HANDOFF_ARTIFACT_FILE: &str = "artifact";
 const CAIRN_HANDOFF_POLICY_FILE: &str = "policy";
+const CAIRN_HANDOFF_ARTIFACTS_PER_ROW: usize = 2;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -79,6 +80,46 @@ pub fn prepare_cairn_handoff_for_bundle(
     debug_assert!(!handoff.rows.is_empty());
     debug_assert!(handoff.rows.len() <= MAX_CAIRN_HANDOFF_ROWS_COUNT as usize);
     Ok(handoff)
+}
+
+pub fn plan_cairn_handoff_artifacts(
+    descriptor_path: &Path,
+    bundle_dir: &Path,
+) -> Result<Vec<CairnMeasuredArtifact>, RunError> {
+    let descriptor_bytes = read_bounded_file(
+        descriptor_path,
+        MAX_CAIRN_HANDOFF_DESCRIPTOR_BYTES,
+        "Cairn handoff descriptor",
+        ReleaseRootKind::BuildArtifact,
+    )?;
+    let descriptor: CairnHandoffDescriptor = serde_json::from_slice(&descriptor_bytes).map_err(|error| {
+        RunError::Internal(format!("parsing Cairn handoff descriptor {}: {error}", descriptor_path.display()))
+    })?;
+    validate_descriptor_header(&descriptor)?;
+    let descriptor_parent = descriptor_path.parent().unwrap_or_else(|| Path::new("."));
+    let mut artifacts = Vec::with_capacity(descriptor.rows.len().saturating_mul(CAIRN_HANDOFF_ARTIFACTS_PER_ROW));
+    for (index, row) in descriptor.rows.iter().enumerate() {
+        let index_u32 = u32::try_from(index)
+            .map_err(|_| RunError::Internal("Cairn handoff row index overflowed u32".to_string()))?;
+        let artifact_source = resolve_descriptor_path(descriptor_parent, &row.artifact_path);
+        let policy_source = resolve_descriptor_path(descriptor_parent, &row.cairn_policy_path);
+        reject_bundle_local_source(&artifact_source, bundle_dir)?;
+        reject_bundle_local_source(&policy_source, bundle_dir)?;
+        let row_directory = PathBuf::from(CAIRN_HANDOFF_BUNDLE_DIRECTORY).join(index_u32.to_string());
+        artifacts.push(measure_planned_artifact(
+            &artifact_source,
+            &row_directory.join(CAIRN_HANDOFF_ARTIFACT_FILE),
+            row.artifact_digest_blake3.clone(),
+        )?);
+        artifacts.push(measure_planned_artifact(
+            &policy_source,
+            &row_directory.join(CAIRN_HANDOFF_POLICY_FILE),
+            row.cairn_policy_digest_blake3.clone(),
+        )?);
+    }
+    debug_assert!(!artifacts.is_empty());
+    debug_assert_eq!(artifacts.len(), descriptor.rows.len().saturating_mul(CAIRN_HANDOFF_ARTIFACTS_PER_ROW));
+    Ok(artifacts)
 }
 
 pub fn remeasure_cairn_handoff_from_bundle(
@@ -160,6 +201,43 @@ fn copy_and_measure(
     debug_assert_eq!(measured_digest_blake3, blake3::hash(&bytes).to_hex().to_string());
     Ok(CairnMeasuredArtifact {
         relative_path: bundled_relative_path,
+        size_bytes,
+        declared_digest_blake3,
+        measured_digest_blake3,
+    })
+}
+
+fn measure_planned_artifact(
+    source: &Path,
+    relative_path: &Path,
+    declared_digest_blake3: String,
+) -> Result<CairnMeasuredArtifact, RunError> {
+    let bytes = read_bounded_file(
+        source,
+        MAX_CAIRN_HANDOFF_ARTIFACT_BYTES,
+        "Cairn handoff artifact",
+        ReleaseRootKind::BuildArtifact,
+    )?;
+    if bytes.is_empty() {
+        return Err(RunError::Internal(format!("Cairn handoff artifact must be non-empty: {}", source.display())));
+    }
+    let relative_path = relative_path
+        .to_str()
+        .ok_or_else(|| RunError::Internal("Cairn handoff bundle path is not UTF-8".to_string()))?
+        .replace(std::path::MAIN_SEPARATOR, "/");
+    let size_bytes = u64::try_from(bytes.len())
+        .map_err(|_| RunError::Internal("Cairn handoff artifact length overflowed u64".to_string()))?;
+    let measured_digest_blake3 = blake3::hash(&bytes).to_hex().to_string();
+    if declared_digest_blake3 != measured_digest_blake3 {
+        return Err(RunError::Internal(format!(
+            "Cairn handoff artifact declared digest does not match measured bytes: {}",
+            source.display()
+        )));
+    }
+    debug_assert!(!relative_path.is_empty());
+    debug_assert!(size_bytes <= MAX_CAIRN_HANDOFF_ARTIFACT_BYTES);
+    Ok(CairnMeasuredArtifact {
+        relative_path,
         size_bytes,
         declared_digest_blake3,
         measured_digest_blake3,
