@@ -53,7 +53,10 @@ pub struct CompositionDependency {
 #[serde(rename_all = "kebab-case")]
 pub enum CompositionDependencySource {
     CompiledComponent,
-    StoreObject { path: String, digest_blake3: Blake3Identity },
+    StoreObject {
+        path: String,
+        digest_blake3: Blake3Identity,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

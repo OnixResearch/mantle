@@ -157,7 +157,8 @@ pub(crate) fn hash_file_bounded(path: &Path) -> Result<Blake3Identity, Error> {
         if count == 0 {
             break;
         }
-        let count_u64 = u64::try_from(count).map_err(|_| Error::Invalid("hash read count overflowed u64".to_string()))?;
+        let count_u64 =
+            u64::try_from(count).map_err(|_| Error::Invalid("hash read count overflowed u64".to_string()))?;
         bytes_read = bytes_read
             .checked_add(count_u64)
             .ok_or_else(|| Error::Invalid("hashed byte count overflowed u64".to_string()))?;
@@ -186,8 +187,9 @@ fn read_version_output(path: &Path) -> Result<String, Error> {
     if bytes.len() > MAX_VERSION_OUTPUT_BYTES {
         return Err(Error::Invalid(format!("tool version output exceeded bound for {}", path.display())));
     }
-    let output = String::from_utf8(bytes)
-        .map_err(|error| Error::Invalid(format!("tool version output was not UTF-8 for {}: {error}", path.display())))?;
+    let output = String::from_utf8(bytes).map_err(|error| {
+        Error::Invalid(format!("tool version output was not UTF-8 for {}: {error}", path.display()))
+    })?;
     let first_line = output.lines().next().unwrap_or_default().trim().to_string();
     if first_line.is_empty() {
         return Err(Error::Invalid(format!("tool version output was empty for {}", path.display())));
@@ -198,11 +200,9 @@ fn read_version_output(path: &Path) -> Result<String, Error> {
 }
 
 fn toolchain_root(manifest_path: &Path) -> Result<PathBuf, Error> {
-    let root = manifest_path
-        .parent()
-        .and_then(Path::parent)
-        .and_then(Path::parent)
-        .ok_or_else(|| Error::Invalid(format!("toolchain manifest path is too shallow: {}", manifest_path.display())))?;
+    let root = manifest_path.parent().and_then(Path::parent).and_then(Path::parent).ok_or_else(|| {
+        Error::Invalid(format!("toolchain manifest path is too shallow: {}", manifest_path.display()))
+    })?;
     if !root.is_absolute() {
         return Err(Error::Invalid("toolchain manifest must use an absolute path".to_string()));
     }

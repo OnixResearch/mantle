@@ -66,8 +66,10 @@ pub fn run_offline_tool(toolchain: &VerifiedToolchain, invocation: ToolInvocatio
     fs::create_dir_all(&log_dir).map_err(|error| Error::io("creating tool log directory", &log_dir, error))?;
     let stdout_path = log_dir.join(format!("{}.stdout", invocation.stage_key));
     let stderr_path = log_dir.join(format!("{}.stderr", invocation.stage_key));
-    let stdout_file = File::create(&stdout_path).map_err(|error| Error::io("creating tool stdout", &stdout_path, error))?;
-    let stderr_file = File::create(&stderr_path).map_err(|error| Error::io("creating tool stderr", &stderr_path, error))?;
+    let stdout_file =
+        File::create(&stdout_path).map_err(|error| Error::io("creating tool stdout", &stdout_path, error))?;
+    let stderr_file =
+        File::create(&stderr_path).map_err(|error| Error::io("creating tool stderr", &stderr_path, error))?;
     let mut command = sandbox_command(&bwrap, &program, toolchain, &invocation)?;
     command.stdout(stdout_file);
     command.stderr(stderr_file);
@@ -147,7 +149,8 @@ fn sandbox_command(
 }
 
 fn validate_env_key(key: &str) -> Result<(), Error> {
-    let valid = !key.is_empty() && key.bytes().all(|byte| byte == b'_' || byte.is_ascii_uppercase() || byte.is_ascii_digit());
+    let valid =
+        !key.is_empty() && key.bytes().all(|byte| byte == b'_' || byte.is_ascii_uppercase() || byte.is_ascii_digit());
     if !valid || key.contains("TOKEN") || key.contains("SECRET") || key.contains("PASSWORD") {
         return Err(Error::Invalid(format!("tool environment key `{key}` is not admitted")));
     }
@@ -157,14 +160,15 @@ fn validate_env_key(key: &str) -> Result<(), Error> {
 fn wait_bounded(child: &mut std::process::Child, stage_key: &str) -> Result<ExitStatus, Error> {
     let deadline = Instant::now() + Duration::from_secs(TOOL_TIMEOUT_SECS);
     loop {
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|error| Error::Tool(format!("waiting for stage `{stage_key}`: {error}")))?
+        if let Some(status) =
+            child.try_wait().map_err(|error| Error::Tool(format!("waiting for stage `{stage_key}`: {error}")))?
         {
             return Ok(status);
         }
         if Instant::now() >= deadline {
-            child.kill().map_err(|error| Error::Tool(format!("killing timed-out stage `{stage_key}`: {error}")))?;
+            child
+                .kill()
+                .map_err(|error| Error::Tool(format!("killing timed-out stage `{stage_key}`: {error}")))?;
             let _ = child.wait();
             return Err(Error::Tool(format!("stage `{stage_key}` exceeded {TOOL_TIMEOUT_SECS} seconds")));
         }
