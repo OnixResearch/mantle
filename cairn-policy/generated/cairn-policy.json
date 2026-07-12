@@ -2402,6 +2402,13 @@
             "extensions": [
               "rs"
             ],
+            "root": "src/function_address_binding_cmd.rs",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "rs"
+            ],
             "root": "crates/crunch-release-core/src/manifest.rs",
             "source_kind": "rust_source"
           },
@@ -2458,6 +2465,13 @@
               "rs"
             ],
             "root": "src/release_cmd.rs",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
+              "rs"
+            ],
+            "root": "src/function_address_binding_cmd.rs",
             "source_kind": "rust_source"
           },
           {

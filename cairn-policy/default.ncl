@@ -100,6 +100,7 @@ let PolicyFieldSetDigest = "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9
         evidence_sources = [
           { root = "src/release_evidence.rs", source_kind = "rust_source", extensions = ["rs"] },
           { root = "src/release_cmd.rs", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "src/function_address_binding_cmd.rs", source_kind = "rust_source", extensions = ["rs"] },
           { root = "crates/crunch-release-core/src/manifest.rs", source_kind = "rust_source", extensions = ["rs"] },
           { root = "crates/crunch-release-core/src/function_address_binding.rs", source_kind = "rust_source", extensions = ["rs"] },
           { root = "tests/release_cli.rs", source_kind = "rust_source", extensions = ["rs"] },
@@ -115,6 +116,7 @@ let PolicyFieldSetDigest = "c5b71f15de4175d9ff01f7cb4b82eed898a71e55f6d1fa5e24a9
         evidence_sources = [
           { root = "src/release_evidence.rs", source_kind = "rust_source", extensions = ["rs"] },
           { root = "src/release_cmd.rs", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "src/function_address_binding_cmd.rs", source_kind = "rust_source", extensions = ["rs"] },
           { root = "crates/crunch-release-core/src/manifest.rs", source_kind = "rust_source", extensions = ["rs"] },
           { root = "crates/crunch-release-core/src/function_address_binding.rs", source_kind = "rust_source", extensions = ["rs"] },
           { root = "tests/release_cli.rs", source_kind = "rust_source", extensions = ["rs"] },

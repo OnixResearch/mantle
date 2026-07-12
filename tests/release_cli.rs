@@ -655,6 +655,7 @@ fn function_address_negative_cases() -> Vec<FunctionAddressCliNegativeCase> {
 // r[verify mantle.release_provenance.function_address_binding_cli.positive]
 #[test]
 fn function_address_binding_cli_emits_cairn_ready_required_receipt() {
+    // r[verify mantle.release_provenance.function_address_binding_cli.validation]
     let (temp, bundle_dir, mut manifest) = make_valid_bundle();
     let fixture = install_function_address_fixture(&bundle_dir, &mut manifest, true);
     let receipt_out = function_address_cli_receipt_out(&temp);

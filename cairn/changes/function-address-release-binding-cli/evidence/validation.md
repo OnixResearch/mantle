@@ -76,7 +76,11 @@ Terminal result: validated for the bounded identity/linkage contract after fixin
 
 Pueue task `819` ran repository-policy validation and proposal, design, and tasks gates serially. Validation reported 11 active changes, 38 validated specs, no issues, and `valid: true`. Every stage gate returned no issues, `valid: true`, and `verdict: PASS`. Pueue task `828` reported `policy fresh` for `cairn-policy/generated/cairn-policy.json`.
 
-The broad Tracey command in task `822` still reports established repository-wide missing coverage plus active-change references as dangling before sync. It reports no implementation gap specific to this package's deterministic checks; this output is not claimed as a passing Tracey rail. The package-level Cairn gates above are the pre-archive lifecycle evidence.
+The broad Tracey command in task `822` reported established repository-wide missing coverage plus active-change references as dangling before sync; that output is not claimed as a passing rail. After accepted-spec sync, the traceability policy was regenerated to scan the actual root-package CLI shell. Pueue task `854` reported `policy fresh`, valid Cairn layout, and proposal/design/tasks `PASS` under policy hash `d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c`. The task `855` broad Tracey receipt retained unrelated historical gaps but contained no missing or dangling `function_address_binding_cli` identifier.
+
+## Accepted-spec sync
+
+Pueue task `832` ran Cairn sync dry-run and execute. The execute receipt reported `mutated: true`, but its before/after accepted-spec content hashes were both `1b39a25b4ee31bd7da6699f35c2ed0d3cf57e6fba84cfed6291d22f9bcc358b0`; no requirement text was materialized. The reviewed requirement block was therefore appended manually to `cairn/specs/release-provenance/spec.md`. A Steel comparator located the first CLI requirement marker in both files, compared every remaining line plus the final newline, and reported `function-address CLI accepted requirement block: byte-for-byte line and terminator match`.
 
 ## Non-claims for failed exploratory commands
 
