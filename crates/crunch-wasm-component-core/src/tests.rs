@@ -644,6 +644,66 @@ fn stale_generated_bytes_or_owner_receipt_fail_closed() {
 }
 
 #[test]
+fn forged_generated_plan_integrity_fails_closed() {
+    let plan = finalize_generated_inputs(generated_candidates()).plan.unwrap();
+    let observed: Vec<ObservedGeneratedInput> = plan
+        .inputs
+        .iter()
+        .map(|input| ObservedGeneratedInput {
+            target: input.target.clone(),
+            content: Some(input.content.as_bytes().to_vec()),
+            receipt_identity_blake3: Some(input.receipt_identity_blake3.clone()),
+        })
+        .collect();
+    let mut forged = plan;
+    forged.schema = String::from("mantle-wasm-component-generated-input-plan-v2");
+    forged.inputs[0].content.push_str("\nforged");
+    let freshness = verify_generated_freshness(forged, observed);
+
+    assert!(!freshness.fresh);
+    assert!(freshness.blockers.iter().any(|item| item.code == "invalid-generated-plan-schema"));
+    assert!(freshness.blockers.iter().any(|item| item.code == "stale-generated-receipt-content"));
+    assert!(freshness.blockers.iter().any(|item| item.code == "stale-generated-plan-identity"));
+}
+
+#[test]
+fn unexpected_or_duplicate_observed_inputs_fail_closed() {
+    let plan = finalize_generated_inputs(generated_candidates()).plan.unwrap();
+    let mut unexpected: Vec<ObservedGeneratedInput> = plan
+        .inputs
+        .iter()
+        .map(|input| ObservedGeneratedInput {
+            target: input.target.clone(),
+            content: Some(input.content.as_bytes().to_vec()),
+            receipt_identity_blake3: Some(input.receipt_identity_blake3.clone()),
+        })
+        .collect();
+    let duplicate = unexpected[0].clone();
+    unexpected.push(ObservedGeneratedInput {
+        target: String::from(".mantle/wasm-component/unowned.toml"),
+        content: Some(Vec::new()),
+        receipt_identity_blake3: Some(blake3('7')),
+    });
+    let unexpected_result = verify_generated_freshness(plan.clone(), unexpected);
+    let mut duplicated = plan
+        .inputs
+        .iter()
+        .map(|input| ObservedGeneratedInput {
+            target: input.target.clone(),
+            content: Some(input.content.as_bytes().to_vec()),
+            receipt_identity_blake3: Some(input.receipt_identity_blake3.clone()),
+        })
+        .collect::<Vec<_>>();
+    duplicated.push(duplicate);
+    let duplicate_result = verify_generated_freshness(plan, duplicated);
+
+    assert!(!unexpected_result.fresh);
+    assert!(unexpected_result.blockers.iter().any(|item| item.code == "unexpected-generated-input"));
+    assert!(!duplicate_result.fresh);
+    assert!(duplicate_result.blockers.iter().any(|item| item.code == "duplicate-observed-input"));
+}
+
+#[test]
 fn generated_plan_rejects_mixed_source_ownership() {
     let mut candidates = generated_candidates();
     candidates[0].owner.source_identity_blake3 = blake3('8');

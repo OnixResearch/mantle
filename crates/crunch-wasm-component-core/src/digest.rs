@@ -50,7 +50,11 @@ impl Blake3Identity {
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        let hex = blake3::hash(&bytes).to_hex().to_string();
+        Self::from_slice(&bytes)
+    }
+
+    pub fn from_slice(bytes: &[u8]) -> Self {
+        let hex = blake3::hash(bytes).to_hex().to_string();
         debug_assert_eq!(hex.len(), BLAKE3_HEX_LENGTH);
         debug_assert!(is_lower_hex(&hex, BLAKE3_HEX_LENGTH));
         Self(hex)

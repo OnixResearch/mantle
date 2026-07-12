@@ -33,7 +33,7 @@ Implemented by:
   identities, followed by core-computed content and receipt BLAKE3 identities;
 - typed output classes and stale content/owner-receipt denial;
 - embedded stdlib parity and Nickel-to-Rust generated-input deserialization;
-- ADR 0014, which preserves ADR 0010's build-only boundary.
+- ADR 0016, which preserves ADR 0010's build-only boundary.
 
 ### Task 2 — pure functional core
 
@@ -184,11 +184,76 @@ cairn gate tasks: "valid": true, "verdict": "PASS"
 The exact JSON receipts are captured under `/tmp/mantle-wasm-target/final/`.
 No sync or archive command was run.
 
+## Mainline integration and adversarial hardening
+
+The two implementation commits were integrated on main as `0e1c60dc` and
+`3b3946d9`. The ADR was renumbered to 0016 because main already owns ADRs 0014
+and 0015.
+
+Adversarial review found a concrete false-acceptance path in generated-input
+freshness validation: a caller could supply a mutated plan without revalidating
+its plan/receipt identities, and extra or duplicate observed generated files
+were ignored. The repaired core now remeasures receipt content, recomputes each
+receipt and plan identity, validates schema/order/ownership, requires the
+observed target set to match exactly, rejects duplicate/unowned targets, and
+checks observed byte bounds before hashing. Two negative tests cover forged
+plans and unexpected/duplicate observed files.
+
+Current mainline evidence:
+
+```text
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-wasm-target cargo test -q -p crunch-wasm-component-core --lib
+running 30 tests
+..............................
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-wasm-target cargo clippy -q -p crunch-wasm-component-core --all-targets -- -D warnings
+(exit 0)
+
+$ nix run path:$PWD#tigerstyle -- check -p crunch-wasm-component-core
+(exit 0)
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-wasm-target cargo check -Zbuild-std=core,alloc -p crunch-wasm-component-core --target wasm32-unknown-unknown
+Checking crunch-wasm-component-core v0.1.0
+Finished `dev` profile
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-wasm-target cargo test -q -p mantle --test stdlib_tests wasm_component -- --nocapture
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.16s
+
+$ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-wasm-target cargo test -q -p crunch-eval stdlib::tests -- --nocapture
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.07s
+
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (15 contracted, 44 classified)
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+valid=true changes=13 specs_validated=39 issues=[]
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal add-wasm-component-build-pipeline --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=318d309fe3a8c92b44f349cd09ca3f796f5ecb4cce21d1a52c8e6c837f6d7b60
+receipt_hash=a92ca4def6f0d0722c197ee2dd0d1e3ce3c0a78837baf6a5c1914f25c9ed5177
+issues=[] valid=true verdict=PASS
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design add-wasm-component-build-pipeline --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=545d4ce8bd93734d23b709d84487a60f3569d3989c41996ef2ffc9da8d19f447
+receipt_hash=0f8aab17aeb1a7164aca069a2c40db2a2294d002493e712682d407bfaf79b81c
+issues=[] valid=true verdict=PASS
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks add-wasm-component-build-pipeline --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=c5489886e0c405c1575866e6b9b234c1751d5ae76a5489950cf13033bedab235
+receipt_hash=3a0704340c1372945afe3a2277bc3702ee2ae404422c4ba62693a7a5e942ad22
+issues=[] valid=true verdict=PASS
+```
+
 ## Portfolio-search registry
 
 | Family | Mechanism | Evidence | State | Exact blocker / next check |
 |---|---|---|---|---|
-| typed-config-core | Nickel contracts plus no-std deterministic Rust core | 28 core tests, 27 stdlib tests, wasm check, Clippy, Tiger Style | validated for tasks 1-2 | None inside the declared pure/config slice |
+| typed-config-core | Nickel contracts plus no-std deterministic Rust core | 30 core tests, 27 stdlib tests, wasm check, Clippy, Tiger Style | validated for tasks 1-2 | None inside the declared pure/config slice |
 | packaged-tool-cohort | Independently packaged component tools | Local package metadata exposed some independent versions, but no complete compatible cohort | blocked | Establish one source/pin set including WASI-Virt and wasm-component-ld, then run cohort fixtures |
 | registry-and-build-shell | Explicit wkg fetch followed by offline compilation/WAC/WASI-Virt execution | No locally executed resolver, immutable package fetch, component compile, composition, or virtualization artifact | blocked | Provide/package the complete cohort, then prove local-registry positive and stale/tampered negative fixtures |
 | independent-artifact-rail | Invoke Octet over exact portable bytes | Core binds exact report/profile/cohort identities without interpreting findings | blocked | Verify Octet's concrete artifact-rail CLI/API and run it on a cohort-built portable artifact |
