@@ -44,12 +44,29 @@ pub const KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA: &str = "kamacite.function-
 pub const KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_ROLE: &str = "kamacite-function-address-json-projection";
 pub const KAMACITE_FUNCTION_ADDRESS_JSON_PROJECTION_SCHEMA: &str = "kamacite.function-address-receipt.v1";
 pub const MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES: u64 = 1_048_576;
+pub const MAX_TRELLIS_PROOF_PRESERVES_SIDECAR_BYTES: u64 = MAX_FUNCTION_ADDRESS_PRESERVES_SIDECAR_BYTES;
 pub const FUNCTION_ADDRESS_MODE_OPTIONAL: &str = "optional";
 pub const FUNCTION_ADDRESS_MODE_REQUIRED: &str = "required";
 pub const FUNCTION_ADDRESS_DISPOSITION_ABSENT: &str = "absent";
 pub const FUNCTION_ADDRESS_DISPOSITION_PRESENT: &str = "present";
 pub const FUNCTION_ADDRESS_DISPOSITION_INVALID: &str = "invalid";
 pub const FUNCTION_ADDRESS_OPAQUE_BOUNDARY: &str = "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics";
+
+pub const TRELLIS_PROOF_PROFILE_VERSION: &str = "kamacite.trellis-proof-evidence-profile.v1";
+pub const TRELLIS_PROOF_CLAIM_SCOPE: &str = "trellis-proof-identity-linkage-only";
+pub const KAMACITE_TRELLIS_PROOF_PRESERVES_ROLE: &str = "kamacite-trellis-proof-preserves-envelope";
+pub const KAMACITE_TRELLIS_PROOF_PRESERVES_SCHEMA: &str = "kamacite.trellis-proof-evidence-profile.v1";
+pub const VALENCE_TRELLIS_PROOF_VALIDATION_ROLE: &str = "valence-trellis-proof-evidence-profile";
+pub const VALENCE_TRELLIS_PROOF_VALIDATION_SCHEMA: &str = "trellis.proof-evidence";
+pub const KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_ROLE: &str = "kamacite-trellis-proof-json-projection";
+pub const KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_SCHEMA: &str =
+    "kamacite.trellis-proof-evidence-profile.v1.compat-json";
+pub const TRELLIS_PROOF_KAMACITE_ROLE_RECORDED_ONLY: &str = "recorded-only";
+pub const TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE: &str = "formal-proof-candidate";
+pub const TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY: &str = "recorded_only";
+pub const TRELLIS_PROOF_REFERENCE_ONLY_NON_CLAIM: &str =
+    "Trellis proof evidence is reference input only and does not establish Mantle release eligibility";
+pub const TRELLIS_PROOF_AUTHORITY_NON_CLAIM: &str = "Mantle does not claim verifier soundness, proof truth, semantic equivalence, whole-program correctness, or downstream certification";
 
 pub const MAX_OPAQUE_EVIDENCE_BINDINGS_COUNT: u32 = 32;
 const MAX_OPAQUE_EVIDENCE_POLICY_HASHES_COUNT: u32 = 16;
@@ -63,6 +80,10 @@ const REQUIRED_POLICY_KINDS_COUNT: u32 = 2;
 const REQUIRED_POLICY_KINDS: &[&str] = &[
     OPAQUE_EVIDENCE_POLICY_KIND_UPSTREAM_PROFILE,
     OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE,
+];
+const TRELLIS_PROOF_REQUIRED_NON_CLAIMS: &[&str] = &[
+    TRELLIS_PROOF_REFERENCE_ONLY_NON_CLAIM,
+    TRELLIS_PROOF_AUTHORITY_NON_CLAIM,
 ];
 const OPAQUE_EVIDENCE_OVERCLAIM_FRAGMENTS: &[&str] = &[
     "mantle verifies payload semantics",
@@ -128,6 +149,12 @@ pub struct OpaqueEvidenceCompatibilityProjection {
     pub canonical_envelope_digest_blake3: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpaqueEvidenceProfileRoles {
+    pub producer_role: String,
+    pub validation_role: String,
+}
+
 fn empty_compatibility_projections() -> Vec<OpaqueEvidenceCompatibilityProjection> {
     Vec::new()
 }
@@ -137,6 +164,8 @@ pub struct OpaqueEvidenceSidecarBinding {
     pub schema: String,
     pub evidence_kind: String,
     pub profile_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_roles: Option<OpaqueEvidenceProfileRoles>,
     pub canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink,
     pub upstream_validation: OpaqueEvidenceUpstreamValidationLink,
     pub source_artifact: OpaqueEvidenceSourceArtifactLink,
@@ -357,7 +386,7 @@ fn validate_evidence_kind_and_profile(binding: &OpaqueEvidenceSidecarBinding, di
         diagnostics.push(format!("binding.evidence_kind is unsupported: {}", binding.evidence_kind));
         return;
     }
-    let expected_claim_scope = expected_claim_scope(&binding.evidence_kind);
+    let expected_claim_scope = expected_claim_scope(binding);
     push_literal_diagnostic(
         LiteralDiagnosticField {
             actual: &binding.claim_scope,
@@ -368,6 +397,9 @@ fn validate_evidence_kind_and_profile(binding: &OpaqueEvidenceSidecarBinding, di
     );
     if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS {
         validate_function_address_profile(binding, diagnostics);
+    }
+    if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_PROOF {
+        validate_trellis_proof_profile(binding, diagnostics);
     }
     debug_assert!(evidence_kind_is_supported(&binding.evidence_kind));
     debug_assert!(
@@ -395,6 +427,159 @@ fn validate_function_address_profile(binding: &OpaqueEvidenceSidecarBinding, dia
         binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS
             || diagnostics.iter().any(|diagnostic| diagnostic.contains("evidence_kind"))
     );
+}
+
+// r[impl mantle.release_provenance.trellis_proof_sidecars.profile]
+// r[impl mantle.release_provenance.trellis_proof_sidecars.links]
+fn validate_trellis_proof_profile(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
+    push_literal_diagnostic(
+        LiteralDiagnosticField {
+            actual: &binding.profile_version,
+            expected: TRELLIS_PROOF_PROFILE_VERSION,
+            field_name: "binding.profile_version",
+        },
+        diagnostics,
+    );
+    validate_trellis_proof_artifacts(binding, diagnostics);
+    validate_required_preserves_metadata(binding, diagnostics);
+    validate_trellis_proof_roles(binding.profile_roles.as_ref(), diagnostics);
+    validate_trellis_identity_domains(binding, diagnostics);
+    validate_trellis_proof_projections(&binding.compatibility_projections, diagnostics);
+    validate_trellis_proof_non_claims(&binding.non_claims, diagnostics);
+    debug_assert_eq!(binding.evidence_kind, OPAQUE_EVIDENCE_KIND_PROOF);
+    debug_assert!(
+        binding.profile_version == TRELLIS_PROOF_PROFILE_VERSION
+            || diagnostics.iter().any(|diagnostic| diagnostic.contains("binding.profile_version"))
+    );
+}
+
+fn validate_trellis_proof_artifacts(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
+    validate_expected_artifact(
+        &binding.canonical_envelope.role,
+        &binding.canonical_envelope.schema,
+        KAMACITE_TRELLIS_PROOF_PRESERVES_ROLE,
+        KAMACITE_TRELLIS_PROOF_PRESERVES_SCHEMA,
+        "binding.canonical_envelope",
+        diagnostics,
+    );
+    validate_expected_artifact(
+        &binding.upstream_validation.role,
+        &binding.upstream_validation.schema,
+        VALENCE_TRELLIS_PROOF_VALIDATION_ROLE,
+        VALENCE_TRELLIS_PROOF_VALIDATION_SCHEMA,
+        "binding.upstream_validation",
+        diagnostics,
+    );
+}
+
+fn validate_expected_artifact(
+    actual_role: &str,
+    actual_schema: &str,
+    expected_role: &str,
+    expected_schema: &str,
+    field_name: &str,
+    diagnostics: &mut Vec<String>,
+) {
+    debug_assert!(!expected_role.is_empty());
+    debug_assert!(!expected_schema.is_empty());
+    push_literal_diagnostic(
+        LiteralDiagnosticField {
+            actual: actual_role,
+            expected: expected_role,
+            field_name: &format!("{field_name}.role"),
+        },
+        diagnostics,
+    );
+    push_literal_diagnostic(
+        LiteralDiagnosticField {
+            actual: actual_schema,
+            expected: expected_schema,
+            field_name: &format!("{field_name}.schema"),
+        },
+        diagnostics,
+    );
+}
+
+fn validate_trellis_proof_roles(roles: Option<&OpaqueEvidenceProfileRoles>, diagnostics: &mut Vec<String>) {
+    let Some(roles) = roles else {
+        diagnostics.push("binding.profile_roles is required for Trellis proof evidence".to_string());
+        return;
+    };
+    if !matches!(
+        roles.producer_role.as_str(),
+        TRELLIS_PROOF_KAMACITE_ROLE_RECORDED_ONLY | TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE
+    ) {
+        diagnostics.push(format!(
+            "binding.profile_roles.producer_role is unsupported for Trellis proof evidence: {}",
+            roles.producer_role
+        ));
+    }
+    push_literal_diagnostic(
+        LiteralDiagnosticField {
+            actual: &roles.validation_role,
+            expected: TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY,
+            field_name: "binding.profile_roles.validation_role",
+        },
+        diagnostics,
+    );
+}
+
+fn validate_trellis_identity_domains(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
+    if binding.upstream_validation.receipt_hash_blake3.as_ref() == Some(&binding.upstream_validation.digest_blake3) {
+        diagnostics.push(
+            "binding.upstream_validation artifact digest and logical receipt hash must remain distinct identity domains"
+                .to_string(),
+        );
+    }
+    for projection in &binding.compatibility_projections {
+        if projection.digest_blake3 == projection.canonical_envelope_digest_blake3 {
+            diagnostics.push(
+                "binding.compatibility_projections artifact digest and canonical envelope identity must remain distinct domains"
+                    .to_string(),
+            );
+        }
+    }
+    debug_assert!(
+        binding.upstream_validation.receipt_hash_blake3.as_ref() != Some(&binding.upstream_validation.digest_blake3)
+            || !diagnostics.is_empty()
+    );
+    debug_assert!(
+        binding
+            .compatibility_projections
+            .iter()
+            .all(|projection| { projection.digest_blake3 != projection.canonical_envelope_digest_blake3 })
+            || !diagnostics.is_empty()
+    );
+}
+
+fn validate_trellis_proof_projections(
+    projections: &[OpaqueEvidenceCompatibilityProjection],
+    diagnostics: &mut Vec<String>,
+) {
+    const MAX_TRELLIS_PROOF_PROJECTIONS_COUNT: usize = 1;
+    if projections.len() > MAX_TRELLIS_PROOF_PROJECTIONS_COUNT {
+        diagnostics.push("binding.compatibility_projections permits at most one Trellis JSON projection".to_string());
+    }
+    for projection in projections {
+        validate_expected_artifact(
+            &projection.role,
+            &projection.schema,
+            KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_ROLE,
+            KAMACITE_TRELLIS_PROOF_JSON_PROJECTION_SCHEMA,
+            "binding.compatibility_projections",
+            diagnostics,
+        );
+    }
+}
+
+fn validate_trellis_proof_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
+    for required in TRELLIS_PROOF_REQUIRED_NON_CLAIMS {
+        if !non_claims.iter().any(|non_claim| non_claim == required) {
+            diagnostics.push(format!("binding.non_claims is missing required Trellis boundary: {required}"));
+        }
+    }
+    debug_assert!(!TRELLIS_PROOF_REQUIRED_NON_CLAIMS.is_empty());
+    debug_assert!(TRELLIS_PROOF_REQUIRED_NON_CLAIMS.iter().all(|required| !required.is_empty()));
 }
 
 fn validate_legacy_function_address_profile(binding: &OpaqueEvidenceSidecarBinding, diagnostics: &mut Vec<String>) {
@@ -529,9 +714,12 @@ fn evidence_kind_is_supported(evidence_kind: &str) -> bool {
     )
 }
 
-fn expected_claim_scope(evidence_kind: &str) -> &'static str {
-    if evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS {
+fn expected_claim_scope(binding: &OpaqueEvidenceSidecarBinding) -> &'static str {
+    if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS {
         return FUNCTION_ADDRESS_CLAIM_SCOPE;
+    }
+    if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_PROOF {
+        return TRELLIS_PROOF_CLAIM_SCOPE;
     }
     OPAQUE_EVIDENCE_GENERIC_CLAIM_SCOPE
 }

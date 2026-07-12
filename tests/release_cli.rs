@@ -752,6 +752,7 @@ fn install_function_address_preserves_fixture(
         schema: OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA.to_string(),
         evidence_kind: OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS.to_string(),
         profile_version: FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION.to_string(),
+        profile_roles: None,
         canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink {
             role: KAMACITE_FUNCTION_ADDRESS_PRESERVES_ROLE.to_string(),
             schema: KAMACITE_FUNCTION_ADDRESS_PRESERVES_SCHEMA.to_string(),

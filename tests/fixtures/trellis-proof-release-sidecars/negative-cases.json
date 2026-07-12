@@ -1,0 +1,86 @@
+[
+  {
+    "name": "missing-canonical-hash",
+    "expected": "binding.canonical_envelope.digest_blake3 must be 64"
+  },
+  {
+    "name": "stale-preserves-digest",
+    "expected": "canonical Preserves artifact digest mismatch"
+  },
+  {
+    "name": "stale-valence-artifact-digest",
+    "expected": "Valence artifact digest mismatch"
+  },
+  {
+    "name": "stale-valence-logical-receipt-hash",
+    "expected": "Valence logical receipt hash mismatch"
+  },
+  {
+    "name": "valence-identity-domain-conflation",
+    "expected": "artifact digest and logical receipt hash must remain distinct identity domains"
+  },
+  {
+    "name": "stale-source-link",
+    "expected": "binding.source_artifact.digest_blake3 does not match the bundled source artifact"
+  },
+  {
+    "name": "stale-binary-link",
+    "expected": "binding.release_binary.digest_blake3 does not match the bundled release binary"
+  },
+  {
+    "name": "missing-policy-hash",
+    "expected": "binding.policy_hashes requires at least"
+  },
+  {
+    "name": "malformed-policy-digest",
+    "expected": "binding.policy_hashes.digest_blake3 must be 64"
+  },
+  {
+    "name": "wrong-claim-scope",
+    "expected": "binding.claim_scope must be trellis-proof-identity-linkage-only"
+  },
+  {
+    "name": "weakened-non-claims",
+    "expected": "binding.non_claims is missing required Trellis boundary"
+  },
+  {
+    "name": "overclaiming-text",
+    "expected": "binding.non_claims contains an opaque evidence overclaim"
+  },
+  {
+    "name": "wrong-upstream-role",
+    "expected": "binding.upstream_validation.role must be valence-trellis-proof-evidence-profile"
+  },
+  {
+    "name": "wrong-canonical-schema",
+    "expected": "binding.canonical_envelope.schema must be kamacite.trellis-proof-evidence-profile.v1"
+  },
+  {
+    "name": "unsupported-proof-profile",
+    "expected": "binding.profile_version must be kamacite.trellis-proof-evidence-profile.v1"
+  },
+  {
+    "name": "unauthorized-property-promotion",
+    "expected": "binding.profile_roles.validation_role must be recorded_only"
+  },
+  {
+    "name": "producer-role-domain-substitution",
+    "expected": "binding.profile_roles.producer_role is unsupported"
+  },
+  {
+    "name": "oversized-preserves-envelope",
+    "expected": "binding.canonical_envelope.size_bytes must be in"
+  },
+  {
+    "name": "json-projection-identity-drift",
+    "expected": "JSON projection canonical Preserves identity mismatch"
+  },
+  {
+    "name": "projection-identity-domain-conflation",
+    "expected": "artifact digest and canonical envelope identity must remain distinct domains"
+  },
+  {
+    "name": "missing-artifact-observations",
+    "expected": "Trellis proof artifact observations are required"
+  }
+]

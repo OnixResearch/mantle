@@ -2128,6 +2128,17 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::opaque_evidence::MAX_TRELLIS_PROOF_PRESERVES_SIDECAR_BYTES;
+    use crate::opaque_evidence::TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE;
+    use crate::opaque_evidence::TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY;
+    use crate::trellis_proof_binding::TRELLIS_PROOF_ACCEPTANCE_AUTHORITY_BLOCKER;
+    use crate::trellis_proof_binding::TRELLIS_PROOF_DISPOSITION_ABSENT;
+    use crate::trellis_proof_binding::TRELLIS_PROOF_DISPOSITION_INVALID;
+    use crate::trellis_proof_binding::TRELLIS_PROOF_DISPOSITION_RECORDED_ONLY;
+    use crate::trellis_proof_binding::TRELLIS_PROOF_MODE_OPTIONAL;
+    use crate::trellis_proof_binding::TRELLIS_PROOF_MODE_REQUIRED;
+    use crate::trellis_proof_binding::TrellisProofArtifactObservations;
+    use crate::trellis_proof_binding::evaluate_trellis_proof_release_evidence;
 
     const SOURCE_ARCHIVE_DIGEST_SEED: u8 = 1;
     const RELEASE_BINARY_DIGEST_SEED: u8 = 3;
@@ -2152,6 +2163,7 @@ mod tests {
     const DOMAIN_SEPARATION_POLICY_DIGEST_SEED: u8 = 45;
     const SECOND_LIFECYCLE_ENVELOPE_DIGEST_SEED: u8 = 46;
     const SECOND_LIFECYCLE_VALIDATION_DIGEST_SEED: u8 = 47;
+    const TRELLIS_STALE_DIGEST_SEED: u8 = 14;
 
     type ManifestMutator = fn(&mut ReleaseEvidenceManifest);
     type ManifestFixtureCase = (&'static str, ManifestMutator, &'static str);
@@ -2349,6 +2361,7 @@ mod tests {
             schema: OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA.to_string(),
             evidence_kind: OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS.to_string(),
             profile_version: FUNCTION_ADDRESS_PROFILE_VERSION.to_string(),
+            profile_roles: None,
             canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink {
                 role: sidecar.role,
                 schema: sidecar.schema,
@@ -2470,6 +2483,7 @@ mod tests {
             schema: OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA.to_string(),
             evidence_kind: OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS.to_string(),
             profile_version: FUNCTION_ADDRESS_PRESERVES_PROFILE_VERSION.to_string(),
+            profile_roles: None,
             canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink {
                 role: preserves.role,
                 schema: preserves.schema,
@@ -2537,6 +2551,96 @@ mod tests {
         manifest
     }
 
+    #[derive(Debug, Deserialize)]
+    struct TrellisProofNegativeCase {
+        name: String,
+        expected: String,
+    }
+
+    fn sample_trellis_proof_binding() -> OpaqueEvidenceSidecarBinding {
+        serde_json::from_str(include_str!(
+            "../../../tests/fixtures/trellis-proof-release-sidecars/binding.optional-recorded-only.valid.json"
+        ))
+        .expect("parse registered Trellis proof binding fixture")
+    }
+
+    fn sample_trellis_proof_manifest() -> ReleaseEvidenceManifest {
+        let mut manifest = sample_manifest();
+        let binding = sample_trellis_proof_binding();
+        manifest.external_evidence = trellis_external_evidence(&binding);
+        manifest.opaque_evidence_sidecar_bindings =
+            vec![opaque_evidence_sidecar_binding_receipt(binding).expect("valid Trellis proof binding")];
+        manifest
+    }
+
+    fn trellis_external_evidence(binding: &OpaqueEvidenceSidecarBinding) -> Vec<ExternalEvidence> {
+        let mut evidence = vec![
+            trellis_external_row(
+                &binding.canonical_envelope.role,
+                &binding.canonical_envelope.schema,
+                &binding.canonical_envelope.relative_path,
+                &binding.canonical_envelope.digest_blake3,
+                binding,
+            ),
+            trellis_external_row(
+                &binding.upstream_validation.role,
+                &binding.upstream_validation.schema,
+                &binding.upstream_validation.relative_path,
+                &binding.upstream_validation.digest_blake3,
+                binding,
+            ),
+        ];
+        evidence.extend(binding.compatibility_projections.iter().map(|projection| {
+            trellis_external_row(
+                &projection.role,
+                &projection.schema,
+                &projection.relative_path,
+                &projection.digest_blake3,
+                binding,
+            )
+        }));
+        evidence
+    }
+
+    fn trellis_external_row(
+        role: &str,
+        schema: &str,
+        relative_path: &str,
+        digest_blake3: &str,
+        binding: &OpaqueEvidenceSidecarBinding,
+    ) -> ExternalEvidence {
+        ExternalEvidence {
+            role: role.to_string(),
+            schema: schema.to_string(),
+            relative_path: relative_path.to_string(),
+            digest_blake3: digest_blake3.to_string(),
+            claim_scope: binding.claim_scope.clone(),
+            non_claims: binding.non_claims.clone(),
+        }
+    }
+
+    fn sample_trellis_observations(binding: &OpaqueEvidenceSidecarBinding) -> TrellisProofArtifactObservations {
+        let projection = binding.compatibility_projections.first();
+        TrellisProofArtifactObservations {
+            canonical_envelope_size_bytes: binding.canonical_envelope.size_bytes.expect("fixture has bounded size"),
+            canonical_envelope_digest_blake3: binding.canonical_envelope.digest_blake3.clone(),
+            valence_artifact_digest_blake3: binding.upstream_validation.digest_blake3.clone(),
+            valence_receipt_hash_blake3: binding
+                .upstream_validation
+                .receipt_hash_blake3
+                .clone()
+                .expect("fixture has Valence logical identity"),
+            projection_artifact_digest_blake3: projection.map(|value| value.digest_blake3.clone()),
+            projection_canonical_envelope_digest_blake3: projection
+                .map(|value| value.canonical_envelope_digest_blake3.clone()),
+        }
+    }
+
+    fn trellis_negative_cases() -> Vec<TrellisProofNegativeCase> {
+        serde_json::from_str(include_str!("../../../tests/fixtures/trellis-proof-release-sidecars/negative-cases.json"))
+            .expect("parse Trellis proof negative cases")
+    }
+
     fn sample_lifecycle_opaque_binding_manifest() -> ReleaseEvidenceManifest {
         let mut manifest = sample_manifest();
         let non_claims = vec![OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM.to_string()];
@@ -2560,6 +2664,7 @@ mod tests {
             schema: OPAQUE_EVIDENCE_SIDECAR_BINDING_SCHEMA.to_string(),
             evidence_kind: OPAQUE_EVIDENCE_KIND_LIFECYCLE.to_string(),
             profile_version: "lifecycle-evidence-v1".to_string(),
+            profile_roles: None,
             canonical_envelope: OpaqueEvidenceCanonicalEnvelopeLink {
                 role: envelope.role.clone(),
                 schema: envelope.schema.clone(),
@@ -3949,5 +4054,157 @@ mod tests {
         });
         let err = canonical_release_evidence_manifest(manifest).unwrap_err();
         assert!(err.to_string().contains("provenance_coverage.binary_hash"));
+    }
+
+    // r[impl mantle.release_provenance.trellis_proof_sidecars.positive]
+    #[test]
+    fn trellis_proof_registered_fixture_is_optional_recorded_only() {
+        let manifest = sample_trellis_proof_manifest();
+        let observations = sample_trellis_observations(&manifest.opaque_evidence_sidecar_bindings[0].binding);
+
+        let canonical = canonical_release_evidence_manifest(manifest.clone()).expect("canonical Trellis manifest");
+        let verification =
+            evaluate_trellis_proof_release_evidence(&manifest, TRELLIS_PROOF_MODE_OPTIONAL, Some(&observations));
+
+        assert!(!canonical.is_empty());
+        assert!(verification.valid, "{:?}", verification.diagnostics);
+        assert_eq!(verification.disposition, TRELLIS_PROOF_DISPOSITION_RECORDED_ONLY);
+        assert_eq!(verification.validation_role.as_deref(), Some(TRELLIS_PROOF_VALENCE_ROLE_RECORDED_ONLY));
+    }
+
+    #[test]
+    fn trellis_formal_proof_candidate_remains_recorded_only_in_mantle() {
+        let mut manifest = sample_trellis_proof_manifest();
+        let mut binding = manifest.opaque_evidence_sidecar_bindings[0].binding.clone();
+        binding.profile_roles.as_mut().expect("fixture roles").producer_role =
+            TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE.to_string();
+        manifest.opaque_evidence_sidecar_bindings[0] =
+            opaque_evidence_sidecar_binding_receipt(binding).expect("candidate binding remains shape-valid");
+        let observations = sample_trellis_observations(&manifest.opaque_evidence_sidecar_bindings[0].binding);
+
+        let verification =
+            evaluate_trellis_proof_release_evidence(&manifest, TRELLIS_PROOF_MODE_OPTIONAL, Some(&observations));
+
+        assert!(verification.valid, "{:?}", verification.diagnostics);
+        assert_eq!(verification.disposition, TRELLIS_PROOF_DISPOSITION_RECORDED_ONLY);
+        assert_eq!(verification.producer_role.as_deref(), Some(TRELLIS_PROOF_KAMACITE_ROLE_FORMAL_PROOF_CANDIDATE));
+    }
+
+    #[test]
+    fn trellis_optional_mode_accepts_absence_without_observations() {
+        let verification =
+            evaluate_trellis_proof_release_evidence(&sample_manifest(), TRELLIS_PROOF_MODE_OPTIONAL, None);
+
+        assert!(verification.valid);
+        assert_eq!(verification.disposition, TRELLIS_PROOF_DISPOSITION_ABSENT);
+        assert!(verification.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn trellis_required_mode_fails_closed_without_accepted_upstream_authority() {
+        let manifest = sample_trellis_proof_manifest();
+        let observations = sample_trellis_observations(&manifest.opaque_evidence_sidecar_bindings[0].binding);
+
+        let verification =
+            evaluate_trellis_proof_release_evidence(&manifest, TRELLIS_PROOF_MODE_REQUIRED, Some(&observations));
+
+        assert!(!verification.valid);
+        assert_eq!(verification.disposition, TRELLIS_PROOF_DISPOSITION_INVALID);
+        assert!(verification.diagnostics.iter().any(|value| value == TRELLIS_PROOF_ACCEPTANCE_AUTHORITY_BLOCKER));
+    }
+
+    // r[impl mantle.release_provenance.trellis_proof_sidecars.negative]
+    #[test]
+    fn trellis_proof_negative_fixture_matrix_fails_closed() {
+        for case in trellis_negative_cases() {
+            let diagnostics = execute_trellis_negative_case(&case.name);
+            assert!(
+                diagnostics.contains(&case.expected),
+                "case {} expected {:?}, got {:?}",
+                case.name,
+                case.expected,
+                diagnostics
+            );
+        }
+    }
+
+    fn execute_trellis_negative_case(case_name: &str) -> String {
+        let mut manifest = sample_trellis_proof_manifest();
+        let mut observations = sample_trellis_observations(&manifest.opaque_evidence_sidecar_bindings[0].binding);
+        if case_name == "missing-artifact-observations" {
+            return evaluate_trellis_proof_release_evidence(&manifest, TRELLIS_PROOF_MODE_OPTIONAL, None)
+                .diagnostics
+                .join("\n");
+        }
+        if mutate_trellis_observations(case_name, &mut observations) {
+            return evaluate_trellis_proof_release_evidence(
+                &manifest,
+                TRELLIS_PROOF_MODE_OPTIONAL,
+                Some(&observations),
+            )
+            .diagnostics
+            .join("\n");
+        }
+        let mut binding = manifest.opaque_evidence_sidecar_bindings[0].binding.clone();
+        assert!(mutate_trellis_binding(case_name, &mut binding), "unknown Trellis negative case: {case_name}");
+        match opaque_evidence_sidecar_binding_receipt(binding) {
+            Ok(receipt) => manifest.opaque_evidence_sidecar_bindings[0] = receipt,
+            Err(error) => return error.to_string(),
+        }
+        evaluate_trellis_proof_release_evidence(&manifest, TRELLIS_PROOF_MODE_OPTIONAL, Some(&observations))
+            .diagnostics
+            .join("\n")
+    }
+
+    fn mutate_trellis_observations(case_name: &str, observed: &mut TrellisProofArtifactObservations) -> bool {
+        let stale = sample_digest(TRELLIS_STALE_DIGEST_SEED);
+        match case_name {
+            "stale-preserves-digest" => observed.canonical_envelope_digest_blake3 = stale,
+            "stale-valence-artifact-digest" => observed.valence_artifact_digest_blake3 = stale,
+            "stale-valence-logical-receipt-hash" => observed.valence_receipt_hash_blake3 = stale,
+            "json-projection-identity-drift" => {
+                observed.projection_canonical_envelope_digest_blake3 = Some(stale);
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn mutate_trellis_binding(case_name: &str, binding: &mut OpaqueEvidenceSidecarBinding) -> bool {
+        match case_name {
+            "missing-canonical-hash" => binding.canonical_envelope.digest_blake3 = String::new(),
+            "valence-identity-domain-conflation" => {
+                binding.upstream_validation.receipt_hash_blake3 =
+                    Some(binding.upstream_validation.digest_blake3.clone());
+            }
+            "stale-source-link" => binding.source_artifact.digest_blake3 = sample_digest(TRELLIS_STALE_DIGEST_SEED),
+            "stale-binary-link" => binding.release_binary.digest_blake3 = sample_digest(TRELLIS_STALE_DIGEST_SEED),
+            "missing-policy-hash" => {
+                binding.policy_hashes.pop();
+            }
+            "malformed-policy-digest" => binding.policy_hashes[0].digest_blake3 = "not-a-digest".to_string(),
+            "wrong-claim-scope" => binding.claim_scope = "proof-acceptance".to_string(),
+            "weakened-non-claims" => binding.non_claims.retain(|value| !value.contains("reference input only")),
+            "overclaiming-text" => binding.non_claims.push("Mantle proves release eligibility".to_string()),
+            "wrong-upstream-role" => binding.upstream_validation.role = "octet".to_string(),
+            "wrong-canonical-schema" => binding.canonical_envelope.schema = "trellis.proof.v0".to_string(),
+            "unsupported-proof-profile" => binding.profile_version = "trellis-proof-v0".to_string(),
+            "unauthorized-property-promotion" => {
+                binding.profile_roles.as_mut().expect("fixture roles").validation_role = "property".to_string();
+            }
+            "producer-role-domain-substitution" => {
+                binding.profile_roles.as_mut().expect("fixture roles").producer_role = "recorded_only".to_string();
+            }
+            "oversized-preserves-envelope" => {
+                binding.canonical_envelope.size_bytes =
+                    Some(MAX_TRELLIS_PROOF_PRESERVES_SIDECAR_BYTES.checked_add(1).expect("bounded fixture size"));
+            }
+            "projection-identity-domain-conflation" => {
+                let projection = binding.compatibility_projections.first_mut().expect("fixture projection");
+                projection.digest_blake3 = projection.canonical_envelope_digest_blake3.clone();
+            }
+            _ => return false,
+        }
+        true
     }
 }

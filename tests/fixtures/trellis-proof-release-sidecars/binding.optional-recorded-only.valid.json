@@ -1,0 +1,56 @@
+{
+  "schema": "mantle-opaque-evidence-sidecar-binding-v1",
+  "evidence_kind": "proof",
+  "profile_version": "kamacite.trellis-proof-evidence-profile.v1",
+  "profile_roles": {
+    "producer_role": "recorded-only",
+    "validation_role": "recorded_only"
+  },
+  "canonical_envelope": {
+    "role": "kamacite-trellis-proof-preserves-envelope",
+    "schema": "kamacite.trellis-proof-evidence-profile.v1",
+    "relative_path": "external-evidence/trellis-proof-envelope.preserves",
+    "digest_blake3": "8888888888888888888888888888888888888888888888888888888888888888",
+    "size_bytes": 1
+  },
+  "upstream_validation": {
+    "role": "valence-trellis-proof-evidence-profile",
+    "schema": "trellis.proof-evidence",
+    "relative_path": "external-evidence/valence-trellis-proof-recorded-only.json",
+    "digest_blake3": "9999999999999999999999999999999999999999999999999999999999999999",
+    "receipt_hash_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "source_artifact": {
+    "relative_path": "source/mantle-src.tar",
+    "digest_blake3": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "release_binary": {
+    "relative_path": "binaries/01-mantle",
+    "digest_blake3": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "policy_hashes": [
+    {
+      "policy_kind": "mantle-release-policy",
+      "digest_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "policy_kind": "upstream-profile-policy",
+      "digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "claim_scope": "trellis-proof-identity-linkage-only",
+  "compatibility_projections": [
+    {
+      "role": "kamacite-trellis-proof-json-projection",
+      "schema": "kamacite.trellis-proof-evidence-profile.v1.compat-json",
+      "relative_path": "external-evidence/trellis-proof-envelope.compat.json",
+      "digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "canonical_envelope_digest_blake3": "8888888888888888888888888888888888888888888888888888888888888888"
+    }
+  ],
+  "non_claims": [
+    "Mantle does not claim verifier soundness, proof truth, semantic equivalence, whole-program correctness, or downstream certification",
+    "Mantle validates opaque evidence metadata and typed BLAKE3 links only; upstream producers own payload semantics",
+    "Trellis proof evidence is reference input only and does not establish Mantle release eligibility"
+  ]
+}
