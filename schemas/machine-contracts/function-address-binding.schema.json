@@ -17,9 +17,11 @@
         "valence_receipt_role",
         "valence_receipt_schema",
         "valence_receipt_digest_blake3",
+        "valence_receipt_hash_blake3",
         "kamacite_receipt_role",
         "kamacite_receipt_schema",
         "kamacite_receipt_digest_blake3",
+        "kamacite_receipt_hash_blake3",
         "source_archive_digest_blake3",
         "release_binary_relative_path",
         "release_binary_digest_blake3",
@@ -65,6 +67,10 @@
           "type": "string",
           "x-mantle-semantic": "blake3"
         },
+        "valence_receipt_hash_blake3": {
+          "type": "string",
+          "x-mantle-semantic": "blake3"
+        },
         "kamacite_receipt_role": {
           "type": ["string", "null"],
           "enum": [null, "kamacite-function-address-receipt"]
@@ -74,6 +80,10 @@
           "enum": [null, "kamacite.function-address-receipt.v1"]
         },
         "kamacite_receipt_digest_blake3": {
+          "type": ["string", "null"],
+          "x-mantle-semantic": "blake3"
+        },
+        "kamacite_receipt_hash_blake3": {
           "type": ["string", "null"],
           "x-mantle-semantic": "blake3"
         },
@@ -229,10 +239,10 @@
     { "kind": "field-equals", "left": "/valid", "right": "/verification_summary/valid" },
     { "kind": "field-equals", "left": "/disposition", "right": "/verification_summary/disposition" },
     { "kind": "field-equals", "left": "/sidecar_digest", "right": "/verification_summary/sidecar_digest_blake3" },
-    { "kind": "field-equals", "left": "/valence_receipt_digest", "right": "/verification_summary/valence_receipt_digest_blake3" },
+    { "kind": "field-equals", "left": "/valence_receipt_digest", "right": "/verification_summary/valence_receipt_hash_blake3" },
     { "kind": "field-equals", "left": "/source_archive_digest", "right": "/verification_summary/source_archive_digest_blake3" },
     { "kind": "field-equals", "left": "/release_binary_digest", "right": "/verification_summary/release_binary_digest_blake3" },
-    { "kind": "field-equals", "left": "/kamacite_receipt_digest", "right": "/verification_summary/kamacite_receipt_digest_blake3" },
+    { "kind": "field-equals", "left": "/kamacite_receipt_digest", "right": "/verification_summary/kamacite_receipt_hash_blake3" },
     { "kind": "field-equals", "left": "/mantle_non_claim_boundary", "right": "/verification_summary/boundary" },
     { "kind": "field-equals-const-when", "boolean": "/valid", "target": "/verdict", "value": "PASS" },
     { "kind": "field-equals-const-when", "boolean": "/valid", "target": "/disposition", "value": "present" }

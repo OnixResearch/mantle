@@ -5,6 +5,28 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Function-address binding CLI bridge.
+//
+// r[impl mantle.release_provenance.function_address_binding_cli.command]
+// r[impl mantle.release_provenance.function_address_binding_cli.shell]
+// r[impl mantle.release_provenance.function_address_binding_cli.shell.replacement]
+// r[impl mantle.release_provenance.function_address_binding_cli.receipt]
+// r[impl mantle.release_provenance.function_address_binding_cli.receipt.identity_domains]
+// The operator surface and bounded capability shell live in
+// `src/{main,release_cmd,function_address_binding_cmd}.rs`; typed selection,
+// identity-domain separation, validation, and deterministic receipt rendering
+// live in `crates/crunch-release-core/src/function_address_binding.rs`.
+//
+// r[verify mantle.release_provenance.function_address_binding_cli.positive]
+// r[verify mantle.release_provenance.function_address_binding_cli.negative]
+// r[verify mantle.release_provenance.function_address_binding_cli.shell.replacement]
+// r[verify mantle.release_provenance.function_address_binding_cli.receipt.identity_domains]
+// r[verify mantle.release_provenance.function_address_binding_cli.validation]
+// Verified by the positive optional/required and adversarial CLI fixtures in
+// `tests/release_cli.rs`, machine-contract parity, and direct Cairn consumption
+// of the CLI-generated receipt. This proves bounded bundle-local identity and
+// linkage handling only, not upstream evidence semantics or release eligibility.
+
 // Kernel-bundle OCI projection bridge.
 //
 // r[impl kernel_bundle_oci.projection]

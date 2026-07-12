@@ -925,12 +925,13 @@ let Registry = {
       "class"= "contracted",
       "rust_owner"= "crates/crunch-release-core/src/function_address_binding.rs::FunctionAddressBindingReceipt",
       "producer"= {
-        "command_or_api"= "render_function_address_binding_receipt",
+        "command_or_api"= "mantle --json release function-address-bind",
         "marker"= "release.function-address-binding",
         "source_paths"= [
           "crates/crunch-release-core/src/function_address_binding.rs",
           "crates/crunch-release-core/src/manifest.rs",
-          "crates/crunch-release-core/src/opaque_evidence.rs"
+          "crates/crunch-release-core/src/opaque_evidence.rs",
+          "src/function_address_binding_cmd.rs"
         ]
       },
       "consumers"= [
@@ -969,11 +970,11 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds the Rust receipt owner, exact linkage schema, generated contract, adversarial fixtures, verification summary, and Cairn-facing non-claims",
       "freshness"= {
-        "schema_blake3"= "9b28bd8bc48191b45bae4d1ea48cf1eb1c8b55e9704585598d8987c69d820a23",
-        "contract_blake3"= "877f091f76fe28888e32a55a6e33a7cc386030b2e00912b0ee65f49455a779fe",
+        "schema_blake3"= "52ccd5aab8c4cba4f7839bdcec283edbfa301dcd59f44bd4ac94b8b6fac6d61f",
+        "contract_blake3"= "bf00663a5c3eb18491c1d432743a4b12984ecefe9898c3e864ffd4437d8eec48",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "fe4f4e1e7382cd140d695a9c7ae41ab167da25eea336c5f6459ccf2f74d1d1e0",
-        "producer_identity_blake3"= "b7515ae6862ff2b4760a1a54bfbc5eba8ec0032d6890c63d2ed7a347fdce2d26",
+        "fixture_set_blake3"= "c78bddaf4a657f5e059b4fa8494fe00beecbd84e8bb57463fd2a44c334378d07",
+        "producer_identity_blake3"= "7b37015c8ccfc9fe7fe15c630ef5c75b4697e18c7cc8a3f1ecafbe3a567be5a6",
         "consumer_policy_blake3"= "f1fe25ad7bf31510a0d970cabe8f0eea37b17342b7743bcd39c3858a4e5adb0a"
       },
       "non_claims"= [

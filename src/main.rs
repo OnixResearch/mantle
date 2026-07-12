@@ -1,5 +1,4 @@
 #![feature(register_tool)]
-
 // machine-artifact-public: eval.raw-json-output
 #![register_tool(tigerstyle)]
 mod artifact_cmd;
@@ -28,6 +27,7 @@ mod foreign_import_cmd;
 mod frontend_artifact_export;
 mod frontend_artifact_spec;
 mod frontend_artifact_store;
+mod function_address_binding_cmd;
 mod global_reproducibility_cmd;
 mod global_reproducibility_release;
 mod log_cmd;
@@ -1223,6 +1223,35 @@ pub enum ReleaseAction {
         /// mode
         #[arg(long = "stack-provenance", value_parser = ["optional", "required"], default_value = "optional")]
         stack_provenance: String,
+    },
+    /// Bind bundle-local function-address evidence into a Cairn-ready Mantle receipt
+    FunctionAddressBind {
+        /// Verified release evidence bundle containing the selected external evidence rows
+        bundle_dir: PathBuf,
+
+        /// Function-address policy mode recorded in the receipt
+        #[arg(long, value_parser = ["optional", "required"], default_value = "optional")]
+        mode: String,
+
+        /// Bundle-relative function-address sidecar path declared in external evidence
+        #[arg(long)]
+        sidecar: String,
+
+        /// Bundle-relative Valence receipt path declared in external evidence
+        #[arg(long = "valence-receipt")]
+        valence_receipt: String,
+
+        /// Bundle-relative Kamacite receipt path declared in external evidence
+        #[arg(long = "kamacite-receipt")]
+        kamacite_receipt: Option<String>,
+
+        /// Bundle-relative release binary path; required when the bundle has multiple binaries
+        #[arg(long = "release-binary")]
+        release_binary: Option<String>,
+
+        /// New output path for the canonical Mantle binding receipt
+        #[arg(long = "receipt-out")]
+        receipt_out: PathBuf,
     },
     /// Rebuild and compare published release artifacts, then write a reproducibility report
     Reproduce {
@@ -5330,6 +5359,18 @@ mod tests {
     const TEST_REMOTE_REUSED_BYTES: u64 = 0;
     const TEST_REMOTE_STATUS_CONCURRENCY: u32 = 2;
     const TEST_REMOTE_STATUS_CONCURRENCY_TEXT: &str = "2";
+    const CLI_PARSE_TEST_STACK_BYTES: usize = 8_388_608;
+
+    fn parse_args_with_cli_test_stack(args: Vec<&'static str>) -> Result<Args, String> {
+        debug_assert!(CLI_PARSE_TEST_STACK_BYTES > 0);
+        debug_assert!(!args.is_empty());
+        std::thread::Builder::new()
+            .stack_size(CLI_PARSE_TEST_STACK_BYTES)
+            .spawn(move || Args::try_parse_from(args).map_err(|error| error.to_string()))
+            .map_err(|error| format!("starting CLI parser test thread: {error}"))?
+            .join()
+            .map_err(|_| "CLI parser test thread panicked".to_string())?
+    }
 
     fn args_with_store_prefix(store_prefix: &str, nix_compat: bool) -> Args {
         Args {
@@ -6172,6 +6213,71 @@ let Plan = {
             panic!("expected release verify with external evidence role");
         };
         assert_eq!(require_external_evidence_role, vec!["stack-provenance-trace".to_string()]);
+    }
+
+    #[test]
+    fn release_function_address_bind_accepts_typed_artifact_selection() {
+        let args = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "release",
+            "function-address-bind",
+            "/tmp/release-bundle",
+            "--mode",
+            "required",
+            "--sidecar",
+            "external/sidecar.json",
+            "--valence-receipt",
+            "external/valence.json",
+            "--kamacite-receipt",
+            "external/kamacite.json",
+            "--release-binary",
+            "binaries/mantle",
+            "--receipt-out",
+            "/tmp/mantle-binding.json",
+        ])
+        .expect("function-address binding arguments must parse");
+        let Command::Release {
+            action:
+                ReleaseAction::FunctionAddressBind {
+                    mode,
+                    sidecar,
+                    valence_receipt,
+                    kamacite_receipt,
+                    release_binary,
+                    receipt_out,
+                    ..
+                },
+        } = args.command
+        else {
+            panic!("expected release function-address-bind");
+        };
+        assert_eq!(mode, "required");
+        assert_eq!(sidecar, "external/sidecar.json");
+        assert_eq!(valence_receipt, "external/valence.json");
+        assert_eq!(kamacite_receipt.as_deref(), Some("external/kamacite.json"));
+        assert_eq!(release_binary.as_deref(), Some("binaries/mantle"));
+        assert_eq!(receipt_out, PathBuf::from("/tmp/mantle-binding.json"));
+    }
+
+    #[test]
+    fn release_function_address_bind_rejects_unknown_mode() {
+        let rendered = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "release",
+            "function-address-bind",
+            "/tmp/release-bundle",
+            "--mode",
+            "semantic-proof",
+            "--sidecar",
+            "external/sidecar.json",
+            "--valence-receipt",
+            "external/valence.json",
+            "--receipt-out",
+            "/tmp/mantle-binding.json",
+        ])
+        .expect_err("unknown function-address mode was accepted");
+        assert!(rendered.contains("semantic-proof"));
+        assert!(rendered.contains("invalid value"));
     }
 
     #[test]

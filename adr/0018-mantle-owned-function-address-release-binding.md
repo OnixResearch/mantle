@@ -15,7 +15,7 @@ Mantle must not parse Rust functions, reinterpret Valence evidence semantics, or
 - Give Cairn a versioned direct input without smoke-specific wrapper glue.
 - Preserve Mantle's complete verification disposition and diagnostics.
 - Keep lifecycle-policy scope distinct from upstream identity/linkage scope.
-- Bind every projected linkage field to the embedded verification summary.
+- Bind every projected linkage field to the embedded verification summary without conflating artifact-byte digests with upstream logical receipt identities.
 - Reject missing, malformed, stale, or weakened receipt data before handoff.
 - Keep construction and validation pure, deterministic, bounded, and `no_std` compatible.
 
@@ -27,7 +27,9 @@ The top-level lifecycle claim and embedded sidecar claim are intentionally diffe
 
 The receipt hash is lowercase BLAKE3 over a dedicated compact JSON material containing every receipt field except the self-referential `receipt_hash`. Validation reconstructs that material, checks exact schema and boundaries, validates bounded canonical hashes and diagnostics, enforces complete optional Kamacite metadata, compares projected links to the summary, and verifies validity/verdict/disposition coherence.
 
-The Rust DTO is the runtime owner. A checked JSON Schema and generated Nickel contract mirror its public shape, including cross-field equality invariants. Filesystem reads and writes remain outside the core.
+The Cairn-facing `valence_receipt_digest` and optional `kamacite_receipt_digest` fields preserve the upstream logical `receipt_hash` values, despite the legacy `digest` spelling in Cairn's input contract. They are not aliases for the BLAKE3 hashes of the JSON files. The embedded summary retains both domains explicitly: `*_receipt_digest_blake3` identifies bundle-local file bytes, while `*_receipt_hash_blake3` identifies the upstream logical receipt. The CLI shell extracts only the public identity-envelope fields and the pure core checks schema, digest shape, and Valence-to-Kamacite linkage; neither layer interprets function records or upstream semantic payloads.
+
+The Rust DTO is the runtime owner. A checked JSON Schema and generated Nickel contract mirror its public shape, including cross-field equality invariants. Filesystem reads, bounded no-follow identity-envelope loading, read-time BLAKE3 comparison with the verified manifest, path resolution, stdout/stderr, and no-clobber receipt writes remain outside the core.
 
 ## Alternatives Considered
 
@@ -47,9 +49,13 @@ Rejected because identity linkage and lifecycle-policy conformance are different
 
 Rejected because a recursive self-hash has no ordinary deterministic construction. The omitted-field hash material is explicit and independently reconstructable.
 
+### Reuse the Valence or Kamacite JSON file-byte digest as its logical receipt identity
+
+Rejected because Cairn cross-links the Mantle field to the upstream receipt's logical `receipt_hash`. A JSON artifact digest and a logical hash over defined receipt material are different domains and generally cannot match when the JSON embeds the logical hash.
+
 ## Consequences
 
 - Cairn can consume the Mantle receipt directly while ignoring additional operator fields it does not need.
-- Any field or ownership-boundary change requires a new schema version or an explicit compatibility converter.
+- After v1 publication, any field or ownership-boundary change requires a new schema version or an explicit compatibility converter. The logical-hash and artifact-digest split was corrected before the CLI made v1 an operator-facing producer.
 - A structurally complete failed verification can preserve bounded diagnostics in a deterministic `FAIL` receipt, but Cairn will not accept it as readiness evidence.
 - Receipt conformance proves typed identity and linkage plus supplied lifecycle-policy facts only. It does not prove Rust semantics, compiler correctness, build correctness, verifier soundness, whole-program safety, or release eligibility.

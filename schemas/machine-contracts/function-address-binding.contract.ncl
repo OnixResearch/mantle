@@ -7,7 +7,7 @@ let MAX_FUNCTION_ADDRESS_BINDING_TEXT_BYTES = 4096 in
 let MIN_FUNCTION_ADDRESS_BINDING_ROLES_COUNT = 2 in
 let MIN_FUNCTION_ADDRESS_BINDING_TEXT_BYTES = 1 in
 let is_verification_summary = fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["boundary","diagnostics","disposition","kamacite_receipt_digest_blake3","kamacite_receipt_role","kamacite_receipt_schema","mode","release_binary_digest_blake3","release_binary_relative_path","required","sidecar_claim_scope","sidecar_digest_blake3","sidecar_role","sidecar_schema","source_archive_digest_blake3","valence_receipt_digest_blake3","valence_receipt_role","valence_receipt_schema","valid"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["boundary","diagnostics","disposition","kamacite_receipt_digest_blake3","kamacite_receipt_hash_blake3","kamacite_receipt_role","kamacite_receipt_schema","mode","release_binary_digest_blake3","release_binary_relative_path","required","sidecar_claim_scope","sidecar_digest_blake3","sidecar_role","sidecar_schema","source_archive_digest_blake3","valence_receipt_digest_blake3","valence_receipt_hash_blake3","valence_receipt_role","valence_receipt_schema","valid"]) (std.record.fields (value))
   && (std.record.has_field "boundary" (value) && (((std.record.get "boundary" (value)) == "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics"
   && (std.is_string (std.record.get "boundary" (value))))))
   && (std.record.has_field "diagnostics" (value) && (((std.is_array (std.record.get "diagnostics" (value))
@@ -20,6 +20,8 @@ let is_verification_summary = fun value => ((std.is_record (value)
   && (std.is_string (std.record.get "disposition" (value))))))
   && (std.record.has_field "kamacite_receipt_digest_blake3" (value) && ((((std.record.get "kamacite_receipt_digest_blake3" (value)) == null || ((std.is_string (std.record.get "kamacite_receipt_digest_blake3" (value))
   && C.IsBlake3Hex (std.record.get "kamacite_receipt_digest_blake3" (value))))))))
+  && (std.record.has_field "kamacite_receipt_hash_blake3" (value) && ((((std.record.get "kamacite_receipt_hash_blake3" (value)) == null || ((std.is_string (std.record.get "kamacite_receipt_hash_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "kamacite_receipt_hash_blake3" (value))))))))
   && (std.record.has_field "kamacite_receipt_role" (value) && ((std.array.elem (std.record.get "kamacite_receipt_role" (value)) [null,"kamacite-function-address-receipt"]
   && ((std.record.get "kamacite_receipt_role" (value)) == null || ((std.is_string (std.record.get "kamacite_receipt_role" (value))))))))
   && (std.record.has_field "kamacite_receipt_schema" (value) && ((std.array.elem (std.record.get "kamacite_receipt_schema" (value)) [null,"kamacite.function-address-receipt.v1"]
@@ -43,6 +45,8 @@ let is_verification_summary = fun value => ((std.is_record (value)
   && C.IsBlake3Hex (std.record.get "source_archive_digest_blake3" (value))))))
   && (std.record.has_field "valence_receipt_digest_blake3" (value) && (((std.is_string (std.record.get "valence_receipt_digest_blake3" (value))
   && C.IsBlake3Hex (std.record.get "valence_receipt_digest_blake3" (value))))))
+  && (std.record.has_field "valence_receipt_hash_blake3" (value) && (((std.is_string (std.record.get "valence_receipt_hash_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "valence_receipt_hash_blake3" (value))))))
   && (std.record.has_field "valence_receipt_role" (value) && (((std.record.get "valence_receipt_role" (value)) == "valence-function-address-evidence-profile"
   && (std.is_string (std.record.get "valence_receipt_role" (value))))))
   && (std.record.has_field "valence_receipt_schema" (value) && (((std.record.get "valence_receipt_schema" (value)) == "function-address-evidence-v1"
@@ -89,10 +93,10 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && ((std.record.get "valid" (value)) == (std.record.get "valid" (std.record.get "verification_summary" (value))))
   && ((std.record.get "disposition" (value)) == (std.record.get "disposition" (std.record.get "verification_summary" (value))))
   && ((std.record.get "sidecar_digest" (value)) == (std.record.get "sidecar_digest_blake3" (std.record.get "verification_summary" (value))))
-  && ((std.record.get "valence_receipt_digest" (value)) == (std.record.get "valence_receipt_digest_blake3" (std.record.get "verification_summary" (value))))
+  && ((std.record.get "valence_receipt_digest" (value)) == (std.record.get "valence_receipt_hash_blake3" (std.record.get "verification_summary" (value))))
   && ((std.record.get "source_archive_digest" (value)) == (std.record.get "source_archive_digest_blake3" (std.record.get "verification_summary" (value))))
   && ((std.record.get "release_binary_digest" (value)) == (std.record.get "release_binary_digest_blake3" (std.record.get "verification_summary" (value))))
-  && ((std.record.get "kamacite_receipt_digest" (value)) == (std.record.get "kamacite_receipt_digest_blake3" (std.record.get "verification_summary" (value))))
+  && ((std.record.get "kamacite_receipt_digest" (value)) == (std.record.get "kamacite_receipt_hash_blake3" (std.record.get "verification_summary" (value))))
   && ((std.record.get "mantle_non_claim_boundary" (value)) == (std.record.get "boundary" (std.record.get "verification_summary" (value))))
   && ((!(std.record.get "valid" (value))) || ((std.record.get "verdict" (value)) == "PASS"))
   && ((!(std.record.get "valid" (value))) || ((std.record.get "disposition" (value)) == "present")))))

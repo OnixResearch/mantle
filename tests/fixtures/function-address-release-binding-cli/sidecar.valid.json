@@ -1,0 +1,6 @@
+{
+  "schema_version": "valence.function-address-evidence.v1",
+  "kind": "function-address-sidecar",
+  "claim_scope": "function-address-identity-linkage-only",
+  "non_claim": "Mantle treats function records as opaque external evidence"
+}

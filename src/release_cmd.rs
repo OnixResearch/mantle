@@ -21,6 +21,8 @@ use crunch_release_core::validate_provider_fixed_point_release_artifact_binding;
 
 use crate::ast_grep_evidence::validate_ast_grep_release_attachment_file;
 use crate::errors::RunError;
+use crate::function_address_binding_cmd::FunctionAddressBindingCommand;
+use crate::function_address_binding_cmd::cmd_function_address_binding;
 use crate::global_reproducibility_cmd::cmd_global_reproducibility;
 use crate::global_reproducibility_release::cmd_global_reproducibility_release_evidence;
 use crate::release_attestation::create_release_attestation;
@@ -151,6 +153,23 @@ pub(crate) fn cmd_release(
             release_profile,
             stack_provenance,
         ),
+        crate::ReleaseAction::FunctionAddressBind {
+            bundle_dir,
+            mode,
+            sidecar,
+            valence_receipt,
+            kamacite_receipt,
+            release_binary,
+            receipt_out,
+        } => cmd_function_address_binding(current_dir, json, FunctionAddressBindingCommand {
+            bundle_dir,
+            mode,
+            sidecar_relative_path: sidecar,
+            valence_receipt_relative_path: valence_receipt,
+            kamacite_receipt_relative_path: kamacite_receipt,
+            release_binary_relative_path: release_binary,
+            receipt_out,
+        }),
         crate::ReleaseAction::Reproduce {
             bundle_dir,
             rebuild_output_dir,

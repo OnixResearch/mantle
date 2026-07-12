@@ -1,0 +1,38 @@
+[
+  {
+    "name": "missing-valence-receipt-row",
+    "mutation": "remove-valence-row",
+    "expected_error": "not declared in release external evidence",
+    "receipt_written": false
+  },
+  {
+    "name": "stale-valence-artifact-digest",
+    "mutation": "stale-valence-digest",
+    "expected_error": "external_evidence[1] does not match manifest",
+    "receipt_written": false
+  },
+  {
+    "name": "wrong-sidecar-role",
+    "mutation": "wrong-sidecar-role",
+    "expected_error": "sidecar role metadata is invalid",
+    "receipt_written": false
+  },
+  {
+    "name": "wrong-valence-schema",
+    "mutation": "wrong-valence-schema",
+    "expected_error": "Valence schema metadata is invalid",
+    "receipt_written": false
+  },
+  {
+    "name": "wrong-sidecar-scope",
+    "mutation": "wrong-sidecar-scope",
+    "expected_error": "sidecar_claim_scope must be",
+    "receipt_written": false
+  },
+  {
+    "name": "overclaiming-non-claim",
+    "mutation": "overclaim",
+    "expected_error": "function-address binding rejected",
+    "receipt_written": true
+  }
+]

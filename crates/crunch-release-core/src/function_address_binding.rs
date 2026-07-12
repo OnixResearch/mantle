@@ -9,7 +9,13 @@ use serde::Serialize;
 
 use crate::ReleaseEvidenceError;
 use crate::manifest::BLAKE3_HEX_LENGTH_CHARS;
+use crate::manifest::BundledArtifact;
+use crate::manifest::ExternalEvidence;
+use crate::manifest::FunctionAddressReleaseEvidence;
 use crate::manifest::FunctionAddressReleaseVerification;
+use crate::manifest::ReleaseEvidenceManifest;
+use crate::manifest::canonical_release_evidence_manifest;
+use crate::manifest::evaluate_function_address_release_evidence;
 use crate::opaque_evidence::FUNCTION_ADDRESS_CLAIM_SCOPE;
 use crate::opaque_evidence::FUNCTION_ADDRESS_DISPOSITION_INVALID;
 use crate::opaque_evidence::FUNCTION_ADDRESS_DISPOSITION_PRESENT;
@@ -35,6 +41,8 @@ pub const MAX_FUNCTION_ADDRESS_BINDING_ROLES_COUNT: u32 = 3;
 pub const MAX_FUNCTION_ADDRESS_BINDING_DIAGNOSTICS_COUNT: u32 = 64;
 pub const MIN_FUNCTION_ADDRESS_BINDING_TEXT_BYTES: u32 = 1;
 pub const MAX_FUNCTION_ADDRESS_BINDING_TEXT_BYTES: u32 = 4_096;
+pub const FUNCTION_ADDRESS_VALENCE_RECEIPT_IDENTITY_SCHEMA: &str = "valence.function-address-evidence.v1";
+pub const FUNCTION_ADDRESS_KAMACITE_RECEIPT_IDENTITY_SCHEMA: &str = "kamacite.function-address-receipt.v1";
 
 const KAMACITE_METADATA_INDEX: usize = 2;
 
@@ -58,6 +66,30 @@ pub struct FunctionAddressBindingReceipt {
     pub mantle_non_claim_boundary: String,
     pub non_claim_boundary: String,
     pub verification_summary: FunctionAddressReleaseVerification,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionAddressValenceReceiptIdentity {
+    pub schema_version: String,
+    pub receipt_hash_blake3: String,
+    pub kamacite_receipt_hash_blake3: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionAddressKamaciteReceiptIdentity {
+    pub schema_version: String,
+    pub receipt_hash_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionAddressBindingSelection {
+    pub mode: String,
+    pub sidecar_relative_path: String,
+    pub valence_receipt_relative_path: String,
+    pub kamacite_receipt_relative_path: Option<String>,
+    pub release_binary_relative_path: Option<String>,
+    pub valence_receipt_identity: FunctionAddressValenceReceiptIdentity,
+    pub kamacite_receipt_identity: Option<FunctionAddressKamaciteReceiptIdentity>,
 }
 
 #[derive(Serialize)]
@@ -98,6 +130,246 @@ struct OptionalKamaciteLinks {
 struct Blake3Field<'a> {
     value: &'a str,
     name: &'static str,
+}
+
+struct ExternalEvidenceQuery<'a> {
+    rows: &'a [ExternalEvidence],
+    relative_path: &'a str,
+    label: &'static str,
+}
+
+// r[impl mantle.release_provenance.function_address_binding_cli.receipt]
+// r[impl mantle.release_provenance.function_address_binding_cli.receipt.identity_domains]
+// r[impl mantle.release_provenance.function_address_binding_cli.positive]
+// r[impl mantle.release_provenance.function_address_binding_cli.negative]
+pub fn render_function_address_binding_from_manifest(
+    mut manifest: ReleaseEvidenceManifest,
+    selection: FunctionAddressBindingSelection,
+) -> Result<FunctionAddressBindingReceipt, ReleaseEvidenceError> {
+    debug_assert_ne!(FUNCTION_ADDRESS_EVIDENCE_ROLE, VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+    debug_assert_ne!(FUNCTION_ADDRESS_VALENCE_RECEIPT_IDENTITY_SCHEMA, VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA);
+    let _canonical_manifest = canonical_release_evidence_manifest(manifest.clone())?;
+    reject_preexisting_function_address_binding(&manifest)?;
+    validate_binding_selection(&selection)?;
+    let evidence = selected_function_address_evidence(&manifest, &selection)?;
+    manifest.function_address_evidence = Some(evidence);
+    let mut verification = evaluate_function_address_release_evidence(&manifest, &selection.mode);
+    verification.valence_receipt_hash_blake3 = Some(selection.valence_receipt_identity.receipt_hash_blake3);
+    verification.kamacite_receipt_hash_blake3 =
+        selection.kamacite_receipt_identity.map(|identity| identity.receipt_hash_blake3);
+    render_function_address_binding_receipt(verification)
+}
+
+fn reject_preexisting_function_address_binding(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    if manifest.function_address_evidence.is_some() {
+        return Err(validation_error(
+            "function-address binding selection cannot replace existing legacy function_address_evidence",
+        ));
+    }
+    if manifest.opaque_evidence_sidecar_bindings.iter().any(opaque_binding_is_function_address_candidate) {
+        return Err(validation_error(
+            "function-address binding selection cannot replace an existing generic function-address binding",
+        ));
+    }
+    Ok(())
+}
+
+fn opaque_binding_is_function_address_candidate(receipt: &crate::OpaqueEvidenceSidecarBindingReceipt) -> bool {
+    let binding = &receipt.binding;
+    binding.evidence_kind == crate::OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS
+        || binding.profile_version == crate::FUNCTION_ADDRESS_PROFILE_VERSION
+        || binding.canonical_envelope.role == FUNCTION_ADDRESS_EVIDENCE_ROLE
+}
+
+fn validate_binding_selection(selection: &FunctionAddressBindingSelection) -> Result<(), ReleaseEvidenceError> {
+    if selection.mode != FUNCTION_ADDRESS_MODE_OPTIONAL && selection.mode != FUNCTION_ADDRESS_MODE_REQUIRED {
+        return Err(validation_error(format!("unsupported function-address binding mode: {}", selection.mode)));
+    }
+    validate_selected_paths(selection)?;
+    validate_selected_receipt_identities(selection)
+}
+
+fn validate_selected_paths(selection: &FunctionAddressBindingSelection) -> Result<(), ReleaseEvidenceError> {
+    if selection.sidecar_relative_path == selection.valence_receipt_relative_path {
+        return Err(validation_error("function-address sidecar and Valence receipt paths must be distinct"));
+    }
+    if let Some(kamacite_path) = selection.kamacite_receipt_relative_path.as_ref()
+        && (kamacite_path == &selection.sidecar_relative_path
+            || kamacite_path == &selection.valence_receipt_relative_path)
+    {
+        return Err(validation_error(
+            "function-address Kamacite receipt path must be distinct from sidecar and Valence receipt paths",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_selected_receipt_identities(
+    selection: &FunctionAddressBindingSelection,
+) -> Result<(), ReleaseEvidenceError> {
+    let valence = &selection.valence_receipt_identity;
+    if valence.schema_version != FUNCTION_ADDRESS_VALENCE_RECEIPT_IDENTITY_SCHEMA {
+        return Err(validation_error("function-address Valence receipt identity schema is unsupported"));
+    }
+    validate_blake3_hex(Blake3Field {
+        value: &valence.receipt_hash_blake3,
+        name: "valence_receipt_identity.receipt_hash_blake3",
+    })?;
+    validate_optional_kamacite_identity(selection)
+}
+
+fn validate_optional_kamacite_identity(
+    selection: &FunctionAddressBindingSelection,
+) -> Result<(), ReleaseEvidenceError> {
+    let (Some(path), Some(identity)) =
+        (selection.kamacite_receipt_relative_path.as_ref(), selection.kamacite_receipt_identity.as_ref())
+    else {
+        if selection.kamacite_receipt_relative_path.is_some() || selection.kamacite_receipt_identity.is_some() {
+            return Err(validation_error(
+                "function-address Kamacite receipt path and identity must be both present or both absent",
+            ));
+        }
+        if selection.valence_receipt_identity.kamacite_receipt_hash_blake3.is_some() {
+            return Err(validation_error(
+                "function-address Valence receipt links Kamacite identity but no Kamacite receipt was selected",
+            ));
+        }
+        return Ok(());
+    };
+    debug_assert!(!path.is_empty());
+    debug_assert!(selection.kamacite_receipt_identity.is_some());
+    if identity.schema_version != FUNCTION_ADDRESS_KAMACITE_RECEIPT_IDENTITY_SCHEMA {
+        return Err(validation_error("function-address Kamacite receipt identity schema is unsupported"));
+    }
+    validate_blake3_hex(Blake3Field {
+        value: &identity.receipt_hash_blake3,
+        name: "kamacite_receipt_identity.receipt_hash_blake3",
+    })?;
+    require_valence_kamacite_identity_link(selection, &identity.receipt_hash_blake3)
+}
+
+fn require_valence_kamacite_identity_link(
+    selection: &FunctionAddressBindingSelection,
+    kamacite_receipt_hash: &str,
+) -> Result<(), ReleaseEvidenceError> {
+    let Some(linked_hash) = selection.valence_receipt_identity.kamacite_receipt_hash_blake3.as_ref() else {
+        return Err(validation_error("function-address Valence receipt is missing its Kamacite receipt identity link"));
+    };
+    if linked_hash != kamacite_receipt_hash {
+        return Err(validation_error("function-address Valence and Kamacite logical receipt identities do not match"));
+    }
+    Ok(())
+}
+
+fn selected_function_address_evidence(
+    manifest: &ReleaseEvidenceManifest,
+    selection: &FunctionAddressBindingSelection,
+) -> Result<FunctionAddressReleaseEvidence, ReleaseEvidenceError> {
+    let sidecar = selected_external_evidence(ExternalEvidenceQuery {
+        rows: &manifest.external_evidence,
+        relative_path: &selection.sidecar_relative_path,
+        label: "function-address sidecar",
+    })?;
+    let valence = selected_external_evidence(ExternalEvidenceQuery {
+        rows: &manifest.external_evidence,
+        relative_path: &selection.valence_receipt_relative_path,
+        label: "Valence receipt",
+    })?;
+    let kamacite = selected_optional_kamacite_evidence(manifest, selection)?;
+    let binary = selected_release_binary(&manifest.binaries, selection.release_binary_relative_path.as_deref())?;
+    Ok(function_address_evidence_from_selection(manifest, sidecar, valence, kamacite, binary))
+}
+
+fn selected_optional_kamacite_evidence(
+    manifest: &ReleaseEvidenceManifest,
+    selection: &FunctionAddressBindingSelection,
+) -> Result<Option<ExternalEvidence>, ReleaseEvidenceError> {
+    let Some(relative_path) = selection.kamacite_receipt_relative_path.as_ref() else {
+        return Ok(None);
+    };
+    selected_external_evidence(ExternalEvidenceQuery {
+        rows: &manifest.external_evidence,
+        relative_path,
+        label: "Kamacite receipt",
+    })
+    .map(Some)
+}
+
+fn selected_external_evidence(query: ExternalEvidenceQuery<'_>) -> Result<ExternalEvidence, ReleaseEvidenceError> {
+    if query.relative_path.is_empty() {
+        return Err(validation_error(format!("{} relative path must not be empty", query.label)));
+    }
+    let mut matches = query.rows.iter().filter(|row| row.relative_path == query.relative_path);
+    let Some(selected) = matches.next() else {
+        return Err(validation_error(format!(
+            "{} is not declared in release external evidence: {}",
+            query.label, query.relative_path
+        )));
+    };
+    if matches.next().is_some() {
+        return Err(validation_error(format!(
+            "{} relative path is ambiguous in release external evidence: {}",
+            query.label, query.relative_path
+        )));
+    }
+    Ok(selected.clone())
+}
+
+fn selected_release_binary(
+    binaries: &[BundledArtifact],
+    relative_path: Option<&str>,
+) -> Result<BundledArtifact, ReleaseEvidenceError> {
+    if let Some(relative_path) = relative_path {
+        let mut matches = binaries.iter().filter(|binary| binary.relative_path == relative_path);
+        let Some(selected) = matches.next() else {
+            return Err(validation_error(format!(
+                "function-address release binary is not declared in the manifest: {relative_path}"
+            )));
+        };
+        if matches.next().is_some() {
+            return Err(validation_error("function-address release binary selection is ambiguous"));
+        }
+        debug_assert_eq!(selected.relative_path, relative_path);
+        debug_assert!(!selected.relative_path.is_empty());
+        return Ok(selected.clone());
+    }
+    if binaries.len() != 1 {
+        return Err(validation_error(
+            "function-address release binary must be selected when the manifest does not contain exactly one binary",
+        ));
+    }
+    binaries
+        .first()
+        .cloned()
+        .ok_or_else(|| validation_error("function-address release manifest contains no binary"))
+}
+
+fn function_address_evidence_from_selection(
+    manifest: &ReleaseEvidenceManifest,
+    sidecar: ExternalEvidence,
+    valence: ExternalEvidence,
+    kamacite: Option<ExternalEvidence>,
+    binary: BundledArtifact,
+) -> FunctionAddressReleaseEvidence {
+    FunctionAddressReleaseEvidence {
+        sidecar_role: sidecar.role,
+        sidecar_schema: sidecar.schema,
+        sidecar_claim_scope: sidecar.claim_scope,
+        sidecar_relative_path: sidecar.relative_path,
+        sidecar_digest_blake3: sidecar.digest_blake3,
+        valence_receipt_role: valence.role,
+        valence_receipt_schema: valence.schema,
+        valence_receipt_relative_path: valence.relative_path,
+        valence_receipt_digest_blake3: valence.digest_blake3,
+        kamacite_receipt_role: kamacite.as_ref().map(|row| row.role.clone()),
+        kamacite_receipt_schema: kamacite.as_ref().map(|row| row.schema.clone()),
+        kamacite_receipt_relative_path: kamacite.as_ref().map(|row| row.relative_path.clone()),
+        kamacite_receipt_digest_blake3: kamacite.map(|row| row.digest_blake3),
+        source_archive_digest_blake3: manifest.source_archive.digest_blake3.clone(),
+        release_binary_relative_path: binary.relative_path,
+        release_binary_digest_blake3: binary.digest_blake3,
+        non_claims: sidecar.non_claims,
+    }
 }
 
 // r[impl mantle.release_provenance.function_address_binding_schema.render]
@@ -174,9 +446,13 @@ fn binding_links(
         required_text(verification.valence_receipt_role.as_ref(), "verification_summary.valence_receipt_role")?;
     let valence_schema =
         required_text(verification.valence_receipt_schema.as_ref(), "verification_summary.valence_receipt_schema")?;
-    let valence_digest = required_text(
+    required_text(
         verification.valence_receipt_digest_blake3.as_ref(),
         "verification_summary.valence_receipt_digest_blake3",
+    )?;
+    let valence_digest = required_text(
+        verification.valence_receipt_hash_blake3.as_ref(),
+        "verification_summary.valence_receipt_hash_blake3",
     )?;
     required_text(
         verification.release_binary_relative_path.as_ref(),
@@ -213,21 +489,22 @@ fn optional_kamacite_links(
 ) -> Result<OptionalKamaciteLinks, ReleaseEvidenceError> {
     match (
         verification.kamacite_receipt_digest_blake3.as_ref(),
+        verification.kamacite_receipt_hash_blake3.as_ref(),
         verification.kamacite_receipt_role.as_ref(),
         verification.kamacite_receipt_schema.as_ref(),
     ) {
-        (None, None, None) => Ok(OptionalKamaciteLinks {
+        (None, None, None, None) => Ok(OptionalKamaciteLinks {
             digest: None,
             role: None,
             schema: None,
         }),
-        (Some(digest), Some(role), Some(schema)) => Ok(OptionalKamaciteLinks {
-            digest: Some(digest.clone()),
+        (Some(_artifact_digest), Some(receipt_hash), Some(role), Some(schema)) => Ok(OptionalKamaciteLinks {
+            digest: Some(receipt_hash.clone()),
             role: Some(role.clone()),
             schema: Some(schema.clone()),
         }),
         _ => Err(validation_error(
-            "function-address binding Kamacite digest, role, and schema must be all present or all absent",
+            "function-address binding Kamacite artifact digest, receipt hash, role, and schema must be all present or all absent",
         )),
     }
 }
@@ -328,10 +605,11 @@ fn validate_binding_links(receipt: &FunctionAddressBindingReceipt) -> Result<(),
     debug_assert_eq!(receipt.sidecar_digest.len(), BLAKE3_HEX_LENGTH_CHARS);
     debug_assert_eq!(receipt.valence_receipt_digest.len(), BLAKE3_HEX_LENGTH_CHARS);
     let summary = &receipt.verification_summary;
+    validate_summary_artifact_digests(summary)?;
     require_equal_link(&receipt.sidecar_digest, summary.sidecar_digest_blake3.as_ref(), "sidecar_digest")?;
     require_equal_link(
         &receipt.valence_receipt_digest,
-        summary.valence_receipt_digest_blake3.as_ref(),
+        summary.valence_receipt_hash_blake3.as_ref(),
         "valence_receipt_digest",
     )?;
     require_equal_link(
@@ -344,8 +622,26 @@ fn validate_binding_links(receipt: &FunctionAddressBindingReceipt) -> Result<(),
         summary.release_binary_digest_blake3.as_ref(),
         "release_binary_digest",
     )?;
-    if receipt.kamacite_receipt_digest.as_ref() != summary.kamacite_receipt_digest_blake3.as_ref() {
-        return Err(validation_error("function-address binding Kamacite receipt digest is stale"));
+    if receipt.kamacite_receipt_digest.as_ref() != summary.kamacite_receipt_hash_blake3.as_ref() {
+        return Err(validation_error("function-address binding Kamacite logical receipt identity is stale"));
+    }
+    Ok(())
+}
+
+fn validate_summary_artifact_digests(summary: &FunctionAddressReleaseVerification) -> Result<(), ReleaseEvidenceError> {
+    let valence_digest = required_text(
+        summary.valence_receipt_digest_blake3.as_ref(),
+        "verification_summary.valence_receipt_digest_blake3",
+    )?;
+    validate_blake3_hex(Blake3Field {
+        value: &valence_digest,
+        name: "verification_summary.valence_receipt_digest_blake3",
+    })?;
+    if let Some(kamacite_digest) = summary.kamacite_receipt_digest_blake3.as_ref() {
+        validate_blake3_hex(Blake3Field {
+            value: kamacite_digest,
+            name: "verification_summary.kamacite_receipt_digest_blake3",
+        })?;
     }
     Ok(())
 }
@@ -527,10 +823,15 @@ mod tests {
     use super::*;
 
     const SIDECAR_DIGEST_SEED: u8 = 1;
-    const VALENCE_DIGEST_SEED: u8 = 2;
-    const KAMACITE_DIGEST_SEED: u8 = 3;
+    const VALENCE_RECEIPT_HASH_SEED: u8 = 2;
+    const KAMACITE_RECEIPT_HASH_SEED: u8 = 3;
     const SOURCE_DIGEST_SEED: u8 = 4;
     const BINARY_DIGEST_SEED: u8 = 5;
+    const VALENCE_ARTIFACT_DIGEST_SEED: u8 = 6;
+    const KAMACITE_ARTIFACT_DIGEST_SEED: u8 = 7;
+    const PROOF_BUNDLE_DIGEST_SEED: u8 = 8;
+    const INVENTORY_DIGEST_SEED: u8 = 10;
+    const PROOF_MANIFEST_DIGEST_SEED: u8 = 11;
     const STALE_DIGEST_SEED: u8 = 9;
     const HEX_CHARS_PER_BYTE: usize = 2;
 
@@ -550,16 +851,177 @@ mod tests {
             sidecar_digest_blake3: Some(digest(SIDECAR_DIGEST_SEED)),
             valence_receipt_role: Some(VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE.to_string()),
             valence_receipt_schema: Some(VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA.to_string()),
-            valence_receipt_digest_blake3: Some(digest(VALENCE_DIGEST_SEED)),
+            valence_receipt_digest_blake3: Some(digest(VALENCE_ARTIFACT_DIGEST_SEED)),
+            valence_receipt_hash_blake3: Some(digest(VALENCE_RECEIPT_HASH_SEED)),
             kamacite_receipt_role: with_kamacite.then(|| KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE.to_string()),
             kamacite_receipt_schema: with_kamacite.then(|| KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA.to_string()),
-            kamacite_receipt_digest_blake3: with_kamacite.then(|| digest(KAMACITE_DIGEST_SEED)),
+            kamacite_receipt_digest_blake3: with_kamacite.then(|| digest(KAMACITE_ARTIFACT_DIGEST_SEED)),
+            kamacite_receipt_hash_blake3: with_kamacite.then(|| digest(KAMACITE_RECEIPT_HASH_SEED)),
             source_archive_digest_blake3: Some(digest(SOURCE_DIGEST_SEED)),
             release_binary_relative_path: Some("binaries/mantle".to_string()),
             release_binary_digest_blake3: Some(digest(BINARY_DIGEST_SEED)),
             boundary: FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
             diagnostics: Vec::new(),
         }
+    }
+
+    fn sample_artifact(kind: crate::BundledArtifactKind, relative_path: &str, seed: u8) -> BundledArtifact {
+        BundledArtifact {
+            kind,
+            relative_path: relative_path.to_string(),
+            size_bytes: u64::from(seed),
+            digest_blake3: digest(seed),
+        }
+    }
+
+    struct SampleExternalEvidence<'a> {
+        role: &'a str,
+        schema: &'a str,
+        relative_path: &'a str,
+        seed: u8,
+    }
+
+    fn sample_external_evidence(sample: SampleExternalEvidence<'_>) -> ExternalEvidence {
+        ExternalEvidence {
+            role: sample.role.to_string(),
+            schema: sample.schema.to_string(),
+            relative_path: sample.relative_path.to_string(),
+            digest_blake3: digest(sample.seed),
+            claim_scope: FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+            non_claims: vec![
+                crate::OPAQUE_EVIDENCE_REQUIRED_NON_CLAIM.to_string(),
+                FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string(),
+            ],
+        }
+    }
+
+    fn sample_function_address_external_evidence(with_kamacite: bool) -> Vec<ExternalEvidence> {
+        debug_assert_ne!(FUNCTION_ADDRESS_EVIDENCE_ROLE, VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE);
+        debug_assert_ne!(FUNCTION_ADDRESS_EVIDENCE_SCHEMA, VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA);
+        let mut external_evidence = vec![
+            sample_external_evidence(SampleExternalEvidence {
+                role: FUNCTION_ADDRESS_EVIDENCE_ROLE,
+                schema: FUNCTION_ADDRESS_EVIDENCE_SCHEMA,
+                relative_path: "external/function-address-sidecar.json",
+                seed: SIDECAR_DIGEST_SEED,
+            }),
+            sample_external_evidence(SampleExternalEvidence {
+                role: VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+                schema: VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+                relative_path: "external/valence-receipt.json",
+                seed: VALENCE_ARTIFACT_DIGEST_SEED,
+            }),
+        ];
+        if with_kamacite {
+            external_evidence.push(sample_external_evidence(SampleExternalEvidence {
+                role: KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+                schema: KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+                relative_path: "external/kamacite-receipt.json",
+                seed: KAMACITE_ARTIFACT_DIGEST_SEED,
+            }));
+        }
+        external_evidence
+    }
+
+    fn sample_manifest(with_kamacite: bool) -> ReleaseEvidenceManifest {
+        debug_assert_ne!(SOURCE_DIGEST_SEED, BINARY_DIGEST_SEED);
+        debug_assert_ne!(VALENCE_RECEIPT_HASH_SEED, VALENCE_ARTIFACT_DIGEST_SEED);
+        let binary = sample_artifact(crate::BundledArtifactKind::File, "binaries/mantle", BINARY_DIGEST_SEED);
+        let inventory = sample_artifact(crate::BundledArtifactKind::File, "proof/inventory.md", INVENTORY_DIGEST_SEED);
+        ReleaseEvidenceManifest {
+            schema: crate::RELEASE_EVIDENCE_SCHEMA.to_string(),
+            release_id: "mantle-function-address-test".to_string(),
+            claim_scope: crate::CLAIM_SCOPE_PACKAGED_INTEGRITY.to_string(),
+            workflow: crate::ReleaseWorkflowIdentity {
+                command: crate::DEFAULT_PROOF_WORKFLOW_COMMAND.to_string(),
+                version: crate::DEFAULT_PROOF_WORKFLOW_VERSION.to_string(),
+            },
+            source_archive: sample_artifact(
+                crate::BundledArtifactKind::File,
+                "source/mantle-src.tar",
+                SOURCE_DIGEST_SEED,
+            ),
+            source_acquisition: None,
+            binaries: vec![binary.clone()],
+            proof_bundle: sample_artifact(
+                crate::BundledArtifactKind::Directory,
+                "proof/self-hosting",
+                PROOF_BUNDLE_DIGEST_SEED,
+            ),
+            prerequisite_inventory: inventory.clone(),
+            provider_fixed_point_proof: None,
+            reproducibility_report: None,
+            deterministic_build_proof: None,
+            deterministic_sandbox_isolation_evidence: None,
+            independent_agreement_report: None,
+            external_evidence: sample_function_address_external_evidence(with_kamacite),
+            kani_toolchain_evidence: vec![],
+            stack_provenance: None,
+            opaque_evidence_sidecar_bindings: vec![],
+            function_address_evidence: None,
+            proof_linkage: crate::ReleaseProofLinkage {
+                release_id: "mantle-function-address-test".to_string(),
+                source_archive_digest_blake3: digest(SOURCE_DIGEST_SEED),
+                proof_bundle_schema: crate::FULL_SELF_HOSTING_PROOF_SCHEMA.to_string(),
+                proof_mode: "fixed-point".to_string(),
+                selected_provider_kind: "source-root".to_string(),
+                staged_source: "/mantle/store/test-mantle-src".to_string(),
+                stage2_binary_digest_blake3: binary.digest_blake3,
+                prerequisite_inventory_digest_blake3: inventory.digest_blake3,
+                proof_manifest_digest_blake3: digest(PROOF_MANIFEST_DIGEST_SEED),
+            },
+            provenance_coverage: None,
+        }
+    }
+
+    fn sample_selection(with_kamacite: bool) -> FunctionAddressBindingSelection {
+        FunctionAddressBindingSelection {
+            mode: FUNCTION_ADDRESS_MODE_REQUIRED.to_string(),
+            sidecar_relative_path: "external/function-address-sidecar.json".to_string(),
+            valence_receipt_relative_path: "external/valence-receipt.json".to_string(),
+            kamacite_receipt_relative_path: with_kamacite.then(|| "external/kamacite-receipt.json".to_string()),
+            release_binary_relative_path: None,
+            valence_receipt_identity: FunctionAddressValenceReceiptIdentity {
+                schema_version: FUNCTION_ADDRESS_VALENCE_RECEIPT_IDENTITY_SCHEMA.to_string(),
+                receipt_hash_blake3: digest(VALENCE_RECEIPT_HASH_SEED),
+                kamacite_receipt_hash_blake3: with_kamacite.then(|| digest(KAMACITE_RECEIPT_HASH_SEED)),
+            },
+            kamacite_receipt_identity: with_kamacite.then(|| FunctionAddressKamaciteReceiptIdentity {
+                schema_version: FUNCTION_ADDRESS_KAMACITE_RECEIPT_IDENTITY_SCHEMA.to_string(),
+                receipt_hash_blake3: digest(KAMACITE_RECEIPT_HASH_SEED),
+            }),
+        }
+    }
+
+    #[test]
+    fn manifest_selection_keeps_artifact_and_logical_receipt_digests_distinct() {
+        // r[verify mantle.release_provenance.function_address_binding_cli.receipt.identity_domains]
+        let receipt = render_function_address_binding_from_manifest(sample_manifest(true), sample_selection(true))
+            .expect("render selected function-address binding");
+
+        assert!(receipt.valid);
+        assert_eq!(receipt.valence_receipt_digest, digest(VALENCE_RECEIPT_HASH_SEED));
+        assert_eq!(receipt.kamacite_receipt_digest, Some(digest(KAMACITE_RECEIPT_HASH_SEED)));
+        assert_eq!(
+            receipt.verification_summary.valence_receipt_digest_blake3,
+            Some(digest(VALENCE_ARTIFACT_DIGEST_SEED))
+        );
+        assert_ne!(
+            receipt.valence_receipt_digest,
+            receipt.verification_summary.valence_receipt_digest_blake3.expect("Valence artifact digest")
+        );
+    }
+
+    #[test]
+    fn manifest_selection_rejects_stale_valence_kamacite_logical_link() {
+        let mut selection = sample_selection(true);
+        selection.valence_receipt_identity.kamacite_receipt_hash_blake3 = Some(digest(STALE_DIGEST_SEED));
+
+        let error = render_function_address_binding_from_manifest(sample_manifest(true), selection)
+            .expect_err("stale logical link must fail");
+
+        assert!(error.to_string().contains("logical receipt identities do not match"));
+        assert!(!error.to_string().contains("accepted"));
     }
 
     #[test]
@@ -575,10 +1037,18 @@ mod tests {
         assert_eq!(value["verdict"], FUNCTION_ADDRESS_BINDING_VERDICT_PASS);
         assert_eq!(value["claim_scope"], FUNCTION_ADDRESS_BINDING_CLAIM_SCOPE);
         assert_eq!(value["sidecar_digest"], digest(SIDECAR_DIGEST_SEED));
-        assert_eq!(value["valence_receipt_digest"], digest(VALENCE_DIGEST_SEED));
+        assert_eq!(value["valence_receipt_digest"], digest(VALENCE_RECEIPT_HASH_SEED));
+        assert_eq!(
+            value["verification_summary"]["valence_receipt_digest_blake3"],
+            digest(VALENCE_ARTIFACT_DIGEST_SEED)
+        );
         assert_eq!(value["source_archive_digest"], digest(SOURCE_DIGEST_SEED));
         assert_eq!(value["release_binary_digest"], digest(BINARY_DIGEST_SEED));
-        assert_eq!(value["kamacite_receipt_digest"], digest(KAMACITE_DIGEST_SEED));
+        assert_eq!(value["kamacite_receipt_digest"], digest(KAMACITE_RECEIPT_HASH_SEED));
+        assert_eq!(
+            value["verification_summary"]["kamacite_receipt_digest_blake3"],
+            digest(KAMACITE_ARTIFACT_DIGEST_SEED)
+        );
         assert_eq!(value["non_claim_boundary"], FUNCTION_ADDRESS_BINDING_CAIRN_NON_CLAIM_BOUNDARY);
         assert_eq!(receipt.receipt_hash.len(), BLAKE3_HEX_LENGTH_CHARS);
     }
@@ -627,7 +1097,7 @@ mod tests {
         );
 
         let mut partial = verification(false);
-        partial.kamacite_receipt_digest_blake3 = Some(digest(KAMACITE_DIGEST_SEED));
+        partial.kamacite_receipt_digest_blake3 = Some(digest(KAMACITE_ARTIFACT_DIGEST_SEED));
         let error = render_function_address_binding_receipt(partial).expect_err("partial Kamacite metadata must fail");
         assert!(error.to_string().contains("all present or all absent"));
     }

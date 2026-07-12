@@ -58,6 +58,10 @@ use tempfile::TempDir;
 
 const RELEASE_EVIDENCE_SCHEMA: &str = "mantle-release-evidence-v1";
 const BLAKE3_HEX_LEN: usize = 64;
+const HEX_CHARS_PER_BYTE: usize = 2;
+const FUNCTION_ADDRESS_VALENCE_RECEIPT_HASH_SEED: u8 = 2;
+const FUNCTION_ADDRESS_KAMACITE_RECEIPT_HASH_SEED: u8 = 3;
+const FUNCTION_ADDRESS_STALE_DIGEST_SEED: u8 = 9;
 const TEST_CARGO_SHA256_HEX_LEN: usize = 64;
 const RELEASE_SIGNING_KEY: &str =
     "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
@@ -72,6 +76,12 @@ const DEFAULT_PROVIDER_WITNESS_TARGET: &str = "x86_64-unknown-linux-musl";
 const TEST_BUNDLED_DETERMINISTIC_PROOF_PATH: &str = "deterministic-release/deterministic-build-proof.json";
 const TEST_BUNDLED_DETERMINISTIC_SANDBOX_PATH: &str =
     "deterministic-release/deterministic-sandbox-isolation-evidence.json";
+const FUNCTION_ADDRESS_SIDECAR_PATH: &str = "external-evidence/03-function-address-sidecar.json";
+const FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH: &str = "external-evidence/04-valence-function-address-receipt.json";
+const FUNCTION_ADDRESS_KAMACITE_RECEIPT_PATH: &str = "external-evidence/05-kamacite-function-address-receipt.json";
+const FUNCTION_ADDRESS_CLI_RECEIPT_OUT_ENV: &str = "MANTLE_FUNCTION_ADDRESS_CLI_RECEIPT_OUT";
+const FUNCTION_ADDRESS_CLI_RECEIPT_FILE: &str = "mantle-binding.json";
+const FUNCTION_ADDRESS_NEGATIVE_CASE_COUNT: usize = 6;
 const RELEASE_VERIFY_JSON_KIND: &str = "mantle-release-verify-v2";
 const RELEASE_VERIFY_DECISION_SCHEMA: &str = "mantle-release-verification-decision-v1";
 const RELEASE_VERIFY_SUCCESS_MARKER: &str = "release evidence verified";
@@ -417,6 +427,10 @@ fn sample_digest(seed: u8) -> String {
     nibble.repeat(BLAKE3_HEX_LEN)
 }
 
+fn sample_byte_digest(seed: u8) -> String {
+    format!("{seed:02x}").repeat(BLAKE3_HEX_LEN / HEX_CHARS_PER_BYTE)
+}
+
 fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
     make_release_bundle(false)
 }
@@ -467,6 +481,311 @@ fn make_release_bundle(include_provider_fixed_point: bool) -> (TempDir, PathBuf,
     let manifest: ReleaseEvidenceManifest =
         serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
     (temp, bundle_dir, manifest)
+}
+
+#[derive(Debug, Clone)]
+struct FunctionAddressFixturePaths {
+    sidecar: String,
+    valence_receipt: String,
+    kamacite_receipt: Option<String>,
+    release_binary: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FunctionAddressCliNegativeCase {
+    name: String,
+    mutation: String,
+    expected_error: String,
+    receipt_written: bool,
+}
+
+fn install_function_address_fixture(
+    bundle_dir: &Path,
+    manifest: &mut ReleaseEvidenceManifest,
+    with_kamacite: bool,
+) -> FunctionAddressFixturePaths {
+    let sidecar_bytes = std::fs::read(function_address_cli_fixture_path("sidecar.valid.json")).unwrap();
+    let valence_fixture = if with_kamacite {
+        function_address_fixture_path("valence-receipt.valid.json")
+    } else {
+        function_address_cli_fixture_path("valence-receipt.optional.valid.json")
+    };
+    let valence_bytes = std::fs::read(valence_fixture).unwrap();
+    let sidecar_path = bundle_dir.join(FUNCTION_ADDRESS_SIDECAR_PATH);
+    let valence_path = bundle_dir.join(FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH);
+    write_file(&sidecar_path, &sidecar_bytes);
+    write_file(&valence_path, &valence_bytes);
+    manifest
+        .external_evidence
+        .push(function_address_external_evidence(FunctionAddressExternalEvidenceFixture {
+            relative_path: FUNCTION_ADDRESS_SIDECAR_PATH,
+            bytes: &sidecar_bytes,
+            role: crunch_release_core::FUNCTION_ADDRESS_EVIDENCE_ROLE,
+            schema: crunch_release_core::FUNCTION_ADDRESS_EVIDENCE_SCHEMA,
+        }));
+    manifest
+        .external_evidence
+        .push(function_address_external_evidence(FunctionAddressExternalEvidenceFixture {
+            relative_path: FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH,
+            bytes: &valence_bytes,
+            role: crunch_release_core::VALENCE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+            schema: crunch_release_core::VALENCE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+        }));
+    let kamacite_receipt = if with_kamacite {
+        let bytes = std::fs::read(function_address_fixture_path("kamacite-receipt.valid.json")).unwrap();
+        write_file(&bundle_dir.join(FUNCTION_ADDRESS_KAMACITE_RECEIPT_PATH), &bytes);
+        manifest
+            .external_evidence
+            .push(function_address_external_evidence(FunctionAddressExternalEvidenceFixture {
+                relative_path: FUNCTION_ADDRESS_KAMACITE_RECEIPT_PATH,
+                bytes: &bytes,
+                role: crunch_release_core::KAMACITE_FUNCTION_ADDRESS_RECEIPT_ROLE,
+                schema: crunch_release_core::KAMACITE_FUNCTION_ADDRESS_RECEIPT_SCHEMA,
+            }));
+        Some(FUNCTION_ADDRESS_KAMACITE_RECEIPT_PATH.to_string())
+    } else {
+        None
+    };
+    write_canonical_manifest(bundle_dir, manifest);
+    FunctionAddressFixturePaths {
+        sidecar: FUNCTION_ADDRESS_SIDECAR_PATH.to_string(),
+        valence_receipt: FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH.to_string(),
+        kamacite_receipt,
+        release_binary: manifest.binaries.first().expect("release binary").relative_path.clone(),
+    }
+}
+
+struct FunctionAddressExternalEvidenceFixture<'a> {
+    relative_path: &'a str,
+    bytes: &'a [u8],
+    role: &'a str,
+    schema: &'a str,
+}
+
+fn function_address_external_evidence(
+    fixture: FunctionAddressExternalEvidenceFixture<'_>,
+) -> crunch_release_core::ExternalEvidence {
+    crunch_release_core::ExternalEvidence {
+        role: fixture.role.to_string(),
+        schema: fixture.schema.to_string(),
+        relative_path: fixture.relative_path.to_string(),
+        digest_blake3: blake3::hash(fixture.bytes).to_hex().to_string(),
+        claim_scope: crunch_release_core::FUNCTION_ADDRESS_CLAIM_SCOPE.to_string(),
+        non_claims: vec![crunch_release_core::FUNCTION_ADDRESS_OPAQUE_BOUNDARY.to_string()],
+    }
+}
+
+fn function_address_fixture_path(file_name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/function-address-release-binding")
+        .join(file_name)
+}
+
+fn function_address_cli_fixture_path(file_name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/function-address-release-binding-cli")
+        .join(file_name)
+}
+
+fn function_address_bind_command(
+    bundle_dir: &Path,
+    fixture: &FunctionAddressFixturePaths,
+    mode: &str,
+    receipt_out: &Path,
+) -> Command {
+    let mut command = crunch();
+    command
+        .arg("--json")
+        .arg("release")
+        .arg("function-address-bind")
+        .arg(bundle_dir)
+        .arg("--mode")
+        .arg(mode)
+        .arg("--sidecar")
+        .arg(&fixture.sidecar)
+        .arg("--valence-receipt")
+        .arg(&fixture.valence_receipt)
+        .arg("--release-binary")
+        .arg(&fixture.release_binary)
+        .arg("--receipt-out")
+        .arg(receipt_out);
+    if let Some(kamacite) = fixture.kamacite_receipt.as_ref() {
+        command.arg("--kamacite-receipt").arg(kamacite);
+    }
+    command
+}
+
+fn function_address_cli_receipt_out(temp: &TempDir) -> PathBuf {
+    std::env::var_os(FUNCTION_ADDRESS_CLI_RECEIPT_OUT_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| temp.path().join(FUNCTION_ADDRESS_CLI_RECEIPT_FILE))
+}
+
+fn apply_function_address_negative_mutation(mutation: &str, manifest: &mut ReleaseEvidenceManifest) {
+    match mutation {
+        "remove-valence-row" => {
+            manifest.external_evidence.retain(|row| row.relative_path != FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH);
+        }
+        "stale-valence-digest" => {
+            manifest.external_evidence[1].digest_blake3 = sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED);
+        }
+        "wrong-sidecar-role" => {
+            manifest.external_evidence[0].role = "wrong-function-address-role".to_string();
+        }
+        "wrong-valence-schema" => {
+            manifest.external_evidence[1].schema = "wrong.valence.schema.v1".to_string();
+        }
+        "wrong-sidecar-scope" => {
+            manifest.external_evidence[0].claim_scope = "function-address-semantic-correctness".to_string();
+        }
+        "overclaim" => {
+            manifest.external_evidence[0].non_claims = vec!["Mantle proves function correctness".to_string()];
+        }
+        other => panic!("unsupported function-address CLI negative mutation: {other}"),
+    }
+}
+
+fn function_address_negative_cases() -> Vec<FunctionAddressCliNegativeCase> {
+    serde_json::from_str(include_str!("fixtures/function-address-release-binding-cli/negative-cases.json"))
+        .expect("parse function-address CLI negative cases")
+}
+
+// r[verify mantle.release_provenance.function_address_binding_cli.command]
+// r[verify mantle.release_provenance.function_address_binding_cli.receipt]
+// r[verify mantle.release_provenance.function_address_binding_cli.positive]
+#[test]
+fn function_address_binding_cli_emits_cairn_ready_required_receipt() {
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    let fixture = install_function_address_fixture(&bundle_dir, &mut manifest, true);
+    let receipt_out = function_address_cli_receipt_out(&temp);
+    let _ = std::fs::remove_file(&receipt_out);
+
+    let mut command = function_address_bind_command(&bundle_dir, &fixture, "required", &receipt_out);
+    let assert = command.assert().success();
+    let receipt: crunch_release_core::FunctionAddressBindingReceipt =
+        serde_json::from_slice(&assert.get_output().stdout).expect("parse CLI binding receipt");
+    let written = std::fs::read(&receipt_out).expect("read CLI binding receipt");
+    let canonical = crunch_release_core::function_address_binding_receipt_canonical_bytes(receipt.clone())
+        .expect("canonical CLI binding receipt");
+
+    assert_eq!(written, canonical);
+    assert!(receipt.valid);
+    assert_eq!(receipt.verdict, crunch_release_core::FUNCTION_ADDRESS_BINDING_VERDICT_PASS);
+    assert_eq!(receipt.valence_receipt_digest, sample_byte_digest(FUNCTION_ADDRESS_VALENCE_RECEIPT_HASH_SEED));
+    assert_eq!(
+        receipt.kamacite_receipt_digest,
+        Some(sample_byte_digest(FUNCTION_ADDRESS_KAMACITE_RECEIPT_HASH_SEED))
+    );
+    assert_ne!(
+        receipt.valence_receipt_digest,
+        receipt.verification_summary.valence_receipt_digest_blake3.expect("Valence artifact digest")
+    );
+    assert_ne!(receipt.kamacite_receipt_digest, receipt.verification_summary.kamacite_receipt_digest_blake3);
+
+    function_address_bind_command(&bundle_dir, &fixture, "required", &receipt_out)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("without overwrite"));
+}
+
+// r[verify mantle.release_provenance.function_address_binding_cli.positive]
+#[test]
+fn function_address_binding_cli_accepts_optional_valence_without_kamacite() {
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    let fixture = install_function_address_fixture(&bundle_dir, &mut manifest, false);
+    let receipt_out = temp.path().join("optional-function-address-binding.json");
+
+    let mut command = function_address_bind_command(&bundle_dir, &fixture, "optional", &receipt_out);
+    let assert = command.assert().success();
+    let receipt: crunch_release_core::FunctionAddressBindingReceipt =
+        serde_json::from_slice(&assert.get_output().stdout).expect("parse optional binding receipt");
+
+    assert!(receipt.valid);
+    assert!(!receipt.verification_summary.required);
+    assert!(receipt.kamacite_receipt_digest.is_none());
+    assert!(receipt.verification_summary.kamacite_receipt_hash_blake3.is_none());
+    assert!(receipt_out.is_file());
+}
+
+// r[verify mantle.release_provenance.function_address_binding_cli.negative]
+#[test]
+fn function_address_binding_cli_negative_fixture_matrix_fails_closed() {
+    let cases = function_address_negative_cases();
+    assert_eq!(cases.len(), FUNCTION_ADDRESS_NEGATIVE_CASE_COUNT);
+    assert!(cases.iter().any(|case| case.receipt_written));
+    for case in cases {
+        let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+        let fixture = install_function_address_fixture(&bundle_dir, &mut manifest, true);
+        apply_function_address_negative_mutation(&case.mutation, &mut manifest);
+        write_canonical_manifest(&bundle_dir, &manifest);
+        let receipt_out = temp.path().join(format!("{}.json", case.name));
+        let output = function_address_bind_command(&bundle_dir, &fixture, "required", &receipt_out)
+            .output()
+            .expect("run function-address negative fixture");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        assert!(!output.status.success(), "negative fixture unexpectedly passed: {}", case.name);
+        assert!(stderr.contains(&case.expected_error), "negative fixture {} stderr was: {stderr}", case.name);
+        assert_eq!(receipt_out.exists(), case.receipt_written, "negative fixture: {}", case.name);
+    }
+}
+
+// r[verify mantle.release_provenance.function_address_binding_cli.shell]
+// r[verify mantle.release_provenance.function_address_binding_cli.negative]
+#[test]
+fn function_address_binding_cli_rejects_stale_valence_bytes_before_output() {
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    let fixture = install_function_address_fixture(&bundle_dir, &mut manifest, true);
+    let receipt_out = temp.path().join("stale-valence-binding.json");
+    write_file(&bundle_dir.join(FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH), br#"{"tampered":true}"#);
+
+    function_address_bind_command(&bundle_dir, &fixture, "required", &receipt_out)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("external_evidence[1] does not match manifest"));
+    assert!(!receipt_out.exists());
+}
+
+// r[verify mantle.release_provenance.function_address_binding_cli.negative]
+#[test]
+fn function_address_binding_cli_rejects_stale_kamacite_logical_link() {
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    let fixture = install_function_address_fixture(&bundle_dir, &mut manifest, true);
+    let receipt_out = temp.path().join("stale-kamacite-link-binding.json");
+    let valence_path = bundle_dir.join(FUNCTION_ADDRESS_VALENCE_RECEIPT_PATH);
+    let mut valence: serde_json::Value = serde_json::from_slice(&std::fs::read(&valence_path).unwrap()).unwrap();
+    valence["kamacite_receipt_hash"] = serde_json::Value::String(sample_digest(FUNCTION_ADDRESS_STALE_DIGEST_SEED));
+    let bytes = serde_json::to_vec(&valence).unwrap();
+    write_file(&valence_path, &bytes);
+    manifest.external_evidence[1].digest_blake3 = blake3::hash(&bytes).to_hex().to_string();
+    write_canonical_manifest(&bundle_dir, &manifest);
+
+    function_address_bind_command(&bundle_dir, &fixture, "required", &receipt_out)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("logical receipt identities do not match"));
+    assert!(!receipt_out.exists());
+}
+
+// r[verify mantle.release_provenance.function_address_binding_cli.negative]
+#[test]
+fn function_address_binding_cli_preserves_overclaim_rejection_receipt() {
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    let fixture = install_function_address_fixture(&bundle_dir, &mut manifest, true);
+    let receipt_out = temp.path().join("overclaim-binding.json");
+    manifest.external_evidence[0].non_claims = vec!["Mantle proves function correctness".to_string()];
+    write_canonical_manifest(&bundle_dir, &manifest);
+
+    function_address_bind_command(&bundle_dir, &fixture, "required", &receipt_out)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("function-address binding rejected"));
+    let receipt: crunch_release_core::FunctionAddressBindingReceipt =
+        serde_json::from_slice(&std::fs::read(&receipt_out).expect("invalid receipt is preserved"))
+            .expect("parse invalid binding receipt");
+    assert!(!receipt.valid);
+    assert_eq!(receipt.verdict, crunch_release_core::FUNCTION_ADDRESS_BINDING_VERDICT_FAIL);
+    assert!(receipt.verification_summary.diagnostics.iter().any(|diagnostic| diagnostic.contains("overclaim")));
 }
 
 #[test]
