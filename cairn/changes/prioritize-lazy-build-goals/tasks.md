@@ -17,3 +17,10 @@
 - [x] [depends:priority-ready-set] r[build_scheduling.deterministic_starvation_bound] Positive: keep a goal continuously ready while higher critical-path work arrives and prove policy-bound age promotion dispatches it; negative: blocked or resource-ineligible goals do not age into eligibility.
 - [x] [depends:priority-evidence] r[build_scheduling.priority_decision_evidence] Negative: shuffle discovery/map order, vary response timing, omit or stale the history snapshot, and prove deterministic fallback plus redacted diagnostics.
 - [x] [depends:scheduler-verification] r[build_scheduling.deterministic_priority_kernel] Run focused crunch-build tests, scheduler benchmarks against FIFO fixtures, Cairn validate, and proposal/design/tasks gates; report performance evidence as comparative rather than optimality proof.
+
+## Evidence summary
+
+- Focused scheduler, Worker, Nickel-policy, build-report, producer-parity, and generated-contract suites passed; the combined rerun is pueue task `249`.
+- Three Kani harnesses verified comparator antisymmetry/transitivity and bounded epoch advance with zero failures in pueue task `247`.
+- `scheduler-benchmark.json` records six comparative fixtures and explicit non-claims; it does not claim global optimality or production throughput.
+- Machine-contract generation/self-test/check and all three Cairn gates passed. See `evidence/validation.md` for commands, counts, receipts, and bounded broad-rail blockers.
