@@ -85,3 +85,28 @@ Pueue task `832` ran Cairn sync dry-run and execute. The execute receipt reporte
 ## Non-claims for failed exploratory commands
 
 The first Nix-shell wasm check used a toolchain without the installed wasm target, and the first direct-rustup retry lacked clang on PATH; neither is counted as evidence. An early Kache-backed root Clippy run hit a compiler ICE in an unrelated dependency, and later broad Clippy attempts exposed unrelated root-package lint debt; only task `795` is claimed. Initial parser tests overflowed the default libtest worker stack while constructing the repository's very large Clap graph; the final parser tests use a named bounded test thread and task `767` is the claimed result.
+
+## Post-archive validation
+
+Pueue task `859` ran the post-archive repository validation and policy-freshness check. Exact Cairn validation output:
+
+```json
+{
+  "change_issues": [],
+  "changes": 10,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 37,
+  "valid": true
+}
+```
+
+Policy output:
+
+```text
+policy fresh: cairn-policy/generated/cairn-policy.json
+```
+
+Task `862` reran the broad Tracey receipt after archive. Historical repository gaps remain, so no broad pass is claimed, but the receipt contains no missing or dangling `function_address_binding_cli` identifier.
