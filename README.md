@@ -303,6 +303,10 @@ and foreign import receipt trust-model links, see
 [`docs/operator-proof-guide.md`](docs/operator-proof-guide.md). For focused
 native `rust-plan` serial, parallel, and ambient-env validation rails, see
 [`docs/native-rust-plan-validation.md`](docs/native-rust-plan-validation.md).
+For the disabled-by-default KernelScript beta profile, authoritative source pin,
+pure offline planning/admission core, exact blockers, upgrade procedure, and
+strict non-claims, see
+[`docs/kernelscript-experiment.md`](docs/kernelscript-experiment.md).
 For repeatable Cairn change validation, sync/archive, post-archive validation,
 and final status evidence capture, see
 [`docs/cairn-lifecycle-evidence-runner.md`](docs/cairn-lifecycle-evidence-runner.md).
@@ -1896,3 +1900,4 @@ fixed-point artifact that was actually proven.
 - [oxidecomputer/cancel-safe-futures](https://github.com/oxidecomputer/cancel-safe-futures) — cancellation-aware async adapter prior art for worker cleanup, output-upload integrity, and final receipt preservation.
 - [lovesegfault/rio-build](https://github.com/lovesegfault/rio-build) — BSD-3-Clause remote-build prior art for pure decision kernels, fenced pull assignments, resumable missing-chunk transfer, critical-path/resource-aware scheduling, immutable attempt logs, and telemetry; Mantle adaptations reuse its own lazy scheduler, castore, trust, evidence, and provider-neutral configuration instead of adopting Rio's full service stack.
 - [onixcomputer/onix-modules](https://github.com/onixcomputer/onix-modules) — accepted `onix-kernel-bundle-v1` contract and golden frontend projection/import fixtures consumed by Mantle's bounded OCI adapter; the snapshots are pinned to OnixOS commit `8a99461`, and Onix semantics remain external to Mantle.
+- [multikernel/kernelscript](https://github.com/multikernel/kernelscript) — KernelScript `v0.1.2` source and generated-project shape reference for Mantle's disabled-by-default bounded experiment; Mantle pins the official source archive but does not accept an upstream compiler closure because the release has no immutable opam dependency lock.
