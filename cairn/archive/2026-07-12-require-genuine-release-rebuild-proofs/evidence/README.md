@@ -46,3 +46,20 @@ Pueue task `356` dry-ran and executed Cairn sync without blockers, but Cairn lef
 
 - `cairn/specs/build-correctness/spec.md`: 3202 bytes, BLAKE3 `014ad3c047d21fda494ba8234a663ec55e7f7ee31018282568803f7414b91264`.
 - `cairn/specs/release-provenance/spec.md`: 1942 bytes, BLAKE3 `e773a1b112f0086b12d6e1ee9e30353172af4b39741bd15e673db926f5f15738`.
+
+## Archive and post-archive validation
+
+Pueue task `389` dry-ran and executed archive without blockers at `cairn/archive/2026-07-12-require-genuine-release-rebuild-proofs`. Pueue task `393` re-proved both accepted suffix identities above and captured final post-archive validation:
+
+```text
+{
+  "change_issues": [],
+  "changes": 7,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 33,
+  "valid": true
+}
+```
