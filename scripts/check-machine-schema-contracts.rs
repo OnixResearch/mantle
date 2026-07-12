@@ -444,20 +444,41 @@ fn run_invariant_parity_self_test() -> Result<(), String> {
         "$schema": JSON_SCHEMA_DRAFT,
         "$id": "mantle://schemas/self-test-invariant-v1",
         "type": "object",
-        "required": ["target"],
+        "required": ["target", "lower", "upper"],
         "properties": {
             "target": {"type": "boolean"},
-            "optional": {"type": "boolean"}
+            "optional": {"type": "boolean"},
+            "lower": {"type": "integer"},
+            "upper": {"type": "integer"}
         },
         "additionalProperties": false,
-        "x-mantle-invariants": [{"kind": "boolean-or", "terms": ["/optional"], "target": "/target"}]
+        "x-mantle-invariants": [
+            {"kind": "boolean-or", "terms": ["/optional"], "target": "/target"},
+            {"kind": "integer-less-than", "integer": "/lower", "target": "/upper"}
+        ]
     });
     reject_issues("self-test invariant schema", validate_schema("self-test.invariant", &schema))?;
     reject_issues(
         "self-test complete invariant value",
-        validate_instance("self-test.invariant", &schema, &serde_json::json!({"target": false, "optional": false})),
+        validate_instance(
+            "self-test.invariant",
+            &schema,
+            &serde_json::json!({"target": false, "optional": false, "lower": 1, "upper": 2}),
+        ),
     )?;
-    let missing = validate_instance("self-test.invariant", &schema, &serde_json::json!({"target": false}));
+    let inverted = validate_instance(
+        "self-test.invariant",
+        &schema,
+        &serde_json::json!({"target": false, "optional": false, "lower": 2, "upper": 1}),
+    );
+    if !inverted.iter().any(|issue| issue.class == "cross-field") {
+        return Err(format!("self-test accepted an inverted integer ordering: {inverted:?}"));
+    }
+    let missing = validate_instance(
+        "self-test.invariant",
+        &schema,
+        &serde_json::json!({"target": false, "lower": 1, "upper": 2}),
+    );
     if !missing.iter().any(|issue| issue.class == "cross-field") {
         return Err(format!("self-test ignored a missing invariant operand: {missing:?}"));
     }

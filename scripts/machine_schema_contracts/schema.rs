@@ -767,6 +767,7 @@ fn valid_invariant_declaration(invariant: &Invariant) -> bool {
     let required = match invariant.kind.as_str() {
         "length-equals" => valid_pointer(&invariant.array, false) && valid_pointer(&invariant.integer, false),
         "sum-equals" => valid_pointer(&invariant.target, false) && valid_pointer_list(&invariant.terms),
+        "integer-less-than" => valid_pointer(&invariant.integer, false) && valid_pointer(&invariant.target, false),
         "empty-iff" => valid_pointer(&invariant.array, false) && valid_pointer(&invariant.boolean, false),
         "present-iff" => valid_pointer(&invariant.boolean, false) && valid_pointer_list(&invariant.fields),
         "boolean-not" => valid_pointer(&invariant.boolean, false) && valid_pointer(&invariant.target, false),
@@ -833,6 +834,7 @@ pub fn supported_invariant_kind(kind: &str) -> bool {
         kind,
         "length-equals"
             | "sum-equals"
+            | "integer-less-than"
             | "empty-iff"
             | "present-iff"
             | "boolean-not"

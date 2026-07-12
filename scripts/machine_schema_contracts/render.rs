@@ -266,6 +266,7 @@ fn render_invariant_predicate(invariant: &Invariant, root: &str) -> Result<Strin
     match invariant.kind.as_str() {
         "length-equals" => render_length_equals(invariant, root),
         "sum-equals" => render_sum_equals(invariant, root),
+        "integer-less-than" => render_integer_less_than(invariant, root),
         "empty-iff" => render_empty_iff(invariant, root),
         "present-iff" => render_present_iff(invariant, root),
         "boolean-not" => render_boolean_not(invariant, root),
@@ -294,6 +295,10 @@ fn render_sum_equals(invariant: &Invariant, root: &str) -> Result<String, String
         render_joined_paths(root, &invariant.terms, " + ")?,
         nickel_path(root, &invariant.target)?
     ))
+}
+
+fn render_integer_less_than(invariant: &Invariant, root: &str) -> Result<String, String> {
+    Ok(format!("{} < {}", nickel_path(root, &invariant.integer)?, nickel_path(root, &invariant.target)?))
 }
 
 fn render_empty_iff(invariant: &Invariant, root: &str) -> Result<String, String> {

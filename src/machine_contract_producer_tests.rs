@@ -43,6 +43,43 @@ const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 const SOURCE_PAYLOAD_BYTES: u64 = 12;
+const SCHEDULER_FIXTURE_SELECTED_GOAL: &str = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-selected.drv";
+const SCHEDULER_FIXTURE_RUNNER_UP_GOAL: &str = "/mantle/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-runner.drv";
+const SCHEDULER_FIXTURE_EPOCH: u32 = 1;
+const SCHEDULER_FIXTURE_SELECTED_PATH_NODES: u32 = 2;
+const SCHEDULER_FIXTURE_RUNNER_UP_PATH_NODES: u32 = 1;
+
+fn scheduler_fixture_decision() -> crunch_pipeline::PriorityDecisionEvidence {
+    let policy = crunch_pipeline::SchedulingPolicy::default();
+    let ready = [
+        crunch_build::ReadyGoalFacts::ordinary(SCHEDULER_FIXTURE_RUNNER_UP_GOAL.to_string(), 0),
+        crunch_build::ReadyGoalFacts::ordinary(SCHEDULER_FIXTURE_SELECTED_GOAL.to_string(), 0),
+    ];
+    let pressures = std::collections::BTreeMap::from([
+        (SCHEDULER_FIXTURE_SELECTED_GOAL.to_string(), crunch_build::KnownGraphPressure {
+            known_critical_path_nodes: SCHEDULER_FIXTURE_SELECTED_PATH_NODES,
+            known_critical_path_work_units: SCHEDULER_FIXTURE_SELECTED_PATH_NODES,
+            blocked_root_count: SCHEDULER_FIXTURE_EPOCH,
+            blocked_root_count_saturated: false,
+        }),
+        (SCHEDULER_FIXTURE_RUNNER_UP_GOAL.to_string(), crunch_build::KnownGraphPressure {
+            known_critical_path_nodes: SCHEDULER_FIXTURE_RUNNER_UP_PATH_NODES,
+            known_critical_path_work_units: SCHEDULER_FIXTURE_RUNNER_UP_PATH_NODES,
+            blocked_root_count: SCHEDULER_FIXTURE_EPOCH,
+            blocked_root_count_saturated: false,
+        }),
+    ]);
+    let ranked = crunch_build::rank_ready_goals(&policy, SCHEDULER_FIXTURE_EPOCH, &ready, &pressures)
+        .expect("rank scheduler fixture candidates");
+    crunch_build::priority_decision_evidence(
+        &policy,
+        SCHEDULER_FIXTURE_EPOCH,
+        &ranked,
+        crunch_build::HistoryBasis::StructuralFallbackMissing,
+        None,
+    )
+    .expect("construct scheduler fixture evidence")
+}
 
 fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(FIXTURE_ROOT).join(name)
@@ -77,11 +114,13 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
         output_dir: "/mantle/store".to_string(),
         state_dir: ".mantle/state".to_string(),
         store_dir: "/mantle/store".to_string(),
+        scheduler_policy: crunch_pipeline::SchedulingPolicy::default(),
         hermeticity_mode: "strict".to_string(),
         hermeticity_audit_events: Vec::new(),
         build_environment_reports: Vec::new(),
         network_policy_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
+        scheduler_priority_decisions: vec![scheduler_fixture_decision()],
         frontend_artifact_attestations: Vec::new(),
         cargo_build_evidence: Vec::new(),
         cargo_build_evidence_diagnostics: Vec::new(),

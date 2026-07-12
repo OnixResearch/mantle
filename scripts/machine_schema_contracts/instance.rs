@@ -404,6 +404,7 @@ fn evaluate_invariant(invariant: &Invariant, value: &Value) -> bool {
     match invariant.kind.as_str() {
         "length-equals" => invariant_length_equals(invariant, value),
         "sum-equals" => invariant_sum_equals(invariant, value),
+        "integer-less-than" => invariant_integer_less_than(invariant, value),
         "empty-iff" => invariant_empty_iff(invariant, value),
         "present-iff" => invariant_present_iff(invariant, value),
         "boolean-not" => invariant_boolean_not(invariant, value),
@@ -437,6 +438,13 @@ fn invariant_sum_equals(invariant: &Invariant, value: &Value) -> bool {
             sum.checked_add(term)
         })
         .is_some_and(|sum| sum == target)
+}
+
+fn invariant_integer_less_than(invariant: &Invariant, value: &Value) -> bool {
+    pointer(value, &invariant.integer)
+        .and_then(Value::as_u64)
+        .zip(pointer(value, &invariant.target).and_then(Value::as_u64))
+        .is_some_and(|(left, right)| left < right)
 }
 
 fn invariant_empty_iff(invariant: &Invariant, value: &Value) -> bool {

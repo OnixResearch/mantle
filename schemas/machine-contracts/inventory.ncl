@@ -145,7 +145,8 @@ let Registry = {
           "src/cache_substitution.rs",
           "src/frontend_artifact_spec.rs",
           "src/ast_grep_evidence.rs",
-          "crates/crunch-release-core/src/ast_grep.rs"
+          "crates/crunch-release-core/src/ast_grep.rs",
+          "crates/crunch-build/src/scheduling.rs"
         ]
       },
       "consumers"= [
@@ -180,11 +181,11 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds the full report projection and all directly serialized owner modules",
       "freshness"= {
-        "schema_blake3"= "a890788484c6f4a0dd17f39dc0bec6c8244e8fd58f890d90b581aa2965e9f56a",
-        "contract_blake3"= "20ff80cf8f4ed2716695eb6fa92f9ace897eef29cc33d2cf8cc5708e95120394",
+        "schema_blake3"= "79330945095623f6cd64268fbe81595a1c3fc24ad368477b2aff582bd1cd9432",
+        "contract_blake3"= "b37b10e0f3295d3659b86ae6c257fc445566a9513c76cd4227542d7dfa2d6e04",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "4af6434c4c85c48ceadd52f0fef4389dfa0ec8cdcfb78efdac64660ec8a37b21",
-        "producer_identity_blake3"= "3347e51ff495db4e7210bca21cd258c007de0140f83961c53ad892a20112d3c3",
+        "fixture_set_blake3"= "8f89cdb1a709a03a5c6afe81a7386f20c310f4f116e96f02dfdd53fa16bf8402",
+        "producer_identity_blake3"= "956d3f42469337b92c7ae44e734e4406fbd44ffc9dc33dc89944d82d84299841",
         "consumer_policy_blake3"= "7d4455f3467f3be7d648f7b5f2db114d776215cfc4c89187da0fa2c07a5520dd"
       },
       "non_claims"= [
