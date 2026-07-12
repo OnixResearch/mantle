@@ -1,7 +1,7 @@
 ## Reconciliation
 
-- [ ] [serial] r[verification_evidence.production_transfer_completion_claim] Add a tracked superseding status record that cites the archived checked I3/V5/V6 tasks, the contradictory session evidence, and the current inline NAR/input payload implementation without rewriting the archive.
-- [ ] [depends:transfer-status-reconciliation] r[verification_evidence.production_transfer_completion_claim] Remove or narrow any current operator wording that presents `RemoteTransferMode::Streaming` or the archived farm change as implementation-complete before new evidence exists.
+- [x] [serial] r[verification_evidence.production_transfer_completion_claim] Add a tracked superseding status record that cites the archived checked I3/V5/V6 tasks, the contradictory session evidence, and the current inline NAR/input payload implementation without rewriting the archive. Evidence: `evidence/status-reconciliation.md`.
+- [x] [depends:transfer-status-reconciliation] r[verification_evidence.production_transfer_completion_claim] Remove or narrow any current operator wording that presents `RemoteTransferMode::Streaming` or the archived farm change as implementation-complete before new evidence exists. Evidence: `evidence/status-reconciliation.md` and the narrowed enum documentation in `src/remote_build.rs`.
 
 ## Implementation
 

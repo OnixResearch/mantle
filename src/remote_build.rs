@@ -623,8 +623,9 @@ impl RemoteFrame {
 pub enum RemoteTransferMode {
     Delta,
     Full,
-    /// Chunked CAS streaming with BLAKE3 content identities, resume
-    /// cursors, quota enforcement, and backpressure.
+    /// Negotiated streaming capability label. Production support is claimed
+    /// only when the bounded data-plane path and current interruption evidence
+    /// accompany this label.
     Streaming,
 }
 
