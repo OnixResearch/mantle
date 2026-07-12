@@ -42,6 +42,7 @@ let AbsolutePath = std.contract.from_validator (fun value =>
 ) in
 
 let OciProtocol = [| 'http, 'https |] in
+let RegistryBackend = [| 'oci, 'local |] in
 let PackageKind = [| 'wit, 'component-library |] in
 let RustProfile = [| 'debug, 'release |] in
 let WizerMode = [| 'disabled, 'diagnostic, 'deterministic |] in
@@ -88,6 +89,7 @@ let ToolIdentity = {
 let ToolCohort = {
   rust_toolchain | ToolIdentity,
   rust_target | NonEmptyString,
+  wkg | ToolIdentity,
   wit_bindgen | ToolIdentity,
   wasm_component_ld | ToolIdentity,
   wasm_tools | ToolIdentity,
@@ -100,9 +102,11 @@ let ToolCohort = {
 let RegistryMapping = {
   namespace | NonEmptyString,
   registry | NonEmptyString,
-  oci_registry | NonEmptyString,
+  backend | RegistryBackend | default = 'oci,
+  oci_registry | NonEmptyString | optional,
   namespace_prefix | String | default = "",
   protocol | OciProtocol | default = 'https,
+  local_root | AbsolutePath | optional,
   credential_handle | NonEmptyString | optional,
 } in
 
@@ -235,11 +239,22 @@ let ComponentExportRequest = {
 let quote = fun value => std.serialize 'Json value in
 
 let render_registry_mapping = fun mapping =>
-  "%{quote mapping.namespace} = { registry = %{quote mapping.registry}, metadata = { preferredProtocol = \"oci\", oci = { registry = %{quote mapping.oci_registry}, namespacePrefix = %{quote mapping.namespace_prefix} } } }"
+  if mapping.backend == 'local then
+    "%{quote mapping.namespace} = %{quote mapping.registry}"
+  else if std.record.has_field "oci_registry" mapping then
+    "%{quote mapping.namespace} = { registry = %{quote mapping.registry}, metadata = { preferredProtocol = \"oci\", oci = { registry = %{quote mapping.oci_registry}, namespacePrefix = %{quote mapping.namespace_prefix} } } }"
+  else
+    "%{quote mapping.namespace} = %{quote mapping.registry}"
 in
 
 let render_registry_transport = fun mapping =>
-  "[registry.%{quote mapping.registry}.oci]\nprotocol = %{quote mapping.protocol}\n"
+  if mapping.backend == 'local then
+    if std.record.has_field "local_root" mapping then
+      "[registry.%{quote mapping.registry}]\ndefault = \"local\"\n[registry.%{quote mapping.registry}.local]\nroot = %{quote mapping.local_root}\n"
+    else
+      "[registry.%{quote mapping.registry}]\ndefault = \"local\"\n"
+  else
+    "[registry.%{quote mapping.registry}.oci]\nprotocol = %{quote mapping.protocol}\n"
 in
 
 let render_wkg_config = fun manifest =>
@@ -369,6 +384,7 @@ let component_export_request_contract = ComponentExportRequest in
   StoreObject = store_object_contract,
   ToolIdentity = tool_identity_contract,
   ToolCohort = tool_cohort_contract,
+  RegistryBackend = RegistryBackend,
   RegistryMapping = registry_mapping_contract,
   PackageRequirement = package_requirement_contract,
   PackageResolution = package_resolution_contract,

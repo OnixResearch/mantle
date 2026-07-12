@@ -17,6 +17,10 @@
       inputs.rust-overlay.follows = "rust-overlay";
       inputs.flake-utils.follows = "flake-utils";
     };
+    wasi-virt = {
+      url = "github:bytecodealliance/wasi-virt/19b174a3244f81ed9b91e067b6901f71665316a8";
+      flake = false;
+    };
   };
 
   outputs =
@@ -28,6 +32,7 @@
       rust-overlay,
       flake-utils,
       tigerstyle,
+      wasi-virt,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -135,6 +140,167 @@
                   upstream_store_path: $upstreamStorePath
                 }' > "$out/share/mantle/ast-grep-toolchain.json"
             '';
+
+        wasiVirtVersion = "0.2.0";
+        wasiVirt = pkgs.rustPlatform.buildRustPackage {
+          pname = "wasi-virt";
+          version = wasiVirtVersion;
+          src = wasi-virt;
+          cargoLock.lockFile = "${wasi-virt}/Cargo.lock";
+          cargoBuildFlags = [
+            "--package"
+            "wasi-virt"
+            "--no-default-features"
+          ];
+          doCheck = false;
+          meta.mainProgram = "wasi-virt";
+        };
+
+        wasmComponentToolchain = pkgs.runCommand "mantle-wasm-component-toolchain-v1"
+          {
+            nativeBuildInputs = [
+              pkgs.b3sum
+              pkgs.coreutils
+              pkgs.jq
+            ];
+          }
+          ''
+            set -eu
+            mkdir -p "$out/bin" "$out/share/mantle"
+
+            link_tool() {
+              source_path="$1"
+              tool_name="$2"
+              test -x "$source_path"
+              ln -s "$source_path" "$out/bin/$tool_name"
+            }
+
+            wrap_rust_tool() {
+              source_path="$1"
+              tool_name="$2"
+              test -x "$source_path"
+              printf '%s\n' '#!${pkgs.bash}/bin/bash' "exec \"$source_path\" \"\$@\"" > "$out/bin/$tool_name"
+              chmod u=rwx,go=rx "$out/bin/$tool_name"
+            }
+
+            wrap_rust_tool "${rustToolchain}/bin/cargo" cargo
+            wrap_rust_tool "${rustToolchain}/bin/rustc" rustc
+            link_tool "${rustToolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/bin/wasm-component-ld" wasm-component-ld
+            link_tool "${pkgs.wkg}/bin/wkg" wkg
+            link_tool "${pkgs.wit-bindgen}/bin/wit-bindgen" wit-bindgen
+            link_tool "${pkgs.wasm-tools}/bin/wasm-tools" wasm-tools
+            link_tool "${pkgs.wac-cli}/bin/wac" wac
+            link_tool "${wasiVirt}/bin/wasi-virt" wasi-virt
+            link_tool "${pkgs.wizer}/bin/wizer" wizer
+            link_tool "${pkgs.wasmtime}/bin/wasmtime" wasmtime
+            link_tool "${pkgs.bubblewrap}/bin/bwrap" bwrap
+
+            tool_record() {
+              tool_name="$1"
+              expected_version="$2"
+              binary="$out/bin/$tool_name"
+              version_output="$($binary --version 2>&1 | ${pkgs.coreutils}/bin/head -n 1)"
+              binary_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$binary")"
+              ${pkgs.jq}/bin/jq --null-input --sort-keys \
+                --arg name "$tool_name" \
+                --arg version "$expected_version" \
+                --arg versionOutput "$version_output" \
+                --arg path "bin/$tool_name" \
+                --arg binaryDigestBlake3 "$binary_digest" \
+                '{
+                  name: $name,
+                  version: $version,
+                  version_output: $versionOutput,
+                  path: $path,
+                  binary_digest_blake3: $binaryDigestBlake3
+                }'
+            }
+
+            tool_record cargo "1.96.0-nightly" > "$TMPDIR/cargo.json"
+            tool_record rustc "1.96.0-nightly" > "$TMPDIR/rustc.json"
+            tool_record wasm-component-ld "0.5.22" > "$TMPDIR/wasm-component-ld.json"
+            tool_record wkg "${pkgs.wkg.version}" > "$TMPDIR/wkg.json"
+            tool_record wit-bindgen "${pkgs.wit-bindgen.version}" > "$TMPDIR/wit-bindgen.json"
+            tool_record wasm-tools "${pkgs.wasm-tools.version}" > "$TMPDIR/wasm-tools.json"
+            tool_record wac "${pkgs.wac-cli.version}" > "$TMPDIR/wac.json"
+            tool_record wasi-virt "${wasiVirtVersion}" > "$TMPDIR/wasi-virt.json"
+            tool_record wizer "${pkgs.wizer.version}" > "$TMPDIR/wizer.json"
+            tool_record wasmtime "${pkgs.wasmtime.version}" > "$TMPDIR/wasmtime.json"
+            tool_record bwrap "${pkgs.bubblewrap.version}" > "$TMPDIR/bwrap.json"
+
+            ${pkgs.jq}/bin/jq --null-input --compact-output --sort-keys \
+              --arg schema "mantle-wasm-component-toolchain-v1" \
+              --arg target "wasm32-wasip2" \
+              --slurpfile cargo "$TMPDIR/cargo.json" \
+              --slurpfile rustc "$TMPDIR/rustc.json" \
+              --slurpfile componentLd "$TMPDIR/wasm-component-ld.json" \
+              --slurpfile wkg "$TMPDIR/wkg.json" \
+              --slurpfile witBindgen "$TMPDIR/wit-bindgen.json" \
+              --slurpfile wasmTools "$TMPDIR/wasm-tools.json" \
+              --slurpfile wac "$TMPDIR/wac.json" \
+              --slurpfile wasiVirt "$TMPDIR/wasi-virt.json" \
+              --slurpfile wizer "$TMPDIR/wizer.json" \
+              --slurpfile wasmtime "$TMPDIR/wasmtime.json" \
+              --slurpfile bwrap "$TMPDIR/bwrap.json" \
+              '{
+                schema: $schema,
+                rust_target: $target,
+                tools: [
+                  $cargo[0],
+                  $rustc[0],
+                  $componentLd[0],
+                  $wkg[0],
+                  $witBindgen[0],
+                  $wasmTools[0],
+                  $wac[0],
+                  $wasiVirt[0],
+                  $wizer[0],
+                  $wasmtime[0],
+                  $bwrap[0]
+                ]
+              }' > "$TMPDIR/cohort-input.json"
+            cohort_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$TMPDIR/cohort-input.json")"
+            ${pkgs.jq}/bin/jq --sort-keys --arg cohortDigest "$cohort_digest" \
+              '. + {cohort_identity_blake3: $cohortDigest}' \
+              "$TMPDIR/cohort-input.json" > "$out/share/mantle/wasm-component-toolchain.json"
+          '';
+
+        wasmComponentToolchainIdentity = pkgs.runCommand "mantle-wasm-component-toolchain-identity"
+          {
+            nativeBuildInputs = [
+              pkgs.b3sum
+              pkgs.jq
+            ];
+          }
+          ''
+            set -eu
+            manifest="${wasmComponentToolchain}/share/mantle/wasm-component-toolchain.json"
+            ${pkgs.jq}/bin/jq --exit-status \
+              '.schema == "mantle-wasm-component-toolchain-v1"
+                and .rust_target == "wasm32-wasip2"
+                and (.tools | length) == 11
+                and ([.tools[].name] | unique | length) == 11
+                and ([.tools[].binary_digest_blake3 | test("^[0-9a-f]{64}$")] | all)
+                and (.cohort_identity_blake3 | test("^[0-9a-f]{64}$"))' \
+              "$manifest" > /dev/null
+
+            ${pkgs.jq}/bin/jq -cS 'del(.cohort_identity_blake3)' "$manifest" > "$TMPDIR/cohort-input.json"
+            actual_cohort_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$TMPDIR/cohort-input.json")"
+            expected_cohort_digest="$(${pkgs.jq}/bin/jq --raw-output '.cohort_identity_blake3' "$manifest")"
+            test "$actual_cohort_digest" = "$expected_cohort_digest"
+
+            for tool in cargo rustc wasm-component-ld wkg wit-bindgen wasm-tools wac wasi-virt wizer wasmtime bwrap; do
+              binary="${wasmComponentToolchain}/bin/$tool"
+              test -x "$binary"
+              actual_binary_digest="$(${pkgs.b3sum}/bin/b3sum --no-names "$binary")"
+              expected_binary_digest="$(${pkgs.jq}/bin/jq --raw-output --arg tool "$tool" '.tools[] | select(.name == $tool) | .binary_digest_blake3' "$manifest")"
+              test "$actual_binary_digest" = "$expected_binary_digest"
+              "$binary" --version > /dev/null 2>&1
+            done
+
+            mkdir -p "$out"
+            cp "$manifest" "$out/wasm-component-toolchain.json"
+          '';
 
         astGrepPackageIdentity = pkgs.runCommand "mantle-ast-grep-package-identity-smoke" { } ''
           set -eu
@@ -268,6 +434,8 @@
           crunch = crunch;
           ast-grep-toolchain = astGrepToolchain;
           ast-grep-package-identity = astGrepPackageIdentity;
+          wasm-component-toolchain = wasmComponentToolchain;
+          wasm-component-toolchain-identity = wasmComponentToolchainIdentity;
           mantle-transcript-quality = mantleTranscriptQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
         }
@@ -289,6 +457,7 @@
         checks = {
           inherit crunch;
           ast-grep-package-identity = astGrepPackageIdentity;
+          wasm-component-toolchain-identity = wasmComponentToolchainIdentity;
           mantle-transcript-quality = mantleTranscriptQuality;
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
           release-determinism-quality = releaseDeterminismQuality;
@@ -354,6 +523,7 @@
             ]
             ++ [
               astGrepToolchain
+              wasmComponentToolchain
               tigerstyle.packages.${system}.cargo-tigerstyle
             ];
 

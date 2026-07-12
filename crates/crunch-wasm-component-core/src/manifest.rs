@@ -14,6 +14,7 @@ use crate::DigestError;
 use crate::LockFacts;
 use crate::PackageMaterialization;
 use crate::PackageResolution;
+use crate::RegistryBackend;
 use crate::StoreObject;
 use crate::ToolCohort;
 use crate::ToolIdentity;
@@ -232,7 +233,7 @@ fn validate_package_resolution(config: &PackageResolution, blockers: &mut Vec<Co
         for registry in &config.registries {
             validate_non_empty((&registry.namespace, "registry.namespace"), blockers);
             validate_non_empty((&registry.registry, "registry.registry"), blockers);
-            validate_non_empty((&registry.oci_registry, "registry.oci_registry"), blockers);
+            validate_registry_backend(registry, blockers);
             if !namespaces.insert(registry.namespace.clone()) {
                 blockers.push(blocker(
                     "duplicate-registry-namespace",
@@ -260,6 +261,32 @@ fn validate_package_resolution(config: &PackageResolution, blockers: &mut Vec<Co
     }
     debug_assert!(blockers.len() >= blocker_count_before);
     debug_assert!(blockers.iter().skip(blocker_count_before).all(|item| !item.code.is_empty()));
+}
+
+fn validate_registry_backend(registry: &crate::RegistryMapping, blockers: &mut Vec<ComponentBlocker>) {
+    match registry.backend {
+        RegistryBackend::Oci => {
+            if registry.oci_registry.as_ref().is_none_or(|value| value.is_empty()) || registry.local_root.is_some() {
+                blockers.push(blocker(
+                    "invalid-oci-registry-config",
+                    &registry.registry,
+                    "OCI registry mapping requires an OCI registry and forbids a local root",
+                ));
+            }
+        }
+        RegistryBackend::Local => {
+            if registry.local_root.as_ref().is_none_or(|value| !value.starts_with('/'))
+                || registry.oci_registry.is_some()
+                || registry.credential_handle.is_some()
+            {
+                blockers.push(blocker(
+                    "invalid-local-registry-config",
+                    &registry.registry,
+                    "local registry mapping requires an absolute root and forbids OCI or credential fields",
+                ));
+            }
+        }
+    }
 }
 
 fn validate_requirements(config: &PackageResolution, blockers: &mut Vec<ComponentBlocker>) {
@@ -355,6 +382,7 @@ fn validate_tool_cohort(cohort: &ToolCohort, blockers: &mut Vec<ComponentBlocker
     validate_non_empty((&cohort.rust_target, "cohort.rust_target"), blockers);
     let tools = [
         ("rust-toolchain", &cohort.rust_toolchain),
+        ("wkg", &cohort.wkg),
         ("wit-bindgen", &cohort.wit_bindgen),
         ("wasm-component-ld", &cohort.wasm_component_ld),
         ("wasm-tools", &cohort.wasm_tools),

@@ -471,6 +471,7 @@ fn wasm_component_export_expression() -> String {
           cohort = {{
             rust_toolchain = tool "rust",
             rust_target = "wasm32-wasip2",
+            wkg = tool "wkg",
             wit_bindgen = tool "wit-bindgen",
             wasm_component_ld = tool "wasm-component-ld",
             wasm_tools = tool "wasm-tools",

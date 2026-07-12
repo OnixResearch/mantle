@@ -46,6 +46,7 @@ fn cohort() -> ToolCohort {
     ToolCohort {
         rust_toolchain: tool("rust", '1'),
         rust_target: String::from("wasm32-wasip2"),
+        wkg: tool("wkg", '2'),
         wit_bindgen: tool("wit-bindgen", '2'),
         wasm_component_ld: tool("wasm-component-ld", '3'),
         wasm_tools: tool("wasm-tools", '4'),
@@ -127,9 +128,11 @@ fn manifest() -> ComponentManifest {
             registries: vec![RegistryMapping {
                 namespace: String::from("wasi"),
                 registry: String::from(REGISTRY_NAME),
-                oci_registry: String::from("ghcr.io"),
+                backend: RegistryBackend::Oci,
+                oci_registry: Some(String::from("ghcr.io")),
                 namespace_prefix: String::from("webassembly/"),
                 protocol: OciProtocol::Https,
+                local_root: None,
                 credential_handle: Some(String::from("secret://registry/ghcr")),
             }],
             requirements: vec![PackageRequirement {
@@ -776,4 +779,92 @@ fn report_claim_enum_rejects_runtime_authority_overclaim() {
 
     assert!(parsed.is_err());
     assert!(serde_json::from_str::<BoundedComponentClaim>("\"portable-bytes-validated\"").is_ok());
+}
+
+fn required_bundle_receipts(final_portable: &StoreObject) -> Vec<StageReceiptReference> {
+    let stages = [
+        ("package-resolution", ComponentStageKind::PackageResolution, '1'),
+        ("lock", ComponentStageKind::Lock, '2'),
+        ("binding-generation", ComponentStageKind::BindingGeneration, '3'),
+        ("compilation", ComponentStageKind::Compilation, '4'),
+        ("composition", ComponentStageKind::Composition, '5'),
+        ("virtualization", ComponentStageKind::Virtualization, '6'),
+        ("build-validation", ComponentStageKind::BuildValidation, '7'),
+        ("octet-validation", ComponentStageKind::OctetValidation, '8'),
+    ];
+    stages
+        .into_iter()
+        .map(|(stage_key, kind, seed)| StageReceiptReference {
+            stage_key: String::from(stage_key),
+            kind,
+            receipt_blake3: blake3(seed),
+            artifact: matches!(
+                kind,
+                ComponentStageKind::Compilation
+                    | ComponentStageKind::Composition
+                    | ComponentStageKind::Virtualization
+                    | ComponentStageKind::BuildValidation
+                    | ComponentStageKind::OctetValidation
+            )
+            .then(|| final_portable.clone()),
+        })
+        .collect()
+}
+
+fn materialization_bundle_request() -> MaterializationBundleRequest {
+    let final_portable = object("final.component.wasm", '9');
+    MaterializationBundleRequest {
+        name: String::from("demo-component"),
+        manifest_blake3: blake3('a'),
+        cohort_blake3: blake3('b'),
+        wit_inputs: vec![object("wit", 'c')],
+        package_inputs: lock_request().facts.materializations,
+        source_closure: object("source", 'd'),
+        lock: object("wkg.lock", 'e'),
+        final_portable: final_portable.clone(),
+        expected_octet_profile_blake3: blake3('f'),
+        expected_runtime_profile_blake3: blake3('0'),
+        stage_receipts: required_bundle_receipts(&final_portable),
+        wizer: None,
+        aot: None,
+        non_claims: report_non_claims(),
+    }
+}
+
+#[test]
+fn materialization_bundle_is_canonical_and_reverifiable() {
+    let first = build_materialization_bundle(materialization_bundle_request()).bundle.unwrap();
+    let second = build_materialization_bundle(materialization_bundle_request()).bundle.unwrap();
+    let verified = verify_materialization_bundle(first.clone());
+
+    assert_eq!(first, second);
+    assert_eq!(first.schema, MATERIALIZATION_BUNDLE_SCHEMA);
+    assert_eq!(verified.bundle, Some(first));
+    assert!(verified.blockers.is_empty());
+}
+
+#[test]
+fn materialization_bundle_rejects_missing_stage_and_stale_identity() {
+    let mut incomplete = materialization_bundle_request();
+    incomplete.stage_receipts.retain(|receipt| receipt.kind != ComponentStageKind::OctetValidation);
+    let incomplete_result = build_materialization_bundle(incomplete);
+    let mut stale = build_materialization_bundle(materialization_bundle_request()).bundle.unwrap();
+    stale.bundle_identity_blake3 = blake3('1');
+    let stale_result = verify_materialization_bundle(stale);
+
+    assert!(incomplete_result.bundle.is_none());
+    assert!(incomplete_result.blockers.iter().any(|item| item.code == "missing-bundle-stage-receipt"));
+    assert!(stale_result.bundle.is_none());
+    assert!(stale_result.blockers.iter().any(|item| item.code == "materialization-bundle-identity-mismatch"));
+}
+
+#[test]
+fn materialization_bundle_stage_kind_rejects_post_materialization_authority() {
+    let parsed: Result<StageReceiptReference, _> = serde_json::from_str(
+        r#"{"stage_key":"cairn","kind":"cairn-acceptance","receipt_blake3":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact":null}"#,
+    );
+    let accepted: Result<ComponentStageKind, _> = serde_json::from_str("\"octet-validation\"");
+
+    assert!(parsed.is_err());
+    assert_eq!(accepted.unwrap(), ComponentStageKind::OctetValidation);
 }

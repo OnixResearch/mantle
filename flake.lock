@@ -89,7 +89,8 @@
         "nixpkgs": "nixpkgs",
         "onix-nixpkgs": "onix-nixpkgs",
         "rust-overlay": "rust-overlay",
-        "tigerstyle": "tigerstyle"
+        "tigerstyle": "tigerstyle",
+        "wasi-virt": "wasi-virt"
       }
     },
     "rust-overlay": {
@@ -156,6 +157,23 @@
         "ref": "main",
         "type": "git",
         "url": "ssh://git@github.com/brittonr/tigerstyle-rs.git"
+      }
+    },
+    "wasi-virt": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1760537237,
+        "narHash": "sha256-dj9FN941ejZXfbHsC2rxs7/2LSUeKQEf545aZ0QkEdI=",
+        "owner": "bytecodealliance",
+        "repo": "wasi-virt",
+        "rev": "19b174a3244f81ed9b91e067b6901f71665316a8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bytecodealliance",
+        "repo": "wasi-virt",
+        "rev": "19b174a3244f81ed9b91e067b6901f71665316a8",
+        "type": "github"
       }
     }
   },

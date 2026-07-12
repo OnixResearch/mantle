@@ -25,6 +25,13 @@ pub enum OciProtocol {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+pub enum RegistryBackend {
+    Oci,
+    Local,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum PackageKind {
     Wit,
     ComponentLibrary,
@@ -34,9 +41,11 @@ pub enum PackageKind {
 pub struct RegistryMapping {
     pub namespace: String,
     pub registry: String,
-    pub oci_registry: String,
+    pub backend: RegistryBackend,
+    pub oci_registry: Option<String>,
     pub namespace_prefix: String,
     pub protocol: OciProtocol,
+    pub local_root: Option<String>,
     pub credential_handle: Option<String>,
 }
 
@@ -97,6 +106,7 @@ pub struct ToolIdentity {
 pub struct ToolCohort {
     pub rust_toolchain: ToolIdentity,
     pub rust_target: String,
+    pub wkg: ToolIdentity,
     pub wit_bindgen: ToolIdentity,
     pub wasm_component_ld: ToolIdentity,
     pub wasm_tools: ToolIdentity,

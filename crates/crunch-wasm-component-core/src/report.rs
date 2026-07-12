@@ -24,7 +24,7 @@ const MAX_REPORT_PARENTS: u32 = 32;
 const MAX_REPORT_CLAIMS: u32 = 16;
 const MAX_REPORT_NON_CLAIMS: u32 = 32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ComponentStageKind {
     PackageResolution,
