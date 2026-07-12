@@ -1740,7 +1740,8 @@ fn content_hash(bytes: &[u8]) -> RemoteAttemptLogDigest {
 
 fn domain_hash(domain: &str, bytes: &[u8]) -> Result<RemoteAttemptLogDigest, RemoteAttemptLogReasonCode> {
     let mut hasher = blake3::Hasher::new();
-    let domain_length_bytes = u64::try_from(domain.len()).map_err(|_| RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
+    let domain_length_bytes =
+        u64::try_from(domain.len()).map_err(|_| RemoteAttemptLogReasonCode::ArithmeticOverflow)?;
     hasher.update(&domain_length_bytes.to_le_bytes());
     hasher.update(domain.as_bytes());
     hasher.update(bytes);
