@@ -33,6 +33,8 @@ mod nickel_export;
 mod nix_evidence_core;
 mod nix_free_demo_bundle;
 mod nix_free_demo_cmd;
+mod oci_projection;
+mod oci_projection_shell;
 #[allow(dead_code)]
 mod offline_cargo;
 mod operator_diagnostics;
@@ -1487,6 +1489,36 @@ pub enum ArtifactAction {
         /// Write the import report JSON to this path
         #[arg(long = "report-out")]
         report_out: Option<PathBuf>,
+    },
+
+    /// Project admitted frontend objects into an atomic local OCI image layout.
+    OciExport {
+        /// Sealed `mantle-oci-projection-v1` document.
+        #[arg(long)]
+        projection: PathBuf,
+
+        /// Exact frontend specification material named by the admission binding.
+        #[arg(long = "spec-material")]
+        spec_material: PathBuf,
+
+        /// Exact source admission bundle reduced into the sealed projection.
+        #[arg(long = "source-admissions")]
+        source_admissions: PathBuf,
+
+        /// New OCI image-layout directory; existing destinations are rejected.
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Verify and admit a local OCI image layout into the Mantle object store.
+    OciImport {
+        /// Local non-symlink OCI image-layout directory.
+        #[arg(long)]
+        layout: PathBuf,
+
+        /// Atomic destination for the import/reconstruction report.
+        #[arg(long = "report-out")]
+        report_out: PathBuf,
     },
 }
 

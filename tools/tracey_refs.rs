@@ -5,6 +5,36 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Kernel-bundle OCI projection bridge.
+//
+// r[impl kernel_bundle_oci.projection]
+// r[impl kernel_bundle_oci.admission]
+// r[impl kernel_bundle_oci.layering]
+// r[impl kernel_bundle_oci.digest_roles]
+// r[impl kernel_bundle_oci.export]
+// r[impl kernel_bundle_oci.import]
+// Implemented by the pure deterministic core in `src/oci_projection.rs` and
+// `src/oci_projection/`, plus the bounded filesystem/CAS shell in
+// `src/oci_projection_shell.rs` and CLI dispatch in `src/artifact_cmd.rs`.
+//
+// r[verify kernel_bundle_oci.projection]
+// r[verify kernel_bundle_oci.admission]
+// r[verify kernel_bundle_oci.layering]
+// r[verify kernel_bundle_oci.digest_roles]
+// r[verify kernel_bundle_oci.export]
+// r[verify kernel_bundle_oci.import]
+// r[related kernel_bundle_oci.verification]
+// Verified by positive and negative core/shell tests under the modules above,
+// including deterministic rebuild, exact source-admission mismatch before CAS
+// reads, exact/canonical layers, digest tampering, escaping links, reviewed
+// Onix snapshots, atomic export, descriptor-first
+// import, admitted reconstruction, and compatibility-only external import.
+//
+// r[related kernel_bundle_oci.reports]
+// Export/import DTOs and redaction-safe writers exist, but registry linkage is
+// intentionally deferred to active dependency
+// `cairn/changes/expand-machine-artifact-contract-registry/`.
+
 // r[impl rust_package_planning.source_built_toolchain_closure]
 // Implemented by `src/source_toolchain_closure.rs`, `src/cargo_free_self_build.rs`,
 // `src/rust_plan.rs`, and `src/main.rs`.

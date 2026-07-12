@@ -26,6 +26,12 @@ use crate::frontend_artifact_store::FrontendArtifactStoreImportReport;
 use crate::frontend_artifact_store::artifact_digest_from_ref;
 use crate::frontend_artifact_store::import_frontend_artifact;
 use crate::frontend_artifact_store::materialize_frontend_artifact;
+use crate::oci_projection::OciExportReport;
+use crate::oci_projection::OciImportReport;
+use crate::oci_projection_shell::ExportRequest as OciExportRequest;
+use crate::oci_projection_shell::ImportRequest as OciImportRequest;
+use crate::oci_projection_shell::export_oci_layout;
+use crate::oci_projection_shell::import_oci_layout;
 
 const PROVENANCE_PAIR_SEPARATOR: char = '=';
 const EXPORT_FAILURE_EXIT_CODE: u8 = 1;
@@ -72,6 +78,15 @@ pub fn cmd_artifact(
             source_path: &path,
             report_out: report_out.as_deref(),
         }),
+        crate::ArtifactAction::OciExport {
+            projection,
+            spec_material,
+            source_admissions,
+            out,
+        } => cmd_oci_export(current_dir, state_dir, json, &projection, &spec_material, &source_admissions, &out),
+        crate::ArtifactAction::OciImport { layout, report_out } => {
+            cmd_oci_import(current_dir, state_dir, json, &layout, &report_out)
+        }
     }
 }
 
@@ -145,6 +160,74 @@ fn cmd_artifact_import(request: ArtifactImportShellRequest<'_>) -> Result<(), Ru
         write_json_output(path, &report)?;
     }
     emit_import_report(&report, report_out.as_deref(), request.json)
+}
+
+fn cmd_oci_export(
+    current_dir: &Path,
+    state_dir: &Path,
+    json: bool,
+    projection: &Path,
+    spec_material: &Path,
+    source_admissions: &Path,
+    out: &Path,
+) -> Result<(), RunError> {
+    let projection = resolve_cli_path(current_dir, projection);
+    let spec_material = resolve_cli_path(current_dir, spec_material);
+    let source_admissions = resolve_cli_path(current_dir, source_admissions);
+    let out = resolve_cli_path(current_dir, out);
+    let report = export_oci_layout(&OciExportRequest {
+        projection_path: &projection,
+        spec_material_path: &spec_material,
+        source_admissions_path: &source_admissions,
+        output_dir: &out,
+        state_dir,
+    })
+    .map_err(|error| RunError::Internal(format!("exporting OCI layout: {error}")))?;
+    emit_oci_export_report(&report, &out, json)
+}
+
+fn cmd_oci_import(
+    current_dir: &Path,
+    state_dir: &Path,
+    json: bool,
+    layout: &Path,
+    report_out: &Path,
+) -> Result<(), RunError> {
+    let layout = resolve_cli_path(current_dir, layout);
+    let report_out = resolve_cli_path(current_dir, report_out);
+    let report = import_oci_layout(&OciImportRequest {
+        layout_dir: &layout,
+        report_path: &report_out,
+        state_dir,
+    })
+    .map_err(|error| RunError::Internal(format!("importing OCI layout: {error}")))?;
+    emit_oci_import_report(&report, &report_out, json)
+}
+
+fn emit_oci_export_report(report: &OciExportReport, out: &Path, json: bool) -> Result<(), RunError> {
+    if json {
+        let rendered = serde_json::to_string_pretty(report)
+            .map_err(|error| RunError::Internal(format!("serializing OCI export report: {error}")))?;
+        println!("{rendered}");
+    } else {
+        println!("exported OCI layout {}", out.display());
+        println!("projection_blake3: {}", report.projection_blake3);
+        println!("layout_blake3: {}", report.layout_blake3);
+    }
+    Ok(())
+}
+
+fn emit_oci_import_report(report: &OciImportReport, out: &Path, json: bool) -> Result<(), RunError> {
+    if json {
+        let rendered = serde_json::to_string_pretty(report)
+            .map_err(|error| RunError::Internal(format!("serializing OCI import report: {error}")))?;
+        println!("{rendered}");
+    } else {
+        println!("imported OCI layout as {}", report.state);
+        println!("layout_blake3: {}", report.layout_blake3);
+        println!("report: {}", out.display());
+    }
+    Ok(())
 }
 
 fn resolve_export_content(

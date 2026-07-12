@@ -1,0 +1,316 @@
+{
+  "receipt": {
+    "schema": "onix-kernel-bundle-validation-v1",
+    "schema_version": 1,
+    "valid": true,
+    "architecture": "x86_64",
+    "kernel_release": "6.12.0-onix",
+    "component_count": 6,
+    "module_pack_count": 1,
+    "bpf_pack_count": 1,
+    "kernel_build_identity": "onix:blake3:kernel-build:71ab5fe37dd010e284119879478a025fa85e07895041e3ddd91627b76609ccbc",
+    "bundle_identity": "onix:blake3:bundle:6cd0090e3fe251d0b10917b879f97a174cbbf2c503589672d69f1ce3818c5042",
+    "manifest_identity": "onix:blake3:manifest:6ffe404579e0db44cf8c2f3a5c506c730303293c6a1037137641fb463d1bc15d",
+    "kbi_id": "kbi:sha256:aa248a4234b4cce5e73231b57236172475ad241790718a4772691b34e326ec67",
+    "kbi_status": "verified",
+    "issues": [],
+    "non_claims": [
+      "no bootability claim",
+      "no deployment authority",
+      "no hardware compatibility claim",
+      "no module safety claim",
+      "no BPF safety claim",
+      "no signature trust claim",
+      "KBI ID excludes initrd, modules, firmware, and add-on packs"
+    ],
+    "receipt_identity": "onix:blake3:kernel-bundle-receipt:dff62918456b1d0d8d8ca16ca7e0f2d9c9930db49559c73a642cb078702f899c"
+  },
+  "canonical_manifest": {
+    "schema": "onix-kernel-bundle-v1",
+    "architecture": "x86_64",
+    "kernel_release": "6.12.0-onix",
+    "boot_format": "linux_efi_stub",
+    "composition_policy": "exact-selected-packs-v1",
+    "limits": {
+      "max_components": 16,
+      "max_packs": 64,
+      "max_members_per_pack": 4096,
+      "max_total_size_bytes": 1099511627776
+    },
+    "components": [
+      {
+        "role": "kernel",
+        "object_ref": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "media_type": "application/vnd.multikernel.kbi.vmlinuz.v1",
+        "size_bytes": 4096,
+        "content_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "content_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "identity": "onix:blake3:component:4024b2aba039ca919f8e92fbff9313d04f269966d35a5f5a7969fdc0a6b9ccd9"
+      },
+      {
+        "role": "initrd",
+        "object_ref": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "media_type": "application/vnd.multikernel.kbi.initrd.v1",
+        "size_bytes": 4096,
+        "content_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "identity": "onix:blake3:component:7e06e18b42152cc4390f0103d7e6b1b5b3ad6a9955d8a94353255c33b410bb14"
+      },
+      {
+        "role": "config",
+        "object_ref": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "media_type": "application/vnd.multikernel.kbi.kernelconfig.v1",
+        "size_bytes": 4096,
+        "content_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "content_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "identity": "onix:blake3:component:1c21f0ec7fd987282a95f8a62b7184bf041649b37e8575dad618a8b71b8c2953"
+      },
+      {
+        "role": "btf",
+        "object_ref": "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "media_type": "application/vnd.multikernel.kbi.btf.v1",
+        "size_bytes": 4096,
+        "content_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "content_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "identity": "onix:blake3:component:ee800d1e1645ea94dad03f957a689f912b33e4f25500a23b396358f0bffa310f"
+      },
+      {
+        "role": "modules",
+        "object_ref": "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "media_type": "application/vnd.multikernel.kbi.modules.v1.tar",
+        "size_bytes": 4096,
+        "content_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "identity": "onix:blake3:component:020524cf571c76216822d7c4b6ccd70cc9b078a5c26fed5a97a6047bc4ff5ab2"
+      },
+      {
+        "role": "firmware",
+        "object_ref": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "media_type": "application/vnd.multikernel.kbi.firmware.v1.tar",
+        "size_bytes": 4096,
+        "content_blake3": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "identity": "onix:blake3:component:76ceb333bbe844f1904bba600b665bfce4d699c40d9261930c6ba81f494c09e6"
+      }
+    ],
+    "module_packs": [
+      {
+        "name": "storage-extra",
+        "target_kernel_build_identity": "onix:blake3:kernel-build:71ab5fe37dd010e284119879478a025fa85e07895041e3ddd91627b76609ccbc",
+        "architecture": "x86_64",
+        "kernel_release": "6.12.0-onix",
+        "members": [
+          {
+            "path": "extra/storage.ko",
+            "object_ref": "blake3:1111111111111111111111111111111111111111111111111111111111111111",
+            "size_bytes": 8192,
+            "content_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
+            "vermagic": "6.12.0-onix",
+            "signature": "present_unverified",
+            "identity": "onix:blake3:component:785a7507198d1614dc54d766e23d73641604dfbd368599bf9155f9beec616e01"
+          }
+        ],
+        "identity": "onix:blake3:module-pack:339457551070b4d45daea00dda540a1b60a87ee0e752357765d28f2e1726a0b9"
+      }
+    ],
+    "bpf_packs": [
+      {
+        "name": "trace-open",
+        "target_kernel_build_identity": "onix:blake3:kernel-build:71ab5fe37dd010e284119879478a025fa85e07895041e3ddd91627b76609ccbc",
+        "architecture": "x86_64",
+        "kernel_release": "6.12.0-onix",
+        "objects": [
+          {
+            "path": "trace.o",
+            "object_ref": "blake3:2222222222222222222222222222222222222222222222222222222222222222",
+            "size_bytes": 8192,
+            "content_blake3": "2222222222222222222222222222222222222222222222222222222222222222",
+            "identity": "onix:blake3:component:f402a1455e2d12dfd31eab82d455ada0921634eee164c4bffc4bef59bec7a1c3"
+          }
+        ],
+        "programs": [
+          {
+            "object": "trace.o",
+            "section": "fentry/do_sys_openat2",
+            "attach": "fentry",
+            "target": "do_sys_openat2"
+          }
+        ],
+        "requires": {
+          "btf": true,
+          "kfuncs": [
+            "bpf_task_acquire"
+          ],
+          "kernel_types": [
+            {
+              "name": "task_struct",
+              "fields": [
+                "comm",
+                "pid"
+              ]
+            }
+          ]
+        },
+        "identity": "onix:blake3:bpf-pack:ff93af658b9b3db86f9f0bf846a003ecf51916127ab83cb970f76e7756f9104b"
+      }
+    ],
+    "kernel_capabilities": {
+      "kfuncs": [
+        "bpf_task_acquire"
+      ],
+      "kernel_types": [
+        {
+          "name": "task_struct",
+          "fields": [
+            "comm",
+            "pid"
+          ]
+        }
+      ]
+    },
+    "compatibility": {
+      "kbi_id": "kbi:sha256:aa248a4234b4cce5e73231b57236172475ad241790718a4772691b34e326ec67"
+    },
+    "provenance_refs": [
+      "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "evidence_refs": [
+      "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ],
+    "non_claims": [
+      "KBI ID excludes initrd, modules, firmware, and add-on packs",
+      "no BPF safety claim",
+      "no bootability claim",
+      "no deployment authority",
+      "no hardware compatibility claim",
+      "no module safety claim",
+      "no signature trust claim"
+    ],
+    "kernel_build_identity": "onix:blake3:kernel-build:71ab5fe37dd010e284119879478a025fa85e07895041e3ddd91627b76609ccbc",
+    "bundle_identity": "onix:blake3:bundle:6cd0090e3fe251d0b10917b879f97a174cbbf2c503589672d69f1ce3818c5042",
+    "manifest_identity": "onix:blake3:manifest:6ffe404579e0db44cf8c2f3a5c506c730303293c6a1037137641fb463d1bc15d"
+  },
+  "projection": {
+    "schema": "mantle-oci-projection-v1",
+    "layers": [
+      {
+        "role": "bpf_pack",
+        "media_type": "application/vnd.multikernel.kbi.bpfpack.v1.tar",
+        "entries": [
+          {
+            "relative_path": "trace.o",
+            "object_ref": "blake3:2222222222222222222222222222222222222222222222222222222222222222",
+            "identity": "onix:blake3:component:f402a1455e2d12dfd31eab82d455ada0921634eee164c4bffc4bef59bec7a1c3",
+            "size_bytes": 8192
+          }
+        ],
+        "pack_identity": "onix:blake3:bpf-pack:ff93af658b9b3db86f9f0bf846a003ecf51916127ab83cb970f76e7756f9104b"
+      },
+      {
+        "role": "btf",
+        "media_type": "application/vnd.multikernel.kbi.btf.v1",
+        "entries": [
+          {
+            "relative_path": "btf",
+            "object_ref": "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "identity": "onix:blake3:component:ee800d1e1645ea94dad03f957a689f912b33e4f25500a23b396358f0bffa310f",
+            "size_bytes": 4096
+          }
+        ]
+      },
+      {
+        "role": "config",
+        "media_type": "application/vnd.multikernel.kbi.kernelconfig.v1",
+        "entries": [
+          {
+            "relative_path": "config",
+            "object_ref": "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "identity": "onix:blake3:component:1c21f0ec7fd987282a95f8a62b7184bf041649b37e8575dad618a8b71b8c2953",
+            "size_bytes": 4096
+          }
+        ]
+      },
+      {
+        "role": "firmware",
+        "media_type": "application/vnd.multikernel.kbi.firmware.v1.tar",
+        "entries": [
+          {
+            "relative_path": "firmware",
+            "object_ref": "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "identity": "onix:blake3:component:76ceb333bbe844f1904bba600b665bfce4d699c40d9261930c6ba81f494c09e6",
+            "size_bytes": 4096
+          }
+        ]
+      },
+      {
+        "role": "initrd",
+        "media_type": "application/vnd.multikernel.kbi.initrd.v1",
+        "entries": [
+          {
+            "relative_path": "initrd",
+            "object_ref": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "identity": "onix:blake3:component:7e06e18b42152cc4390f0103d7e6b1b5b3ad6a9955d8a94353255c33b410bb14",
+            "size_bytes": 4096
+          }
+        ]
+      },
+      {
+        "role": "kernel",
+        "media_type": "application/vnd.multikernel.kbi.vmlinuz.v1",
+        "entries": [
+          {
+            "relative_path": "kernel",
+            "object_ref": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "identity": "onix:blake3:component:4024b2aba039ca919f8e92fbff9313d04f269966d35a5f5a7969fdc0a6b9ccd9",
+            "size_bytes": 4096
+          }
+        ]
+      },
+      {
+        "role": "module_pack",
+        "media_type": "application/vnd.multikernel.kbi.modulepack.v1.tar",
+        "entries": [
+          {
+            "relative_path": "extra/storage.ko",
+            "object_ref": "blake3:1111111111111111111111111111111111111111111111111111111111111111",
+            "identity": "onix:blake3:component:785a7507198d1614dc54d766e23d73641604dfbd368599bf9155f9beec616e01",
+            "size_bytes": 8192
+          }
+        ],
+        "pack_identity": "onix:blake3:module-pack:339457551070b4d45daea00dda540a1b60a87ee0e752357765d28f2e1726a0b9"
+      },
+      {
+        "role": "modules",
+        "media_type": "application/vnd.multikernel.kbi.modules.v1.tar",
+        "entries": [
+          {
+            "relative_path": "modules",
+            "object_ref": "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "identity": "onix:blake3:component:020524cf571c76216822d7c4b6ccd70cc9b078a5c26fed5a97a6047bc4ff5ab2",
+            "size_bytes": 4096
+          }
+        ]
+      }
+    ],
+    "required_annotations": {
+      "io.multikernel.kbi.id": "kbi:sha256:aa248a4234b4cce5e73231b57236172475ad241790718a4772691b34e326ec67",
+      "io.onix.kernel-bundle.bundle-identity": "onix:blake3:bundle:6cd0090e3fe251d0b10917b879f97a174cbbf2c503589672d69f1ce3818c5042",
+      "io.onix.kernel-bundle.kernel-build-identity": "onix:blake3:kernel-build:71ab5fe37dd010e284119879478a025fa85e07895041e3ddd91627b76609ccbc",
+      "io.onix.kernel-bundle.manifest-identity": "onix:blake3:manifest:6ffe404579e0db44cf8c2f3a5c506c730303293c6a1037137641fb463d1bc15d"
+    },
+    "round_trip": {
+      "kernel_build_identity": "onix:blake3:kernel-build:71ab5fe37dd010e284119879478a025fa85e07895041e3ddd91627b76609ccbc",
+      "bundle_identity": "onix:blake3:bundle:6cd0090e3fe251d0b10917b879f97a174cbbf2c503589672d69f1ce3818c5042",
+      "manifest_identity": "onix:blake3:manifest:6ffe404579e0db44cf8c2f3a5c506c730303293c6a1037137641fb463d1bc15d",
+      "component_identities": [
+        "onix:blake3:component:020524cf571c76216822d7c4b6ccd70cc9b078a5c26fed5a97a6047bc4ff5ab2",
+        "onix:blake3:component:1c21f0ec7fd987282a95f8a62b7184bf041649b37e8575dad618a8b71b8c2953",
+        "onix:blake3:component:4024b2aba039ca919f8e92fbff9313d04f269966d35a5f5a7969fdc0a6b9ccd9",
+        "onix:blake3:component:76ceb333bbe844f1904bba600b665bfce4d699c40d9261930c6ba81f494c09e6",
+        "onix:blake3:component:7e06e18b42152cc4390f0103d7e6b1b5b3ad6a9955d8a94353255c33b410bb14",
+        "onix:blake3:component:ee800d1e1645ea94dad03f957a689f912b33e4f25500a23b396358f0bffa310f"
+      ],
+      "pack_identities": [
+        "onix:blake3:bpf-pack:ff93af658b9b3db86f9f0bf846a003ecf51916127ab83cb970f76e7756f9104b",
+        "onix:blake3:module-pack:339457551070b4d45daea00dda540a1b60a87ee0e752357765d28f2e1726a0b9"
+      ]
+    }
+  }
+}

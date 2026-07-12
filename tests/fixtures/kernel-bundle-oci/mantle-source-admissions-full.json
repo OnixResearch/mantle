@@ -1,0 +1,35 @@
+{
+  "schema": "mantle-oci-projection-admissions-v1",
+  "admissions": [
+    {
+      "spec_id": "kernel-bundles",
+      "spec_version": "1",
+      "spec_hash_algorithm": "blake3",
+      "spec_hash": "a33e770cc6a992e4f22b45a07f5a0b0235416d55409b0bfe80b5973c8267f3eb",
+      "validator_kind": "onix-kernel-bundle-v1",
+      "validator_ref": "builtin:onix-kernel-bundle-v1",
+      "artifact_kind": "kernel-bundle-component",
+      "artifact_ref": "mantle://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_digest": "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "target_identity": "onix:component:blake3:1111111111111111111111111111111111111111111111111111111111111111",
+      "build_root": "fixture-build-root",
+      "validation_result": "admitted",
+      "no_hidden_fallback": true
+    },
+    {
+      "spec_id": "kernel-bundles",
+      "spec_version": "1",
+      "spec_hash_algorithm": "blake3",
+      "spec_hash": "a33e770cc6a992e4f22b45a07f5a0b0235416d55409b0bfe80b5973c8267f3eb",
+      "validator_kind": "onix-kernel-bundle-v1",
+      "validator_ref": "builtin:onix-kernel-bundle-v1",
+      "artifact_kind": "kernel-bundle-component",
+      "artifact_ref": "mantle://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "artifact_digest": "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "target_identity": "onix:component:blake3:2222222222222222222222222222222222222222222222222222222222222222",
+      "build_root": "fixture-build-root",
+      "validation_result": "admitted",
+      "no_hidden_fallback": true
+    }
+  ]
+}

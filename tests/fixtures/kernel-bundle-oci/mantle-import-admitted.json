@@ -1,0 +1,94 @@
+{
+  "schema": "mantle-oci-import-report-v1",
+  "schema_version": 1,
+  "imported": true,
+  "state": "admitted",
+  "layout_blake3": "8ffa3efaa52819f292c3bc4f4ccd5610cb03fe37afb0a071d0bf05f3de6451b3",
+  "manifest_descriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:bca3accc2441446c577d47f0af5ecfcbbd760e64b4975ebef5a9f1ba675f4928",
+    "size": 1272,
+    "annotations": {
+      "io.multikernel.kbi.id": "kbi:sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "org.onix.bundle.schema": "onix-kernel-bundle-v1",
+      "org.opencontainers.image.title": "Onix kernel bundle"
+    },
+    "platform": {
+      "architecture": "x86_64",
+      "os": "linux"
+    }
+  },
+  "objects": [
+    {
+      "role": "base-kernel",
+      "media_type": "application/vnd.onix.kernel.v1",
+      "oci_sha256": "sha256:7d85a326c4eaf5c09d11bed101a08ea50915897a31b627285b5b3446bd37262f",
+      "blob_blake3": "60e4b4d8a925700ceed4ae9543b4cc33a01c4e760657c5495dc5b123593d219a",
+      "size_bytes": 12,
+      "archive_profile": "exact-blob",
+      "artifact_ref": "mantle://blake3/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "role": "module-pack",
+      "media_type": "application/vnd.onix.module-pack.v1.tar",
+      "oci_sha256": "sha256:ca2549f9e74907368f3cc25bea2446d5ac9394e1cfd8460f07a0a078fb29fdd9",
+      "blob_blake3": "289a57d93bf2f999384052c3028f661de1a06e3e02dcef3207c40be5d9e4e007",
+      "size_bytes": 2560,
+      "archive_profile": "mantle-canonical-exact",
+      "artifact_ref": "mantle://blake3/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "role": "oci-config",
+      "media_type": "application/vnd.oci.image.config.v1+json",
+      "oci_sha256": "sha256:d3e1a6d0ff6361522ed343ba63271698ad23b994c0148441ff18837ca29c1ce7",
+      "blob_blake3": "512310344ff8e1d8741113833467dec55d049b6a662f09b8ff2dfec9a5201fa1",
+      "size_bytes": 738,
+      "archive_profile": "exact-json",
+      "artifact_ref": "mantle://blake3/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "role": "oci-manifest",
+      "media_type": "application/vnd.oci.image.manifest.v1+json",
+      "oci_sha256": "sha256:bca3accc2441446c577d47f0af5ecfcbbd760e64b4975ebef5a9f1ba675f4928",
+      "blob_blake3": "49e87978927c5a98d6ca17bad69696a7b2d9bf640fafd0c023614204c584149a",
+      "size_bytes": 1272,
+      "archive_profile": "exact-json",
+      "artifact_ref": "mantle://blake3/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  ],
+  "frontend_spec": {
+    "id": "kernel-bundles",
+    "version": "1",
+    "hash_algorithm": "blake3",
+    "hash": "a33e770cc6a992e4f22b45a07f5a0b0235416d55409b0bfe80b5973c8267f3eb"
+  },
+  "object_admissions_blake3": "80d1605ec5c11e964a521c9e6b385c746215c937c3f0986e72b306d73709e676",
+  "projection_blake3": "068a60a5a725ac9ba0344df3d8226a1694fa4a669f2c690edfdd3a866eb6f2c2",
+  "round_trip": {
+    "kernel_build_identity": "onix:kernel-build:blake3:4444444444444444444444444444444444444444444444444444444444444444",
+    "bundle_identity": "onix:kernel-bundle:blake3:5555555555555555555555555555555555555555555555555555555555555555",
+    "manifest_identity": "onix:manifest:blake3:6666666666666666666666666666666666666666666666666666666666666666",
+    "component_identities": [
+      "onix:component:blake3:1111111111111111111111111111111111111111111111111111111111111111",
+      "onix:component:blake3:2222222222222222222222222222222222222222222222222222222222222222"
+    ],
+    "pack_identities": [
+      "onix:module-pack:blake3:3333333333333333333333333333333333333333333333333333333333333333"
+    ]
+  },
+  "issues": [],
+  "non_claims": [
+    "CAS admission is not release eligibility",
+    "archive safety is not kernel compatibility",
+    "compatibility-only imports do not recover frontend semantics",
+    "descriptor validation is not signature verification",
+    "frontend semantics remain external",
+    "no bootability claim",
+    "no deployability claim",
+    "no kernel compatibility decision",
+    "no registry publication",
+    "no release eligibility claim",
+    "no signature policy claim"
+  ],
+  "receipt_blake3": "43fa582c55e3bdda30ff9986527914352b3b4fcbee0a39effabd57d1e2d5794a"
+}

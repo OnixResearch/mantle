@@ -63,6 +63,18 @@ struct ArtifactTreeEntry {
     executable: bool,
 }
 
+/// Recompute a frontend artifact identity without mutating the content store.
+///
+/// OCI export uses this after materialization so projection admission binds the
+/// exact metadata-aware object already accepted by the store.
+pub fn frontend_artifact_identity(source: &Path) -> Result<String, String> {
+    std::fs::symlink_metadata(source)
+        .map_err(|err| format!("reading frontend artifact metadata for {}: {err}", source.display()))?;
+    let entries = collect_artifact_tree_entries(source)?;
+    root_content_kind(&entries)?;
+    Ok(artifact_ref_from_digest_hex(&hash_artifact_tree_entries(&entries)))
+}
+
 pub fn import_frontend_artifact(source: &Path, state_dir: &Path) -> Result<FrontendArtifactStoreImportReport, String> {
     if !source.exists() {
         return Err(format!("frontend artifact source does not exist: {}", source.display()));
@@ -124,6 +136,28 @@ pub fn materialize_frontend_artifact(
 
 pub fn artifact_digest_from_ref(artifact_ref: &str) -> Option<String> {
     parse_artifact_ref_digest_hex(artifact_ref).map(artifact_digest_from_digest_hex)
+}
+
+/// Check that both content and store metadata exist without reading content bytes.
+pub fn frontend_artifact_is_available(state_dir: &Path, artifact_ref: &str) -> Result<bool, String> {
+    let Some(digest_hex) = parse_artifact_ref_digest_hex(artifact_ref) else {
+        return Err(format!(
+            "frontend artifact ref must use {FRONTEND_ARTIFACT_REF_PREFIX_BLAKE3}<hex>; got {artifact_ref}"
+        ));
+    };
+    let content_path = stored_content_path(state_dir, digest_hex);
+    let manifest_path = stored_manifest_path(state_dir, digest_hex);
+    let content_available = match std::fs::symlink_metadata(&content_path) {
+        Ok(_) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(format!("checking frontend artifact content availability: {error}")),
+    };
+    let manifest_available = match std::fs::symlink_metadata(&manifest_path) {
+        Ok(metadata) => metadata.is_file() && !metadata.file_type().is_symlink(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(format!("checking frontend artifact manifest availability: {error}")),
+    };
+    Ok(content_available && manifest_available)
 }
 
 fn stored_content_path(state_dir: &Path, digest_hex: &str) -> PathBuf {

@@ -1650,6 +1650,10 @@ mantle foreign-import validate --graph <graph.json> --package-index <index.json>
                                  Validate lowered foreign import artifacts without live Guix/Nix frontends
 mantle foreign-import plan --graph <graph.json> --package-index <index.json> --policy <policy.json> --package hello
                                  Emit a receipt-bound adapter plan with explicit non-claims and no output-trust claim
+mantle artifact oci-export --projection <projection.json> --spec-material <spec> --source-admissions <admissions.json> --out <layout>
+                                 Project admitted frontend objects into an atomic local OCI image layout
+mantle artifact oci-import --layout <layout> --report-out <report.json>
+                                 Verify descriptors and admit exact OCI blobs; external layouts remain compatibility-only
 
 # Store, logs, attestations, release evidence
 mantle store <subcommand>        List, inspect, verify, sign, pin, push, pull, or GC store state
@@ -1754,3 +1758,4 @@ fixed-point artifact that was actually proven.
 - [nickel-lang/rules_nickel](https://github.com/nickel-lang/rules_nickel) — declared Nickel export action and evaluator toolchain prior art; Mantle adaptations should keep source closures, safe import paths, export formats, and evaluator identity while avoiding Bazel-specific repository/toolchain machinery in core.
 - [nickel-lang/organist](https://github.com/nickel-lang/organist) — Nickel-managed project workflow prior art for typed generated files and named shell profiles; Mantle adaptations should keep explicit plan/apply mutation boundaries and avoid adopting service lifecycle management into core.
 - [nickel-lang/json-schema-to-nickel](https://github.com/nickel-lang/json-schema-to-nickel) — JSON Schema to Nickel contract generation prior art for machine-report schema validation; Mantle adaptations should use generated contracts as checked development/release rails with positive and negative fixtures.
+- [onixcomputer/onix-modules](https://github.com/onixcomputer/onix-modules) — accepted `onix-kernel-bundle-v1` contract and golden frontend projection/import fixtures consumed by Mantle's bounded OCI adapter; the snapshots are pinned to OnixOS commit `8a99461`, and Onix semantics remain external to Mantle.

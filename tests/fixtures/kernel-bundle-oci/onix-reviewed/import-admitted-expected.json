@@ -1,0 +1,34 @@
+{
+  "schema": "onix-kernel-bundle-import-response-v1",
+  "state": "admitted",
+  "external_digests": [
+    {
+      "role": "oci_config",
+      "subject_identity": "onix:blake3:bundle:6cd0090e3fe251d0b10917b879f97a174cbbf2c503589672d69f1ce3818c5042",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "role": "oci_layer",
+      "subject_identity": "onix:blake3:component:4024b2aba039ca919f8e92fbff9313d04f269966d35a5f5a7969fdc0a6b9ccd9",
+      "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "role": "oci_manifest",
+      "subject_identity": "onix:blake3:manifest:6ffe404579e0db44cf8c2f3a5c506c730303293c6a1037137641fb463d1bc15d",
+      "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+    }
+  ],
+  "kernel_build_identity": "onix:blake3:kernel-build:71ab5fe37dd010e284119879478a025fa85e07895041e3ddd91627b76609ccbc",
+  "bundle_identity": "onix:blake3:bundle:6cd0090e3fe251d0b10917b879f97a174cbbf2c503589672d69f1ce3818c5042",
+  "manifest_identity": "onix:blake3:manifest:6ffe404579e0db44cf8c2f3a5c506c730303293c6a1037137641fb463d1bc15d",
+  "issues": [],
+  "non_claims": [
+    "no bootability claim",
+    "no deployment authority",
+    "no hardware compatibility claim",
+    "no module safety claim",
+    "no BPF safety claim",
+    "no signature trust claim",
+    "KBI ID excludes initrd, modules, firmware, and add-on packs"
+  ]
+}
