@@ -22,8 +22,8 @@
       "priority_first": "long-chain-leaf",
       "fifo_first_blocked_roots": 1,
       "priority_first_blocked_roots": 1,
-      "fifo_runtime_ns_total": 410981,
-      "priority_runtime_ns_total": 37902877
+      "fifo_runtime_ns_total": 357762,
+      "priority_runtime_ns_total": 34696280
     },
     {
       "name": "diamond-deep-branch-vs-shallow",
@@ -34,8 +34,8 @@
       "priority_first": "diamond-deep-leaf",
       "fifo_first_blocked_roots": 1,
       "priority_first_blocked_roots": 1,
-      "fifo_runtime_ns_total": 396054,
-      "priority_runtime_ns_total": 38791114
+      "fifo_runtime_ns_total": 382347,
+      "priority_runtime_ns_total": 36739053
     },
     {
       "name": "shared-dependency-vs-independent",
@@ -46,8 +46,8 @@
       "priority_first": "diamond-shared-leaf",
       "fifo_first_blocked_roots": 1,
       "priority_first_blocked_roots": 3,
-      "fifo_runtime_ns_total": 448071,
-      "priority_runtime_ns_total": 40367191
+      "fifo_runtime_ns_total": 387257,
+      "priority_runtime_ns_total": 36861674
     },
     {
       "name": "verified-locality-vs-unknown",
@@ -58,8 +58,8 @@
       "priority_first": "local-compatible",
       "fifo_first_blocked_roots": 1,
       "priority_first_blocked_roots": 1,
-      "fifo_runtime_ns_total": 418275,
-      "priority_runtime_ns_total": 41324018
+      "fifo_runtime_ns_total": 382998,
+      "priority_runtime_ns_total": 35036839
     },
     {
       "name": "aged-goal-vs-recurring-pressure",
@@ -70,8 +70,8 @@
       "priority_first": "continuously-ready",
       "fifo_first_blocked_roots": 3,
       "priority_first_blocked_roots": 1,
-      "fifo_runtime_ns_total": 419607,
-      "priority_runtime_ns_total": 37362704
+      "fifo_runtime_ns_total": 373531,
+      "priority_runtime_ns_total": 34563431
     },
     {
       "name": "bounded-ready-set-stress",
@@ -82,8 +82,8 @@
       "priority_first": "stress-priority",
       "fifo_first_blocked_roots": 1,
       "priority_first_blocked_roots": 3,
-      "fifo_runtime_ns_total": 4889,
-      "priority_runtime_ns_total": 270370960
+      "fifo_runtime_ns_total": 4028,
+      "priority_runtime_ns_total": 244175743
     }
   ]
 }

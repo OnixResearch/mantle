@@ -377,7 +377,7 @@ where BServ: BuildService + 'static
 
         debug_assert!(max_jobs >= 1, "max_jobs must be at least 1");
 
-        let mut worker = Worker::new(max_jobs);
+        let mut worker = Worker::with_scheduling_policy(max_jobs, crate::scheduling::SchedulingPolicy::default())?;
 
         for root in roots {
             worker.want(root, known_paths, true)?;

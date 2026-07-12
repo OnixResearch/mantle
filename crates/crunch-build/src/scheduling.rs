@@ -34,10 +34,10 @@ pub const MAX_HISTORY_KEY_BYTES_TOTAL: u32 = 4_194_304;
 pub const MAX_HISTORY_SNAPSHOT_BYTES: u32 = 8_388_608;
 pub const MAX_PRIORITY_DECISIONS: u32 = MAX_GOALS;
 pub const MAX_EDGES_PER_GOAL_BUDGET: u32 = 64;
-pub const MAX_KNOWN_GRAPH_EDGES: u32 = MAX_SCHEDULING_GOALS * MAX_EDGES_PER_GOAL_BUDGET;
+pub const MAX_KNOWN_GRAPH_EDGES: u32 = MAX_SCHEDULING_GOALS.saturating_mul(MAX_EDGES_PER_GOAL_BUDGET);
 pub const MAX_BLOCKED_ROOT_PRESSURE: u32 = 256;
 pub const MAX_SCHEDULING_EVENTS_PER_GOAL: u32 = 8;
-pub const MAX_SCHEDULING_EPOCH: u32 = MAX_SCHEDULING_GOALS * MAX_SCHEDULING_EVENTS_PER_GOAL;
+pub const MAX_SCHEDULING_EPOCH: u32 = MAX_SCHEDULING_GOALS.saturating_mul(MAX_SCHEDULING_EVENTS_PER_GOAL);
 pub const MAX_POLICY_ID_BYTES: u32 = 128;
 pub const MAX_GOAL_KEY_BYTES: u32 = 4096;
 pub const DEFAULT_AGED_AFTER_EPOCHS: u32 = 4;
@@ -47,9 +47,10 @@ const STRUCTURAL_DURATION_UNITS: u32 = 1;
 const SHORT_DURATION_UNITS: u32 = 2;
 const MEDIUM_DURATION_UNITS: u32 = 4;
 const LONG_DURATION_UNITS: u32 = 8;
-const MAX_KNOWN_CRITICAL_PATH_WORK_UNITS: u32 = MAX_SCHEDULING_GOALS * LONG_DURATION_UNITS;
+const MAX_KNOWN_CRITICAL_PATH_WORK_UNITS: u32 = MAX_SCHEDULING_GOALS.saturating_mul(LONG_DURATION_UNITS);
 const PRIORITY_NON_CLAIM_COUNT: usize = 5;
 const HEX_LOWER_CHARS_PER_BYTE: usize = 2;
+const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(HEX_LOWER_CHARS_PER_BYTE);
 const ADJACENT_PAIR_WINDOW: usize = 2;
 
 pub const PRIORITY_NON_CLAIMS: [&str; PRIORITY_NON_CLAIM_COUNT] = [
@@ -136,7 +137,11 @@ fn validate_policy_identity(policy: &SchedulingPolicy) -> Result<(), SchedulingE
             reason: "unsupported policy schema".to_string(),
         });
     }
-    validate_bounded_identifier("policy_id", &policy.policy_id, MAX_POLICY_ID_BYTES)?;
+    validate_bounded_identifier(BoundedIdentifier {
+        field: "policy_id",
+        value: &policy.policy_id,
+        max_bytes: MAX_POLICY_ID_BYTES,
+    })?;
     debug_assert_eq!(policy.schema, SCHEDULING_POLICY_SCHEMA);
     debug_assert!(!policy.policy_id.is_empty());
     Ok(())
@@ -163,7 +168,18 @@ fn validate_preference_order(order: &[PreferenceField]) -> Result<(), Scheduling
     Ok(())
 }
 
-fn validate_bounded_identifier(field: &'static str, value: &str, max_bytes: u32) -> Result<(), SchedulingError> {
+struct BoundedIdentifier<'a> {
+    field: &'static str,
+    value: &'a str,
+    max_bytes: u32,
+}
+
+fn validate_bounded_identifier(input: BoundedIdentifier<'_>) -> Result<(), SchedulingError> {
+    let BoundedIdentifier {
+        field,
+        value,
+        max_bytes,
+    } = input;
     if value.is_empty() {
         return Err(SchedulingError::InvalidIdentifier {
             field,
@@ -194,12 +210,18 @@ fn is_safe_identifier_byte(byte: u8) -> bool {
 
 fn goal_identity_blake3(value: &str) -> String {
     let digest = blake3::hash(value.as_bytes()).to_hex().to_string();
-    debug_assert_eq!(digest.len(), blake3::OUT_LEN * HEX_LOWER_CHARS_PER_BYTE);
+    debug_assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
     debug_assert!(!digest.chars().any(char::is_control));
     digest
 }
 
-fn validate_goal_key(field: &'static str, value: &str) -> Result<(), SchedulingError> {
+struct GoalKeyInput<'a> {
+    field: &'static str,
+    value: &'a str,
+}
+
+fn validate_goal_key(input: GoalKeyInput<'_>) -> Result<(), SchedulingError> {
+    let GoalKeyInput { field, value } = input;
     if value.is_empty() {
         return Err(SchedulingError::InvalidIdentifier {
             field,
@@ -262,9 +284,20 @@ fn validate_known_graph(graph: &KnownGraphFacts) -> Result<ValidatedKnownGraph, 
     let mut edge_count = 0_u32;
     let mut reciprocal_edge_count = 0_u32;
     for goal in &graph.goals {
-        validate_goal_key("goal_key", &goal.goal_key)?;
-        let waitees = unique_edges(&goal.goal_key, "waitees", &goal.waitees)?;
-        let waiters = unique_edges(&goal.goal_key, "waiters", &goal.waiters)?;
+        validate_goal_key(GoalKeyInput {
+            field: "goal_key",
+            value: &goal.goal_key,
+        })?;
+        let waitees = unique_edges(EdgeInput {
+            goal_key: &goal.goal_key,
+            edge_kind: "waitees",
+            edges: &goal.waitees,
+        })?;
+        let waiters = unique_edges(EdgeInput {
+            goal_key: &goal.goal_key,
+            edge_kind: "waiters",
+            edges: &goal.waiters,
+        })?;
         edge_count = bounded_edge_total(edge_count, waitees.len(), "known graph waitee edge count")?;
         reciprocal_edge_count =
             bounded_edge_total(reciprocal_edge_count, waiters.len(), "known graph waiter edge count")?;
@@ -303,14 +336,24 @@ fn bounded_edge_total(current: u32, additional: usize, field: &'static str) -> R
     Ok(next)
 }
 
-fn unique_edges(
-    goal_key: &str,
+struct EdgeInput<'a> {
+    goal_key: &'a str,
     edge_kind: &'static str,
-    edges: &[String],
-) -> Result<BTreeSet<String>, SchedulingError> {
+    edges: &'a [String],
+}
+
+fn unique_edges(input: EdgeInput<'_>) -> Result<BTreeSet<String>, SchedulingError> {
+    let EdgeInput {
+        goal_key,
+        edge_kind,
+        edges,
+    } = input;
     let mut unique = BTreeSet::new();
     for edge in edges {
-        validate_goal_key("edge goal key", edge)?;
+        validate_goal_key(GoalKeyInput {
+            field: "edge goal key",
+            value: edge,
+        })?;
         if !unique.insert(edge.clone()) {
             return Err(SchedulingError::DuplicateEdge {
                 goal_key: goal_identity_blake3(goal_key),
@@ -451,7 +494,7 @@ fn resolve_history(
         return Ok(structural_history(HistoryBasis::StructuralFallbackUnknownGoal, Some(digest)));
     }
     debug_assert!(
-        snapshot.duration_classes.len() <= usize::try_from(MAX_HISTORY_ENTRIES).expect("history limit fits usize")
+        u32::try_from(snapshot.duration_classes.len()).is_ok_and(|entry_count| entry_count <= MAX_HISTORY_ENTRIES)
     );
     debug_assert!(snapshot.duration_classes.keys().all(|key| graph.goals.contains_key(key)));
     Ok(ResolvedHistory {
@@ -497,7 +540,7 @@ fn preflight_history_snapshot(snapshot: &DurationHistorySnapshot) -> Result<Opti
 
 fn structural_history(basis: HistoryBasis, digest: Option<String>) -> ResolvedHistory {
     debug_assert_ne!(basis, HistoryBasis::FreshSnapshot);
-    debug_assert!(digest.as_ref().is_none_or(|value| value.len() == blake3::OUT_LEN * HEX_LOWER_CHARS_PER_BYTE));
+    debug_assert!(digest.as_ref().is_none_or(|value| value.len() == BLAKE3_HEX_LENGTH));
     ResolvedHistory {
         basis,
         snapshot_digest_blake3: digest,
@@ -582,7 +625,10 @@ fn validate_previous_pressures(previous: &BTreeMap<String, KnownGraphPressure>) 
         });
     }
     for (goal_key, pressure) in previous {
-        validate_goal_key("previous pressure goal key", goal_key)?;
+        validate_goal_key(GoalKeyInput {
+            field: "previous pressure goal key",
+            value: goal_key,
+        })?;
         validate_known_graph_pressure(goal_key, pressure)?;
     }
     debug_assert!(previous_count <= MAX_SCHEDULING_GOALS);
@@ -603,15 +649,18 @@ fn affected_goal_keys(
         });
     }
     for goal_key in changed_goal_keys {
-        validate_goal_key("changed scheduling goal key", goal_key)?;
+        validate_goal_key(GoalKeyInput {
+            field: "changed scheduling goal key",
+            value: goal_key,
+        })?;
     }
-    let previous_keys_valid = previous.keys().all(|goal_key| graph.goals.contains_key(goal_key));
-    let missing_keys_are_changed = graph
+    let is_previous_key_set_valid = previous.keys().all(|goal_key| graph.goals.contains_key(goal_key));
+    let is_every_missing_key_changed = graph
         .goals
         .keys()
         .filter(|goal_key| !previous.contains_key(*goal_key))
         .all(|goal_key| changed_goal_keys.contains(goal_key));
-    if !previous_keys_valid || !missing_keys_are_changed {
+    if !is_previous_key_set_valid || !is_every_missing_key_changed {
         return Ok(graph.goals.keys().cloned().collect());
     }
     if changed_goal_keys.is_empty() {
@@ -658,8 +707,10 @@ fn compute_component_pressures(
     let root_ids = requested_root_ids(graph)?;
     let mut accumulators: BTreeMap<String, PressureAccumulator> = affected
         .iter()
-        .map(|goal_key| (goal_key.clone(), root_accumulator(goal_key, graph, history, &root_ids)))
-        .collect();
+        .map(|goal_key| {
+            root_accumulator(goal_key, graph, history, &root_ids).map(|accumulator| (goal_key.clone(), accumulator))
+        })
+        .collect::<Result<_, SchedulingError>>()?;
     for goal_key in topological.iter().rev() {
         propagate_goal_pressure(goal_key, graph, affected, history, &mut accumulators)?;
     }
@@ -673,18 +724,28 @@ fn compute_component_pressures(
 }
 
 fn requested_root_ids(graph: &ValidatedKnownGraph) -> Result<BTreeMap<String, u32>, SchedulingError> {
-    let mut root_ids = BTreeMap::new();
-    let mut next_root_id = 0_u32;
-    for (goal_key, goal) in &graph.goals {
-        if !goal.requested_root {
-            continue;
-        }
-        root_ids.insert(goal_key.clone(), next_root_id);
-        next_root_id = next_root_id.checked_add(1).ok_or(SchedulingError::ArithmeticOverflow {
-            field: "requested root id",
-        })?;
+    let requested_root_count =
+        len_as_u32("requested roots", graph.goals.values().filter(|goal| goal.requested_root).count())?;
+    if requested_root_count > MAX_SCHEDULING_GOALS {
+        return Err(SchedulingError::TooManyGoals {
+            actual: requested_root_count,
+            max: MAX_SCHEDULING_GOALS,
+        });
     }
-    debug_assert!(next_root_id <= MAX_SCHEDULING_GOALS);
+    let root_ids = graph
+        .goals
+        .iter()
+        .filter(|(_, goal)| goal.requested_root)
+        .enumerate()
+        .map(|(root_id, (goal_key, _))| {
+            u32::try_from(root_id).map(|root_id| (goal_key.clone(), root_id)).map_err(|_| {
+                SchedulingError::LengthOverflow {
+                    field: "requested root id",
+                }
+            })
+        })
+        .collect::<Result<BTreeMap<_, _>, SchedulingError>>()?;
+    debug_assert_eq!(u32::try_from(root_ids.len()), Ok(requested_root_count));
     debug_assert!(root_ids.keys().all(|goal_key| graph.goals.contains_key(goal_key)));
     Ok(root_ids)
 }
@@ -694,41 +755,46 @@ fn root_accumulator(
     graph: &ValidatedKnownGraph,
     history: &ResolvedHistory,
     root_ids: &BTreeMap<String, u32>,
-) -> PressureAccumulator {
-    let requested_root = graph.goals.get(goal_key).is_some_and(|goal| goal.requested_root);
-    if !requested_root {
-        return PressureAccumulator::default();
+) -> Result<PressureAccumulator, SchedulingError> {
+    let is_requested_root = graph.goals.get(goal_key).is_some_and(|goal| goal.requested_root);
+    if !is_requested_root {
+        return Ok(PressureAccumulator::default());
     }
     let mut roots = BTreeSet::new();
-    let root_id = root_ids.get(goal_key).copied().expect("requested root must have a bounded canonical id");
+    let root_id = root_ids.get(goal_key).copied().ok_or_else(|| SchedulingError::MissingPressure {
+        goal_key: goal_identity_blake3(goal_key),
+    })?;
     roots.insert(root_id);
     let work_units = duration_units(goal_key, history);
     debug_assert_eq!(roots.len(), 1);
     debug_assert!(work_units >= STRUCTURAL_DURATION_UNITS);
-    PressureAccumulator {
+    Ok(PressureAccumulator {
         path_nodes: 1,
         path_work_units: work_units,
         roots,
         roots_saturated: false,
-    }
+    })
 }
 
 fn topological_order(graph: &ValidatedKnownGraph, affected: &BTreeSet<String>) -> Result<Vec<String>, SchedulingError> {
-    let mut remaining_dependencies: BTreeMap<String, u32> = BTreeMap::new();
-    let mut ready = BTreeSet::new();
-    for goal_key in affected {
-        let goal = graph.goals.get(goal_key).ok_or_else(|| SchedulingError::UnknownChangedGoal {
-            goal_key: goal_identity_blake3(goal_key),
-        })?;
-        let dependency_count = len_as_u32(
-            "component dependencies",
-            goal.waitees.iter().filter(|waitee| affected.contains(*waitee)).count(),
-        )?;
-        remaining_dependencies.insert(goal_key.clone(), dependency_count);
-        if dependency_count == 0 {
-            ready.insert(goal_key.clone());
-        }
-    }
+    let mut remaining_dependencies = affected
+        .iter()
+        .map(|goal_key| {
+            let goal = graph.goals.get(goal_key).ok_or_else(|| SchedulingError::UnknownChangedGoal {
+                goal_key: goal_identity_blake3(goal_key),
+            })?;
+            let dependency_count = len_as_u32(
+                "component dependencies",
+                goal.waitees.iter().filter(|waitee| affected.contains(*waitee)).count(),
+            )?;
+            Ok((goal_key.clone(), dependency_count))
+        })
+        .collect::<Result<BTreeMap<_, _>, SchedulingError>>()?;
+    let mut ready: BTreeSet<String> = remaining_dependencies
+        .iter()
+        .filter(|(_, dependency_count)| **dependency_count == 0)
+        .map(|(goal_key, _)| goal_key.clone())
+        .collect();
     let mut ordered = Vec::with_capacity(affected.len());
     while let Some(goal_key) = ready.pop_first() {
         ordered.push(goal_key.clone());
@@ -775,11 +841,11 @@ fn propagate_goal_pressure(
         goal_key: goal_identity_blake3(goal_key),
     })?;
     for waitee in goal.waitees.iter().filter(|waitee| affected.contains(*waitee)) {
-        let waitee_duration = duration_units(waitee, history);
+        let waitee_work_unit_count = duration_units(waitee, history);
         let target = accumulators.get_mut(waitee).ok_or_else(|| SchedulingError::MissingPressure {
             goal_key: goal_identity_blake3(waitee),
         })?;
-        merge_pressure(target, &source, waitee_duration)?;
+        merge_pressure(target, &source, waitee_work_unit_count)?;
     }
     debug_assert!(source.path_nodes > 0);
     debug_assert!(source.path_work_units > 0);
@@ -1104,7 +1170,10 @@ pub fn rank_ready_goals(
     let mut seen = BTreeSet::new();
     let mut ranked = Vec::with_capacity(ready_goals.len());
     for ready in ready_goals {
-        validate_goal_key("ready goal key", &ready.goal_key)?;
+        validate_goal_key(GoalKeyInput {
+            field: "ready goal key",
+            value: &ready.goal_key,
+        })?;
         if !seen.insert(ready.goal_key.clone()) {
             return Err(SchedulingError::DuplicateReadyGoal {
                 goal_key: goal_identity_blake3(&ready.goal_key),
@@ -1127,37 +1196,60 @@ pub fn rank_ready_goals(
 }
 
 fn validate_known_graph_pressure(goal_key: &str, pressure: &KnownGraphPressure) -> Result<(), SchedulingError> {
-    let node_and_work_zero_agree =
+    let is_node_work_zero_state_consistent =
         (pressure.known_critical_path_nodes == 0) == (pressure.known_critical_path_work_units == 0);
-    if !node_and_work_zero_agree {
-        return Err(invalid_pressure(goal_key, "critical-path node/work zero state disagrees"));
+    if !is_node_work_zero_state_consistent {
+        return Err(invalid_pressure(PressureViolation {
+            goal_key,
+            reason: "critical-path node/work zero state disagrees",
+        }));
     }
     if pressure.known_critical_path_nodes > MAX_SCHEDULING_GOALS {
-        return Err(invalid_pressure(goal_key, "critical-path node count exceeds known-goal bound"));
+        return Err(invalid_pressure(PressureViolation {
+            goal_key,
+            reason: "critical-path node count exceeds known-goal bound",
+        }));
     }
     if pressure.known_critical_path_work_units > MAX_KNOWN_CRITICAL_PATH_WORK_UNITS {
-        return Err(invalid_pressure(goal_key, "critical-path work exceeds bounded duration classes"));
+        return Err(invalid_pressure(PressureViolation {
+            goal_key,
+            reason: "critical-path work exceeds bounded duration classes",
+        }));
     }
     if pressure.blocked_root_count > MAX_BLOCKED_ROOT_PRESSURE {
-        return Err(invalid_pressure(goal_key, "blocked-root count exceeds pressure bound"));
+        return Err(invalid_pressure(PressureViolation {
+            goal_key,
+            reason: "blocked-root count exceeds pressure bound",
+        }));
     }
     if pressure.blocked_root_count_saturated && pressure.blocked_root_count != MAX_BLOCKED_ROOT_PRESSURE {
-        return Err(invalid_pressure(goal_key, "saturated blocked-root count is not at its bound"));
+        return Err(invalid_pressure(PressureViolation {
+            goal_key,
+            reason: "saturated blocked-root count is not at its bound",
+        }));
     }
     if pressure.blocked_root_count > 0 && pressure.known_critical_path_nodes == 0 {
-        return Err(invalid_pressure(goal_key, "blocked-root pressure has no known path"));
+        return Err(invalid_pressure(PressureViolation {
+            goal_key,
+            reason: "blocked-root pressure has no known path",
+        }));
     }
-    debug_assert!(node_and_work_zero_agree);
+    debug_assert!(is_node_work_zero_state_consistent);
     debug_assert!(pressure.blocked_root_count <= MAX_BLOCKED_ROOT_PRESSURE);
     Ok(())
 }
 
-fn invalid_pressure(goal_key: &str, reason: &'static str) -> SchedulingError {
-    debug_assert!(!goal_key.is_empty());
-    debug_assert!(!reason.is_empty());
+struct PressureViolation<'a> {
+    goal_key: &'a str,
+    reason: &'static str,
+}
+
+fn invalid_pressure(violation: PressureViolation<'_>) -> SchedulingError {
+    debug_assert!(!violation.goal_key.is_empty());
+    debug_assert!(!violation.reason.is_empty());
     SchedulingError::InvalidPressure {
-        goal_key: goal_identity_blake3(goal_key),
-        reason,
+        goal_key: goal_identity_blake3(violation.goal_key),
+        reason: violation.reason,
     }
 }
 
@@ -1343,7 +1435,7 @@ fn priority_candidate_evidence(candidate: &RankedReadyGoal) -> PriorityCandidate
         content_locality_class: candidate.priority.content_locality,
         transfer_cost_class: candidate.priority.transfer_cost,
     };
-    debug_assert_eq!(evidence.goal_key_blake3.len(), blake3::OUT_LEN * HEX_LOWER_CHARS_PER_BYTE);
+    debug_assert_eq!(evidence.goal_key_blake3.len(), BLAKE3_HEX_LENGTH);
     debug_assert!(!candidate.goal_key.is_empty());
     evidence
 }
@@ -1379,7 +1471,10 @@ fn validate_ranked_snapshot(
     }
     let mut identities = BTreeSet::new();
     for candidate in ranked {
-        validate_goal_key("ranked goal key", &candidate.goal_key)?;
+        validate_goal_key(GoalKeyInput {
+            field: "ranked goal key",
+            value: &candidate.goal_key,
+        })?;
         if candidate.goal_key != candidate.priority.stable_goal_key {
             return Err(invalid_ranked_snapshot("candidate identity disagrees with stable tie-break key"));
         }
@@ -1466,41 +1561,41 @@ pub fn priority_decision_evidence(
         claim_scope: SCHEDULING_CLAIM_SCOPE.to_string(),
         non_claims: PRIORITY_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
     };
-    debug_assert_eq!(evidence.selected_goal_key_blake3.len(), blake3::OUT_LEN * HEX_LOWER_CHARS_PER_BYTE);
+    debug_assert_eq!(evidence.selected_goal_key_blake3.len(), BLAKE3_HEX_LENGTH);
     debug_assert_eq!(evidence.non_claims.len(), PRIORITY_NON_CLAIM_COUNT);
     Ok(evidence)
 }
 
 fn validate_history_evidence(basis: HistoryBasis, digest_blake3: Option<&str>) -> Result<(), SchedulingError> {
     if let Some(digest) = digest_blake3 {
-        let expected_bytes = blake3::OUT_LEN * HEX_LOWER_CHARS_PER_BYTE;
-        let lowercase_hex = digest.bytes().all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'));
-        if digest.len() != expected_bytes || !lowercase_hex {
+        let expected_bytes = BLAKE3_HEX_LENGTH;
+        let is_lowercase_hex = digest.bytes().all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'));
+        if digest.len() != expected_bytes || !is_lowercase_hex {
             return Err(SchedulingError::InvalidHistoryEvidence {
                 reason: "snapshot digest must be 64 lowercase hexadecimal characters",
             });
         }
     }
-    let digest_required = matches!(
+    let is_digest_required = matches!(
         basis,
         HistoryBasis::FreshSnapshot
             | HistoryBasis::StructuralFallbackStale
             | HistoryBasis::StructuralFallbackUnknownGoal
     );
-    let digest_forbidden =
+    let is_digest_forbidden =
         matches!(basis, HistoryBasis::StructuralFallbackMissing | HistoryBasis::StructuralFallbackOversized);
-    if digest_required && digest_blake3.is_none() {
+    if is_digest_required && digest_blake3.is_none() {
         return Err(SchedulingError::InvalidHistoryEvidence {
             reason: "history basis requires an admitted snapshot digest",
         });
     }
-    if digest_forbidden && digest_blake3.is_some() {
+    if is_digest_forbidden && digest_blake3.is_some() {
         return Err(SchedulingError::InvalidHistoryEvidence {
             reason: "history basis forbids a snapshot digest",
         });
     }
-    debug_assert!(!digest_required || digest_blake3.is_some());
-    debug_assert!(!digest_forbidden || digest_blake3.is_none());
+    debug_assert!(!is_digest_required || digest_blake3.is_some());
+    debug_assert!(!is_digest_forbidden || digest_blake3.is_none());
     Ok(())
 }
 

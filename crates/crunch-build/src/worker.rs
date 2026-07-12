@@ -103,6 +103,7 @@ pub struct EvalMessage {
 /// dispatch shell, and semaphore all enforce this bound.
 const MAX_IN_FLIGHT: u32 = 64;
 const BLAKE3_HEX_CHARS_PER_BYTE: usize = 2;
+const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(BLAKE3_HEX_CHARS_PER_BYTE);
 
 /// A root goal that failed, with error context.
 #[derive(Debug, Clone)]
@@ -594,14 +595,15 @@ pub struct Worker {
 
 fn redacted_goal_identity(goal_key: &str) -> String {
     let digest = blake3::hash(goal_key.as_bytes()).to_hex().to_string();
-    debug_assert_eq!(digest.len(), blake3::OUT_LEN * BLAKE3_HEX_CHARS_PER_BYTE);
+    debug_assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
     debug_assert!(!digest.chars().any(char::is_control));
     digest
 }
 
 impl Worker {
-    /// Create a new Worker with the given concurrency limit.
-    pub fn new(max_jobs: u32) -> Self {
+    /// Create a test Worker with the default scheduling policy.
+    #[cfg(test)]
+    pub(crate) fn new(max_jobs: u32) -> Self {
         Self::with_scheduling_policy(max_jobs, SchedulingPolicy::default())
             .expect("default scheduling policy must be valid")
     }
@@ -695,21 +697,29 @@ impl Worker {
     }
 
     fn known_graph_facts(&self) -> Result<KnownGraphFacts, Error> {
-        let mut nodes: BTreeMap<String, (Vec<String>, BTreeSet<String>, bool)> = BTreeMap::new();
-        let mut edge_count = 0_u32;
-        for (goal_key, goal) in self.registry.iter() {
-            let goal_edge_count = u32::try_from(goal.waitees.len())
-                .map_err(|_| Error::Store("goal dependency count exceeds u32".to_string()))?;
-            edge_count = edge_count
-                .checked_add(goal_edge_count)
-                .ok_or_else(|| Error::Store("known graph edge count overflow".to_string()))?;
-            if edge_count > MAX_KNOWN_GRAPH_EDGES {
-                return Err(Error::Store(format!("known graph edge limit exceeded ({MAX_KNOWN_GRAPH_EDGES})")));
-            }
-            let mut waitees = goal.waitees.clone();
-            waitees.sort();
-            nodes.insert(goal_key.to_string(), (waitees, BTreeSet::new(), goal.is_root));
+        let node_count = u32::try_from(self.registry.iter().count())
+            .map_err(|_| Error::Store("known graph node count exceeds u32".to_string()))?;
+        if node_count > MAX_GOALS {
+            return Err(Error::Store(format!("known graph node limit exceeded ({MAX_GOALS})")));
         }
+        let mut edge_count = 0_u32;
+        let mut nodes: BTreeMap<String, (Vec<String>, BTreeSet<String>, bool)> = self
+            .registry
+            .iter()
+            .map(|(goal_key, goal)| {
+                let goal_edge_count = u32::try_from(goal.waitees.len())
+                    .map_err(|_| Error::Store("goal dependency count exceeds u32".to_string()))?;
+                edge_count = edge_count
+                    .checked_add(goal_edge_count)
+                    .ok_or_else(|| Error::Store("known graph edge count overflow".to_string()))?;
+                if edge_count > MAX_KNOWN_GRAPH_EDGES {
+                    return Err(Error::Store(format!("known graph edge limit exceeded ({MAX_KNOWN_GRAPH_EDGES})")));
+                }
+                let mut waitees = goal.waitees.clone();
+                waitees.sort();
+                Ok((goal_key.to_string(), (waitees, BTreeSet::new(), goal.is_root)))
+            })
+            .collect::<Result<_, Error>>()?;
         let dependency_edges: Vec<(String, String)> = nodes
             .iter()
             .flat_map(|(goal_key, (waitees, _, _))| {
@@ -898,12 +908,12 @@ impl Worker {
             .ok_or_else(|| Error::Store(format!("worker: goal not found in registry: {key}")))?;
         let state = goal.inspect(unbuilt_dep_keys)?;
 
-        let became_ready = *state == GoalState::Ready;
-        if became_ready {
+        let is_ready_after_inspection = *state == GoalState::Ready;
+        if is_ready_after_inspection {
             self.enqueue_ready_goal(key)?;
         }
 
-        debug_assert_eq!(became_ready, self.ready_goals.contains_key(key));
+        debug_assert_eq!(is_ready_after_inspection, self.ready_goals.contains_key(key));
         Ok(())
     }
 
@@ -1507,8 +1517,8 @@ impl Worker {
             };
             let (drv_path, is_root, derivation) = self.ready_goal_inputs(&drv_key)?;
             let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root).await;
-            let spawned = self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
-            if spawned {
+            let is_spawned = self.handle_prepare_result(&drv_key, prepare_result, builder, known_paths, state).await?;
+            if is_spawned {
                 available_build_slots = available_build_slots
                     .checked_sub(1)
                     .ok_or_else(|| Error::Store("available build slot underflow".to_string()))?;
