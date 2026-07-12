@@ -3518,7 +3518,7 @@ fn remote_build_selection(
         now_unix_s: unix_time_now_s()?,
         build_time_limit_secs,
         client_endpoint: None,
-        transfer_capabilities: remote_build::RemoteTransferCapabilities::delta_and_full(),
+        transfer_capabilities: remote_build::RemoteTransferCapabilities::full_only().with_streaming(),
     };
     Ok(Some(RemoteBuildSelection { options }))
 }
@@ -3665,34 +3665,63 @@ async fn run_remote_build_dispatches_async(
     })
     .await
     .map_err(|err| RunError::Internal(format!("opening local store for remote build dispatch: {err}")))?;
+    let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
     let mut imported = Vec::with_capacity(inputs.len());
     for input in inputs {
         let mut plan =
             remote_build::plan_remote_stdio_client_dispatch(input, &selection.options).map_err(RunError::Internal)?;
-        remote_build::populate_remote_input_upload_artifacts_from_store_or_source_state(
+        let attempt = remote_build::admit_remote_production_dispatch(
+            &mut coordinator,
+            &plan.client.request,
+            &selection.options.builder.endpoint_id,
+            &plan.client.trusted_output_keys,
+            selection.options.now_unix_s,
+        )
+        .map_err(|err| RunError::Internal(format!("remote coordinator dispatch failed: {err}")))?;
+        remote_build::bind_remote_production_dispatch(
+            &mut plan,
+            attempt.clone(),
+            crunch_build::distributed::RemoteTransferPolicy::default(),
+            state_dir,
+        )
+        .map_err(|err| RunError::Internal(format!("remote production transfer binding failed: {err}")))?;
+        let request = plan.client.request.clone();
+        remote_build::prepare_remote_production_input_transfer(
             &store,
             &mut plan.command,
-            &plan.client.request,
+            &request,
             state_dir,
         )
         .await
-        .map_err(|err| RunError::Internal(format!("remote input upload preparation failed: {err}")))?;
+        .map_err(|err| RunError::Internal(format!("remote input stream preparation failed: {err}")))?;
         let transcript = remote_build::run_stdio_remote_child(&plan.command)?;
-        let admission = remote_build::validate_remote_builder_frames_output_import(
+        let admission = remote_build::admit_fenced_remote_stdio_output(
+            &mut coordinator,
+            &attempt,
+            true,
             &plan.client.request,
             &plan.client.trusted_output_keys,
-            &transcript.frames,
+            &transcript,
+            selection.options.now_unix_s,
         )
         .map_err(|err| RunError::Internal(format!("remote output import admission failed: {err}")))?;
-        let import_report = remote_build::import_admitted_remote_outputs(
+        let import_report = remote_build::import_admitted_remote_stdio_outputs(
             &mut store,
             &plan.client.request,
             &admission,
+            &transcript,
             true,
             Some(crunch_store::GcRootSource::Build),
         )
         .await
         .map_err(|err| RunError::Internal(format!("remote output import failed: {err}")))?;
+        remote_build::complete_remote_production_attempt(
+            &mut coordinator,
+            &attempt,
+            &admission.output_digest_blake3,
+            selection.options.now_unix_s.saturating_add(1),
+        )
+        .map_err(|err| RunError::Internal(format!("remote coordinator completion failed: {err}")))?;
         imported.push(remote_build::RemoteClientImportedBuild {
             label: plan.label,
             request_id: plan.client.request.request_id,

@@ -142,6 +142,23 @@ pub enum RemoteTransferStateLoad {
     ExpiredInvalidated,
 }
 
+/// Receiver-owned interactive session state. The session lock remains held
+/// from receiver reprobe through the final checkpoint so a second process
+/// cannot race acknowledgement or admission facts for the same fence.
+pub struct RemoteTransferReceiveSession {
+    manifest: CanonicalRemoteTransferManifest,
+    policy: RemoteTransferPolicy,
+    state_dir: PathBuf,
+    receiver_root: PathBuf,
+    options: RemoteTransferRunOptions,
+    demand: RemoteTransferDemand,
+    credit: RemoteTransferCreditState,
+    reused_bytes: u64,
+    lease: RemoteTransferLease,
+    checkpoint_path: PathBuf,
+    _session_lock: RemoteTransferSessionLock,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteTransferDataFrameHeader {
     pub schema: String,
@@ -357,7 +374,43 @@ pub fn prepare_inline_fixture_or_bootstrap_artifact(
     prepare_file_transfer_artifact(artifact_id, artifact_kind, &path, required_for_completion, None, policy)
 }
 
-/// Render a NAR directly into a spool file; no whole-NAR `Vec` exists.
+/// Render a castore node directly into a spool file; no whole-NAR `Vec`
+/// exists. Input transfers use this when no PathInfo exists yet.
+pub async fn prepare_nar_node_transfer_artifact(
+    store: &crunch_store::StoreHandle,
+    node: &snix_castore::Node,
+    artifact_id: RemoteTransferArtifactId,
+    spool_dir: &Path,
+    required_for_completion: bool,
+    policy: RemoteTransferPolicy,
+) -> Result<PreparedRemoteTransferArtifact, String> {
+    policy.validate().map_err(reason)?;
+    let path = safe_spool_path(spool_dir, artifact_id.as_str(), "nar")?;
+    let mut file = tokio::fs::File::create(&path)
+        .await
+        .map_err(|err| format!("creating NAR spool {}: {err}", path.display()))?;
+    store
+        .render_nar(node, &mut file)
+        .await
+        .map_err(|err| format!("rendering transfer NAR: {err}"))?;
+    file.flush().await.map_err(|err| format!("flushing NAR spool: {err}"))?;
+    drop(file);
+    let nar_sha256_hex = hash_file_sha256_hex(&path)?;
+    let prepared = prepare_file_transfer_artifact(
+        artifact_id,
+        RemoteTransferArtifactKind::Nar,
+        &path,
+        required_for_completion,
+        Some(nar_sha256_hex),
+        policy,
+    )?;
+    assert!(prepared.descriptor.size_bytes > 0);
+    assert!(prepared.descriptor.nar_sha256_hex.is_some());
+    Ok(prepared)
+}
+
+/// Render a PathInfo-backed NAR directly into a spool file and check the Nix
+/// interoperability SHA-256/size facts before advertising the manifest.
 pub async fn prepare_nar_transfer_artifact(
     store: &crunch_store::StoreHandle,
     path_info: &PathInfo,
@@ -366,32 +419,22 @@ pub async fn prepare_nar_transfer_artifact(
     required_for_completion: bool,
     policy: RemoteTransferPolicy,
 ) -> Result<PreparedRemoteTransferArtifact, String> {
-    policy.validate().map_err(reason)?;
     if path_info.nar_size == 0 || path_info.nar_size > policy.total_bytes_max {
         return Err(reason(RemoteTransferReasonCode::TotalBytesExceeded));
     }
-    let path = safe_spool_path(spool_dir, artifact_id.as_str(), "nar")?;
-    let mut file = tokio::fs::File::create(&path)
-        .await
-        .map_err(|err| format!("creating NAR spool {}: {err}", path.display()))?;
-    store
-        .render_nar(&path_info.node, &mut file)
-        .await
-        .map_err(|err| format!("rendering transfer NAR: {err}"))?;
-    file.flush().await.map_err(|err| format!("flushing NAR spool: {err}"))?;
-    drop(file);
-    let prepared = prepare_file_transfer_artifact(
+    let prepared = prepare_nar_node_transfer_artifact(
+        store,
+        &path_info.node,
         artifact_id,
-        RemoteTransferArtifactKind::Nar,
-        &path,
+        spool_dir,
         required_for_completion,
-        Some(data_encoding::HEXLOWER.encode(&path_info.nar_sha256)),
         policy,
-    )?;
+    )
+    .await?;
     if prepared.descriptor.size_bytes != path_info.nar_size {
         return Err("remote-transfer-nar-size-mismatch".to_string());
     }
-    verify_nar_sha256(&path, path_info)?;
+    verify_nar_sha256(&prepared.source_path, path_info)?;
     Ok(prepared)
 }
 
@@ -464,12 +507,22 @@ pub fn prepare_pathinfo_transfer_artifact(
     required_for_completion: bool,
     policy: RemoteTransferPolicy,
 ) -> Result<PreparedRemoteTransferArtifact, String> {
-    let bytes = serde_json::to_vec(path_info).map_err(|err| format!("serializing transfer PathInfo: {err}"))?;
     let id = RemoteTransferArtifactId::new(format!("pathinfo:{}", path_info.store_path)).map_err(reason)?;
-    let path = safe_spool_path(spool_dir, id.as_str(), "pathinfo")?;
+    prepare_pathinfo_transfer_artifact_with_id(path_info, id, spool_dir, required_for_completion, policy)
+}
+
+pub fn prepare_pathinfo_transfer_artifact_with_id(
+    path_info: &PathInfo,
+    artifact_id: RemoteTransferArtifactId,
+    spool_dir: &Path,
+    required_for_completion: bool,
+    policy: RemoteTransferPolicy,
+) -> Result<PreparedRemoteTransferArtifact, String> {
+    let bytes = serde_json::to_vec(path_info).map_err(|err| format!("serializing transfer PathInfo: {err}"))?;
+    let path = safe_spool_path(spool_dir, artifact_id.as_str(), "pathinfo")?;
     write_atomic_bytes(&path, &bytes)?;
     prepare_file_transfer_artifact(
-        id,
+        artifact_id,
         RemoteTransferArtifactKind::PathInfo,
         &path,
         required_for_completion,
@@ -646,6 +699,193 @@ fn prepare_delta_bytes(
 fn safe_spool_path(root: &Path, identity: &str, extension: &str) -> Result<PathBuf, String> {
     fs::create_dir_all(root).map_err(|err| format!("creating spool {}: {err}", root.display()))?;
     Ok(root.join(format!("{}.{}", blake3::hash(identity.as_bytes()).to_hex(), extension)))
+}
+
+/// Begin an interactive receive from a wire manifest. Canonicalization,
+/// current-scope checkpoint validation, receiver reprobe, and resume planning
+/// all complete before any payload credit can be issued.
+pub fn begin_remote_transfer_receive(
+    manifest: RemoteTransferManifest,
+    expected_manifest_digest: &RemoteTransferDigest,
+    policy: RemoteTransferPolicy,
+    state_dir: &Path,
+    receiver_root: &Path,
+    options: RemoteTransferRunOptions,
+) -> Result<RemoteTransferReceiveSession, String> {
+    policy.validate().map_err(reason)?;
+    validate_run_options(options)?;
+    let manifest = canonicalize_remote_transfer_manifest(manifest, policy).map_err(reason)?;
+    if &manifest.digest_blake3 != expected_manifest_digest {
+        return Err(reason(RemoteTransferReasonCode::ManifestIdentityMismatch));
+    }
+    let scope = remote_transfer_scope(&manifest);
+    let session_lock = acquire_remote_transfer_session_lock(state_dir, &scope.session_id)?;
+    let previous = match load_remote_transfer_state(state_dir, &scope, policy, options.now_unix_s)? {
+        RemoteTransferStateLoad::Loaded(state) => Some(state),
+        RemoteTransferStateLoad::Missing
+        | RemoteTransferStateLoad::StaleInvalidated
+        | RemoteTransferStateLoad::ExpiredInvalidated => None,
+    };
+    let receiver = probe_remote_transfer_receiver(receiver_root, &manifest, options.admission)?;
+    let resume = plan_remote_transfer_resume(
+        &manifest,
+        policy,
+        &receiver,
+        previous.as_ref().map(|state| &state.checkpoint),
+        previous.as_ref().map(|state| &state.checkpoint),
+    )
+    .map_err(reason)?;
+    let last_progress_step = previous
+        .as_ref()
+        .map(|state| state.lease.last_progress_step)
+        .unwrap_or(INITIAL_PROGRESS_STEP);
+    let credit = RemoteTransferCreditState {
+        acknowledged_chunk_digests: resume.acknowledged_chunk_digests,
+        transferred_bytes: resume.transferred_bytes,
+        next_sequence: resume.next_sequence,
+        last_progress_step,
+        ..RemoteTransferCreditState::default()
+    };
+    let lease = transfer_lease_from_manifest(&manifest, options, &scope)?;
+    let checkpoint_path = remote_transfer_state_path(state_dir, &scope.session_id);
+    assert_eq!(resume.demand.scope, scope);
+    assert!(resume.demand.missing_bytes <= manifest.total_bytes);
+    Ok(RemoteTransferReceiveSession {
+        manifest,
+        policy,
+        state_dir: state_dir.to_path_buf(),
+        receiver_root: receiver_root.to_path_buf(),
+        options,
+        demand: resume.demand,
+        credit,
+        reused_bytes: resume.reused_bytes,
+        lease,
+        checkpoint_path,
+        _session_lock: session_lock,
+    })
+}
+
+impl RemoteTransferReceiveSession {
+    pub fn manifest(&self) -> &CanonicalRemoteTransferManifest {
+        &self.manifest
+    }
+
+    pub fn demand(&self) -> &RemoteTransferDemand {
+        &self.demand
+    }
+
+    /// Sender bookkeeping starts from the receiver-verified sequence/byte
+    /// cursor but never treats the cursor as proof of receiver content.
+    pub fn sender_credit_state(&self) -> RemoteTransferCreditState {
+        RemoteTransferCreditState {
+            transferred_bytes: self.credit.transferred_bytes,
+            next_sequence: self.credit.next_sequence,
+            last_progress_step: self.credit.last_progress_step,
+            ..RemoteTransferCreditState::default()
+        }
+    }
+
+    /// Validate exact demand and receiver capacity before advertising one
+    /// byte/chunk grant to the sender.
+    pub fn credit_for_chunk(
+        &self,
+        missing: &RemoteTransferChunkDemand,
+    ) -> Result<RemoteTransferCreditGrant, String> {
+        if !self.demand.missing_chunks.iter().any(|candidate| candidate == missing) {
+            return Err(reason(RemoteTransferReasonCode::ChunkNotDemanded));
+        }
+        let grant = RemoteTransferCreditGrant {
+            bytes: u64::from(missing.chunk.size_bytes),
+            chunks: FIRST_CHUNK_COUNT,
+        };
+        let available_storage_bytes = available_storage_bytes(&self.receiver_root)?;
+        let _ = grant_remote_transfer_credit(self.policy, &self.credit, grant.clone(), available_storage_bytes)
+            .map_err(reason)?;
+        assert_eq!(grant.bytes, u64::from(missing.chunk.size_bytes));
+        assert_eq!(grant.chunks, FIRST_CHUNK_COUNT);
+        Ok(grant)
+    }
+
+    /// Receive, verify, persist, acknowledge, and checkpoint one previously
+    /// credited data frame.
+    pub fn receive_chunk(&mut self, reader: impl Read) -> Result<RemoteTransferAcknowledgement, String> {
+        let progress_step = self
+            .credit
+            .last_progress_step
+            .checked_add(1)
+            .ok_or_else(|| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
+        let (next, acknowledgement) = receive_remote_transfer_data_chunk(
+            reader,
+            &self.receiver_root,
+            &self.manifest,
+            self.policy,
+            &self.demand,
+            &self.credit,
+            progress_step,
+        )?;
+        persist_transfer_progress(
+            &self.state_dir,
+            self.policy,
+            &self.demand.scope,
+            &next,
+            self.reused_bytes,
+            &self.lease,
+        )?;
+        self.credit = next;
+        assert!(self.credit.in_flight.is_empty());
+        assert_eq!(acknowledgement.transferred_bytes, self.credit.transferred_bytes);
+        Ok(acknowledgement)
+    }
+
+    /// Assemble all demanded artifacts and classify completion from a fresh
+    /// receiver probe. Transfer completion remains distinct from output trust.
+    pub fn finish(self) -> Result<RemoteTransferShellReport, String> {
+        assemble_remote_transfer_artifacts(&self.receiver_root, &self.manifest)?;
+        let receiver = probe_remote_transfer_receiver(&self.receiver_root, &self.manifest, self.options.admission)?;
+        let completion = decide_remote_transfer_cutoff(
+            &self.manifest,
+            &self.demand,
+            &receiver,
+            &self.credit.acknowledged_chunk_digests,
+            self.credit.transferred_bytes,
+        );
+        let disposition = match completion.disposition {
+            RemoteTransferCompletionDisposition::AlreadyPresent => RemoteTransferShellDisposition::AlreadyPresent,
+            RemoteTransferCompletionDisposition::DemandSatisfied => RemoteTransferShellDisposition::Completed,
+            RemoteTransferCompletionDisposition::Continue => RemoteTransferShellDisposition::AwaitingAdmission,
+            RemoteTransferCompletionDisposition::Reject => {
+                return Err(reason(RemoteTransferReasonCode::TransferRejected));
+            }
+        };
+        persist_transfer_progress(
+            &self.state_dir,
+            self.policy,
+            &self.demand.scope,
+            &self.credit,
+            self.reused_bytes,
+            &self.lease,
+        )?;
+        let sent_chunk_digests = self
+            .demand
+            .missing_chunks
+            .iter()
+            .map(|missing| missing.chunk.digest_blake3.as_str().to_string())
+            .collect();
+        assert!(receiver.requested_content_identity_verified);
+        assert!(!completion.output_admission_claimed);
+        Ok(shell_report(
+            self.options.direction,
+            disposition,
+            &PreparedRemoteTransfer {
+                manifest: self.manifest,
+                sources: BTreeMap::new(),
+            },
+            self.credit.transferred_bytes,
+            completion.reused_bytes,
+            sent_chunk_digests,
+            &self.checkpoint_path,
+        ))
+    }
 }
 
 /// Run receiver-demanded chunks with one bounded reservation before each read.
@@ -928,6 +1168,15 @@ pub fn remote_transfer_receiver_root(state_dir: &Path, session: &RemoteTransferS
     state_dir.join(REMOTE_TRANSFER_RECEIVER_DIR).join(session.as_str())
 }
 
+/// Resolve one assembled receiver artifact without exposing the hashed spool
+/// layout to protocol callers.
+pub fn remote_transfer_received_artifact_path(
+    receiver_root: &Path,
+    artifact_id: &RemoteTransferArtifactId,
+) -> PathBuf {
+    receiver_artifact_path(receiver_root, artifact_id)
+}
+
 struct RemoteTransferSessionLock {
     _file: File,
 }
@@ -1005,10 +1254,18 @@ fn transfer_lease(
     options: RemoteTransferRunOptions,
     scope: &RemoteTransferScope,
 ) -> Result<RemoteTransferLease, String> {
+    transfer_lease_from_manifest(&prepared.manifest, options, scope)
+}
+
+fn transfer_lease_from_manifest(
+    manifest: &CanonicalRemoteTransferManifest,
+    options: RemoteTransferRunOptions,
+    scope: &RemoteTransferScope,
+) -> Result<RemoteTransferLease, String> {
     if options.lease_expires_unix_s <= options.now_unix_s {
         return Err("remote-transfer-lease-not-future".to_string());
     }
-    let count = u32::try_from(prepared.manifest.manifest.artifacts.len())
+    let count = u32::try_from(manifest.manifest.artifacts.len())
         .map_err(|_| reason(RemoteTransferReasonCode::ArithmeticOverflow))?;
     if count > MAX_REMOTE_TRANSFER_LEASE_REFS_HARD {
         return Err("remote-transfer-lease-ref-limit-exceeded".to_string());
@@ -1016,8 +1273,7 @@ fn transfer_lease(
     Ok(RemoteTransferLease {
         schema: REMOTE_TRANSFER_LEASE_SCHEMA.to_string(),
         scope: scope.clone(),
-        artifact_ids: prepared
-            .manifest
+        artifact_ids: manifest
             .manifest
             .artifacts
             .iter()
