@@ -163,6 +163,38 @@ receipt_hash=121229d6315c63c079799fa739826a37d915156be30c982aeb66615db01ec28f
 The sync created `cairn/specs/kernel-bundle-oci/spec.md`; inspection confirmed
 that all eight requirements and their scenarios were retained.
 
+## Archive and post-archive validation
+
+```text
+$ CAIRN_ARCHIVE_DATE=2026-07-12 nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- archive add-onix-kernel-bundle-oci-projections --root . --policy cairn-policy/generated/cairn-policy.json
+dry_run=true blocked=false mutated=false reasons=[]
+input_hash=c6acbecef15e91275e3b4afa404443adeeba2116b8fe31d530109387662766e3
+receipt_hash=3233c0688e02465317317d6e3cfec9be5c36b1d8471bc4d0384c6f8fc89e37dd
+
+$ CAIRN_ARCHIVE_DATE=2026-07-12 nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- archive add-onix-kernel-bundle-oci-projections --root . --policy cairn-policy/generated/cairn-policy.json --execute
+dry_run=false blocked=false mutated=true reasons=[]
+before_manifest_hash=c8cf75b62c361092a840077377d12ddd802b866b24afd78c5fe6c2f9e7aa71a9
+after_manifest_hash=d90da2954ed9aaa0b933f73c776ed5e48bc7106f7bd61bbbed8b6de81af8550f
+mutation_manifest_hash=ff050ea818575a18705859893ebaaebb8e9cfb022bf4d425de3bb6af5c7d29f7
+receipt_hash=0f59dc160ca65c865df78b18492f961f1e4bb99e666f935ec5beb01918456eff
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 13,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 39,
+  "valid": true
+}
+```
+
+The archive was created at
+`cairn/archive/2026-07-12-add-onix-kernel-bundle-oci-projections` and preserved
+the recorded content hash for every moved lifecycle artifact.
+
 ## Claim boundary
 
 This evidence proves the bounded local projection and import/export behavior
