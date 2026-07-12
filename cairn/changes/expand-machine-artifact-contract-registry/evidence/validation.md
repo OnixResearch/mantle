@@ -11,7 +11,7 @@ Covers: mantle.machine_artifact_contracts.inventory, mantle.machine_artifact_con
 - 15 surfaces are contracted: the 13 original cohort surfaces plus the stable OCI export/import reports.
 - Rust DTOs remain runtime authority; generated Nickel contracts run only in checker/integration tests.
 - No prior schema versions are declared supported. The checker rejects any prior version unless both an explicit converter and migration fixtures are registered.
-- No sync, archive, or push operation was run.
+- The accepted spec was synced after implementation and gate evidence; archive is pending this transcript update, and no push was run.
 
 ## Checker self-test, generation, and freshness
 
@@ -294,6 +294,27 @@ input_hash=5092e48537e5e7b77051334dd1701bacd410892c0786a8f2226e7349fe8d5a2f
 receipt_hash=7c08573032e431a025e8625923bec1314e813f8e379bcf828be488007cc757ca
 issues=[] valid=true verdict=PASS
 ```
+
+## Accepted-spec sync
+
+```text
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- sync expand-machine-artifact-contract-registry --root . --policy cairn-policy/generated/cairn-policy.json
+dry_run=true blocked=false mutated=false reasons=[]
+input_hash=e4306975864926daaa3770d02b3c69436122fe10a86d181fa768ac989ba2c91a
+receipt_hash=52ef4b9969638e9e9b2b282aefc1cd6e0e458f6b86dbf0f926f02ae496f1811f
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- sync expand-machine-artifact-contract-registry --root . --policy cairn-policy/generated/cairn-policy.json --execute
+dry_run=false blocked=false mutated=true reasons=[]
+input_hash=e4306975864926daaa3770d02b3c69436122fe10a86d181fa768ac989ba2c91a
+before_manifest_hash=b3ebaf18e2fb5d450012465c5990918f7a66e4c93a8053c9139e41f4d5f982b7
+after_manifest_hash=ea12c42c960cb5aeae96a7323d5113884464a41a9ea26577f90604c3cb1f4214
+mutation_manifest_hash=c4e621239ef4077168d08c7d45a49c696a2f9cb7b4e081f03bc8257f99c434fd
+receipt_hash=d3e338a8b25ef4a19386c5628d9fbed507a5c4e8466066b25f508d2e7f3a44a1
+```
+
+The sync created `cairn/specs/machine-artifact-contracts/spec.md`; inspection
+confirmed that every delta requirement and scenario is present in the accepted
+spec.
 
 ## Claim boundary
 
