@@ -11,7 +11,7 @@ Covers: mantle.machine_artifact_contracts.inventory, mantle.machine_artifact_con
 - 15 surfaces are contracted: the 13 original cohort surfaces plus the stable OCI export/import reports.
 - Rust DTOs remain runtime authority; generated Nickel contracts run only in checker/integration tests.
 - No prior schema versions are declared supported. The checker rejects any prior version unless both an explicit converter and migration fixtures are registered.
-- The accepted spec was synced after implementation and gate evidence; archive is pending this transcript update, and no push was run.
+- The accepted spec was synced and the completed change was archived after implementation and gate evidence; no push was run.
 
 ## Checker self-test, generation, and freshness
 
@@ -315,6 +315,38 @@ receipt_hash=d3e338a8b25ef4a19386c5628d9fbed507a5c4e8466066b25f508d2e7f3a44a1
 The sync created `cairn/specs/machine-artifact-contracts/spec.md`; inspection
 confirmed that every delta requirement and scenario is present in the accepted
 spec.
+
+## Archive and post-archive validation
+
+```text
+$ CAIRN_ARCHIVE_DATE=2026-07-12 nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- archive expand-machine-artifact-contract-registry --root . --policy cairn-policy/generated/cairn-policy.json
+dry_run=true blocked=false mutated=false reasons=[]
+input_hash=e4306975864926daaa3770d02b3c69436122fe10a86d181fa768ac989ba2c91a
+receipt_hash=a0952f3ce269887ec8234bc0755ead349f724bdfa6cf5caf0c4983ae1365f52c
+
+$ CAIRN_ARCHIVE_DATE=2026-07-12 nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- archive expand-machine-artifact-contract-registry --root . --policy cairn-policy/generated/cairn-policy.json --execute
+dry_run=false blocked=false mutated=true reasons=[]
+before_manifest_hash=e287b7e23ff18bfd96d907278d1e81535997e5a3612785895b7d7bf28f34a461
+after_manifest_hash=fc12db8d41bd8586f177625ede64efae85826bdc2d6f1cbb871457b0288afaa3
+mutation_manifest_hash=b579a2e641b87df2f218ffff536e97331c858068417c79b2cce7765334cadda8
+receipt_hash=c37bcc631423f91324e9bb754d6ed692a15970ef8a7acc785952c1e984fcf9d4
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 14,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 39,
+  "valid": true
+}
+```
+
+The archive was created at
+`cairn/archive/2026-07-12-expand-machine-artifact-contract-registry` with the
+same content hashes recorded for every moved lifecycle artifact.
 
 ## Claim boundary
 
