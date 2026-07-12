@@ -25,7 +25,9 @@ Mantle will expose ast-grep through a flake package named `ast-grep-toolchain` a
 
 Repository-owned workflows may emit `mantle-ast-grep-structural-evidence-v1` sidecars for `scan` and `rule-test` commands. The sidecar records expected and observed tool, rule-bundle, and scan-input identities; command and receipt identities; output format and bounded finding counts; structural-only labels; and mandatory non-claims.
 
-Pure parsing, validation, canonicalization, and canonical BLAKE3 identity live in the no-std `crunch-release-core` crate. The root-package shell owns bounded filesystem reads, raw-file hashing, build-output discovery, diagnostics, and release attachment. Mantle does not invoke ast-grep automatically and does not interpret findings.
+Pure parsing, validation, canonicalization, and canonical BLAKE3 identity live in the no-std `crunch-release-core` crate. The root-package shell owns capability-confined no-follow opens, bounded filesystem reads, raw-file hashing, build-output discovery, diagnostics, and release attachment. Mantle does not invoke ast-grep automatically and does not interpret findings.
+
+The generated package identity record is the executable trust anchor. Equality between sidecar `binary_digest_blake3` and `expected_binary_digest_blake3` establishes only producer-declared internal consistency; it does not authenticate the producer or prove execution. Workflows making a stronger attribution must source the expected digest from the checked package identity record and bind it through their authenticated execution receipt.
 
 Valid output sidecars appear in `ast_grep_structural_evidence[]`; invalid sidecars appear only in `ast_grep_structural_evidence_diagnostics[]`. Generic release external evidence may carry this schema only after the same sidecar validation and exact non-claim preservation.
 
@@ -53,4 +55,6 @@ Rejected because structural evidence cannot establish runtime behavior, compiler
 - Sidecar producers must define deterministic bytes for argv, rule bundles, scan scopes, and receipts before hashing.
 - Build reports gain additive accepted-evidence and diagnostic arrays.
 - Release attachment remains identity and shape evidence; downstream policy must make any narrower promotion explicitly.
-- Sidecars with stale hashes, wrong tool identity, missing non-claims, unsupported formats, or overclaimed labels fail closed.
+- Sidecars with stale hashes, internally mismatched tool identity, missing non-claims, unsupported formats, or overclaimed labels fail closed.
+- Sidecar paths with symlinked parents or final components fail before bytes are read.
+- A self-consistent sidecar remains declared evidence, not authenticated proof that the packaged binary executed.

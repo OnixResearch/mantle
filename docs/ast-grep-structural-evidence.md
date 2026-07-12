@@ -20,7 +20,7 @@ nix develop -c ast-grep --version
 nix build .#checks.x86_64-linux.ast-grep-package-identity --no-link -L
 ```
 
-The identity smoke recomputes the executable BLAKE3, compares it with the identity record, checks the schema/package/version/path fields, and runs `ast-grep --version`.
+The identity smoke recomputes the executable BLAKE3, compares it with the identity record, checks the schema/package/version/path fields, and runs `ast-grep --version`. This package check is the trust anchor for the packaged executable; a structural-evidence sidecar does not replace it.
 
 ## Sidecar contract
 
@@ -43,13 +43,13 @@ Schema `mantle-ast-grep-structural-evidence-v1` records:
 
 Positive scan and rule-test fixtures plus fail-closed fixtures live in [`tests/fixtures/ast-grep-structural-evidence/`](../tests/fixtures/ast-grep-structural-evidence/).
 
-The owning repository defines deterministic byte encodings for argv, rule bundles, and scan inputs before hashing them. Mantle validates that the sidecar carries lowercase BLAKE3 identities, that observed/expected identities agree, and that the reported tool version is the pinned `0.42.1`. Scan runners select an explicit `--json=compact|pretty|stream` mode; rule-test runners use `--color never`. Mantle does not invent repository rule semantics.
+The owning repository defines deterministic byte encodings for argv, rule bundles, and scan inputs before hashing them. Mantle validates that the sidecar carries lowercase BLAKE3 identities, that observed/expected identities agree, and that the reported tool version is the pinned `0.42.1`. Observed/expected equality is an internal-consistency check, not authentication of the producer or proof that the pinned executable ran. An evidence producer that needs that stronger attribution must copy the expected binary digest from the checked `ast-grep-toolchain.json` record and bind the run through its authenticated execution receipt. Scan runners select an explicit `--json=compact|pretty|stream` mode; rule-test runners use `--color never`. Mantle does not invent repository rule semantics.
 
 ## Functional core and shell
 
 `crunch-release-core` parses, bounds, canonicalizes, and validates already-loaded sidecar DTOs. It has no process, filesystem, environment, clock, or network access. Canonical sidecar identity is BLAKE3 over compact canonical JSON with sorted claim labels and non-claims.
 
-The root-package shell adapter owns filesystem metadata checks, bounded reads, UTF-8 decoding, and the raw sidecar-file BLAKE3. Mantle does not automatically invoke ast-grep. Repository-owned runners invoke `ast-grep scan` or `ast-grep test`, capture raw output, and write the sidecar.
+The root-package shell adapter owns capability-confined no-follow file opens, post-open type/size checks, bounded reads, UTF-8 decoding, and the raw sidecar-file BLAKE3. Final-component and parent-directory symlinks are rejected before sidecar bytes are read. Mantle does not automatically invoke ast-grep. Repository-owned runners invoke `ast-grep scan` or `ast-grep test`, capture raw output, and write the sidecar.
 
 ## Build-report evidence
 

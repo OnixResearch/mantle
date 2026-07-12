@@ -1,5 +1,5 @@
-use std::fs;
 use std::io::ErrorKind;
+use std::io::Read;
 use std::path::Path;
 
 use crunch_release_core::AstGrepReleaseAttachment;
@@ -8,6 +8,10 @@ use crunch_release_core::ReleaseEvidenceError;
 use crunch_release_core::ast_grep_structural_evidence_digest_blake3;
 use crunch_release_core::parse_ast_grep_structural_evidence_json;
 use crunch_release_core::validate_ast_grep_release_attachment;
+
+use crate::release_capability::ReleaseCapabilityRoot;
+use crate::release_capability::ReleaseRootKind;
+use crate::release_capability::ValidatedReleasePath;
 
 pub(crate) const AST_GREP_EVIDENCE_RELATIVE_PATH: &str = "share/mantle/ast-grep-structural-evidence.json";
 
@@ -94,35 +98,60 @@ pub(crate) fn validate_ast_grep_release_attachment_file(
 }
 
 fn read_bounded_sidecar_bytes(path: &Path) -> Result<Option<Vec<u8>>, AstGrepEvidenceRead> {
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(error) => {
-            return Err(invalid(
-                BLOCKER_READ,
-                format!("reading ast-grep structural evidence metadata at {}: {error}", path.display()),
-            ));
-        }
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+        return Err(invalid(
+            BLOCKER_READ,
+            format!("ast-grep structural evidence path has no UTF-8 file name: {}", path.display()),
+        ));
     };
+    let relative_path = ValidatedReleasePath::new(file_name).map_err(|error| {
+        invalid(
+            BLOCKER_READ,
+            format!("validating ast-grep structural evidence file name at {}: {error:?}", path.display()),
+        )
+    })?;
+    let root = match ReleaseCapabilityRoot::open_ambient_nofollow(ReleaseRootKind::BuildArtifact, parent) {
+        Ok(root) => root,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(sidecar_read_error(path, "opening parent capability", error)),
+    };
+    let mut file = match root.open_file_read_nofollow(&relative_path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(sidecar_read_error(path, "opening no-follow file", error)),
+    };
+    let metadata = file.metadata().map_err(|error| sidecar_read_error(path, "reading opened-file metadata", error))?;
     if !metadata.is_file() {
         return Err(invalid(
             BLOCKER_READ,
-            format!("ast-grep structural evidence path is not a file: {}", path.display()),
+            format!("ast-grep structural evidence path is not a regular file: {}", path.display()),
         ));
     }
     if metadata.len() > MAX_AST_GREP_SIDECAR_BYTES {
         return Err(sidecar_too_large(path, metadata.len()));
     }
-    let bytes = fs::read(path).map_err(|error| {
-        invalid(BLOCKER_READ, format!("reading ast-grep structural evidence at {}: {error}", path.display()))
+    let read_limit = MAX_AST_GREP_SIDECAR_BYTES.checked_add(1).ok_or_else(|| {
+        invalid(BLOCKER_TOO_LARGE, "ast-grep structural evidence read limit overflowed u64".to_string())
     })?;
+    let mut bytes = Vec::new();
+    file.by_ref()
+        .take(read_limit)
+        .read_to_end(&mut bytes)
+        .map_err(|error| sidecar_read_error(path, "reading opened file", error))?;
     let byte_count = u64::try_from(bytes.len()).map_err(|_| {
         invalid(BLOCKER_TOO_LARGE, "ast-grep structural evidence byte count overflowed u64".to_string())
     })?;
     if byte_count > MAX_AST_GREP_SIDECAR_BYTES {
         return Err(sidecar_too_large(path, byte_count));
     }
+    debug_assert!(byte_count <= MAX_AST_GREP_SIDECAR_BYTES);
+    debug_assert!(metadata.is_file());
     Ok(Some(bytes))
+}
+
+fn sidecar_read_error(path: &Path, operation: &str, error: std::io::Error) -> AstGrepEvidenceRead {
+    invalid(BLOCKER_READ, format!("{operation} for ast-grep structural evidence at {}: {error}", path.display()))
 }
 
 fn sidecar_too_large(path: &Path, byte_count: u64) -> AstGrepEvidenceRead {
@@ -149,6 +178,8 @@ fn invalid(blocker_class: &'static str, message: String) -> AstGrepEvidenceRead 
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use crunch_release_core::AST_GREP_EXTERNAL_EVIDENCE_ROLE;
     use crunch_release_core::AST_GREP_NON_CLAIM_BUILD_CORRECTNESS;
     use crunch_release_core::AST_GREP_NON_CLAIM_CACHE_CORRECTNESS;
@@ -223,6 +254,45 @@ mod tests {
         assert_eq!(blocker_class, BLOCKER_TOO_LARGE);
         assert!(message.contains("limit"));
         assert!(message.contains(&MAX_AST_GREP_SIDECAR_BYTES.to_string()));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn shell_rejects_final_component_symlink_without_reading_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("outside.json");
+        let path = temp.path().join("evidence.json");
+        fs::write(&target, POSITIVE_SCAN_BYTES).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+
+        let read = read_ast_grep_evidence(&path);
+        let AstGrepEvidenceRead::Invalid { blocker_class, message } = read else {
+            panic!("final-component symlink should fail");
+        };
+
+        assert_eq!(blocker_class, BLOCKER_READ);
+        assert!(message.contains("opening no-follow file"));
+        assert!(!message.contains("structural-tool-evidence-only"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn shell_rejects_symlinked_parent_without_reading_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let outside = temp.path().join("outside");
+        let linked_parent = temp.path().join("linked-parent");
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("evidence.json"), POSITIVE_SCAN_BYTES).unwrap();
+        std::os::unix::fs::symlink(&outside, &linked_parent).unwrap();
+
+        let read = read_ast_grep_evidence(&linked_parent.join("evidence.json"));
+        let AstGrepEvidenceRead::Invalid { blocker_class, message } = read else {
+            panic!("symlinked parent should fail");
+        };
+
+        assert_eq!(blocker_class, BLOCKER_READ);
+        assert!(message.contains("opening parent capability"));
+        assert!(!message.contains("structural-tool-evidence-only"));
     }
 
     #[test]

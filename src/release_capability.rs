@@ -5,8 +5,14 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use cap_fs_ext::DirExt;
+use cap_fs_ext::FollowSymlinks;
+use cap_fs_ext::OpenOptionsFollowExt;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
+use cap_std::fs::File;
+use cap_std::fs::OpenOptions;
+#[cfg(unix)]
+use cap_std::fs::OpenOptionsExt;
 
 const MAX_RELEASE_RELATIVE_PATH_BYTES: usize = 4_096;
 const MAX_RELEASE_PATH_COMPONENTS: usize = 128;
@@ -93,6 +99,17 @@ impl ReleaseCapabilityRoot {
 
     pub(crate) fn read(&self, path: &ValidatedReleasePath) -> io::Result<Vec<u8>> {
         self.dir.read(path.as_str())
+    }
+
+    pub(crate) fn open_file_read_nofollow(&self, path: &ValidatedReleasePath) -> io::Result<File> {
+        let mut options = OpenOptions::new();
+        options.read(true);
+        options.follow(FollowSymlinks::No);
+        #[cfg(unix)]
+        options.custom_flags(libc::O_CLOEXEC | libc::O_NONBLOCK);
+        debug_assert!(!path.as_str().is_empty());
+        debug_assert!(!Path::new(path.as_str()).is_absolute());
+        self.dir.open_with(path.as_str(), &options)
     }
 
     pub(crate) fn write(&self, path: &ValidatedReleasePath, bytes: &[u8]) -> io::Result<()> {

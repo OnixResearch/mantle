@@ -409,8 +409,9 @@
 // packaged executable BLAKE3 and checks the reported package/version identity.
 //
 // r[impl mantle.ast_grep_structural_rails.shell_boundary]
-// Filesystem reads and raw sidecar hashing live in `src/ast_grep_evidence.rs`;
-// the no-std validator lives in `crates/crunch-release-core/src/ast_grep.rs`.
+// Capability-confined no-follow reads and raw sidecar hashing live in
+// `src/ast_grep_evidence.rs`; the no-std validator lives in
+// `crates/crunch-release-core/src/ast_grep.rs`.
 // Mantle does not automatically invoke ast-grep.
 //
 // r[verify mantle.ast_grep_structural_rails.shell_boundary]
