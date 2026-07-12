@@ -1,6 +1,6 @@
 # Resumable remote transfer
 
-Mantle's resumable data plane transfers existing castore blobs/directories, NARs, source bundles, PathInfo records, attestations, and delta blobs/chunks. It does not introduce another CAS or replace output admission.
+Mantle contains a bounded resumable-transfer core and standalone shell for existing castore blobs/directories, NARs, source bundles, PathInfo records, attestations, and delta blobs/chunks. It does not introduce another CAS or replace output admission. This shell is not yet wired into the production remote client/server protocol.
 
 ## Policy
 
@@ -28,9 +28,9 @@ A per-session exclusive lock rejects concurrent writers before progress. On reco
 
 Bounded control DTOs carry manifests, demand, acknowledgement, checkpoint, and completion state. `mantle-remote-transfer-data-frame-v1` carries one credit-reserved chunk over any `Read`/`Write` transport such as stdio or a socket. The receiver validates the bounded header and reserves credit before allocating the payload buffer.
 
-The production streaming report can only be constructed from a completed runtime transfer report. Negotiating a `streaming` capability label alone is not implementation evidence. Legacy whole-NAR/PathInfo frames remain compatibility fallback only and cannot produce a streaming report.
+A streaming report can only be constructed from a completed standalone runtime transfer report. Negotiating a `streaming` capability label alone is not implementation evidence. The production remote path still carries whole NAR/PathInfo payloads in `RemoteOutputTransferArtifact::payload`; those frames are not yet confined to a compatibility-only capability.
 
-Delta failure falls back to full NAR with stable reasons (`delta-transfer-failed`, `delta-unavailable`, or `full-nar-unavailable`). Both paths still verify ordinary digests and require ordinary PathInfo/output admission.
+The standalone shell models delta failure falling back to full NAR with stable reasons (`delta-transfer-failed`, `delta-unavailable`, or `full-nar-unavailable`). Production composition of that streaming fallback with ordinary PathInfo/output admission remains incomplete.
 
 ## Completion semantics
 
@@ -43,4 +43,4 @@ Transfer reports always set `output_admission_claimed` to false. Signed PathInfo
 
 ## Validation boundary
 
-Focused tests cover multi-chunk upload and download interruption, process restart, no-resend resume, receiver preseed cutoff, socket framing, stale/expired state, tampering, policy limits, castore/NAR/source/PathInfo/attestation/delta adapters, and delta-to-full fallback. Kani source harnesses cover the pure transfer core; Kani execution remains unclaimed when `cargo-kani` is unavailable.
+Focused tests cover the standalone shell's multi-chunk upload and download interruption, process restart, no-resend resume, receiver preseed cutoff, socket framing helpers, stale/expired state, tampering, policy limits, castore/NAR/source/PathInfo/attestation/delta adapters, and delta-to-full fallback. They do not exercise the production `run_stdio_remote_child` / `cmd_remote_serve` payload path. Kani source harnesses cover the pure transfer core; Kani execution remains unclaimed when `cargo-kani` is unavailable.

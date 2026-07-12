@@ -55,7 +55,9 @@ The final tasks receipt reported `"issues": []`, `"valid": true`, and `"verdict"
 
 ## Completion boundary
 
-This packet proves the focused transfer/store/delta/remote-build behavior, bounded multi-process 8 MiB output rail, formatting, diff hygiene, typed Nickel policy, and current Cairn validation/gates. It does not sync or archive the change, push commits, claim Kani execution, or collapse transfer completion into output admission.
+This packet proves the focused transfer core/shell, store, delta, existing remote-build behavior, bounded child-process 8 MiB shell rail, formatting, diff hygiene, typed Nickel policy, and current Cairn validation/gates. It does not sync or archive the change, push commits, claim Kani execution, or collapse transfer completion into output admission.
+
+A post-integration adversarial call-graph audit found that this packet does **not** satisfy `r[verification_evidence.production_transfer_completion_claim]`: the 8 MiB child-process rail calls `execute_prepared_remote_transfer` directly, while production `src/remote_build.rs` continues to emit and consume `RemoteOutputTransferArtifact { payload: Vec<u8> }` through `OutputTransferArtifact` frames. Searches for `execute_prepared_remote_transfer`, `write_remote_transfer_data_chunk`, and `receive_remote_transfer_data_chunk` found no production remote client/server caller. Production streaming/resume therefore remains incomplete and unproven; the production replacement, production fallback/admission composition, production interruption test, and final completion task are unchecked.
 
 ## Post-completion Cairn packet
 
