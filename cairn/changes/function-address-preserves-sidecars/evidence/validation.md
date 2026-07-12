@@ -73,3 +73,9 @@ Broad Tiger Style and aggregate Cairn readiness are not claimed as passing repos
 ## Lifecycle gates
 
 Pueue task `114` ran repository validation and proposal, design, and tasks gates serially with the generated Mantle policy. Validation reported 10 active changes, 37 validated specs, no issues, and `valid: true`. All three gates returned no issues, `valid: true`, and `verdict: PASS` under policy hash `d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c`.
+
+## Accepted-spec synchronization
+
+Pueue task `171` dry-ran and executed Cairn sync with no blockers. The execute receipt claimed mutation, but its before and after accepted-spec content hashes were both `30200e8bbcfb1ce907a6953575d052601f5cecbeb9e912b926402911f352d901`, and the new requirement IDs were absent. The reviewed delta requirement suffix was therefore appended manually to `cairn/specs/release-provenance/spec.md`.
+
+Pueue task `178` compared the accepted suffix byte-for-byte with the reviewed delta: `2714` bytes, BLAKE3 `18b83810a1a80d3b52860d0817e64cdb57cd4bc707b2c0cde741d2988952df18`. Pueue task `181` then reran validation and all three gates; validation remained `valid: true` with 10 active changes and 37 specs, and proposal/design/tasks remained `PASS` with no issues.
