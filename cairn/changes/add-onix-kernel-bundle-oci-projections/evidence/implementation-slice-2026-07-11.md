@@ -109,8 +109,40 @@ $ nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-main-registry-target cargo che
 (exit 0)
 ```
 
-The package remains unsynced and unarchived only until the final current-tree
-Cairn validation and proposal/design/tasks gates are recorded below.
+## Final current-tree lifecycle review
+
+```text
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 14,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 39,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal add-onix-kernel-bundle-oci-projections --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=ee435ad3f753a35a5fc007f48e2b5f0e9960fae01da3a388df2a1adcfe80fe4e
+receipt_hash=f7ee3f06665ca4c709f0a7a651743d5da40f33659a528e3a005a75bd38f8a05d
+issues=[] valid=true verdict=PASS
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design add-onix-kernel-bundle-oci-projections --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=e9f2fd1ee22b00eaa1d8adfe0e41d21b28e6b109e1923c78d2899ed798a71a45
+receipt_hash=cd61ebbd4f0372e789956b238f8a9b674945a04ec87dd839057137c345b70062
+issues=[] valid=true verdict=PASS
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks add-onix-kernel-bundle-oci-projections --root . --policy cairn-policy/generated/cairn-policy.json
+input_hash=5c477973d2cc472fd3de51fc6f25d7385345008b71c440b6f80d3155163e5054
+receipt_hash=8e864e6283f14965e6f07a040786513dcb58fd0169a3221a8da8321d8cafaf21
+issues=[] valid=true verdict=PASS
+```
+
+All tasks are now checked. Sync and archive remain separate recorded lifecycle
+mutations and do not strengthen the bounded implementation claim.
+
 ## Claim boundary
 
 This evidence proves the bounded local projection and import/export behavior

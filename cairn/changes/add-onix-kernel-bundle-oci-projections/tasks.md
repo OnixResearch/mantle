@@ -26,4 +26,4 @@
 
 - [x] [parallel] Document CLI use, local-layout scope, canonical archive profile, Onix/Mantle ownership, digest roles, KBI preservation, external import states, and registry non-goals. r[kernel_bundle_oci.reports]
 - [x] [serial] Run focused pure-core, artifact CLI, CAS, schema/contract, round-trip, dependency-audit, formatting, clippy, and first-party tests. r[kernel_bundle_oci.verification]
-- [ ] [serial] Run Cairn validation and proposal/design/tasks gates; sync and archive only after cross-repo round-trip and positive/negative evidence are recorded. r[kernel_bundle_oci.verification]
+- [x] [serial] Run Cairn validation and proposal/design/tasks gates; sync and archive only after cross-repo round-trip and positive/negative evidence are recorded. r[kernel_bundle_oci.verification]
