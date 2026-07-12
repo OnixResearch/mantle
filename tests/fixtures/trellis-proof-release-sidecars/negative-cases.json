@@ -60,6 +60,10 @@
     "expected": "binding.profile_version must be kamacite.trellis-proof-evidence-profile.v1"
   },
   {
+    "name": "duplicate-json-projection",
+    "expected": "permits at most one Trellis JSON projection"
+  },
+  {
     "name": "unauthorized-property-promotion",
     "expected": "binding.profile_roles.validation_role must be recorded_only"
   },

@@ -35,6 +35,8 @@ use crate::opaque_evidence::OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS;
 #[cfg(test)]
 use crate::opaque_evidence::OPAQUE_EVIDENCE_KIND_LIFECYCLE;
 #[cfg(test)]
+use crate::opaque_evidence::OPAQUE_EVIDENCE_KIND_PROOF;
+#[cfg(test)]
 use crate::opaque_evidence::OPAQUE_EVIDENCE_POLICY_KIND_MANTLE_RELEASE;
 #[cfg(test)]
 use crate::opaque_evidence::OPAQUE_EVIDENCE_POLICY_KIND_UPSTREAM_PROFILE;
@@ -3460,6 +3462,26 @@ mod tests {
     }
 
     #[test]
+    fn validate_keeps_non_trellis_proof_profiles_on_the_generic_contract() {
+        let mut manifest = sample_lifecycle_opaque_binding_manifest();
+        let mut binding = manifest.opaque_evidence_sidecar_bindings[0].binding.clone();
+        binding.evidence_kind = OPAQUE_EVIDENCE_KIND_PROOF.to_string();
+        binding.profile_version = "generic-proof-evidence-v1".to_string();
+        binding.claim_scope = OPAQUE_EVIDENCE_GENERIC_CLAIM_SCOPE.to_string();
+        manifest.opaque_evidence_sidecar_bindings =
+            vec![opaque_evidence_sidecar_binding_receipt(binding).expect("generic proof profile remains valid")];
+
+        let canonical = canonical_release_evidence_manifest(manifest).expect("canonical generic proof manifest");
+
+        assert!(!canonical.is_empty());
+        assert!(
+            String::from_utf8(canonical)
+                .expect("canonical manifest is UTF-8")
+                .contains("generic-proof-evidence-v1")
+        );
+    }
+
+    #[test]
     fn validate_accepts_multiple_profiles_for_same_non_function_kind() {
         let mut manifest = sample_lifecycle_opaque_binding_manifest();
         let mut second_binding = manifest.opaque_evidence_sidecar_bindings[0].binding.clone();
@@ -4188,7 +4210,17 @@ mod tests {
             "overclaiming-text" => binding.non_claims.push("Mantle proves release eligibility".to_string()),
             "wrong-upstream-role" => binding.upstream_validation.role = "octet".to_string(),
             "wrong-canonical-schema" => binding.canonical_envelope.schema = "trellis.proof.v0".to_string(),
-            "unsupported-proof-profile" => binding.profile_version = "trellis-proof-v0".to_string(),
+            "unsupported-proof-profile" => {
+                binding.profile_version = "kamacite.trellis-proof-evidence-profile.v2".to_string();
+            }
+            "duplicate-json-projection" => {
+                let duplicate = binding
+                    .compatibility_projections
+                    .first()
+                    .expect("Trellis fixture has one compatibility projection")
+                    .clone();
+                binding.compatibility_projections.push(duplicate);
+            }
             "unauthorized-property-promotion" => {
                 binding.profile_roles.as_mut().expect("fixture roles").validation_role = "property".to_string();
             }

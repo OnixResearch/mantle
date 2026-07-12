@@ -53,6 +53,7 @@ pub const FUNCTION_ADDRESS_DISPOSITION_INVALID: &str = "invalid";
 pub const FUNCTION_ADDRESS_OPAQUE_BOUNDARY: &str = "Mantle validates bundle-local function-address evidence path, digest, role, schema, claim scope, source archive identity, binary identity, and non-claims only; Octet owns Rust extraction, Kamacite owns portable receipts, and Valence owns evidence semantics";
 
 pub const TRELLIS_PROOF_PROFILE_VERSION: &str = "kamacite.trellis-proof-evidence-profile.v1";
+const TRELLIS_PROOF_PROFILE_FAMILY_PREFIX: &str = "kamacite.trellis-proof-evidence-profile.";
 pub const TRELLIS_PROOF_CLAIM_SCOPE: &str = "trellis-proof-identity-linkage-only";
 pub const KAMACITE_TRELLIS_PROOF_PRESERVES_ROLE: &str = "kamacite-trellis-proof-preserves-envelope";
 pub const KAMACITE_TRELLIS_PROOF_PRESERVES_SCHEMA: &str = "kamacite.trellis-proof-evidence-profile.v1";
@@ -398,7 +399,7 @@ fn validate_evidence_kind_and_profile(binding: &OpaqueEvidenceSidecarBinding, di
     if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS {
         validate_function_address_profile(binding, diagnostics);
     }
-    if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_PROOF {
+    if is_trellis_proof_profile(binding) {
         validate_trellis_proof_profile(binding, diagnostics);
     }
     debug_assert!(evidence_kind_is_supported(&binding.evidence_kind));
@@ -718,10 +719,16 @@ fn expected_claim_scope(binding: &OpaqueEvidenceSidecarBinding) -> &'static str 
     if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_FUNCTION_ADDRESS {
         return FUNCTION_ADDRESS_CLAIM_SCOPE;
     }
-    if binding.evidence_kind == OPAQUE_EVIDENCE_KIND_PROOF {
+    if is_trellis_proof_profile(binding) {
         return TRELLIS_PROOF_CLAIM_SCOPE;
     }
     OPAQUE_EVIDENCE_GENERIC_CLAIM_SCOPE
+}
+
+fn is_trellis_proof_profile(binding: &OpaqueEvidenceSidecarBinding) -> bool {
+    let is_proof = binding.evidence_kind == OPAQUE_EVIDENCE_KIND_PROOF;
+    let is_trellis_family = binding.profile_version.starts_with(TRELLIS_PROOF_PROFILE_FAMILY_PREFIX);
+    is_proof && is_trellis_family
 }
 
 fn validate_canonical_envelope_link(link: &OpaqueEvidenceCanonicalEnvelopeLink, diagnostics: &mut Vec<String>) {

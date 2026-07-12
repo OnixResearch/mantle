@@ -11,7 +11,7 @@ The core receives typed observations and never parses Verus source, proof IR, ve
 ## Authority inspected
 
 - Kamacite revision: `de710a092d351e829abfb288d46124e2db8e5b7f`
-  - `crates/kamacite-core/src/trellis_proof.rs`: exact canonical schema/projection identities and only `recorded-only` / `formal-proof-candidate` producer roles.
+  - `crates/kamacite-core/src/proof_evidence.rs`: exact canonical schema/projection identities and only `recorded-only` / `formal-proof-candidate` producer roles.
   - `cairn/specs/stack-integration/spec.md`: Kamacite preserves candidate metadata but must not claim downstream proof acceptance.
 - Valence revision: `7a027529dd4b7057cf52e86dc5b258f2a9541545`
   - `crates/valence-core/src/stack_role_registry.rs`: shipped verification roles are `property`, `recorded_only`, `boundary`, and `manual_review`.
@@ -114,3 +114,11 @@ The command sequence completed successfully. The final tasks receipt reported:
 ```
 
 The active change is intentionally not ready to archive: the accepted-proof positive and upstream stack-smoke tasks remain unchecked with the exact Valence blocker recorded above.
+
+## Integration hardening
+
+An adversarial VibeThinker review challenged proof-kind dispatch as a possible generic-profile hijack. The integrated implementation now dispatches Trellis validation and claim scope only for the closed `kamacite.trellis-proof-evidence-profile.*` family, rejects an unsupported family version instead of treating it as generic, and preserves unrelated generic `proof` profiles on the generic opaque contract. The negative matrix now also rejects duplicate JSON projections.
+
+Pueue task `497` ran the hardened Trellis-focused tests: 6 passed, 0 failed. Pueue task `506` ran the complete release core and strict core Clippy: 185 tests passed, 0 failed, and Clippy completed with `-D warnings`. The chained Nix-shell wasm leg could not find that shell's wasm target and is not success evidence. Pueue task `513` reran the no-std check with the installed nightly wasm target and cleared wrappers; `cargo check -p crunch-release-core --target wasm32-unknown-unknown` completed successfully.
+
+Pueue task `519` ran repository validation and proposal, design, and tasks gates with `cairn-policy/generated/cairn-policy.json`. Validation reported 9 active changes, 36 specs, no issues, and `valid: true`; all three gates reported no issues, `valid: true`, and `verdict: PASS` under policy hash `d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c`.
