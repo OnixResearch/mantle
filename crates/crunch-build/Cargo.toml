@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
+
 [dependencies]
 async-trait = "0.1"
 crunch-attestation = { path = "../crunch-attestation" }
@@ -43,6 +46,7 @@ gix = { version = "0.81.0", features = ["blocking-http-transport-reqwest-rust-tl
 crunch-attestation = { path = "../crunch-attestation" }
 crunch-glue = { path = "../crunch-glue" }
 pretty_assertions = "1.0"
+proptest = "1.11"
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }
 zstd = "0.13"

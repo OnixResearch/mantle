@@ -422,3 +422,24 @@
 // Verified by positive and negative fixture tests, focused build-report and
 // release-attachment tests, the package identity smoke, and Cairn lifecycle
 // validation/gates recorded for the active change.
+// Durable remote-attempt fencing bridge.
+//
+// r[impl remote_builds.durable_attempt_fencing]
+// r[verify remote_builds.durable_attempt_fencing]
+// The pure identity/fence model lives in
+// `crates/crunch-build/src/distributed/remote_attempt.rs`; the durable shell is
+// in `src/remote_build.rs`. Focused coordinator tests cover persistence-before-
+// exposure, fail-closed legacy migration, restart/reassignment, and stale report
+// rejection across start, log, transfer, result, failure, and completion events.
+//
+// r[impl remote_builds.idempotent_attempt_reporting]
+// r[verify remote_builds.idempotent_attempt_reporting]
+// Canonical BLAKE3 payload digests and bounded event retention are implemented
+// in the pure attempt core. Coordinator tests verify identical redelivery leaves
+// durable bytes unchanged and conflicting event reuse changes no mutable surface.
+//
+// r[impl remote_builds.pure_attempt_decisions]
+// r[verify remote_builds.pure_attempt_decisions]
+// Authorization, retry, transition, idempotency, and fence decisions consume
+// immutable facts in the `crunch-build` core. Table, proptest, and Kani harnesses
+// cover deterministic decisions, monotonic fences, and terminal-state closure.

@@ -14,6 +14,25 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+pub use crunch_build::distributed::RemoteAttemptApplyDisposition;
+pub use crunch_build::distributed::RemoteAttemptAuthorizationFacts;
+pub use crunch_build::distributed::RemoteAttemptFailureClass;
+pub use crunch_build::distributed::RemoteAttemptId;
+pub use crunch_build::distributed::RemoteAttemptPhase;
+pub use crunch_build::distributed::RemoteAttemptReasonCode;
+pub use crunch_build::distributed::RemoteAttemptReport;
+pub use crunch_build::distributed::RemoteAttemptReportPayload;
+pub use crunch_build::distributed::RemoteAttemptRetryPolicy;
+pub use crunch_build::distributed::RemoteAttemptState;
+pub use crunch_build::distributed::RemoteAttemptTimeFacts;
+pub use crunch_build::distributed::RemoteEventId;
+pub use crunch_build::distributed::RemoteFenceGeneration;
+pub use crunch_build::distributed::RemoteJobId;
+pub use crunch_build::distributed::RemotePayloadDigest;
+use crunch_build::distributed::decide_remote_attempt_retry;
+use crunch_build::distributed::derive_remote_attempt_id;
+use crunch_build::distributed::plan_remote_attempt_assignment;
+use crunch_build::distributed::plan_remote_attempt_report;
 use nix_compat::store_path::StorePath;
 use serde::Deserialize;
 use serde::Serialize;
@@ -78,6 +97,7 @@ const MAX_REMOTE_LOG_BYTES: u64 = 1_048_576;
 const MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES: usize = 512;
 const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
+const LEGACY_MISSING_ATTEMPT_ID: &str = "legacy-missing-attempt-id";
 const REMOTE_CHILD_POLL_INTERVAL_MS: u64 = 10;
 const SSH_STDIO_FIXED_ARG_COUNT: usize = 2;
 const REMOTE_UPLOAD_PROOF_PREFIX: &str = "proof:";
@@ -959,11 +979,23 @@ impl RemoteCoordinatorJobPhase {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteWorkerResumeSummary {
-    pub job_id: String,
+    pub job_id: RemoteJobId,
+    #[serde(default = "legacy_missing_attempt_id")]
+    pub attempt_id: RemoteAttemptId,
+    #[serde(default = "legacy_missing_fence_generation")]
+    pub fence_generation: RemoteFenceGeneration,
     pub normalized_build_key: String,
     pub phase: RemoteCoordinatorJobPhase,
     pub result_available: bool,
     pub log_next_cursor: u64,
+}
+
+fn legacy_missing_attempt_id() -> RemoteAttemptId {
+    RemoteAttemptId::new(LEGACY_MISSING_ATTEMPT_ID).expect("legacy attempt sentinel is a bounded identity")
+}
+
+fn legacy_missing_fence_generation() -> RemoteFenceGeneration {
+    RemoteFenceGeneration::INITIAL
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -994,7 +1026,7 @@ pub struct RemoteCoordinatorBuildRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteCoordinatorJobSummary {
-    pub job_id: String,
+    pub job_id: RemoteJobId,
     pub normalized_build_key: String,
     pub assigned_worker_endpoint_id: Option<String>,
     pub phase: RemoteCoordinatorJobPhase,
@@ -1004,17 +1036,44 @@ pub struct RemoteCoordinatorJobSummary {
     pub log_start_cursor: u64,
     pub log_next_cursor: u64,
     pub short_error: Option<String>,
+    #[serde(default)]
+    pub current_attempt: Option<RemoteAttemptState>,
+    #[serde(default)]
+    pub transfer_checkpoint: Option<u64>,
+    #[serde(default)]
+    pub transferred_bytes: u64,
+    #[serde(default)]
+    pub output_admission_completed: bool,
+    #[serde(default)]
+    pub last_attempt_reason_code: Option<RemoteAttemptReasonCode>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteCoordinatorState {
     pub workers: BTreeMap<String, RemoteWorkerRegistration>,
-    pub jobs: BTreeMap<String, RemoteCoordinatorJobSummary>,
+    pub jobs: BTreeMap<RemoteJobId, RemoteCoordinatorJobSummary>,
     pub live_output_claims: BTreeMap<String, String>,
-    pub logs: BTreeMap<String, Vec<RemoteCoordinatorLogChunk>>,
+    pub logs: BTreeMap<RemoteJobId, Vec<RemoteCoordinatorLogChunk>>,
     /// When set, mutations auto-save to this directory for durability.
     #[serde(skip)]
     pub state_dir: Option<PathBuf>,
+    #[serde(skip)]
+    allow_volatile_test_state: bool,
+}
+
+// The test-only volatile flag intentionally differs from the derived non-test default.
+#[allow(clippy::derivable_impls)]
+impl Default for RemoteCoordinatorState {
+    fn default() -> Self {
+        Self {
+            workers: BTreeMap::new(),
+            jobs: BTreeMap::new(),
+            live_output_claims: BTreeMap::new(),
+            logs: BTreeMap::new(),
+            state_dir: None,
+            allow_volatile_test_state: cfg!(test),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1022,15 +1081,17 @@ pub struct RemoteCoordinatorState {
 pub enum RemoteCoordinatorDispatchDecision {
     Dispatch {
         worker_endpoint_id: String,
-        job_id: String,
+        job_id: RemoteJobId,
+        attempt_id: RemoteAttemptId,
+        fence_generation: RemoteFenceGeneration,
         normalized_build_key: String,
     },
     AttachExisting {
-        job_id: String,
+        job_id: RemoteJobId,
         normalized_build_key: String,
     },
     RedeliverResult {
-        job_id: String,
+        job_id: RemoteJobId,
         normalized_build_key: String,
     },
     Pending {
@@ -1042,9 +1103,31 @@ pub enum RemoteCoordinatorDispatchDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteCoordinatorAttemptApplyResult {
+    pub disposition: RemoteAttemptApplyDisposition,
+    pub reason_code: RemoteAttemptReasonCode,
+    pub output_admission_allowed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteFencedOutputAdmissionDecision {
+    NoAdmission {
+        attempt: RemoteCoordinatorAttemptApplyResult,
+    },
+    Admit {
+        attempt: RemoteCoordinatorAttemptApplyResult,
+        admission: Box<RemoteOutputAdmissionReport>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteCoordinatorLogChunk {
     pub cursor: u64,
     pub bytes: String,
+    #[serde(default)]
+    pub event_id: Option<RemoteEventId>,
+    #[serde(default)]
+    pub payload_digest: Option<RemotePayloadDigest>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1073,11 +1156,15 @@ pub struct RemoteLogReplayPlan {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteCoordinatorJobStatus {
-    pub job_id: String,
+    pub job_id: RemoteJobId,
     pub phase: RemoteCoordinatorJobPhase,
     pub worker_endpoint_id: Option<String>,
     pub short_error: Option<String>,
     pub log_bytes_retained: u64,
+    pub attempt_id: Option<RemoteAttemptId>,
+    pub fence_generation: Option<RemoteFenceGeneration>,
+    pub attempt_phase: Option<RemoteAttemptPhase>,
+    pub attempt_reason_code: Option<RemoteAttemptReasonCode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1095,16 +1182,17 @@ pub struct RemoteWorkerStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RemoteFailureStatus {
-    pub job_id: String,
+    pub job_id: RemoteJobId,
     pub phase: RemoteCoordinatorJobPhase,
     pub lost_phase: Option<RemoteFailurePhase>,
     pub retry_class: RemoteRetryClass,
     pub short_error: Option<String>,
+    pub attempt_reason_code: Option<RemoteAttemptReasonCode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RemoteLogCursorStatus {
-    pub job_id: String,
+    pub job_id: RemoteJobId,
     pub start_cursor: u64,
     pub next_cursor: u64,
     pub retained_bytes: u64,
@@ -1121,6 +1209,7 @@ pub struct RemoteCoordinatorStatusSnapshot {
     pub recent_jobs: Vec<RemoteCoordinatorJobStatus>,
     pub recent_failures: Vec<RemoteFailureStatus>,
     pub log_cursors: Vec<RemoteLogCursorStatus>,
+    pub attempt_reason_codes: Vec<RemoteAttemptReasonCode>,
     pub tickets: Vec<RemoteTicketView>,
 }
 
@@ -1136,6 +1225,7 @@ pub struct RemoteBuildObservabilityReport {
     pub selected_route: String,
     pub rejected_route_reasons: Vec<String>,
     pub endpoint_id: Option<String>,
+    pub attempt_reason_codes: Vec<String>,
     pub upload_summary: RemoteInputUploadPrivacySummary,
     pub transfer: RemoteTransferReport,
     pub trust_basis: RemoteOutputTrustBasis,
@@ -2033,6 +2123,7 @@ pub fn remote_build_observability_report(
     selected_route: &str,
     rejected_route_reasons: &[String],
     endpoint_id: Option<&str>,
+    attempt_reason_codes: &[RemoteAttemptReasonCode],
     upload_summary: RemoteInputUploadPrivacySummary,
     admission: &RemoteOutputAdmissionReport,
     import_report: &RemoteOutputImportReport,
@@ -2060,6 +2151,11 @@ pub fn remote_build_observability_report(
         selected_route: selected_route.to_string(),
         rejected_route_reasons: rejected_route_reasons.iter().map(|reason| bounded_untrusted_text(reason)).collect(),
         endpoint_id: endpoint_id.map(bounded_untrusted_text),
+        attempt_reason_codes: attempt_reason_codes
+            .iter()
+            .take(MAX_REMOTE_STATUS_ITEMS)
+            .map(|reason| reason.as_str().to_string())
+            .collect(),
         upload_summary,
         transfer: import_report.transfer.clone(),
         trust_basis: admission.trust_basis.clone(),
@@ -2090,6 +2186,7 @@ pub fn remote_operator_e2e_rail_report(
         &selected_route,
         &rejected_route_reasons,
         Some(&status.endpoint_id),
+        &status.attempt_reason_codes,
         upload_summary.clone(),
         admission,
         import_report,
@@ -3069,8 +3166,15 @@ pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> 
 }
 
 fn validate_worker_resume_summary(summary: &RemoteWorkerResumeSummary) -> Result<(), String> {
-    if summary.job_id.is_empty() || summary.normalized_build_key.is_empty() {
+    if summary.job_id.as_str().is_empty()
+        || summary.attempt_id.as_str().is_empty()
+        || summary.attempt_id.as_str() == LEGACY_MISSING_ATTEMPT_ID
+        || summary.normalized_build_key.is_empty()
+    {
         return Err("remote-worker-resume-identity-empty".to_string());
+    }
+    if summary.fence_generation.get() == 0 {
+        return Err(RemoteAttemptReasonCode::FenceInvalid.as_str().to_string());
     }
     if !is_blake3_hex_digest(&summary.normalized_build_key) {
         return Err("remote-worker-resume-key-invalid".to_string());
@@ -3181,64 +3285,57 @@ fn hash_expected_outputs_for_key(hasher: &mut blake3::Hasher, outputs: &[RemoteE
 pub fn apply_worker_registration(
     state: &mut RemoteCoordinatorState,
     registration: RemoteWorkerRegistration,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<RemoteJobId>, String> {
     validate_worker_registration(&registration)?;
-    let adopted = adopt_worker_resume_summaries(state, &registration)?;
-    state.workers.insert(registration.endpoint_id.clone(), registration);
+    let adopted = validate_worker_resume_summaries(state, &registration)?;
+    let mut candidate = state.clone();
+    candidate.workers.insert(registration.endpoint_id.clone(), registration);
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
     Ok(adopted)
 }
 
-fn adopt_worker_resume_summaries(
-    state: &mut RemoteCoordinatorState,
+fn validate_worker_resume_summaries(
+    state: &RemoteCoordinatorState,
     registration: &RemoteWorkerRegistration,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<RemoteJobId>, String> {
     let mut adopted = Vec::with_capacity(registration.resumable_jobs.len());
     for summary in &registration.resumable_jobs {
-        adopt_worker_resume_summary(state, registration, summary)?;
+        validate_worker_resume_claim(state, registration, summary)?;
         adopted.push(summary.job_id.clone());
     }
     Ok(adopted)
 }
 
-fn adopt_worker_resume_summary(
-    state: &mut RemoteCoordinatorState,
+fn validate_worker_resume_claim(
+    state: &RemoteCoordinatorState,
     registration: &RemoteWorkerRegistration,
     summary: &RemoteWorkerResumeSummary,
 ) -> Result<(), String> {
-    if let Some(existing) = state.jobs.get_mut(&summary.job_id) {
-        if existing.normalized_build_key != summary.normalized_build_key {
-            return Err("remote-worker-resume-key-conflict".to_string());
-        }
-        existing.assigned_worker_endpoint_id = Some(registration.endpoint_id.clone());
-        existing.phase = summary.phase;
-        existing.result_available = summary.result_available;
-        existing.log_next_cursor = summary.log_next_cursor;
-        existing.lost_phase = None;
-        return Ok(());
+    let job = state.jobs.get(&summary.job_id).ok_or_else(|| "remote-worker-resume-unknown-job".to_string())?;
+    let attempt = job
+        .current_attempt
+        .as_ref()
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    if job.normalized_build_key != summary.normalized_build_key {
+        return Err("remote-worker-resume-key-conflict".to_string());
     }
-    state.jobs.insert(summary.job_id.clone(), resumed_job_summary(registration, summary));
+    if job.assigned_worker_endpoint_id.as_deref() != Some(registration.endpoint_id.as_str()) {
+        return Err(RemoteAttemptReasonCode::ResumeStateConflict.as_str().to_string());
+    }
+    if attempt.attempt_id != summary.attempt_id || attempt.fence_generation != summary.fence_generation {
+        return Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string());
+    }
+    if job.phase != summary.phase
+        || job.result_available != summary.result_available
+        || job.log_next_cursor != summary.log_next_cursor
+    {
+        return Err(RemoteAttemptReasonCode::ResumeStateConflict.as_str().to_string());
+    }
     Ok(())
 }
 
-fn resumed_job_summary(
-    registration: &RemoteWorkerRegistration,
-    summary: &RemoteWorkerResumeSummary,
-) -> RemoteCoordinatorJobSummary {
-    RemoteCoordinatorJobSummary {
-        job_id: summary.job_id.clone(),
-        normalized_build_key: summary.normalized_build_key.clone(),
-        assigned_worker_endpoint_id: Some(registration.endpoint_id.clone()),
-        phase: summary.phase,
-        live_output_claims: Vec::new(),
-        result_available: summary.result_available,
-        lost_phase: None,
-        log_start_cursor: 0,
-        log_next_cursor: summary.log_next_cursor,
-        short_error: None,
-    }
-}
-
-pub fn plan_coordinator_dispatch(
+fn plan_coordinator_dispatch(
     state: &RemoteCoordinatorState,
     request: &RemoteCoordinatorBuildRequest,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
@@ -3249,54 +3346,85 @@ pub fn plan_coordinator_dispatch(
     if let Some(decision) = existing_job_decision(state, &normalized_key) {
         return Ok(decision);
     }
-    match select_coordinator_worker(state, request) {
-        Some(worker) => Ok(RemoteCoordinatorDispatchDecision::Dispatch {
-            worker_endpoint_id: worker.endpoint_id.clone(),
-            job_id: coordinator_job_id(&normalized_key),
-            normalized_build_key: normalized_key,
-        }),
-        None => {
-            let reason = no_matching_worker_reason(state, request);
-            if request.wait_for_worker {
-                return Ok(RemoteCoordinatorDispatchDecision::Pending { reason });
-            }
-            Ok(RemoteCoordinatorDispatchDecision::Reject { reason })
-        }
+    let Some(worker) = select_coordinator_worker(state, request) else {
+        return Ok(no_worker_dispatch_decision(state, request));
+    };
+    new_dispatch_decision(&worker.endpoint_id, normalized_key)
+}
+
+fn new_dispatch_decision(
+    worker_endpoint_id: &str,
+    normalized_build_key: String,
+) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    let job_id = coordinator_job_id(&normalized_build_key);
+    let fence_generation = RemoteFenceGeneration::INITIAL;
+    let attempt_id = derive_remote_attempt_id(&job_id, fence_generation, worker_endpoint_id)
+        .map_err(|reason| reason.as_str().to_string())?;
+    Ok(RemoteCoordinatorDispatchDecision::Dispatch {
+        worker_endpoint_id: worker_endpoint_id.to_string(),
+        job_id,
+        attempt_id,
+        fence_generation,
+        normalized_build_key,
+    })
+}
+
+fn no_worker_dispatch_decision(
+    state: &RemoteCoordinatorState,
+    request: &RemoteCoordinatorBuildRequest,
+) -> RemoteCoordinatorDispatchDecision {
+    let reason = no_matching_worker_reason(state, request);
+    if request.wait_for_worker {
+        return RemoteCoordinatorDispatchDecision::Pending { reason };
     }
+    RemoteCoordinatorDispatchDecision::Reject { reason }
 }
 
 pub fn admit_coordinator_dispatch(
     state: &mut RemoteCoordinatorState,
     request: &RemoteCoordinatorBuildRequest,
+    retry_policy: RemoteAttemptRetryPolicy,
+    time: RemoteAttemptTimeFacts,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
     let decision = plan_coordinator_dispatch(state, request)?;
-    if let RemoteCoordinatorDispatchDecision::Dispatch {
+    let RemoteCoordinatorDispatchDecision::Dispatch {
         worker_endpoint_id,
         job_id,
+        attempt_id,
+        fence_generation,
         normalized_build_key,
     } = &decision
+    else {
+        return Ok(decision);
+    };
+    let summary = queued_job_summary(job_id, normalized_build_key, worker_endpoint_id, request, retry_policy, time)?;
+    if summary.current_attempt.as_ref().map(|attempt| &attempt.attempt_id) != Some(attempt_id)
+        || summary.current_attempt.as_ref().map(|attempt| attempt.fence_generation) != Some(*fence_generation)
     {
-        let summary = queued_job_summary(job_id, normalized_build_key, worker_endpoint_id, request);
-        for claim in &summary.live_output_claims {
-            state.live_output_claims.insert(claim.clone(), normalized_build_key.clone());
-        }
-        state.jobs.insert(job_id.clone(), summary);
+        return Err("remote-coordinator-attempt-plan-mismatch".to_string());
     }
-    // Auto-save after mutation for durability.
-    if let Some(ref sd) = state.state_dir {
-        let _ = save_coordinator_state(sd, state).map_err(|e| tracing::warn!("coordinator state save failed: {e}"));
+    let mut candidate = state.clone();
+    for claim in &summary.live_output_claims {
+        candidate.live_output_claims.insert(claim.clone(), normalized_build_key.clone());
     }
+    candidate.jobs.insert(job_id.clone(), summary);
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
     Ok(decision)
 }
 
 fn queued_job_summary(
-    job_id: &str,
+    job_id: &RemoteJobId,
     normalized_key: &str,
     worker_endpoint_id: &str,
     request: &RemoteCoordinatorBuildRequest,
-) -> RemoteCoordinatorJobSummary {
-    RemoteCoordinatorJobSummary {
-        job_id: job_id.to_string(),
+    retry_policy: RemoteAttemptRetryPolicy,
+    time: RemoteAttemptTimeFacts,
+) -> Result<RemoteCoordinatorJobSummary, String> {
+    let current_attempt = plan_remote_attempt_assignment(job_id, worker_endpoint_id, None, retry_policy, time)
+        .map_err(|reason| reason.as_str().to_string())?;
+    Ok(RemoteCoordinatorJobSummary {
+        job_id: job_id.clone(),
         normalized_build_key: normalized_key.to_string(),
         assigned_worker_endpoint_id: Some(worker_endpoint_id.to_string()),
         phase: RemoteCoordinatorJobPhase::Queued,
@@ -3306,7 +3434,219 @@ fn queued_job_summary(
         log_start_cursor: 0,
         log_next_cursor: 0,
         short_error: None,
+        current_attempt: Some(current_attempt),
+        transfer_checkpoint: None,
+        transferred_bytes: 0,
+        output_admission_completed: false,
+        last_attempt_reason_code: None,
+    })
+}
+
+pub fn reassign_coordinator_attempt(
+    state: &mut RemoteCoordinatorState,
+    job_id: &RemoteJobId,
+    worker_endpoint_id: &str,
+    failure_class: RemoteAttemptFailureClass,
+    retry_policy: RemoteAttemptRetryPolicy,
+    time: RemoteAttemptTimeFacts,
+) -> Result<RemoteCoordinatorDispatchDecision, String> {
+    let job = state.jobs.get(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let previous = job
+        .current_attempt
+        .as_ref()
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    let retry = decide_remote_attempt_retry(previous, failure_class, retry_policy, time);
+    if !retry.retry_allowed {
+        return Ok(RemoteCoordinatorDispatchDecision::Reject {
+            reason: retry.reason_code.as_str().to_string(),
+        });
     }
+    require_registered_worker(state, worker_endpoint_id)?;
+    let next = plan_remote_attempt_assignment(job_id, worker_endpoint_id, Some(previous), retry_policy, time)
+        .map_err(|reason| reason.as_str().to_string())?;
+    let normalized_build_key = job.normalized_build_key.clone();
+    let decision = dispatch_decision_from_attempt(worker_endpoint_id, &normalized_build_key, &next);
+    let mut candidate = state.clone();
+    install_reassigned_attempt(&mut candidate, job_id, worker_endpoint_id, next)?;
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    Ok(decision)
+}
+
+fn require_registered_worker(state: &RemoteCoordinatorState, worker_endpoint_id: &str) -> Result<(), String> {
+    if state.workers.contains_key(worker_endpoint_id) {
+        return Ok(());
+    }
+    Err("remote-coordinator-worker-unknown".to_string())
+}
+
+fn dispatch_decision_from_attempt(
+    worker_endpoint_id: &str,
+    normalized_build_key: &str,
+    attempt: &RemoteAttemptState,
+) -> RemoteCoordinatorDispatchDecision {
+    RemoteCoordinatorDispatchDecision::Dispatch {
+        worker_endpoint_id: worker_endpoint_id.to_string(),
+        job_id: attempt.job_id.clone(),
+        attempt_id: attempt.attempt_id.clone(),
+        fence_generation: attempt.fence_generation,
+        normalized_build_key: normalized_build_key.to_string(),
+    }
+}
+
+fn install_reassigned_attempt(
+    state: &mut RemoteCoordinatorState,
+    job_id: &RemoteJobId,
+    worker_endpoint_id: &str,
+    attempt: RemoteAttemptState,
+) -> Result<(), String> {
+    let job = state.jobs.get_mut(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    job.assigned_worker_endpoint_id = Some(worker_endpoint_id.to_string());
+    job.phase = RemoteCoordinatorJobPhase::Queued;
+    job.result_available = false;
+    job.lost_phase = None;
+    job.short_error = None;
+    job.current_attempt = Some(attempt);
+    job.transfer_checkpoint = None;
+    job.transferred_bytes = 0;
+    job.output_admission_completed = false;
+    job.last_attempt_reason_code = Some(RemoteAttemptReasonCode::Superseded);
+    Ok(())
+}
+
+pub fn apply_coordinator_attempt_report(
+    state: &mut RemoteCoordinatorState,
+    report: &RemoteAttemptReport,
+    authorization: RemoteAttemptAuthorizationFacts,
+    log_policy: RemoteLogRetentionPolicy,
+) -> Result<RemoteCoordinatorAttemptApplyResult, String> {
+    let Some(job) = state.jobs.get(&report.identity.job_id) else {
+        return Ok(rejected_attempt_apply_result(RemoteAttemptReasonCode::JobIdentityMismatch));
+    };
+    let Some(current) = job.current_attempt.as_ref() else {
+        return Ok(rejected_attempt_apply_result(RemoteAttemptReasonCode::LegacyStateRejected));
+    };
+    let plan = plan_remote_attempt_report(current, report, authorization);
+    if plan.disposition != RemoteAttemptApplyDisposition::Applied {
+        return Ok(RemoteCoordinatorAttemptApplyResult {
+            disposition: plan.disposition,
+            reason_code: plan.reason_code,
+            output_admission_allowed: false,
+        });
+    }
+    let mut candidate = state.clone();
+    apply_attempt_plan_to_candidate(&mut candidate, report, &plan.next_state, plan.reason_code, log_policy)?;
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    Ok(RemoteCoordinatorAttemptApplyResult {
+        disposition: plan.disposition,
+        reason_code: plan.reason_code,
+        output_admission_allowed: plan.output_admission_allowed,
+    })
+}
+
+fn rejected_attempt_apply_result(reason_code: RemoteAttemptReasonCode) -> RemoteCoordinatorAttemptApplyResult {
+    RemoteCoordinatorAttemptApplyResult {
+        disposition: RemoteAttemptApplyDisposition::Rejected,
+        reason_code,
+        output_admission_allowed: false,
+    }
+}
+
+fn apply_attempt_plan_to_candidate(
+    state: &mut RemoteCoordinatorState,
+    report: &RemoteAttemptReport,
+    next_attempt: &RemoteAttemptState,
+    reason_code: RemoteAttemptReasonCode,
+    log_policy: RemoteLogRetentionPolicy,
+) -> Result<(), String> {
+    if let RemoteAttemptReportPayload::LogAppend { cursor, bytes } = &report.payload {
+        apply_fenced_log_append(state, report, *cursor, bytes, log_policy)?;
+    }
+    let job = state
+        .jobs
+        .get_mut(&report.identity.job_id)
+        .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    apply_attempt_payload_to_job(job, &report.payload, next_attempt);
+    job.last_attempt_reason_code = Some(reason_code);
+    Ok(())
+}
+
+fn apply_fenced_log_append(
+    state: &mut RemoteCoordinatorState,
+    report: &RemoteAttemptReport,
+    cursor: u64,
+    bytes: &str,
+    log_policy: RemoteLogRetentionPolicy,
+) -> Result<(), String> {
+    let existing = state.logs.get(&report.identity.job_id).cloned().unwrap_or_default();
+    let chunk = RemoteCoordinatorLogChunk {
+        cursor,
+        bytes: bytes.to_string(),
+        event_id: Some(report.identity.event_id.clone()),
+        payload_digest: Some(report.identity.payload_digest.clone()),
+    };
+    let replay = retain_remote_log_chunks(&existing, chunk, 0, log_policy)?;
+    let job = state
+        .jobs
+        .get_mut(&report.identity.job_id)
+        .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    job.log_start_cursor = replay.retained_chunks.first().map(|chunk| chunk.cursor).unwrap_or(replay.next_cursor);
+    job.log_next_cursor = replay.next_cursor;
+    state.logs.insert(report.identity.job_id.clone(), replay.retained_chunks);
+    Ok(())
+}
+
+fn apply_attempt_payload_to_job(
+    job: &mut RemoteCoordinatorJobSummary,
+    payload: &RemoteAttemptReportPayload,
+    next_attempt: &RemoteAttemptState,
+) {
+    job.phase = coordinator_phase_for_attempt(next_attempt.phase);
+    job.current_attempt = Some(next_attempt.clone());
+    match payload {
+        RemoteAttemptReportPayload::TransferCheckpoint {
+            checkpoint,
+            transferred_bytes,
+        } => {
+            job.transfer_checkpoint = Some(*checkpoint);
+            job.transferred_bytes = *transferred_bytes;
+        }
+        RemoteAttemptReportPayload::ResultReady { .. } => {
+            job.result_available = false;
+            job.output_admission_completed = true;
+        }
+        RemoteAttemptReportPayload::Completion { .. } => {
+            job.result_available = true;
+            job.output_admission_completed = true;
+        }
+        RemoteAttemptReportPayload::Failure { reason_code, .. } => {
+            job.result_available = false;
+            job.output_admission_completed = false;
+            job.short_error = Some(reason_code.as_str().to_string());
+        }
+        _ => {}
+    }
+}
+
+fn coordinator_phase_for_attempt(phase: RemoteAttemptPhase) -> RemoteCoordinatorJobPhase {
+    match phase {
+        RemoteAttemptPhase::Queued => RemoteCoordinatorJobPhase::Queued,
+        RemoteAttemptPhase::Running | RemoteAttemptPhase::Transferring => RemoteCoordinatorJobPhase::Running,
+        RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed => RemoteCoordinatorJobPhase::Finished,
+        RemoteAttemptPhase::Failed | RemoteAttemptPhase::Superseded => RemoteCoordinatorJobPhase::Lost,
+    }
+}
+
+fn persist_coordinator_candidate(state: &RemoteCoordinatorState) -> Result<(), String> {
+    let Some(state_dir) = state.state_dir.as_deref() else {
+        if state.allow_volatile_test_state {
+            return Ok(());
+        }
+        return Err(RemoteAttemptReasonCode::PersistenceUnconfigured.as_str().to_string());
+    };
+    save_coordinator_state(state_dir, state)
+        .map_err(|error| format!("{}: {error}", RemoteAttemptReasonCode::PersistenceFailed.as_str()))
 }
 
 fn conflicting_live_output_claim(
@@ -3344,10 +3684,16 @@ fn existing_job_to_dispatch_decision(job: &RemoteCoordinatorJobSummary) -> Remot
             }
         }
         RemoteCoordinatorJobPhase::Lost => RemoteCoordinatorDispatchDecision::Reject {
-            reason: format!(
-                "restart-state-unavailable-phase-{}",
-                job.lost_phase.map(RemoteFailurePhase::as_status_label).unwrap_or("unknown")
-            ),
+            reason: job
+                .last_attempt_reason_code
+                .map(RemoteAttemptReasonCode::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| {
+                    format!(
+                        "restart-state-unavailable-phase-{}",
+                        job.lost_phase.map(RemoteFailurePhase::as_status_label).unwrap_or("unknown")
+                    )
+                }),
         },
         _ => RemoteCoordinatorDispatchDecision::AttachExisting {
             job_id: job.job_id.clone(),
@@ -3428,11 +3774,12 @@ fn active_jobs_for_worker(state: &RemoteCoordinatorState, endpoint_id: &str) -> 
         .unwrap_or(MAX_REMOTE_WORKER_CONCURRENCY)
 }
 
-fn coordinator_job_id(normalized_key: &str) -> String {
+fn coordinator_job_id(normalized_key: &str) -> RemoteJobId {
     let mut hasher = blake3::Hasher::new();
     hash_labeled_str(&mut hasher, "kind", REMOTE_COORDINATOR_JOB_ID_LABEL);
     hash_labeled_str(&mut hasher, "normalized-key", normalized_key);
-    hasher.finalize().to_hex().to_string()
+    let digest = hasher.finalize().to_hex().to_string();
+    RemoteJobId::new(digest).expect("BLAKE3 coordinator job id is a valid bounded identity")
 }
 
 pub fn retain_remote_log_chunks(
@@ -3514,6 +3861,7 @@ pub fn coordinator_status_snapshot(
     endpoint_id: &str,
     configured_concurrency: u32,
     state: &RemoteCoordinatorState,
+    transient_attempt_reason_codes: &[RemoteAttemptReasonCode],
     tickets: &[RemoteTicket],
 ) -> Result<RemoteCoordinatorStatusSnapshot, String> {
     if endpoint_id.is_empty() {
@@ -3545,6 +3893,12 @@ pub fn coordinator_status_snapshot(
         recent_jobs,
         recent_failures,
         log_cursors,
+        attempt_reason_codes: transient_attempt_reason_codes
+            .iter()
+            .copied()
+            .chain(state.jobs.values().filter_map(|job| job.last_attempt_reason_code))
+            .take(MAX_REMOTE_STATUS_ITEMS)
+            .collect(),
         tickets: tickets.iter().map(redacted_ticket_view).collect(),
     })
 }
@@ -3577,6 +3931,7 @@ fn push_status_failure(recent_failures: &mut Vec<RemoteFailureStatus>, job: &Rem
         lost_phase: job.lost_phase,
         retry_class: RemoteRetryClass::Terminal,
         short_error: job.short_error.as_deref().map(bounded_untrusted_text),
+        attempt_reason_code: job.last_attempt_reason_code,
     });
 }
 
@@ -3648,6 +4003,10 @@ fn coordinator_job_status(
         worker_endpoint_id: job.assigned_worker_endpoint_id.clone(),
         short_error: job.short_error.as_deref().map(bounded_untrusted_text),
         log_bytes_retained: remote_log_bytes(retained)?,
+        attempt_id: job.current_attempt.as_ref().map(|attempt| attempt.attempt_id.clone()),
+        fence_generation: job.current_attempt.as_ref().map(|attempt| attempt.fence_generation),
+        attempt_phase: job.current_attempt.as_ref().map(|attempt| attempt.phase),
+        attempt_reason_code: job.last_attempt_reason_code,
     })
 }
 
@@ -4487,6 +4846,68 @@ pub fn validate_remote_builder_response_output_import(
         import_frames.transfer,
         &import_frames.artifacts,
     )
+}
+
+pub fn admit_fenced_remote_builder_response(
+    state: &mut RemoteCoordinatorState,
+    report: &RemoteAttemptReport,
+    worker_authorized: bool,
+    log_policy: RemoteLogRetentionPolicy,
+    request: &ConcreteBuildRequest,
+    trusted_output_keys: &[String],
+    response: &RemoteBuilderFrameResponse,
+) -> Result<RemoteFencedOutputAdmissionDecision, String> {
+    let preflight = preflight_fenced_output_report(state, report, worker_authorized);
+    if preflight.disposition != RemoteAttemptApplyDisposition::Applied {
+        return Ok(RemoteFencedOutputAdmissionDecision::NoAdmission { attempt: preflight });
+    }
+    let RemoteAttemptReportPayload::ResultReady { output_digest_blake3 } = &report.payload else {
+        return Err("remote-fenced-output-report-kind-invalid".to_string());
+    };
+    if output_digest_blake3 != &response.output_digest_blake3 {
+        return Err(RemoteAttemptReasonCode::ResultDigestMismatch.as_str().to_string());
+    }
+    let admission = validate_remote_builder_response_output_import(request, trusted_output_keys, response)?;
+    let attempt = apply_coordinator_attempt_report(
+        state,
+        report,
+        RemoteAttemptAuthorizationFacts {
+            worker_authorized,
+            output_admission_authorized: true,
+        },
+        log_policy,
+    )?;
+    if !attempt.output_admission_allowed {
+        return Err("remote-fenced-output-admission-invariant".to_string());
+    }
+    debug_assert_eq!(admission.output_digest_blake3, *output_digest_blake3);
+    debug_assert_eq!(attempt.disposition, RemoteAttemptApplyDisposition::Applied);
+    Ok(RemoteFencedOutputAdmissionDecision::Admit {
+        attempt,
+        admission: Box::new(admission),
+    })
+}
+
+fn preflight_fenced_output_report(
+    state: &RemoteCoordinatorState,
+    report: &RemoteAttemptReport,
+    worker_authorized: bool,
+) -> RemoteCoordinatorAttemptApplyResult {
+    let Some(job) = state.jobs.get(&report.identity.job_id) else {
+        return rejected_attempt_apply_result(RemoteAttemptReasonCode::JobIdentityMismatch);
+    };
+    let Some(current) = job.current_attempt.as_ref() else {
+        return rejected_attempt_apply_result(RemoteAttemptReasonCode::LegacyStateRejected);
+    };
+    let plan = plan_remote_attempt_report(current, report, RemoteAttemptAuthorizationFacts {
+        worker_authorized,
+        output_admission_authorized: true,
+    });
+    RemoteCoordinatorAttemptApplyResult {
+        disposition: plan.disposition,
+        reason_code: plan.reason_code,
+        output_admission_allowed: plan.output_admission_allowed,
+    }
 }
 
 pub fn validate_remote_builder_frames_output_import(
@@ -5402,12 +5823,136 @@ fn coordinator_state_path(state_dir: &Path) -> PathBuf {
 pub fn load_coordinator_state(state_dir: &Path) -> Result<RemoteCoordinatorState, RunError> {
     let path = coordinator_state_path(state_dir);
     if !path.exists() {
-        return Ok(RemoteCoordinatorState::default());
+        return Ok(RemoteCoordinatorState {
+            state_dir: Some(state_dir.to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        });
     }
     let bytes = fs::read(&path)
         .map_err(|err| RunError::Internal(format!("reading coordinator state {}: {err}", path.display())))?;
-    serde_json::from_slice(&bytes)
-        .map_err(|err| RunError::Internal(format!("parsing coordinator state {}: {err}", path.display())))
+    let mut state: RemoteCoordinatorState = serde_json::from_slice(&bytes)
+        .map_err(|err| RunError::Internal(format!("parsing coordinator state {}: {err}", path.display())))?;
+    state.state_dir = Some(state_dir.to_path_buf());
+    if migrate_legacy_coordinator_state(&mut state) {
+        save_coordinator_state(state_dir, &state)?;
+    }
+    Ok(state)
+}
+
+fn migrate_legacy_coordinator_state(state: &mut RemoteCoordinatorState) -> bool {
+    let mut migrated = false;
+    for job in state.jobs.values_mut() {
+        if coordinator_job_attempt_is_valid(job) {
+            continue;
+        }
+        let reason_code = if job.current_attempt.is_some() {
+            RemoteAttemptReasonCode::DurableStateInvalid
+        } else {
+            RemoteAttemptReasonCode::LegacyStateRejected
+        };
+        fail_closed_coordinator_job(job, reason_code);
+        migrated = true;
+    }
+    if migrated {
+        rebuild_live_output_claims(state);
+    }
+    migrated
+}
+
+fn coordinator_job_attempt_is_valid(job: &RemoteCoordinatorJobSummary) -> bool {
+    let Some(attempt) = job.current_attempt.as_ref() else {
+        return job.phase == RemoteCoordinatorJobPhase::Lost
+            && matches!(
+                job.last_attempt_reason_code,
+                Some(RemoteAttemptReasonCode::LegacyStateRejected | RemoteAttemptReasonCode::DurableStateInvalid)
+            );
+    };
+    coordinator_attempt_identity_is_valid(job, attempt) && coordinator_attempt_projection_matches(job, attempt)
+}
+
+fn coordinator_attempt_identity_is_valid(job: &RemoteCoordinatorJobSummary, attempt: &RemoteAttemptState) -> bool {
+    if attempt.job_id != job.job_id {
+        return false;
+    }
+    if RemoteJobId::new(attempt.job_id.as_str().to_string()).is_err() {
+        return false;
+    }
+    if RemoteAttemptId::new(attempt.attempt_id.as_str().to_string()).is_err() {
+        return false;
+    }
+    if attempt.fence_generation.get() == 0 {
+        return false;
+    }
+    if attempt.attempts_started == 0 {
+        return false;
+    }
+    if attempt.attempts_started > crunch_build::distributed::MAX_REMOTE_ATTEMPTS {
+        return false;
+    }
+    if attempt.started_unix_s >= attempt.deadline_unix_s {
+        return false;
+    }
+    if attempt.applied_events.len() > crunch_build::distributed::MAX_REMOTE_ATTEMPT_EVENTS {
+        return false;
+    }
+    if let Some(heartbeat_unix_s) = attempt.last_heartbeat_unix_s {
+        if heartbeat_unix_s < attempt.started_unix_s {
+            return false;
+        }
+        if heartbeat_unix_s > attempt.deadline_unix_s {
+            return false;
+        }
+    }
+    for (event_id, digest) in &attempt.applied_events {
+        if RemoteEventId::new(event_id.as_str().to_string()).is_err() {
+            return false;
+        }
+        if RemotePayloadDigest::new(digest.as_str().to_string()).is_err() {
+            return false;
+        }
+    }
+    true
+}
+
+fn coordinator_attempt_projection_matches(job: &RemoteCoordinatorJobSummary, attempt: &RemoteAttemptState) -> bool {
+    let result_available = attempt.phase == RemoteAttemptPhase::Completed;
+    let output_admitted =
+        matches!(attempt.phase, RemoteAttemptPhase::FinishedUndelivered | RemoteAttemptPhase::Completed);
+    if job.phase != coordinator_phase_for_attempt(attempt.phase) {
+        return false;
+    }
+    if job.result_available != result_available {
+        return false;
+    }
+    if job.output_admission_completed != output_admitted {
+        return false;
+    }
+    if job.transfer_checkpoint != attempt.transfer_checkpoint {
+        return false;
+    }
+    job.transferred_bytes == attempt.transferred_bytes
+}
+
+fn fail_closed_coordinator_job(job: &mut RemoteCoordinatorJobSummary, reason_code: RemoteAttemptReasonCode) {
+    job.assigned_worker_endpoint_id = None;
+    job.phase = RemoteCoordinatorJobPhase::Lost;
+    job.result_available = false;
+    job.current_attempt = None;
+    job.transfer_checkpoint = None;
+    job.transferred_bytes = 0;
+    job.output_admission_completed = false;
+    job.last_attempt_reason_code = Some(reason_code);
+    job.short_error = Some(reason_code.as_str().to_string());
+}
+
+fn rebuild_live_output_claims(state: &mut RemoteCoordinatorState) {
+    let live_keys = state
+        .jobs
+        .values()
+        .filter(|job| job.phase.is_live())
+        .map(|job| job.normalized_build_key.clone())
+        .collect::<BTreeSet<_>>();
+    state.live_output_claims.retain(|_, owner_key| live_keys.contains(owner_key));
 }
 
 pub fn save_coordinator_state(state_dir: &Path, state: &RemoteCoordinatorState) -> Result<(), RunError> {
@@ -5418,10 +5963,34 @@ pub fn save_coordinator_state(state_dir: &Path, state: &RemoteCoordinatorState) 
     let rendered = serde_json::to_string_pretty(state)
         .map_err(|err| RunError::Internal(format!("serializing coordinator state: {err}")))?;
     let tmp = path.with_extension(TEMP_FILE_EXTENSION);
-    fs::write(&tmp, format!("{rendered}\n"))
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&tmp)
+        .map_err(|err| RunError::Internal(format!("opening coordinator state temp {}: {err}", tmp.display())))?;
+    file.write_all(format!("{rendered}\n").as_bytes())
         .map_err(|err| RunError::Internal(format!("writing coordinator state temp {}: {err}", tmp.display())))?;
+    file.sync_all()
+        .map_err(|err| RunError::Internal(format!("syncing coordinator state temp {}: {err}", tmp.display())))?;
+    drop(file);
     fs::rename(&tmp, &path)
-        .map_err(|err| RunError::Internal(format!("committing coordinator state {}: {err}", path.display())))
+        .map_err(|err| RunError::Internal(format!("committing coordinator state {}: {err}", path.display())))?;
+    sync_coordinator_state_parent(parent)
+}
+
+#[cfg(unix)]
+fn sync_coordinator_state_parent(parent: &Path) -> Result<(), RunError> {
+    let directory = fs::File::open(parent)
+        .map_err(|err| RunError::Internal(format!("opening coordinator state dir {}: {err}", parent.display())))?;
+    directory
+        .sync_all()
+        .map_err(|err| RunError::Internal(format!("syncing coordinator state dir {}: {err}", parent.display())))
+}
+
+#[cfg(not(unix))]
+fn sync_coordinator_state_parent(_parent: &Path) -> Result<(), RunError> {
+    Ok(())
 }
 
 fn validate_ticket_limits(
@@ -5584,7 +6153,7 @@ fn cmd_remote_status(
     let ticket_state = load_ticket_state(state_dir)?;
     let tickets = ticket_state.tickets.values().cloned().collect::<Vec<_>>();
     let coordinator_state = load_coordinator_state(state_dir)?;
-    let snapshot = coordinator_status_snapshot(&endpoint_id, concurrency, &coordinator_state, &tickets)
+    let snapshot = coordinator_status_snapshot(&endpoint_id, concurrency, &coordinator_state, &[], &tickets)
         .map_err(RunError::Internal)?;
     print_json_or_human(&snapshot, json_output)
 }
@@ -5662,6 +6231,147 @@ mod tests {
     const CORRUPTED_TRANSFER_PAYLOAD_BYTE: u8 = b'X';
     const OPERATOR_RAIL_LOG_START_CURSOR: u64 = 1;
     const OPERATOR_RAIL_LOG_NEXT_CURSOR: u64 = 2;
+    const TEST_ATTEMPT_NOW_UNIX_S: u64 = 100;
+    const TEST_ATTEMPT_DEADLINE_UNIX_S: u64 = 10_000;
+    const TEST_ATTEMPT_OUTPUT_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const TEST_RETRY_NOW_UNIX_S: u64 = 110;
+    const TEST_RETRY_FAILURE_UNIX_S: u64 = 100;
+    const TEST_HEARTBEAT_OBSERVED_UNIX_S: u64 = 101;
+    const TEST_LOG_CURSOR: u64 = 1;
+    const TEST_TRANSFER_CHECKPOINT: u64 = 1;
+    const TEST_TRANSFERRED_BYTES: u64 = 64;
+
+    fn fixture_attempt_time(now_unix_s: u64) -> RemoteAttemptTimeFacts {
+        RemoteAttemptTimeFacts {
+            now_unix_s,
+            failure_observed_unix_s: now_unix_s,
+            overall_deadline_unix_s: TEST_ATTEMPT_DEADLINE_UNIX_S,
+        }
+    }
+
+    fn admit_fixture_dispatch(
+        state: &mut RemoteCoordinatorState,
+        request: &RemoteCoordinatorBuildRequest,
+    ) -> Result<RemoteCoordinatorDispatchDecision, String> {
+        admit_coordinator_dispatch(
+            state,
+            request,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_attempt_time(TEST_ATTEMPT_NOW_UNIX_S),
+        )
+    }
+
+    fn fixture_attempt_report(
+        state: &RemoteCoordinatorState,
+        job_id: &RemoteJobId,
+        event_id: &str,
+        payload: RemoteAttemptReportPayload,
+    ) -> RemoteAttemptReport {
+        let attempt = state.jobs[job_id].current_attempt.as_ref().expect("fixture attempt exists");
+        RemoteAttemptReport::new(
+            job_id.clone(),
+            attempt.attempt_id.clone(),
+            attempt.fence_generation,
+            RemoteEventId::new(event_id).expect("fixture event id is valid"),
+            payload,
+        )
+        .expect("fixture report is canonical")
+    }
+
+    fn apply_fixture_attempt_report(
+        state: &mut RemoteCoordinatorState,
+        report: &RemoteAttemptReport,
+    ) -> RemoteCoordinatorAttemptApplyResult {
+        apply_coordinator_attempt_report(
+            state,
+            report,
+            RemoteAttemptAuthorizationFacts {
+                worker_authorized: true,
+                output_admission_authorized: true,
+            },
+            RemoteLogRetentionPolicy::default(),
+        )
+        .expect("fixture report applies")
+    }
+
+    fn fixture_report_for_attempt(
+        attempt: &RemoteAttemptState,
+        event_id: &str,
+        payload: RemoteAttemptReportPayload,
+    ) -> RemoteAttemptReport {
+        RemoteAttemptReport::new(
+            attempt.job_id.clone(),
+            attempt.attempt_id.clone(),
+            attempt.fence_generation,
+            RemoteEventId::new(event_id).expect("fixture event id is valid"),
+            payload,
+        )
+        .expect("fixture report is canonical")
+    }
+
+    fn fixture_retry_time() -> RemoteAttemptTimeFacts {
+        RemoteAttemptTimeFacts {
+            now_unix_s: TEST_RETRY_NOW_UNIX_S,
+            failure_observed_unix_s: TEST_RETRY_FAILURE_UNIX_S,
+            overall_deadline_unix_s: TEST_ATTEMPT_DEADLINE_UNIX_S,
+        }
+    }
+
+    fn register_second_fixture_worker(state: &mut RemoteCoordinatorState) {
+        let mut worker = fixture_worker_registration();
+        worker.endpoint_id = "builder-2".to_string();
+        apply_worker_registration(state, worker).expect("second worker registers");
+    }
+
+    fn advance_current_fixture_attempt(
+        state: &mut RemoteCoordinatorState,
+        job_id: &RemoteJobId,
+        target_phase: RemoteAttemptPhase,
+    ) {
+        assert!(matches!(
+            target_phase,
+            RemoteAttemptPhase::Queued
+                | RemoteAttemptPhase::Running
+                | RemoteAttemptPhase::Transferring
+                | RemoteAttemptPhase::FinishedUndelivered
+        ));
+        assert!(!target_phase.is_terminal());
+        if target_phase == RemoteAttemptPhase::Queued {
+            return;
+        }
+        let start = fixture_attempt_report(state, job_id, "phase-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(state, &start);
+        if target_phase == RemoteAttemptPhase::Running {
+            return;
+        }
+        let transfer =
+            fixture_attempt_report(state, job_id, "phase-transfer", RemoteAttemptReportPayload::TransferCheckpoint {
+                checkpoint: TEST_TRANSFER_CHECKPOINT,
+                transferred_bytes: TEST_TRANSFERRED_BYTES,
+            });
+        apply_fixture_attempt_report(state, &transfer);
+        if target_phase == RemoteAttemptPhase::Transferring {
+            return;
+        }
+        let ready = fixture_attempt_report(state, job_id, "phase-result", RemoteAttemptReportPayload::ResultReady {
+            output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+        });
+        apply_fixture_attempt_report(state, &ready);
+    }
+
+    fn complete_current_fixture_attempt(state: &mut RemoteCoordinatorState, job_id: &RemoteJobId) {
+        let start = fixture_attempt_report(state, job_id, "current-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(state, &start);
+        let ready = fixture_attempt_report(state, job_id, "current-result", RemoteAttemptReportPayload::ResultReady {
+            output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+        });
+        apply_fixture_attempt_report(state, &ready);
+        let complete =
+            fixture_attempt_report(state, job_id, "current-complete", RemoteAttemptReportPayload::Completion {
+                output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+            });
+        apply_fixture_attempt_report(state, &complete);
+    }
 
     #[test]
     fn compatible_hello_reaches_authorization() {
@@ -7159,13 +7869,14 @@ mod tests {
         let mut state = RemoteCoordinatorState::default();
         apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
         let request = fixture_coordinator_request();
-        let first = admit_coordinator_dispatch(&mut state, &request).expect("first request dispatches");
-        let second = admit_coordinator_dispatch(&mut state, &request).expect("identical request attaches");
+        let first = admit_fixture_dispatch(&mut state, &request).expect("first request dispatches");
+        let second = admit_fixture_dispatch(&mut state, &request).expect("identical request attaches");
 
         let RemoteCoordinatorDispatchDecision::Dispatch {
             worker_endpoint_id,
             job_id,
             normalized_build_key,
+            ..
         } = first
         else {
             panic!("first coordinator request should dispatch");
@@ -7182,22 +7893,482 @@ mod tests {
     fn coordinator_resume_summary_redelivers_finished_result() {
         let request = fixture_coordinator_request();
         let normalized_key = normalized_remote_build_key(&request).expect("request key");
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let start = fixture_attempt_report(&state, &job_id, "resume-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(&mut state, &start);
+        let ready = fixture_attempt_report(&state, &job_id, "resume-result", RemoteAttemptReportPayload::ResultReady {
+            output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+        });
+        apply_fixture_attempt_report(&mut state, &ready);
+        let complete =
+            fixture_attempt_report(&state, &job_id, "resume-complete", RemoteAttemptReportPayload::Completion {
+                output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+            });
+        apply_fixture_attempt_report(&mut state, &complete);
+        let attempt = state.jobs[&job_id].current_attempt.as_ref().expect("finished attempt exists");
         let mut worker = fixture_worker_registration();
         worker.resumable_jobs.push(RemoteWorkerResumeSummary {
-            job_id: coordinator_job_id(&normalized_key),
+            job_id: job_id.clone(),
+            attempt_id: attempt.attempt_id.clone(),
+            fence_generation: attempt.fence_generation,
             normalized_build_key: normalized_key.clone(),
             phase: RemoteCoordinatorJobPhase::Finished,
             result_available: true,
-            log_next_cursor: 3,
+            log_next_cursor: 0,
         });
-        let mut state = RemoteCoordinatorState::default();
-        let adopted = apply_worker_registration(&mut state, worker).expect("resumable worker registers");
+        let adopted = apply_worker_registration(&mut state, worker).expect("matching resume summary registers");
         let decision = plan_coordinator_dispatch(&state, &request).expect("resumed request plans");
 
-        assert_eq!(adopted, vec![coordinator_job_id(&normalized_key)]);
+        assert_eq!(adopted, vec![job_id]);
         assert!(
             matches!(decision, RemoteCoordinatorDispatchDecision::RedeliverResult { normalized_build_key, .. } if normalized_build_key == normalized_key)
         );
+    }
+
+    #[test]
+    fn coordinator_resume_claim_cannot_overwrite_reassigned_durable_owner() {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        register_second_fixture_worker(&mut state);
+        let request = fixture_coordinator_request();
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let superseded = state.jobs[&job_id].current_attempt.as_ref().expect("attempt exists").clone();
+        reassign_coordinator_attempt(
+            &mut state,
+            &job_id,
+            "builder-2",
+            RemoteAttemptFailureClass::Retryable,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_retry_time(),
+        )
+        .expect("replacement persists");
+        let mut stale_worker = fixture_worker_registration();
+        stale_worker.endpoint_id = "builder-2".to_string();
+        stale_worker.resumable_jobs.push(RemoteWorkerResumeSummary {
+            job_id: job_id.clone(),
+            attempt_id: superseded.attempt_id,
+            fence_generation: superseded.fence_generation,
+            normalized_build_key: state.jobs[&job_id].normalized_build_key.clone(),
+            phase: RemoteCoordinatorJobPhase::Running,
+            result_available: false,
+            log_next_cursor: 0,
+        });
+        let before = state.clone();
+        let error = apply_worker_registration(&mut state, stale_worker)
+            .expect_err("superseded resume claim cannot overwrite current owner");
+
+        assert_eq!(error, RemoteAttemptReasonCode::StaleReportRejected.as_str());
+        assert_eq!(state, before);
+        assert_eq!(state.jobs[&job_id].assigned_worker_endpoint_id.as_deref(), Some("builder-2"));
+    }
+
+    #[test]
+    fn coordinator_restart_recovers_each_live_attempt_phase_and_retained_result_disposition() {
+        let phases = [
+            RemoteAttemptPhase::Queued,
+            RemoteAttemptPhase::Running,
+            RemoteAttemptPhase::Transferring,
+            RemoteAttemptPhase::FinishedUndelivered,
+        ];
+        for phase in phases {
+            let temp = tempfile::tempdir().expect("temp state dir");
+            let mut state = RemoteCoordinatorState {
+                state_dir: Some(temp.path().to_path_buf()),
+                ..RemoteCoordinatorState::default()
+            };
+            apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+            let request = fixture_coordinator_request();
+            let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+            let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+                panic!("fixture request must dispatch");
+            };
+            let expected = state.jobs[&job_id].current_attempt.as_ref().expect("attempt exists").clone();
+            advance_current_fixture_attempt(&mut state, &job_id, phase);
+            let restarted = load_coordinator_state(temp.path()).expect("attempt reloads");
+            let job = &restarted.jobs[&job_id];
+            let attempt = job.current_attempt.as_ref().expect("fenced attempt survives restart");
+
+            assert_eq!(attempt.attempt_id, expected.attempt_id);
+            assert_eq!(attempt.fence_generation, expected.fence_generation);
+            assert_eq!(attempt.phase, phase);
+            assert_eq!(job.output_admission_completed, phase == RemoteAttemptPhase::FinishedUndelivered);
+            assert!(!job.result_available);
+        }
+    }
+
+    #[test]
+    fn coordinator_duplicate_current_report_is_durable_idempotent_no_op() {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let request = fixture_coordinator_request();
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let start = fixture_attempt_report(&state, &job_id, "idempotent-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(&mut state, &start);
+        let log = fixture_attempt_report(&state, &job_id, "idempotent-log", RemoteAttemptReportPayload::LogAppend {
+            cursor: TEST_LOG_CURSOR,
+            bytes: "one durable line".to_string(),
+        });
+        let first = apply_fixture_attempt_report(&mut state, &log);
+        let expected_state = state.clone();
+        let durable_before = fs::read(coordinator_state_path(temp.path())).expect("durable state exists");
+        let duplicate = apply_fixture_attempt_report(&mut state, &log);
+        let durable_after = fs::read(coordinator_state_path(temp.path())).expect("durable state remains");
+
+        assert_eq!(first.disposition, RemoteAttemptApplyDisposition::Applied);
+        assert_eq!(duplicate.disposition, RemoteAttemptApplyDisposition::AlreadyApplied);
+        assert_eq!(duplicate.reason_code, RemoteAttemptReasonCode::AlreadyApplied);
+        assert_eq!(state, expected_state);
+        assert_eq!(durable_after, durable_before);
+    }
+
+    #[test]
+    fn coordinator_conflicting_event_digest_changes_no_mutable_surface() {
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let request = fixture_coordinator_request();
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let start = fixture_attempt_report(&state, &job_id, "conflict-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(&mut state, &start);
+        let log = fixture_attempt_report(&state, &job_id, "shared-event", RemoteAttemptReportPayload::LogAppend {
+            cursor: TEST_LOG_CURSOR,
+            bytes: "accepted".to_string(),
+        });
+        apply_fixture_attempt_report(&mut state, &log);
+        let before_conflict = state.clone();
+        let attempt = state.jobs[&job_id].current_attempt.as_ref().expect("attempt exists").clone();
+        let conflict =
+            fixture_report_for_attempt(&attempt, "shared-event", RemoteAttemptReportPayload::TransferCheckpoint {
+                checkpoint: TEST_TRANSFER_CHECKPOINT,
+                transferred_bytes: TEST_TRANSFERRED_BYTES,
+            });
+        let rejected = apply_fixture_attempt_report(&mut state, &conflict);
+
+        assert_eq!(rejected.disposition, RemoteAttemptApplyDisposition::Rejected);
+        assert_eq!(rejected.reason_code, RemoteAttemptReasonCode::EventDigestConflict);
+        assert!(!rejected.output_admission_allowed);
+        assert_eq!(state, before_conflict);
+    }
+
+    #[test]
+    fn coordinator_fenced_output_admission_binds_current_result_and_skips_duplicate_validation() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let response = fixture_builder_response(&client);
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let request = fixture_remote_operator_coordinator_request(&client);
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let start = fixture_attempt_report(&state, &job_id, "admission-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(&mut state, &start);
+        let result =
+            fixture_attempt_report(&state, &job_id, "admission-result", RemoteAttemptReportPayload::ResultReady {
+                output_digest_blake3: response.output_digest_blake3.clone(),
+            });
+        let admitted = admit_fenced_remote_builder_response(
+            &mut state,
+            &result,
+            true,
+            RemoteLogRetentionPolicy::default(),
+            &client.request,
+            &client.trusted_output_keys,
+            &response,
+        )
+        .expect("current fenced output admits");
+        assert!(matches!(admitted, RemoteFencedOutputAdmissionDecision::Admit { .. }));
+        assert!(state.jobs[&job_id].output_admission_completed);
+        assert!(!state.jobs[&job_id].result_available);
+        let before_duplicate = state.clone();
+        let mut invalid_duplicate_response = response;
+        invalid_duplicate_response.output_digest_blake3 = "invalid".to_string();
+        let duplicate = admit_fenced_remote_builder_response(
+            &mut state,
+            &result,
+            true,
+            RemoteLogRetentionPolicy::default(),
+            &client.request,
+            &[],
+            &invalid_duplicate_response,
+        )
+        .expect("duplicate is classified before output validation");
+        assert!(matches!(duplicate, RemoteFencedOutputAdmissionDecision::NoAdmission {
+            attempt: RemoteCoordinatorAttemptApplyResult {
+                reason_code: RemoteAttemptReasonCode::AlreadyApplied,
+                ..
+            }
+        }));
+        assert_eq!(state, before_duplicate);
+    }
+
+    #[test]
+    fn coordinator_stale_output_result_is_rejected_before_cryptographic_admission() {
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let mut response = fixture_builder_response(&client);
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        register_second_fixture_worker(&mut state);
+        let request = fixture_remote_operator_coordinator_request(&client);
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let superseded = state.jobs[&job_id].current_attempt.as_ref().expect("attempt exists").clone();
+        reassign_coordinator_attempt(
+            &mut state,
+            &job_id,
+            "builder-2",
+            RemoteAttemptFailureClass::Retryable,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_retry_time(),
+        )
+        .expect("replacement persists");
+        let stale =
+            fixture_report_for_attempt(&superseded, "stale-output-result", RemoteAttemptReportPayload::ResultReady {
+                output_digest_blake3: response.output_digest_blake3.clone(),
+            });
+        response.output_digest_blake3 = "cryptographically-invalid".to_string();
+        let before = state.clone();
+        let decision = admit_fenced_remote_builder_response(
+            &mut state,
+            &stale,
+            true,
+            RemoteLogRetentionPolicy::default(),
+            &client.request,
+            &[],
+            &response,
+        )
+        .expect("stale fence rejects before output validation");
+
+        assert!(matches!(decision, RemoteFencedOutputAdmissionDecision::NoAdmission {
+            attempt: RemoteCoordinatorAttemptApplyResult {
+                reason_code: RemoteAttemptReasonCode::StaleReportRejected,
+                ..
+            }
+        }));
+        assert_eq!(state, before);
+    }
+
+    #[test]
+    fn coordinator_restart_reassignment_fences_every_stale_mutation_and_completion_race() {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        register_second_fixture_worker(&mut state);
+        let request = fixture_coordinator_request();
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let superseded = state.jobs[&job_id].current_attempt.as_ref().expect("attempt exists").clone();
+        let replacement = reassign_coordinator_attempt(
+            &mut state,
+            &job_id,
+            "builder-2",
+            RemoteAttemptFailureClass::Retryable,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_retry_time(),
+        )
+        .expect("replacement persists");
+        let RemoteCoordinatorDispatchDecision::Dispatch { fence_generation, .. } = replacement else {
+            panic!("retry must dispatch");
+        };
+        assert!(fence_generation > superseded.fence_generation);
+        let mut restarted = load_coordinator_state(temp.path()).expect("coordinator restarts");
+        assert_eq!(restarted.jobs[&job_id].current_attempt.as_ref().unwrap().fence_generation, fence_generation);
+        reject_all_superseded_report_kinds(&mut restarted, &superseded);
+        complete_current_fixture_attempt(&mut restarted, &job_id);
+        let completed = restarted.clone();
+        let late_completion = fixture_report_for_attempt(
+            &superseded,
+            "late-after-current-completion",
+            RemoteAttemptReportPayload::Completion {
+                output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+            },
+        );
+        let rejected = apply_fixture_attempt_report(&mut restarted, &late_completion);
+        let status = coordinator_status_snapshot(
+            "coordinator-1",
+            DEFAULT_REMOTE_CONCURRENCY,
+            &restarted,
+            &[rejected.reason_code],
+            &[],
+        )
+        .expect("stale rejection renders in status");
+        assert_eq!(rejected.reason_code, RemoteAttemptReasonCode::StaleReportRejected);
+        assert_eq!(status.attempt_reason_codes[0], RemoteAttemptReasonCode::StaleReportRejected);
+        assert_eq!(restarted, completed);
+        let durable = load_coordinator_state(temp.path()).expect("completed attempt reloads");
+        assert_eq!(durable.jobs[&job_id].current_attempt.as_ref().unwrap().phase, RemoteAttemptPhase::Completed);
+        assert_eq!(
+            durable.jobs[&job_id].last_attempt_reason_code,
+            Some(RemoteAttemptReasonCode::CurrentAttemptCompleted)
+        );
+    }
+
+    fn reject_all_superseded_report_kinds(state: &mut RemoteCoordinatorState, superseded: &RemoteAttemptState) {
+        let payloads = [
+            RemoteAttemptReportPayload::Start,
+            RemoteAttemptReportPayload::Heartbeat {
+                observed_unix_s: TEST_HEARTBEAT_OBSERVED_UNIX_S,
+            },
+            RemoteAttemptReportPayload::LogAppend {
+                cursor: TEST_LOG_CURSOR,
+                bytes: "late log".to_string(),
+            },
+            RemoteAttemptReportPayload::TransferCheckpoint {
+                checkpoint: TEST_TRANSFER_CHECKPOINT,
+                transferred_bytes: TEST_TRANSFERRED_BYTES,
+            },
+            RemoteAttemptReportPayload::ResultReady {
+                output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+            },
+            RemoteAttemptReportPayload::Failure {
+                failure_class: RemoteAttemptFailureClass::Retryable,
+                reason_code: RemoteAttemptReasonCode::RetryAllowed,
+            },
+            RemoteAttemptReportPayload::Completion {
+                output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+            },
+        ];
+        for (event_index, payload) in payloads.into_iter().enumerate() {
+            let before = state.clone();
+            let event_id = format!("superseded-event-{event_index}");
+            let report = fixture_report_for_attempt(superseded, &event_id, payload);
+            let result = apply_fixture_attempt_report(state, &report);
+            assert_eq!(result.reason_code, RemoteAttemptReasonCode::StaleReportRejected);
+            assert!(!result.output_admission_allowed);
+            assert_eq!(state, &before);
+        }
+    }
+
+    #[test]
+    fn coordinator_unconfigured_persistence_exposes_no_assignment_or_claim() {
+        let mut state = RemoteCoordinatorState::default();
+        state.allow_volatile_test_state = false;
+        let worker = fixture_worker_registration();
+        state.workers.insert(worker.endpoint_id.clone(), worker);
+        let request = fixture_coordinator_request();
+        let before = state.clone();
+        let error = admit_fixture_dispatch(&mut state, &request).expect_err("missing persistence rejects dispatch");
+
+        assert_eq!(error, RemoteAttemptReasonCode::PersistenceUnconfigured.as_str());
+        assert_eq!(state, before);
+        assert!(state.jobs.is_empty());
+        assert!(state.live_output_claims.is_empty());
+    }
+
+    #[test]
+    fn coordinator_persistence_failure_exposes_no_assignment_or_claim() {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let blocked_state_path = temp.path().join("not-a-directory");
+        fs::write(&blocked_state_path, "blocked").expect("blocking file writes");
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("in-memory worker registers");
+        state.state_dir = Some(blocked_state_path);
+        let request = fixture_coordinator_request();
+        let before = state.clone();
+        let error = admit_fixture_dispatch(&mut state, &request).expect_err("failed persistence rejects dispatch");
+
+        assert!(error.starts_with(RemoteAttemptReasonCode::PersistenceFailed.as_str()));
+        assert_eq!(state, before);
+        assert!(state.jobs.is_empty());
+        assert!(state.live_output_claims.is_empty());
+    }
+
+    #[test]
+    fn coordinator_load_migrates_legacy_unfenced_result_fail_closed() {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let job_id = "legacy-job";
+        let legacy = serde_json::json!({
+            "workers": {},
+            "jobs": {
+                (job_id): {
+                    "job_id": job_id,
+                    "normalized_build_key": "a".repeat(BLAKE3_HEX_LENGTH_CHARS),
+                    "assigned_worker_endpoint_id": "legacy-worker",
+                    "phase": "finished",
+                    "live_output_claims": ["legacy-output"],
+                    "result_available": true,
+                    "lost_phase": null,
+                    "log_start_cursor": 0,
+                    "log_next_cursor": 0,
+                    "short_error": null
+                }
+            },
+            "live_output_claims": { "legacy-output": "a".repeat(BLAKE3_HEX_LENGTH_CHARS) },
+            "logs": {}
+        });
+        fs::write(
+            coordinator_state_path(temp.path()),
+            serde_json::to_vec_pretty(&legacy).expect("legacy state renders"),
+        )
+        .expect("legacy state writes");
+        let state = load_coordinator_state(temp.path()).expect("legacy state migrates");
+        let job_id = RemoteJobId::new(job_id).expect("legacy job id");
+        let job = &state.jobs[&job_id];
+        let persisted = fs::read_to_string(coordinator_state_path(temp.path())).expect("migration persists");
+
+        assert_eq!(job.phase, RemoteCoordinatorJobPhase::Lost);
+        assert!(!job.result_available);
+        assert!(job.current_attempt.is_none());
+        assert_eq!(job.last_attempt_reason_code, Some(RemoteAttemptReasonCode::LegacyStateRejected));
+        assert!(state.live_output_claims.is_empty());
+        assert!(persisted.contains("legacy-state-rejected"));
+    }
+
+    #[test]
+    fn coordinator_load_rejects_corrupt_fenced_projection_fail_closed() {
+        let temp = tempfile::tempdir().expect("temp state dir");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
+        let request = fixture_coordinator_request();
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("fixture request must dispatch");
+        };
+        let mut encoded = serde_json::to_value(&state).expect("coordinator state serializes");
+        let encoded_job = encoded["jobs"]
+            .as_object_mut()
+            .and_then(|jobs| jobs.values_mut().next())
+            .expect("encoded job exists");
+        encoded_job["current_attempt"]["fence_generation"] = serde_json::Value::from(0_u64);
+        fs::write(
+            coordinator_state_path(temp.path()),
+            serde_json::to_vec_pretty(&encoded).expect("corrupt state renders"),
+        )
+        .expect("corrupt state writes");
+        let loaded = load_coordinator_state(temp.path()).expect("corrupt state fails closed");
+        let job = &loaded.jobs[&job_id];
+
+        assert_eq!(job.phase, RemoteCoordinatorJobPhase::Lost);
+        assert!(job.current_attempt.is_none());
+        assert_eq!(job.last_attempt_reason_code, Some(RemoteAttemptReasonCode::DurableStateInvalid));
+        assert!(!job.result_available);
     }
 
     #[test]
@@ -7222,7 +8393,7 @@ mod tests {
         let mut state = RemoteCoordinatorState::default();
         apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
         let request = fixture_coordinator_request();
-        admit_coordinator_dispatch(&mut state, &request).expect("first request dispatches");
+        admit_fixture_dispatch(&mut state, &request).expect("first request dispatches");
         let mut conflict = fixture_coordinator_request();
         conflict.request.payload = RemoteConcreteBuildPayload::Action {
             action_id: "action-2".to_string(),
@@ -7259,7 +8430,7 @@ mod tests {
         );
 
         let first = fixture_coordinator_request();
-        admit_coordinator_dispatch(&mut state, &first).expect("first request dispatches");
+        admit_fixture_dispatch(&mut state, &first).expect("first request dispatches");
         let mut second = fixture_coordinator_request();
         second.request.payload = RemoteConcreteBuildPayload::Action {
             action_id: "action-2".to_string(),
@@ -7284,15 +8455,21 @@ mod tests {
             RemoteCoordinatorLogChunk {
                 cursor: 1,
                 bytes: "aa".to_string(),
+                event_id: None,
+                payload_digest: None,
             },
             RemoteCoordinatorLogChunk {
                 cursor: 2,
                 bytes: "bb".to_string(),
+                event_id: None,
+                payload_digest: None,
             },
         ];
         let next = RemoteCoordinatorLogChunk {
             cursor: 3,
             bytes: "cc".to_string(),
+            event_id: None,
+            payload_digest: None,
         };
         let policy = RemoteLogRetentionPolicy {
             max_chunks: 2,
@@ -7312,15 +8489,17 @@ mod tests {
         let mut state = RemoteCoordinatorState::default();
         apply_worker_registration(&mut state, fixture_worker_registration()).expect("worker registers");
         let request = fixture_coordinator_request();
-        admit_coordinator_dispatch(&mut state, &request).expect("request dispatches");
+        admit_fixture_dispatch(&mut state, &request).expect("request dispatches");
         let ticket = fixture_ticket();
-        let snapshot = coordinator_status_snapshot("coordinator-1", 1, &state, &[ticket.clone()])
+        let snapshot = coordinator_status_snapshot("coordinator-1", 1, &state, &[], &[ticket.clone()])
             .expect("status snapshot renders");
         let rendered = serde_json::to_string(&snapshot).expect("status serializes");
 
         assert_eq!(snapshot.worker_count, 1);
         assert_eq!(snapshot.workers[0].output_signing_key_count, 1);
         assert_eq!(snapshot.queued_jobs.len(), 1);
+        assert!(snapshot.queued_jobs[0].attempt_id.is_some());
+        assert_eq!(snapshot.queued_jobs[0].fence_generation, Some(RemoteFenceGeneration::INITIAL));
         assert_eq!(snapshot.log_cursors.len(), 1);
         assert!(snapshot.active_jobs.is_empty());
         assert_eq!(snapshot.tickets[0].secret, SECRET_REDACTION);
@@ -7332,8 +8511,9 @@ mod tests {
         let request = fixture_coordinator_request();
         let normalized_key = normalized_remote_build_key(&request).expect("request key");
         let mut state = RemoteCoordinatorState::default();
-        state.jobs.insert("lost-job".to_string(), RemoteCoordinatorJobSummary {
-            job_id: "lost-job".to_string(),
+        let job_id = RemoteJobId::new("lost-job").expect("fixture job id");
+        state.jobs.insert(job_id.clone(), RemoteCoordinatorJobSummary {
+            job_id: job_id.clone(),
             normalized_build_key: normalized_key,
             assigned_worker_endpoint_id: Some("worker-secret".to_string()),
             phase: RemoteCoordinatorJobPhase::Lost,
@@ -7343,12 +8523,20 @@ mod tests {
             log_start_cursor: 7,
             log_next_cursor: 9,
             short_error: Some(format!("diagnostic\u{0007}{}", "x".repeat(MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES))),
+            current_attempt: None,
+            transfer_checkpoint: None,
+            transferred_bytes: 0,
+            output_admission_completed: false,
+            last_attempt_reason_code: Some(RemoteAttemptReasonCode::LegacyStateRejected),
         });
-        state.logs.insert("lost-job".to_string(), vec![RemoteCoordinatorLogChunk {
+        state.logs.insert(job_id, vec![RemoteCoordinatorLogChunk {
             cursor: 8,
             bytes: "log".to_string(),
+            event_id: None,
+            payload_digest: None,
         }]);
-        let snapshot = coordinator_status_snapshot("coordinator-1", 1, &state, &[]).expect("status snapshot renders");
+        let snapshot =
+            coordinator_status_snapshot("coordinator-1", 1, &state, &[], &[]).expect("status snapshot renders");
         let rendered = serde_json::to_string(&snapshot).expect("status serializes");
 
         assert_eq!(snapshot.recent_failures.len(), 1);
@@ -7392,6 +8580,7 @@ mod tests {
             "p2p-remote-builder",
             &["local-preflight-failed".to_string()],
             Some("builder-1"),
+            &[RemoteAttemptReasonCode::StaleReportRejected],
             upload_summary,
             &admission,
             &import_report,
@@ -7401,6 +8590,7 @@ mod tests {
 
         assert_eq!(report.selected_route, "p2p-remote-builder");
         assert_eq!(report.endpoint_id.as_deref(), Some("builder-1"));
+        assert_eq!(report.attempt_reason_codes, vec!["stale-report-rejected".to_string()]);
         assert_eq!(report.transfer.mode, RemoteTransferMode::Delta);
         assert_eq!(report.trust_basis.key_id, "builder-key");
         assert_eq!(
@@ -7435,6 +8625,7 @@ mod tests {
             "p2p-remote-builder",
             &[],
             None,
+            &[],
             upload_summary,
             &admission,
             &import_report,
@@ -7584,8 +8775,9 @@ mod tests {
         let request = fixture_coordinator_request();
         let normalized_key = normalized_remote_build_key(&request).expect("request key");
         let mut state = RemoteCoordinatorState::default();
-        state.jobs.insert("lost-job".to_string(), RemoteCoordinatorJobSummary {
-            job_id: "lost-job".to_string(),
+        let job_id = RemoteJobId::new("lost-job").expect("fixture job id");
+        state.jobs.insert(job_id.clone(), RemoteCoordinatorJobSummary {
+            job_id,
             normalized_build_key: normalized_key,
             assigned_worker_endpoint_id: None,
             phase: RemoteCoordinatorJobPhase::Lost,
@@ -7595,6 +8787,11 @@ mod tests {
             log_start_cursor: 0,
             log_next_cursor: 0,
             short_error: Some("worker restart lost job".to_string()),
+            current_attempt: None,
+            transfer_checkpoint: None,
+            transferred_bytes: 0,
+            output_admission_completed: false,
+            last_attempt_reason_code: None,
         });
         let decision = plan_coordinator_dispatch(&state, &request).expect("lost job decision");
 
@@ -8298,21 +9495,25 @@ mod tests {
         let mut state = RemoteCoordinatorState::default();
         apply_worker_registration(&mut state, fixture_worker_registration()).expect("operator rail worker registers");
         let request = fixture_remote_operator_coordinator_request(client);
-        let decision = admit_coordinator_dispatch(&mut state, &request).expect("operator rail dispatch admits");
+        let decision = admit_fixture_dispatch(&mut state, &request).expect("operator rail dispatch admits");
         let job_id = match decision {
             RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } => job_id,
             _ => panic!("operator rail request should dispatch"),
         };
-        let job = state.jobs.get_mut(&job_id).expect("operator rail job exists");
-        job.phase = RemoteCoordinatorJobPhase::Finished;
-        job.result_available = true;
-        job.log_start_cursor = OPERATOR_RAIL_LOG_START_CURSOR;
-        job.log_next_cursor = OPERATOR_RAIL_LOG_NEXT_CURSOR;
-        state.logs.insert(job_id, vec![RemoteCoordinatorLogChunk {
+        let start = fixture_attempt_report(&state, &job_id, "operator-start", RemoteAttemptReportPayload::Start);
+        apply_fixture_attempt_report(&mut state, &start);
+        let log = fixture_attempt_report(&state, &job_id, "operator-log", RemoteAttemptReportPayload::LogAppend {
             cursor: OPERATOR_RAIL_LOG_START_CURSOR,
             bytes: "remote fixture log".to_string(),
-        }]);
-        coordinator_status_snapshot("builder-1", DEFAULT_REMOTE_CONCURRENCY, &state, &[fixture_ticket()])
+        });
+        apply_fixture_attempt_report(&mut state, &log);
+        let ready =
+            fixture_attempt_report(&state, &job_id, "operator-result", RemoteAttemptReportPayload::ResultReady {
+                output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
+            });
+        apply_fixture_attempt_report(&mut state, &ready);
+        assert_eq!(state.jobs[&job_id].log_next_cursor, OPERATOR_RAIL_LOG_NEXT_CURSOR);
+        coordinator_status_snapshot("builder-1", DEFAULT_REMOTE_CONCURRENCY, &state, &[], &[fixture_ticket()])
             .expect("operator rail status renders")
     }
 

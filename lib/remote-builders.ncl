@@ -32,6 +32,28 @@ let RemoteFallbackPolicy = [|
   'trusted-only,
 |] in
 
+let DefaultRemoteConcurrency = 1 in
+let DefaultRemoteUploadBytes = 1073741824 in
+let DefaultRemoteBuildTimeSecs = 3600 in
+let DefaultRemoteRetryAttempts = 3 in
+let DefaultRemoteRetryDelaySecs = 5 in
+let DefaultRemoteAttemptTimeoutSecs = DefaultRemoteBuildTimeSecs in
+
+let RemoteRetryPolicy = {
+  max_attempts
+    | doc "Total bounded attempts, including the initial assignment"
+    | Number
+    | default = DefaultRemoteRetryAttempts,
+  retry_delay_secs
+    | doc "Provider-neutral delay before a retry becomes eligible"
+    | Number
+    | default = DefaultRemoteRetryDelaySecs,
+  attempt_timeout_secs
+    | doc "Per-attempt timeout evaluated against coordinator-supplied time facts"
+    | Number
+    | default = DefaultRemoteAttemptTimeoutSecs,
+} in
+
 let RemoteCapabilityProfile = {
   system
     | doc "Target system triple"
@@ -49,15 +71,18 @@ let RemoteCapabilityProfile = {
   max_concurrency
     | doc "Maximum parallel builds on this builder"
     | Number
-    | default = 1,
+    | default = DefaultRemoteConcurrency,
   max_upload_bytes
     | doc "Maximum upload size per request"
     | Number
-    | default = 1073741824,
+    | default = DefaultRemoteUploadBytes,
   max_build_time_secs
     | doc "Maximum build duration"
     | Number
-    | default = 3600,
+    | default = DefaultRemoteBuildTimeSecs,
+  retry_policy
+    | RemoteRetryPolicy
+    | default = {},
 } in
 
 let RemoteEndpoint = {
@@ -95,7 +120,7 @@ let PublisherProfile = {
     | default = [],
 } in
 
-let RemoteBuilderPool = {
+let RemoteBuilderPoolContract = {
   pool_id
     | doc "Unique pool identifier"
     | String,
@@ -115,10 +140,10 @@ let RemoteBuilderPool = {
 {
   RemoteBuilderPool
     | doc "A configured remote builder pool with typed capability and trust facts."
-    = RemoteBuilderPool,
+    = RemoteBuilderPoolContract,
 
   pools
     | doc "List of configured remote builder pools."
-    | Array RemoteBuilderPool
+    | Array RemoteBuilderPoolContract
     | default = [],
 }

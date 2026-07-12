@@ -1304,6 +1304,7 @@ dependencies = [
  "md-5 0.10.6",
  "nix-compat",
  "pretty_assertions",
+ "proptest",
  "rand 0.8.6",
  "ruzstd",
  "serde",

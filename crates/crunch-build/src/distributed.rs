@@ -9,6 +9,9 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use serde::Serialize;
 
+mod remote_attempt;
+pub use remote_attempt::*;
+
 const REALIZATION_KEY_SCHEMA: &str = "crunch-realization-key-v1";
 const MAX_READY_REMOTE_GOALS: usize = 4096;
 const REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION: &str = "request-validation";

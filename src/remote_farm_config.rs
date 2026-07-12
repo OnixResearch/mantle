@@ -6,7 +6,13 @@
 //!
 //! r[impl remote_builds.production_operator_configuration]
 
+use crunch_build::distributed::RemoteAttemptRetryPolicy;
 use serde::Deserialize;
+
+const DEFAULT_REMOTE_SYSTEM: &str = "x86_64-linux";
+const DEFAULT_REMOTE_MAX_CONCURRENCY: u32 = 1;
+const DEFAULT_REMOTE_MAX_UPLOAD_BYTES: u64 = 1_073_741_824;
+const DEFAULT_REMOTE_MAX_BUILD_TIME_SECS: u64 = 3_600;
 
 /// Transport binding for a remote builder endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
@@ -64,37 +70,40 @@ pub struct RemoteCapabilityProfile {
     pub max_upload_bytes: u64,
     #[serde(default = "default_build_time_secs")]
     pub max_build_time_secs: u64,
+    #[serde(default)]
+    pub retry_policy: RemoteAttemptRetryPolicy,
 }
 
 fn default_sandbox_mode() -> RemoteSandboxMode {
     RemoteSandboxMode::Practical
 }
 fn default_system() -> String {
-    "x86_64-linux".to_string()
+    DEFAULT_REMOTE_SYSTEM.to_string()
 }
 fn default_network_mode() -> RemoteNetworkMode {
     RemoteNetworkMode::None
 }
 fn default_concurrency() -> u32 {
-    1
+    DEFAULT_REMOTE_MAX_CONCURRENCY
 }
 fn default_upload_bytes() -> u64 {
-    1_073_741_824
+    DEFAULT_REMOTE_MAX_UPLOAD_BYTES
 }
 fn default_build_time_secs() -> u64 {
-    3_600
+    DEFAULT_REMOTE_MAX_BUILD_TIME_SECS
 }
 
 impl Default for RemoteCapabilityProfile {
     fn default() -> Self {
         Self {
-            system: "x86_64-linux".to_string(),
+            system: DEFAULT_REMOTE_SYSTEM.to_string(),
             sandbox_mode: RemoteSandboxMode::Practical,
             network_mode: RemoteNetworkMode::None,
             features: Vec::new(),
-            max_concurrency: 1,
-            max_upload_bytes: 1_073_741_824,
-            max_build_time_secs: 3_600,
+            max_concurrency: DEFAULT_REMOTE_MAX_CONCURRENCY,
+            max_upload_bytes: DEFAULT_REMOTE_MAX_UPLOAD_BYTES,
+            max_build_time_secs: DEFAULT_REMOTE_MAX_BUILD_TIME_SECS,
+            retry_policy: RemoteAttemptRetryPolicy::default(),
         }
     }
 }
@@ -197,6 +206,9 @@ impl RemoteBuildFarmConfig {
                 if endpoint.endpoint_id.is_empty() {
                     return Err("endpoint_id must not be empty".to_string());
                 }
+                endpoint.profile.retry_policy.validate().map_err(|reason| {
+                    format!("endpoint '{}' retry policy: {}", endpoint.endpoint_id, reason.as_str())
+                })?;
             }
             // Check for duplicate endpoint IDs within a pool.
             let mut seen = std::collections::BTreeSet::new();
@@ -227,6 +239,11 @@ impl Default for RemoteBuildFarmConfig {
 mod tests {
     use super::*;
 
+    const SAMPLE_MAX_CONCURRENCY: u32 = 4;
+    const SAMPLE_MAX_BUILD_TIME_SECS: u64 = 7_200;
+    const SAMPLE_MAX_ATTEMPTS: u32 = 4;
+    const SAMPLE_RETRY_DELAY_SECS: u64 = 10;
+
     fn sample_config() -> RemoteBuildFarmConfig {
         RemoteBuildFarmConfig {
             pools: vec![RemoteBuilderPool {
@@ -239,9 +256,14 @@ mod tests {
                         sandbox_mode: RemoteSandboxMode::Strict,
                         network_mode: RemoteNetworkMode::None,
                         features: vec!["tigerstyle".to_string()],
-                        max_concurrency: 4,
-                        max_upload_bytes: 1_073_741_824,
-                        max_build_time_secs: 7_200,
+                        max_concurrency: SAMPLE_MAX_CONCURRENCY,
+                        max_upload_bytes: DEFAULT_REMOTE_MAX_UPLOAD_BYTES,
+                        max_build_time_secs: SAMPLE_MAX_BUILD_TIME_SECS,
+                        retry_policy: RemoteAttemptRetryPolicy {
+                            max_attempts: SAMPLE_MAX_ATTEMPTS,
+                            retry_delay_secs: SAMPLE_RETRY_DELAY_SECS,
+                            attempt_timeout_secs: SAMPLE_MAX_BUILD_TIME_SECS,
+                        },
                     },
                 }],
                 fallback_policy: RemoteFallbackPolicy::Always,
@@ -377,6 +399,74 @@ mod tests {
     }
 
     #[test]
+    fn nickel_retry_policy_contract_round_trips_typed_values() {
+        let temp = tempfile::tempdir().expect("temporary Nickel config dir");
+        let config_path = temp.path().join("remote-farm.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+let configured_attempts = 4 in
+let configured_retry_delay_secs = 10 in
+let configured_attempt_timeout_secs = 7200 in
+{
+  pools = [
+    ({
+      pool_id = "typed-pool",
+      endpoints = [{
+        endpoint_id = "typed-worker",
+        profile.retry_policy = {
+          max_attempts = configured_attempts,
+          retry_delay_secs = configured_retry_delay_secs,
+          attempt_timeout_secs = configured_attempt_timeout_secs,
+        },
+      }],
+    } | remote.RemoteBuilderPool),
+  ],
+}
+"#,
+        )
+        .expect("Nickel config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let config: RemoteBuildFarmConfig = crunch_eval::evaluate_and_deserialize(&config_path, &import_paths)
+            .expect("typed Nickel remote policy evaluates");
+
+        assert!(config.validate().is_ok());
+        assert_eq!(config.pools[0].endpoints[0].profile.retry_policy.max_attempts, SAMPLE_MAX_ATTEMPTS);
+        assert_eq!(config.pools[0].endpoints[0].profile.retry_policy.attempt_timeout_secs, SAMPLE_MAX_BUILD_TIME_SECS);
+    }
+
+    #[test]
+    fn nickel_retry_policy_contract_rejects_type_mismatch() {
+        let temp = tempfile::tempdir().expect("temporary Nickel config dir");
+        let config_path = temp.path().join("invalid-remote-farm.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+{
+  pools = [
+    ({
+      pool_id = "invalid-pool",
+      endpoints = [{
+        endpoint_id = "invalid-worker",
+        profile.retry_policy.max_attempts = "unbounded",
+      }],
+    } | remote.RemoteBuilderPool),
+  ],
+}
+"#,
+        )
+        .expect("invalid Nickel config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let error = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(&config_path, &import_paths)
+            .expect_err("typed Nickel retry policy rejects a string attempt budget");
+
+        assert!(error.to_string().contains("contract"));
+        assert!(error.to_string().contains("max_attempts"));
+    }
+
+    #[test]
     fn config_defaults_are_safe() {
         // A pool with minimal fields should get safe defaults.
         let json = r#"{
@@ -394,6 +484,16 @@ mod tests {
         assert_eq!(endpoint.profile.system, "x86_64-linux");
         assert_eq!(endpoint.profile.sandbox_mode, RemoteSandboxMode::Practical);
         assert_eq!(endpoint.profile.network_mode, RemoteNetworkMode::None);
-        assert_eq!(endpoint.profile.max_concurrency, 1);
+        assert_eq!(endpoint.profile.max_concurrency, DEFAULT_REMOTE_MAX_CONCURRENCY);
+        assert_eq!(endpoint.profile.retry_policy, RemoteAttemptRetryPolicy::default());
+    }
+
+    #[test]
+    fn invalid_retry_policy_is_rejected() {
+        let mut config = sample_config();
+        config.pools[0].endpoints[0].profile.retry_policy.max_attempts = 0;
+        let error = config.validate().expect_err("zero retry attempts fail closed");
+        assert!(error.contains("retry-policy-invalid"));
+        assert!(error.contains("builder-01"));
     }
 }
