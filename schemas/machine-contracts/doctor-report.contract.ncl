@@ -3,26 +3,26 @@
 let C = import "prelude.ncl" in
 let MAX_DOCTOR_CHECKS = 32 in
 let MIN_DOCTOR_CHECKS = 1 in
-C.FromPredicate (fun value => (std.is_record (value)
+C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["checks","command","ok","profile","schema"]) (std.record.fields (value))
-  && (std.record.has_field "checks" (value) && ((std.is_array (std.record.get "checks" (value))
+  && (std.record.has_field "checks" (value) && (((std.is_array (std.record.get "checks" (value))
   && std.array.length (std.record.get "checks" (value)) >= MIN_DOCTOR_CHECKS
   && std.array.length (std.record.get "checks" (value)) <= MAX_DOCTOR_CHECKS
-  && std.array.all (fun item_2 => (std.is_record (item_2)
+  && std.array.all (fun item_2 => ((std.is_record (item_2)
   && std.array.all (fun field_3 => std.array.elem field_3 ["detail","id","status","summary"]) (std.record.fields (item_2))
-  && (!std.record.has_field "detail" (item_2) || (((std.record.get "detail" (item_2)) == null || ((std.is_string (std.record.get "detail" (item_2))
-  && C.IsRedactionSafe (std.record.get "detail" (item_2)))))))
-  && (std.record.has_field "id" (item_2) && ((std.is_string (std.record.get "id" (item_2))
-  && C.IsNonEmptyString (std.record.get "id" (item_2)))))
+  && (!std.record.has_field "detail" (item_2) || ((((std.record.get "detail" (item_2)) == null || ((std.is_string (std.record.get "detail" (item_2))
+  && C.IsRedactionSafe (std.record.get "detail" (item_2))))))))
+  && (std.record.has_field "id" (item_2) && (((std.is_string (std.record.get "id" (item_2))
+  && C.IsNonEmptyString (std.record.get "id" (item_2))))))
   && (std.record.has_field "status" (item_2) && ((std.array.elem (std.record.get "status" (item_2)) ["ok","failed"]
-  && std.is_string (std.record.get "status" (item_2)))))
-  && (std.record.has_field "summary" (item_2) && ((std.is_string (std.record.get "summary" (item_2))
-  && C.IsRedactionSafe (std.record.get "summary" (item_2))))))) (std.record.get "checks" (value)))))
+  && (std.is_string (std.record.get "status" (item_2))))))
+  && (std.record.has_field "summary" (item_2) && (((std.is_string (std.record.get "summary" (item_2))
+  && C.IsRedactionSafe (std.record.get "summary" (item_2))))))))) (std.record.get "checks" (value))))))
   && (std.record.has_field "command" (value) && (((std.record.get "command" (value)) == "doctor"
-  && std.is_string (std.record.get "command" (value)))))
-  && (std.record.has_field "ok" (value) && ((std.is_bool (std.record.get "ok" (value)))))
+  && (std.is_string (std.record.get "command" (value))))))
+  && (std.record.has_field "ok" (value) && (((std.is_bool (std.record.get "ok" (value))))))
   && (std.record.has_field "profile" (value) && ((std.array.elem (std.record.get "profile" (value)) ["build","self-build"]
-  && std.is_string (std.record.get "profile" (value)))))
+  && (std.is_string (std.record.get "profile" (value))))))
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "crunch-doctor-report-v1"
-  && std.is_string (std.record.get "schema" (value)))))
-  && (std.array.all (fun item => std.record.get "status" item == "ok") (std.record.get "checks" (value))) == (std.record.get "ok" (value))))
+  && (std.is_string (std.record.get "schema" (value))))))
+  && (std.array.all (fun item => std.record.get "status" item == "ok") (std.record.get "checks" (value))) == (std.record.get "ok" (value)))))

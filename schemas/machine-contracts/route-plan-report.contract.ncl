@@ -10,67 +10,67 @@ let MAX_UPLOAD_OBJECTS = 65536 in
 let MIN_UPLOAD_BYTES = 0 in
 let MIN_UPLOAD_OBJECTS = 0 in
 let is_route = fun value => (std.array.elem (value) ["cached-local","trusted-substitute","archive-import","source-bundle","p2p-remote-builder","local-build","preflight-error"]
-  && std.is_string (value)) in
-let is_rejection = fun value => (std.is_record (value)
+  && (std.is_string (value))) in
+let is_rejection = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["detail","reason_code","route"]) (std.record.fields (value))
-  && (!std.record.has_field "detail" (value) || (((std.record.get "detail" (value)) == null || ((std.is_string (std.record.get "detail" (value))
+  && (!std.record.has_field "detail" (value) || ((((std.record.get "detail" (value)) == null || ((std.is_string (std.record.get "detail" (value))
   && C.Utf8ByteLength (std.record.get "detail" (value)) <= MAX_DETAIL_BYTES
-  && C.IsRedactionSafe (std.record.get "detail" (value)))))))
-  && (std.record.has_field "reason_code" (value) && ((std.is_string (std.record.get "reason_code" (value))
+  && C.IsRedactionSafe (std.record.get "detail" (value))))))))
+  && (std.record.has_field "reason_code" (value) && (((std.is_string (std.record.get "reason_code" (value))
   && C.Utf8ByteLength (std.record.get "reason_code" (value)) <= MAX_REASON_CODE_BYTES
-  && C.IsNonEmptyString (std.record.get "reason_code" (value)))))
-  && (std.record.has_field "route" (value) && (is_route (std.record.get "route" (value))))) in
-let is_upload_summary = fun value => (std.is_record (value)
+  && C.IsNonEmptyString (std.record.get "reason_code" (value))))))
+  && (std.record.has_field "route" (value) && (is_route (std.record.get "route" (value)))))) in
+let is_upload_summary = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["byte_count","classes","object_count"]) (std.record.fields (value))
-  && (std.record.has_field "byte_count" (value) && ((std.is_number (std.record.get "byte_count" (value))
+  && (std.record.has_field "byte_count" (value) && (((std.is_number (std.record.get "byte_count" (value))
   && std.number.is_integer (std.record.get "byte_count" (value))
   && (std.record.get "byte_count" (value)) >= MIN_UPLOAD_BYTES
-  && (std.record.get "byte_count" (value)) <= MAX_UPLOAD_BYTES)))
-  && (std.record.has_field "classes" (value) && ((std.is_array (std.record.get "classes" (value))
+  && (std.record.get "byte_count" (value)) <= MAX_UPLOAD_BYTES))))
+  && (std.record.has_field "classes" (value) && (((std.is_array (std.record.get "classes" (value))
   && std.array.length (std.record.get "classes" (value)) <= MAX_UPLOAD_CLASSES
   && std.array.all (fun item_2 => (std.array.elem (item_2) ["source","store-object","proof","secret-descriptor"]
-  && std.is_string (item_2))) (std.record.get "classes" (value)))))
-  && (std.record.has_field "object_count" (value) && ((std.is_number (std.record.get "object_count" (value))
+  && (std.is_string (item_2)))) (std.record.get "classes" (value))))))
+  && (std.record.has_field "object_count" (value) && (((std.is_number (std.record.get "object_count" (value))
   && std.number.is_integer (std.record.get "object_count" (value))
   && (std.record.get "object_count" (value)) >= MIN_UPLOAD_OBJECTS
-  && (std.record.get "object_count" (value)) <= MAX_UPLOAD_OBJECTS)))) in
-C.FromPredicate (fun value => (std.is_record (value)
+  && (std.record.get "object_count" (value)) <= MAX_UPLOAD_OBJECTS)))))) in
+C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["non_claim","policy","rejected_routes","schema","selected_detail","selected_reason_code","selected_route","tie_breaker","upload_summary"]) (std.record.fields (value))
   && (std.record.has_field "non_claim" (value) && (((std.record.get "non_claim" (value)) == "route planning is advisory and does not prove transport execution or artifact correctness"
-  && std.is_string (std.record.get "non_claim" (value)))))
-  && (std.record.has_field "policy" (value) && ((std.is_record (std.record.get "policy" (value))
+  && (std.is_string (std.record.get "non_claim" (value))))))
+  && (std.record.has_field "policy" (value) && (((std.is_record (std.record.get "policy" (value))
   && std.array.all (fun field_2 => std.array.elem field_2 ["network","requested_claim_strength"]) (std.record.fields (std.record.get "policy" (value)))
   && (std.record.has_field "network" (std.record.get "policy" (value)) && ((std.array.elem (std.record.get "network" (std.record.get "policy" (value))) ["online","offline"]
-  && std.is_string (std.record.get "network" (std.record.get "policy" (value))))))
+  && (std.is_string (std.record.get "network" (std.record.get "policy" (value)))))))
   && (std.record.has_field "requested_claim_strength" (std.record.get "policy" (value)) && ((std.array.elem (std.record.get "requested_claim_strength" (std.record.get "policy" (value))) ["practical","strong-action-correctness","release-facing"]
-  && std.is_string (std.record.get "requested_claim_strength" (std.record.get "policy" (value)))))))))
-  && (std.record.has_field "rejected_routes" (value) && ((std.is_array (std.record.get "rejected_routes" (value))
+  && (std.is_string (std.record.get "requested_claim_strength" (std.record.get "policy" (value)))))))))))
+  && (std.record.has_field "rejected_routes" (value) && (((std.is_array (std.record.get "rejected_routes" (value))
   && std.array.length (std.record.get "rejected_routes" (value)) <= MAX_REJECTED_ROUTES
-  && std.array.all (fun item_2 => is_rejection (item_2)) (std.record.get "rejected_routes" (value)))))
+  && std.array.all (fun item_2 => is_rejection (item_2)) (std.record.get "rejected_routes" (value))))))
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-realization-route-plan-v1"
-  && std.is_string (std.record.get "schema" (value)))))
-  && (!std.record.has_field "selected_detail" (value) || (((std.record.get "selected_detail" (value)) == null || ((std.is_string (std.record.get "selected_detail" (value))
+  && (std.is_string (std.record.get "schema" (value))))))
+  && (!std.record.has_field "selected_detail" (value) || ((((std.record.get "selected_detail" (value)) == null || ((std.is_string (std.record.get "selected_detail" (value))
   && C.Utf8ByteLength (std.record.get "selected_detail" (value)) <= MAX_DETAIL_BYTES
-  && C.IsRedactionSafe (std.record.get "selected_detail" (value)))))))
-  && (std.record.has_field "selected_reason_code" (value) && ((std.is_string (std.record.get "selected_reason_code" (value))
+  && C.IsRedactionSafe (std.record.get "selected_detail" (value))))))))
+  && (std.record.has_field "selected_reason_code" (value) && (((std.is_string (std.record.get "selected_reason_code" (value))
   && C.Utf8ByteLength (std.record.get "selected_reason_code" (value)) <= MAX_REASON_CODE_BYTES
-  && C.IsNonEmptyString (std.record.get "selected_reason_code" (value)))))
+  && C.IsNonEmptyString (std.record.get "selected_reason_code" (value))))))
   && (std.record.has_field "selected_route" (value) && (is_route (std.record.get "selected_route" (value))))
   && (std.record.has_field "tie_breaker" (value) && (((std.record.get "tie_breaker" (value)) == "local-cache,trusted-substitute,archive-import,source-bundle,p2p-remote-builder,local-build,preflight-error"
-  && std.is_string (std.record.get "tie_breaker" (value)))))
-  && (!std.record.has_field "upload_summary" (value) || (((std.record.get "upload_summary" (value)) == null || ((std.is_record (std.record.get "upload_summary" (value))
+  && (std.is_string (std.record.get "tie_breaker" (value))))))
+  && (!std.record.has_field "upload_summary" (value) || ((((std.record.get "upload_summary" (value)) == null || ((std.is_record (std.record.get "upload_summary" (value))
   && std.array.all (fun field_2 => std.array.elem field_2 ["byte_count","classes","object_count"]) (std.record.fields (std.record.get "upload_summary" (value)))
-  && (std.record.has_field "byte_count" (std.record.get "upload_summary" (value)) && ((std.is_number (std.record.get "byte_count" (std.record.get "upload_summary" (value)))
+  && (std.record.has_field "byte_count" (std.record.get "upload_summary" (value)) && (((std.is_number (std.record.get "byte_count" (std.record.get "upload_summary" (value)))
   && std.number.is_integer (std.record.get "byte_count" (std.record.get "upload_summary" (value)))
   && (std.record.get "byte_count" (std.record.get "upload_summary" (value))) >= MIN_UPLOAD_BYTES
-  && (std.record.get "byte_count" (std.record.get "upload_summary" (value))) <= MAX_UPLOAD_BYTES)))
-  && (std.record.has_field "classes" (std.record.get "upload_summary" (value)) && ((std.is_array (std.record.get "classes" (std.record.get "upload_summary" (value)))
+  && (std.record.get "byte_count" (std.record.get "upload_summary" (value))) <= MAX_UPLOAD_BYTES))))
+  && (std.record.has_field "classes" (std.record.get "upload_summary" (value)) && (((std.is_array (std.record.get "classes" (std.record.get "upload_summary" (value)))
   && std.array.length (std.record.get "classes" (std.record.get "upload_summary" (value))) <= MAX_UPLOAD_CLASSES
   && std.array.all (fun item_3 => (std.array.elem (item_3) ["source","store-object","proof","secret-descriptor"]
-  && std.is_string (item_3))) (std.record.get "classes" (std.record.get "upload_summary" (value))))))
-  && (std.record.has_field "object_count" (std.record.get "upload_summary" (value)) && ((std.is_number (std.record.get "object_count" (std.record.get "upload_summary" (value)))
+  && (std.is_string (item_3)))) (std.record.get "classes" (std.record.get "upload_summary" (value)))))))
+  && (std.record.has_field "object_count" (std.record.get "upload_summary" (value)) && (((std.is_number (std.record.get "object_count" (std.record.get "upload_summary" (value)))
   && std.number.is_integer (std.record.get "object_count" (std.record.get "upload_summary" (value)))
   && (std.record.get "object_count" (std.record.get "upload_summary" (value))) >= MIN_UPLOAD_OBJECTS
-  && (std.record.get "object_count" (std.record.get "upload_summary" (value))) <= MAX_UPLOAD_OBJECTS))))))))
+  && (std.record.get "object_count" (std.record.get "upload_summary" (value))) <= MAX_UPLOAD_OBJECTS))))))))))
   && std.array.all (fun item => std.record.get "route" item != (std.record.get "selected_route" (value))) (std.record.get "rejected_routes" (value))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "route" other == std.record.get "route" item) (std.record.get "rejected_routes" (value))) == 1) (std.record.get "rejected_routes" (value))))
+  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "route" other == std.record.get "route" item) (std.record.get "rejected_routes" (value))) == 1) (std.record.get "rejected_routes" (value)))))

@@ -7,6 +7,7 @@ edition = "2024"
 blake3 = "=1.8.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+syn = { version = "=2.0.117", features = ["full", "parsing"] }
 ---
 
 mod machine_schema_contracts;
@@ -31,6 +32,10 @@ const MAX_CONTRACT_FILE_MEBIBYTES: u64 = 16;
 const MAX_SOURCE_BYTES: u64 = MAX_SOURCE_FILE_MEBIBYTES * KIBIBYTES_PER_MEBIBYTE * BYTES_PER_KIBIBYTE;
 const MAX_CONTRACT_FILE_BYTES: u64 = MAX_CONTRACT_FILE_MEBIBYTES * KIBIBYTES_PER_MEBIBYTE * BYTES_PER_KIBIBYTE;
 const SELF_TEST_MAX_VALUES: u64 = 2;
+const SELF_TEST_SCHEMA_PATH: &str = "schemas/machine-contracts/self-test.schema.json";
+const SELF_TEST_CONTRACT_PATH: &str = "schemas/machine-contracts/self-test.contract.ncl";
+const SELF_TEST_POSITIVE_PATH: &str = "schemas/machine-contracts/fixtures/self-test.valid.json";
+const SELF_TEST_NEGATIVE_PATH: &str = "schemas/machine-contracts/fixtures/self-test.negatives.json";
 const ZERO_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -326,6 +331,9 @@ fn run_self_test() -> Result<(), String> {
         return Err("self-test detected permissive rendering or digest-length drift".to_string());
     }
     run_utf8_bounds_self_test()?;
+    run_schema_rejection_self_test()?;
+    run_nullable_constraint_self_test()?;
+    run_invariant_parity_self_test()?;
     run_rust_shape_self_test()?;
     run_registry_self_test()?;
     run_freshness_self_test()?;
@@ -354,6 +362,112 @@ fn run_utf8_bounds_self_test() -> Result<(), String> {
     Ok(())
 }
 
+fn run_schema_rejection_self_test() -> Result<(), String> {
+    const FRACTIONAL_ITEM_BOUND: f64 = 1.5;
+    let mut invalid_union = self_test_schema();
+    invalid_union["properties"]["digest"]["type"] = serde_json::json!(["string", "integer", "null"]);
+    expect_schema_rejected("multi-type nullable union", &invalid_union)?;
+
+    let mut ref_sibling = self_test_schema();
+    ref_sibling["properties"]["digest"] = serde_json::json!({
+        "$ref": "#/$defs/digest",
+        "description": "ignored sibling",
+    });
+    ref_sibling["$defs"] = serde_json::json!({
+        "digest": {"type": "string", "x-mantle-semantic": "blake3"}
+    });
+    expect_schema_rejected("reference sibling", &ref_sibling)?;
+
+    let mut misplaced_bound = self_test_schema();
+    misplaced_bound["properties"]["digest"]["maxItems"] = serde_json::json!(SELF_TEST_MAX_VALUES);
+    misplaced_bound["properties"]["digest"]["x-mantle-bound-name"] =
+        serde_json::json!({"maxItems": "SELF_TEST_MAX_VALUES"});
+    expect_schema_rejected("type-incompatible bound", &misplaced_bound)?;
+
+    let mut missing_items = self_test_schema();
+    missing_items["properties"]["values"].as_object_mut().expect("array schema object").remove("items");
+    expect_schema_rejected("untyped array", &missing_items)?;
+
+    let mut fractional_bound = self_test_schema();
+    fractional_bound["properties"]["values"]["maxItems"] = serde_json::json!(FRACTIONAL_ITEM_BOUND);
+    expect_schema_rejected("fractional collection bound", &fractional_bound)?;
+
+    let recursive = serde_json::json!({
+        "$schema": JSON_SCHEMA_DRAFT,
+        "$id": "mantle://schemas/self-test-recursive-v1",
+        "$defs": {"loop": {"$ref": "#/$defs/loop"}},
+        "type": "object",
+        "required": ["loop"],
+        "properties": {"loop": {"$ref": "#/$defs/loop"}},
+        "additionalProperties": false
+    });
+    reject_issues("self-test recursive schema shape", validate_schema("self-test.recursive", &recursive))?;
+    if render_contract("self-test.recursive", &recursive).is_ok() {
+        return Err("self-test accepted a recursive contract reference".to_string());
+    }
+    Ok(())
+}
+
+fn expect_schema_rejected(label: &str, schema: &Value) -> Result<(), String> {
+    if validate_schema("self-test.rejection", schema).is_empty() {
+        return Err(format!("self-test accepted unsupported schema: {label}"));
+    }
+    if render_contract("self-test.rejection", schema).is_ok() {
+        return Err(format!("self-test rendered unsupported schema: {label}"));
+    }
+    Ok(())
+}
+
+fn run_nullable_constraint_self_test() -> Result<(), String> {
+    let schema = serde_json::json!({
+        "$schema": JSON_SCHEMA_DRAFT,
+        "$id": "mantle://schemas/self-test-nullable-const-v1",
+        "type": ["string", "null"],
+        "const": "exact"
+    });
+    reject_issues("self-test nullable const schema", validate_schema("self-test.nullable", &schema))?;
+    if validate_instance("self-test.nullable", &schema, &Value::Null).is_empty() {
+        return Err("self-test accepted null despite a non-null const constraint".to_string());
+    }
+    let rendered = render_contract("self-test.nullable", &schema)?;
+    let const_offset =
+        rendered.find("(value) == \"exact\"").ok_or_else(|| "nullable const was not rendered".to_string())?;
+    let null_offset = rendered.find("(value) == null").ok_or_else(|| "nullable type was not rendered".to_string())?;
+    if const_offset >= null_offset {
+        return Err("nullable rendering bypasses its universal const constraint".to_string());
+    }
+    Ok(())
+}
+
+fn run_invariant_parity_self_test() -> Result<(), String> {
+    let schema = serde_json::json!({
+        "$schema": JSON_SCHEMA_DRAFT,
+        "$id": "mantle://schemas/self-test-invariant-v1",
+        "type": "object",
+        "required": ["target"],
+        "properties": {
+            "target": {"type": "boolean"},
+            "optional": {"type": "boolean"}
+        },
+        "additionalProperties": false,
+        "x-mantle-invariants": [{"kind": "boolean-or", "terms": ["/optional"], "target": "/target"}]
+    });
+    reject_issues("self-test invariant schema", validate_schema("self-test.invariant", &schema))?;
+    reject_issues(
+        "self-test complete invariant value",
+        validate_instance("self-test.invariant", &schema, &serde_json::json!({"target": false, "optional": false})),
+    )?;
+    let missing = validate_instance("self-test.invariant", &schema, &serde_json::json!({"target": false}));
+    if !missing.iter().any(|issue| issue.class == "cross-field") {
+        return Err(format!("self-test ignored a missing invariant operand: {missing:?}"));
+    }
+
+    let mut malformed = schema;
+    malformed["x-mantle-invariants"] = serde_json::json!([{"kind": "boolean-or", "target": "/target"}]);
+    expect_schema_rejected("invariant with empty terms", &malformed)?;
+    Ok(())
+}
+
 fn run_rust_shape_self_test() -> Result<(), String> {
     let surface = self_test_surface();
     let schema = serde_json::json!({
@@ -367,6 +481,7 @@ fn run_rust_shape_self_test() -> Result<(), String> {
         "additionalProperties": false
     });
     let source = r#"
+        #[derive(serde::Serialize)]
         struct Report {
             #[serde(rename = "wire")]
             pub logical: String,
@@ -378,10 +493,33 @@ fn run_rust_shape_self_test() -> Result<(), String> {
     "#;
     let sources = BTreeMap::from([("src/self_test.rs".to_string(), source.to_string())]);
     reject_issues("self-test Rust owner shape", validate_rust_owner_shape(&surface, &schema, &sources))?;
-    let mut stale = schema;
+    let mut stale = schema.clone();
     stale["required"] = serde_json::json!(["wire", "optional"]);
     if validate_rust_owner_shape(&surface, &stale, &sources).is_empty() {
         return Err("self-test missed Rust/schema optional-field drift".to_string());
+    }
+    let mut stale_type = schema.clone();
+    stale_type["properties"]["wire"]["type"] = Value::String("boolean".to_string());
+    if validate_rust_owner_shape(&surface, &stale_type, &sources).is_empty() {
+        return Err("self-test missed Rust/schema scalar-type drift".to_string());
+    }
+    let spoofed = r#"
+        // struct Report { pub wire: String }
+        #[derive(serde::Serialize)]
+        struct Report { pub wrong: String }
+    "#;
+    let spoofed_sources = BTreeMap::from([("src/self_test.rs".to_string(), spoofed.to_string())]);
+    if validate_rust_owner_shape(&surface, &schema, &spoofed_sources).is_empty() {
+        return Err("self-test let a commented struct spoof Rust owner parity".to_string());
+    }
+    let renamed = r#"
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Report { pub wire: String, pub optional: Option<String> }
+    "#;
+    let renamed_sources = BTreeMap::from([("src/self_test.rs".to_string(), renamed.to_string())]);
+    if validate_rust_owner_shape(&surface, &schema, &renamed_sources).is_empty() {
+        return Err("self-test accepted unsupported struct-level serializer rewriting".to_string());
     }
     Ok(())
 }
@@ -434,10 +572,10 @@ fn self_test_surface() -> Surface {
         },
         consumers: vec!["self-test consumer".to_string()],
         artifacts: Artifacts {
-            schema: "schema.json".to_string(),
-            generated_contract: "contract.ncl".to_string(),
-            positive_fixtures: vec!["positive.json".to_string()],
-            negative_fixture_set: "negative.json".to_string(),
+            schema: SELF_TEST_SCHEMA_PATH.to_string(),
+            generated_contract: SELF_TEST_CONTRACT_PATH.to_string(),
+            positive_fixtures: vec![SELF_TEST_POSITIVE_PATH.to_string()],
+            negative_fixture_set: SELF_TEST_NEGATIVE_PATH.to_string(),
         },
         version_policy: VersionPolicy {
             current: "self-test-v1".to_string(),
@@ -499,6 +637,11 @@ fn run_registry_self_test() -> Result<(), String> {
     if validate_runtime_contract_boundary(&runtime_contract_source).is_empty() {
         return Err("self-test missed runtime Nickel contract execution dependency".to_string());
     }
+    let mut escaped_registry = registry.clone();
+    escaped_registry.surfaces[0].artifacts.generated_contract = "../escaped.contract.ncl".to_string();
+    if validate_registry(&escaped_registry).is_empty() {
+        return Err("self-test accepted an artifact path outside the repository contract root".to_string());
+    }
     let mut duplicate_registry = registry.clone();
     duplicate_registry.surfaces.push(surface.clone());
     duplicate_registry.initial_cohort.push(surface.id.clone());
@@ -518,19 +661,19 @@ fn run_freshness_self_test() -> Result<(), String> {
     let mut surface = self_test_surface();
     let mut files = BTreeMap::from([
         (PRELUDE_PATH.to_string(), b"prelude".to_vec()),
-        ("schema.json".to_string(), b"schema".to_vec()),
-        ("contract.ncl".to_string(), b"contract".to_vec()),
-        ("positive.json".to_string(), b"positive".to_vec()),
-        ("negative.json".to_string(), b"negative".to_vec()),
+        (SELF_TEST_SCHEMA_PATH.to_string(), b"schema".to_vec()),
+        (SELF_TEST_CONTRACT_PATH.to_string(), b"contract".to_vec()),
+        (SELF_TEST_POSITIVE_PATH.to_string(), b"positive".to_vec()),
+        (SELF_TEST_NEGATIVE_PATH.to_string(), b"negative".to_vec()),
         ("src/self_test.rs".to_string(), b"owner".to_vec()),
     ]);
     surface.freshness = expected_freshness(&surface, &files)?;
     reject_issues("self-test current freshness", validate_freshness(&surface, &expected_freshness(&surface, &files)?))?;
     for path in [
-        "schema.json",
-        "contract.ncl",
-        "positive.json",
-        "negative.json",
+        SELF_TEST_SCHEMA_PATH,
+        SELF_TEST_CONTRACT_PATH,
+        SELF_TEST_POSITIVE_PATH,
+        SELF_TEST_NEGATIVE_PATH,
         "src/self_test.rs",
     ] {
         let original = files.get(path).cloned().ok_or_else(|| format!("self-test file missing: {path}"))?;

@@ -9,45 +9,45 @@ let MIN_SOURCE_BYTES = 0 in
 let MIN_SOURCE_FILES = 0 in
 let MIN_SOURCE_RECORDS = 1 in
 let is_kind = fun value => (std.array.elem (value) ["fixed-url","local-path","vcs-snapshot","package-mirror","bootstrap-archive","provider-manifest","toolchain-source-root","proof-input"]
-  && std.is_string (value)) in
+  && (std.is_string (value))) in
 let is_readiness = fun value => (std.array.elem (value) ["ready","missing","stale","unsupported","untrusted","network-required","unpinned"]
-  && std.is_string (value)) in
-let is_record = fun value => (std.is_record (value)
+  && (std.is_string (value))) in
+let is_record = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["content_blake3","file_count","identity","kind","payload_bytes"]) (std.record.fields (value))
-  && (std.record.has_field "content_blake3" (value) && ((std.is_string (std.record.get "content_blake3" (value))
-  && C.IsBlake3Hex (std.record.get "content_blake3" (value)))))
-  && (std.record.has_field "file_count" (value) && ((std.is_number (std.record.get "file_count" (value))
+  && (std.record.has_field "content_blake3" (value) && (((std.is_string (std.record.get "content_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "content_blake3" (value))))))
+  && (std.record.has_field "file_count" (value) && (((std.is_number (std.record.get "file_count" (value))
   && std.number.is_integer (std.record.get "file_count" (value))
   && (std.record.get "file_count" (value)) >= MIN_SOURCE_FILES
-  && (std.record.get "file_count" (value)) <= MAX_SOURCE_FILES_PER_RECORD)))
-  && (std.record.has_field "identity" (value) && ((std.is_string (std.record.get "identity" (value))
+  && (std.record.get "file_count" (value)) <= MAX_SOURCE_FILES_PER_RECORD))))
+  && (std.record.has_field "identity" (value) && (((std.is_string (std.record.get "identity" (value))
   && C.Utf8ByteLength (std.record.get "identity" (value)) <= MAX_SOURCE_ID_BYTES
-  && C.IsSafeReference (std.record.get "identity" (value)))))
+  && C.IsSafeReference (std.record.get "identity" (value))))))
   && (std.record.has_field "kind" (value) && (is_kind (std.record.get "kind" (value))))
-  && (std.record.has_field "payload_bytes" (value) && ((std.is_number (std.record.get "payload_bytes" (value))
+  && (std.record.has_field "payload_bytes" (value) && (((std.is_number (std.record.get "payload_bytes" (value))
   && std.number.is_integer (std.record.get "payload_bytes" (value))
   && (std.record.get "payload_bytes" (value)) >= MIN_SOURCE_BYTES
-  && (std.record.get "payload_bytes" (value)) <= MAX_SOURCE_TOTAL_BYTES)))) in
-C.FromPredicate (fun value => (std.is_record (value)
+  && (std.record.get "payload_bytes" (value)) <= MAX_SOURCE_TOTAL_BYTES)))))) in
+C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["format","non_claim","payload_bytes","ready_class","record_count","records","store_prefix"]) (std.record.fields (value))
   && (std.record.has_field "format" (value) && (((std.record.get "format" (value)) == "mantle-source-bundle-v1"
-  && std.is_string (std.record.get "format" (value)))))
+  && (std.is_string (std.record.get "format" (value))))))
   && (std.record.has_field "non_claim" (value) && (((std.record.get "non_claim" (value)) == "source bundle evidence proves declared source/input availability and identity only"
-  && std.is_string (std.record.get "non_claim" (value)))))
-  && (std.record.has_field "payload_bytes" (value) && ((std.is_number (std.record.get "payload_bytes" (value))
+  && (std.is_string (std.record.get "non_claim" (value))))))
+  && (std.record.has_field "payload_bytes" (value) && (((std.is_number (std.record.get "payload_bytes" (value))
   && std.number.is_integer (std.record.get "payload_bytes" (value))
   && (std.record.get "payload_bytes" (value)) >= MIN_SOURCE_BYTES
-  && (std.record.get "payload_bytes" (value)) <= MAX_SOURCE_TOTAL_BYTES)))
+  && (std.record.get "payload_bytes" (value)) <= MAX_SOURCE_TOTAL_BYTES))))
   && (std.record.has_field "ready_class" (value) && (is_readiness (std.record.get "ready_class" (value))))
-  && (std.record.has_field "record_count" (value) && ((std.is_number (std.record.get "record_count" (value))
+  && (std.record.has_field "record_count" (value) && (((std.is_number (std.record.get "record_count" (value))
   && std.number.is_integer (std.record.get "record_count" (value))
   && (std.record.get "record_count" (value)) >= MIN_SOURCE_RECORDS
-  && (std.record.get "record_count" (value)) <= MAX_SOURCE_RECORDS)))
-  && (std.record.has_field "records" (value) && ((std.is_array (std.record.get "records" (value))
+  && (std.record.get "record_count" (value)) <= MAX_SOURCE_RECORDS))))
+  && (std.record.has_field "records" (value) && (((std.is_array (std.record.get "records" (value))
   && std.array.length (std.record.get "records" (value)) >= MIN_SOURCE_RECORDS
   && std.array.length (std.record.get "records" (value)) <= MAX_SOURCE_RECORDS
-  && std.array.all (fun item_2 => is_record (item_2)) (std.record.get "records" (value)))))
-  && (std.record.has_field "store_prefix" (value) && ((std.is_string (std.record.get "store_prefix" (value))
-  && C.IsSafeReference (std.record.get "store_prefix" (value)))))
+  && std.array.all (fun item_2 => is_record (item_2)) (std.record.get "records" (value))))))
+  && (std.record.has_field "store_prefix" (value) && (((std.is_string (std.record.get "store_prefix" (value))
+  && C.IsSafeReference (std.record.get "store_prefix" (value))))))
   && std.array.length (std.record.get "records" (value)) == (std.record.get "record_count" (value))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "identity" other == std.record.get "identity" item) (std.record.get "records" (value))) == 1) (std.record.get "records" (value))))
+  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "identity" other == std.record.get "identity" item) (std.record.get "records" (value))) == 1) (std.record.get "records" (value)))))

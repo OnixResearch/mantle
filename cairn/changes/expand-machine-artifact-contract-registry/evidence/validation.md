@@ -139,6 +139,62 @@ issues=[] valid=true verdict=PASS
 
 `cairn tracey coverage --root .` is not claimed as passing. The active `mantle-default` Tracey profile currently points only at the accepted `release-provenance` spec and its five evidence sources; it reports 55 pre-existing missing `mantle.release_provenance.*` references. It reports no dangling references and does not evaluate this active change's requirement source. Cairn validation and all three change gates pass independently.
 
+## Adversarial integration review
+
+The integration review found and closed generic false-pass paths that the initial
+cohort did not exercise directly:
+
+- nullable unions could contain multiple non-null types;
+- `$ref` siblings and type-incompatible keywords could be accepted and then
+  ignored by the generated predicate;
+- collection bounds could be negative or fractional, and arrays could omit an
+  item schema;
+- nullable type handling could bypass a sibling `const` or `enum` constraint;
+- missing invariant operands could be ignored by the Rust validator while the
+  Nickel contract rejected them;
+- the textual Rust-owner parser could be spoofed by comments or prefix-matching
+  declarations and did not compare resolvable root scalar/container types;
+- registry artifact paths were not normalized or confined to the contract
+  subtree.
+
+The repaired checker parses owner files with `syn`, rejects unsupported
+serializer rewrites, validates root field names/requiredness/type categories,
+uses exact nullable unions and root-definition-only references, validates
+keyword/type compatibility and invariant declarations, keeps universal literal
+constraints outside nullable type predicates, uses checked invariant sums, and
+confines normalized artifact paths.
+
+Current post-review evidence:
+
+```text
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --self-test
+machine schema contract self-test: PASS
+
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (13 contracted, 42 classified)
+
+$ nix develop -c cargo test -q -p mantle --test machine_schema_contracts -- --nocapture
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.32s
+
+$ nix develop -c cargo test -q -p mantle --bin mantle machine_contract -- --nocapture
+running 6 tests
+...
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1284 filtered out; finished in 0.00s
+
+$ nix develop -c rustfmt --check --edition 2024 scripts/check-machine-schema-contracts.rs scripts/machine_schema_contracts/model.rs scripts/machine_schema_contracts/registry.rs scripts/machine_schema_contracts/schema.rs scripts/machine_schema_contracts/instance.rs scripts/machine_schema_contracts/render.rs
+(exit 0)
+
+$ git diff --check
+(exit 0)
+```
+
+The attempted `cargo clippy -Zscript ...` invocation is not claimed as evidence:
+this Cargo version dispatches that form to `cargo check` and rejects the script
+path as an unexpected argument. The executable self-test/check, scoped rustfmt,
+Rust producer fixtures, and Nickel integration tests are the validated rails.
+
 ## Claim boundary
 
 Contract conformance proves only the declared JSON shape, bounds, linkage, and version policy. It does not prove build correctness, cache trust, reproducibility, release eligibility, attestation truth, provenance, deployability, or the truth of facts carried by a conforming artifact.

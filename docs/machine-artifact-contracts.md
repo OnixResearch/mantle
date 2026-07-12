@@ -29,18 +29,22 @@ Authority is one-way:
 
 1. Rust DTOs own emitted runtime facts.
 2. A checked JSON Schema snapshot records the exact supported review
-   projection. The checker compares root fields and requiredness with the named
-   Rust owner, including `serde(rename)`, `skip_serializing`, and
-   `skip_serializing_if`; producer tests compare Rust serialization with
-   positive fixtures.
+   projection. The checker parses the exact Rust owner syntax, compares root
+   fields, requiredness, and resolvable scalar/container categories, and
+   accounts for `serde(rename)`, `skip_serializing`, and `skip_serializing_if`.
+   It rejects comment-spoofed declarations, conditional fields, flattening,
+   custom field serializers, and unsupported struct-level serializer rewrites;
+   producer tests also compare Rust serialization with positive fixtures.
 3. The pure Rust generator accepts only a bounded schema subset and renders a
    Nickel contract from it.
 4. Nickel evaluates only in tests as typed review evidence. Product commands do
    not load Nickel contracts or execute a Nickel validator before emitting JSON.
 
-Unsupported schema keywords, missing or non-local references, recursive
-schemas, permissive object tails, and unnamed bounds fail closed. The generator
-never falls back to `Dyn`.
+Unsupported schema keywords, multi-type unions, `$ref` siblings, missing or
+non-root-definition references, recursive schemas, misplaced constraints,
+untyped arrays, permissive object tails, fractional collection bounds, and
+unnamed bounds fail closed. Contract artifact paths are normalized and confined
+to `schemas/machine-contracts/`. The generator never falls back to `Dyn`.
 
 The shared generated-contract vocabulary covers exact versions, closed enums,
 integer and collection bounds, BLAKE3 and protocol-required SHA-256 syntax,

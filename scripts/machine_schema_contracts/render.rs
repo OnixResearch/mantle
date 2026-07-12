@@ -49,31 +49,35 @@ fn render_predicate_node(root: &Value, schema: &Value, value: &str, depth: u32) 
         .get("type")
         .and_then(Value::as_array)
         .is_some_and(|types| types.iter().any(|kind| kind.as_str() == Some("null")));
-    let mut predicates = Vec::new();
+    let mut universal_predicates = Vec::new();
     if let Some(expected) = object.get("const") {
-        predicates.push(format!("({value}) == {}", json_literal(expected)?));
+        universal_predicates.push(format!("({value}) == {}", json_literal(expected)?));
     }
     if let Some(allowed) = object.get("enum") {
-        predicates.push(format!("std.array.elem ({value}) {}", json_literal(allowed)?));
+        universal_predicates.push(format!("std.array.elem ({value}) {}", json_literal(allowed)?));
     }
+    let mut type_predicates = Vec::new();
     match declared_non_null_type(object) {
-        Some("object") => predicates.extend(render_object_predicates(root, object, value, depth)?),
-        Some("array") => predicates.extend(render_array_predicates(root, object, value, depth)?),
-        Some("string") => predicates.extend(render_string_predicates(object, value)?),
-        Some("integer") => predicates.extend(render_number_predicates(object, value, true)?),
-        Some("number") => predicates.extend(render_number_predicates(object, value, false)?),
-        Some("boolean") => predicates.push(format!("std.is_bool ({value})")),
-        Some("null") => predicates.push(format!("({value}) == null")),
+        Some("object") => type_predicates.extend(render_object_predicates(root, object, value, depth)?),
+        Some("array") => type_predicates.extend(render_array_predicates(root, object, value, depth)?),
+        Some("string") => type_predicates.extend(render_string_predicates(object, value)?),
+        Some("integer") => type_predicates.extend(render_number_predicates(object, value, true)?),
+        Some("number") => type_predicates.extend(render_number_predicates(object, value, false)?),
+        Some("boolean") => type_predicates.push(format!("std.is_bool ({value})")),
+        Some("null") => type_predicates.push(format!("({value}) == null")),
         Some(other) => return Err(format!("unsupported predicate type {other}")),
         None if object.contains_key("const") || object.contains_key("enum") => {}
         None => return Err("predicate node lacks renderable type".to_string()),
     }
-    let body = join_predicates(predicates);
-    if nullable {
-        Ok(format!("(({value}) == null || ({body}))"))
-    } else {
-        Ok(body)
+    if !type_predicates.is_empty() {
+        let type_body = join_predicates(type_predicates);
+        universal_predicates.push(if nullable {
+            format!("(({value}) == null || ({type_body}))")
+        } else {
+            type_body
+        });
     }
+    Ok(join_predicates(universal_predicates))
 }
 
 fn render_object_predicates(

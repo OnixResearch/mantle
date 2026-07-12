@@ -6,43 +6,43 @@ let MAX_RECEIPT_RECORDS = 65536 in
 let MIN_RECEIPT_RECORDS = 1 in
 let RECEIPT_RECORD_KIND_COUNT = 11 in
 let is_kind = fun value => (std.array.elem (value) ["source-ref","action-ref","sandbox-report","network-policy","reference-scan","output-ref","artifact-attestation","closure-attestation","semantic-graph-edge","trust-basis","signature"]
-  && std.is_string (value)) in
-let is_record = fun value => (std.is_record (value)
+  && (std.is_string (value))) in
+let is_record = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["digest","identity","kind"]) (std.record.fields (value))
-  && (std.record.has_field "digest" (value) && ((std.is_string (std.record.get "digest" (value))
-  && C.IsMantleDigest (std.record.get "digest" (value)))))
-  && (std.record.has_field "identity" (value) && ((std.is_string (std.record.get "identity" (value))
+  && (std.record.has_field "digest" (value) && (((std.is_string (std.record.get "digest" (value))
+  && C.IsMantleDigest (std.record.get "digest" (value))))))
+  && (std.record.has_field "identity" (value) && (((std.is_string (std.record.get "identity" (value))
   && C.Utf8ByteLength (std.record.get "identity" (value)) <= MAX_RECEIPT_FIELD_BYTES
-  && C.IsSafeReference (std.record.get "identity" (value)))))
-  && (std.record.has_field "kind" (value) && (is_kind (std.record.get "kind" (value))))) in
-C.FromPredicate (fun value => (std.is_record (value)
+  && C.IsSafeReference (std.record.get "identity" (value))))))
+  && (std.record.has_field "kind" (value) && (is_kind (std.record.get "kind" (value)))))) in
+C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["bundle_blake3","claim_strength","evidence_complete","format","missing_evidence","non_claim","output_identities","record_count","records","store_prefix"]) (std.record.fields (value))
-  && (std.record.has_field "bundle_blake3" (value) && ((std.is_string (std.record.get "bundle_blake3" (value))
-  && C.IsBlake3Hex (std.record.get "bundle_blake3" (value)))))
+  && (std.record.has_field "bundle_blake3" (value) && (((std.is_string (std.record.get "bundle_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "bundle_blake3" (value))))))
   && (std.record.has_field "claim_strength" (value) && ((std.array.elem (std.record.get "claim_strength" (value)) ["diagnostic","strong-action-correctness","release-facing"]
-  && std.is_string (std.record.get "claim_strength" (value)))))
-  && (std.record.has_field "evidence_complete" (value) && ((std.is_bool (std.record.get "evidence_complete" (value)))))
+  && (std.is_string (std.record.get "claim_strength" (value))))))
+  && (std.record.has_field "evidence_complete" (value) && (((std.is_bool (std.record.get "evidence_complete" (value))))))
   && (std.record.has_field "format" (value) && (((std.record.get "format" (value)) == "mantle-build-receipt-bundle-v1"
-  && std.is_string (std.record.get "format" (value)))))
-  && (std.record.has_field "missing_evidence" (value) && ((std.is_array (std.record.get "missing_evidence" (value))
+  && (std.is_string (std.record.get "format" (value))))))
+  && (std.record.has_field "missing_evidence" (value) && (((std.is_array (std.record.get "missing_evidence" (value))
   && std.array.length (std.record.get "missing_evidence" (value)) <= RECEIPT_RECORD_KIND_COUNT
-  && std.array.all (fun item_2 => is_kind (item_2)) (std.record.get "missing_evidence" (value)))))
+  && std.array.all (fun item_2 => is_kind (item_2)) (std.record.get "missing_evidence" (value))))))
   && (std.record.has_field "non_claim" (value) && (((std.record.get "non_claim" (value)) == "receipt bundle evidence proves only matched receipt, attestation, graph, and trust-basis facts"
-  && std.is_string (std.record.get "non_claim" (value)))))
-  && (std.record.has_field "output_identities" (value) && ((std.is_array (std.record.get "output_identities" (value))
+  && (std.is_string (std.record.get "non_claim" (value))))))
+  && (std.record.has_field "output_identities" (value) && (((std.is_array (std.record.get "output_identities" (value))
   && std.array.length (std.record.get "output_identities" (value)) <= MAX_RECEIPT_RECORDS
-  && std.array.all (fun item_2 => (std.is_string (item_2)
-  && C.IsSafeReference (item_2))) (std.record.get "output_identities" (value)))))
-  && (std.record.has_field "record_count" (value) && ((std.is_number (std.record.get "record_count" (value))
+  && std.array.all (fun item_2 => ((std.is_string (item_2)
+  && C.IsSafeReference (item_2)))) (std.record.get "output_identities" (value))))))
+  && (std.record.has_field "record_count" (value) && (((std.is_number (std.record.get "record_count" (value))
   && std.number.is_integer (std.record.get "record_count" (value))
   && (std.record.get "record_count" (value)) >= MIN_RECEIPT_RECORDS
-  && (std.record.get "record_count" (value)) <= MAX_RECEIPT_RECORDS)))
-  && (std.record.has_field "records" (value) && ((std.is_array (std.record.get "records" (value))
+  && (std.record.get "record_count" (value)) <= MAX_RECEIPT_RECORDS))))
+  && (std.record.has_field "records" (value) && (((std.is_array (std.record.get "records" (value))
   && std.array.length (std.record.get "records" (value)) >= MIN_RECEIPT_RECORDS
   && std.array.length (std.record.get "records" (value)) <= MAX_RECEIPT_RECORDS
-  && std.array.all (fun item_2 => is_record (item_2)) (std.record.get "records" (value)))))
-  && (std.record.has_field "store_prefix" (value) && ((std.is_string (std.record.get "store_prefix" (value))
-  && C.IsSafeReference (std.record.get "store_prefix" (value)))))
+  && std.array.all (fun item_2 => is_record (item_2)) (std.record.get "records" (value))))))
+  && (std.record.has_field "store_prefix" (value) && (((std.is_string (std.record.get "store_prefix" (value))
+  && C.IsSafeReference (std.record.get "store_prefix" (value))))))
   && std.array.length (std.record.get "records" (value)) == (std.record.get "record_count" (value))
   && (std.array.length (std.record.get "missing_evidence" (value)) == 0) == (std.record.get "evidence_complete" (value))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => other == item) (std.record.get "output_identities" (value))) == 1) (std.record.get "output_identities" (value))))
+  && std.array.all (fun item => std.array.length (std.array.filter (fun other => other == item) (std.record.get "output_identities" (value))) == 1) (std.record.get "output_identities" (value)))))

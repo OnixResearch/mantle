@@ -5,56 +5,56 @@ let MAX_BINARY_DIGEST_COUNT = 256 in
 let MAX_RELEASE_CLAIMS = 256 in
 let MAX_RELEASE_FACTS = 256 in
 let MIN_BINARY_DIGEST_COUNT = 1 in
-let is_binary_digest = fun value => (std.is_record (value)
+let is_binary_digest = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["algorithm","digest","name"]) (std.record.fields (value))
   && (std.record.has_field "algorithm" (value) && ((std.array.elem (std.record.get "algorithm" (value)) ["blake3"]
-  && std.is_string (std.record.get "algorithm" (value)))))
-  && (std.record.has_field "digest" (value) && ((std.is_string (std.record.get "digest" (value))
-  && C.IsBlake3Hex (std.record.get "digest" (value)))))
-  && (std.record.has_field "name" (value) && ((std.is_string (std.record.get "name" (value))
-  && C.IsSafeReference (std.record.get "name" (value)))))) in
-let is_workflow = fun value => (std.is_record (value)
+  && (std.is_string (std.record.get "algorithm" (value))))))
+  && (std.record.has_field "digest" (value) && (((std.is_string (std.record.get "digest" (value))
+  && C.IsBlake3Hex (std.record.get "digest" (value))))))
+  && (std.record.has_field "name" (value) && (((std.is_string (std.record.get "name" (value))
+  && C.IsSafeReference (std.record.get "name" (value)))))))) in
+let is_workflow = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["command","version"]) (std.record.fields (value))
-  && (std.record.has_field "command" (value) && ((std.is_string (std.record.get "command" (value))
-  && C.IsNonEmptyString (std.record.get "command" (value)))))
-  && (std.record.has_field "version" (value) && ((std.is_string (std.record.get "version" (value))
-  && C.IsNonEmptyString (std.record.get "version" (value)))))) in
-let is_release_attestation = fun value => (std.is_record (value)
+  && (std.record.has_field "command" (value) && (((std.is_string (std.record.get "command" (value))
+  && C.IsNonEmptyString (std.record.get "command" (value))))))
+  && (std.record.has_field "version" (value) && (((std.is_string (std.record.get "version" (value))
+  && C.IsNonEmptyString (std.record.get "version" (value)))))))) in
+let is_release_attestation = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["binary_digests","declared_effect_claims","observed_effect_facts","proof_bundle_digest_blake3","proof_mode","release_evidence_manifest_digest_blake3","release_id","schema","workflow"]) (std.record.fields (value))
-  && (std.record.has_field "binary_digests" (value) && ((std.is_array (std.record.get "binary_digests" (value))
+  && (std.record.has_field "binary_digests" (value) && (((std.is_array (std.record.get "binary_digests" (value))
   && std.array.length (std.record.get "binary_digests" (value)) >= MIN_BINARY_DIGEST_COUNT
   && std.array.length (std.record.get "binary_digests" (value)) <= MAX_BINARY_DIGEST_COUNT
-  && std.array.all (fun item_2 => is_binary_digest (item_2)) (std.record.get "binary_digests" (value)))))
-  && (!std.record.has_field "declared_effect_claims" (value) || (((std.record.get "declared_effect_claims" (value)) == null || ((std.is_array (std.record.get "declared_effect_claims" (value))
+  && std.array.all (fun item_2 => is_binary_digest (item_2)) (std.record.get "binary_digests" (value))))))
+  && (!std.record.has_field "declared_effect_claims" (value) || ((((std.record.get "declared_effect_claims" (value)) == null || ((std.is_array (std.record.get "declared_effect_claims" (value))
   && std.array.length (std.record.get "declared_effect_claims" (value)) <= MAX_RELEASE_CLAIMS
-  && std.array.all (fun item_2 => (std.is_string (item_2)
-  && C.IsRedactionSafe (item_2))) (std.record.get "declared_effect_claims" (value)))))))
-  && (!std.record.has_field "observed_effect_facts" (value) || (((std.record.get "observed_effect_facts" (value)) == null || ((std.is_array (std.record.get "observed_effect_facts" (value))
+  && std.array.all (fun item_2 => ((std.is_string (item_2)
+  && C.IsRedactionSafe (item_2)))) (std.record.get "declared_effect_claims" (value))))))))
+  && (!std.record.has_field "observed_effect_facts" (value) || ((((std.record.get "observed_effect_facts" (value)) == null || ((std.is_array (std.record.get "observed_effect_facts" (value))
   && std.array.length (std.record.get "observed_effect_facts" (value)) <= MAX_RELEASE_FACTS
-  && std.array.all (fun item_2 => (std.is_string (item_2)
-  && C.IsRedactionSafe (item_2))) (std.record.get "observed_effect_facts" (value)))))))
-  && (std.record.has_field "proof_bundle_digest_blake3" (value) && ((std.is_string (std.record.get "proof_bundle_digest_blake3" (value))
-  && C.IsBlake3Hex (std.record.get "proof_bundle_digest_blake3" (value)))))
-  && (std.record.has_field "proof_mode" (value) && ((std.is_string (std.record.get "proof_mode" (value))
-  && C.IsNonEmptyString (std.record.get "proof_mode" (value)))))
-  && (std.record.has_field "release_evidence_manifest_digest_blake3" (value) && ((std.is_string (std.record.get "release_evidence_manifest_digest_blake3" (value))
-  && C.IsBlake3Hex (std.record.get "release_evidence_manifest_digest_blake3" (value)))))
-  && (std.record.has_field "release_id" (value) && ((std.is_string (std.record.get "release_id" (value))
-  && C.IsSafeReference (std.record.get "release_id" (value)))))
+  && std.array.all (fun item_2 => ((std.is_string (item_2)
+  && C.IsRedactionSafe (item_2)))) (std.record.get "observed_effect_facts" (value))))))))
+  && (std.record.has_field "proof_bundle_digest_blake3" (value) && (((std.is_string (std.record.get "proof_bundle_digest_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "proof_bundle_digest_blake3" (value))))))
+  && (std.record.has_field "proof_mode" (value) && (((std.is_string (std.record.get "proof_mode" (value))
+  && C.IsNonEmptyString (std.record.get "proof_mode" (value))))))
+  && (std.record.has_field "release_evidence_manifest_digest_blake3" (value) && (((std.is_string (std.record.get "release_evidence_manifest_digest_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "release_evidence_manifest_digest_blake3" (value))))))
+  && (std.record.has_field "release_id" (value) && (((std.is_string (std.record.get "release_id" (value))
+  && C.IsSafeReference (std.record.get "release_id" (value))))))
   && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-release-attestation-v1"
-  && std.is_string (std.record.get "schema" (value)))))
+  && (std.is_string (std.record.get "schema" (value))))))
   && (std.record.has_field "workflow" (value) && (is_workflow (std.record.get "workflow" (value))))
-  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "name" other == std.record.get "name" item) (std.record.get "binary_digests" (value))) == 1) (std.record.get "binary_digests" (value))) in
-let is_string_array = fun value => (std.is_array (value)
+  && std.array.all (fun item => std.array.length (std.array.filter (fun other => std.record.get "name" other == std.record.get "name" item) (std.record.get "binary_digests" (value))) == 1) (std.record.get "binary_digests" (value)))) in
+let is_string_array = fun value => ((std.is_array (value)
   && std.array.length (value) <= MAX_RELEASE_CLAIMS
-  && std.array.all (fun item_1 => (std.is_string (item_1)
-  && C.IsRedactionSafe (item_1))) (value)) in
-C.FromPredicate (fun value => (std.is_record (value)
+  && std.array.all (fun item_1 => ((std.is_string (item_1)
+  && C.IsRedactionSafe (item_1)))) (value))) in
+C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["attestation","digest","kind","stored_path"]) (std.record.fields (value))
   && (std.record.has_field "attestation" (value) && (is_release_attestation (std.record.get "attestation" (value))))
-  && (std.record.has_field "digest" (value) && ((std.is_string (std.record.get "digest" (value))
-  && C.IsBlake3Hex (std.record.get "digest" (value)))))
+  && (std.record.has_field "digest" (value) && (((std.is_string (std.record.get "digest" (value))
+  && C.IsBlake3Hex (std.record.get "digest" (value))))))
   && (std.record.has_field "kind" (value) && (((std.record.get "kind" (value)) == "mantle-release-attestation"
-  && std.is_string (std.record.get "kind" (value)))))
-  && (!std.record.has_field "stored_path" (value) || ((std.is_string (std.record.get "stored_path" (value))
-  && C.IsSafeReference (std.record.get "stored_path" (value)))))))
+  && (std.is_string (std.record.get "kind" (value))))))
+  && (!std.record.has_field "stored_path" (value) || (((std.is_string (std.record.get "stored_path" (value))
+  && C.IsSafeReference (std.record.get "stored_path" (value)))))))))

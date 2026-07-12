@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::Component;
+use std::path::Path;
 
 use super::model::*;
 
@@ -241,6 +243,7 @@ fn validate_surface(surface: &Surface, path: &str, issues: &mut Vec<Issue>) {
     require_list(surface, &surface.validation_commands, "validation_commands", path, issues);
     require_list(surface, &surface.non_claims, "non_claims", path, issues);
     validate_version_policy(surface, path, issues);
+    validate_surface_paths(surface, path, issues);
     if surface.class == CONTRACTED_CLASS {
         require_text(surface, &surface.artifacts.schema, "artifacts/schema", path, issues);
         require_text(surface, &surface.artifacts.generated_contract, "artifacts/generated_contract", path, issues);
@@ -276,6 +279,57 @@ fn validate_surface(surface: &Surface, path: &str, issues: &mut Vec<Issue>) {
             ),
         );
     }
+}
+
+fn validate_surface_paths(surface: &Surface, path: &str, issues: &mut Vec<Issue>) {
+    for source_path in &surface.producer.source_paths {
+        let allowed_root =
+            source_path.starts_with("src/") || source_path.starts_with("crates/") || source_path.starts_with("tools/");
+        if !safe_repo_relative_path(source_path) || !allowed_root || !source_path.ends_with(".rs") {
+            push_issue(
+                issues,
+                Issue::surface(
+                    &surface.id,
+                    "reference",
+                    format!("{path}/producer/source_paths"),
+                    format!("producer source must be a safe Rust path under src, crates, or tools: {source_path}"),
+                ),
+            );
+        }
+    }
+    if surface.class != CONTRACTED_CLASS {
+        return;
+    }
+    for artifact_path in contracted_artifact_paths(surface) {
+        if !safe_repo_relative_path(artifact_path) || !artifact_path.starts_with("schemas/machine-contracts/") {
+            push_issue(
+                issues,
+                Issue::surface(
+                    &surface.id,
+                    "reference",
+                    format!("{path}/artifacts"),
+                    format!("contract artifact must stay under schemas/machine-contracts: {artifact_path}"),
+                ),
+            );
+        }
+    }
+}
+
+fn safe_repo_relative_path(value: &str) -> bool {
+    if value.is_empty() || value.contains('\\') {
+        return false;
+    }
+    let mut normalized = Vec::new();
+    for component in Path::new(value).components() {
+        let Component::Normal(segment) = component else {
+            return false;
+        };
+        let Some(segment) = segment.to_str() else {
+            return false;
+        };
+        normalized.push(segment);
+    }
+    !normalized.is_empty() && normalized.join("/") == value
 }
 
 fn validate_version_policy(surface: &Surface, path: &str, issues: &mut Vec<Issue>) {
@@ -370,6 +424,18 @@ fn require_list(surface: &Surface, values: &[String], field: &str, path: &str, i
                 "bounds",
                 format!("{path}/{field}"),
                 format!("{field} exceeds MAX_REGISTRY_LIST_ITEMS={MAX_REGISTRY_LIST_ITEMS}"),
+            ),
+        );
+    }
+    let distinct = values.iter().collect::<BTreeSet<_>>();
+    if distinct.len() != values.len() {
+        push_issue(
+            issues,
+            Issue::surface(
+                &surface.id,
+                "schema",
+                format!("{path}/{field}"),
+                format!("{field} must not contain duplicate values"),
             ),
         );
     }

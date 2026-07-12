@@ -430,7 +430,10 @@ fn invariant_sum_equals(invariant: &Invariant, value: &Value) -> bool {
     invariant
         .terms
         .iter()
-        .try_fold(0u64, |sum, path| pointer(value, path).and_then(Value::as_u64).map(|term| sum.saturating_add(term)))
+        .try_fold(0u64, |sum, path| {
+            let term = pointer(value, path).and_then(Value::as_u64)?;
+            sum.checked_add(term)
+        })
         .is_some_and(|sum| sum == target)
 }
 
@@ -462,12 +465,15 @@ fn invariant_boolean_or(invariant: &Invariant, value: &Value) -> bool {
     let Some(target) = pointer(value, &invariant.target).and_then(Value::as_bool) else {
         return false;
     };
-    invariant
+    let Some(terms) = invariant
         .terms
         .iter()
-        .filter_map(|path| pointer(value, path).and_then(Value::as_bool))
-        .any(|term| term)
-        == target
+        .map(|path| pointer(value, path).and_then(Value::as_bool))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    terms.into_iter().any(|term| term) == target
 }
 
 fn invariant_selected_not_in_array(invariant: &Invariant, value: &Value) -> bool {
@@ -477,7 +483,7 @@ fn invariant_selected_not_in_array(invariant: &Invariant, value: &Value) -> bool
     pointer(value, &invariant.array).and_then(Value::as_array).is_some_and(|array| {
         array
             .iter()
-            .all(|item| pointer(item, &invariant.item_field).is_none_or(|candidate| candidate != selected))
+            .all(|item| pointer(item, &invariant.item_field).is_some_and(|candidate| candidate != selected))
     })
 }
 
@@ -485,12 +491,13 @@ fn invariant_all_item_equals_iff(invariant: &Invariant, value: &Value) -> bool {
     let Some(expected) = pointer(value, &invariant.boolean).and_then(Value::as_bool) else {
         return false;
     };
-    let all_equal = pointer(value, &invariant.array).and_then(Value::as_array).is_some_and(|array| {
-        array
-            .iter()
-            .all(|item| pointer(item, &invariant.item_field).is_some_and(|field| field == &invariant.value))
-    });
-    all_equal == expected
+    let Some(array) = pointer(value, &invariant.array).and_then(Value::as_array) else {
+        return false;
+    };
+    let Some(fields) = array.iter().map(|item| pointer(item, &invariant.item_field)).collect::<Option<Vec<_>>>() else {
+        return false;
+    };
+    fields.into_iter().all(|field| field == &invariant.value) == expected
 }
 
 fn invariant_unique_by(invariant: &Invariant, value: &Value) -> bool {
@@ -517,15 +524,17 @@ fn invariant_disjoint_by(invariant: &Invariant, value: &Value) -> bool {
     let Some(right) = pointer(value, &invariant.other_array).and_then(Value::as_array) else {
         return false;
     };
-    let left_values = left
+    let Some(left_values) = left
         .iter()
-        .filter_map(|item| pointer(item, &invariant.item_field))
-        .map(Value::to_string)
-        .collect::<BTreeSet<_>>();
-    right
-        .iter()
-        .filter_map(|item| pointer(item, &invariant.other_item_field))
-        .all(|candidate| !left_values.contains(&candidate.to_string()))
+        .map(|item| pointer(item, &invariant.item_field).map(Value::to_string))
+        .collect::<Option<BTreeSet<_>>>()
+    else {
+        return false;
+    };
+    right.iter().all(|item| {
+        pointer(item, &invariant.other_item_field)
+            .is_some_and(|candidate| !left_values.contains(&candidate.to_string()))
+    })
 }
 
 fn invariant_field_equals_const_when(invariant: &Invariant, value: &Value) -> bool {
@@ -536,12 +545,18 @@ fn invariant_field_equals_const_when(invariant: &Invariant, value: &Value) -> bo
 }
 
 fn invariant_arrays_empty_iff_enum(invariant: &Invariant, value: &Value) -> bool {
-    let expected_empty = pointer(value, &invariant.target).is_some_and(|actual| actual == &invariant.value);
-    let all_empty = invariant
+    let Some(target) = pointer(value, &invariant.target) else {
+        return false;
+    };
+    let Some(arrays) = invariant
         .fields
         .iter()
-        .all(|path| pointer(value, path).and_then(Value::as_array).is_some_and(Vec::is_empty));
-    all_empty == expected_empty
+        .map(|path| pointer(value, path).and_then(Value::as_array))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    arrays.into_iter().all(Vec::is_empty) == (target == &invariant.value)
 }
 
 fn pointer<'a>(value: &'a Value, pointer: &str) -> Option<&'a Value> {
