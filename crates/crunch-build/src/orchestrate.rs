@@ -511,8 +511,9 @@ where BServ: BuildService + 'static
         // Shared action-result discovery is separate from CA mapping lookup.
         // Every candidate is re-admitted before the executor can be skipped.
         // r[impl build_correctness.shared_action_result_admission]
-        if let Some(shared_hit) =
-            self.check_shared_action_result(drv_path, derivation_ref, known_paths, is_root).await?
+        if !mutable_workspace
+            && let Some(shared_hit) =
+                self.check_shared_action_result(drv_path, derivation_ref, known_paths, is_root).await?
         {
             info!(drv = %drv_name, "shared action result admitted, skipping executor");
             return Ok(PrepareResult::Done(BuildOutcome {
@@ -641,7 +642,9 @@ where BServ: BuildService + 'static
             }
         }
 
-        self.publish_completed_action_result(&prepared.derivation, &output_infos).await;
+        if !derivation_uses_mutable_workspace(&prepared.derivation)? {
+            self.publish_completed_action_result(&prepared.derivation, &output_infos).await;
+        }
 
         info!(
             drv = %prepared.drv_name,
@@ -2219,7 +2222,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mutable_workspace_bypasses_strong_shared_cache_lookup() {
+    async fn mutable_workspace_bypasses_strong_cache_discovery_and_publication() {
         use snix_store::pathinfoservice::PathInfoService;
 
         let bs = MemoryBlobService::default();
@@ -2265,8 +2268,14 @@ mod tests {
             false,
         );
         let outcome = builder.build(&drv_path, &mut registry).await.unwrap();
+        let action_result_reports = builder.take_action_result_reports();
+
         assert!(!outcome.cached);
         assert_eq!(calls.lock().unwrap().len(), 1);
+        assert!(
+            action_result_reports.is_empty(),
+            "mutable workspace execution must neither discover nor publish strong shared results"
+        );
     }
 
     #[tokio::test]
