@@ -2075,10 +2075,11 @@ let Registry = {
       "class"= "internal",
       "rust_owner"= "src/build_correctness.rs::PlannedWasmComponentArtifacts",
       "producer"= {
-        "command_or_api"= "planned Wasm component reports and materialization bundle",
+        "command_or_api"= "planned and production Wasm component reports and materialization bundle",
         "marker"= "wasm.component-future",
         "source_paths"= [
-          "src/build_correctness.rs"
+          "src/build_correctness.rs",
+          "src/wasm_component_cmd.rs"
         ]
       },
       "consumers"= [
@@ -2091,19 +2092,20 @@ let Registry = {
         "negative_fixture_set"= ""
       },
       "version_policy"= {
-        "current"= "planned",
+        "current"= "mixed-active",
         "supported"= [],
-        "unknown_version_behavior"= "owning change must version before exposure",
+        "unknown_version_behavior"= "active change owns versioning and authoritative admission",
         "compatibility_converter"= "",
         "compatibility_fixtures"= []
       },
       "validation_commands"= [
-        "cairn validate add-wasm-component-build-pipeline"
+        "cairn validate add-wasm-component-build-pipeline",
+        "cargo test -p mantle --test wasm_component_cli --offline"
       ],
       "fixture_coverage"= [
         "classification"
       ],
-      "freshness_strategy"= "future classification only",
+      "freshness_strategy"= "classification only pending authoritative contract",
       "freshness"= {
         "schema_blake3"= "",
         "contract_blake3"= "",
@@ -2113,9 +2115,9 @@ let Registry = {
         "consumer_policy_blake3"= ""
       },
       "non_claims"= [
-        "registration does not claim component pipeline implementation or Octet acceptance"
+        "registration does not claim Octet acceptance or final materialization admission"
       ],
-      "rationale"= "Registers future component reports and bundle without constraining the active owner."
+      "rationale"= "Classifies active component reports and bundle without replacing the owning change's authority boundary."
     },
     {
       "id"= "build.correctness-primitives",

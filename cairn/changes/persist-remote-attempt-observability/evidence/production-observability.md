@@ -102,6 +102,16 @@ Pueue task 2130 ran the four exact commands through `nix run path:/home/brittonr
 - Design returned `PASS`, input hash `528ebbcf09ce868683a5dfe06a70f7215ce6efd06fec9ce5b6969b90e8589f30`, receipt hash `4b1ac3001ccdaea5d27b411125d4354c4f860e10b743d5cb2037f7cb98fd5c73`.
 - Tasks returned `PASS`, input hash `907c464bab71695aeda2bc8c666cde5b5346297279aed6ab3c8a0f2793bda924`, receipt hash `7f4918fe54b411dd9d6d7eb8818d504e535b93205b9208098c3e5ab6ffff16df`.
 
+### Main integration validation
+
+The validated agent checkpoint was integrated onto current `main` as commit `4713ed6d`, preserving the already-landed production delta/full-fallback path, Wasm component CLI, and KernelScript adapter. Conflict resolution retained both `--remote-delta` and `--remote-observability-config` and combined the production process suites rather than choosing either side.
+
+Pueue task 2200 used a fresh isolated target and passed the integrated binary check, 118 remote-build tests, the 8/7/16/3 immutable-log/exporter/config/trace suites, all seven combined production process tests, 555 `crunch-build` tests, and all six KernelScript integration tests. Its final unconfigured Wasm CLI invocation stopped before test execution because `MANTLE_WASM_COMPONENT_TOOLCHAIN` was absent; that invocation is not counted as passing evidence.
+
+Pueue task 2220 then classified the already-landed `src/wasm_component_cmd.rs` JSON producer in the machine-contract inventory and passed generation, checker self-test, strict freshness validation (`16 contracted, 45 classified`), and all five producer-parity tests. Pueue task 2231 supplied the pinned Nix toolchain at `/nix/store/dyp444vl42jc33wh2sl9qbhc39051gy8-mantle-wasm-component-toolchain-v1` and passed both positive/negative Wasm production CLI tests. These checks prove the observability integration did not erase the current transfer, KernelScript, Wasm, or machine-contract boundaries.
+
+Pueue task 2236 ran the exact-policy Cairn closeout again on integrated `main`: validation covered 38 specs and 10 visible changes with no issues; proposal passed with receipt `4a98bec7a1bdc1d50c097c6f5291b2bba7fb1a08a944619be63665aa82d2a924`; design passed with receipt `b27c93910e023f9e2a8ee2cdd310132621c4f04b698082acdc3df02b9025d87b`; and tasks passed with receipt `96e07f837a2dffb4ea6cd6e17a59b02a1900e4d5a02929962421465f6fefb967`. Every gate used policy hash `d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c` and returned `valid: true` / `PASS`.
+
 ## Scheduler-priority audit
 
 Task 9 is complete. The remote production shell no longer infers priority from queue admission or worker assignment. It creates one immutable bounded ready-root snapshot before dispatch, computes stable BLAKE3 root identities, calls the existing ranking kernel exactly once, preserves the returned order for dispatch, emits one canonical candidate-count event at that real selection boundary, and carries the kernel-produced `PriorityDecisionEvidence` into the strict build JSON report.
