@@ -132,8 +132,30 @@ Telemetry and immutable logs remain diagnostic evidence only. They do not change
 
 ## Owner
 
-The active Cairn change `persist-remote-attempt-observability` owns this completed integration and its closeout evidence.
+The archived Cairn change `cairn/archive/2026-07-12-persist-remote-attempt-observability/` owns this completed integration and its closeout evidence.
+
+## Archive evidence
+
+Pueue task 2284 produced an unblocked dry-run archive receipt `719ce8883f865cba5b8dcfc995ecd40b38626d19f6a70956f5282a88b9aa06b2`. Pueue task 2285 executed the archive under `CAIRN_ARCHIVE_DATE=2026-07-12` with receipt `1e1eb4d3e8e03c9f8b2fd7a4cd54f5a30609bd6b3adf66da1bf955cace881024` and moved the complete package to the dated archive path.
+
+Pueue task 2297 ran the exact post-archive validation command after the archive and parity evidence were complete:
+
+```text
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+{
+  "change_issues": [],
+  "changes": 9,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 36,
+  "valid": true
+}
+```
+
+Pueue task 2296 repeated the exact-block comparator against the dated archive paths and reconfirmed the same five byte-identical accepted requirement blocks and byte lengths.
 
 ## Next action
 
-Commit the validated implementation and evidence as one coherent checkpoint and report the resulting commit hash. Archive is not part of this requested closeout.
+No implementation action remains for this archived change. Future consumers must preserve the diagnostic-only non-claims and use separate authority for compiler correctness, reproducibility, release eligibility, CI success, or physical-target determinism.
