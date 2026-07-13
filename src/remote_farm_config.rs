@@ -13,6 +13,12 @@ use serde::Deserialize;
 use crate::remote_telemetry_export::RemoteTelemetryExportConfig;
 use crate::remote_telemetry_export::validate_remote_telemetry_export_config;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+pub struct RemoteTraceContextConfig {
+    #[serde(default)]
+    pub enabled: bool,
+}
+
 const DEFAULT_REMOTE_SYSTEM: &str = "x86_64-linux";
 const DEFAULT_REMOTE_MAX_CONCURRENCY: u32 = 1;
 const DEFAULT_REMOTE_MAX_UPLOAD_BYTES: u64 = 1_073_741_824;
@@ -185,6 +191,8 @@ pub struct RemoteBuildFarmConfig {
     pub pools: Vec<RemoteBuilderPool>,
     #[serde(default)]
     pub telemetry: RemoteTelemetryExportConfig,
+    #[serde(default)]
+    pub trace_context: RemoteTraceContextConfig,
 }
 
 impl RemoteBuildFarmConfig {
@@ -248,8 +256,24 @@ impl Default for RemoteBuildFarmConfig {
         Self {
             pools: Vec::new(),
             telemetry: RemoteTelemetryExportConfig::default(),
+            trace_context: RemoteTraceContextConfig::default(),
         }
     }
+}
+
+pub fn load_remote_build_farm_config(path: &std::path::Path) -> Result<RemoteBuildFarmConfig, String> {
+    let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+    let config = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(path, &import_paths)
+        .map_err(|error| format!("evaluating remote build farm configuration: {error}"))?;
+    config.validate()?;
+    debug_assert!(config.pools.len() <= RemoteBuildFarmConfig::MAX_POOLS);
+    debug_assert!(
+        config
+            .pools
+            .iter()
+            .all(|pool| pool.endpoints.len() <= RemoteBuildFarmConfig::MAX_ENDPOINTS_PER_POOL)
+    );
+    Ok(config)
 }
 
 #[cfg(test)]
@@ -296,6 +320,7 @@ mod tests {
                 }],
             }],
             telemetry: RemoteTelemetryExportConfig::default(),
+            trace_context: RemoteTraceContextConfig::default(),
         }
     }
 

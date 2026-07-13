@@ -38,6 +38,10 @@ pub struct BuildJsonReport {
     pub network_policy_reports: Vec<BuildJsonNetworkPolicyReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub scheduler_priority_decisions: Vec<crunch_pipeline::PriorityDecisionEvidence>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remote_telemetry_events: Vec<crunch_build::distributed::RemoteTelemetryEvent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_observability: Option<Vec<BuildJsonRemoteObservability>>,
     pub frontend_artifact_attestations: Vec<FrontendArtifactAdmissionAttestation>,
     pub ast_grep_structural_evidence: Vec<BuildJsonAstGrepStructuralEvidence>,
     pub ast_grep_structural_evidence_diagnostics: Vec<BuildJsonAstGrepStructuralEvidenceDiagnostic>,
@@ -48,6 +52,13 @@ pub struct BuildJsonReport {
     pub outcomes: Vec<BuildJsonOutcome>,
     pub failed: Vec<BuildFailureEnvelope>,
     pub fod_mismatches: Vec<BuildJsonFodMismatch>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BuildJsonRemoteObservability {
+    pub health: crate::remote_build::RemoteAttemptObservabilityHealth,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub immutable_log: Option<crate::remote_build::RemoteAttemptLogControlSummary>,
 }
 
 #[derive(Debug, Serialize)]
@@ -376,6 +387,11 @@ fn build_json_report(
     let network_policy_reports = build_network_policy_reports(result);
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
     let scheduler_priority_decisions = result.priority_decisions.clone();
+    let remote_telemetry_events = result
+        .priority_decisions
+        .iter()
+        .filter_map(|decision| crunch_build::distributed::telemetry_for_priority_dispatch(decision).ok())
+        .collect();
 
     BuildJsonReport {
         schema: "crunch-build-report-v1",
@@ -390,6 +406,8 @@ fn build_json_report(
         network_policy_reports,
         native_dynamic_plans,
         scheduler_priority_decisions,
+        remote_telemetry_events,
+        remote_observability: None,
         frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
         ast_grep_structural_evidence,
         ast_grep_structural_evidence_diagnostics,

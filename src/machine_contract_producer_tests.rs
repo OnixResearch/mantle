@@ -121,6 +121,8 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
         network_policy_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
         scheduler_priority_decisions: vec![scheduler_fixture_decision()],
+        remote_telemetry_events: Vec::new(),
+        remote_observability: None,
         frontend_artifact_attestations: Vec::new(),
         cargo_build_evidence: Vec::new(),
         cargo_build_evidence_diagnostics: Vec::new(),

@@ -577,3 +577,29 @@
 // r[verify mantle.machine_artifact_contracts.runtime_boundary]
 // Product sources contain no machine-contract Nickel execution path; source
 // guards and producer tests keep validation confined to review/test tooling.
+
+// Remote-attempt observability bridge.
+//
+// r[impl remote_builds.immutable_attempt_log_segments]
+// r[verify remote_builds.immutable_attempt_log_segments]
+// r[impl remote_builds.pure_log_cursor_kernel]
+// r[verify remote_builds.pure_log_cursor_kernel]
+// Immutable segment/manifest/anchor decisions live in `crunch-build`; the
+// no-follow durable shell and coordinator summary integration live under
+// `src/{remote_attempt_log_store,remote_build}.rs`.
+//
+// r[impl remote_builds.diagnostic_trace_context]
+// r[verify remote_builds.diagnostic_trace_context]
+// Bounded W3C parsing and digest-only health live in
+// `src/remote_trace_context.rs`; production stdio tests prove propagation,
+// malformed dropping, and authority invariance.
+//
+// r[impl operator_diagnostics.remote_execution_telemetry]
+// r[verify operator_diagnostics.remote_execution_telemetry]
+// r[impl operator_diagnostics.telemetry_exporter_isolation]
+// r[verify operator_diagnostics.telemetry_exporter_isolation]
+// Canonical events/metric admission live in `crunch-build`; production lifecycle
+// wiring, disabled-by-default Prometheus/OTLP shells, immutable summaries, and
+// build-report health live under root `src/`. Scheduler-priority instrumentation
+// remains an explicit active-task blocker until a real lazy-goal priority
+// decision reaches the remote dispatch seam.

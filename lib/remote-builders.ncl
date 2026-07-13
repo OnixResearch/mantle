@@ -96,6 +96,13 @@ let RemoteTelemetryExport = {
   otlp | RemoteOtlpTelemetry | default = {},
 } in
 
+let RemoteTraceContext = {
+  enabled
+    | doc "Opt in to bounded W3C TRACEPARENT/TRACESTATE propagation for diagnostics only"
+    | Bool
+    | default = false,
+} in
+
 let RemoteTransferPolicy = {
   chunk_bytes_max | Number | default = DefaultTransferChunkBytes,
   in_flight_bytes_max | Number | default = DefaultTransferInFlightBytes,
@@ -229,5 +236,10 @@ let RemoteBuilderPoolContract = {
   telemetry
     | doc "Disabled-by-default bounded remote lifecycle telemetry exporters."
     | RemoteTelemetryExport
+    | default = {},
+
+  trace_context
+    | doc "Disabled-by-default W3C diagnostic trace propagation; never authoritative."
+    | RemoteTraceContext
     | default = {},
 }

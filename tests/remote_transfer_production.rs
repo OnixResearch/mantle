@@ -27,6 +27,18 @@ const TEST_EXPIRES_UNIX_S: u64 = u64::MAX;
 const INPUT_INTERRUPT_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_INPUT_CHUNKS";
 const INTERRUPT_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS";
 const MAX_TEST_REMOTE_WORKERS: usize = 16;
+const VALID_TRACEPARENT: &str = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+const VALID_TRACESTATE: &str = "vendor=value";
+const TRACEPARENT_ENV: &str = "TRACEPARENT";
+const TRACESTATE_ENV: &str = "TRACESTATE";
+const OTLP_OUTAGE_ENDPOINT: &str = "http://127.0.0.1:9/v1/metrics";
+const OTLP_TEST_TIMEOUT_MS: u32 = 100;
+const MALFORMED_TRACEPARENT_BYTES: usize = 4_096;
+const REMOTE_ATTEMPT_LOG_DIR: &str = "remote-attempt-logs";
+const MAX_DIAGNOSTIC_SCAN_FILES: usize = 4_096;
+const MAX_DIAGNOSTIC_SCAN_BYTES: usize = 1_048_576;
+const MAX_DIAGNOSTIC_JSON_NODES: usize = 65_536;
+const PRIORITY_LIFECYCLE_PREFIX_COUNT: usize = 5;
 
 #[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
@@ -53,6 +65,9 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
         interrupted_stderr.contains("remote-production-transfer-interrupted-after-checkpoint"),
         "unexpected interruption stderr: {interrupted_stderr}"
     );
+    assert!(state_diagnostics_contain(&state_dir, "transfer-cutoff"));
+    assert!(!state_diagnostics_contain(&state_dir, "execution-failed"));
+    assert!(!state_diagnostics_contain(&state_dir, "output-admitted"));
     let first_run_checkpoints = transfer_checkpoints(&state_dir);
     let completed_upload = first_run_checkpoints
         .iter()
@@ -71,6 +86,7 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
     let report: Value = serde_json::from_slice(&resumed.stdout).expect("production build JSON report");
     let substitution = &report["outcomes"][0]["outputs"][0]["substitution"];
     assert_eq!(substitution["mode"], "streaming");
+    assert_production_lifecycle_sequence(&report, true);
     assert!(substitution["reused_bytes"].as_u64().unwrap_or(0) >= partial.transferred_bytes);
     let output_path =
         PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("imported output path"));
@@ -186,6 +202,69 @@ fn production_stdio_streams_and_admits_8_mib_output() {
     assert!(output_checkpoint.transferred_bytes > u64::try_from(PRODUCTION_SCALE_OUTPUT_BYTES).unwrap());
 }
 
+#[test]
+fn production_stdio_exports_prometheus_and_propagates_bounded_trace_context() {
+    let root = tempfile::Builder::new()
+        .prefix("observability-positive")
+        .tempdir()
+        .expect("production fixture tempdir");
+    let fixture = setup_production_fixture(root.path(), OUTPUT_BYTES, MAX_UPLOAD_BYTES);
+    let config = root.path().join("observability.ncl");
+    let prometheus = root.path().join("mantle-remote.prom");
+    write_observability_config(&config, Some(&prometheus), None);
+
+    let output = remote_build_command(&fixture.state_dir, &fixture.store_dir, &fixture.build_file)
+        .arg("--remote-observability-config")
+        .arg(&config)
+        .env(TRACEPARENT_ENV, VALID_TRACEPARENT)
+        .env(TRACESTATE_ENV, VALID_TRACESTATE)
+        .output()
+        .expect("run trace-enabled production transfer");
+    assert!(output.status.success(), "trace-enabled stderr={}", String::from_utf8_lossy(&output.stderr));
+    let report: Value = serde_json::from_slice(&output.stdout).expect("trace-enabled production report");
+    let observability = &report["remote_observability"][0];
+    assert_eq!(observability["health"]["trace_context"]["status"], "accepted");
+    assert_eq!(observability["health"]["exporters"]["prometheus"]["status"], "succeeded");
+    assert!(observability["immutable_log"]["head_record_blake3"].as_str().is_some());
+    assert!(observability["immutable_log"]["next_cursor"].as_u64().unwrap_or(0) > 0);
+    assert_production_lifecycle_sequence(&report, false);
+    let rendered = String::from_utf8(output.stdout).unwrap();
+    let metrics = fs::read_to_string(prometheus).expect("Prometheus textfile");
+    assert!(!rendered.contains(VALID_TRACEPARENT));
+    assert!(!metrics.contains(VALID_TRACEPARENT));
+    assert!(metrics.contains("mantle_remote_admission_total"));
+}
+
+#[test]
+fn production_stdio_drops_malformed_trace_and_survives_otlp_outage() {
+    let root = tempfile::Builder::new()
+        .prefix("observability-outage")
+        .tempdir()
+        .expect("production fixture tempdir");
+    let fixture = setup_production_fixture(root.path(), OUTPUT_BYTES, MAX_UPLOAD_BYTES);
+    let config = root.path().join("observability.ncl");
+    write_observability_config(&config, None, Some(OTLP_OUTAGE_ENDPOINT));
+    let malformed_traceparent = "x".repeat(MALFORMED_TRACEPARENT_BYTES);
+
+    let output = remote_build_command(&fixture.state_dir, &fixture.store_dir, &fixture.build_file)
+        .arg("--remote-observability-config")
+        .arg(&config)
+        .env(TRACEPARENT_ENV, &malformed_traceparent)
+        .env(TRACESTATE_ENV, VALID_TRACESTATE)
+        .output()
+        .expect("run outage-isolated production transfer");
+    assert!(output.status.success(), "outage stderr={}", String::from_utf8_lossy(&output.stderr));
+    let report: Value = serde_json::from_slice(&output.stdout).expect("outage production report");
+    let health = &report["remote_observability"][0]["health"];
+    assert_eq!(health["trace_context"]["status"], "dropped");
+    assert_eq!(health["exporters"]["otlp"]["status"], "failed");
+    assert_eq!(health["immutable_log"]["status"], "succeeded");
+    assert_production_lifecycle_sequence(&report, false);
+    let output_path = PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().unwrap());
+    assert_eq!(fs::read(output_path).unwrap(), patterned_bytes(OUTPUT_BYTES));
+    assert!(!String::from_utf8(output.stdout).unwrap().contains(&malformed_traceparent));
+}
+
 struct ProductionFixture {
     state_dir: PathBuf,
     store_dir: PathBuf,
@@ -210,6 +289,58 @@ fn setup_production_fixture(root: &Path, output_bytes: usize, max_upload_bytes: 
         store_dir,
         build_file,
     }
+}
+
+fn write_observability_config(path: &Path, prometheus: Option<&Path>, otlp_endpoint: Option<&str>) {
+    let contract = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/remote-builders.ncl");
+    let prometheus_config = prometheus.map_or_else(
+        || "{ enabled = false }".to_string(),
+        |path| format!("{{ enabled = true, textfile_path = \"{}\" }}", path.display()),
+    );
+    let otlp_config = otlp_endpoint.map_or_else(
+        || "{ enabled = false }".to_string(),
+        |endpoint| format!("{{ enabled = true, endpoint = \"{endpoint}\", timeout_ms = {OTLP_TEST_TIMEOUT_MS} }}"),
+    );
+    let source = format!(
+        "let remote = import \"{}\" in {{ pools = [], telemetry = ({{ prometheus = {prometheus_config}, otlp = {otlp_config} }} | remote.RemoteTelemetry), trace_context = {{ enabled = true }} }}",
+        contract.display(),
+    );
+    fs::write(path, source).expect("observability config");
+}
+
+fn assert_production_lifecycle_sequence(report: &Value, expect_resume: bool) {
+    let reasons = report["remote_telemetry_events"]
+        .as_array()
+        .expect("remote telemetry array")
+        .iter()
+        .map(|event| event["reason"].as_str().expect("telemetry reason"))
+        .collect::<Vec<_>>();
+    assert_eq!(&reasons[..PRIORITY_LIFECYCLE_PREFIX_COUNT], [
+        "priority-selected",
+        "route-selected",
+        "queue-admitted",
+        "worker-assigned",
+        "fence-accepted"
+    ]);
+    assert_eq!(reasons.last(), Some(&"output-admitted"));
+    assert!(reasons.contains(&"transfer-demand"));
+    assert!(reasons.contains(&"transfer-credit"));
+    assert!(reasons.contains(&"transfer-completed"));
+    assert!(reasons.contains(&"execution-completed"));
+    assert_eq!(reasons.contains(&"transfer-resumed"), expect_resume);
+    let priority_event = &report["remote_telemetry_events"][0];
+    assert_eq!(priority_event["measurement"], "candidate-count");
+    assert_eq!(priority_event["value"], 1);
+    let decisions = report["scheduler_priority_decisions"].as_array().expect("priority decisions");
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0]["competing_goal_count"], 1);
+    assert_eq!(decisions[0]["known_critical_path_nodes"], 0);
+    assert_eq!(decisions[0]["known_critical_path_work_units"], 0);
+    assert_eq!(decisions[0]["blocked_root_count"], 0);
+    assert_eq!(decisions[0]["history_basis"], "structural-fallback-missing");
+    let execution = reasons.iter().position(|reason| *reason == "execution-completed").unwrap();
+    let admission = reasons.iter().position(|reason| *reason == "output-admitted").unwrap();
+    assert!(execution < admission);
 }
 
 #[derive(Debug)]
@@ -256,6 +387,69 @@ fn transfer_checkpoints(state_dir: &Path) -> Vec<CheckpointSummary> {
         }
     }
     checkpoints
+}
+
+fn state_diagnostics_contain(state_dir: &Path, needle: &str) -> bool {
+    assert!(!needle.is_empty());
+    let mut pending = vec![state_dir.join(REMOTE_ATTEMPT_LOG_DIR)];
+    let mut scanned_files = 0_usize;
+    while let Some(path) = pending.pop() {
+        if scanned_files >= MAX_DIAGNOSTIC_SCAN_FILES {
+            return false;
+        }
+        if path.is_dir() {
+            let Ok(entries) = fs::read_dir(path) else {
+                continue;
+            };
+            pending.extend(entries.filter_map(Result::ok).map(|entry| entry.path()));
+            continue;
+        }
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        scanned_files = scanned_files.saturating_add(1);
+        let retained = &bytes[..bytes.len().min(MAX_DIAGNOSTIC_SCAN_BYTES)];
+        if let Ok(value) = serde_json::from_slice::<Value>(retained)
+            && json_diagnostic_contains(&value, needle)
+        {
+            return true;
+        }
+    }
+    assert!(scanned_files <= MAX_DIAGNOSTIC_SCAN_FILES);
+    false
+}
+
+fn json_diagnostic_contains(root: &Value, needle: &str) -> bool {
+    assert!(!needle.is_empty());
+    let mut pending = vec![root];
+    let mut visited = 0_usize;
+    while let Some(value) = pending.pop() {
+        if visited >= MAX_DIAGNOSTIC_JSON_NODES {
+            return false;
+        }
+        visited = visited.saturating_add(1);
+        match value {
+            Value::String(text) => {
+                if text.contains(needle) {
+                    return true;
+                }
+            }
+            Value::Array(values) => {
+                let payload = values
+                    .iter()
+                    .map(|value| value.as_u64().and_then(|byte| u8::try_from(byte).ok()))
+                    .collect::<Option<Vec<_>>>();
+                if payload.is_some_and(|bytes| String::from_utf8_lossy(&bytes).contains(needle)) {
+                    return true;
+                }
+                pending.extend(values);
+            }
+            Value::Object(fields) => pending.extend(fields.values()),
+            Value::Null | Value::Bool(_) | Value::Number(_) => {}
+        }
+    }
+    assert!(visited <= MAX_DIAGNOSTIC_JSON_NODES);
+    false
 }
 
 fn read_checkpoint_summary(path: &Path) -> CheckpointSummary {

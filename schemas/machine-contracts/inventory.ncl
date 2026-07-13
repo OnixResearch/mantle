@@ -146,8 +146,12 @@ let Registry = {
           "src/cache_substitution.rs",
           "src/frontend_artifact_spec.rs",
           "src/ast_grep_evidence.rs",
+          "src/remote_build.rs",
+          "src/remote_telemetry_export.rs",
+          "src/remote_trace_context.rs",
           "crates/crunch-release-core/src/ast_grep.rs",
-          "crates/crunch-build/src/scheduling.rs"
+          "crates/crunch-build/src/scheduling.rs",
+          "crates/crunch-build/src/distributed/remote_telemetry.rs"
         ]
       },
       "consumers"= [
@@ -178,16 +182,17 @@ let Registry = {
       ],
       "fixture_coverage"= [
         "schema",
+        "enum",
         "unknown-field"
       ],
       "freshness_strategy"= "BLAKE3 binds the full report projection and all directly serialized owner modules",
       "freshness"= {
-        "schema_blake3"= "79330945095623f6cd64268fbe81595a1c3fc24ad368477b2aff582bd1cd9432",
-        "contract_blake3"= "69373a47a7fda43789da12cafa221c45a97e29b6c03ca28f188a40f11e7a4ae6",
+        "schema_blake3"= "e9ee0d612157c2672c15a7efeb81206262f5c4b8ab2c3f4058fca2042db48ec5",
+        "contract_blake3"= "febfe4aabac9b0ed73bfee1cb6b8175533543cbba3d7f2a366dccf90326e8d1f",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "8f89cdb1a709a03a5c6afe81a7386f20c310f4f116e96f02dfdd53fa16bf8402",
-        "producer_identity_blake3"= "7e0a84bc6de0ee402a92747410355d04cd6624e7563a19d98cc33a12dd49f915",
-        "consumer_policy_blake3"= "7d4455f3467f3be7d648f7b5f2db114d776215cfc4c89187da0fa2c07a5520dd"
+        "fixture_set_blake3"= "d32ab77ccaf0ab455d66c07aebadfba96f0c4c54b64800ebebdbcdeb799cc969",
+        "producer_identity_blake3"= "e963cfd74ee8d64daee5855463fb3c278824ae1947bb33b12027e6614393c2a9",
+        "consumer_policy_blake3"= "d4d7d58e21738c707f6071b435807382c28939a76da4cbb88e9c32c6b80af72b"
       },
       "non_claims"= [
         "report conformance does not prove build success, trust, reproducibility, or release eligibility"
@@ -975,7 +980,7 @@ let Registry = {
         "contract_blake3"= "ca290b374f6b2987e6bd56f541a4ac2539df2fcc55878eb9572e25734783f16f",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "3d447dccbcf05cc8bdf1875896266084327a7ae352416e319d7408125dd9cd41",
-        "producer_identity_blake3"= "bda116082077170cb91b8273d8e6a5b18c20deca22a44f10fc36ad23c51f9643",
+        "producer_identity_blake3"= "629db7b17f6cdaaaee33b4ddb5aae92b975a1a894736ddff1213831700b9699f",
         "consumer_policy_blake3"= "f1fe25ad7bf31510a0d970cabe8f0eea37b17342b7743bcd39c3858a4e5adb0a"
       },
       "non_claims"= [
@@ -1381,7 +1386,9 @@ let Registry = {
           "src/global_reproducibility_cmd.rs",
           "src/global_reproducibility_release.rs",
           "src/release_nix_witness.rs",
-          "src/release_source.rs"
+          "src/release_source.rs",
+          "src/cairn_release_handoff.rs",
+          "src/release_publication.rs"
         ]
       },
       "consumers"= [
@@ -1577,6 +1584,7 @@ let Registry = {
           "src/bootstrap.rs",
           "src/bootstrap_validate.rs",
           "src/bootstrap_source_root.rs",
+          "src/source_root_capability.rs",
           "src/source_root_provider.rs",
           "src/rust_source_provider.rs",
           "src/rust_bootstrap_patch_plan.rs",
@@ -1959,16 +1967,22 @@ let Registry = {
     {
       "id"= "remote.observability-future",
       "class"= "internal",
-      "rust_owner"= "src/remote_build.rs::PlannedRemoteObservabilityArtifacts",
+      "rust_owner"= "src/remote_build.rs::RemoteObservabilityHealth",
       "producer"= {
-        "command_or_api"= "planned attempt logs and telemetry events",
+        "command_or_api"= "remote build lifecycle telemetry, immutable attempt diagnostics, and health reports",
         "marker"= "remote.observability-future",
         "source_paths"= [
-          "src/remote_build.rs"
+          "src/remote_build.rs",
+          "src/remote_attempt_log_store.rs",
+          "src/remote_telemetry_export.rs",
+          "src/remote_trace_context.rs",
+          "src/remote_transfer.rs",
+          "crates/crunch-build/src/distributed/remote_telemetry.rs"
         ]
       },
       "consumers"= [
-        "persist-remote-attempt-observability change"
+        "remote build operators",
+        "build report automation"
       ],
       "artifacts"= {
         "schema"= "",
@@ -1977,19 +1991,25 @@ let Registry = {
         "negative_fixture_set"= ""
       },
       "version_policy"= {
-        "current"= "planned",
-        "supported"= [],
-        "unknown_version_behavior"= "owning change must version before exposure",
+        "current"= "mantle-remote-observability-v1",
+        "supported"= [
+          "mantle-remote-observability-v1"
+        ],
+        "unknown_version_behavior"= "reject unknown standalone trace or telemetry frames while preserving build-result independence for diagnostics",
         "compatibility_converter"= "",
         "compatibility_fixtures"= []
       },
       "validation_commands"= [
+        "cargo test -p mantle --bin mantle remote_trace_context::tests",
+        "cargo test -p mantle --test remote_transfer_production production_remote_observability",
         "cairn validate persist-remote-attempt-observability"
       ],
       "fixture_coverage"= [
-        "classification"
+        "classification",
+        "malformed-trace-context",
+        "exporter-outage"
       ],
-      "freshness_strategy"= "future classification only",
+      "freshness_strategy"= "internal lifecycle events are embedded in the contracted build report; immutable logs and exporter state remain bounded diagnostic surfaces",
       "freshness"= {
         "schema_blake3"= "",
         "contract_blake3"= "",
@@ -1999,9 +2019,9 @@ let Registry = {
         "consumer_policy_blake3"= ""
       },
       "non_claims"= [
-        "registration does not define telemetry authority or metric labels"
+        "diagnostic observability does not affect identity, authorization, scheduling, fencing, admission, output trust, build success, reproducibility, or release eligibility"
       ],
-      "rationale"= "Registers the active observability surface without freezing its design."
+      "rationale"= "Classifies the bounded internal observability surfaces while the closed build-report schema owns their exported JSON projection."
     },
     {
       "id"= "remote.transfer-future",

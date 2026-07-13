@@ -44,10 +44,19 @@ pub use crunch_build::distributed::RemoteEventId;
 pub use crunch_build::distributed::RemoteFenceGeneration;
 pub use crunch_build::distributed::RemoteJobId;
 pub use crunch_build::distributed::RemotePayloadDigest;
-use crunch_build::distributed::decide_remote_attempt_retry;
-use crunch_build::distributed::derive_remote_attempt_id;
-use crunch_build::distributed::plan_remote_attempt_assignment;
-use crunch_build::distributed::plan_remote_attempt_report;
+use crunch_build::distributed::RemoteTelemetryBuffer;
+use crunch_build::distributed::RemoteTelemetryCapabilityClass;
+use crunch_build::distributed::RemoteTelemetryCategory;
+use crunch_build::distributed::RemoteTelemetryEvent;
+use crunch_build::distributed::RemoteTelemetryMeasurementKind;
+use crunch_build::distributed::RemoteTelemetryPhaseClass;
+use crunch_build::distributed::RemoteTelemetryPolicy;
+use crunch_build::distributed::RemoteTelemetryReasonClass;
+use crunch_build::distributed::RemoteTelemetryReasonCode;
+use crunch_build::distributed::RemoteTelemetryResultClass;
+use crunch_build::distributed::RemoteTelemetryRetryClass;
+use crunch_build::distributed::RemoteTelemetryRouteClass;
+use crunch_build::distributed::RemoteTelemetryTransferClass;
 use crunch_build::distributed::RemoteTransferAcknowledgement;
 use crunch_build::distributed::RemoteTransferArtifactId;
 use crunch_build::distributed::RemoteTransferArtifactKind;
@@ -60,8 +69,12 @@ use crunch_build::distributed::RemoteTransferManifest;
 use crunch_build::distributed::RemoteTransferPolicy;
 use crunch_build::distributed::RemoteTransferReasonCode;
 use crunch_build::distributed::acknowledge_remote_transfer_chunk;
-use fs2::FileExt;
 use crunch_build::distributed::canonicalize_remote_transfer_manifest;
+use crunch_build::distributed::decide_remote_attempt_retry;
+use crunch_build::distributed::derive_remote_attempt_id;
+use crunch_build::distributed::plan_remote_attempt_assignment;
+use crunch_build::distributed::plan_remote_attempt_report;
+use fs2::FileExt;
 use nix_compat::store_path::StorePath;
 use rand::RngCore;
 use rand::rngs::OsRng;
@@ -71,8 +84,16 @@ use snix_store::path_info::PathInfo;
 use tokio::io::AsyncWrite;
 
 use crate::errors::RunError;
+use crate::remote_telemetry_export::RemoteTelemetryAdapterHealth;
+use crate::remote_telemetry_export::RemoteTelemetryAdapterStatus;
+use crate::remote_telemetry_export::RemoteTelemetryExportReport;
+use crate::remote_trace_context::REMOTE_TRACE_CONTEXT_CAPABILITY;
+use crate::remote_trace_context::RemoteTraceContext;
+use crate::remote_trace_context::RemoteTraceContextHealth;
+use crate::remote_trace_context::accept_remote_trace_context;
 
 pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
+pub const REMOTE_OBSERVABILITY_NON_CLAIM: &str = "remote observability is diagnostic only and does not prove build success, output validity, reproducibility, release eligibility, or physical-target determinism";
 pub const REMOTE_PROTOCOL_VERSION: u32 = 1;
 pub const MAX_REMOTE_CAPABILITIES: usize = 32;
 pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
@@ -461,6 +482,8 @@ impl RemoteProtocolPhase {
 #[serde(rename_all = "kebab-case")]
 pub enum RemoteFrameKind {
     Hello,
+    TraceContext,
+    TraceContextAck,
     AuthTicket,
     AuthOk,
     BuildRequest,
@@ -485,6 +508,8 @@ impl RemoteFrameKind {
     fn as_str(self) -> &'static str {
         match self {
             Self::Hello => "hello",
+            Self::TraceContext => "trace-context",
+            Self::TraceContextAck => "trace-context-ack",
             Self::AuthTicket => "auth-ticket",
             Self::AuthOk => "auth-ok",
             Self::BuildRequest => "build-request",
@@ -511,6 +536,11 @@ impl RemoteFrameKind {
 pub struct RemoteAuthOk {
     pub builder_signing_keys: Vec<String>,
     pub accepted_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteTraceContextAck {
+    pub health: RemoteTraceContextHealth,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -672,16 +702,43 @@ pub struct RemoteTransferCreditFrame {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum RemoteFrame {
-    Hello { hello: RemoteHello },
-    AuthTicket { auth: TicketAuthRequest },
-    AuthOk { auth: RemoteAuthOk },
-    BuildRequest { request: ConcreteBuildRequest },
-    InputManifest { manifest: RemoteInputManifest },
-    MissingInputs { request_id: String, refs: Vec<String> },
-    InputUpload { upload: RemoteInputUpload },
-    TransferManifest { transfer: RemoteTransferManifestFrame },
-    TransferDemand { transfer: RemoteTransferDemandFrame },
-    TransferCredit { transfer: RemoteTransferCreditFrame },
+    Hello {
+        hello: RemoteHello,
+    },
+    TraceContext {
+        context: Option<RemoteTraceContext>,
+    },
+    TraceContextAck {
+        acknowledgement: RemoteTraceContextAck,
+    },
+    AuthTicket {
+        auth: TicketAuthRequest,
+    },
+    AuthOk {
+        auth: RemoteAuthOk,
+    },
+    BuildRequest {
+        request: ConcreteBuildRequest,
+    },
+    InputManifest {
+        manifest: RemoteInputManifest,
+    },
+    MissingInputs {
+        request_id: String,
+        refs: Vec<String>,
+    },
+    InputUpload {
+        upload: RemoteInputUpload,
+    },
+    TransferManifest {
+        transfer: RemoteTransferManifestFrame,
+    },
+    TransferDemand {
+        transfer: RemoteTransferDemandFrame,
+    },
+    TransferCredit {
+        transfer: RemoteTransferCreditFrame,
+    },
     TransferAcknowledgement {
         direction: crate::remote_transfer::RemoteTransferDirection,
         acknowledgement: RemoteTransferAcknowledgement,
@@ -690,19 +747,36 @@ pub enum RemoteFrame {
         direction: crate::remote_transfer::RemoteTransferDirection,
         report: crate::remote_transfer::RemoteTransferShellReport,
     },
-    BuildQueued { request_id: String, session_id: String },
-    BuildStarted { request_id: String },
-    BuildFinished { result: RemoteBuildFinished },
-    OutputTransferArtifact { artifact: RemoteOutputTransferArtifact },
-    OutputTransferDone { report: RemoteTransferReport },
-    Done { request_id: String },
-    Error { error: RemoteProtocolErrorFrame },
+    BuildQueued {
+        request_id: String,
+        session_id: String,
+    },
+    BuildStarted {
+        request_id: String,
+    },
+    BuildFinished {
+        result: RemoteBuildFinished,
+    },
+    OutputTransferArtifact {
+        artifact: RemoteOutputTransferArtifact,
+    },
+    OutputTransferDone {
+        report: RemoteTransferReport,
+    },
+    Done {
+        request_id: String,
+    },
+    Error {
+        error: RemoteProtocolErrorFrame,
+    },
 }
 
 impl RemoteFrame {
     pub fn kind(&self) -> RemoteFrameKind {
         match self {
             Self::Hello { .. } => RemoteFrameKind::Hello,
+            Self::TraceContext { .. } => RemoteFrameKind::TraceContext,
+            Self::TraceContextAck { .. } => RemoteFrameKind::TraceContextAck,
             Self::AuthTicket { .. } => RemoteFrameKind::AuthTicket,
             Self::AuthOk { .. } => RemoteFrameKind::AuthOk,
             Self::BuildRequest { .. } => RemoteFrameKind::BuildRequest,
@@ -895,8 +969,12 @@ pub struct RemoteStdioTranscript {
     pub binding: RemoteTransportBinding,
     pub frames: Vec<RemoteFrame>,
     pub stderr_summary: String,
+    #[serde(default)]
+    pub telemetry: RemoteTelemetryBuffer,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub streaming_output: Option<RemoteStreamingOutputReceipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trace_context_health: Option<RemoteTraceContextHealth>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -974,6 +1052,7 @@ pub struct RemoteStdioExchangeReport {
 pub struct RemoteProductionTransferClient {
     pub state_dir: PathBuf,
     pub transfer_policy: RemoteTransferPolicy,
+    pub telemetry_policy: RemoteTelemetryPolicy,
     pub trusted_output_keys: Vec<String>,
     pub input_transfer: Option<crate::remote_transfer::PreparedRemoteTransfer>,
     pub interrupt_after_input_chunks: Option<u32>,
@@ -1060,6 +1139,91 @@ pub struct RemoteClientDerivationInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteRootPriorityCandidate {
+    pub input_index: u32,
+    pub root_identity_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteRootPriorityPlan {
+    pub ordered_input_indices: Vec<u32>,
+    pub evidence: crunch_build::scheduling::PriorityDecisionEvidence,
+}
+
+pub fn remote_root_priority_identity(
+    label: &str,
+    drv_path: &StorePath<String>,
+    store_prefix: &str,
+) -> Result<String, String> {
+    if label.is_empty() || store_prefix.is_empty() {
+        return Err("remote-root-priority-identity-input-empty".to_string());
+    }
+    let identity = remote_client_request_id(label, drv_path, store_prefix);
+    assert!(is_blake3_hex_digest(&identity));
+    assert_eq!(identity.len(), BLAKE3_HEX_LENGTH_CHARS);
+    Ok(identity)
+}
+
+pub fn plan_remote_root_priority(
+    policy: &crunch_build::scheduling::SchedulingPolicy,
+    candidates: &[RemoteRootPriorityCandidate],
+) -> Result<RemoteRootPriorityPlan, String> {
+    if candidates.is_empty() {
+        return Err("remote-root-priority-candidates-empty".to_string());
+    }
+    let candidate_count =
+        u32::try_from(candidates.len()).map_err(|_| "remote-root-priority-candidate-count-overflow".to_string())?;
+    if candidate_count > crunch_build::scheduling::MAX_READY_GOALS {
+        return Err("remote-root-priority-candidate-limit-exceeded".to_string());
+    }
+    let mut input_indices = BTreeSet::new();
+    let mut root_identities = BTreeSet::new();
+    let mut index_by_identity = BTreeMap::new();
+    let mut ready_goals = Vec::with_capacity(candidates.len());
+    let mut pressures = BTreeMap::new();
+    for candidate in candidates {
+        if !input_indices.insert(candidate.input_index) {
+            return Err("remote-root-priority-input-index-duplicate".to_string());
+        }
+        if !is_blake3_hex_digest(&candidate.root_identity_blake3) {
+            return Err("remote-root-priority-identity-invalid".to_string());
+        }
+        if !root_identities.insert(candidate.root_identity_blake3.clone()) {
+            return Err("remote-root-priority-identity-duplicate".to_string());
+        }
+        index_by_identity.insert(candidate.root_identity_blake3.clone(), candidate.input_index);
+        ready_goals.push(crunch_build::scheduling::ReadyGoalFacts::ordinary(candidate.root_identity_blake3.clone(), 0));
+        pressures
+            .insert(candidate.root_identity_blake3.clone(), crunch_build::scheduling::KnownGraphPressure::default());
+    }
+    let ranked = crunch_build::scheduling::rank_ready_goals(policy, 0, &ready_goals, &pressures)
+        .map_err(|error| error.to_string())?;
+    let evidence = crunch_build::scheduling::priority_decision_evidence(
+        policy,
+        0,
+        &ranked,
+        crunch_build::scheduling::HistoryBasis::StructuralFallbackMissing,
+        None,
+    )
+    .map_err(|error| error.to_string())?;
+    let ordered_input_indices = ranked
+        .iter()
+        .map(|ranked_goal| {
+            index_by_identity
+                .get(&ranked_goal.goal_key)
+                .copied()
+                .ok_or_else(|| "remote-root-priority-selection-missing".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(ordered_input_indices.len(), candidates.len());
+    assert_eq!(evidence.competing_goal_count, candidate_count);
+    Ok(RemoteRootPriorityPlan {
+        ordered_input_indices,
+        evidence,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteClientDispatchPlan {
     pub label: String,
     pub command: RemoteStdioCommand,
@@ -1067,17 +1231,44 @@ pub struct RemoteClientDispatchPlan {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteTelemetryBufferHealth {
+    pub accepted_events: u64,
+    pub dropped_events: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_drop_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteAttemptObservabilityHealth {
+    pub telemetry: RemoteTelemetryBufferHealth,
+    pub exporters: RemoteTelemetryExportReport,
+    pub trace_context: RemoteTraceContextHealth,
+    pub immutable_log: RemoteTelemetryAdapterHealth,
+    pub non_claim: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteAttemptObservabilityReport {
+    pub events: Vec<RemoteTelemetryEvent>,
+    pub health: RemoteAttemptObservabilityHealth,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub immutable_log: Option<RemoteAttemptLogControlSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RemoteClientImportedBuild {
     pub label: String,
     pub request_id: String,
     pub imported: RemoteOutputImportReport,
+    pub observability: RemoteAttemptObservabilityReport,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RemoteClientBuildReport {
     pub schema: String,
     pub builder: String,
     pub store_prefix: String,
+    pub priority_decisions: Vec<crunch_build::scheduling::PriorityDecisionEvidence>,
     pub imported: Vec<RemoteClientImportedBuild>,
 }
 
@@ -1175,6 +1366,8 @@ pub struct RemoteCoordinatorJobSummary {
     pub lost_phase: Option<RemoteFailurePhase>,
     #[serde(default)]
     pub immutable_log: Option<RemoteAttemptLogControlSummary>,
+    #[serde(default)]
+    pub observability_health: Option<RemoteAttemptObservabilityHealth>,
     pub short_error: Option<String>,
     #[serde(default)]
     pub current_attempt: Option<RemoteAttemptState>,
@@ -1308,6 +1501,7 @@ pub struct RemoteCoordinatorJobStatus {
     pub worker_endpoint_id: Option<String>,
     pub short_error: Option<String>,
     pub immutable_log: Option<RemoteAttemptLogControlSummary>,
+    pub observability_health: Option<RemoteAttemptObservabilityHealth>,
     pub attempt_id: Option<RemoteAttemptId>,
     pub fence_generation: Option<RemoteFenceGeneration>,
     pub attempt_phase: Option<RemoteAttemptPhase>,
@@ -2095,6 +2289,7 @@ pub fn bind_remote_production_dispatch(
     plan.command.production_transfer = Some(RemoteProductionTransferClient {
         state_dir: state_dir.to_path_buf(),
         transfer_policy,
+        telemetry_policy: RemoteTelemetryPolicy::default(),
         trusted_output_keys: plan.client.trusted_output_keys.clone(),
         input_transfer: None,
         interrupt_after_input_chunks: None,
@@ -2139,6 +2334,47 @@ pub fn set_remote_production_interrupt_after_output_chunks(
     Ok(())
 }
 
+pub fn set_remote_production_telemetry_policy(
+    command: &mut RemoteStdioCommand,
+    policy: RemoteTelemetryPolicy,
+) -> Result<(), String> {
+    policy.validate().map_err(|reason| reason.as_str().to_string())?;
+    let production = command
+        .production_transfer
+        .as_mut()
+        .ok_or_else(|| "remote-production-transfer-context-missing".to_string())?;
+    production.telemetry_policy = policy;
+    assert_eq!(production.telemetry_policy, policy);
+    assert!(policy.batch_size <= policy.event_capacity);
+    Ok(())
+}
+
+pub fn set_remote_diagnostic_trace_context(
+    command: &mut RemoteStdioCommand,
+    context: Option<RemoteTraceContext>,
+) -> Result<(), String> {
+    command.input_frames.retain(|frame| !matches!(frame, RemoteFrame::TraceContext { .. }));
+    let hello_index = command
+        .input_frames
+        .iter()
+        .position(|frame| matches!(frame, RemoteFrame::Hello { .. }))
+        .ok_or_else(|| "remote-production-hello-frame-missing".to_string())?;
+    let RemoteFrame::Hello { hello } = &mut command.input_frames[hello_index] else {
+        unreachable!("hello position checked");
+    };
+    if !hello.capabilities.iter().any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY) {
+        hello.capabilities.push(REMOTE_TRACE_CONTEXT_CAPABILITY.to_string());
+    }
+    if hello.capabilities.len() > MAX_REMOTE_CAPABILITIES {
+        return Err(format!("capability count exceeds {MAX_REMOTE_CAPABILITIES}"));
+    }
+    let trace_index = hello_index.checked_add(1).ok_or_else(|| "remote-trace-frame-index-overflow".to_string())?;
+    command.input_frames.insert(trace_index, RemoteFrame::TraceContext { context });
+    assert!(matches!(command.input_frames.get(trace_index), Some(RemoteFrame::TraceContext { .. })));
+    assert!(hello_index < trace_index);
+    Ok(())
+}
+
 pub async fn prepare_remote_production_input_transfer(
     store: &crunch_store::StoreHandle,
     command: &mut RemoteStdioCommand,
@@ -2149,33 +2385,16 @@ pub async fn prepare_remote_production_input_transfer(
         .production_transfer
         .as_mut()
         .ok_or_else(|| "remote-production-transfer-context-missing".to_string())?;
-    let attempt = request
-        .production_attempt
-        .as_ref()
-        .ok_or_else(|| "remote-production-attempt-missing".to_string())?;
-    let policy = request
-        .transfer_policy
-        .ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
+    let attempt = request.production_attempt.as_ref().ok_or_else(|| "remote-production-attempt-missing".to_string())?;
+    let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     if policy != production.transfer_policy {
         return Err("remote-production-transfer-policy-mismatch".to_string());
     }
-    let spool_dir = production
-        .state_dir
-        .join(REMOTE_TRANSFER_SPOOL_DIR)
-        .join(&request.request_id)
-        .join("inputs");
+    let spool_dir = production.state_dir.join(REMOTE_TRANSFER_SPOOL_DIR).join(&request.request_id).join("inputs");
     let mut artifacts = Vec::with_capacity(request.input_refs.len());
     for input_ref in &request.input_refs {
         artifacts.push(
-            prepare_remote_input_nar_artifact(
-                store,
-                request,
-                input_ref,
-                source_state_dir,
-                &spool_dir,
-                policy,
-            )
-            .await?,
+            prepare_remote_input_nar_artifact(store, request, input_ref, source_state_dir, &spool_dir, policy).await?,
         );
     }
     if artifacts.is_empty() {
@@ -2195,9 +2414,12 @@ pub async fn prepare_remote_production_input_transfer(
     )?;
     production.input_transfer = Some(prepared);
     assert!(production.input_transfer.is_some());
-    assert!(command.input_frames.iter().all(|frame| {
-        !matches!(frame, RemoteFrame::InputUpload { upload } if !upload.artifacts.is_empty())
-    }));
+    assert!(
+        command
+            .input_frames
+            .iter()
+            .all(|frame| { !matches!(frame, RemoteFrame::InputUpload { upload } if !upload.artifacts.is_empty()) })
+    );
     Ok(())
 }
 
@@ -2255,10 +2477,7 @@ fn remote_input_nar_artifact_id(input_ref: &str) -> Result<RemoteTransferArtifac
 }
 
 fn remote_output_nar_artifact_id(output_name: &str, logical_path: &str) -> Result<RemoteTransferArtifactId, String> {
-    remote_hashed_transfer_artifact_id(
-        REMOTE_OUTPUT_NAR_ARTIFACT_DOMAIN,
-        &format!("{output_name}\0{logical_path}"),
-    )
+    remote_hashed_transfer_artifact_id(REMOTE_OUTPUT_NAR_ARTIFACT_DOMAIN, &format!("{output_name}\0{logical_path}"))
 }
 
 fn remote_output_pathinfo_artifact_id(
@@ -2779,14 +2998,10 @@ async fn materialize_streamed_remote_inputs(
         let reader = crate::remote_transfer::open_remote_transfer_received_artifact(receiver_root, &artifact_id)
             .map_err(|err| format!("remote-streamed-input-open-failed: {err}"))?;
         let mut reader = tokio::fs::File::from_std(reader);
-        let (node, nar_sha256, nar_size) = snix_store::nar::ingest_nar_and_hash(
-            store.blob_service(),
-            store.directory_service(),
-            &mut reader,
-            &None,
-        )
-        .await
-        .map_err(|err| format!("remote-streamed-input-nar-ingest-failed: {err}"))?;
+        let (node, nar_sha256, nar_size) =
+            snix_store::nar::ingest_nar_and_hash(store.blob_service(), store.directory_service(), &mut reader, &None)
+                .await
+                .map_err(|err| format!("remote-streamed-input-nar-ingest-failed: {err}"))?;
         if nar_size != descriptor.size_bytes {
             return Err("remote-streamed-input-nar-size-mismatch".to_string());
         }
@@ -2829,26 +3044,15 @@ async fn prepare_remote_production_output(
     request: &ConcreteBuildRequest,
     execution: &RemoteExecutionOutcome,
 ) -> Result<PreparedRemoteProductionOutput, String> {
-    let attempt = request
-        .production_attempt
-        .as_ref()
-        .ok_or_else(|| "remote-production-attempt-missing".to_string())?;
-    let policy = request
-        .transfer_policy
-        .ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
+    let attempt = request.production_attempt.as_ref().ok_or_else(|| "remote-production-attempt-missing".to_string())?;
+    let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     let store = open_remote_local_executor_store(executor).await?;
-    let spool_dir = executor
-        .state_dir
-        .join(REMOTE_TRANSFER_SPOOL_DIR)
-        .join(&request.request_id)
-        .join("outputs");
+    let spool_dir = executor.state_dir.join(REMOTE_TRANSFER_SPOOL_DIR).join(&request.request_id).join("outputs");
     let mut outputs = sign_remote_execution_outputs(&execution.outputs, &executor.signing_key_id())?;
     let mut artifacts = Vec::with_capacity(outputs.len().saturating_mul(REMOTE_TRANSFER_ARTIFACTS_PER_PATHINFO_OUTPUT));
     for output in &mut outputs {
-        let path_info = output
-            .path_info
-            .as_ref()
-            .ok_or_else(|| "remote-production-output-pathinfo-missing".to_string())?;
+        let path_info =
+            output.path_info.as_ref().ok_or_else(|| "remote-production-output-pathinfo-missing".to_string())?;
         let pathinfo = crate::remote_transfer::prepare_pathinfo_transfer_artifact_with_id(
             path_info,
             remote_output_pathinfo_artifact_id(&output.name, &output.logical_path)?,
@@ -3820,11 +4024,7 @@ pub fn admit_remote_production_dispatch(
         required_sandbox_mode: "native".to_string(),
         required_network_mode: "none".to_string(),
         trusted_output_keys: trusted_output_keys.to_vec(),
-        live_output_claims: request
-            .expected_outputs
-            .iter()
-            .filter_map(|output| output.logical_path.clone())
-            .collect(),
+        live_output_claims: request.expected_outputs.iter().filter_map(|output| output.logical_path.clone()).collect(),
         wait_for_worker: false,
     };
     let deadline_unix_s = now_unix_s
@@ -3916,6 +4116,211 @@ fn start_remote_production_attempt_if_queued(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteProductionTelemetryFact {
+    PrioritySelected { competing_goal_count: u32 },
+    RouteSelected,
+    QueueAdmitted,
+    WorkerAssigned,
+    FenceAccepted,
+    StaleFenceRejected,
+    ExecutionStarted,
+    ExecutionCompleted,
+    ExecutionFailed,
+    TransferDemand { chunks: u32 },
+    TransferCredit { bytes: u64 },
+    TransferResumed { bytes: u64 },
+    TransferCutoff { accepted: bool },
+    TransferCompleted { bytes: u64, mode: RemoteTransferMode },
+    TransferFallback { bytes: u64 },
+    OutputAdmitted,
+    OutputRejected,
+}
+
+pub fn remote_production_telemetry_event(
+    fact: RemoteProductionTelemetryFact,
+) -> Result<RemoteTelemetryEvent, RemoteTelemetryReasonCode> {
+    if matches!(fact, RemoteProductionTelemetryFact::PrioritySelected {
+        competing_goal_count: 0
+    }) {
+        return Err(RemoteTelemetryReasonCode::EventValueInvalid);
+    }
+    let fields = production_telemetry_fields(fact);
+    crunch_build::distributed::remote_telemetry_event(
+        fields.category,
+        fields.phase,
+        fields.result,
+        fields.route,
+        fields.retry,
+        fields.transfer,
+        fields.reason,
+        fields.capability,
+        fields.measurement,
+        fields.value,
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ProductionTelemetryFields {
+    category: RemoteTelemetryCategory,
+    phase: RemoteTelemetryPhaseClass,
+    result: RemoteTelemetryResultClass,
+    route: RemoteTelemetryRouteClass,
+    retry: RemoteTelemetryRetryClass,
+    transfer: RemoteTelemetryTransferClass,
+    reason: RemoteTelemetryReasonClass,
+    capability: RemoteTelemetryCapabilityClass,
+    measurement: RemoteTelemetryMeasurementKind,
+    value: u64,
+}
+
+fn production_telemetry_fields(fact: RemoteProductionTelemetryFact) -> ProductionTelemetryFields {
+    let mut fields = ProductionTelemetryFields {
+        category: RemoteTelemetryCategory::Execution,
+        phase: RemoteTelemetryPhaseClass::Running,
+        result: RemoteTelemetryResultClass::Accepted,
+        route: RemoteTelemetryRouteClass::RemoteStdio,
+        retry: RemoteTelemetryRetryClass::None,
+        transfer: RemoteTelemetryTransferClass::None,
+        reason: RemoteTelemetryReasonClass::AttemptTransition,
+        capability: RemoteTelemetryCapabilityClass::Exact,
+        measurement: RemoteTelemetryMeasurementKind::Occurrences,
+        value: 1,
+    };
+    apply_production_telemetry_fact(&mut fields, fact);
+    debug_assert!(fields.value > 0);
+    debug_assert_eq!(fields.route, RemoteTelemetryRouteClass::RemoteStdio);
+    fields
+}
+
+fn apply_production_telemetry_fact(fields: &mut ProductionTelemetryFields, fact: RemoteProductionTelemetryFact) {
+    match fact {
+        RemoteProductionTelemetryFact::PrioritySelected { competing_goal_count } => {
+            fields.category = RemoteTelemetryCategory::Queue;
+            fields.phase = RemoteTelemetryPhaseClass::Planning;
+            fields.reason = RemoteTelemetryReasonClass::PrioritySelected;
+            fields.measurement = RemoteTelemetryMeasurementKind::CandidateCount;
+            fields.value = u64::from(competing_goal_count);
+        }
+        RemoteProductionTelemetryFact::RouteSelected => {
+            fields.category = RemoteTelemetryCategory::Route;
+            fields.phase = RemoteTelemetryPhaseClass::Planning;
+            fields.reason = RemoteTelemetryReasonClass::RouteSelected;
+        }
+        RemoteProductionTelemetryFact::QueueAdmitted => {
+            fields.category = RemoteTelemetryCategory::Queue;
+            fields.phase = RemoteTelemetryPhaseClass::Queued;
+            fields.reason = RemoteTelemetryReasonClass::QueueAdmitted;
+        }
+        RemoteProductionTelemetryFact::WorkerAssigned => {
+            fields.category = RemoteTelemetryCategory::Assignment;
+            fields.phase = RemoteTelemetryPhaseClass::Assigned;
+            fields.reason = RemoteTelemetryReasonClass::WorkerAssigned;
+        }
+        RemoteProductionTelemetryFact::FenceAccepted => {
+            fields.category = RemoteTelemetryCategory::RetryFencing;
+            fields.retry = RemoteTelemetryRetryClass::CurrentFence;
+            fields.reason = RemoteTelemetryReasonClass::FenceAccepted;
+        }
+        RemoteProductionTelemetryFact::StaleFenceRejected => {
+            fields.category = RemoteTelemetryCategory::RetryFencing;
+            fields.result = RemoteTelemetryResultClass::Rejected;
+            fields.retry = RemoteTelemetryRetryClass::StaleFence;
+            fields.reason = RemoteTelemetryReasonClass::FenceRejected;
+        }
+        RemoteProductionTelemetryFact::ExecutionStarted => {}
+        RemoteProductionTelemetryFact::ExecutionCompleted => {
+            fields.result = RemoteTelemetryResultClass::Succeeded;
+            fields.reason = RemoteTelemetryReasonClass::ExecutionCompleted;
+        }
+        RemoteProductionTelemetryFact::ExecutionFailed => {
+            fields.phase = RemoteTelemetryPhaseClass::Terminal;
+            fields.result = RemoteTelemetryResultClass::Failed;
+            fields.retry = RemoteTelemetryRetryClass::Terminal;
+            fields.reason = RemoteTelemetryReasonClass::ExecutionFailed;
+        }
+        RemoteProductionTelemetryFact::TransferDemand { chunks } => {
+            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferDemand, u64::from(chunks));
+            fields.measurement = RemoteTelemetryMeasurementKind::Objects;
+        }
+        RemoteProductionTelemetryFact::TransferCredit { bytes } => {
+            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferCredit, bytes);
+            fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+        }
+        RemoteProductionTelemetryFact::TransferResumed { bytes } => {
+            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferResumed, bytes);
+            fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+        }
+        RemoteProductionTelemetryFact::TransferCutoff { accepted } => {
+            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferCutoff, 1);
+            fields.result = if accepted {
+                RemoteTelemetryResultClass::Accepted
+            } else {
+                RemoteTelemetryResultClass::Dropped
+            };
+        }
+        RemoteProductionTelemetryFact::TransferCompleted { bytes, mode } => {
+            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferCompleted, bytes);
+            fields.result = RemoteTelemetryResultClass::Succeeded;
+            fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+            fields.transfer = telemetry_transfer_class(mode);
+        }
+        RemoteProductionTelemetryFact::TransferFallback { bytes } => {
+            set_transfer_fields(fields, RemoteTelemetryReasonClass::TransferFallback, bytes);
+            fields.transfer = RemoteTelemetryTransferClass::Fallback;
+            fields.capability = RemoteTelemetryCapabilityClass::Degraded;
+            fields.measurement = RemoteTelemetryMeasurementKind::Bytes;
+        }
+        RemoteProductionTelemetryFact::OutputAdmitted => {
+            fields.category = RemoteTelemetryCategory::Admission;
+            fields.phase = RemoteTelemetryPhaseClass::Admitting;
+            fields.reason = RemoteTelemetryReasonClass::OutputAdmitted;
+        }
+        RemoteProductionTelemetryFact::OutputRejected => {
+            fields.category = RemoteTelemetryCategory::Admission;
+            fields.phase = RemoteTelemetryPhaseClass::Terminal;
+            fields.result = RemoteTelemetryResultClass::Rejected;
+            fields.retry = RemoteTelemetryRetryClass::Terminal;
+            fields.reason = RemoteTelemetryReasonClass::OutputRejected;
+        }
+    }
+}
+
+fn set_transfer_fields(fields: &mut ProductionTelemetryFields, reason: RemoteTelemetryReasonClass, value: u64) {
+    fields.category = RemoteTelemetryCategory::Transfer;
+    fields.phase = RemoteTelemetryPhaseClass::Transferring;
+    fields.transfer = RemoteTelemetryTransferClass::Streaming;
+    fields.reason = reason;
+    fields.value = value.max(1);
+}
+
+fn telemetry_transfer_class(mode: RemoteTransferMode) -> RemoteTelemetryTransferClass {
+    match mode {
+        RemoteTransferMode::Delta => RemoteTelemetryTransferClass::Delta,
+        RemoteTransferMode::Full => RemoteTelemetryTransferClass::Full,
+        RemoteTransferMode::Streaming => RemoteTelemetryTransferClass::Streaming,
+    }
+}
+
+pub fn record_remote_production_telemetry(
+    buffer: &RemoteTelemetryBuffer,
+    fact: RemoteProductionTelemetryFact,
+    policy: RemoteTelemetryPolicy,
+) -> RemoteTelemetryBuffer {
+    match remote_production_telemetry_event(fact) {
+        Ok(event) => crunch_build::distributed::record_remote_telemetry(buffer, event, policy),
+        Err(_) => buffer.clone(),
+    }
+}
+
+pub fn remote_telemetry_buffer_health(buffer: &RemoteTelemetryBuffer) -> RemoteTelemetryBufferHealth {
+    RemoteTelemetryBufferHealth {
+        accepted_events: buffer.accepted_events,
+        dropped_events: buffer.dropped_events,
+        last_drop_reason: buffer.last_drop_reason.map(|reason| reason.as_str().to_string()),
+    }
+}
+
 fn production_attempt_report(
     binding: &RemoteProductionAttemptBinding,
     label: &str,
@@ -3927,8 +4332,8 @@ fn production_attempt_report(
     hash_labeled_str(&mut hasher, "attempt", binding.attempt_id.as_str());
     hash_labeled_str(&mut hasher, "label", label);
     hash_labeled_str(&mut hasher, "event-number", &event_number.to_string());
-    let event_id = RemoteEventId::new(hasher.finalize().to_hex().to_string())
-        .map_err(|reason| reason.as_str().to_string())?;
+    let event_id =
+        RemoteEventId::new(hasher.finalize().to_hex().to_string()).map_err(|reason| reason.as_str().to_string())?;
     RemoteAttemptReport::new(
         binding.job_id.clone(),
         binding.attempt_id.clone(),
@@ -3937,6 +4342,155 @@ fn production_attempt_report(
         payload,
     )
     .map_err(|reason| reason.as_str().to_string())
+}
+
+pub fn append_remote_production_observability_log(
+    state: &mut RemoteCoordinatorState,
+    binding: &RemoteProductionAttemptBinding,
+    telemetry: &RemoteTelemetryBuffer,
+) -> Result<RemoteAttemptLogControlSummary, String> {
+    let job = state.jobs.get(&binding.job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let attempt = job
+        .current_attempt
+        .as_ref()
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    if attempt.attempt_id != binding.attempt_id || attempt.fence_generation != binding.fence_generation {
+        return Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string());
+    }
+    let cursor = job.immutable_log.as_ref().map_or(0, |log| log.next_cursor);
+    let payload = remote_observability_log_payload(telemetry)?;
+    let report =
+        production_attempt_report(binding, "observability-log", cursor, RemoteAttemptReportPayload::LogAppend {
+            cursor,
+            bytes: payload,
+        })?;
+    let mut candidate = state.clone();
+    apply_fenced_log_append(
+        &mut candidate,
+        &report,
+        cursor,
+        match &report.payload {
+            RemoteAttemptReportPayload::LogAppend { bytes, .. } => bytes,
+            _ => unreachable!("observability report is a log append"),
+        },
+        RemoteLogRetentionPolicy::default(),
+    )?;
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    let summary = state
+        .jobs
+        .get(&binding.job_id)
+        .and_then(|job| job.immutable_log.clone())
+        .ok_or_else(|| "remote-observability-log-summary-missing".to_string())?;
+    assert!(summary.next_cursor > cursor);
+    assert!(summary.head_record_blake3.is_some());
+    Ok(summary)
+}
+
+pub fn append_remote_rejected_production_observability_log(
+    state_dir: &Path,
+    binding: &RemoteProductionAttemptBinding,
+    telemetry: &RemoteTelemetryBuffer,
+) -> Result<RemoteAttemptLogControlSummary, String> {
+    let scope = rejected_observability_log_scope(binding)?;
+    let policy = immutable_attempt_log_policy(RemoteLogRetentionPolicy::default())?;
+    let manifest = crate::remote_attempt_log_store::load_remote_attempt_log_manifest(state_dir, &scope, policy)?;
+    let cursor = manifest.next_cursor;
+    let report =
+        production_attempt_report(binding, "stale-observability-log", cursor, RemoteAttemptReportPayload::LogAppend {
+            cursor,
+            bytes: remote_observability_log_payload(telemetry)?,
+        })?;
+    let current = RemoteAttemptLogCurrentAttemptFacts {
+        scope,
+        phase: RemoteAttemptPhase::Superseded,
+    };
+    let stored = crate::remote_attempt_log_store::append_remote_attempt_log(
+        state_dir,
+        &current,
+        report.identity.event_id,
+        cursor,
+        match &report.payload {
+            RemoteAttemptReportPayload::LogAppend { bytes, .. } => bytes.as_bytes(),
+            _ => unreachable!("rejected observability report is a log append"),
+        },
+        policy,
+    )?;
+    let summary = remote_attempt_log_control_summary(&stored.manifest, RemoteLogRetentionPolicy::default());
+    assert!(summary.next_cursor > cursor);
+    assert_ne!(summary.scope.attempt_id, binding.attempt_id);
+    Ok(summary)
+}
+
+fn rejected_observability_log_scope(binding: &RemoteProductionAttemptBinding) -> Result<RemoteAttemptLogScope, String> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"mantle-rejected-remote-observability-v1\0");
+    hash_labeled_str(&mut hasher, "job", binding.job_id.as_str());
+    hash_labeled_str(&mut hasher, "attempt", binding.attempt_id.as_str());
+    hash_labeled_str(&mut hasher, "fence", &binding.fence_generation.get().to_string());
+    let digest = hasher.finalize().to_hex().to_string();
+    let job_id = RemoteJobId::new(format!("rejected-job-{digest}")).map_err(|reason| reason.as_str().to_string())?;
+    let attempt_id =
+        RemoteAttemptId::new(format!("rejected-attempt-{digest}")).map_err(|reason| reason.as_str().to_string())?;
+    debug_assert_ne!(attempt_id, binding.attempt_id);
+    debug_assert!(binding.fence_generation.get() > 0);
+    Ok(RemoteAttemptLogScope {
+        job_id,
+        attempt_id,
+        fence_generation: binding.fence_generation,
+    })
+}
+
+fn remote_observability_log_payload(telemetry: &RemoteTelemetryBuffer) -> Result<String, String> {
+    let payload = serde_json::to_string(&serde_json::json!({
+        "schema": "mantle-remote-observability-log-v1",
+        "events": telemetry.events,
+        "accepted_events": telemetry.accepted_events,
+        "dropped_events": telemetry.dropped_events,
+        "non_claim": REMOTE_OBSERVABILITY_NON_CLAIM,
+    }))
+    .map_err(|error| format!("serializing remote observability log summary: {error}"))?;
+    debug_assert!(!payload.is_empty());
+    debug_assert!(payload.contains("mantle-remote-observability-log-v1"));
+    Ok(payload)
+}
+
+pub fn update_remote_production_observability_health(
+    state: &mut RemoteCoordinatorState,
+    binding: &RemoteProductionAttemptBinding,
+    health: RemoteAttemptObservabilityHealth,
+) -> Result<(), String> {
+    let mut candidate = state.clone();
+    let job = candidate
+        .jobs
+        .get_mut(&binding.job_id)
+        .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let attempt = job
+        .current_attempt
+        .as_ref()
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    if attempt.attempt_id != binding.attempt_id || attempt.fence_generation != binding.fence_generation {
+        return Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string());
+    }
+    job.observability_health = Some(health);
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    debug_assert!(state.jobs[&binding.job_id].observability_health.is_some());
+    debug_assert_eq!(
+        state.jobs[&binding.job_id].current_attempt.as_ref().map(|attempt| &attempt.attempt_id),
+        Some(&binding.attempt_id)
+    );
+    Ok(())
+}
+
+pub fn remote_observability_adapter_health(
+    status: RemoteTelemetryAdapterStatus,
+    reason_code: &str,
+) -> RemoteTelemetryAdapterHealth {
+    RemoteTelemetryAdapterHealth {
+        status,
+        reason_code: bounded_untrusted_text(reason_code),
+    }
 }
 
 pub fn validate_current_production_attempt(
@@ -4124,6 +4678,7 @@ fn queued_job_summary(
         result_available: false,
         lost_phase: None,
         immutable_log: None,
+        observability_health: None,
         short_error: None,
         current_attempt: Some(current_attempt),
         transfer_checkpoint: None,
@@ -4763,6 +5318,7 @@ fn coordinator_job_status(
         worker_endpoint_id: job.assigned_worker_endpoint_id.clone(),
         short_error: job.short_error.as_deref().map(bounded_untrusted_text),
         immutable_log: job.immutable_log.clone(),
+        observability_health: job.observability_health.clone(),
         attempt_id: job.current_attempt.as_ref().map(|attempt| attempt.attempt_id.clone()),
         fence_generation: job.current_attempt.as_ref().map(|attempt| attempt.fence_generation),
         attempt_phase: job.current_attempt.as_ref().map(|attempt| attempt.phase),
@@ -4910,7 +5466,9 @@ pub fn validate_stdio_child_output_for_binding(
         binding,
         frames,
         stderr_summary: bounded_stderr_summary(&output.stderr),
+        telemetry: RemoteTelemetryBuffer::default(),
         streaming_output: None,
+        trace_context_health: None,
     })
 }
 
@@ -4935,10 +5493,7 @@ fn write_remote_control_frame(writer: &mut impl Write, frame: &RemoteFrame) -> R
     writer.flush().map_err(|err| format!("flushing remote control frame: {err}"))
 }
 
-fn read_expected_remote_frame(
-    reader: &mut impl Read,
-    expected: RemoteFrameKind,
-) -> Result<RemoteFrame, String> {
+fn read_expected_remote_frame(reader: &mut impl Read, expected: RemoteFrameKind) -> Result<RemoteFrame, String> {
     let frame = read_remote_frame(&mut *reader)?;
     if frame.kind() != expected {
         return Err(format!(
@@ -4952,22 +5507,43 @@ fn read_expected_remote_frame(
 
 fn command_client_frames(
     command: &RemoteStdioCommand,
-) -> Result<(RemoteHello, TicketAuthRequest, ConcreteBuildRequest, RemoteInputManifest), String> {
+) -> Result<
+    (
+        RemoteHello,
+        Option<RemoteTraceContext>,
+        TicketAuthRequest,
+        ConcreteBuildRequest,
+        RemoteInputManifest,
+    ),
+    String,
+> {
     let mut hello = None;
+    let mut trace_context = None;
+    let mut trace_frame_seen = false;
     let mut auth = None;
     let mut request = None;
     let mut input_manifest = None;
     for frame in &command.input_frames {
         match frame {
             RemoteFrame::Hello { hello: value } => hello = Some(value.clone()),
+            RemoteFrame::TraceContext { context } => {
+                trace_frame_seen = true;
+                trace_context = context.clone();
+            }
             RemoteFrame::AuthTicket { auth: value } => auth = Some(value.clone()),
             RemoteFrame::BuildRequest { request: value } => request = Some(value.clone()),
             RemoteFrame::InputManifest { manifest: value } => input_manifest = Some(value.clone()),
             _ => {}
         }
     }
+    let hello = hello.ok_or_else(|| "remote-production-hello-frame-missing".to_string())?;
+    let trace_negotiated = hello.capabilities.iter().any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY);
+    if trace_negotiated != trace_frame_seen {
+        return Err("remote-production-trace-capability-frame-mismatch".to_string());
+    }
     Ok((
-        hello.ok_or_else(|| "remote-production-hello-frame-missing".to_string())?,
+        hello,
+        trace_context,
         auth.ok_or_else(|| "remote-production-auth-frame-missing".to_string())?,
         request.ok_or_else(|| "remote-production-build-request-frame-missing".to_string())?,
         input_manifest.ok_or_else(|| "remote-production-input-manifest-frame-missing".to_string())?,
@@ -5004,10 +5580,48 @@ fn send_prepared_remote_transfer_with_fence_validator(
     interrupt_after_chunks: Option<u32>,
     validate_fence: &mut impl FnMut() -> Result<(), String>,
 ) -> Result<crate::remote_transfer::RemoteTransferShellReport, String> {
-    if demand_frame.direction != direction || demand_frame.demand.scope != crunch_build::distributed::remote_transfer_scope(&prepared.manifest) {
+    send_prepared_remote_transfer_with_observer(
+        reader,
+        writer,
+        prepared,
+        policy,
+        direction,
+        demand_frame,
+        interrupt_after_chunks,
+        validate_fence,
+        &mut |_| {},
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn send_prepared_remote_transfer_with_observer(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    prepared: &crate::remote_transfer::PreparedRemoteTransfer,
+    policy: RemoteTransferPolicy,
+    direction: crate::remote_transfer::RemoteTransferDirection,
+    demand_frame: RemoteTransferDemandFrame,
+    interrupt_after_chunks: Option<u32>,
+    validate_fence: &mut impl FnMut() -> Result<(), String>,
+    observe: &mut impl FnMut(RemoteProductionTelemetryFact),
+) -> Result<crate::remote_transfer::RemoteTransferShellReport, String> {
+    if demand_frame.direction != direction
+        || demand_frame.demand.scope != crunch_build::distributed::remote_transfer_scope(&prepared.manifest)
+    {
         return Err("remote-transfer-demand-scope-mismatch".to_string());
     }
     let initial_transferred_bytes = demand_frame.sender_state.transferred_bytes;
+    let demanded_chunks = u32::try_from(demand_frame.demand.missing_chunks.len()).unwrap_or(u32::MAX);
+    if demanded_chunks > 0 {
+        observe(RemoteProductionTelemetryFact::TransferDemand {
+            chunks: demanded_chunks,
+        });
+    }
+    if initial_transferred_bytes > 0 {
+        observe(RemoteProductionTelemetryFact::TransferResumed {
+            bytes: initial_transferred_bytes,
+        });
+    }
     let mut sender_state = demand_frame.sender_state;
     let mut sent_chunks = 0_u32;
     for missing in &demand_frame.demand.missing_chunks {
@@ -5016,10 +5630,12 @@ fn send_prepared_remote_transfer_with_fence_validator(
             unreachable!("frame kind checked");
         };
         if transfer.direction != direction || transfer.missing != *missing {
+            observe(RemoteProductionTelemetryFact::TransferCutoff { accepted: false });
             return Err("remote-transfer-credit-demand-mismatch".to_string());
         }
         validate_fence()?;
-        let reserved = crate::remote_transfer::write_remote_transfer_data_chunk(
+        let credit_bytes = transfer.grant.bytes;
+        let reserved = match crate::remote_transfer::write_remote_transfer_data_chunk(
             &mut *writer,
             prepared,
             policy,
@@ -5027,7 +5643,16 @@ fn send_prepared_remote_transfer_with_fence_validator(
             &sender_state,
             transfer.grant,
             missing,
-        )?;
+        ) {
+            Ok(reserved) => reserved,
+            Err(reason) => {
+                observe(RemoteProductionTelemetryFact::TransferCutoff { accepted: false });
+                return Err(reason);
+            }
+        };
+        if credit_bytes > 0 {
+            observe(RemoteProductionTelemetryFact::TransferCredit { bytes: credit_bytes });
+        }
         let acknowledgement_frame = read_expected_remote_frame(reader, RemoteFrameKind::TransferAcknowledgement)?;
         let RemoteFrame::TransferAcknowledgement {
             direction: acknowledgement_direction,
@@ -5051,9 +5676,8 @@ fn send_prepared_remote_transfer_with_fence_validator(
             progress_step,
         )
         .map_err(|reason| reason.as_str().to_string())?;
-        sent_chunks = sent_chunks
-            .checked_add(1)
-            .ok_or_else(|| "remote-transfer-sent-chunk-count-overflow".to_string())?;
+        sent_chunks =
+            sent_chunks.checked_add(1).ok_or_else(|| "remote-transfer-sent-chunk-count-overflow".to_string())?;
         if interrupt_after_chunks.is_some_and(|limit| sent_chunks >= limit) {
             return Err("remote-production-input-transfer-interrupted-after-checkpoint".to_string());
         }
@@ -5071,6 +5695,13 @@ fn send_prepared_remote_transfer_with_fence_validator(
         return Err("remote-transfer-completion-manifest-mismatch".to_string());
     }
     validate_fence()?;
+    let completed_bytes = report.transferred_bytes.checked_add(report.reused_bytes).unwrap_or(u64::MAX);
+    if completed_bytes > 0 {
+        observe(RemoteProductionTelemetryFact::TransferCompleted {
+            bytes: completed_bytes,
+            mode: RemoteTransferMode::Streaming,
+        });
+    }
     assert!(sender_state.in_flight.is_empty());
     assert!(report.transferred_bytes >= initial_transferred_bytes);
     Ok(report)
@@ -5120,21 +5751,18 @@ fn receive_remote_transfer_interactively_with_fence_validator(
     for missing in &missing_chunks {
         validate_fence()?;
         let grant = session.credit_for_chunk(missing)?;
-        write_remote_control_frame(
-            writer,
-            &RemoteFrame::TransferCredit {
-                transfer: RemoteTransferCreditFrame {
-                    direction,
-                    missing: missing.clone(),
-                    grant,
-                },
+        write_remote_control_frame(writer, &RemoteFrame::TransferCredit {
+            transfer: RemoteTransferCreditFrame {
+                direction,
+                missing: missing.clone(),
+                grant,
             },
-        )?;
+        })?;
         let acknowledgement = session.receive_chunk(&mut *reader)?;
         if let Err(reason) = validate_fence() {
-            session
-                .invalidate_fenced_progress()
-                .map_err(|invalidation| format!("{reason}; remote-transfer-fence-invalidation-failed: {invalidation}"))?;
+            session.invalidate_fenced_progress().map_err(|invalidation| {
+                format!("{reason}; remote-transfer-fence-invalidation-failed: {invalidation}")
+            })?;
             return Err(reason);
         }
         received_chunks = received_chunks
@@ -5143,15 +5771,82 @@ fn receive_remote_transfer_interactively_with_fence_validator(
         if interrupt_after_chunks.is_some_and(|limit| received_chunks >= limit) {
             return Err("remote-production-transfer-interrupted-after-checkpoint".to_string());
         }
-        write_remote_control_frame(
-            writer,
-            &RemoteFrame::TransferAcknowledgement {
-                direction,
-                acknowledgement,
-            },
-        )?;
+        write_remote_control_frame(writer, &RemoteFrame::TransferAcknowledgement {
+            direction,
+            acknowledgement,
+        })?;
     }
     Ok(None)
+}
+
+fn record_production_fact(
+    telemetry: &mut RemoteTelemetryBuffer,
+    policy: RemoteTelemetryPolicy,
+    fact: RemoteProductionTelemetryFact,
+) {
+    *telemetry = record_remote_production_telemetry(telemetry, fact, policy);
+    debug_assert!(telemetry.events.len() <= usize::try_from(policy.event_capacity).unwrap_or(usize::MAX));
+    debug_assert!(telemetry.accepted_events >= u64::try_from(telemetry.events.len()).unwrap_or(u64::MAX));
+}
+
+fn record_transfer_demand_and_resume(
+    telemetry: &mut RemoteTelemetryBuffer,
+    policy: RemoteTelemetryPolicy,
+    demand: &RemoteTransferDemandFrame,
+) {
+    let chunks = u32::try_from(demand.demand.missing_chunks.len()).unwrap_or(u32::MAX);
+    if chunks > 0 {
+        record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferDemand { chunks });
+        let bytes = demand
+            .demand
+            .missing_chunks
+            .iter()
+            .try_fold(0_u64, |total, chunk| total.checked_add(u64::from(chunk.chunk.size_bytes)))
+            .unwrap_or(u64::MAX);
+        if bytes > 0 {
+            record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferCredit { bytes });
+        }
+    }
+    if demand.sender_state.transferred_bytes > 0 {
+        record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferResumed {
+            bytes: demand.sender_state.transferred_bytes,
+        });
+    }
+}
+
+fn record_transfer_demand_and_resume_from_session(
+    telemetry: &mut RemoteTelemetryBuffer,
+    policy: RemoteTelemetryPolicy,
+    session: &crate::remote_transfer::RemoteTransferReceiveSession,
+    direction: crate::remote_transfer::RemoteTransferDirection,
+) {
+    let demand = RemoteTransferDemandFrame {
+        direction,
+        demand: session.demand().clone(),
+        sender_state: session.sender_credit_state(),
+    };
+    record_transfer_demand_and_resume(telemetry, policy, &demand);
+}
+
+fn record_transfer_completion(
+    telemetry: &mut RemoteTelemetryBuffer,
+    policy: RemoteTelemetryPolicy,
+    report: &crate::remote_transfer::RemoteTransferShellReport,
+    mode: RemoteTransferMode,
+    fallback_reason: Option<&str>,
+) {
+    let bytes = report.transferred_bytes.checked_add(report.reused_bytes).unwrap_or(u64::MAX);
+    if report.disposition == crate::remote_transfer::RemoteTransferShellDisposition::AlreadyPresent {
+        record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferCutoff { accepted: true });
+    }
+    if bytes > 0 {
+        record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferCompleted { bytes, mode });
+        if fallback_reason.is_some() {
+            record_production_fact(telemetry, policy, RemoteProductionTelemetryFact::TransferFallback { bytes });
+        }
+    }
+    debug_assert!(fallback_reason.is_none() || mode != RemoteTransferMode::Streaming);
+    debug_assert!(report.transferred_bytes <= bytes);
 }
 
 fn run_remote_production_client_protocol(
@@ -5160,24 +5855,40 @@ fn run_remote_production_client_protocol(
     command: RemoteStdioCommand,
     production: RemoteProductionTransferClient,
 ) -> Result<RemoteStdioTranscript, String> {
-    let (hello, auth, request, input_manifest) = command_client_frames(&command)?;
-    let attempt = request
-        .production_attempt
-        .as_ref()
-        .ok_or_else(|| "remote-production-attempt-missing".to_string())?;
-    let policy = request
-        .transfer_policy
-        .ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
+    let (hello, trace_context, auth, request, input_manifest) = command_client_frames(&command)?;
+    let attempt = request.production_attempt.as_ref().ok_or_else(|| "remote-production-attempt-missing".to_string())?;
+    let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     if policy != production.transfer_policy {
         return Err("remote-production-transfer-policy-mismatch".to_string());
     }
+    let telemetry_policy = production.telemetry_policy;
+    let mut telemetry = RemoteTelemetryBuffer::default();
     validate_current_production_attempt(&production.state_dir, attempt)?;
+    let trace_negotiated = hello.capabilities.iter().any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY);
     write_remote_control_frame(&mut stdin, &RemoteFrame::Hello { hello })?;
+    if trace_negotiated {
+        write_remote_control_frame(&mut stdin, &RemoteFrame::TraceContext { context: trace_context })?;
+    }
     write_remote_control_frame(&mut stdin, &RemoteFrame::AuthTicket { auth: auth.clone() })?;
     let auth_ok = read_expected_remote_frame(&mut stdout, RemoteFrameKind::AuthOk)?;
     let mut frames = vec![auth_ok];
-    write_remote_control_frame(&mut stdin, &RemoteFrame::BuildRequest { request: request.clone() })?;
-    write_remote_control_frame(&mut stdin, &RemoteFrame::InputManifest { manifest: input_manifest })?;
+    let trace_context_health = if trace_negotiated {
+        let acknowledgement_frame = read_expected_remote_frame(&mut stdout, RemoteFrameKind::TraceContextAck)?;
+        let RemoteFrame::TraceContextAck { acknowledgement } = &acknowledgement_frame else {
+            unreachable!("frame kind checked");
+        };
+        let health = acknowledgement.health.clone();
+        frames.push(acknowledgement_frame);
+        Some(health)
+    } else {
+        None
+    };
+    write_remote_control_frame(&mut stdin, &RemoteFrame::BuildRequest {
+        request: request.clone(),
+    })?;
+    write_remote_control_frame(&mut stdin, &RemoteFrame::InputManifest {
+        manifest: input_manifest,
+    })?;
     let missing = read_expected_remote_frame(&mut stdout, RemoteFrameKind::MissingInputs)?;
     frames.push(missing);
     if let Some(input_transfer) = production.input_transfer.as_ref() {
@@ -5188,13 +5899,16 @@ fn run_remote_production_client_protocol(
             actual_mode: RemoteTransferMode::Streaming,
             fallback_reason: None,
         };
-        write_remote_control_frame(&mut stdin, &RemoteFrame::TransferManifest { transfer: transfer_frame })?;
+        write_remote_control_frame(&mut stdin, &RemoteFrame::TransferManifest {
+            transfer: transfer_frame,
+        })?;
         let demand = read_expected_remote_frame(&mut stdout, RemoteFrameKind::TransferDemand)?;
         let RemoteFrame::TransferDemand { transfer: demand } = demand else {
             unreachable!("frame kind checked");
         };
         let mut validate_upload_fence = || validate_current_production_attempt(&production.state_dir, attempt);
-        let complete = send_prepared_remote_transfer_with_fence_validator(
+        let mut observe = |fact| record_production_fact(&mut telemetry, telemetry_policy, fact);
+        let complete = send_prepared_remote_transfer_with_observer(
             &mut stdout,
             &mut stdin,
             input_transfer,
@@ -5203,6 +5917,7 @@ fn run_remote_production_client_protocol(
             demand,
             production.interrupt_after_input_chunks,
             &mut validate_upload_fence,
+            &mut observe,
         )?;
         frames.push(RemoteFrame::TransferComplete {
             direction: crate::remote_transfer::RemoteTransferDirection::Upload,
@@ -5213,15 +5928,20 @@ fn run_remote_production_client_protocol(
     }
     frames.push(read_expected_remote_frame(&mut stdout, RemoteFrameKind::BuildQueued)?);
     frames.push(read_expected_remote_frame(&mut stdout, RemoteFrameKind::BuildStarted)?);
+    record_production_fact(&mut telemetry, telemetry_policy, RemoteProductionTelemetryFact::ExecutionStarted);
     let finished_frame = read_expected_remote_frame(&mut stdout, RemoteFrameKind::BuildFinished)?;
     let RemoteFrame::BuildFinished { result } = &finished_frame else {
         unreachable!("frame kind checked");
     };
     let result = result.clone();
+    record_production_fact(&mut telemetry, telemetry_policy, RemoteProductionTelemetryFact::ExecutionCompleted);
     prevalidate_remote_streaming_output_metadata(&request, &production.trusted_output_keys, &result)?;
     frames.push(finished_frame);
     let manifest_frame = read_expected_remote_frame(&mut stdout, RemoteFrameKind::TransferManifest)?;
-    let RemoteFrame::TransferManifest { transfer: output_transfer } = &manifest_frame else {
+    let RemoteFrame::TransferManifest {
+        transfer: output_transfer,
+    } = &manifest_frame
+    else {
         unreachable!("frame kind checked");
     };
     let output_transfer = output_transfer.clone();
@@ -5230,10 +5950,8 @@ fn run_remote_production_client_protocol(
     validate_current_production_attempt(&production.state_dir, attempt)?;
     let canonical = canonicalize_remote_transfer_manifest(output_transfer.manifest.clone(), policy)
         .map_err(|reason| reason.as_str().to_string())?;
-    let receiver_root = crate::remote_transfer::remote_transfer_receiver_root(
-        &production.state_dir,
-        &canonical.manifest.session_id,
-    );
+    let receiver_root =
+        crate::remote_transfer::remote_transfer_receiver_root(&production.state_dir, &canonical.manifest.session_id);
     let lease_expires_unix_s = auth
         .now_unix_s
         .checked_add(REMOTE_TRANSFER_LEASE_DURATION_SECS)
@@ -5255,6 +5973,12 @@ fn run_remote_production_client_protocol(
             },
         },
     )?;
+    record_transfer_demand_and_resume_from_session(
+        &mut telemetry,
+        telemetry_policy,
+        &session,
+        crate::remote_transfer::RemoteTransferDirection::Download,
+    );
     receive_remote_transfer_interactively(
         &mut stdout,
         &mut stdin,
@@ -5266,6 +5990,13 @@ fn run_remote_production_client_protocol(
     )?;
     validate_current_production_attempt(&production.state_dir, attempt)?;
     let report = session.finish()?;
+    record_transfer_completion(
+        &mut telemetry,
+        telemetry_policy,
+        &report,
+        output_transfer.actual_mode,
+        output_transfer.fallback_reason.as_deref(),
+    );
     if let Err(reason) = validate_current_production_attempt(&production.state_dir, attempt) {
         session
             .invalidate_fenced_progress()
@@ -5273,13 +6004,10 @@ fn run_remote_production_client_protocol(
         return Err(reason);
     }
     validate_current_production_attempt(&production.state_dir, attempt)?;
-    write_remote_control_frame(
-        &mut stdin,
-        &RemoteFrame::TransferComplete {
-            direction: crate::remote_transfer::RemoteTransferDirection::Download,
-            report,
-        },
-    )?;
+    write_remote_control_frame(&mut stdin, &RemoteFrame::TransferComplete {
+        direction: crate::remote_transfer::RemoteTransferDirection::Download,
+        report,
+    })?;
     frames.push(read_expected_remote_frame(&mut stdout, RemoteFrameKind::OutputTransferDone)?);
     frames.push(read_expected_remote_frame(&mut stdout, RemoteFrameKind::Done)?);
     drop(stdin);
@@ -5287,11 +6015,13 @@ fn run_remote_production_client_protocol(
         binding: command.binding,
         frames,
         stderr_summary: String::new(),
+        telemetry,
         streaming_output: Some(RemoteStreamingOutputReceipt {
             manifest: output_transfer.manifest.clone(),
             manifest_digest_blake3: output_transfer.manifest_digest_blake3.clone(),
             receiver_root,
         }),
+        trace_context_health,
     })
 }
 
@@ -5344,9 +6074,7 @@ fn terminate_remote_child_tree(child: &mut std::process::Child) -> Result<(), Ru
             return Err(RunError::Internal(format!("killing stdio remote child process group: {error}")));
         }
     }
-    child
-        .wait()
-        .map_err(|error| RunError::Internal(format!("reaping stdio remote child: {error}")))?;
+    child.wait().map_err(|error| RunError::Internal(format!("reaping stdio remote child: {error}")))?;
     assert!(child.try_wait().is_ok_and(|status| status.is_some()));
     assert!(process_group > 0);
     Ok(())
@@ -5354,12 +6082,8 @@ fn terminate_remote_child_tree(child: &mut std::process::Child) -> Result<(), Ru
 
 #[cfg(not(unix))]
 fn terminate_remote_child_tree(child: &mut std::process::Child) -> Result<(), RunError> {
-    child
-        .kill()
-        .map_err(|error| RunError::Internal(format!("killing stdio remote child: {error}")))?;
-    child
-        .wait()
-        .map_err(|error| RunError::Internal(format!("reaping stdio remote child: {error}")))?;
+    child.kill().map_err(|error| RunError::Internal(format!("killing stdio remote child: {error}")))?;
+    child.wait().map_err(|error| RunError::Internal(format!("reaping stdio remote child: {error}")))?;
     Ok(())
 }
 
@@ -5388,9 +6112,18 @@ fn run_production_stdio_remote_child(
     command: &RemoteStdioCommand,
     production: &RemoteProductionTransferClient,
 ) -> Result<RemoteStdioTranscript, RunError> {
-    let stdin = child.stdin.take().ok_or_else(|| RunError::Internal("stdio remote child stdin missing".to_string()))?;
-    let stdout = child.stdout.take().ok_or_else(|| RunError::Internal("stdio remote child stdout missing".to_string()))?;
-    let stderr = child.stderr.take().ok_or_else(|| RunError::Internal("stdio remote child stderr missing".to_string()))?;
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| RunError::Internal("stdio remote child stdin missing".to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| RunError::Internal("stdio remote child stdout missing".to_string()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| RunError::Internal("stdio remote child stderr missing".to_string()))?;
     let (protocol_tx, protocol_rx) = std::sync::mpsc::sync_channel(1);
     let command_owned = command.clone();
     let production_owned = production.clone();
@@ -5413,10 +6146,9 @@ fn run_production_stdio_remote_child(
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {}
         }
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|err| RunError::Internal(format!("polling stdio remote child {}: {err}", command.program.display())))?
-        {
+        if let Some(status) = child.try_wait().map_err(|err| {
+            RunError::Internal(format!("polling stdio remote child {}: {err}", command.program.display()))
+        })? {
             if !status.success() {
                 break Err("stdio-child-exit-failed".to_string());
             }
@@ -5464,11 +6196,7 @@ pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdi
         )));
     }
     let mut process = Command::new(&command.program);
-    process
-        .args(&command.args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    process.args(&command.args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     configure_remote_child_process_group(&mut process);
     let mut child = process.spawn().map_err(|err| {
         RunError::Internal(format!("spawning stdio remote child {}: {err}", command.program.display()))
@@ -5897,12 +6625,20 @@ pub fn validate_remote_transition(
         (RemoteProtocolPhase::Open, RemoteFrameDirection::ClientToBuilder, RemoteFrameKind::Hello) => {
             Ok(RemoteProtocolPhase::AwaitAuth)
         }
+        (RemoteProtocolPhase::AwaitAuth, RemoteFrameDirection::ClientToBuilder, RemoteFrameKind::TraceContext) => {
+            Ok(RemoteProtocolPhase::AwaitAuth)
+        }
         (RemoteProtocolPhase::AwaitAuth, RemoteFrameDirection::ClientToBuilder, RemoteFrameKind::AuthTicket) => {
             Ok(RemoteProtocolPhase::AwaitAuthOk)
         }
         (RemoteProtocolPhase::AwaitAuthOk, RemoteFrameDirection::BuilderToClient, RemoteFrameKind::AuthOk) => {
             Ok(RemoteProtocolPhase::AwaitBuildRequest)
         }
+        (
+            RemoteProtocolPhase::AwaitBuildRequest,
+            RemoteFrameDirection::BuilderToClient,
+            RemoteFrameKind::TraceContextAck,
+        ) => Ok(RemoteProtocolPhase::AwaitBuildRequest),
         (
             RemoteProtocolPhase::AwaitBuildRequest,
             RemoteFrameDirection::ClientToBuilder,
@@ -6103,10 +6839,7 @@ fn prevalidate_remote_streaming_output_metadata(
     }
     validate_remote_produced_outputs(request, result)?;
     for output in &result.outputs {
-        let path_info = output
-            .path_info
-            .as_ref()
-            .ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
+        let path_info = output.path_info.as_ref().ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
         let store_path = parse_remote_output_store_path(&output.logical_path, &request.store_prefix)?;
         validate_remote_output_pathinfo(output, path_info, &store_path, &request.store_prefix)?;
     }
@@ -6130,10 +6863,7 @@ fn validate_output_transfer_manifest_frame(
     if canonical.digest_blake3 != transfer.manifest_digest_blake3 {
         return Err(RemoteTransferReasonCode::ManifestIdentityMismatch.as_str().to_string());
     }
-    let attempt = request
-        .production_attempt
-        .as_ref()
-        .ok_or_else(|| "remote-production-attempt-missing".to_string())?;
+    let attempt = request.production_attempt.as_ref().ok_or_else(|| "remote-production-attempt-missing".to_string())?;
     if canonical.manifest.job_id != attempt.job_id
         || canonical.manifest.attempt_id != attempt.attempt_id
         || canonical.manifest.fence_generation != attempt.fence_generation
@@ -6182,10 +6912,7 @@ fn validate_output_transfer_manifest_artifacts(
     {
         return Err("remote-output-transfer-nar-manifest-mismatch".to_string());
     }
-    let path_info = output
-        .path_info
-        .as_ref()
-        .ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
+    let path_info = output.path_info.as_ref().ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
     let pathinfo_id = remote_output_pathinfo_artifact_id(&output.name, &output.logical_path)?;
     let pathinfo = artifacts
         .iter()
@@ -6273,14 +7000,10 @@ pub fn admit_fenced_remote_stdio_output(
     event_number: u64,
 ) -> Result<RemoteOutputAdmissionReport, String> {
     let (result, _) = extract_streaming_output_frames(&transcript.frames, &request.request_id)?;
-    let report = production_attempt_report(
-        binding,
-        "result-ready",
-        event_number,
-        RemoteAttemptReportPayload::ResultReady {
+    let report =
+        production_attempt_report(binding, "result-ready", event_number, RemoteAttemptReportPayload::ResultReady {
             output_digest_blake3: result.output_digest_blake3.clone(),
-        },
-    )?;
+        })?;
     let preflight = preflight_fenced_output_report(state, &report, worker_authorized);
     if preflight.disposition == RemoteAttemptApplyDisposition::Rejected {
         return Err(preflight.reason_code.as_str().to_string());
@@ -6314,14 +7037,10 @@ pub fn complete_remote_production_attempt(
     output_digest_blake3: &str,
     event_number: u64,
 ) -> Result<(), String> {
-    let report = production_attempt_report(
-        binding,
-        "completion",
-        event_number,
-        RemoteAttemptReportPayload::Completion {
+    let report =
+        production_attempt_report(binding, "completion", event_number, RemoteAttemptReportPayload::Completion {
             output_digest_blake3: output_digest_blake3.to_string(),
-        },
-    )?;
+        })?;
     let applied = apply_coordinator_attempt_report(
         state,
         &report,
@@ -6457,9 +7176,7 @@ pub fn validate_remote_stdio_output_import(
     };
     let (result, transfer) = extract_streaming_output_frames(&transcript.frames, &request.request_id)?;
     prevalidate_remote_streaming_output_metadata(request, trusted_output_keys, result)?;
-    let policy = request
-        .transfer_policy
-        .ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
+    let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     let manifest_frame = RemoteTransferManifestFrame {
         direction: crate::remote_transfer::RemoteTransferDirection::Download,
         manifest: streaming.manifest.clone(),
@@ -6553,15 +7270,10 @@ fn validate_streamed_output_receiver_files(
         return Err("remote-output-transfer-receiver-incomplete".to_string());
     }
     for output in &result.outputs {
-        let path_info = output
-            .path_info
-            .as_ref()
-            .ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
+        let path_info = output.path_info.as_ref().ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
         let pathinfo_id = remote_output_pathinfo_artifact_id(&output.name, &output.logical_path)?;
-        let pathinfo_path = crate::remote_transfer::remote_transfer_received_artifact_path(
-            &streaming.receiver_root,
-            &pathinfo_id,
-        );
+        let pathinfo_path =
+            crate::remote_transfer::remote_transfer_received_artifact_path(&streaming.receiver_root, &pathinfo_id);
         let pathinfo_file = crate::remote_transfer::open_remote_transfer_authority_file(&pathinfo_path)
             .map_err(|err| format!("opening streamed PathInfo {}: {err}", pathinfo_path.display()))?;
         let mut observed_pathinfo = Vec::new();
@@ -6618,9 +7330,7 @@ pub async fn import_admitted_remote_stdio_outputs(
     let Some(streaming) = transcript.streaming_output.as_ref() else {
         return import_admitted_remote_outputs(store, request, admission, is_root, root_source).await;
     };
-    let policy = request
-        .transfer_policy
-        .ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
+    let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     validate_streamed_output_receiver_files(
         &RemoteBuildFinished {
             request_id: admission.request_id.clone(),
@@ -6671,10 +7381,7 @@ fn plan_streamed_remote_output_import_action(
     output: &RemoteProducedOutput,
     streaming: &RemoteStreamingOutputReceipt,
 ) -> Result<RemoteOutputImportAction, String> {
-    let path_info = output
-        .path_info
-        .clone()
-        .ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
+    let path_info = output.path_info.clone().ok_or_else(|| "remote-output-pathinfo-missing".to_string())?;
     let store_path = parse_remote_output_store_path(&output.logical_path, &request.store_prefix)?;
     validate_remote_output_pathinfo(output, &path_info, &store_path, &request.store_prefix)?;
     let nar_id = remote_output_nar_artifact_id(&output.name, &output.logical_path)?;
@@ -7093,12 +7800,7 @@ pub fn streaming_transfer_report_from_runtime(
     runtime: &crate::remote_transfer::RemoteTransferShellReport,
     verified_builder_key: &str,
 ) -> Result<RemoteTransferReport, String> {
-    production_transfer_report_from_runtime(
-        runtime,
-        verified_builder_key,
-        RemoteTransferMode::Streaming,
-        None,
-    )
+    production_transfer_report_from_runtime(runtime, verified_builder_key, RemoteTransferMode::Streaming, None)
 }
 
 fn validate_loopback_participants(
@@ -7587,17 +8289,12 @@ pub struct RemoteCoordinatorMutationGuard {
     _file: File,
 }
 
-pub fn acquire_remote_coordinator_mutation_guard(
-    state_dir: &Path,
-) -> Result<RemoteCoordinatorMutationGuard, String> {
+pub fn acquire_remote_coordinator_mutation_guard(state_dir: &Path) -> Result<RemoteCoordinatorMutationGuard, String> {
     fs::create_dir_all(state_dir).map_err(|err| format!("creating coordinator state dir: {err}"))?;
     let path = state_dir.join(COORDINATOR_MUTATION_LOCK_FILE);
     let file = open_coordinator_lock_no_follow(&path)?;
-    FileExt::try_lock_exclusive(&file)
-        .map_err(|err| format!("remote-coordinator-mutation-lock-busy: {err}"))?;
-    let metadata = file
-        .metadata()
-        .map_err(|err| format!("reading coordinator mutation lock metadata: {err}"))?;
+    FileExt::try_lock_exclusive(&file).map_err(|err| format!("remote-coordinator-mutation-lock-busy: {err}"))?;
+    let metadata = file.metadata().map_err(|err| format!("reading coordinator mutation lock metadata: {err}"))?;
     if !metadata.is_file() {
         return Err("remote-coordinator-mutation-lock-not-regular".to_string());
     }
@@ -8098,10 +8795,7 @@ fn validate_input_transfer_manifest_frame(
     if canonical.digest_blake3 != transfer.manifest_digest_blake3 {
         return Err(RemoteTransferReasonCode::ManifestIdentityMismatch.as_str().to_string());
     }
-    let attempt = request
-        .production_attempt
-        .as_ref()
-        .ok_or_else(|| "remote-production-attempt-missing".to_string())?;
+    let attempt = request.production_attempt.as_ref().ok_or_else(|| "remote-production-attempt-missing".to_string())?;
     if canonical.manifest.job_id != attempt.job_id
         || canonical.manifest.attempt_id != attempt.attempt_id
         || canonical.manifest.fence_generation != attempt.fence_generation
@@ -8148,6 +8842,24 @@ fn serve_stdio_remote_production_once(
         unreachable!("frame kind checked");
     };
     let accepted = expect_accepted_hello(&hello, builder)?;
+    let trace_negotiated = accepted
+        .accepted_capabilities
+        .iter()
+        .any(|capability| capability == REMOTE_TRACE_CONTEXT_CAPABILITY);
+    let trace_context_health = if trace_negotiated {
+        let trace_frame = read_expected_remote_frame(reader, RemoteFrameKind::TraceContext)?;
+        let RemoteFrame::TraceContext { context } = trace_frame else {
+            unreachable!("frame kind checked");
+        };
+        match context {
+            Some(context) => {
+                accept_remote_trace_context(true, Some(&context.traceparent), context.tracestate.as_deref()).1
+            }
+            None => accept_remote_trace_context(true, None, None).1,
+        }
+    } else {
+        accept_remote_trace_context(false, None, None).1
+    };
     let auth_frame = read_expected_remote_frame(reader, RemoteFrameKind::AuthTicket)?;
     let RemoteFrame::AuthTicket { auth } = auth_frame else {
         unreachable!("frame kind checked");
@@ -8157,37 +8869,39 @@ fn serve_stdio_remote_production_once(
         .get_mut(&auth.ticket_id)
         .ok_or_else(|| format!("unknown-remote-ticket-{}", auth.ticket_id))?;
     expect_authorized_ticket(ticket, &auth)?;
-    write_remote_control_frame(
-        writer,
-        &RemoteFrame::AuthOk {
-            auth: RemoteAuthOk {
-                builder_signing_keys: vec![builder.signing_key_id.clone()],
-                accepted_capabilities: accepted.accepted_capabilities,
-            },
+    write_remote_control_frame(writer, &RemoteFrame::AuthOk {
+        auth: RemoteAuthOk {
+            builder_signing_keys: vec![builder.signing_key_id.clone()],
+            accepted_capabilities: accepted.accepted_capabilities,
         },
-    )?;
+    })?;
+    if trace_negotiated {
+        write_remote_control_frame(writer, &RemoteFrame::TraceContextAck {
+            acknowledgement: RemoteTraceContextAck {
+                health: trace_context_health,
+            },
+        })?;
+    }
     let request_frame = read_expected_remote_frame(reader, RemoteFrameKind::BuildRequest)?;
     let RemoteFrame::BuildRequest { request } = request_frame else {
         unreachable!("frame kind checked");
     };
     validate_concrete_request(&request, ticket)?;
-    let policy = request
-        .transfer_policy
-        .ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
+    let policy = request.transfer_policy.ok_or_else(|| "remote-production-transfer-policy-missing".to_string())?;
     policy.validate().map_err(|reason| reason.as_str().to_string())?;
     let input_manifest_frame = read_expected_remote_frame(reader, RemoteFrameKind::InputManifest)?;
-    let RemoteFrame::InputManifest { manifest: input_manifest } = input_manifest_frame else {
+    let RemoteFrame::InputManifest {
+        manifest: input_manifest,
+    } = input_manifest_frame
+    else {
         unreachable!("frame kind checked");
     };
     validate_input_manifest(&input_manifest, &request)?;
     let missing = derive_missing_inputs(&input_manifest.input_refs, &builder.present_input_refs)?;
-    write_remote_control_frame(
-        writer,
-        &RemoteFrame::MissingInputs {
-            request_id: request.request_id.clone(),
-            refs: missing.clone(),
-        },
-    )?;
+    write_remote_control_frame(writer, &RemoteFrame::MissingInputs {
+        request_id: request.request_id.clone(),
+        refs: missing.clone(),
+    })?;
     let runtime = tokio::runtime::Runtime::new().map_err(|err| format!("remote production runtime: {err}"))?;
     let uploaded_bytes = if request.input_refs.is_empty() {
         0
@@ -8200,10 +8914,8 @@ fn serve_stdio_remote_production_once(
         if canonical.total_bytes > ticket.max_upload_bytes {
             return Err("upload-byte-limit-exceeded".to_string());
         }
-        let receiver_root = crate::remote_transfer::remote_transfer_receiver_root(
-            state_dir,
-            &canonical.manifest.session_id,
-        );
+        let receiver_root =
+            crate::remote_transfer::remote_transfer_receiver_root(state_dir, &canonical.manifest.session_id);
         let lease_expires_unix_s = auth
             .now_unix_s
             .checked_add(REMOTE_TRANSFER_LEASE_DURATION_SECS)
@@ -8235,38 +8947,29 @@ fn serve_stdio_remote_production_once(
             None,
         )?;
         let report = session.finish()?;
-        write_remote_control_frame(
-            writer,
-            &RemoteFrame::TransferComplete {
-                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
-                report: report.clone(),
-            },
-        )?;
+        write_remote_control_frame(writer, &RemoteFrame::TransferComplete {
+            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+            report: report.clone(),
+        })?;
         let store = runtime.block_on(open_remote_local_executor_store(executor))?;
         runtime.block_on(materialize_streamed_remote_inputs(&store, &request, &canonical, &receiver_root))?;
         report.transferred_bytes
     };
     validate_missing_uploads(&missing, &missing, uploaded_bytes, ticket.max_upload_bytes)?;
     redeem_after_queue(ticket, true)?;
-    write_remote_control_frame(
-        writer,
-        &RemoteFrame::BuildQueued {
-            request_id: request.request_id.clone(),
-            session_id: request
-                .production_attempt
-                .as_ref()
-                .ok_or_else(|| "remote-production-attempt-missing".to_string())?
-                .attempt_id
-                .as_str()
-                .to_string(),
-        },
-    )?;
-    write_remote_control_frame(
-        writer,
-        &RemoteFrame::BuildStarted {
-            request_id: request.request_id.clone(),
-        },
-    )?;
+    write_remote_control_frame(writer, &RemoteFrame::BuildQueued {
+        request_id: request.request_id.clone(),
+        session_id: request
+            .production_attempt
+            .as_ref()
+            .ok_or_else(|| "remote-production-attempt-missing".to_string())?
+            .attempt_id
+            .as_str()
+            .to_string(),
+    })?;
+    write_remote_control_frame(writer, &RemoteFrame::BuildStarted {
+        request_id: request.request_id.clone(),
+    })?;
     let plan = plan_remote_executable_request(&request)?;
     let upload = RemoteInputUpload {
         request_id: request.request_id.clone(),
@@ -8279,27 +8982,21 @@ fn serve_stdio_remote_production_once(
     validate_remote_execution_outcome(&execution, &request, &plan)?;
     validate_remote_execution_output_pathinfos(&execution.outputs, &builder.signing_key_id, &request.store_prefix)?;
     let prepared = runtime.block_on(prepare_remote_production_output(executor, &request, &execution))?;
-    write_remote_control_frame(
-        writer,
-        &RemoteFrame::BuildFinished {
-            result: prepared.result.clone(),
-        },
-    )?;
+    write_remote_control_frame(writer, &RemoteFrame::BuildFinished {
+        result: prepared.result.clone(),
+    })?;
     let client_transfer = remote_transfer_capabilities_from_labels(&hello.capabilities);
     let (actual_mode, fallback_reason) =
         production_output_transfer_selection(client_transfer, builder.transfer_capabilities)?;
-    write_remote_control_frame(
-        writer,
-        &RemoteFrame::TransferManifest {
-            transfer: RemoteTransferManifestFrame {
-                direction: crate::remote_transfer::RemoteTransferDirection::Download,
-                manifest: prepared.transfer.manifest.manifest.clone(),
-                manifest_digest_blake3: prepared.transfer.manifest.digest_blake3.clone(),
-                actual_mode,
-                fallback_reason: fallback_reason.clone(),
-            },
+    write_remote_control_frame(writer, &RemoteFrame::TransferManifest {
+        transfer: RemoteTransferManifestFrame {
+            direction: crate::remote_transfer::RemoteTransferDirection::Download,
+            manifest: prepared.transfer.manifest.manifest.clone(),
+            manifest_digest_blake3: prepared.transfer.manifest.digest_blake3.clone(),
+            actual_mode,
+            fallback_reason: fallback_reason.clone(),
         },
-    )?;
+    })?;
     let demand_frame = read_expected_remote_frame(reader, RemoteFrameKind::TransferDemand)?;
     let RemoteFrame::TransferDemand { transfer: demand } = demand_frame else {
         unreachable!("frame kind checked");
@@ -8319,12 +9016,9 @@ fn serve_stdio_remote_production_once(
         fallback_reason,
     )?;
     write_remote_control_frame(writer, &RemoteFrame::OutputTransferDone { report: transfer })?;
-    write_remote_control_frame(
-        writer,
-        &RemoteFrame::Done {
-            request_id: request.request_id,
-        },
-    )?;
+    write_remote_control_frame(writer, &RemoteFrame::Done {
+        request_id: request.request_id,
+    })?;
     Ok(())
 }
 
@@ -8351,7 +9045,12 @@ fn cmd_remote_serve(
             let builder = RemoteLoopbackBuilder {
                 endpoint_id,
                 store_prefix: store_prefix.to_string(),
-                supported_capabilities: vec!["delta".to_string(), "full".to_string(), "streaming".to_string()],
+                supported_capabilities: vec![
+                    "delta".to_string(),
+                    "full".to_string(),
+                    "streaming".to_string(),
+                    REMOTE_TRACE_CONTEXT_CAPABILITY.to_string(),
+                ],
                 present_input_refs,
                 signing_key_id: builder_signing_key_id,
                 transfer_capabilities: RemoteTransferCapabilities::delta_and_full().with_streaming(),
@@ -8839,11 +9538,13 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error, RemoteAttemptReasonCode::StaleReportRejected.as_str());
-        assert!(fs::symlink_metadata(crate::remote_transfer::remote_transfer_state_path(
-            &state_dir,
-            &prepared.manifest.manifest.session_id,
-        ))
-        .is_err());
+        assert!(
+            fs::symlink_metadata(crate::remote_transfer::remote_transfer_state_path(
+                &state_dir,
+                &prepared.manifest.manifest.session_id,
+            ))
+            .is_err()
+        );
         assert!(fs::symlink_metadata(&receiver_root).is_err());
         let mut frames = std::io::Cursor::new(control);
         assert!(matches!(read_remote_frame(&mut frames).unwrap(), RemoteFrame::TransferDemand { .. }));
@@ -8856,11 +9557,8 @@ mod tests {
     fn stale_input_attempt_stops_before_source_read_or_data_disclosure() {
         let root = tempfile::tempdir().unwrap();
         let prepared = interactive_transfer_fixture(&root.path().join("spool"));
-        let mut receiver = interactive_receive_session(
-            &prepared,
-            &root.path().join("state"),
-            &root.path().join("receiver"),
-        );
+        let mut receiver =
+            interactive_receive_session(&prepared, &root.path().join("state"), &root.path().join("receiver"));
         let demand = RemoteTransferDemandFrame {
             direction: crate::remote_transfer::RemoteTransferDirection::Upload,
             demand: receiver.demand().clone(),
@@ -8869,16 +9567,13 @@ mod tests {
         let missing = demand.demand.missing_chunks[0].clone();
         let grant = receiver.credit_for_chunk(&missing).unwrap();
         let mut control = Vec::new();
-        write_remote_control_frame(
-            &mut control,
-            &RemoteFrame::TransferCredit {
-                transfer: RemoteTransferCreditFrame {
-                    direction: crate::remote_transfer::RemoteTransferDirection::Upload,
-                    missing,
-                    grant,
-                },
+        write_remote_control_frame(&mut control, &RemoteFrame::TransferCredit {
+            transfer: RemoteTransferCreditFrame {
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                missing,
+                grant,
             },
-        )
+        })
         .unwrap();
         let mut disclosed = Vec::new();
         let error = send_prepared_remote_transfer_with_fence_validator(
@@ -8901,11 +9596,8 @@ mod tests {
     fn production_sender_rejects_excess_credit_before_source_disclosure() {
         let root = tempfile::tempdir().unwrap();
         let prepared = interactive_transfer_fixture(&root.path().join("spool"));
-        let receiver = interactive_receive_session(
-            &prepared,
-            &root.path().join("state"),
-            &root.path().join("receiver"),
-        );
+        let receiver =
+            interactive_receive_session(&prepared, &root.path().join("state"), &root.path().join("receiver"));
         let demand = RemoteTransferDemandFrame {
             direction: crate::remote_transfer::RemoteTransferDirection::Upload,
             demand: receiver.demand().clone(),
@@ -8913,22 +9605,20 @@ mod tests {
         };
         let missing = demand.demand.missing_chunks[0].clone();
         let mut control = Vec::new();
-        write_remote_control_frame(
-            &mut control,
-            &RemoteFrame::TransferCredit {
-                transfer: RemoteTransferCreditFrame {
-                    direction: crate::remote_transfer::RemoteTransferDirection::Upload,
-                    missing: missing.clone(),
-                    grant: RemoteTransferCreditGrant {
-                        bytes: u64::from(missing.chunk.size_bytes).saturating_add(1),
-                        chunks: 1,
-                    },
+        write_remote_control_frame(&mut control, &RemoteFrame::TransferCredit {
+            transfer: RemoteTransferCreditFrame {
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                missing: missing.clone(),
+                grant: RemoteTransferCreditGrant {
+                    bytes: u64::from(missing.chunk.size_bytes).saturating_add(1),
+                    chunks: 1,
                 },
             },
-        )
+        })
         .unwrap();
         let mut disclosed = Vec::new();
-        let error = send_prepared_remote_transfer_with_fence_validator(
+        let mut observed = Vec::new();
+        let error = send_prepared_remote_transfer_with_observer(
             &mut std::io::Cursor::new(control),
             &mut disclosed,
             &prepared,
@@ -8937,21 +9627,164 @@ mod tests {
             demand,
             None,
             &mut || Ok(()),
+            &mut |fact| observed.push(fact),
         )
         .unwrap_err();
         assert_eq!(error, RemoteTransferReasonCode::CreditGrantInvalid.as_str());
         assert!(disclosed.is_empty());
+        assert!(matches!(observed.first(), Some(RemoteProductionTelemetryFact::TransferDemand { .. })));
+        assert_eq!(observed.last(), Some(&RemoteProductionTelemetryFact::TransferCutoff { accepted: false }));
+        assert!(!observed.iter().any(|fact| matches!(fact, RemoteProductionTelemetryFact::TransferCredit { .. })));
+    }
+
+    #[test]
+    fn already_present_transfer_emits_accepted_cutoff_before_completion() {
+        let report = crate::remote_transfer::RemoteTransferShellReport {
+            direction: crate::remote_transfer::RemoteTransferDirection::Download,
+            disposition: crate::remote_transfer::RemoteTransferShellDisposition::AlreadyPresent,
+            manifest_digest_blake3: blake3::hash(b"already-present").to_hex().to_string(),
+            transferred_bytes: 0,
+            reused_bytes: 1,
+            chunks_sent: 0,
+            sent_chunk_digests: Vec::new(),
+            checkpoint_path: "diagnostic-checkpoint".to_string(),
+            output_admission_claimed: true,
+        };
+        let mut telemetry = RemoteTelemetryBuffer::default();
+        record_transfer_completion(
+            &mut telemetry,
+            RemoteTelemetryPolicy::default(),
+            &report,
+            RemoteTransferMode::Streaming,
+            None,
+        );
+
+        let reasons = telemetry.events.iter().map(|event| event.reason).collect::<Vec<_>>();
+        assert_eq!(reasons, vec![
+            RemoteTelemetryReasonClass::TransferCutoff,
+            RemoteTelemetryReasonClass::TransferCompleted
+        ]);
+        assert_eq!(telemetry.events[0].result, RemoteTelemetryResultClass::Accepted);
+        assert_eq!(telemetry.events[0].value, 1);
+    }
+
+    #[test]
+    fn remote_root_priority_plan_orders_once_with_zero_pressure_evidence() {
+        const CANDIDATE_COUNT: u32 = 2;
+        let candidates = vec![
+            RemoteRootPriorityCandidate {
+                input_index: 0,
+                root_identity_blake3: "b".repeat(BLAKE3_HEX_LENGTH_CHARS),
+            },
+            RemoteRootPriorityCandidate {
+                input_index: 1,
+                root_identity_blake3: "a".repeat(BLAKE3_HEX_LENGTH_CHARS),
+            },
+        ];
+        let plan =
+            plan_remote_root_priority(&crunch_build::scheduling::SchedulingPolicy::default(), &candidates).unwrap();
+
+        assert_eq!(plan.ordered_input_indices, vec![1, 0]);
+        assert_eq!(plan.evidence.competing_goal_count, CANDIDATE_COUNT);
+        assert_eq!(plan.evidence.known_critical_path_nodes, 0);
+        assert_eq!(plan.evidence.known_critical_path_work_units, 0);
+        assert_eq!(plan.evidence.blocked_root_count, 0);
+        assert_eq!(plan.evidence.history_basis, crunch_build::scheduling::HistoryBasis::StructuralFallbackMissing);
+        assert_eq!(plan.evidence.selection_reason, crunch_build::scheduling::PrioritySelectionReason::StableGoalKey);
+        assert_eq!(plan.evidence.selected_goal_key_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+        assert_ne!(plan.evidence.selected_goal_key_blake3, candidates[1].root_identity_blake3);
+    }
+
+    #[test]
+    fn remote_root_priority_plan_rejects_empty_duplicate_and_oversized_snapshots() {
+        let policy = crunch_build::scheduling::SchedulingPolicy::default();
+        assert_eq!(plan_remote_root_priority(&policy, &[]).unwrap_err(), "remote-root-priority-candidates-empty");
+        let identity = blake3::hash(b"duplicate-root").to_hex().to_string();
+        let duplicate_identity = vec![
+            RemoteRootPriorityCandidate {
+                input_index: 0,
+                root_identity_blake3: identity.clone(),
+            },
+            RemoteRootPriorityCandidate {
+                input_index: 1,
+                root_identity_blake3: identity,
+            },
+        ];
+        assert_eq!(
+            plan_remote_root_priority(&policy, &duplicate_identity).unwrap_err(),
+            "remote-root-priority-identity-duplicate"
+        );
+        let duplicate_index = vec![
+            RemoteRootPriorityCandidate {
+                input_index: 0,
+                root_identity_blake3: blake3::hash(b"root-a").to_hex().to_string(),
+            },
+            RemoteRootPriorityCandidate {
+                input_index: 0,
+                root_identity_blake3: blake3::hash(b"root-b").to_hex().to_string(),
+            },
+        ];
+        assert_eq!(
+            plan_remote_root_priority(&policy, &duplicate_index).unwrap_err(),
+            "remote-root-priority-input-index-duplicate"
+        );
+        let oversized_count =
+            usize::try_from(crunch_build::scheduling::MAX_READY_GOALS).unwrap().checked_add(1).unwrap();
+        let oversized = vec![duplicate_identity[0].clone(); oversized_count];
+        assert_eq!(
+            plan_remote_root_priority(&policy, &oversized).unwrap_err(),
+            "remote-root-priority-candidate-limit-exceeded"
+        );
+    }
+
+    #[test]
+    fn lifecycle_fact_mapping_distinguishes_success_failure_fence_and_admission() {
+        let facts = [
+            RemoteProductionTelemetryFact::RouteSelected,
+            RemoteProductionTelemetryFact::QueueAdmitted,
+            RemoteProductionTelemetryFact::WorkerAssigned,
+            RemoteProductionTelemetryFact::FenceAccepted,
+            RemoteProductionTelemetryFact::ExecutionStarted,
+            RemoteProductionTelemetryFact::ExecutionCompleted,
+            RemoteProductionTelemetryFact::ExecutionFailed,
+            RemoteProductionTelemetryFact::OutputAdmitted,
+            RemoteProductionTelemetryFact::OutputRejected,
+        ];
+        let events = facts.into_iter().map(|fact| remote_production_telemetry_event(fact).unwrap()).collect::<Vec<_>>();
+
+        assert_eq!(events[3].category, RemoteTelemetryCategory::RetryFencing);
+        assert_eq!(events[3].retry, RemoteTelemetryRetryClass::CurrentFence);
+        assert_eq!(events[3].reason, RemoteTelemetryReasonClass::FenceAccepted);
+        assert_eq!(events[6].result, RemoteTelemetryResultClass::Failed);
+        assert_eq!(events[6].reason, RemoteTelemetryReasonClass::ExecutionFailed);
+        assert_eq!(events[8].category, RemoteTelemetryCategory::Admission);
+        assert_eq!(events[8].result, RemoteTelemetryResultClass::Rejected);
+        assert_eq!(events[8].reason, RemoteTelemetryReasonClass::OutputRejected);
+    }
+
+    #[test]
+    fn immutable_observability_payload_contains_bounded_lifecycle_events() {
+        let telemetry = record_remote_production_telemetry(
+            &RemoteTelemetryBuffer::default(),
+            RemoteProductionTelemetryFact::OutputAdmitted,
+            RemoteTelemetryPolicy::default(),
+        );
+        let payload = remote_observability_log_payload(&telemetry).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        let events = parsed["events"].as_array().expect("bounded lifecycle events are persisted");
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["reason"], "output-admitted");
+        assert_eq!(parsed["accepted_events"], 1);
+        assert_eq!(parsed["dropped_events"], 0);
     }
 
     #[test]
     fn stale_input_final_chunk_is_rejected_before_transfer_completion() {
         let root = tempfile::tempdir().unwrap();
         let prepared = interactive_transfer_fixture(&root.path().join("spool"));
-        let mut receiver = interactive_receive_session(
-            &prepared,
-            &root.path().join("state"),
-            &root.path().join("receiver"),
-        );
+        let mut receiver =
+            interactive_receive_session(&prepared, &root.path().join("state"), &root.path().join("receiver"));
         let demand = RemoteTransferDemandFrame {
             direction: crate::remote_transfer::RemoteTransferDirection::Upload,
             demand: receiver.demand().clone(),
@@ -9038,6 +9871,66 @@ mod tests {
         let rejected = acquire_remote_coordinator_mutation_guard(&hostile).unwrap_err();
         assert!(rejected.contains("without symlink following"));
         assert_eq!(fs::read(victim).unwrap(), b"unchanged");
+    }
+
+    #[test]
+    fn trace_context_changes_only_diagnostic_health_not_authoritative_decisions() {
+        const TRACEPARENT_A: &str = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        const TRACEPARENT_B: &str = "00-4bf92f3577b34da6a3ce929d0e0e4737-00f067aa0ba902b8-00";
+        let client = fixture_loopback_client(vec!["input-a".to_string()], vec!["builder-key".to_string()]);
+        let command = RemoteStdioCommand {
+            binding: RemoteTransportBinding::Stdio,
+            program: PathBuf::from("unused"),
+            args: Vec::new(),
+            input_frames: remote_client_request_frames(&client),
+            timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
+            production_transfer: None,
+        };
+        let (context_a, health_a) = accept_remote_trace_context(true, Some(TRACEPARENT_A), None);
+        let (context_b, health_b) = accept_remote_trace_context(true, Some(TRACEPARENT_B), None);
+        let mut command_a = command.clone();
+        let mut command_b = command;
+        set_remote_diagnostic_trace_context(&mut command_a, context_a).unwrap();
+        set_remote_diagnostic_trace_context(&mut command_b, context_b).unwrap();
+        let (_, _, auth_a, request_a, _) = command_client_frames(&command_a).unwrap();
+        let (_, _, auth_b, request_b, _) = command_client_frames(&command_b).unwrap();
+        let mut coordinator_request_a = fixture_remote_operator_coordinator_request(&client);
+        coordinator_request_a.request = request_a.clone();
+        let mut coordinator_request_b = fixture_remote_operator_coordinator_request(&client);
+        coordinator_request_b.request = request_b.clone();
+        let mut state = RemoteCoordinatorState::default();
+        apply_worker_registration(&mut state, fixture_worker_registration()).unwrap();
+        let nonce = fixture_assignment_nonce("trace-invariance");
+        let dispatch_a = plan_coordinator_dispatch(&state, &coordinator_request_a, &nonce).unwrap();
+        let dispatch_b = plan_coordinator_dispatch(&state, &coordinator_request_b, &nonce).unwrap();
+        let response = fixture_builder_response(&client);
+        let admission_a =
+            validate_remote_builder_response_output_import(&request_a, &client.trusted_output_keys, &response).unwrap();
+        let admission_b =
+            validate_remote_builder_response_output_import(&request_b, &client.trusted_output_keys, &response).unwrap();
+
+        assert_ne!(health_a.context_digest_blake3, health_b.context_digest_blake3);
+        assert_ne!(command_a.input_frames, command_b.input_frames);
+        assert_eq!(command_a.binding, command_b.binding);
+        assert_eq!(command_a.program, command_b.program);
+        assert_eq!(command_a.args, command_b.args);
+        assert_eq!(command_a.timeout_secs, command_b.timeout_secs);
+        assert_eq!(command_a.production_transfer, command_b.production_transfer);
+        assert_eq!(request_a, request_b);
+        assert_eq!(
+            plan_remote_executable_request(&request_a).unwrap().plan_digest_blake3,
+            plan_remote_executable_request(&request_b).unwrap().plan_digest_blake3
+        );
+        assert_eq!(
+            normalized_remote_build_key(&coordinator_request_a).unwrap(),
+            normalized_remote_build_key(&coordinator_request_b).unwrap()
+        );
+        assert_eq!(authorize_ticket(&fixture_ticket(), &auth_a), authorize_ticket(&fixture_ticket(), &auth_b));
+        assert_eq!(dispatch_a, dispatch_b);
+        assert_eq!(admission_a.trust_basis, admission_b.trust_basis);
+        assert_eq!(admission_a.builder_signing_key_id, admission_b.builder_signing_key_id);
+        assert_eq!(admission_a.output_digest_blake3, admission_b.output_digest_blake3);
+        assert_eq!(admission_a, admission_b);
     }
 
     #[test]
@@ -11415,11 +12308,31 @@ mod tests {
             bytes: "must-not-append".to_string(),
         });
         let state_before = state.clone();
+        let control_before = fs::read(coordinator_state_path(temp.path())).unwrap();
         let rejected = apply_fixture_attempt_report(&mut state, &stale);
+        let telemetry = record_remote_production_telemetry(
+            &RemoteTelemetryBuffer::default(),
+            RemoteProductionTelemetryFact::StaleFenceRejected,
+            RemoteTelemetryPolicy::default(),
+        );
+        let diagnostic = append_remote_rejected_production_observability_log(
+            temp.path(),
+            &RemoteProductionAttemptBinding {
+                job_id: superseded.job_id.clone(),
+                attempt_id: superseded.attempt_id.clone(),
+                fence_generation: superseded.fence_generation,
+            },
+            &telemetry,
+        )
+        .expect("stale-fence rejection diagnostic persists separately");
 
         assert_eq!(rejected.disposition, RemoteAttemptApplyDisposition::Rejected);
         assert_eq!(rejected.reason_code, RemoteAttemptReasonCode::StaleReportRejected);
+        assert_eq!(telemetry.events[0].retry, RemoteTelemetryRetryClass::StaleFence);
+        assert_eq!(telemetry.events[0].reason, RemoteTelemetryReasonClass::FenceRejected);
+        assert_ne!(diagnostic.scope, old_scope);
         assert_eq!(fs::read(&manifest_path).unwrap(), manifest_before);
+        assert_eq!(fs::read(coordinator_state_path(temp.path())).unwrap(), control_before);
         assert_eq!(state, state_before);
     }
 
@@ -11460,6 +12373,7 @@ mod tests {
             result_available: false,
             lost_phase: Some(RemoteFailurePhase::TransportSetup),
             immutable_log: Some(fixture_log_control_summary(7, 9, true)),
+            observability_health: None,
             short_error: Some(format!("diagnostic\u{0007}{}", "x".repeat(MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES))),
             current_attempt: None,
             transfer_checkpoint: None,
@@ -11718,6 +12632,7 @@ mod tests {
             result_available: false,
             lost_phase: Some(RemoteFailurePhase::BuildExecution),
             immutable_log: None,
+            observability_health: None,
             short_error: Some("worker restart lost job".to_string()),
             current_attempt: None,
             transfer_checkpoint: None,

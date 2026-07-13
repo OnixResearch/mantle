@@ -3,7 +3,7 @@
 //! This shell consumes already-redacted provider-neutral descriptors. Export
 //! failures are returned as bounded health facts and never as build failures.
 //!
-//! r[impl operator_diagnostics.remote_execution_telemetry_export]
+//! r[impl operator_diagnostics.telemetry_exporter_isolation]
 
 use std::fs;
 use std::io::Read;
@@ -260,10 +260,13 @@ fn bounded_metric_admission(
     let Some(capacity) = usize::try_from(config.telemetry.event_capacity).ok() else {
         return failed_metric_admission(events_received, "remote-telemetry-intake-capacity-invalid");
     };
+    let Some(batch_size) = usize::try_from(config.telemetry.batch_size).ok() else {
+        return failed_metric_admission(events_received, "remote-telemetry-intake-batch-size-invalid");
+    };
     if let Some(reason) = config_error {
         return failed_metric_admission(events_received, reason);
     }
-    let bounded_count = events.len().min(capacity);
+    let bounded_count = events.len().min(capacity).min(batch_size);
     let mut descriptors = Vec::with_capacity(bounded_count);
     let mut metrics_rejected = 0_u64;
     for event in events.iter().take(bounded_count) {

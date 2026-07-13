@@ -172,6 +172,55 @@
         "fod_mismatches": [],
         "token": "should-not-exist"
       }
+    },
+    {
+      "id": "remote-observability-retry-class-malformed",
+      "issue_class": "enum",
+      "expected_path": "/remote_telemetry_events/0/retry",
+      "artifact": {
+        "schema": "crunch-build-report-v1",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "scheduler_policy": {
+          "schema": "mantle-scheduling-policy-v1",
+          "policy_id": "mantle-lazy-priority-v1",
+          "preference_order": ["known-graph", "resource-fit", "locality-transfer"],
+          "aged_after_epochs": 4,
+          "protected_after_epochs": 8
+        },
+        "hermeticity_mode": "strict",
+        "hermeticity_audit_events": [],
+        "build_environment_reports": [],
+        "network_policy_reports": [],
+        "native_dynamic_plans": [],
+        "scheduler_priority_decisions": [],
+        "remote_telemetry_events": [{
+          "schema": "mantle-remote-telemetry-event-v1",
+          "category": "retry-fencing",
+          "phase": "running",
+          "result": "rejected",
+          "route": "remote-stdio",
+          "retry": "raw-attempt-id",
+          "transfer": "none",
+          "reason": "fence-rejected",
+          "capability": "exact",
+          "measurement": "occurrences",
+          "value": 1,
+          "non_claim": "diagnostic runtime events do not prove compiler correctness, source reproducibility, release eligibility, CI success, or physical-target determinism"
+        }],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
+        "ast_grep_structural_evidence": [],
+        "ast_grep_structural_evidence_diagnostics": [],
+        "diagnostic_persistence_failures": [],
+        "counts": { "succeeded_total": 0, "built_total": 0, "cached_total": 0, "failed_total": 0 },
+        "outcomes": [],
+        "failed": [],
+        "fod_mismatches": []
+      }
     }
   ]
 }

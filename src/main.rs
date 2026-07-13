@@ -69,6 +69,7 @@ mod remote_attempt_log_store;
 mod remote_build;
 mod remote_farm_config;
 mod remote_telemetry_export;
+mod remote_trace_context;
 mod remote_transfer;
 mod rust_bootstrap_patch_plan;
 mod rust_plan;
@@ -108,7 +109,10 @@ const REMOTE_CLIENT_BUILD_REPORT_SCHEMA: &str = "mantle-remote-client-build-v1";
 const BUILD_JSON_REPORT_SCHEMA: &str = "crunch-build-report-v1";
 const REMOTE_BUILD_HERMETICITY_MODE: &str = "practical";
 const REMOTE_TEST_INTERRUPT_AFTER_INPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_INPUT_CHUNKS";
+const W3C_TRACEPARENT_ENV: &str = "TRACEPARENT";
+const W3C_TRACESTATE_ENV: &str = "TRACESTATE";
 const REMOTE_TEST_INTERRUPT_AFTER_OUTPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS";
+const REMOTE_TRANSFER_INTERRUPTION_REASON_FRAGMENT: &str = "transfer-interrupted-after-checkpoint";
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
@@ -265,6 +269,11 @@ enum Command {
         /// Offer bounded delta transfer with full-NAR streaming fallback to the remote builder.
         #[arg(long)]
         remote_delta: bool,
+
+        /// Typed Nickel configuration for disabled-by-default remote telemetry and trace
+        /// propagation.
+        #[arg(long, requires = "builder")]
+        remote_observability_config: Option<PathBuf>,
     },
 
     /// Build a portable WebAssembly component through the pinned production cohort.
@@ -3288,6 +3297,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             trusted_builder_keys,
             remote_build_time_secs,
             remote_delta,
+            remote_observability_config,
         } => run_build_command(
             ctx,
             file.as_ref(),
@@ -3310,6 +3320,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             trusted_builder_keys,
             *remote_build_time_secs,
             *remote_delta,
+            remote_observability_config.as_deref(),
         ),
         _ => unreachable!("build helper called with non-build command"),
     }
@@ -3347,6 +3358,7 @@ fn run_build_command(
     trusted_builder_keys: &[String],
     remote_build_time_secs: u64,
     remote_delta: bool,
+    remote_observability_config: Option<&Path>,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
     let substituter_urls: Vec<String> = if no_substitute {
@@ -3368,6 +3380,7 @@ fn run_build_command(
             trusted_builder_keys,
             remote_build_time_secs,
             remote_delta,
+            remote_observability_config,
             ctx,
         )?
     };
@@ -3531,6 +3544,9 @@ fn run_build_command(
 
 struct RemoteBuildSelection {
     options: remote_build::RemoteClientBuildOptions,
+    telemetry: remote_telemetry_export::RemoteTelemetryExportConfig,
+    trace_context: Option<remote_trace_context::RemoteTraceContext>,
+    trace_health: remote_trace_context::RemoteTraceContextHealth,
 }
 
 fn remote_plan_facts_for_cli(
@@ -3560,6 +3576,7 @@ fn remote_build_selection(
     trusted_builder_keys: &[String],
     build_time_limit_secs: u64,
     remote_delta: bool,
+    observability_config_path: Option<&Path>,
     ctx: &RunContext,
 ) -> Result<Option<RemoteBuildSelection>, RunError> {
     if builder.is_none() && ticket.is_none() && builder_program.is_none() && builder_args.is_empty() {
@@ -3575,6 +3592,18 @@ fn remote_build_selection(
     } else {
         remote_build::RemoteTransferCapabilities::full_only().with_streaming()
     };
+    let farm_config = observability_config_path
+        .map(remote_farm_config::load_remote_build_farm_config)
+        .transpose()
+        .map_err(RunError::Internal)?
+        .unwrap_or_default();
+    let traceparent = std::env::var(W3C_TRACEPARENT_ENV).ok();
+    let tracestate = std::env::var(W3C_TRACESTATE_ENV).ok();
+    let (trace_context, trace_health) = remote_trace_context::accept_remote_trace_context(
+        farm_config.trace_context.enabled,
+        traceparent.as_deref(),
+        tracestate.as_deref(),
+    );
     let options = remote_build::RemoteClientBuildOptions {
         store_prefix: ctx.store_prefix.clone(),
         ticket,
@@ -3589,7 +3618,12 @@ fn remote_build_selection(
         client_endpoint: None,
         transfer_capabilities,
     };
-    Ok(Some(RemoteBuildSelection { options }))
+    Ok(Some(RemoteBuildSelection {
+        options,
+        telemetry: farm_config.telemetry,
+        trace_context,
+        trace_health,
+    }))
 }
 
 fn remote_stdio_builder_command(
@@ -3729,6 +3763,53 @@ fn run_remote_build_dispatches(
     rt.block_on(run_remote_build_dispatches_async(selection, inputs, output_dir, state_dir, store_prefix))
 }
 
+#[derive(Debug)]
+struct RemoteFailureObservabilityOutcome {
+    immutable_log: Result<remote_build::RemoteAttemptLogControlSummary, String>,
+    exporters: remote_telemetry_export::RemoteTelemetryExportReport,
+}
+
+fn remote_protocol_failure_fact(reason: &str) -> remote_build::RemoteProductionTelemetryFact {
+    if reason.contains(remote_build::RemoteAttemptReasonCode::StaleReportRejected.as_str()) {
+        return remote_build::RemoteProductionTelemetryFact::StaleFenceRejected;
+    }
+    if reason.contains(REMOTE_TRANSFER_INTERRUPTION_REASON_FRAGMENT) {
+        return remote_build::RemoteProductionTelemetryFact::TransferCutoff { accepted: false };
+    }
+    remote_build::RemoteProductionTelemetryFact::ExecutionFailed
+}
+
+fn record_remote_failure_observability(
+    export_config: &remote_telemetry_export::RemoteTelemetryExportConfig,
+    telemetry_policy: crunch_build::distributed::RemoteTelemetryPolicy,
+    state_dir: &Path,
+    coordinator: &mut remote_build::RemoteCoordinatorState,
+    attempt: &remote_build::RemoteProductionAttemptBinding,
+    telemetry: &mut crunch_build::distributed::RemoteTelemetryBuffer,
+    fact: remote_build::RemoteProductionTelemetryFact,
+) -> RemoteFailureObservabilityOutcome {
+    assert!(matches!(
+        fact,
+        remote_build::RemoteProductionTelemetryFact::StaleFenceRejected
+            | remote_build::RemoteProductionTelemetryFact::ExecutionFailed
+            | remote_build::RemoteProductionTelemetryFact::OutputRejected
+            | remote_build::RemoteProductionTelemetryFact::TransferCutoff { accepted: false }
+    ));
+    let accepted_events_before = telemetry.accepted_events;
+    *telemetry = remote_build::record_remote_production_telemetry(telemetry, fact, telemetry_policy);
+    let immutable_log = if fact == remote_build::RemoteProductionTelemetryFact::StaleFenceRejected {
+        remote_build::append_remote_rejected_production_observability_log(state_dir, attempt, telemetry)
+    } else {
+        remote_build::append_remote_production_observability_log(coordinator, attempt, telemetry)
+    };
+    let exporters = remote_telemetry_export::export_remote_telemetry(export_config, &telemetry.events);
+    debug_assert!(telemetry.accepted_events >= accepted_events_before);
+    RemoteFailureObservabilityOutcome {
+        immutable_log,
+        exporters,
+    }
+}
+
 async fn run_remote_build_dispatches_async(
     selection: &RemoteBuildSelection,
     inputs: Vec<remote_build::RemoteClientDerivationInput>,
@@ -3749,8 +3830,55 @@ async fn run_remote_build_dispatches_async(
     .await
     .map_err(|err| RunError::Internal(format!("opening local store for remote build dispatch: {err}")))?;
     let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
-    let mut imported = Vec::with_capacity(inputs.len());
-    for input in inputs {
+    let priority_policy = crunch_build::scheduling::SchedulingPolicy::default();
+    let ready_roots = inputs
+        .iter()
+        .enumerate()
+        .map(|(input_index, input)| {
+            let input_index = u32::try_from(input_index)
+                .map_err(|_| RunError::Internal("remote root index does not fit in u32".to_string()))?;
+            let root_identity_blake3 = remote_build::remote_root_priority_identity(
+                &input.label,
+                &input.drv_path,
+                &selection.options.store_prefix,
+            )
+            .map_err(RunError::Internal)?;
+            Ok(remote_build::RemoteRootPriorityCandidate {
+                input_index,
+                root_identity_blake3,
+            })
+        })
+        .collect::<Result<Vec<_>, RunError>>()?;
+    let priority_plan =
+        remote_build::plan_remote_root_priority(&priority_policy, &ready_roots).map_err(RunError::Internal)?;
+    let priority_competing_goal_count = priority_plan.evidence.competing_goal_count;
+    let mut input_slots = inputs.into_iter().map(Some).collect::<Vec<_>>();
+    let mut imported = Vec::with_capacity(input_slots.len());
+    let mut priority_event_pending = true;
+    for selected_input_index in &priority_plan.ordered_input_indices {
+        let selected_slot = usize::try_from(*selected_input_index)
+            .map_err(|_| RunError::Internal("remote root index does not fit in usize".to_string()))?;
+        let input = input_slots
+            .get_mut(selected_slot)
+            .and_then(Option::take)
+            .ok_or_else(|| RunError::Internal("remote priority selected missing input".to_string()))?;
+        let telemetry_policy = selection.telemetry.telemetry;
+        let mut telemetry = crunch_build::distributed::RemoteTelemetryBuffer::default();
+        if priority_event_pending {
+            telemetry = remote_build::record_remote_production_telemetry(
+                &telemetry,
+                remote_build::RemoteProductionTelemetryFact::PrioritySelected {
+                    competing_goal_count: priority_competing_goal_count,
+                },
+                telemetry_policy,
+            );
+            priority_event_pending = false;
+        }
+        telemetry = remote_build::record_remote_production_telemetry(
+            &telemetry,
+            remote_build::RemoteProductionTelemetryFact::RouteSelected,
+            telemetry_policy,
+        );
         let mut plan =
             remote_build::plan_remote_stdio_client_dispatch(input, &selection.options).map_err(RunError::Internal)?;
         let attempt = remote_build::admit_remote_production_dispatch(
@@ -3761,6 +3889,13 @@ async fn run_remote_build_dispatches_async(
             selection.options.now_unix_s,
         )
         .map_err(|err| RunError::Internal(format!("remote coordinator dispatch failed: {err}")))?;
+        for fact in [
+            remote_build::RemoteProductionTelemetryFact::QueueAdmitted,
+            remote_build::RemoteProductionTelemetryFact::WorkerAssigned,
+            remote_build::RemoteProductionTelemetryFact::FenceAccepted,
+        ] {
+            telemetry = remote_build::record_remote_production_telemetry(&telemetry, fact, telemetry_policy);
+        }
         remote_build::bind_remote_production_dispatch(
             &mut plan,
             attempt.clone(),
@@ -3768,6 +3903,12 @@ async fn run_remote_build_dispatches_async(
             state_dir,
         )
         .map_err(|err| RunError::Internal(format!("remote production transfer binding failed: {err}")))?;
+        remote_build::set_remote_production_telemetry_policy(&mut plan.command, telemetry_policy)
+            .map_err(RunError::Internal)?;
+        if selection.trace_health.status != remote_trace_context::RemoteTraceContextStatus::Disabled {
+            remote_build::set_remote_diagnostic_trace_context(&mut plan.command, selection.trace_context.clone())
+                .map_err(RunError::Internal)?;
+        }
         if cfg!(debug_assertions)
             && let Some(value) = std::env::var_os(REMOTE_TEST_INTERRUPT_AFTER_INPUT_CHUNKS_ENV)
         {
@@ -3794,8 +3935,26 @@ async fn run_remote_build_dispatches_async(
         remote_build::prepare_remote_production_input_transfer(&store, &mut plan.command, &request, state_dir)
             .await
             .map_err(|err| RunError::Internal(format!("remote input stream preparation failed: {err}")))?;
-        let transcript = remote_build::run_stdio_remote_child(&plan.command)?;
-        let admission = remote_build::admit_fenced_remote_stdio_output(
+        let transcript = match remote_build::run_stdio_remote_child(&plan.command) {
+            Ok(transcript) => transcript,
+            Err(error) => {
+                let failure_fact = remote_protocol_failure_fact(&error.to_string());
+                let _failure_observability = record_remote_failure_observability(
+                    &selection.telemetry,
+                    telemetry_policy,
+                    state_dir,
+                    &mut coordinator,
+                    &attempt,
+                    &mut telemetry,
+                    failure_fact,
+                );
+                return Err(error);
+            }
+        };
+        for event in &transcript.telemetry.events {
+            telemetry = crunch_build::distributed::record_remote_telemetry(&telemetry, event.clone(), telemetry_policy);
+        }
+        let admission = match remote_build::admit_fenced_remote_stdio_output(
             &mut coordinator,
             &attempt,
             true,
@@ -3803,8 +3962,21 @@ async fn run_remote_build_dispatches_async(
             &plan.client.trusted_output_keys,
             &transcript,
             selection.options.now_unix_s,
-        )
-        .map_err(|err| RunError::Internal(format!("remote output import admission failed: {err}")))?;
+        ) {
+            Ok(admission) => admission,
+            Err(error) => {
+                let _failure_observability = record_remote_failure_observability(
+                    &selection.telemetry,
+                    telemetry_policy,
+                    state_dir,
+                    &mut coordinator,
+                    &attempt,
+                    &mut telemetry,
+                    remote_build::RemoteProductionTelemetryFact::OutputRejected,
+                );
+                return Err(RunError::Internal(format!("remote output import admission failed: {error}")));
+            }
+        };
         let import_report = remote_build::import_admitted_remote_stdio_outputs(
             &mut store,
             &plan.client.request,
@@ -3815,6 +3987,11 @@ async fn run_remote_build_dispatches_async(
         )
         .await
         .map_err(|err| RunError::Internal(format!("remote output import failed: {err}")))?;
+        telemetry = remote_build::record_remote_production_telemetry(
+            &telemetry,
+            remote_build::RemoteProductionTelemetryFact::OutputAdmitted,
+            telemetry_policy,
+        );
         remote_build::complete_remote_production_attempt(
             &mut coordinator,
             &attempt,
@@ -3822,18 +3999,85 @@ async fn run_remote_build_dispatches_async(
             selection.options.now_unix_s.saturating_add(1),
         )
         .map_err(|err| RunError::Internal(format!("remote coordinator completion failed: {err}")))?;
+        let immutable_log_result =
+            remote_build::append_remote_production_observability_log(&mut coordinator, &attempt, &telemetry);
+        let (immutable_log, immutable_log_health) = match immutable_log_result {
+            Ok(summary) => (
+                Some(summary),
+                remote_build::remote_observability_adapter_health(
+                    remote_telemetry_export::RemoteTelemetryAdapterStatus::Succeeded,
+                    "remote-observability-log-persisted",
+                ),
+            ),
+            Err(reason) => (
+                None,
+                remote_build::remote_observability_adapter_health(
+                    remote_telemetry_export::RemoteTelemetryAdapterStatus::Failed,
+                    &reason,
+                ),
+            ),
+        };
+        let exporters = remote_telemetry_export::export_remote_telemetry(&selection.telemetry, &telemetry.events);
+        let trace_context = production_trace_health(selection, &transcript);
+        let health = remote_build::RemoteAttemptObservabilityHealth {
+            telemetry: remote_build::remote_telemetry_buffer_health(&telemetry),
+            exporters,
+            trace_context,
+            immutable_log: immutable_log_health,
+            non_claim: remote_build::REMOTE_OBSERVABILITY_NON_CLAIM.to_string(),
+        };
+        let _health_persistence =
+            remote_build::update_remote_production_observability_health(&mut coordinator, &attempt, health.clone());
         imported.push(remote_build::RemoteClientImportedBuild {
             label: plan.label,
             request_id: plan.client.request.request_id,
             imported: import_report,
+            observability: remote_build::RemoteAttemptObservabilityReport {
+                events: telemetry.events.clone(),
+                health,
+                immutable_log,
+            },
         });
     }
+    assert_eq!(imported.len(), input_slots.len());
+    assert!(input_slots.iter().all(Option::is_none));
     Ok(remote_build::RemoteClientBuildReport {
         schema: REMOTE_CLIENT_BUILD_REPORT_SCHEMA.to_string(),
         builder: selection.options.builder.endpoint_id.clone(),
         store_prefix: store_prefix.to_string(),
+        priority_decisions: vec![priority_plan.evidence],
         imported,
     })
+}
+
+fn production_trace_health(
+    selection: &RemoteBuildSelection,
+    transcript: &remote_build::RemoteStdioTranscript,
+) -> remote_trace_context::RemoteTraceContextHealth {
+    if selection.trace_health.status != remote_trace_context::RemoteTraceContextStatus::Accepted {
+        return selection.trace_health.clone();
+    }
+    let Some(server_health) = transcript.trace_context_health.as_ref() else {
+        return remote_trace_context::RemoteTraceContextHealth {
+            status: remote_trace_context::RemoteTraceContextStatus::Dropped,
+            reason_code: "remote-trace-context-ack-missing".to_string(),
+            context_digest_blake3: None,
+            non_claim: remote_trace_context::REMOTE_TRACE_CONTEXT_NON_CLAIM.to_string(),
+        };
+    };
+    if server_health.status != remote_trace_context::RemoteTraceContextStatus::Accepted
+        || server_health.context_digest_blake3 != selection.trace_health.context_digest_blake3
+    {
+        return remote_trace_context::RemoteTraceContextHealth {
+            status: remote_trace_context::RemoteTraceContextStatus::Dropped,
+            reason_code: "remote-trace-context-ack-mismatch".to_string(),
+            context_digest_blake3: None,
+            non_claim: remote_trace_context::REMOTE_TRACE_CONTEXT_NON_CLAIM.to_string(),
+        };
+    }
+    debug_assert_eq!(server_health.context_digest_blake3, selection.trace_health.context_digest_blake3);
+    debug_assert_eq!(server_health.status, remote_trace_context::RemoteTraceContextStatus::Accepted);
+    server_health.clone()
 }
 
 fn print_remote_client_build_report(
@@ -3873,21 +4117,42 @@ fn remote_client_build_json_report(
         .map(|build| remote_client_build_outcome_json(report, build, output_dir))
         .collect::<Result<Vec<_>, _>>()?;
     let succeeded_total = remote_report_count(outcomes.len())?;
+    let telemetry_events = report
+        .imported
+        .iter()
+        .flat_map(|build| build.observability.events.iter().cloned())
+        .take(usize::try_from(crunch_build::distributed::MAX_REMOTE_TELEMETRY_EVENT_CAPACITY).unwrap_or(usize::MAX))
+        .collect::<Vec<_>>();
+    let remote_observability = report
+        .imported
+        .iter()
+        .map(|build| {
+            serde_json::json!({
+                "health": &build.observability.health,
+                "immutable_log": &build.observability.immutable_log,
+            })
+        })
+        .collect::<Vec<_>>();
     Ok(serde_json::json!({
         "schema": BUILD_JSON_REPORT_SCHEMA,
         "file": file.display().to_string(),
         "output_dir": output_dir.display().to_string(),
         "state_dir": state_dir.display().to_string(),
         "store_dir": &report.store_prefix,
+        "scheduler_policy": crunch_pipeline::SchedulingPolicy::default(),
         "hermeticity_mode": REMOTE_BUILD_HERMETICITY_MODE,
         "hermeticity_audit_events": [],
         "build_environment_reports": [],
         "network_policy_reports": [],
         "native_dynamic_plans": [],
+        "scheduler_priority_decisions": &report.priority_decisions,
+        "remote_telemetry_events": telemetry_events,
+        "remote_observability": remote_observability,
         "frontend_artifact_attestations": [],
         "ast_grep_structural_evidence": [],
         "ast_grep_structural_evidence_diagnostics": [],
         "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
         "diagnostic_persistence_failures": [],
         "counts": {
             "succeeded_total": succeeded_total,
@@ -5488,6 +5753,63 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 mod tests {
     use super::*;
 
+    #[test]
+    fn failure_observability_records_bounded_rejections_when_log_shell_is_unavailable() {
+        const TEST_FENCE_GENERATION: u64 = 1;
+        let temp = tempfile::tempdir().unwrap();
+        let mut coordinator = remote_build::RemoteCoordinatorState::default();
+        let attempt = remote_build::RemoteProductionAttemptBinding {
+            job_id: remote_build::RemoteJobId::new("failure-observability-job").unwrap(),
+            attempt_id: remote_build::RemoteAttemptId::new("failure-observability-attempt").unwrap(),
+            fence_generation: remote_build::RemoteFenceGeneration::new(TEST_FENCE_GENERATION).unwrap(),
+        };
+        let export_config = remote_telemetry_export::RemoteTelemetryExportConfig::default();
+        let telemetry_policy = crunch_build::distributed::RemoteTelemetryPolicy::default();
+        let mut telemetry = crunch_build::distributed::RemoteTelemetryBuffer::default();
+
+        let outcomes = [
+            remote_build::RemoteProductionTelemetryFact::ExecutionFailed,
+            remote_build::RemoteProductionTelemetryFact::OutputRejected,
+        ]
+        .into_iter()
+        .map(|fact| {
+            record_remote_failure_observability(
+                &export_config,
+                telemetry_policy,
+                temp.path(),
+                &mut coordinator,
+                &attempt,
+                &mut telemetry,
+                fact,
+            )
+        })
+        .collect::<Vec<_>>();
+
+        assert_eq!(telemetry.events.len(), 2);
+        assert_eq!(telemetry.events[0].reason, crunch_build::distributed::RemoteTelemetryReasonClass::ExecutionFailed);
+        assert_eq!(telemetry.events[1].reason, crunch_build::distributed::RemoteTelemetryReasonClass::OutputRejected);
+        assert!(outcomes.iter().all(|outcome| outcome.immutable_log.is_err()));
+        assert_eq!(outcomes[0].exporters.events_received, 1);
+        assert_eq!(outcomes[1].exporters.events_received, 2);
+        assert!(coordinator.jobs.is_empty());
+        assert_eq!(
+            remote_protocol_failure_fact("remote-production-input-transfer-interrupted-after-checkpoint"),
+            remote_build::RemoteProductionTelemetryFact::TransferCutoff { accepted: false }
+        );
+        assert_eq!(
+            remote_protocol_failure_fact("remote-production-transfer-interrupted-after-checkpoint"),
+            remote_build::RemoteProductionTelemetryFact::TransferCutoff { accepted: false }
+        );
+        assert_eq!(
+            remote_protocol_failure_fact("remote-protocol-frame-invalid"),
+            remote_build::RemoteProductionTelemetryFact::ExecutionFailed
+        );
+        assert_eq!(
+            remote_protocol_failure_fact(remote_build::RemoteAttemptReasonCode::StaleReportRejected.as_str()),
+            remote_build::RemoteProductionTelemetryFact::StaleFenceRejected
+        );
+    }
+
     #[cfg(unix)]
     const TEST_EXEC_MODE: u32 = 0o755;
     #[cfg(unix)]
@@ -5526,10 +5848,38 @@ mod tests {
     }
 
     fn remote_client_report_fixture() -> remote_build::RemoteClientBuildReport {
+        let telemetry = crunch_build::distributed::RemoteTelemetryBuffer::default();
+        let trace_context = remote_trace_context::accept_remote_trace_context(false, None, None).1;
+        let priority =
+            remote_build::plan_remote_root_priority(&crunch_build::scheduling::SchedulingPolicy::default(), &[
+                remote_build::RemoteRootPriorityCandidate {
+                    input_index: 0,
+                    root_identity_blake3: blake3::hash(b"root").to_hex().to_string(),
+                },
+            ])
+            .unwrap();
+        let observability = remote_build::RemoteAttemptObservabilityReport {
+            events: Vec::new(),
+            health: remote_build::RemoteAttemptObservabilityHealth {
+                telemetry: remote_build::remote_telemetry_buffer_health(&telemetry),
+                exporters: remote_telemetry_export::export_remote_telemetry(
+                    &remote_telemetry_export::RemoteTelemetryExportConfig::default(),
+                    &[],
+                ),
+                trace_context,
+                immutable_log: remote_build::remote_observability_adapter_health(
+                    remote_telemetry_export::RemoteTelemetryAdapterStatus::Disabled,
+                    "remote-observability-log-not-requested",
+                ),
+                non_claim: remote_build::REMOTE_OBSERVABILITY_NON_CLAIM.to_string(),
+            },
+            immutable_log: None,
+        };
         remote_build::RemoteClientBuildReport {
             schema: REMOTE_CLIENT_BUILD_REPORT_SCHEMA.to_string(),
             builder: "builder-1".to_string(),
             store_prefix: "/mantle/store".to_string(),
+            priority_decisions: vec![priority.evidence],
             imported: vec![remote_build::RemoteClientImportedBuild {
                 label: "root".to_string(),
                 request_id: "request-1".to_string(),
@@ -5552,6 +5902,7 @@ mod tests {
                         verified_builder_key: "builder-key".to_string(),
                     },
                 },
+                observability,
             }],
         }
     }

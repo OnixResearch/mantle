@@ -12,6 +12,8 @@ let MAX_BUILD_REPORT_ROWS = 65536 in
 let MAX_KNOWN_CRITICAL_PATH_WORK_UNITS = 80000 in
 let MAX_PRIORITY_DECISIONS = 10000 in
 let MAX_READY_GOALS = 10000 in
+let MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES = 4096 in
+let MAX_REMOTE_TELEMETRY_EVENT_CAPACITY = 16384 in
 let MAX_SCHEDULING_EPOCH = 80000 in
 let MAX_SCHEDULING_GOALS = 10000 in
 let MAX_SCHEDULING_POLICY_ID_BYTES = 128 in
@@ -27,15 +29,30 @@ let MIN_BLOCKED_ROOT_COUNT = 0 in
 let MIN_BUILD_COUNT = 0 in
 let MIN_ENVIRONMENT_VARIABLES = 0 in
 let MIN_EVIDENCE_VERSION = 1 in
+let MIN_FENCE_GENERATION = 1 in
 let MIN_KNOWN_CRITICAL_PATH_NODES = 0 in
 let MIN_KNOWN_CRITICAL_PATH_WORK_UNITS = 0 in
+let MIN_LOG_CHUNKS = 1 in
+let MIN_LOG_CURSOR = 0 in
+let MIN_LOG_RECORDS = 0 in
 let MIN_PROTECTED_AFTER_EPOCHS = 2 in
 let MIN_READY_GOAL_COUNT = 1 in
+let MIN_RETAINED_LOG_BYTES = 0 in
+let MIN_RETENTION_LOG_BYTES = 1 in
 let MIN_REUSED_BYTES = 0 in
 let MIN_SCHEDULING_EPOCH = 0 in
+let MIN_TELEMETRY_EVENTS = 0 in
+let MIN_TELEMETRY_VALUE = 1 in
 let MIN_TRANSFER_BYTES = 0 in
 let PRIORITY_NON_CLAIM_COUNT = 5 in
 let SCHEDULING_PREFERENCE_FIELD_COUNT = 3 in
+let is_adapter_health = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["reason_code","status"]) (std.record.fields (value))
+  && (std.record.has_field "reason_code" (value) && (((std.is_string (std.record.get "reason_code" (value))
+  && C.Utf8ByteLength (std.record.get "reason_code" (value)) <= MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES
+  && C.IsRedactionSafe (std.record.get "reason_code" (value))))))
+  && (std.record.has_field "status" (value) && ((std.array.elem (std.record.get "status" (value)) ["disabled","succeeded","failed"]
+  && (std.is_string (std.record.get "status" (value)))))))) in
 let is_ast_grep_command = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["argv_digest_blake3","kind"]) (std.record.fields (value))
   && (std.record.has_field "argv_digest_blake3" (value) && (((std.is_string (std.record.get "argv_digest_blake3" (value))
@@ -152,6 +169,54 @@ let is_ast_grep_evidence = fun value => ((std.is_record (value)
   && C.IsNonEmptyString (std.record.get "output_name" (value))))))
   && (std.record.has_field "sidecar_digest_blake3" (value) && (((std.is_string (std.record.get "sidecar_digest_blake3" (value))
   && C.IsBlake3Hex (std.record.get "sidecar_digest_blake3" (value)))))))) in
+let is_attempt_log_scope = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["attempt_id","fence_generation","job_id"]) (std.record.fields (value))
+  && (std.record.has_field "attempt_id" (value) && (((std.is_string (std.record.get "attempt_id" (value))
+  && C.IsNonEmptyString (std.record.get "attempt_id" (value))))))
+  && (std.record.has_field "fence_generation" (value) && (((std.is_number (std.record.get "fence_generation" (value))
+  && std.number.is_integer (std.record.get "fence_generation" (value))
+  && (std.record.get "fence_generation" (value)) >= MIN_FENCE_GENERATION
+  && (std.record.get "fence_generation" (value)) <= MAX_U64))))
+  && (std.record.has_field "job_id" (value) && (((std.is_string (std.record.get "job_id" (value))
+  && C.IsNonEmptyString (std.record.get "job_id" (value)))))))) in
+let is_attempt_log = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["head_record_blake3","head_segment_blake3","manifest_blake3","next_cursor","retained_payload_bytes","retained_record_count","retained_start_cursor","retention_policy","scope","truncated","truncation_anchor_blake3"]) (std.record.fields (value))
+  && (std.record.has_field "head_record_blake3" (value) && ((((std.record.get "head_record_blake3" (value)) == null || ((std.is_string (std.record.get "head_record_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "head_record_blake3" (value))))))))
+  && (std.record.has_field "head_segment_blake3" (value) && ((((std.record.get "head_segment_blake3" (value)) == null || ((std.is_string (std.record.get "head_segment_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "head_segment_blake3" (value))))))))
+  && (std.record.has_field "manifest_blake3" (value) && (((std.is_string (std.record.get "manifest_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "manifest_blake3" (value))))))
+  && (std.record.has_field "next_cursor" (value) && (((std.is_number (std.record.get "next_cursor" (value))
+  && std.number.is_integer (std.record.get "next_cursor" (value))
+  && (std.record.get "next_cursor" (value)) >= MIN_LOG_CURSOR
+  && (std.record.get "next_cursor" (value)) <= MAX_U64))))
+  && (std.record.has_field "retained_payload_bytes" (value) && (((std.is_number (std.record.get "retained_payload_bytes" (value))
+  && std.number.is_integer (std.record.get "retained_payload_bytes" (value))
+  && (std.record.get "retained_payload_bytes" (value)) >= MIN_RETAINED_LOG_BYTES
+  && (std.record.get "retained_payload_bytes" (value)) <= MAX_U64))))
+  && (std.record.has_field "retained_record_count" (value) && (((std.is_number (std.record.get "retained_record_count" (value))
+  && std.number.is_integer (std.record.get "retained_record_count" (value))
+  && (std.record.get "retained_record_count" (value)) >= MIN_LOG_RECORDS
+  && (std.record.get "retained_record_count" (value)) <= MAX_U32))))
+  && (std.record.has_field "retained_start_cursor" (value) && (((std.is_number (std.record.get "retained_start_cursor" (value))
+  && std.number.is_integer (std.record.get "retained_start_cursor" (value))
+  && (std.record.get "retained_start_cursor" (value)) >= MIN_LOG_CURSOR
+  && (std.record.get "retained_start_cursor" (value)) <= MAX_U64))))
+  && (std.record.has_field "retention_policy" (value) && (((std.is_record (std.record.get "retention_policy" (value))
+  && std.array.all (fun field_2 => std.array.elem field_2 ["max_bytes","max_chunks"]) (std.record.fields (std.record.get "retention_policy" (value)))
+  && (std.record.has_field "max_bytes" (std.record.get "retention_policy" (value)) && (((std.is_number (std.record.get "max_bytes" (std.record.get "retention_policy" (value)))
+  && std.number.is_integer (std.record.get "max_bytes" (std.record.get "retention_policy" (value)))
+  && (std.record.get "max_bytes" (std.record.get "retention_policy" (value))) >= MIN_RETENTION_LOG_BYTES
+  && (std.record.get "max_bytes" (std.record.get "retention_policy" (value))) <= MAX_U64))))
+  && (std.record.has_field "max_chunks" (std.record.get "retention_policy" (value)) && (((std.is_number (std.record.get "max_chunks" (std.record.get "retention_policy" (value)))
+  && std.number.is_integer (std.record.get "max_chunks" (std.record.get "retention_policy" (value)))
+  && (std.record.get "max_chunks" (std.record.get "retention_policy" (value))) >= MIN_LOG_CHUNKS
+  && (std.record.get "max_chunks" (std.record.get "retention_policy" (value))) <= MAX_U32))))))))
+  && (std.record.has_field "scope" (value) && (is_attempt_log_scope (std.record.get "scope" (value))))
+  && (std.record.has_field "truncated" (value) && (((std.is_bool (std.record.get "truncated" (value))))))
+  && (std.record.has_field "truncation_anchor_blake3" (value) && ((((std.record.get "truncation_anchor_blake3" (value)) == null || ((std.is_string (std.record.get "truncation_anchor_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "truncation_anchor_blake3" (value)))))))))) in
 let is_attestation_ref = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["logical_path","path"]) (std.record.fields (value))
   && (std.record.has_field "logical_path" (value) && (((std.is_string (std.record.get "logical_path" (value))
@@ -420,6 +485,31 @@ let is_environment = fun value => ((std.is_record (value)
   && std.number.is_integer (std.record.get "variable_count" (value))
   && (std.record.get "variable_count" (value)) >= MIN_ENVIRONMENT_VARIABLES
   && (std.record.get "variable_count" (value)) <= MAX_BUILD_REPORT_ROWS)))))) in
+let is_export_health = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["events_dropped","events_received","intake","metrics_admitted","metrics_rejected","non_claim","otlp","prometheus","schema"]) (std.record.fields (value))
+  && (std.record.has_field "events_dropped" (value) && (((std.is_number (std.record.get "events_dropped" (value))
+  && std.number.is_integer (std.record.get "events_dropped" (value))
+  && (std.record.get "events_dropped" (value)) >= MIN_TELEMETRY_EVENTS
+  && (std.record.get "events_dropped" (value)) <= MAX_U64))))
+  && (std.record.has_field "events_received" (value) && (((std.is_number (std.record.get "events_received" (value))
+  && std.number.is_integer (std.record.get "events_received" (value))
+  && (std.record.get "events_received" (value)) >= MIN_TELEMETRY_EVENTS
+  && (std.record.get "events_received" (value)) <= MAX_U64))))
+  && (std.record.has_field "intake" (value) && (is_adapter_health (std.record.get "intake" (value))))
+  && (std.record.has_field "metrics_admitted" (value) && (((std.is_number (std.record.get "metrics_admitted" (value))
+  && std.number.is_integer (std.record.get "metrics_admitted" (value))
+  && (std.record.get "metrics_admitted" (value)) >= MIN_TELEMETRY_EVENTS
+  && (std.record.get "metrics_admitted" (value)) <= MAX_U64))))
+  && (std.record.has_field "metrics_rejected" (value) && (((std.is_number (std.record.get "metrics_rejected" (value))
+  && std.number.is_integer (std.record.get "metrics_rejected" (value))
+  && (std.record.get "metrics_rejected" (value)) >= MIN_TELEMETRY_EVENTS
+  && (std.record.get "metrics_rejected" (value)) <= MAX_U64))))
+  && (std.record.has_field "non_claim" (value) && (((std.is_string (std.record.get "non_claim" (value))
+  && C.IsRedactionSafe (std.record.get "non_claim" (value))))))
+  && (std.record.has_field "otlp" (value) && (is_adapter_health (std.record.get "otlp" (value))))
+  && (std.record.has_field "prometheus" (value) && (is_adapter_health (std.record.get "prometheus" (value))))
+  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-remote-telemetry-export-report-v1"
+  && (std.is_string (std.record.get "schema" (value)))))))) in
 let is_failure = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["drv_key","error_class","message","phase","root","saved_log_path"]) (std.record.fields (value))
   && (std.record.has_field "drv_key" (value) && (((std.is_string (std.record.get "drv_key" (value))
@@ -505,6 +595,36 @@ let is_network = fun value => ((std.is_record (value)
   && C.IsNonEmptyString (std.record.get "policy_basis" (value))))))))
   && (std.record.has_field "result" (value) && (((std.is_string (std.record.get "result" (value))
   && C.IsNonEmptyString (std.record.get "result" (value)))))))) in
+let is_telemetry_buffer_health = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["accepted_events","dropped_events","last_drop_reason"]) (std.record.fields (value))
+  && (std.record.has_field "accepted_events" (value) && (((std.is_number (std.record.get "accepted_events" (value))
+  && std.number.is_integer (std.record.get "accepted_events" (value))
+  && (std.record.get "accepted_events" (value)) >= MIN_TELEMETRY_EVENTS
+  && (std.record.get "accepted_events" (value)) <= MAX_U64))))
+  && (std.record.has_field "dropped_events" (value) && (((std.is_number (std.record.get "dropped_events" (value))
+  && std.number.is_integer (std.record.get "dropped_events" (value))
+  && (std.record.get "dropped_events" (value)) >= MIN_TELEMETRY_EVENTS
+  && (std.record.get "dropped_events" (value)) <= MAX_U64))))
+  && (!std.record.has_field "last_drop_reason" (value) || ((((std.record.get "last_drop_reason" (value)) == null || ((std.is_string (std.record.get "last_drop_reason" (value))
+  && C.IsRedactionSafe (std.record.get "last_drop_reason" (value)))))))))) in
+let is_trace_health = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["context_digest_blake3","non_claim","reason_code","status"]) (std.record.fields (value))
+  && (!std.record.has_field "context_digest_blake3" (value) || ((((std.record.get "context_digest_blake3" (value)) == null || ((std.is_string (std.record.get "context_digest_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "context_digest_blake3" (value))))))))
+  && (std.record.has_field "non_claim" (value) && (((std.is_string (std.record.get "non_claim" (value))
+  && C.IsRedactionSafe (std.record.get "non_claim" (value))))))
+  && (std.record.has_field "reason_code" (value) && (((std.is_string (std.record.get "reason_code" (value))
+  && C.IsRedactionSafe (std.record.get "reason_code" (value))))))
+  && (std.record.has_field "status" (value) && ((std.array.elem (std.record.get "status" (value)) ["disabled","accepted","dropped"]
+  && (std.is_string (std.record.get "status" (value)))))))) in
+let is_observability_health = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["exporters","immutable_log","non_claim","telemetry","trace_context"]) (std.record.fields (value))
+  && (std.record.has_field "exporters" (value) && (is_export_health (std.record.get "exporters" (value))))
+  && (std.record.has_field "immutable_log" (value) && (is_adapter_health (std.record.get "immutable_log" (value))))
+  && (std.record.has_field "non_claim" (value) && (((std.is_string (std.record.get "non_claim" (value))
+  && C.IsRedactionSafe (std.record.get "non_claim" (value))))))
+  && (std.record.has_field "telemetry" (value) && (is_telemetry_buffer_health (std.record.get "telemetry" (value))))
+  && (std.record.has_field "trace_context" (value) && (is_trace_health (std.record.get "trace_context" (value)))))) in
 let is_output = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["artifact_attestation","cache_admission","name","path","substitution"]) (std.record.fields (value))
   && (std.record.has_field "artifact_attestation" (value) && (is_attestation_ref (std.record.get "artifact_attestation" (value))))
@@ -681,6 +801,10 @@ let is_priority_decision = fun value => ((std.is_record (value)
   && (std.is_string (std.record.get "starvation_class" (value))))))
   && (std.record.has_field "transfer_cost_class" (value) && ((std.array.elem (std.record.get "transfer_cost_class" (value)) ["unknown","large","medium","small","none"]
   && (std.is_string (std.record.get "transfer_cost_class" (value)))))))) in
+let is_remote_observability = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["health","immutable_log"]) (std.record.fields (value))
+  && (std.record.has_field "health" (value) && (is_observability_health (std.record.get "health" (value))))
+  && (!std.record.has_field "immutable_log" (value) || (is_attempt_log (std.record.get "immutable_log" (value)))))) in
 let is_scheduling_policy = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["aged_after_epochs","policy_id","preference_order","protected_after_epochs","schema"]) (std.record.fields (value))
   && (std.record.has_field "aged_after_epochs" (value) && (((std.is_number (std.record.get "aged_after_epochs" (value))
@@ -732,8 +856,36 @@ let is_substitution = fun value => ((std.is_record (value)
   && std.number.is_integer (std.record.get "transferred_bytes" (value))
   && (std.record.get "transferred_bytes" (value)) >= MIN_TRANSFER_BYTES
   && (std.record.get "transferred_bytes" (value)) <= MAX_U64)))))) in
+let is_telemetry_event = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["capability","category","measurement","non_claim","phase","reason","result","retry","route","schema","transfer","value"]) (std.record.fields (value))
+  && (std.record.has_field "capability" (value) && ((std.array.elem (std.record.get "capability" (value)) ["exact","compatible","degraded","ineligible","unknown","not-applicable"]
+  && (std.is_string (std.record.get "capability" (value))))))
+  && (std.record.has_field "category" (value) && ((std.array.elem (std.record.get "category" (value)) ["route","queue","assignment","retry-fencing","execution","transfer","admission","publication"]
+  && (std.is_string (std.record.get "category" (value))))))
+  && (std.record.has_field "measurement" (value) && ((std.array.elem (std.record.get "measurement" (value)) ["occurrences","queue-depth","candidate-count","attempt-count","bytes","objects"]
+  && (std.is_string (std.record.get "measurement" (value))))))
+  && (std.record.has_field "non_claim" (value) && (((std.is_string (std.record.get "non_claim" (value))
+  && C.IsRedactionSafe (std.record.get "non_claim" (value))))))
+  && (std.record.has_field "phase" (value) && ((std.array.elem (std.record.get "phase" (value)) ["planning","queued","assigned","running","transferring","admitting","publishing","terminal","not-applicable"]
+  && (std.is_string (std.record.get "phase" (value))))))
+  && (std.record.has_field "reason" (value) && ((std.array.elem (std.record.get "reason" (value)) ["route-selected","route-ineligible","queue-admitted","priority-selected","worker-assigned","attempt-transition","fence-accepted","retry-allowed","retry-denied","fence-rejected","execution-completed","execution-failed","transfer-demand","transfer-credit","transfer-resumed","transfer-cutoff","transfer-completed","transfer-fallback","output-admitted","output-rejected","published","publication-failed","exporter-backpressure","exporter-unavailable"]
+  && (std.is_string (std.record.get "reason" (value))))))
+  && (std.record.has_field "result" (value) && ((std.array.elem (std.record.get "result" (value)) ["accepted","rejected","succeeded","failed","retried","dropped","pending","not-applicable"]
+  && (std.is_string (std.record.get "result" (value))))))
+  && (std.record.has_field "retry" (value) && ((std.array.elem (std.record.get "retry" (value)) ["none","current-fence","retryable","terminal","policy-denied","stale-fence","unknown-fence"]
+  && (std.is_string (std.record.get "retry" (value))))))
+  && (std.record.has_field "route" (value) && ((std.array.elem (std.record.get "route" (value)) ["local","remote-stdio","remote-ssh-stdio","remote-p2p","substitute","preflight-error","not-applicable"]
+  && (std.is_string (std.record.get "route" (value))))))
+  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-remote-telemetry-event-v1"
+  && (std.is_string (std.record.get "schema" (value))))))
+  && (std.record.has_field "transfer" (value) && ((std.array.elem (std.record.get "transfer" (value)) ["none","full","delta","streaming","fallback","not-available"]
+  && (std.is_string (std.record.get "transfer" (value))))))
+  && (std.record.has_field "value" (value) && (((std.is_number (std.record.get "value" (value))
+  && std.number.is_integer (std.record.get "value" (value))
+  && (std.record.get "value" (value)) >= MIN_TELEMETRY_VALUE
+  && (std.record.get "value" (value)) <= MAX_U64)))))) in
 C.FromPredicate (fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["ast_grep_structural_evidence","ast_grep_structural_evidence_diagnostics","build_environment_reports","cargo_build_evidence","cargo_build_evidence_diagnostics","counts","diagnostic_persistence_failures","failed","file","fod_mismatches","frontend_artifact_attestations","hermeticity_audit_events","hermeticity_mode","native_dynamic_plans","network_policy_reports","outcomes","output_dir","scheduler_policy","scheduler_priority_decisions","schema","state_dir","store_dir"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["ast_grep_structural_evidence","ast_grep_structural_evidence_diagnostics","build_environment_reports","cargo_build_evidence","cargo_build_evidence_diagnostics","counts","diagnostic_persistence_failures","failed","file","fod_mismatches","frontend_artifact_attestations","hermeticity_audit_events","hermeticity_mode","native_dynamic_plans","network_policy_reports","outcomes","output_dir","remote_observability","remote_telemetry_events","scheduler_policy","scheduler_priority_decisions","schema","state_dir","store_dir"]) (std.record.fields (value))
   && (std.record.has_field "ast_grep_structural_evidence" (value) && (((std.is_array (std.record.get "ast_grep_structural_evidence" (value))
   && std.array.length (std.record.get "ast_grep_structural_evidence" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_ast_grep_evidence (item_2)) (std.record.get "ast_grep_structural_evidence" (value))))))
@@ -798,6 +950,12 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun item_2 => is_outcome (item_2)) (std.record.get "outcomes" (value))))))
   && (std.record.has_field "output_dir" (value) && (((std.is_string (std.record.get "output_dir" (value))
   && C.IsSafeReference (std.record.get "output_dir" (value))))))
+  && (!std.record.has_field "remote_observability" (value) || (((std.is_array (std.record.get "remote_observability" (value))
+  && std.array.length (std.record.get "remote_observability" (value)) <= MAX_BUILD_REPORT_ROWS
+  && std.array.all (fun item_2 => is_remote_observability (item_2)) (std.record.get "remote_observability" (value))))))
+  && (!std.record.has_field "remote_telemetry_events" (value) || (((std.is_array (std.record.get "remote_telemetry_events" (value))
+  && std.array.length (std.record.get "remote_telemetry_events" (value)) <= MAX_REMOTE_TELEMETRY_EVENT_CAPACITY
+  && std.array.all (fun item_2 => is_telemetry_event (item_2)) (std.record.get "remote_telemetry_events" (value))))))
   && (std.record.has_field "scheduler_policy" (value) && (is_scheduling_policy (std.record.get "scheduler_policy" (value))))
   && (std.record.has_field "scheduler_priority_decisions" (value) && (((std.is_array (std.record.get "scheduler_priority_decisions" (value))
   && std.array.length (std.record.get "scheduler_priority_decisions" (value)) <= MAX_PRIORITY_DECISIONS
