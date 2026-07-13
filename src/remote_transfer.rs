@@ -14,12 +14,15 @@ use std::collections::BTreeSet;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{self};
+use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use crunch_build::distributed::*;
 use fs2::FileExt;
@@ -41,11 +44,16 @@ pub const MAX_REMOTE_INLINE_FIXTURE_BOOTSTRAP_BYTES: u64 = 262_144;
 pub const MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD: u64 = 2_097_152;
 pub const MAX_REMOTE_TRANSFER_LEASE_REFS_HARD: u32 = 1_000_000;
 
-const TEMP_FILE_EXTENSION: &str = "tmp";
+const ATOMIC_TEMP_CREATE_ATTEMPTS: u32 = 16;
+const ATOMIC_TEMP_FILE_SUFFIX: &str = "tmp";
+#[cfg(unix)]
+const PRIVATE_AUTHORITY_FILE_MODE: u32 = 0o600;
 const COPY_BUFFER_BYTES: u32 = 65_536;
 const REMOTE_TRANSFER_DATA_HEADER_BYTES: usize = 4;
 const FIRST_CHUNK_COUNT: u32 = 1;
 const INITIAL_PROGRESS_STEP: u64 = 0;
+
+static ATOMIC_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -837,9 +845,20 @@ impl RemoteTransferReceiveSession {
         Ok(acknowledgement)
     }
 
+    /// Remove every attempt-scoped durable receiver fact after a fence changes.
+    /// No acknowledgement or completion may follow a successful invalidation.
+    pub fn invalidate_fenced_progress(&mut self) -> Result<(), String> {
+        remove_file_if_present(&self.checkpoint_path, "invalidating fenced transfer checkpoint")?;
+        remove_directory_if_present(&self.receiver_root, "invalidating fenced transfer receiver")?;
+        self.credit = RemoteTransferCreditState::default();
+        assert!(!path_entry_exists_no_follow(&self.checkpoint_path));
+        assert!(!path_entry_exists_no_follow(&self.receiver_root));
+        Ok(())
+    }
+
     /// Assemble all demanded artifacts and classify completion from a fresh
     /// receiver probe. Transfer completion remains distinct from output trust.
-    pub fn finish(self) -> Result<RemoteTransferShellReport, String> {
+    pub fn finish(&mut self) -> Result<RemoteTransferShellReport, String> {
         assemble_remote_transfer_artifacts(&self.receiver_root, &self.manifest)?;
         let receiver = probe_remote_transfer_receiver(&self.receiver_root, &self.manifest, self.options.admission)?;
         let completion = decide_remote_transfer_cutoff(
@@ -877,7 +896,7 @@ impl RemoteTransferReceiveSession {
             self.options.direction,
             disposition,
             &PreparedRemoteTransfer {
-                manifest: self.manifest,
+                manifest: self.manifest.clone(),
                 sources: BTreeMap::new(),
             },
             self.credit.transferred_bytes,
@@ -1135,15 +1154,22 @@ pub fn load_remote_transfer_state(
 ) -> Result<RemoteTransferStateLoad, String> {
     policy.validate().map_err(reason)?;
     let path = remote_transfer_state_path(state_dir, &expected_scope.session_id);
-    if !path.exists() {
+    let Some(file) = open_regular_file_no_follow(&path, "transfer checkpoint")? else {
         return Ok(RemoteTransferStateLoad::Missing);
-    }
-    let metadata = fs::metadata(&path).map_err(|err| format!("reading state metadata: {err}"))?;
+    };
+    let metadata = file.metadata().map_err(|err| format!("reading transfer checkpoint metadata: {err}"))?;
     if metadata.len() > MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD {
         invalidate_transfer_state_file(&path)?;
         return Ok(RemoteTransferStateLoad::StaleInvalidated);
     }
-    let bytes = fs::read(&path).map_err(|err| format!("reading transfer state: {err}"))?;
+    let bytes = match read_transfer_checkpoint_bounded(file, metadata.len()) {
+        Ok(bytes) => bytes,
+        Err(error) if error == "remote-transfer-checkpoint-grew-beyond-limit" => {
+            invalidate_transfer_state_file(&path)?;
+            return Err(error);
+        }
+        Err(error) => return Err(error),
+    };
     let state: RemoteTransferDurableState =
         serde_json::from_slice(&bytes).map_err(|err| format!("parsing transfer state: {err}"))?;
     if state.checkpoint.scope != *expected_scope || state.lease.scope != *expected_scope {
@@ -1158,6 +1184,23 @@ pub fn load_remote_transfer_state(
     assert_eq!(state.checkpoint.scope, *expected_scope);
     assert!(now_unix_s <= state.lease.expires_unix_s);
     Ok(RemoteTransferStateLoad::Loaded(state))
+}
+
+fn read_transfer_checkpoint_bounded(file: File, capacity_hint_bytes: u64) -> Result<Vec<u8>, String> {
+    let checkpoint_read_limit = MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD
+        .checked_add(1)
+        .ok_or_else(|| "remote-transfer-checkpoint-read-limit-overflow".to_string())?;
+    let bounded_capacity = std::cmp::min(capacity_hint_bytes, MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
+    let mut bytes = Vec::with_capacity(usize::try_from(bounded_capacity).unwrap_or(0));
+    file.take(checkpoint_read_limit)
+        .read_to_end(&mut bytes)
+        .map_err(|err| format!("reading bounded transfer checkpoint: {err}"))?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD {
+        return Err("remote-transfer-checkpoint-grew-beyond-limit".to_string());
+    }
+    assert!(u64::try_from(bytes.len()).unwrap_or(u64::MAX) <= MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
+    assert!(bounded_capacity <= MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD);
+    Ok(bytes)
 }
 
 pub fn remote_transfer_state_path(state_dir: &Path, session: &RemoteTransferSessionId) -> PathBuf {
@@ -1177,6 +1220,20 @@ pub fn remote_transfer_received_artifact_path(
     receiver_artifact_path(receiver_root, artifact_id)
 }
 
+pub fn open_remote_transfer_received_artifact(
+    receiver_root: &Path,
+    artifact_id: &RemoteTransferArtifactId,
+) -> Result<File, String> {
+    let path = receiver_artifact_path(receiver_root, artifact_id);
+    open_remote_transfer_authority_file(&path)
+}
+
+pub fn open_remote_transfer_authority_file(path: &Path) -> Result<File, String> {
+    open_regular_file_no_follow(path, "received transfer authority file")?
+        .ok_or_else(|| "remote-transfer-received-artifact-missing".to_string())
+}
+
+#[derive(Debug)]
 struct RemoteTransferSessionLock {
     _file: File,
 }
@@ -1188,16 +1245,47 @@ fn acquire_remote_transfer_session_lock(
     let lock_dir = state_dir.join(REMOTE_TRANSFER_STATE_DIR);
     fs::create_dir_all(&lock_dir).map_err(|err| format!("creating transfer lock directory: {err}"))?;
     let path = lock_dir.join(format!("{}.lock", session.as_str()));
-    let file = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(&path)
-        .map_err(|err| format!("opening transfer session lock: {err}"))?;
+    let file = open_or_create_regular_lock_no_follow(&path)?;
     FileExt::try_lock_exclusive(&file).map_err(|err| format!("remote-transfer-session-lock-busy: {err}"))?;
-    assert!(path.is_file());
+    let metadata = file.metadata().map_err(|err| format!("reading transfer session lock metadata: {err}"))?;
+    if !metadata.is_file() {
+        return Err("remote-transfer-session-lock-not-regular".to_string());
+    }
+    assert!(metadata.is_file());
     assert_eq!(path.parent(), Some(lock_dir.as_path()));
     Ok(RemoteTransferSessionLock { _file: file })
+}
+
+fn open_or_create_regular_lock_no_follow(path: &Path) -> Result<File, String> {
+    match open_new_file_no_follow(path, true) {
+        Ok(file) => Ok(file),
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => open_existing_lock_no_follow(path),
+        Err(error) => Err(format!("creating transfer session lock without symlink following: {error}")),
+    }
+}
+
+#[cfg(unix)]
+fn open_existing_lock_no_follow(path: &Path) -> Result<File, String> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+        .map_err(|error| format!("opening transfer session lock without symlink following: {error}"))
+}
+
+#[cfg(not(unix))]
+fn open_existing_lock_no_follow(path: &Path) -> Result<File, String> {
+    if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err("remote-transfer-session-lock-symlink-rejected".to_string());
+    }
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|error| format!("opening transfer session lock: {error}"))
 }
 
 fn available_storage_bytes(receiver_root: &Path) -> Result<u64, String> {
@@ -1430,17 +1518,14 @@ fn assemble_remote_transfer_artifacts(
             continue;
         }
         let target = receiver_artifact_path(receiver_root, &artifact.artifact_id);
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent).map_err(|err| format!("creating receiver artifact dir: {err}"))?;
-        }
-        let temporary = target.with_extension(TEMP_FILE_EXTENSION);
-        let mut writer = File::create(&temporary).map_err(|err| format!("creating receiver artifact: {err}"))?;
+        let (mut writer, temporary) = create_owned_atomic_temp(&target)?;
         for chunk in &artifact.chunks {
             let path = receiver_chunk_path(receiver_root, &chunk.digest_blake3);
             if !receiver_chunk_is_valid(receiver_root, chunk)? {
                 return Err(reason(RemoteTransferReasonCode::AcknowledgedChunkMissing));
             }
-            let mut reader = File::open(&path).map_err(|err| format!("opening receiver chunk: {err}"))?;
+            let mut reader = open_regular_file_no_follow(&path, "receiver chunk")?
+                .ok_or_else(|| reason(RemoteTransferReasonCode::AcknowledgedChunkMissing))?;
             std::io::copy(&mut reader, &mut writer).map_err(|err| format!("assembling receiver artifact: {err}"))?;
         }
         commit_atomic_file(writer, &temporary, &target)?;
@@ -1456,32 +1541,33 @@ fn assemble_remote_transfer_artifacts(
 
 fn receiver_chunk_is_valid(root: &Path, descriptor: &RemoteTransferChunkDescriptor) -> Result<bool, String> {
     let path = receiver_chunk_path(root, &descriptor.digest_blake3);
-    if !path.exists() {
+    let Some(mut file) = open_regular_file_no_follow(&path, "receiver chunk")? else {
+        return Ok(false);
+    };
+    let metadata = file.metadata().map_err(|err| format!("reading receiver chunk metadata: {err}"))?;
+    if metadata.len() != u64::from(descriptor.size_bytes) {
         return Ok(false);
     }
-    let metadata = fs::metadata(&path).map_err(|err| format!("reading receiver chunk metadata: {err}"))?;
-    if !metadata.is_file() || metadata.len() != u64::from(descriptor.size_bytes) {
-        return Ok(false);
-    }
-    Ok(hash_file_blake3(&path)? == descriptor.digest_blake3)
+    Ok(hash_reader_blake3(&mut file)? == descriptor.digest_blake3)
 }
 
 fn receiver_artifact_is_valid(root: &Path, artifact: &RemoteTransferArtifact) -> Result<bool, String> {
     let path = receiver_artifact_path(root, &artifact.artifact_id);
-    if !path.exists() {
+    let Some(mut file) = open_regular_file_no_follow(&path, "receiver artifact")? else {
+        return Ok(false);
+    };
+    let metadata = file.metadata().map_err(|err| format!("reading receiver artifact metadata: {err}"))?;
+    if metadata.len() != artifact.size_bytes {
         return Ok(false);
     }
-    let metadata = fs::metadata(&path).map_err(|err| format!("reading receiver artifact metadata: {err}"))?;
-    if !metadata.is_file() || metadata.len() != artifact.size_bytes {
-        return Ok(false);
-    }
-    if hash_file_blake3(&path)? != artifact.digest_blake3 {
+    if hash_reader_blake3(&mut file)? != artifact.digest_blake3 {
         return Ok(false);
     }
     if artifact.artifact_kind == RemoteTransferArtifactKind::Nar {
         let expected =
             artifact.nar_sha256_hex.as_ref().ok_or_else(|| reason(RemoteTransferReasonCode::NarSha256Invalid))?;
-        if hash_file_sha256_hex(&path)? != *expected {
+        file.seek(SeekFrom::Start(0)).map_err(|err| format!("rewinding receiver artifact: {err}"))?;
+        if hash_reader_sha256_hex(&mut file)? != *expected {
             return Ok(false);
         }
     }
@@ -1498,6 +1584,10 @@ fn receiver_artifact_path(root: &Path, id: &RemoteTransferArtifactId) -> PathBuf
 
 fn hash_file_blake3(path: &Path) -> Result<RemoteTransferDigest, String> {
     let mut file = File::open(path).map_err(|err| format!("opening content for BLAKE3: {err}"))?;
+    hash_reader_blake3(&mut file)
+}
+
+fn hash_reader_blake3(file: &mut File) -> Result<RemoteTransferDigest, String> {
     let mut hasher = blake3::Hasher::new();
     let mut buffer = vec![0_u8; usize::try_from(COPY_BUFFER_BYTES).unwrap_or(1)];
     loop {
@@ -1512,6 +1602,10 @@ fn hash_file_blake3(path: &Path) -> Result<RemoteTransferDigest, String> {
 
 fn hash_file_sha256_hex(path: &Path) -> Result<String, String> {
     let mut file = File::open(path).map_err(|err| format!("opening content for SHA-256: {err}"))?;
+    hash_reader_sha256_hex(&mut file)
+}
+
+fn hash_reader_sha256_hex(file: &mut File) -> Result<String, String> {
     let mut hasher = <sha2::Sha256 as sha2::Digest>::new();
     let mut buffer = vec![0_u8; usize::try_from(COPY_BUFFER_BYTES).unwrap_or(1)];
     loop {
@@ -1539,11 +1633,7 @@ fn copy_file_bounded(source: &Path, target: &Path, max_bytes: u64) -> Result<(),
         return Err(reason(RemoteTransferReasonCode::TotalBytesExceeded));
     }
     let mut reader = File::open(source).map_err(|err| format!("opening bounded source: {err}"))?;
-    let temporary = target.with_extension(TEMP_FILE_EXTENSION);
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|err| format!("creating bounded target dir: {err}"))?;
-    }
-    let mut writer = File::create(&temporary).map_err(|err| format!("creating bounded target: {err}"))?;
+    let (mut writer, temporary) = create_owned_atomic_temp(target)?;
     let copied = std::io::copy(&mut std::io::Read::by_ref(&mut reader).take(max_bytes.saturating_add(1)), &mut writer)
         .map_err(|err| format!("copying bounded source: {err}"))?;
     if copied != metadata.len() || copied > max_bytes {
@@ -1554,34 +1644,199 @@ fn copy_file_bounded(source: &Path, target: &Path, max_bytes: u64) -> Result<(),
 }
 
 fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| format!("creating atomic parent {}: {err}", parent.display()))?;
+    let (mut file, temporary) = create_owned_atomic_temp(path)?;
+    if let Err(error) = file.write_all(bytes) {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("writing owned atomic temp: {error}"));
     }
-    let temporary = path.with_extension(TEMP_FILE_EXTENSION);
-    let mut file =
-        File::create(&temporary).map_err(|err| format!("creating atomic temp {}: {err}", temporary.display()))?;
-    file.write_all(bytes).map_err(|err| format!("writing atomic temp: {err}"))?;
     commit_atomic_file(file, &temporary, path)
+}
+
+fn create_owned_atomic_temp(target: &Path) -> Result<(File, PathBuf), String> {
+    let parent = target.parent().ok_or_else(|| format!("atomic target has no parent: {}", target.display()))?;
+    fs::create_dir_all(parent).map_err(|err| format!("creating atomic parent {}: {err}", parent.display()))?;
+    let target_name = target
+        .file_name()
+        .ok_or_else(|| format!("atomic target has no file name: {}", target.display()))?
+        .to_string_lossy();
+    for _ in 0..ATOMIC_TEMP_CREATE_ATTEMPTS {
+        let sequence = ATOMIC_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let name = format!(".{target_name}.{}.{}.{}", std::process::id(), sequence, ATOMIC_TEMP_FILE_SUFFIX);
+        let temporary = parent.join(name);
+        match open_new_file_no_follow(&temporary, false) {
+            Ok(file) => return Ok((file, temporary)),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("creating owned atomic temp {}: {error}", temporary.display())),
+        }
+    }
+    Err(format!("creating owned atomic temp exhausted {ATOMIC_TEMP_CREATE_ATTEMPTS} attempts"))
+}
+
+#[cfg(unix)]
+fn open_new_file_no_follow(path: &Path, read: bool) -> std::io::Result<File> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    OpenOptions::new()
+        .create_new(true)
+        .read(read)
+        .write(true)
+        .mode(PRIVATE_AUTHORITY_FILE_MODE)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+}
+
+#[cfg(not(unix))]
+fn open_new_file_no_follow(path: &Path, read: bool) -> std::io::Result<File> {
+    OpenOptions::new().create_new(true).read(read).write(true).open(path)
+}
+
+#[cfg(unix)]
+fn open_regular_file_no_follow(path: &Path, purpose: &str) -> Result<Option<File>, String> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let result = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path);
+    finish_regular_file_open(result, path, purpose)
+}
+
+#[cfg(not(unix))]
+fn open_regular_file_no_follow(path: &Path, purpose: &str) -> Result<Option<File>, String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Err(format!("{purpose} symlink rejected: {}", path.display()));
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("reading {purpose} metadata {}: {error}", path.display())),
+    }
+    finish_regular_file_open(File::open(path), path, purpose)
+}
+
+fn finish_regular_file_open(
+    result: std::io::Result<File>,
+    path: &Path,
+    purpose: &str,
+) -> Result<Option<File>, String> {
+    let file = match result {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("opening {purpose} without symlink following {}: {error}", path.display())),
+    };
+    let metadata = file.metadata().map_err(|error| format!("reading {purpose} metadata {}: {error}", path.display()))?;
+    if !metadata.is_file() {
+        return Err(format!("{purpose} is not a regular file: {}", path.display()));
+    }
+    assert!(metadata.is_file());
+    assert!(path.file_name().is_some());
+    Ok(Some(file))
 }
 
 fn commit_atomic_file(mut file: File, temporary: &Path, target: &Path) -> Result<(), String> {
     file.flush().map_err(|err| format!("flushing atomic temp: {err}"))?;
     file.sync_all().map_err(|err| format!("syncing atomic temp: {err}"))?;
-    drop(file);
-    fs::rename(temporary, target).map_err(|err| format!("committing atomic file {}: {err}", target.display()))?;
-    if let Some(parent) = target.parent() {
-        File::open(parent)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|err| format!("syncing atomic parent {}: {err}", parent.display()))?;
+    let temporary_metadata = file.metadata().map_err(|err| format!("reading atomic temp metadata: {err}"))?;
+    if !temporary_metadata.is_file() {
+        return Err("owned atomic temp is not a regular file".to_string());
     }
-    assert!(target.exists());
+    drop(file);
+    if let Err(error) = fs::rename(temporary, target) {
+        let _ = fs::remove_file(temporary);
+        return Err(format!("committing atomic file {}: {error}", target.display()));
+    }
+    let published = open_regular_file_no_follow(target, "published atomic file")?
+        .ok_or_else(|| "published atomic file disappeared".to_string())?;
+    verify_same_published_file(&temporary_metadata, &published.metadata().map_err(|err| err.to_string())?)?;
+    if let Some(parent) = target.parent() {
+        sync_parent_directory_no_follow(parent)?;
+    }
     assert!(!temporary.exists());
+    assert!(published.metadata().is_ok_and(|metadata| metadata.is_file()));
     Ok(())
 }
 
+#[cfg(unix)]
+fn sync_parent_directory_no_follow(parent: &Path) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let directory = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(parent)
+        .map_err(|error| format!("opening atomic parent without symlink following {}: {error}", parent.display()))?;
+    let metadata = directory
+        .metadata()
+        .map_err(|error| format!("reading atomic parent metadata {}: {error}", parent.display()))?;
+    if !metadata.is_dir() {
+        return Err(format!("atomic parent is not a directory: {}", parent.display()));
+    }
+    directory.sync_all().map_err(|error| format!("syncing atomic parent {}: {error}", parent.display()))?;
+    assert!(metadata.is_dir());
+    assert!(parent.file_name().is_some() || parent.parent().is_none());
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory_no_follow(parent: &Path) -> Result<(), String> {
+    if fs::symlink_metadata(parent).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(format!("atomic parent symlink rejected: {}", parent.display()));
+    }
+    let directory = File::open(parent).map_err(|error| format!("opening atomic parent {}: {error}", parent.display()))?;
+    let metadata = directory
+        .metadata()
+        .map_err(|error| format!("reading atomic parent metadata {}: {error}", parent.display()))?;
+    if !metadata.is_dir() {
+        return Err(format!("atomic parent is not a directory: {}", parent.display()));
+    }
+    directory.sync_all().map_err(|error| format!("syncing atomic parent {}: {error}", parent.display()))
+}
+
+#[cfg(unix)]
+fn verify_same_published_file(before: &fs::Metadata, after: &fs::Metadata) -> Result<(), String> {
+    use std::os::unix::fs::MetadataExt;
+
+    if before.dev() != after.dev() || before.ino() != after.ino() {
+        return Err("atomic destination changed during publication".to_string());
+    }
+    assert_eq!(before.dev(), after.dev());
+    assert_eq!(before.ino(), after.ino());
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn verify_same_published_file(before: &fs::Metadata, after: &fs::Metadata) -> Result<(), String> {
+    if !after.is_file() || before.len() != after.len() {
+        return Err("atomic destination changed during publication".to_string());
+    }
+    assert!(after.is_file());
+    assert_eq!(before.len(), after.len());
+    Ok(())
+}
+
+fn remove_file_if_present(path: &Path, purpose: &str) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("{purpose} {}: {error}", path.display())),
+    }
+}
+
+fn remove_directory_if_present(path: &Path, purpose: &str) -> Result<(), String> {
+    match fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("{purpose} {}: {error}", path.display())),
+    }
+}
+
+fn path_entry_exists_no_follow(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok()
+}
+
 fn invalidate_transfer_state_file(path: &Path) -> Result<(), String> {
-    fs::remove_file(path).map_err(|err| format!("invalidating stale transfer state: {err}"))?;
-    assert!(!path.exists());
+    remove_file_if_present(path, "invalidating stale transfer state")?;
+    assert!(!path_entry_exists_no_follow(path));
     assert!(path.extension().is_some_and(|extension| extension == "json"));
     Ok(())
 }
@@ -1928,6 +2183,139 @@ mod tests {
             RemoteTransferStateLoad::ExpiredInvalidated,
         );
         assert!(!path.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn authority_checkpoint_and_lock_symlinks_fail_closed() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap();
+        let prepared = prepared_fixture(&root.path().join("prepared"));
+        let state_dir = root.path().join("state");
+        let receiver = root.path().join("receiver");
+        execute_prepared_remote_transfer(
+            &prepared,
+            RemoteTransferPolicy::default(),
+            &state_dir,
+            &receiver,
+            admitted_options(Some(FIRST_CHUNK_COUNT)),
+        )
+        .unwrap();
+        let scope = remote_transfer_scope(&prepared.manifest);
+        let checkpoint = remote_transfer_state_path(&state_dir, &scope.session_id);
+        let checkpoint_bytes = fs::read(&checkpoint).unwrap();
+        let checkpoint_victim = root.path().join("checkpoint-victim");
+        fs::write(&checkpoint_victim, &checkpoint_bytes).unwrap();
+        fs::remove_file(&checkpoint).unwrap();
+        symlink(&checkpoint_victim, &checkpoint).unwrap();
+
+        let checkpoint_error = load_remote_transfer_state(
+            &state_dir,
+            &scope,
+            RemoteTransferPolicy::default(),
+            TEST_NOW_UNIX_S,
+        )
+        .unwrap_err();
+        assert!(checkpoint_error.contains("without symlink following"));
+        assert_eq!(fs::read(&checkpoint_victim).unwrap(), checkpoint_bytes);
+
+        let fresh_state = root.path().join("fresh-state");
+        let lock_dir = fresh_state.join(REMOTE_TRANSFER_STATE_DIR);
+        fs::create_dir_all(&lock_dir).unwrap();
+        let lock_path = lock_dir.join(format!("{}.lock", scope.session_id.as_str()));
+        let lock_victim = root.path().join("lock-victim");
+        fs::write(&lock_victim, b"unchanged").unwrap();
+        symlink(&lock_victim, &lock_path).unwrap();
+        let lock_error = acquire_remote_transfer_session_lock(&fresh_state, &scope.session_id).unwrap_err();
+        assert!(lock_error.contains("without symlink following"));
+        assert_eq!(fs::read(&lock_victim).unwrap(), b"unchanged");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receiver_chunk_symlink_is_never_accepted_as_verified_content() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap();
+        let prepared = prepared_fixture(&root.path().join("prepared"));
+        let state_dir = root.path().join("state");
+        let receiver = root.path().join("receiver");
+        let first = execute_prepared_remote_transfer(
+            &prepared,
+            RemoteTransferPolicy::default(),
+            &state_dir,
+            &receiver,
+            admitted_options(Some(FIRST_CHUNK_COUNT)),
+        )
+        .unwrap();
+        let digest = RemoteTransferDigest::new(first.sent_chunk_digests[0].clone()).unwrap();
+        let chunk = receiver_chunk_path(&receiver, &digest);
+        let victim = root.path().join("valid-chunk-victim");
+        fs::rename(&chunk, &victim).unwrap();
+        symlink(&victim, &chunk).unwrap();
+
+        let error = probe_remote_transfer_receiver(
+            &receiver,
+            &prepared.manifest,
+            admitted_options(None).admission,
+        )
+        .unwrap_err();
+        assert!(error.contains("without symlink following"));
+        assert!(victim.is_file());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn owned_atomic_publication_rejects_temp_and_destination_substitution() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap();
+        let victim = root.path().join("victim");
+        fs::write(&victim, b"victim-unchanged").unwrap();
+        let target = root.path().join("checkpoint.json");
+        let legacy_predictable_temp = target.with_extension(ATOMIC_TEMP_FILE_SUFFIX);
+        symlink(&victim, &legacy_predictable_temp).unwrap();
+        symlink(&victim, &target).unwrap();
+
+        write_atomic_bytes(&target, b"published").unwrap();
+        assert_eq!(fs::read(&victim).unwrap(), b"victim-unchanged");
+        assert_eq!(fs::read(&target).unwrap(), b"published");
+        assert!(fs::symlink_metadata(&target).unwrap().file_type().is_file());
+        assert!(fs::symlink_metadata(&legacy_predictable_temp).unwrap().file_type().is_symlink());
+
+        let owned = root.path().join("owned-temp");
+        fs::write(&owned, b"preexisting").unwrap();
+        let error = open_new_file_no_follow(&owned, false).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::AlreadyExists);
+        assert_eq!(fs::read(&owned).unwrap(), b"preexisting");
+
+        let other = root.path().join("other");
+        fs::write(&other, b"different-inode").unwrap();
+        let race_error = verify_same_published_file(&fs::metadata(&target).unwrap(), &fs::metadata(&other).unwrap())
+            .unwrap_err();
+        assert_eq!(race_error, "atomic destination changed during publication");
+
+        let real_parent = root.path().join("real-parent");
+        fs::create_dir(&real_parent).unwrap();
+        let replaced_parent = root.path().join("replaced-parent");
+        symlink(&real_parent, &replaced_parent).unwrap();
+        let parent_error = sync_parent_directory_no_follow(&replaced_parent).unwrap_err();
+        assert!(parent_error.contains("without symlink following"));
+    }
+
+    #[test]
+    fn bounded_checkpoint_reader_rejects_growth_beyond_metadata_snapshot() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("growing-checkpoint");
+        let file = File::create(&path).unwrap();
+        file.set_len(MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD.saturating_add(1))
+            .unwrap();
+        drop(file);
+        let opened = File::open(&path).unwrap();
+        let error = read_transfer_checkpoint_bounded(opened, 1).unwrap_err();
+        assert_eq!(error, "remote-transfer-checkpoint-grew-beyond-limit");
+        assert_eq!(fs::metadata(path).unwrap().len(), MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD + 1);
     }
 
     #[test]

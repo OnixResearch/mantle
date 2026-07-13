@@ -104,6 +104,8 @@ const EMPTY_TRUSTED_PUBLIC_KEY_COUNT: usize = 0;
 const REMOTE_CLIENT_BUILD_REPORT_SCHEMA: &str = "mantle-remote-client-build-v1";
 const BUILD_JSON_REPORT_SCHEMA: &str = "crunch-build-report-v1";
 const REMOTE_BUILD_HERMETICITY_MODE: &str = "practical";
+const REMOTE_TEST_INTERRUPT_AFTER_INPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_INPUT_CHUNKS";
+const REMOTE_TEST_INTERRUPT_AFTER_OUTPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS";
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
@@ -1833,6 +1835,10 @@ pub enum RemoteAction {
         /// Input ref already present on this builder; repeat for multiple refs
         #[arg(long = "present-input-ref")]
         present_input_refs: Vec<String>,
+
+        /// Separate worker execution/CAS state; defaults to the global state directory.
+        #[arg(long, hide = true)]
+        execution_state_dir: Option<PathBuf>,
     },
 }
 
@@ -3505,7 +3511,7 @@ fn remote_build_selection(
     let ticket = ticket.ok_or_else(|| RunError::Internal("remote build dispatch requires --ticket".to_string()))?;
     let ticket = remote_build::parse_remote_ticket_credential(ticket).map_err(RunError::Internal)?;
     let (program, args) = remote_stdio_builder_command(builder, builder_program, builder_args, ctx)?;
-    let trusted_output_keys = remote_trusted_builder_keys(trusted_builder_keys, builder_program, ctx)?;
+    let trusted_output_keys = remote_trusted_builder_keys(trusted_builder_keys, builder_program, builder, ctx)?;
     let options = remote_build::RemoteClientBuildOptions {
         store_prefix: ctx.store_prefix.clone(),
         ticket,
@@ -3540,11 +3546,14 @@ fn remote_stdio_builder_command(
     }
     let program =
         std::env::current_exe().map_err(|err| RunError::Internal(format!("resolving current executable: {err}")))?;
+    let worker_root = local_remote_worker_root(ctx, builder);
+    let worker_state_dir = worker_root.join("state");
+    let worker_store_dir = worker_root.join("store");
     let args = vec![
         "--state-dir".to_string(),
         ctx.resolved_state_dir.display().to_string(),
         "--store".to_string(),
-        ctx.store.display().to_string(),
+        worker_store_dir.display().to_string(),
         "--store-prefix".to_string(),
         ctx.store_prefix.clone(),
         "remote".to_string(),
@@ -3555,13 +3564,21 @@ fn remote_stdio_builder_command(
         "stdio-once".to_string(),
         "--executor".to_string(),
         "local-build".to_string(),
+        "--execution-state-dir".to_string(),
+        worker_state_dir.display().to_string(),
     ];
     Ok((program, args))
+}
+
+fn local_remote_worker_root(ctx: &RunContext, builder: &str) -> PathBuf {
+    let identity = blake3::hash(builder.as_bytes()).to_hex().to_string();
+    ctx.resolved_state_dir.join("remote-workers").join(identity)
 }
 
 fn remote_trusted_builder_keys(
     trusted_builder_keys: &[String],
     builder_program: Option<&Path>,
+    builder: &str,
     ctx: &RunContext,
 ) -> Result<Vec<String>, RunError> {
     if !trusted_builder_keys.is_empty() {
@@ -3572,7 +3589,8 @@ fn remote_trusted_builder_keys(
             "remote build dispatch with --builder-program requires --trusted-builder-key".to_string(),
         ));
     }
-    let keypair = build_cmd::load_or_generate_signing_keypair(None, &ctx.resolved_state_dir, false)?;
+    let worker_state_dir = local_remote_worker_root(ctx, builder).join("state");
+    let keypair = build_cmd::load_or_generate_signing_keypair(None, &worker_state_dir, false)?;
     Ok(vec![keypair.verifying_key.name().to_string()])
 }
 
@@ -3655,6 +3673,8 @@ async fn run_remote_build_dispatches_async(
     state_dir: &Path,
     store_prefix: &str,
 ) -> Result<remote_build::RemoteClientBuildReport, RunError> {
+    let _coordinator_mutation_guard = remote_build::acquire_remote_coordinator_mutation_guard(state_dir)
+        .map_err(RunError::Internal)?;
     let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
@@ -3685,6 +3705,28 @@ async fn run_remote_build_dispatches_async(
             state_dir,
         )
         .map_err(|err| RunError::Internal(format!("remote production transfer binding failed: {err}")))?;
+        if cfg!(debug_assertions)
+            && let Some(value) = std::env::var_os(REMOTE_TEST_INTERRUPT_AFTER_INPUT_CHUNKS_ENV)
+        {
+            let chunk_count = value
+                .to_str()
+                .ok_or_else(|| RunError::Internal("remote test input interruption count is not UTF-8".to_string()))?
+                .parse::<u32>()
+                .map_err(|err| RunError::Internal(format!("remote test input interruption count is invalid: {err}")))?;
+            remote_build::set_remote_production_interrupt_after_input_chunks(&mut plan.command, chunk_count)
+                .map_err(RunError::Internal)?;
+        }
+        if cfg!(debug_assertions)
+            && let Some(value) = std::env::var_os(REMOTE_TEST_INTERRUPT_AFTER_OUTPUT_CHUNKS_ENV)
+        {
+            let chunk_count = value
+                .to_str()
+                .ok_or_else(|| RunError::Internal("remote test interruption count is not UTF-8".to_string()))?
+                .parse::<u32>()
+                .map_err(|err| RunError::Internal(format!("remote test interruption count is invalid: {err}")))?;
+            remote_build::set_remote_production_interrupt_after_output_chunks(&mut plan.command, chunk_count)
+                .map_err(RunError::Internal)?;
+        }
         let request = plan.client.request.clone();
         remote_build::prepare_remote_production_input_transfer(
             &store,

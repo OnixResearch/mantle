@@ -5,6 +5,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;
+use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
@@ -50,6 +52,7 @@ use crunch_build::distributed::RemoteTransferManifest;
 use crunch_build::distributed::RemoteTransferPolicy;
 use crunch_build::distributed::RemoteTransferReasonCode;
 use crunch_build::distributed::acknowledge_remote_transfer_chunk;
+use fs2::FileExt;
 use crunch_build::distributed::canonicalize_remote_transfer_manifest;
 use nix_compat::store_path::StorePath;
 use rand::RngCore;
@@ -95,6 +98,9 @@ pub const MAX_TICKET_DISPLAY_NAME_BYTES: usize = 128;
 const TICKET_STATE_DIR: &str = "remote-builders";
 const TICKET_STATE_FILE: &str = "tickets.json";
 const COORDINATOR_STATE_FILE: &str = "remote-coordinator-state.json";
+const COORDINATOR_MUTATION_LOCK_FILE: &str = "remote-coordinator-mutation.lock";
+#[cfg(unix)]
+const COORDINATOR_LOCK_FILE_MODE: u32 = 0o600;
 const SECRET_REDACTION: &str = "<redacted>";
 const TEMP_FILE_EXTENSION: &str = "tmp";
 const REMOTE_FRAME_HEADER_BYTES: usize = std::mem::size_of::<u32>();
@@ -958,6 +964,7 @@ pub struct RemoteProductionTransferClient {
     pub transfer_policy: RemoteTransferPolicy,
     pub trusted_output_keys: Vec<String>,
     pub input_transfer: Option<crate::remote_transfer::PreparedRemoteTransfer>,
+    pub interrupt_after_input_chunks: Option<u32>,
     pub interrupt_after_output_chunks: Option<u32>,
 }
 
@@ -2063,10 +2070,45 @@ pub fn bind_remote_production_dispatch(
         transfer_policy,
         trusted_output_keys: plan.client.trusted_output_keys.clone(),
         input_transfer: None,
+        interrupt_after_input_chunks: None,
         interrupt_after_output_chunks: None,
     });
     assert!(plan.client.request.production_attempt.is_some());
     assert!(plan.client.request.transfer_policy.is_some());
+    Ok(())
+}
+
+pub fn set_remote_production_interrupt_after_input_chunks(
+    command: &mut RemoteStdioCommand,
+    chunk_count: u32,
+) -> Result<(), String> {
+    if chunk_count == 0 {
+        return Err("remote-production-interrupt-chunk-count-zero".to_string());
+    }
+    let production = command
+        .production_transfer
+        .as_mut()
+        .ok_or_else(|| "remote-production-transfer-context-missing".to_string())?;
+    production.interrupt_after_input_chunks = Some(chunk_count);
+    assert_eq!(production.interrupt_after_input_chunks, Some(chunk_count));
+    assert!(chunk_count > 0);
+    Ok(())
+}
+
+pub fn set_remote_production_interrupt_after_output_chunks(
+    command: &mut RemoteStdioCommand,
+    chunk_count: u32,
+) -> Result<(), String> {
+    if chunk_count == 0 {
+        return Err("remote-production-interrupt-chunk-count-zero".to_string());
+    }
+    let production = command
+        .production_transfer
+        .as_mut()
+        .ok_or_else(|| "remote-production-transfer-context-missing".to_string())?;
+    production.interrupt_after_output_chunks = Some(chunk_count);
+    assert_eq!(production.interrupt_after_output_chunks, Some(chunk_count));
+    assert!(chunk_count > 0);
     Ok(())
 }
 
@@ -2707,10 +2749,9 @@ async fn materialize_streamed_remote_inputs(
         if descriptor.artifact_kind != RemoteTransferArtifactKind::Nar {
             return Err("remote-streamed-input-artifact-kind-mismatch".to_string());
         }
-        let path = crate::remote_transfer::remote_transfer_received_artifact_path(receiver_root, &artifact_id);
-        let mut reader = tokio::fs::File::open(&path)
-            .await
+        let reader = crate::remote_transfer::open_remote_transfer_received_artifact(receiver_root, &artifact_id)
             .map_err(|err| format!("remote-streamed-input-open-failed: {err}"))?;
+        let mut reader = tokio::fs::File::from_std(reader);
         let (node, nar_sha256, nar_size) = snix_store::nar::ingest_nar_and_hash(
             store.blob_service(),
             store.directory_service(),
@@ -4888,11 +4929,34 @@ fn send_prepared_remote_transfer(
     direction: crate::remote_transfer::RemoteTransferDirection,
     demand_frame: RemoteTransferDemandFrame,
 ) -> Result<crate::remote_transfer::RemoteTransferShellReport, String> {
+    send_prepared_remote_transfer_with_fence_validator(
+        reader,
+        writer,
+        prepared,
+        policy,
+        direction,
+        demand_frame,
+        None,
+        &mut || Ok(()),
+    )
+}
+
+fn send_prepared_remote_transfer_with_fence_validator(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    prepared: &crate::remote_transfer::PreparedRemoteTransfer,
+    policy: RemoteTransferPolicy,
+    direction: crate::remote_transfer::RemoteTransferDirection,
+    demand_frame: RemoteTransferDemandFrame,
+    interrupt_after_chunks: Option<u32>,
+    validate_fence: &mut impl FnMut() -> Result<(), String>,
+) -> Result<crate::remote_transfer::RemoteTransferShellReport, String> {
     if demand_frame.direction != direction || demand_frame.demand.scope != crunch_build::distributed::remote_transfer_scope(&prepared.manifest) {
         return Err("remote-transfer-demand-scope-mismatch".to_string());
     }
     let initial_transferred_bytes = demand_frame.sender_state.transferred_bytes;
     let mut sender_state = demand_frame.sender_state;
+    let mut sent_chunks = 0_u32;
     for missing in &demand_frame.demand.missing_chunks {
         let frame = read_expected_remote_frame(reader, RemoteFrameKind::TransferCredit)?;
         let RemoteFrame::TransferCredit { transfer } = frame else {
@@ -4901,6 +4965,7 @@ fn send_prepared_remote_transfer(
         if transfer.direction != direction || transfer.missing != *missing {
             return Err("remote-transfer-credit-demand-mismatch".to_string());
         }
+        validate_fence()?;
         let reserved = crate::remote_transfer::write_remote_transfer_data_chunk(
             &mut *writer,
             prepared,
@@ -4933,7 +4998,14 @@ fn send_prepared_remote_transfer(
             progress_step,
         )
         .map_err(|reason| reason.as_str().to_string())?;
+        sent_chunks = sent_chunks
+            .checked_add(1)
+            .ok_or_else(|| "remote-transfer-sent-chunk-count-overflow".to_string())?;
+        if interrupt_after_chunks.is_some_and(|limit| sent_chunks >= limit) {
+            return Err("remote-production-input-transfer-interrupted-after-checkpoint".to_string());
+        }
     }
+    validate_fence()?;
     let complete = read_expected_remote_frame(reader, RemoteFrameKind::TransferComplete)?;
     let RemoteFrame::TransferComplete {
         direction: complete_direction,
@@ -4945,6 +5017,7 @@ fn send_prepared_remote_transfer(
     if complete_direction != direction || report.manifest_digest_blake3 != prepared.manifest.digest_blake3.as_str() {
         return Err("remote-transfer-completion-manifest-mismatch".to_string());
     }
+    validate_fence()?;
     assert!(sender_state.in_flight.is_empty());
     assert!(report.transferred_bytes >= initial_transferred_bytes);
     Ok(report)
@@ -4959,6 +5032,30 @@ fn receive_remote_transfer_interactively(
     attempt: Option<&RemoteProductionAttemptBinding>,
     interrupt_after_chunks: Option<u32>,
 ) -> Result<Option<crate::remote_transfer::RemoteTransferShellReport>, String> {
+    let mut validate_fence = || {
+        if let (Some(state_dir), Some(attempt)) = (state_dir, attempt) {
+            validate_current_production_attempt(state_dir, attempt)?;
+        }
+        Ok(())
+    };
+    receive_remote_transfer_interactively_with_fence_validator(
+        reader,
+        writer,
+        session,
+        direction,
+        interrupt_after_chunks,
+        &mut validate_fence,
+    )
+}
+
+fn receive_remote_transfer_interactively_with_fence_validator(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    session: &mut crate::remote_transfer::RemoteTransferReceiveSession,
+    direction: crate::remote_transfer::RemoteTransferDirection,
+    interrupt_after_chunks: Option<u32>,
+    validate_fence: &mut impl FnMut() -> Result<(), String>,
+) -> Result<Option<crate::remote_transfer::RemoteTransferShellReport>, String> {
     let demand = RemoteTransferDemandFrame {
         direction,
         demand: session.demand().clone(),
@@ -4968,9 +5065,7 @@ fn receive_remote_transfer_interactively(
     let missing_chunks = session.demand().missing_chunks.clone();
     let mut received_chunks = 0_u32;
     for missing in &missing_chunks {
-        if let (Some(state_dir), Some(attempt)) = (state_dir, attempt) {
-            validate_current_production_attempt(state_dir, attempt)?;
-        }
+        validate_fence()?;
         let grant = session.credit_for_chunk(missing)?;
         write_remote_control_frame(
             writer,
@@ -4983,6 +5078,12 @@ fn receive_remote_transfer_interactively(
             },
         )?;
         let acknowledgement = session.receive_chunk(&mut *reader)?;
+        if let Err(reason) = validate_fence() {
+            session
+                .invalidate_fenced_progress()
+                .map_err(|invalidation| format!("{reason}; remote-transfer-fence-invalidation-failed: {invalidation}"))?;
+            return Err(reason);
+        }
         received_chunks = received_chunks
             .checked_add(1)
             .ok_or_else(|| "remote-transfer-received-chunk-count-overflow".to_string())?;
@@ -5039,13 +5140,16 @@ fn run_remote_production_client_protocol(
         let RemoteFrame::TransferDemand { transfer: demand } = demand else {
             unreachable!("frame kind checked");
         };
-        let complete = send_prepared_remote_transfer(
+        let mut validate_upload_fence = || validate_current_production_attempt(&production.state_dir, attempt);
+        let complete = send_prepared_remote_transfer_with_fence_validator(
             &mut stdout,
             &mut stdin,
             input_transfer,
             policy,
             crate::remote_transfer::RemoteTransferDirection::Upload,
             demand,
+            production.interrupt_after_input_chunks,
+            &mut validate_upload_fence,
         )?;
         frames.push(RemoteFrame::TransferComplete {
             direction: crate::remote_transfer::RemoteTransferDirection::Upload,
@@ -5107,7 +5211,15 @@ fn run_remote_production_client_protocol(
         Some(attempt),
         production.interrupt_after_output_chunks,
     )?;
+    validate_current_production_attempt(&production.state_dir, attempt)?;
     let report = session.finish()?;
+    if let Err(reason) = validate_current_production_attempt(&production.state_dir, attempt) {
+        session
+            .invalidate_fenced_progress()
+            .map_err(|invalidation| format!("{reason}; remote-transfer-fence-invalidation-failed: {invalidation}"))?;
+        return Err(reason);
+    }
+    validate_current_production_attempt(&production.state_dir, attempt)?;
     write_remote_control_frame(
         &mut stdin,
         &RemoteFrame::TransferComplete {
@@ -5150,6 +5262,74 @@ fn drain_bounded_pipe(mut reader: impl Read, retained_bytes_max: usize) -> Resul
     Ok((retained, exceeded))
 }
 
+#[cfg(unix)]
+fn configure_remote_child_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    // SAFETY: setpgid is async-signal-safe and touches only the child process.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setpgid(0, 0) == 0 {
+                return Ok(());
+            }
+            Err(std::io::Error::last_os_error())
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn configure_remote_child_process_group(_command: &mut Command) {}
+
+#[cfg(unix)]
+fn terminate_remote_child_tree(child: &mut std::process::Child) -> Result<(), RunError> {
+    let process_group = i32::try_from(child.id())
+        .map_err(|_| RunError::Internal("stdio remote child pid does not fit process-group id".to_string()))?;
+    let result = unsafe { libc::kill(-process_group, libc::SIGKILL) };
+    if result != 0 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() != Some(libc::ESRCH) {
+            return Err(RunError::Internal(format!("killing stdio remote child process group: {error}")));
+        }
+    }
+    child
+        .wait()
+        .map_err(|error| RunError::Internal(format!("reaping stdio remote child: {error}")))?;
+    assert!(child.try_wait().is_ok_and(|status| status.is_some()));
+    assert!(process_group > 0);
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn terminate_remote_child_tree(child: &mut std::process::Child) -> Result<(), RunError> {
+    child
+        .kill()
+        .map_err(|error| RunError::Internal(format!("killing stdio remote child: {error}")))?;
+    child
+        .wait()
+        .map_err(|error| RunError::Internal(format!("reaping stdio remote child: {error}")))?;
+    Ok(())
+}
+
+fn wait_for_remote_child_teardown(child: &mut std::process::Child) -> Result<(), RunError> {
+    let deadline = Instant::now()
+        .checked_add(Duration::from_secs(REMOTE_CHILD_TEARDOWN_TIMEOUT_SECS))
+        .ok_or_else(|| RunError::Internal("stdio remote child teardown deadline overflow".to_string()))?;
+    loop {
+        if child
+            .try_wait()
+            .map_err(|error| RunError::Internal(format!("polling stdio remote child teardown: {error}")))?
+            .is_some()
+        {
+            assert!(Instant::now() <= deadline);
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return terminate_remote_child_tree(child);
+        }
+        thread::sleep(Duration::from_millis(REMOTE_CHILD_POLL_INTERVAL_MS));
+    }
+}
+
 fn run_production_stdio_remote_child(
     mut child: std::process::Child,
     command: &RemoteStdioCommand,
@@ -5189,8 +5369,7 @@ fn run_production_stdio_remote_child(
             }
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
+            terminate_remote_child_tree(&mut child)?;
             return Err(RunError::Internal(format!(
                 "stdio remote child timed out after {} seconds phase={:?}",
                 command.timeout_secs,
@@ -5200,9 +5379,10 @@ fn run_production_stdio_remote_child(
         thread::sleep(Duration::from_millis(REMOTE_CHILD_POLL_INTERVAL_MS));
     };
     if protocol_result.is_err() {
-        let _ = child.kill();
+        terminate_remote_child_tree(&mut child)?;
+    } else {
+        wait_for_remote_child_teardown(&mut child)?;
     }
-    let _ = child.wait();
     let teardown_timeout = Duration::from_secs(REMOTE_CHILD_TEARDOWN_TIMEOUT_SECS);
     let (stderr, stderr_exceeded) = stderr_rx
         .recv_timeout(teardown_timeout)
@@ -5230,15 +5410,16 @@ pub fn run_stdio_remote_child(command: &RemoteStdioCommand) -> Result<RemoteStdi
             command.timeout_secs
         )));
     }
-    let mut child = Command::new(&command.program)
+    let mut process = Command::new(&command.program);
+    process
         .args(&command.args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|err| {
-            RunError::Internal(format!("spawning stdio remote child {}: {err}", command.program.display()))
-        })?;
+        .stderr(Stdio::piped());
+    configure_remote_child_process_group(&mut process);
+    let mut child = process.spawn().map_err(|err| {
+        RunError::Internal(format!("spawning stdio remote child {}: {err}", command.program.display()))
+    })?;
     if let Some(production) = command.production_transfer.as_ref() {
         return run_production_stdio_remote_child(child, command, production);
     }
@@ -5283,8 +5464,7 @@ fn wait_for_stdio_child_output(
             });
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
+            terminate_remote_child_tree(&mut child)?;
             return Err(RunError::Internal(format!(
                 "stdio remote child timed out after {timeout_secs} seconds phase={:?}",
                 RemoteFailurePhase::TransportSetup
@@ -6333,8 +6513,16 @@ fn validate_streamed_output_receiver_files(
             &streaming.receiver_root,
             &pathinfo_id,
         );
-        let observed_pathinfo = fs::read(&pathinfo_path)
+        let pathinfo_file = crate::remote_transfer::open_remote_transfer_authority_file(&pathinfo_path)
+            .map_err(|err| format!("opening streamed PathInfo {}: {err}", pathinfo_path.display()))?;
+        let mut observed_pathinfo = Vec::new();
+        pathinfo_file
+            .take(u64::try_from(MAX_REMOTE_FRAME_BYTES).unwrap_or(u64::MAX).saturating_add(1))
+            .read_to_end(&mut observed_pathinfo)
             .map_err(|err| format!("reading streamed PathInfo {}: {err}", pathinfo_path.display()))?;
+        if observed_pathinfo.len() > MAX_REMOTE_FRAME_BYTES {
+            return Err("remote-output-streamed-pathinfo-too-large".to_string());
+        }
         if observed_pathinfo != serialize_remote_pathinfo_payload(path_info)? {
             return Err("remote-output-streamed-pathinfo-mismatch".to_string());
         }
@@ -6442,9 +6630,8 @@ fn plan_streamed_remote_output_import_action(
     validate_remote_output_pathinfo(output, &path_info, &store_path, &request.store_prefix)?;
     let nar_id = remote_output_nar_artifact_id(&output.name, &output.logical_path)?;
     let nar_path = crate::remote_transfer::remote_transfer_received_artifact_path(&streaming.receiver_root, &nar_id);
-    if !nar_path.is_file() {
-        return Err("remote-output-streamed-nar-missing".to_string());
-    }
+    crate::remote_transfer::open_remote_transfer_authority_file(&nar_path)
+        .map_err(|_| "remote-output-streamed-nar-missing".to_string())?;
     Ok(RemoteOutputImportAction {
         output_name: output.name.clone(),
         logical_path: output.logical_path.clone(),
@@ -6667,9 +6854,9 @@ async fn ingest_remote_output_nar_payload(
         )
         .await
     } else if let Some(path) = &action.nar_path {
-        let mut reader = tokio::fs::File::open(path)
-            .await
+        let reader = crate::remote_transfer::open_remote_transfer_authority_file(path)
             .map_err(|err| format!("remote-output-streamed-nar-open-failed: {err}"))?;
+        let mut reader = tokio::fs::File::from_std(reader);
         snix_store::nar::ingest_nar_and_hash(
             store.blob_service(),
             store.directory_service(),
@@ -7346,6 +7533,57 @@ fn coordinator_state_path(state_dir: &Path) -> PathBuf {
     state_dir.join(COORDINATOR_STATE_FILE)
 }
 
+#[derive(Debug)]
+pub struct RemoteCoordinatorMutationGuard {
+    _file: File,
+}
+
+pub fn acquire_remote_coordinator_mutation_guard(
+    state_dir: &Path,
+) -> Result<RemoteCoordinatorMutationGuard, String> {
+    fs::create_dir_all(state_dir).map_err(|err| format!("creating coordinator state dir: {err}"))?;
+    let path = state_dir.join(COORDINATOR_MUTATION_LOCK_FILE);
+    let file = open_coordinator_lock_no_follow(&path)?;
+    FileExt::try_lock_exclusive(&file)
+        .map_err(|err| format!("remote-coordinator-mutation-lock-busy: {err}"))?;
+    let metadata = file
+        .metadata()
+        .map_err(|err| format!("reading coordinator mutation lock metadata: {err}"))?;
+    if !metadata.is_file() {
+        return Err("remote-coordinator-mutation-lock-not-regular".to_string());
+    }
+    assert!(metadata.is_file());
+    assert_eq!(path.parent(), Some(state_dir));
+    Ok(RemoteCoordinatorMutationGuard { _file: file })
+}
+
+#[cfg(unix)]
+fn open_coordinator_lock_no_follow(path: &Path) -> Result<File, String> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .mode(COORDINATOR_LOCK_FILE_MODE)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+        .map_err(|err| format!("opening coordinator mutation lock without symlink following: {err}"))
+}
+
+#[cfg(not(unix))]
+fn open_coordinator_lock_no_follow(path: &Path) -> Result<File, String> {
+    if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err("remote-coordinator-mutation-lock-symlink-rejected".to_string());
+    }
+    OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|err| format!("opening coordinator mutation lock: {err}"))
+}
+
 pub fn load_coordinator_state(state_dir: &Path) -> Result<RemoteCoordinatorState, RunError> {
     let path = coordinator_state_path(state_dir);
     if !path.exists() {
@@ -7601,6 +7839,7 @@ pub fn cmd_remote(
             signing_key_id,
             executor,
             present_input_refs,
+            execution_state_dir,
         } => cmd_remote_serve(
             endpoint_id,
             binding,
@@ -7609,6 +7848,7 @@ pub fn cmd_remote(
             present_input_refs,
             output_dir,
             state_dir,
+            execution_state_dir.as_deref().unwrap_or(state_dir),
             store_prefix,
             json_output,
         ),
@@ -7626,12 +7866,13 @@ fn remote_serve_executor(
         crate::RemoteServeExecutor::Fixture => Ok((fixture_signing_key_id, None)),
         crate::RemoteServeExecutor::LocalBuild => {
             let keypair = crate::build_cmd::load_or_generate_signing_keypair(None, state_dir, false)?;
+            let trusted_keys = vec![keypair.verifying_key.clone()];
             let local = RemoteLocalBuildExecutor {
                 state_dir: state_dir.to_path_buf(),
                 output_dir: output_dir.to_path_buf(),
                 store_prefix: store_prefix.to_string(),
                 keypair,
-                trusted_keys: Vec::new(),
+                trusted_keys,
                 trust_unsigned: false,
                 verbose: false,
             };
@@ -7957,6 +8198,7 @@ fn cmd_remote_serve(
     present_input_refs: Vec<String>,
     output_dir: &Path,
     state_dir: &Path,
+    execution_state_dir: &Path,
     store_prefix: &str,
     json_output: bool,
 ) -> Result<(), RunError> {
@@ -7967,7 +8209,7 @@ fn cmd_remote_serve(
         crate::RemoteServeBinding::StdioOnce => {
             let mut state = load_ticket_state(state_dir)?;
             let (builder_signing_key_id, local_executor) =
-                remote_serve_executor(executor, signing_key_id, output_dir, state_dir, store_prefix)?;
+                remote_serve_executor(executor, signing_key_id, output_dir, execution_state_dir, store_prefix)?;
             let builder = RemoteLoopbackBuilder {
                 endpoint_id,
                 store_prefix: store_prefix.to_string(),
@@ -7986,7 +8228,7 @@ fn cmd_remote_serve(
                         &builder,
                         &mut state,
                         &local_executor,
-                        state_dir,
+                        execution_state_dir,
                     )
                     .map_err(|err| RunError::Internal(format!("remote production stdio serve once: {err}")))?;
                     save_ticket_state(state_dir, &state)?;
@@ -8119,6 +8361,10 @@ mod tests {
     const TEST_RETRY_FAILURE_UNIX_S: u64 = 100;
     const TEST_HEARTBEAT_OBSERVED_UNIX_S: u64 = 101;
     const TEST_LOG_CURSOR: u64 = 1;
+    const TEST_INTERACTIVE_TRANSFER_BYTES: usize = 32_768;
+    const TEST_INTERACTIVE_PATTERN_MODULUS: usize = 251;
+    const TEST_INTERACTIVE_NOW_UNIX_S: u64 = 1_000;
+    const TEST_INTERACTIVE_LEASE_EXPIRES_UNIX_S: u64 = 2_000;
     const TEST_TRANSFER_CHECKPOINT: u64 = 1;
     const TEST_TRANSFERRED_BYTES: u64 = 64;
 
@@ -8258,6 +8504,303 @@ mod tests {
                 output_digest_blake3: TEST_ATTEMPT_OUTPUT_DIGEST.to_string(),
             });
         apply_fixture_attempt_report(state, &complete);
+    }
+
+    fn interactive_transfer_fixture(root: &Path) -> crate::remote_transfer::PreparedRemoteTransfer {
+        let policy = RemoteTransferPolicy::default();
+        let bytes = (0..TEST_INTERACTIVE_TRANSFER_BYTES)
+            .map(|index| u8::try_from(index % TEST_INTERACTIVE_PATTERN_MODULUS).unwrap())
+            .collect::<Vec<_>>();
+        let artifact = crate::remote_transfer::prepare_inline_fixture_or_bootstrap_artifact(
+            crate::remote_transfer::RemoteInlinePayloadCapability::Fixture,
+            RemoteTransferArtifactId::new("fence-fixture").unwrap(),
+            RemoteTransferArtifactKind::SourceBundle,
+            &bytes,
+            root,
+            true,
+            policy,
+        )
+        .unwrap();
+        let requested_content_blake3 = artifact.descriptor.digest_blake3.clone();
+        crate::remote_transfer::prepare_remote_transfer(
+            crate::remote_transfer::RemoteTransferBinding {
+                job_id: RemoteJobId::new("fence-job").unwrap(),
+                attempt_id: RemoteAttemptId::new("fence-attempt").unwrap(),
+                fence_generation: RemoteFenceGeneration::INITIAL,
+                store_prefix: "/mantle/store".to_string(),
+                requested_content_blake3,
+            },
+            policy,
+            vec![artifact],
+        )
+        .unwrap()
+    }
+
+    fn interactive_receive_session(
+        prepared: &crate::remote_transfer::PreparedRemoteTransfer,
+        state_dir: &Path,
+        receiver_root: &Path,
+    ) -> crate::remote_transfer::RemoteTransferReceiveSession {
+        crate::remote_transfer::begin_remote_transfer_receive(
+            prepared.manifest.manifest.clone(),
+            &prepared.manifest.digest_blake3,
+            RemoteTransferPolicy::default(),
+            state_dir,
+            receiver_root,
+            crate::remote_transfer::RemoteTransferRunOptions {
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                interrupt_after_chunks: None,
+                now_unix_s: TEST_INTERACTIVE_NOW_UNIX_S,
+                lease_expires_unix_s: TEST_INTERACTIVE_LEASE_EXPIRES_UNIX_S,
+                admission: crate::remote_transfer::RemoteTransferAdmissionFacts {
+                    required_closure_metadata_verified: true,
+                    path_info_admitted: true,
+                },
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn stale_final_chunk_invalidates_checkpoint_before_acknowledgement_or_completion() {
+        let root = tempfile::tempdir().unwrap();
+        let prepared = interactive_transfer_fixture(&root.path().join("spool"));
+        let state_dir = root.path().join("state");
+        let receiver_root = root.path().join("receiver");
+        let mut session = interactive_receive_session(&prepared, &state_dir, &receiver_root);
+        let demand = session.demand().clone();
+        let missing = demand.missing_chunks[0].clone();
+        let grant = session.credit_for_chunk(&missing).unwrap();
+        let mut incoming = Vec::new();
+        crate::remote_transfer::write_remote_transfer_data_chunk(
+            &mut incoming,
+            &prepared,
+            RemoteTransferPolicy::default(),
+            &demand,
+            &session.sender_credit_state(),
+            grant,
+            &missing,
+        )
+        .unwrap();
+        let mut validator_calls = 0_u32;
+        let mut validate = || {
+            validator_calls = validator_calls.checked_add(1).unwrap();
+            if validator_calls == 1 {
+                Ok(())
+            } else {
+                Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string())
+            }
+        };
+        let mut control = Vec::new();
+        let error = receive_remote_transfer_interactively_with_fence_validator(
+            &mut std::io::Cursor::new(incoming),
+            &mut control,
+            &mut session,
+            crate::remote_transfer::RemoteTransferDirection::Upload,
+            None,
+            &mut validate,
+        )
+        .unwrap_err();
+        assert_eq!(error, RemoteAttemptReasonCode::StaleReportRejected.as_str());
+        assert!(fs::symlink_metadata(crate::remote_transfer::remote_transfer_state_path(
+            &state_dir,
+            &prepared.manifest.manifest.session_id,
+        ))
+        .is_err());
+        assert!(fs::symlink_metadata(&receiver_root).is_err());
+        let mut frames = std::io::Cursor::new(control);
+        assert!(matches!(read_remote_frame(&mut frames).unwrap(), RemoteFrame::TransferDemand { .. }));
+        assert!(matches!(read_remote_frame(&mut frames).unwrap(), RemoteFrame::TransferCredit { .. }));
+        assert!(read_remote_frame(&mut frames).is_err());
+        assert!(session.finish().is_err());
+    }
+
+    #[test]
+    fn stale_input_attempt_stops_before_source_read_or_data_disclosure() {
+        let root = tempfile::tempdir().unwrap();
+        let prepared = interactive_transfer_fixture(&root.path().join("spool"));
+        let mut receiver = interactive_receive_session(
+            &prepared,
+            &root.path().join("state"),
+            &root.path().join("receiver"),
+        );
+        let demand = RemoteTransferDemandFrame {
+            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+            demand: receiver.demand().clone(),
+            sender_state: receiver.sender_credit_state(),
+        };
+        let missing = demand.demand.missing_chunks[0].clone();
+        let grant = receiver.credit_for_chunk(&missing).unwrap();
+        let mut control = Vec::new();
+        write_remote_control_frame(
+            &mut control,
+            &RemoteFrame::TransferCredit {
+                transfer: RemoteTransferCreditFrame {
+                    direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                    missing,
+                    grant,
+                },
+            },
+        )
+        .unwrap();
+        let mut disclosed = Vec::new();
+        let error = send_prepared_remote_transfer_with_fence_validator(
+            &mut std::io::Cursor::new(control),
+            &mut disclosed,
+            &prepared,
+            RemoteTransferPolicy::default(),
+            crate::remote_transfer::RemoteTransferDirection::Upload,
+            demand,
+            None,
+            &mut || Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string()),
+        )
+        .unwrap_err();
+        assert_eq!(error, RemoteAttemptReasonCode::StaleReportRejected.as_str());
+        assert!(disclosed.is_empty());
+        assert!(!receiver.demand().missing_chunks.is_empty());
+    }
+
+    #[test]
+    fn production_sender_rejects_excess_credit_before_source_disclosure() {
+        let root = tempfile::tempdir().unwrap();
+        let prepared = interactive_transfer_fixture(&root.path().join("spool"));
+        let receiver = interactive_receive_session(
+            &prepared,
+            &root.path().join("state"),
+            &root.path().join("receiver"),
+        );
+        let demand = RemoteTransferDemandFrame {
+            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+            demand: receiver.demand().clone(),
+            sender_state: receiver.sender_credit_state(),
+        };
+        let missing = demand.demand.missing_chunks[0].clone();
+        let mut control = Vec::new();
+        write_remote_control_frame(
+            &mut control,
+            &RemoteFrame::TransferCredit {
+                transfer: RemoteTransferCreditFrame {
+                    direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                    missing: missing.clone(),
+                    grant: RemoteTransferCreditGrant {
+                        bytes: u64::from(missing.chunk.size_bytes).saturating_add(1),
+                        chunks: 1,
+                    },
+                },
+            },
+        )
+        .unwrap();
+        let mut disclosed = Vec::new();
+        let error = send_prepared_remote_transfer_with_fence_validator(
+            &mut std::io::Cursor::new(control),
+            &mut disclosed,
+            &prepared,
+            RemoteTransferPolicy::default(),
+            crate::remote_transfer::RemoteTransferDirection::Upload,
+            demand,
+            None,
+            &mut || Ok(()),
+        )
+        .unwrap_err();
+        assert_eq!(error, RemoteTransferReasonCode::CreditGrantInvalid.as_str());
+        assert!(disclosed.is_empty());
+    }
+
+    #[test]
+    fn stale_input_final_chunk_is_rejected_before_transfer_completion() {
+        let root = tempfile::tempdir().unwrap();
+        let prepared = interactive_transfer_fixture(&root.path().join("spool"));
+        let mut receiver = interactive_receive_session(
+            &prepared,
+            &root.path().join("state"),
+            &root.path().join("receiver"),
+        );
+        let demand = RemoteTransferDemandFrame {
+            direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+            demand: receiver.demand().clone(),
+            sender_state: receiver.sender_credit_state(),
+        };
+        let missing = demand.demand.missing_chunks[0].clone();
+        let grant = receiver.credit_for_chunk(&missing).unwrap();
+        let mut data = Vec::new();
+        crate::remote_transfer::write_remote_transfer_data_chunk(
+            &mut data,
+            &prepared,
+            RemoteTransferPolicy::default(),
+            &demand.demand,
+            &demand.sender_state,
+            grant.clone(),
+            &missing,
+        )
+        .unwrap();
+        let acknowledgement = receiver.receive_chunk(std::io::Cursor::new(data)).unwrap();
+        let report = receiver.finish().unwrap();
+        let mut control = Vec::new();
+        for frame in [
+            RemoteFrame::TransferCredit {
+                transfer: RemoteTransferCreditFrame {
+                    direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                    missing,
+                    grant,
+                },
+            },
+            RemoteFrame::TransferAcknowledgement {
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                acknowledgement,
+            },
+            RemoteFrame::TransferComplete {
+                direction: crate::remote_transfer::RemoteTransferDirection::Upload,
+                report,
+            },
+        ] {
+            write_remote_control_frame(&mut control, &frame).unwrap();
+        }
+        let control_len = u64::try_from(control.len()).unwrap();
+        let mut reader = std::io::Cursor::new(control);
+        let mut validator_calls = 0_u32;
+        let mut validate = || {
+            validator_calls = validator_calls.checked_add(1).unwrap();
+            if validator_calls == 1 {
+                Ok(())
+            } else {
+                Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string())
+            }
+        };
+        let error = send_prepared_remote_transfer_with_fence_validator(
+            &mut reader,
+            &mut Vec::new(),
+            &prepared,
+            RemoteTransferPolicy::default(),
+            crate::remote_transfer::RemoteTransferDirection::Upload,
+            demand,
+            None,
+            &mut validate,
+        )
+        .unwrap_err();
+        assert_eq!(error, RemoteAttemptReasonCode::StaleReportRejected.as_str());
+        assert!(reader.position() < control_len);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn coordinator_mutation_guard_is_exclusive_and_rejects_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap();
+        let guard = acquire_remote_coordinator_mutation_guard(root.path()).unwrap();
+        let busy = acquire_remote_coordinator_mutation_guard(root.path()).unwrap_err();
+        assert!(busy.contains("remote-coordinator-mutation-lock-busy"));
+        drop(guard);
+        drop(acquire_remote_coordinator_mutation_guard(root.path()).unwrap());
+
+        let hostile = root.path().join("hostile");
+        fs::create_dir_all(&hostile).unwrap();
+        let victim = root.path().join("victim");
+        fs::write(&victim, b"unchanged").unwrap();
+        symlink(&victim, hostile.join(COORDINATOR_MUTATION_LOCK_FILE)).unwrap();
+        let rejected = acquire_remote_coordinator_mutation_guard(&hostile).unwrap_err();
+        assert!(rejected.contains("without symlink following"));
+        assert_eq!(fs::read(victim).unwrap(), b"unchanged");
     }
 
     #[test]
