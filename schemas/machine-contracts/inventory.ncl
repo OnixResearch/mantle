@@ -187,11 +187,11 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds the full report projection and all directly serialized owner modules",
       "freshness"= {
-        "schema_blake3"= "25f50fa3294c66f8191b70b42ba9446fa1d3058c7ae630025aebd07aaf192e75",
-        "contract_blake3"= "39d90100d5cf0268dd3a8514b719ab13296361d88c7312a60c5e30f36659099d",
+        "schema_blake3"= "af9be2a6e163cf291e741a7ff2b51670a933340236746a61139232704001aa44",
+        "contract_blake3"= "91470a788e37a61ac82f21b5579642735ea681787a7ed3a1fdd38ac43313a9e7",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "805f1b747e533a0a802bd2c10e749b2bceba95dd9704de1c967a5446bf3feadc",
-        "producer_identity_blake3"= "dae63b9500471a7caa3e55a417fcd272197422ee28dd452cb1642c2ed6523c79",
+        "fixture_set_blake3"= "85b288de31a968fb972c8e096988e19b5d14a00348ef87939cdb0382940c408b",
+        "producer_identity_blake3"= "b4f5b2a2f9133fe9f3e34e909e86560327da69b7092797a8f9cf0aa3c66f6d98",
         "consumer_policy_blake3"= "d4d7d58e21738c707f6071b435807382c28939a76da4cbb88e9c32c6b80af72b"
       },
       "non_claims"= [
@@ -245,7 +245,7 @@ let Registry = {
         "contract_blake3"= "16ccc6644e6a2b74b1b4db20014818bb73028343e9c3da8a92a0711ed520d434",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "576b0cc4dbed5d3c850a408c032411c180e9a0446507ec333606c25c4b15f719",
-        "producer_identity_blake3"= "dbe731a57496166bd4c44ccc86bed96f07f85389b5526e5e50743ade646e4e04",
+        "producer_identity_blake3"= "6dd03f3881f6e1dab8fef44f29f211a3ce5b9a18544814068c44ddc0b12441af",
         "consumer_policy_blake3"= "d9c1ccf9e8d250b9ce0b12e6b0b73a2e13db503096b5d725ac3a16e9d65061ed"
       },
       "non_claims"= [
@@ -1872,12 +1872,13 @@ let Registry = {
     {
       "id"= "remote.execution-reports",
       "class"= "compatibility",
-      "rust_owner"= "src/remote_build.rs::public_json_family",
+      "rust_owner"= "src/remote_build.rs and src/remote_failure_debug.rs public JSON family",
       "producer"= {
-        "command_or_api"= "mantle remote build/status/serve --json",
+        "command_or_api"= "mantle remote build/status/serve/failure-debug --json",
         "marker"= "remote.execution-reports",
         "source_paths"= [
-          "src/remote_build.rs"
+          "src/remote_build.rs",
+          "src/remote_failure_debug.rs"
         ]
       },
       "consumers"= [
@@ -1898,7 +1899,8 @@ let Registry = {
         "compatibility_fixtures"= []
       },
       "validation_commands"= [
-        "cargo test -p mantle remote_build::tests"
+        "cargo test -p mantle remote_build::tests",
+        "cargo test -p mantle remote_failure_debug::tests"
       ],
       "fixture_coverage"= [
         "classification"
@@ -1913,9 +1915,9 @@ let Registry = {
         "consumer_policy_blake3"= ""
       },
       "non_claims"= [
-        "remote status does not prove output admission or exactly-once execution"
+        "remote status and failure diagnostics do not prove output admission, exactly-once execution, determinism, or replay authority"
       ],
-      "rationale"= "Current remote reports stay under the active remote execution family."
+      "rationale"= "Current remote execution and bounded failure-diagnostic reports stay under one compatibility family until a closed cohort contract is adopted."
     },
     {
       "id"= "remote.attempt-future",

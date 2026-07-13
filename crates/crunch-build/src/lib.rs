@@ -7,6 +7,7 @@
 //!
 //! Pipeline: `Derivation` → `BuildRequest` → sandbox → `BuildResult` → `PathInfo`
 
+pub mod action_result;
 mod build_request;
 pub mod ca_mapping;
 pub mod ca_plan;
@@ -36,6 +37,7 @@ pub mod worker;
 pub mod workspace;
 pub mod workspace_shell;
 
+pub use action_result::ActionResultRuntimeReport;
 pub use build_request::BuildRequestEnvelope;
 pub use build_request::WORKSPACE_LEASE_ENV;
 pub use build_request::WORKSPACE_POLICY_ENV;

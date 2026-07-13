@@ -102,6 +102,7 @@ path = "examples/benchmark_scheduler_priority.rs"
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
 crunch-glue = { path = "crates/crunch-glue" }
+crunch-action-result-core = { path = "crates/crunch-action-result-core" }
 crunch-build = { path = "crates/crunch-build" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-wasm-component = { path = "crates/crunch-wasm-component" }

@@ -91,6 +91,7 @@ pub struct PipelineResult {
     pub build_environment_reports: Vec<BuildEnvironmentReport>,
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
+    pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
 }
@@ -227,8 +228,6 @@ async fn build_linux(
 
     let blob_service = store.blob_service();
     let directory_service = store.directory_service();
-    let pathinfo_service = store.pathinfo_service();
-    let remote_pathinfo = store.remote_pathinfo();
     let workdir = std::env::temp_dir().join("crunch-builds");
     std::fs::create_dir_all(&workdir).map_err(|e| Error::Internal(format!("create workdir: {e}")))?;
 
@@ -259,15 +258,9 @@ async fn build_linux(
     let workspace_reports = crunch_build::WorkspaceReportCollector::default();
     let build_service =
         crunch_build::StatefulWorkspaceBuildService::new(dispatch, store.state_dir(), workspace_reports.clone());
-    let mut builder = Builder::with_state_dir(
-        blob_service,
-        directory_service,
+    let mut builder = Builder::from_store(
+        store,
         build_service,
-        pathinfo_service,
-        config.output_dir.clone(),
-        Some(store.state_dir().to_path_buf()),
-        remote_pathinfo,
-        &config.store_dir,
         config.keypair.clone(),
         config.trusted_keys.clone(),
         config.trust_unsigned,
@@ -298,6 +291,7 @@ async fn build_linux(
     hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
     let build_environment_reports = builder.take_build_environment_reports();
     let network_policy_reports = builder.take_network_policy_reports();
+    let action_result_reports = builder.take_action_result_reports();
     if let Some(eval_failure) = &eval_stream.eval_failure {
         worker_result.failed.push(FailedGoal {
             drv_key: eval_failure_key(&eval_failure.label),
@@ -319,6 +313,7 @@ async fn build_linux(
         build_environment_reports,
         network_policy_reports,
         workspace_reports: workspace_reports.take(),
+        action_result_reports,
         native_dynamic_plans: worker_result.native_dynamic_plans,
         priority_decisions: worker_result.priority_decisions,
     })
@@ -525,6 +520,7 @@ fn build_preflight_failure(
         build_environment_reports: Vec::new(),
         network_policy_reports: Vec::new(),
         workspace_reports: Vec::new(),
+        action_result_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
         priority_decisions: Vec::new(),
     })

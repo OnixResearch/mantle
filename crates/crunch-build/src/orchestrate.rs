@@ -7,6 +7,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crunch_action_result_core::DiscoveredActionResultCandidate;
+use crunch_action_result_core::StrongReuseRequest;
+use crunch_action_result_core::plan_strong_reuse;
 use crunch_store::ArtifactProvenance;
 use crunch_store::GcRootSource;
 use crunch_store::OutputSubstitutionReport;
@@ -26,10 +29,21 @@ use snix_store::pathinfoservice::PathInfoService;
 use tracing::debug;
 use tracing::info;
 
+use crate::ActionResultRuntimeReport;
 use crate::BuildNetworkPolicyReport;
 use crate::Error;
 use crate::HermeticityAuditEvent;
 use crate::HermeticityMode;
+use crate::action_result::ACTION_RESULT_DISPOSITION_CONFLICT;
+use crate::action_result::ACTION_RESULT_DISPOSITION_MISS;
+use crate::action_result::ACTION_RESULT_DISPOSITION_REUSED;
+use crate::action_result::action_ref_for_derivation;
+use crate::action_result::candidate_admission_facts;
+use crate::action_result::discovery_runtime_report;
+use crate::action_result::policy_refs_for_derivation;
+use crate::action_result::publication_runtime_report;
+use crate::action_result::signed_record_for_outputs;
+use crate::action_result::trust_policy_for_action;
 use crate::build_request::collect_input_paths;
 use crate::build_request::derivation_to_build_request;
 use crate::fod::verify_fod_hash;
@@ -118,6 +132,24 @@ struct CacheCheckHit {
     substitutions: BTreeMap<String, OutputSubstitutionReport>,
 }
 
+struct SharedActionCandidates {
+    action_ref: String,
+    candidates: Vec<DiscoveredActionResultCandidate>,
+    outputs_by_result_ref: BTreeMap<String, BTreeMap<String, PathInfo>>,
+    source_by_result_ref: BTreeMap<String, (String, String)>,
+    diagnostics: Vec<String>,
+}
+
+fn shared_action_disposition(plan: &crunch_action_result_core::StrongReusePlan) -> &'static str {
+    if plan.conflict_class.is_some() {
+        return ACTION_RESULT_DISPOSITION_CONFLICT;
+    }
+    if plan.selected_result_ref.is_some() {
+        return ACTION_RESULT_DISPOSITION_REUSED;
+    }
+    ACTION_RESULT_DISPOSITION_MISS
+}
+
 /// Metadata saved during `prepare_build`, consumed by `finish_build`.
 /// Intermediate state for a single CA output during multi-output
 /// CA derivation finalization (between pass 1 and pass 2).
@@ -175,6 +207,7 @@ pub struct Builder<BServ> {
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     build_environment_reports: Vec<crate::BuildEnvironmentReport>,
     network_policy_reports: Vec<BuildNetworkPolicyReport>,
+    action_result_reports: Vec<ActionResultRuntimeReport>,
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
     root_retention_source: Option<GcRootSource>,
 }
@@ -228,6 +261,7 @@ where BServ: BuildService + 'static
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             source_closure_cache: HashMap::new(),
             root_retention_source: None,
         }
@@ -278,6 +312,33 @@ where BServ: BuildService + 'static
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
+            action_result_reports: Vec::new(),
+            source_closure_cache: HashMap::new(),
+            root_retention_source: None,
+        }
+    }
+
+    #[allow(tigerstyle::too_many_parameters)]
+    pub fn from_store(
+        store: crunch_store::StoreHandle,
+        build_service: BServ,
+        keypair: KeyPair,
+        trusted_keys: Vec<VerifyingKey>,
+        trust_unsigned: bool,
+        verbose: bool,
+    ) -> Self {
+        Self {
+            store,
+            build_service: Arc::new(build_service),
+            keypair,
+            trusted_keys,
+            trust_unsigned,
+            verbose,
+            hermeticity_mode: HermeticityMode::Practical,
+            hermeticity_audit_events: Vec::new(),
+            build_environment_reports: Vec::new(),
+            network_policy_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             source_closure_cache: HashMap::new(),
             root_retention_source: None,
         }
@@ -294,6 +355,10 @@ where BServ: BuildService + 'static
     /// The logical store directory prefix.
     pub fn store_dir(&self) -> &str {
         self.store.store_dir()
+    }
+
+    pub fn store_handle(&self) -> &crunch_store::StoreHandle {
+        &self.store
     }
 
     pub fn set_hermeticity_mode(&mut self, hermeticity_mode: HermeticityMode) {
@@ -314,6 +379,18 @@ where BServ: BuildService + 'static
 
     pub fn take_network_policy_reports(&mut self) -> Vec<BuildNetworkPolicyReport> {
         std::mem::take(&mut self.network_policy_reports)
+    }
+
+    pub fn take_action_result_reports(&mut self) -> Vec<ActionResultRuntimeReport> {
+        let mut reports = std::mem::take(&mut self.action_result_reports);
+        reports.sort_by(|left, right| {
+            left.action_ref
+                .cmp(&right.action_ref)
+                .then(left.phase.cmp(&right.phase))
+                .then(left.disposition.cmp(&right.disposition))
+                .then(left.selected_result_ref.cmp(&right.selected_result_ref))
+        });
+        reports
     }
 
     /// Read the full content of a blob from castore.
@@ -426,6 +503,22 @@ where BServ: BuildService + 'static
                 drv_path: drv_path.clone(),
                 outputs: cached_hit.infos,
                 substitutions: cached_hit.substitutions,
+                cached: true,
+                log: None,
+            }));
+        }
+
+        // Shared action-result discovery is separate from CA mapping lookup.
+        // Every candidate is re-admitted before the executor can be skipped.
+        // r[impl build_correctness.shared_action_result_admission]
+        if let Some(shared_hit) =
+            self.check_shared_action_result(drv_path, derivation_ref, known_paths, is_root).await?
+        {
+            info!(drv = %drv_name, "shared action result admitted, skipping executor");
+            return Ok(PrepareResult::Done(BuildOutcome {
+                drv_path: drv_path.clone(),
+                outputs: shared_hit.infos,
+                substitutions: BTreeMap::new(),
                 cached: true,
                 log: None,
             }));
@@ -547,6 +640,8 @@ where BServ: BuildService + 'static
                 output_infos.insert(output_name.clone(), path_info);
             }
         }
+
+        self.publish_completed_action_result(&prepared.derivation, &output_infos).await;
 
         info!(
             drv = %prepared.drv_name,
@@ -1207,6 +1302,142 @@ where BServ: BuildService + 'static
             .map_err(|e| Error::Store(format!("{e}")))
     }
 
+    async fn check_shared_action_result(
+        &mut self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+        known_paths: &mut DerivationRegistry,
+        is_root: bool,
+    ) -> Result<Option<CacheCheckHit>, Error> {
+        let collection = self.collect_shared_action_candidates(derivation).await?;
+        let policy_refs = policy_refs_for_derivation(derivation, self.store.store_dir(), self.hermeticity_mode)
+            .map_err(Error::Store)?;
+        let request = StrongReuseRequest {
+            action_ref: collection.action_ref.clone(),
+            output_names: derivation.outputs.keys().cloned().collect(),
+            policy: trust_policy_for_action(&policy_refs, &self.trusted_keys),
+        };
+        let plan = plan_strong_reuse(request, collection.candidates).map_err(Error::Store)?;
+        let selected_source = plan
+            .selected_result_ref
+            .as_ref()
+            .and_then(|result_ref| collection.source_by_result_ref.get(result_ref).cloned());
+        let disposition = shared_action_disposition(&plan);
+        let selected_result_ref = plan.selected_result_ref.clone();
+        let conflict_class = plan.conflict_class.clone();
+        self.action_result_reports.push(discovery_runtime_report(
+            collection.action_ref,
+            disposition,
+            plan,
+            selected_source,
+            collection.diagnostics,
+        ));
+        if let Some(conflict) = conflict_class {
+            return Err(Error::Store(format!("{conflict}: strong shared action-result reuse rejected")));
+        }
+        let Some(result_ref) = selected_result_ref else {
+            return Ok(None);
+        };
+        let infos = collection
+            .outputs_by_result_ref
+            .get(&result_ref)
+            .cloned()
+            .ok_or_else(|| Error::Store("selected action result has no admitted outputs".to_string()))?;
+        self.store
+            .admit_action_result_outputs(&infos, is_root, self.root_retention_source)
+            .await
+            .map_err(|error| Error::Store(format!("admitting shared action result: {error}")))?;
+        self.persist_shared_ca_mapping(drv_path, derivation, &infos);
+        self.record_cached_output_paths(drv_path, derivation, &infos, known_paths)?;
+        Ok(Some(CacheCheckHit {
+            infos,
+            substitutions: BTreeMap::new(),
+        }))
+    }
+
+    async fn collect_shared_action_candidates(&self, derivation: &Derivation) -> Result<SharedActionCandidates, Error> {
+        let action_ref = action_ref_for_derivation(derivation, self.store.store_dir());
+        let discovery = self.store.discover_action_results(&action_ref).await;
+        let mut candidates = Vec::new();
+        let mut outputs_by_result_ref = BTreeMap::new();
+        let mut source_by_result_ref = BTreeMap::new();
+        for lookup in discovery.lookups {
+            for signed_record in lookup.records {
+                let result_ref = signed_record.record.result_ref.clone();
+                let outputs = self.store.probe_action_result_outputs(&signed_record.record).await.ok();
+                let facts = candidate_admission_facts(
+                    lookup.source_id.clone(),
+                    lookup.source_class.clone(),
+                    &signed_record,
+                    derivation,
+                    outputs.as_ref(),
+                    self.store.store_dir(),
+                    self.hermeticity_mode,
+                    &self.trusted_keys,
+                );
+                if let Some(outputs) = outputs {
+                    outputs_by_result_ref.entry(result_ref.clone()).or_insert(outputs);
+                }
+                source_by_result_ref
+                    .entry(result_ref)
+                    .or_insert((lookup.source_id.clone(), lookup.source_class.clone()));
+                candidates.push(DiscoveredActionResultCandidate { signed_record, facts });
+            }
+        }
+        Ok(SharedActionCandidates {
+            action_ref,
+            candidates,
+            outputs_by_result_ref,
+            source_by_result_ref,
+            diagnostics: discovery.diagnostics,
+        })
+    }
+
+    fn persist_shared_ca_mapping(
+        &mut self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+        infos: &BTreeMap<String, PathInfo>,
+    ) {
+        let is_ca = derivation.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
+        if !is_ca {
+            return;
+        }
+        let drv_abs = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
+        for (output_name, path_info) in infos {
+            let output_abs = path_info.store_path.to_absolute_path_with_prefix(self.store.store_dir());
+            self.store.insert_ca_mapping(&drv_abs, output_name, &output_abs);
+        }
+    }
+
+    async fn publish_completed_action_result(&mut self, derivation: &Derivation, outputs: &BTreeMap<String, PathInfo>) {
+        let signed = match signed_record_for_outputs(
+            derivation,
+            outputs,
+            self.store.store_dir(),
+            self.hermeticity_mode,
+            &self.keypair,
+        ) {
+            Ok(signed) => signed,
+            Err(error) => {
+                tracing::warn!(error = %error, "shared action-result record construction failed");
+                return;
+            }
+        };
+        let diagnostics = match self.store.publish_local_action_result(&signed).await {
+            Ok(_) => Vec::new(),
+            Err(error) => {
+                tracing::warn!(result_ref = %signed.record.result_ref, error = %error, "shared action-result publication failed");
+                vec![error]
+            }
+        };
+        self.action_result_reports.push(publication_runtime_report(
+            signed.record.action_ref,
+            signed.record.result_ref,
+            diagnostics,
+        ));
+    }
+
     /// Check cache: every output must have PathInfo AND exist on disk.
     /// For CA derivations, uses ca_mappings to find the resolved path.
     /// Delegates to `self.store.check_cache()`, then verifies signatures.
@@ -1353,8 +1584,15 @@ where BServ: BuildService + 'static
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+    use std::io::Read as _;
+    use std::io::Write as _;
+    use std::net::TcpListener;
+    use std::net::TcpStream;
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering as AtomicOrdering;
+    use std::thread::JoinHandle;
 
     use async_trait::async_trait;
     use futures::stream::StreamExt;
@@ -1405,6 +1643,101 @@ mod tests {
 
     fn test_trusted_keys() -> Vec<nix_compat::narinfo::VerifyingKey> {
         crate::signing::build_trusted_keys(&test_keypair(), None)
+    }
+
+    const STATIC_HTTP_READ_CAPACITY_BYTES: usize = 16_384;
+    const STATIC_HTTP_MAX_FILES: usize = 64;
+    const STATIC_HTTP_POLL_MS: u64 = 5;
+
+    struct StaticHttpServer {
+        base_url: String,
+        stop: Arc<AtomicBool>,
+        requests: Arc<Mutex<Vec<String>>>,
+        thread: Option<JoinHandle<()>>,
+    }
+
+    impl StaticHttpServer {
+        fn start(files: BTreeMap<String, Vec<u8>>) -> Self {
+            assert!(!files.is_empty());
+            assert!(files.len() <= STATIC_HTTP_MAX_FILES);
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let address = listener.local_addr().unwrap();
+            let stop = Arc::new(AtomicBool::new(false));
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let thread_stop = stop.clone();
+            let thread_requests = requests.clone();
+            let thread = std::thread::spawn(move || {
+                while !thread_stop.load(AtomicOrdering::SeqCst) {
+                    match listener.accept() {
+                        Ok((stream, _)) => serve_static_http_request(stream, &files, &thread_requests),
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                            std::thread::sleep(std::time::Duration::from_millis(STATIC_HTTP_POLL_MS));
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+            Self {
+                base_url: format!("http://{address}"),
+                stop,
+                requests,
+                thread: Some(thread),
+            }
+        }
+    }
+
+    impl Drop for StaticHttpServer {
+        fn drop(&mut self) {
+            self.stop.store(true, AtomicOrdering::SeqCst);
+            let _ = TcpStream::connect(self.base_url.trim_start_matches("http://"));
+            if let Some(thread) = self.thread.take() {
+                thread.join().unwrap();
+            }
+        }
+    }
+
+    fn serve_static_http_request(
+        mut stream: TcpStream,
+        files: &BTreeMap<String, Vec<u8>>,
+        requests: &Arc<Mutex<Vec<String>>>,
+    ) {
+        let mut request = [0u8; STATIC_HTTP_READ_CAPACITY_BYTES];
+        let bytes_read = stream.read(&mut request).unwrap_or(0);
+        let request_text = String::from_utf8_lossy(&request[..bytes_read]);
+        let path = request_text
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .unwrap_or("/")
+            .split('?')
+            .next()
+            .unwrap_or("/")
+            .to_string();
+        requests.lock().unwrap().push(path.clone());
+        let (status, body) =
+            files.get(&path).map(|body| ("200 OK", body.as_slice())).unwrap_or(("404 Not Found", b"missing"));
+        let response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+        stream.write_all(response.as_bytes()).unwrap();
+        stream.write_all(body).unwrap();
+    }
+
+    fn collect_static_http_files(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        let mut files = BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(path) = pending.pop() {
+            for entry in std::fs::read_dir(&path).unwrap() {
+                let entry = entry.unwrap();
+                if entry.file_type().unwrap().is_dir() {
+                    pending.push(entry.path());
+                    continue;
+                }
+                let relative = entry.path().strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                files.insert(format!("/{relative}"), std::fs::read(entry.path()).unwrap());
+                assert!(files.len() <= STATIC_HTTP_MAX_FILES);
+            }
+        }
+        files
     }
 
     fn sign_with_test_key(path_info: &mut PathInfo) {
@@ -1464,6 +1797,15 @@ mod tests {
                 .collect();
 
             Ok(BuildResult { outputs, log: None })
+        }
+    }
+
+    struct ErrorBuildService;
+
+    #[async_trait]
+    impl BuildService for ErrorBuildService {
+        async fn do_build(&self, _request: BuildRequest) -> std::io::Result<BuildResult> {
+            Err(std::io::Error::other("controlled executor failure"))
         }
     }
 
@@ -1695,6 +2037,40 @@ mod tests {
 
         assert_eq!(sandbox_inputs.get(&dep_output_path), Some(&cached_node));
         assert_eq!(builder.store.output_nodes.get(&dep_output_path), Some(&cached_node));
+    }
+
+    #[tokio::test]
+    async fn failed_build_never_publishes_an_action_result() {
+        use crunch_store::ActionResultStore as _;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut registry = DerivationRegistry::default();
+        let (drv_path, derivation) = build_and_register("failed-action-result", &[], &mut registry);
+        let action_ref = action_ref_for_derivation(&derivation, nix_compat::store_path::STORE_DIR);
+        let mut builder = Builder::with_state_dir(
+            Arc::new(MemoryBlobService::default()),
+            Arc::new(tmp_ds()),
+            ErrorBuildService,
+            Arc::new(test_pis()),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+
+        let result = builder.build(&drv_path, &mut registry).await;
+        let local_results = crunch_store::LocalActionResultStore::new(state_dir.path());
+        let lookup = local_results.lookup(&action_ref).await.unwrap();
+
+        assert!(result.is_err());
+        assert!(lookup.records.is_empty());
+        assert!(lookup.index.result_refs.is_empty());
+        assert!(!builder.take_action_result_reports().iter().any(|report| report.phase == "publication"));
     }
 
     #[tokio::test]
@@ -2245,6 +2621,163 @@ mod tests {
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 2, "only the seed build and dependent root build should dispatch");
+    }
+
+    #[tokio::test]
+    async fn shared_action_result_reuses_ca_output_without_ca_mapping_or_execution() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis = Arc::new(test_pis()) as Arc<dyn PathInfoService>;
+        let keypair = test_keypair();
+        let trusted_keys = test_trusted_keys();
+        let mut producer_registry = DerivationRegistry::default();
+        let (drv_path, _) = build_and_register_ca("shared-ca", &mut producer_registry);
+        let (producer_service, producer_calls) = MockBuildService::new(bs.clone());
+        let mut producer = Builder::with_state_dir(
+            Arc::new(bs.clone()),
+            Arc::new(ds.clone()),
+            producer_service,
+            pis.clone(),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            keypair.clone(),
+            trusted_keys.clone(),
+            false,
+            false,
+        );
+        let producer_outcome = producer.build(&drv_path, &mut producer_registry).await.unwrap();
+        let publication_reports = producer.take_action_result_reports();
+        drop(producer);
+        std::fs::remove_file(state_dir.path().join("ca_mappings.json")).unwrap();
+
+        let mut consumer_registry = DerivationRegistry::default();
+        let (consumer_drv_path, _) = build_and_register_ca("shared-ca", &mut consumer_registry);
+        let (consumer_service, consumer_calls) = MockBuildService::new(bs.clone());
+        let mut consumer = Builder::with_state_dir(
+            Arc::new(bs),
+            Arc::new(ds),
+            consumer_service,
+            pis,
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            keypair,
+            trusted_keys,
+            false,
+            false,
+        );
+        let consumer_outcome = consumer.build(&consumer_drv_path, &mut consumer_registry).await.unwrap();
+        let consumer_reports = consumer.take_action_result_reports();
+
+        assert_eq!(producer_calls.lock().unwrap().len(), 1);
+        assert_eq!(consumer_calls.lock().unwrap().len(), 0);
+        assert!(!producer_outcome.cached);
+        assert!(consumer_outcome.cached);
+        assert_eq!(producer_outcome.outputs, consumer_outcome.outputs);
+        assert!(publication_reports.iter().any(|report| report.phase == "publication"));
+        assert!(consumer_reports.iter().any(|report| report.disposition == "reused"));
+    }
+
+    // r[verify cache_substitution.shared_action_result_discovery]
+    #[tokio::test]
+    async fn fresh_client_fetches_http_action_result_and_objects_without_execution() {
+        use crunch_store::ActionResultStore as _;
+
+        let producer_state = tempfile::tempdir().unwrap();
+        let producer_output = tempfile::tempdir().unwrap();
+        let cache_dir = tempfile::tempdir().unwrap();
+        let producer_blobs = MemoryBlobService::default();
+        let producer_directories = tmp_ds();
+        let keypair = test_keypair();
+        let trusted_keys = test_trusted_keys();
+        let (producer_service, producer_calls) = MockBuildService::new(producer_blobs.clone());
+        let mut producer = Builder::with_state_dir(
+            Arc::new(producer_blobs),
+            Arc::new(producer_directories),
+            producer_service,
+            Arc::new(test_pis()),
+            producer_output.path().to_path_buf(),
+            Some(producer_state.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            keypair.clone(),
+            trusted_keys.clone(),
+            false,
+            false,
+        );
+        let mut producer_registry = DerivationRegistry::default();
+        let (drv_path, _) = build_and_register_ca("http-shared-ca", &mut producer_registry);
+        let producer_outcome = producer.build(&drv_path, &mut producer_registry).await.unwrap();
+        let output_infos = producer_outcome.outputs.values().cloned().collect::<Vec<_>>();
+        crunch_store::export_paths_to_cache_dir(
+            producer.store_handle(),
+            &output_infos,
+            cache_dir.path(),
+            &crunch_store::PushOptions { trust_unsigned: false },
+        )
+        .await
+        .unwrap();
+        let local_results = crunch_store::LocalActionResultStore::new(producer_state.path());
+        let producer_drv_abs = drv_path.to_absolute_path();
+        let producer_derivation = &producer_registry.get_by_drv_path(&producer_drv_abs).unwrap().derivation;
+        let action_ref = action_ref_for_derivation(producer_derivation, nix_compat::store_path::STORE_DIR);
+        let lookup = local_results.lookup(&action_ref).await.unwrap();
+        let signed = lookup.records.first().unwrap();
+        write_http_action_result_sidecars(cache_dir.path(), &lookup.index, signed);
+        let server = StaticHttpServer::start(collect_static_http_files(cache_dir.path()));
+
+        let consumer_state = tempfile::tempdir().unwrap();
+        let consumer_output = tempfile::tempdir().unwrap();
+        let trusted_token =
+            url::form_urlencoded::byte_serialize(trusted_keys[0].to_string().as_bytes()).collect::<String>();
+        let mut store_config = crunch_store::StoreConfig::new(
+            consumer_state.path().to_path_buf(),
+            consumer_output.path().to_path_buf(),
+            nix_compat::store_path::STORE_DIR.to_string(),
+        );
+        store_config.remote_cache_urls = vec![format!("{}?trusted_public_keys[0]={trusted_token}", server.base_url)];
+        let consumer_store = crunch_store::StoreHandle::open(store_config).await.unwrap();
+        let mut consumer =
+            Builder::from_store(consumer_store, PanicSandboxService, keypair, trusted_keys, false, false);
+        let mut consumer_registry = DerivationRegistry::default();
+        let (consumer_drv_path, _) = build_and_register_ca("http-shared-ca", &mut consumer_registry);
+        assert!(!consumer_state.path().join("ca_mappings.json").exists());
+        let consumer_outcome = consumer.build(&consumer_drv_path, &mut consumer_registry).await.unwrap();
+        let reports = consumer.take_action_result_reports();
+        let requests = server.requests.lock().unwrap().clone();
+
+        assert_eq!(producer_calls.lock().unwrap().len(), 1);
+        assert!(consumer_outcome.cached);
+        assert_eq!(consumer_outcome.outputs, producer_outcome.outputs);
+        assert!(reports.iter().any(|report| {
+            report.disposition == ACTION_RESULT_DISPOSITION_REUSED
+                && report.selected_source_class.as_deref() == Some("http")
+        }));
+        assert!(requests.iter().any(|path| path.ends_with(".narinfo")));
+        assert!(requests.iter().any(|path| path.contains("/action-results/v1/indexes/")));
+        assert!(requests.iter().any(|path| path.contains("/action-results/v1/records/")));
+        assert!(requests.iter().any(|path| path.starts_with("/nar/")));
+    }
+
+    fn write_http_action_result_sidecars(
+        cache_dir: &Path,
+        index: &crunch_action_result_core::ActionResultIndex,
+        signed: &crunch_action_result_core::SignedActionResultRecord,
+    ) {
+        let action_digest = index.action_ref.strip_prefix(crunch_action_result_core::ACTION_REF_PREFIX).unwrap();
+        let result_digest =
+            signed.record.result_ref.strip_prefix(crunch_action_result_core::ACTION_RESULT_REF_PREFIX).unwrap();
+        let index_path = cache_dir.join("action-results/v1/indexes").join(format!("{action_digest}.json"));
+        let record_path = cache_dir.join("action-results/v1/records").join(format!("{result_digest}.json"));
+        std::fs::create_dir_all(index_path.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(record_path.parent().unwrap()).unwrap();
+        std::fs::write(index_path, crunch_action_result_core::canonical_index_bytes(index).unwrap()).unwrap();
+        std::fs::write(record_path, crunch_action_result_core::canonical_signed_record_bytes(signed).unwrap()).unwrap();
     }
 
     #[tokio::test]

@@ -225,7 +225,7 @@ fn cmd_store_unpin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), 
 
 async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -> Result<(), RunError> {
     let report = store.garbage_collect(is_dry_run).await.map_err(|e| RunError::Build(format!("{e}")))?;
-    if report.candidate_paths.is_empty() {
+    if !gc_report_has_candidates(&report) {
         println!("retained_roots={}  candidate_paths=0  reclaimable_bytes=0", report.retained_root_count);
         if is_dry_run {
             eprintln!("dry-run: no changes made");
@@ -240,12 +240,14 @@ async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -
         report.retained_root_count, report.candidate_path_count, report.reclaimable_bytes_total
     );
     println!(
-        "candidate_exported_outputs={}  candidate_artifact_attestations={}  candidate_closure_attestations={}  candidate_blob_indexes={}  candidate_blob_chunks={}",
+        "candidate_exported_outputs={}  candidate_artifact_attestations={}  candidate_closure_attestations={}  candidate_blob_indexes={}  candidate_blob_chunks={}  candidate_action_result_records={}  candidate_action_result_indexes={}",
         report.candidate_exported_output_count,
         report.candidate_artifact_attestation_count,
         report.candidate_closure_attestation_count,
         report.candidate_blob_index_count,
         report.candidate_blob_chunk_count,
+        report.candidate_action_result_record_count,
+        report.candidate_action_result_index_count,
     );
     for path in &report.candidate_paths {
         println!("DELETE {path}");
@@ -256,6 +258,34 @@ async fn cmd_store_gc(store: &mut crunch_store::StoreHandle, is_dry_run: bool) -
         eprintln!("gc: removed {} candidate path(s)", report.candidate_path_count);
     }
     Ok(())
+}
+
+fn gc_report_has_candidates(report: &crunch_store::GcReport) -> bool {
+    if report.candidate_path_count > 0 {
+        return true;
+    }
+    if report.candidate_blob_index_count > 0 {
+        return true;
+    }
+    if report.candidate_blob_chunk_count > 0 {
+        return true;
+    }
+    if report.candidate_artifact_attestation_count > 0 {
+        return true;
+    }
+    if report.candidate_closure_attestation_count > 0 {
+        return true;
+    }
+    if report.candidate_exported_output_count > 0 {
+        return true;
+    }
+    if report.candidate_action_result_record_count > 0 {
+        return true;
+    }
+    if report.candidate_action_result_index_count > 0 {
+        return true;
+    }
+    false
 }
 
 async fn cmd_store_verify(

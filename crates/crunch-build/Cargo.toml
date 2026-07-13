@@ -9,6 +9,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
 
 [dependencies]
 async-trait = "0.1"
+crunch-action-result-core = { path = "../crunch-action-result-core" }
 crunch-attestation = { path = "../crunch-attestation" }
 crunch-store = { path = "../crunch-store" }
 nix-compat = { path = "../../vendor/nix-compat", features = ["serde"] }

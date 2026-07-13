@@ -3396,6 +3396,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -3438,6 +3439,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };

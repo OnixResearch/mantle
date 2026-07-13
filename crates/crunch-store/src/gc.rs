@@ -18,6 +18,7 @@ use snix_store::pathinfoservice::PathInfoService;
 use crate::CaMappings;
 use crate::Error;
 use crate::StoreFallbackMode;
+use crate::action_result::local_action_result_gc_candidates;
 
 /// Services and paths needed for GC operations.
 pub struct GcContext<'a> {
@@ -45,6 +46,7 @@ pub enum GcOperationKind {
     DirectoryRewrite,
     BlobIndexFiles,
     BlobChunkFiles,
+    ActionResults,
     CaMappings,
 }
 
@@ -60,6 +62,8 @@ pub struct GcReport {
     pub candidate_artifact_attestation_count: u32,
     pub candidate_closure_attestation_count: u32,
     pub candidate_exported_output_count: u32,
+    pub candidate_action_result_record_count: u32,
+    pub candidate_action_result_index_count: u32,
     pub operations: Vec<GcOperationKind>,
 }
 
@@ -89,6 +93,13 @@ pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_ru
     assert!(ctx.store_dir.starts_with('/'), "store_dir must be absolute");
 
     let plan = build_plan(ctx).await?;
+    let live_paths: BTreeSet<String> = plan
+        .live_pathinfos
+        .iter()
+        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
+        .collect();
+    let action_result_gc = local_action_result_gc_candidates(ctx.state_dir, &live_paths)
+        .map_err(|error| Error::Gc(format!("planning action-result metadata collection: {error}")))?;
     let mut gc_result = GcReport {
         is_dry_run,
         retained_root_count: saturating_u32(plan.retained_roots.len()),
@@ -100,6 +111,8 @@ pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_ru
         candidate_artifact_attestation_count: saturating_u32(plan.artifact_attestation_paths.len()),
         candidate_closure_attestation_count: saturating_u32(plan.closure_attestation_paths.len()),
         candidate_exported_output_count: saturating_u32(plan.orphaned_on_disk.len()),
+        candidate_action_result_record_count: saturating_u32(action_result_gc.record_paths.len()),
+        candidate_action_result_index_count: saturating_u32(action_result_gc.index_marker_paths.len()),
         operations: Vec::new(),
     };
     if is_dry_run {
@@ -127,11 +140,10 @@ pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_ru
     remove_files(&plan.blob_chunk_paths)?;
     gc_result.operations.push(GcOperationKind::BlobChunkFiles);
 
-    let live_paths: BTreeSet<String> = plan
-        .live_pathinfos
-        .iter()
-        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
-        .collect();
+    remove_files(&action_result_gc.record_paths)?;
+    remove_files(&action_result_gc.index_marker_paths)?;
+    gc_result.operations.push(GcOperationKind::ActionResults);
+
     ca_mappings.retain_output_paths(&live_paths);
     ca_mappings
         .save_checked(ctx.state_dir)
@@ -970,6 +982,7 @@ mod tests {
             GcOperationKind::DirectoryRewrite,
             GcOperationKind::BlobIndexFiles,
             GcOperationKind::BlobChunkFiles,
+            GcOperationKind::ActionResults,
             GcOperationKind::CaMappings,
         ]);
     }

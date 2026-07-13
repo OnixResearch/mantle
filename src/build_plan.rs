@@ -1,4 +1,5 @@
 // machine-artifact-public: build.build-plan-report
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::num::NonZeroUsize;
 use std::path::Path;
@@ -6,10 +7,22 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::ValueEnum;
+use crunch_action_result_core::DiscoveredActionResultCandidate;
+use crunch_action_result_core::StrongReuseRequest;
+use crunch_action_result_core::plan_strong_reuse;
+use crunch_build::HermeticityMode;
+use crunch_build::action_result::action_ref_for_derivation;
+use crunch_build::action_result::candidate_admission_facts;
+use crunch_build::action_result::discovery_runtime_report;
+use crunch_build::action_result::policy_refs_for_derivation;
+use crunch_build::action_result::trust_policy_for_action;
 use crunch_build::signing;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
+use crunch_store::ActionResultStoreSet;
 use crunch_store::CaMappings;
+use crunch_store::HttpActionResultStore;
+use crunch_store::LocalActionResultStore;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
@@ -69,6 +82,8 @@ pub struct BuildPlanEntry {
     pub detail: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_admission: Option<BuildJsonCacheAdmission>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action_result: Option<crunch_build::ActionResultRuntimeReport>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -108,6 +123,9 @@ impl BuildPlanReport {
             if let Some(detail) = &entry.detail {
                 out.push_str(&format!("  {}\n", detail));
             }
+            if let Some(action_result) = &entry.action_result {
+                out.push_str(&render_action_result_plan_human(action_result));
+            }
         }
         out
     }
@@ -119,6 +137,39 @@ impl BuildPlanReport {
     fn has_preflight_errors(&self) -> bool {
         self.entries.iter().any(|entry| entry.action == PlanAction::PreflightError)
     }
+}
+
+fn render_action_result_plan_human(report: &crunch_build::ActionResultRuntimeReport) -> String {
+    let selected = report.selected_result_ref.as_deref().unwrap_or("none");
+    let source = report.selected_source_class.as_deref().unwrap_or("none");
+    let source_id = report.selected_source_id.as_deref().unwrap_or("none");
+    let conflict = report.conflict_class.as_deref().unwrap_or("none");
+    let trust_basis = if report.trust_basis.is_empty() {
+        "none".to_string()
+    } else {
+        report.trust_basis.join(",")
+    };
+    let mut rendered = format!(
+        "  shared-action-result: disposition={} selected={} source={} source_id={} trust={} conflict={} non_claims={}\n",
+        report.disposition,
+        selected,
+        source,
+        source_id,
+        trust_basis,
+        conflict,
+        report.non_claims.join(",")
+    );
+    for decision in &report.candidate_decisions {
+        if decision.admitted {
+            continue;
+        }
+        rendered.push_str(&format!(
+            "  shared-action-result-rejected: result={} diagnostics={}\n",
+            decision.result_ref,
+            decision.diagnostics.join(",")
+        ));
+    }
+    rendered
 }
 
 pub struct BuildPlanConfig<'a> {
@@ -260,43 +311,79 @@ async fn plan_root_action(
         ));
     }
 
+    let action_result = plan_store.plan_action_result(root, trust).await?;
+    if action_result.conflict_class.is_some() {
+        let mut entry = root.remote_aware_preflight_entry(
+            &plan_store.store_dir,
+            Some("conflicting-action-results: strong shared reuse rejected".to_string()),
+            remote_builder,
+            source_preflight,
+        );
+        entry.action_result = Some(action_result);
+        return Ok(entry);
+    }
+    if action_result.selected_result_ref.is_some() {
+        let mut entry = root.plan_entry(
+            &plan_store.store_dir,
+            PlanAction::Cached,
+            Some("shared-action-result=admitted".to_string()),
+            remote_builder,
+            source_preflight,
+        );
+        entry.action_result = Some(action_result);
+        return Ok(entry);
+    }
+
     let cache_status = plan_store.classify_cache(root, trust).await?;
+    let mut entry =
+        plan_cache_or_build_action(plan_store, doctor_report, remote_builder, source_preflight, root, cache_status);
+    entry.action_result = Some(action_result);
+    Ok(entry)
+}
+
+fn plan_cache_or_build_action(
+    plan_store: &PlanStore,
+    doctor_report: &crate::operator_diagnostics::PreflightReport,
+    remote_builder: Option<&crate::realization_routing::RemoteBuilderPlanFacts>,
+    source_preflight: Option<&crate::source_bundle::SourceOfflinePreflightReport>,
+    root: &PlannedRoot,
+    cache_status: CachePlanStatus,
+) -> BuildPlanEntry {
     if cache_status.all_local {
-        return Ok(root.plan_entry(
+        return root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Cached,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        ));
+        );
     }
     if cache_status.any_remote && !cache_status.any_build && source_preflight.is_none() {
-        return Ok(root.plan_entry(
+        return root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Substitute,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        ));
+        );
     }
     if doctor_report.ok {
-        return Ok(root.plan_entry(
+        return root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Build,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        ));
+        );
     }
-
-    let failing_checks: Vec<&str> = doctor_report
+    let failing_checks = doctor_report
         .checks
         .iter()
         .filter(|check| check.status == crate::operator_diagnostics::PreflightStatus::Failed)
         .map(|check| check.id)
-        .collect();
+        .collect::<Vec<_>>();
     let detail = format!("local build blocked by preflight checks: {}", failing_checks.join(", "));
-    Ok(root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder, source_preflight))
+    root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder, source_preflight)
 }
 
 struct PlannedRoot {
@@ -328,6 +415,7 @@ impl PlannedRoot {
             route_plan,
             detail,
             cache_admission: None,
+            action_result: None,
         }
     }
 
@@ -377,6 +465,34 @@ fn source_readiness_reason_code(readiness: crate::source_bundle::SourceReadiness
     }
 }
 
+fn action_result_plan_disposition(plan: &crunch_action_result_core::StrongReusePlan) -> &'static str {
+    if plan.conflict_class.is_some() {
+        return crunch_build::action_result::ACTION_RESULT_DISPOSITION_CONFLICT;
+    }
+    if plan.selected_result_ref.is_some() {
+        return crunch_build::action_result::ACTION_RESULT_DISPOSITION_REUSED;
+    }
+    crunch_build::action_result::ACTION_RESULT_DISPOSITION_MISS
+}
+
+fn open_action_result_stores(state_dir: &Path, substituter_urls: &[String]) -> Result<ActionResultStoreSet, RunError> {
+    let policy = crunch_store::action_result_runtime_policy();
+    let mut stores = ActionResultStoreSet::new(substituter_urls.is_empty());
+    if policy.sources.local_enabled {
+        stores.add_local(Box::new(LocalActionResultStore::new(state_dir)));
+    }
+    if !policy.sources.http_enabled {
+        return Ok(stores);
+    }
+    for url in substituter_urls {
+        let parsed = url::Url::parse(url)
+            .map_err(|error| RunError::Build(format!("invalid shared action-result source URL: {error}")))?;
+        let store = HttpActionResultStore::with_default_timeout(parsed).map_err(RunError::Build)?;
+        stores.add_remote(Box::new(store));
+    }
+    Ok(stores)
+}
+
 struct PlanStore {
     store_dir: String,
     local_pathinfo: Arc<dyn PathInfoService>,
@@ -384,6 +500,7 @@ struct PlanStore {
     blob_service: Arc<dyn BlobService>,
     directory_service: Arc<dyn DirectoryService>,
     ca_mappings: CaMappings,
+    action_result_stores: ActionResultStoreSet,
 }
 
 impl PlanStore {
@@ -402,7 +519,82 @@ impl PlanStore {
             blob_service,
             directory_service,
             ca_mappings: CaMappings::load(state_dir),
+            action_result_stores: open_action_result_stores(state_dir, substituter_urls)?,
         })
+    }
+
+    async fn plan_action_result(
+        &self,
+        root: &PlannedRoot,
+        trust: &PlanTrust,
+    ) -> Result<crunch_build::ActionResultRuntimeReport, RunError> {
+        let action_ref = action_ref_for_derivation(&root.derivation, &self.store_dir);
+        let discovery = self.action_result_stores.discover(&action_ref).await;
+        let mut candidates = Vec::new();
+        let mut sources = BTreeMap::new();
+        for lookup in discovery.lookups {
+            for signed_record in lookup.records {
+                let result_ref = signed_record.record.result_ref.clone();
+                let outputs = self.probe_local_action_outputs(&signed_record.record).await?;
+                let facts = candidate_admission_facts(
+                    lookup.source_id.clone(),
+                    lookup.source_class.clone(),
+                    &signed_record,
+                    &root.derivation,
+                    outputs.as_ref(),
+                    &self.store_dir,
+                    HermeticityMode::Practical,
+                    &trust.trusted_keys,
+                );
+                sources.entry(result_ref).or_insert((lookup.source_id.clone(), lookup.source_class.clone()));
+                candidates.push(DiscoveredActionResultCandidate { signed_record, facts });
+            }
+        }
+        let policy_refs = policy_refs_for_derivation(&root.derivation, &self.store_dir, HermeticityMode::Practical)
+            .map_err(RunError::Build)?;
+        let plan = plan_strong_reuse(
+            StrongReuseRequest {
+                action_ref: action_ref.clone(),
+                output_names: root.derivation.outputs.keys().cloned().collect(),
+                policy: trust_policy_for_action(&policy_refs, &trust.trusted_keys),
+            },
+            candidates,
+        )
+        .map_err(RunError::Build)?;
+        let selected_source = plan.selected_result_ref.as_ref().and_then(|result_ref| sources.get(result_ref).cloned());
+        let disposition = action_result_plan_disposition(&plan);
+        Ok(discovery_runtime_report(action_ref, disposition, plan, selected_source, discovery.diagnostics))
+    }
+
+    async fn probe_local_action_outputs(
+        &self,
+        record: &crunch_action_result_core::ActionResultRecord,
+    ) -> Result<Option<BTreeMap<String, PathInfo>>, RunError> {
+        let mut outputs = BTreeMap::new();
+        for output in &record.outputs {
+            let store_path = StorePath::from_absolute_path_with_prefix(output.store_path.as_bytes(), &self.store_dir)
+                .map_err(|_| {
+                RunError::Build(format!("invalid shared action-result path: {}", output.store_path))
+            })?;
+            let Some(path_info) = self
+                .local_pathinfo
+                .get(*store_path.digest())
+                .await
+                .map_err(|error| RunError::Internal(format!("shared action-result PathInfo probe: {error}")))?
+            else {
+                return Ok(None);
+            };
+            if path_info.store_path != store_path {
+                return Ok(None);
+            }
+            if !castore_has_content(&path_info, self.blob_service.as_ref(), self.directory_service.as_ref()).await? {
+                return Ok(None);
+            }
+            if outputs.insert(output.name.clone(), path_info).is_some() {
+                return Ok(None);
+            }
+        }
+        Ok(Some(outputs))
     }
 
     async fn classify_cache(&self, root: &PlannedRoot, trust: &PlanTrust) -> Result<CachePlanStatus, RunError> {
@@ -665,5 +857,48 @@ async fn castore_has_content(
             .map(|directory| directory.is_some())
             .map_err(|e| RunError::Internal(format!("directory existence check: {e}"))),
         Node::Symlink { .. } => Ok(true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn report_with_rejection() -> crunch_build::ActionResultRuntimeReport {
+        crunch_build::ActionResultRuntimeReport {
+            schema: "mantle-action-result-runtime-report-v1".to_string(),
+            phase: "discovery".to_string(),
+            action_ref: "action-b3:demo".to_string(),
+            disposition: "conflict".to_string(),
+            selected_result_ref: None,
+            selected_source_id: None,
+            selected_source_class: None,
+            trust_basis: Vec::new(),
+            conflict_class: Some("conflicting-action-results".to_string()),
+            candidate_decisions: vec![crunch_action_result_core::CandidateDecision {
+                result_ref: "result-b3:rejected".to_string(),
+                source_id: "local-action-results".to_string(),
+                source_class: "local".to_string(),
+                admitted: false,
+                diagnostics: vec!["record-signature-missing".to_string()],
+                trust_basis: Vec::new(),
+                output_set_digest_blake3: None,
+            }],
+            publication_result_refs: Vec::new(),
+            diagnostics: Vec::new(),
+            non_claims: vec!["index-presence-is-not-output-trust".to_string()],
+        }
+    }
+
+    #[test]
+    fn action_result_plan_human_surfaces_conflicts_and_rejections() {
+        let rendered = render_action_result_plan_human(&report_with_rejection());
+
+        assert!(rendered.contains("disposition=conflict"));
+        assert!(rendered.contains("conflict=conflicting-action-results"));
+        assert!(rendered.contains("result=result-b3:rejected"));
+        assert!(rendered.contains("record-signature-missing"));
+        assert!(rendered.contains("index-presence-is-not-output-trust"));
+        assert!(!rendered.contains("selected=result-b3:rejected"));
     }
 }

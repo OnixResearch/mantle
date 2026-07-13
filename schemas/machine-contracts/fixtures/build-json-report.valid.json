@@ -16,6 +16,33 @@
   "build_environment_reports": [],
   "network_policy_reports": [],
   "workspace_reports": [],
+  "action_result_reports": [
+    {
+      "schema": "mantle-action-result-runtime-report-v1",
+      "phase": "discovery",
+      "action_ref": "mantle-action://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "disposition": "reused",
+      "selected_result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "selected_source_id": "local-action-results",
+      "selected_source_class": "local",
+      "trust_basis": ["record-signature-verified:fixture-key-1"],
+      "conflict_class": null,
+      "candidate_decisions": [
+        {
+          "result_ref": "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_id": "local-action-results",
+          "source_class": "local",
+          "admitted": true,
+          "diagnostics": [],
+          "trust_basis": ["record-signature-verified:fixture-key-1"],
+          "output_set_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "publication_result_refs": [],
+      "diagnostics": [],
+      "non_claims": ["index-presence-is-not-output-trust"]
+    }
+  ],
   "native_dynamic_plans": [],
   "scheduler_priority_decisions": [
     {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -37,6 +37,20 @@ An action ref may index multiple immutable candidates. Identical candidates dedu
 Publication occurs only after output admission and makes complete records visible atomically. Existing local CA mappings remain restart hints and may be promoted only by reconstructing and admitting a complete result record.
 
 Mantle-native local and HTTP sidecars are the initial shells. REv2 or another protocol may be added later only through a separate adapter change with compatibility evidence; this ADR makes no protocol-compatibility claim.
+
+## Implementation
+
+- `crates/crunch-action-result-core` owns bounded records, BLAKE3 identities,
+  candidate validation, deduplication, conflict classification, and strong
+  reuse planning without CAS, executor, or transport dependencies.
+- `crates/crunch-store/src/action_result.rs` owns the distinct
+  `ActionResultStore` interface and atomic local/bounded HTTP shells. It does
+  not implement `PathInfoService` or `BuildService`.
+- `crates/crunch-build/src/orchestrate.rs` joins the interfaces at the
+  pre-execution admission boundary and publishes only after output admission.
+- `crates/crunch-action-result-core/tests/architecture.rs` guards the pure-core
+  dependency boundary. Clean-client and zero-executor-call tests guard the
+  runtime separation.
 
 ## Alternatives Considered
 

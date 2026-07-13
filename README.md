@@ -170,6 +170,30 @@ Stable reason codes: `local-hit`, `remote-hit`, `miss`,
 The `cache_admission` field is omitted when no admission data is available,
 preserving compatibility with existing consumers.
 
+### Shared action results
+
+Mantle publishes a successful derivation as a signed immutable
+`mantle-action-result-v1` record only after every named output has durable,
+signed PathInfo and complete castore content. The action-result index is a
+bounded discovery hint, not trust: every discovered candidate is rechecked
+against the requested derivation, object and PathInfo identities, signatures,
+producer identity, receipt linkage, sandbox/network policy, and reference-scan
+facts before Mantle skips execution. Conflicting fully admitted output sets fail
+with `conflicting-action-results`; source order and CA mappings never choose a
+winner.
+
+Local records live under `<state>/action-results/v1`. Configured HTTP
+substituters expose provider-neutral sidecars under `/action-results/v1/` next
+to their `.narinfo` and NAR objects. Offline store sets never open HTTP action
+sources. Human plans/builds print `shared-action-result` lines; JSON reports
+carry bounded `action_result_reports` with selected/rejected candidates, trust
+basis, source class, conflict class, diagnostics, and explicit non-claims.
+
+The typed source/limits/trust/offline/publication/GC policy is
+[`config/action-result-policy/default.ncl`](config/action-result-policy/default.ncl).
+GC never treats candidate metadata as an output root: it retains local result
+metadata only while the referenced store paths are independently live.
+
 ### Remote metadata cache
 
 Remote cache metadata is cached under the state directory in

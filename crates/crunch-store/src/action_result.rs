@@ -4,11 +4,14 @@
 //! interfaces. Indexes are advisory: this module validates immutable bytes and
 //! publication ordering but does not admit outputs for reuse.
 
+use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::fmt;
 use std::io::ErrorKind;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -30,6 +33,7 @@ use reqwest::header::CONTENT_LENGTH;
 use reqwest::header::ETAG;
 use reqwest::header::IF_MATCH;
 use reqwest::header::IF_NONE_MATCH;
+use serde::Deserialize;
 
 pub const ACTION_RESULT_STORE_LAYOUT_VERSION: &str = "v1";
 pub const LOCAL_ACTION_RESULT_SOURCE_ID: &str = "local-action-results";
@@ -37,7 +41,113 @@ pub const HTTP_ACTION_RESULT_SOURCE_CLASS: &str = "http";
 pub const LOCAL_ACTION_RESULT_SOURCE_CLASS: &str = "local";
 pub const DEFAULT_ACTION_RESULT_HTTP_TIMEOUT_MS: u64 = 5_000;
 pub const MAX_ACTION_RESULT_HTTP_RETRIES: u32 = 4;
+pub const MAX_ACTION_RESULT_SOURCES: usize = 16;
 pub const MAX_ACTION_RESULT_TOTAL_CANDIDATES: usize = 256;
+
+const ACTION_RESULT_POLICY_SCHEMA: &str = "mantle-action-result-runtime-policy-v1";
+const ACTION_RESULT_POLICY_JSON: &str =
+    include_str!("../../../config/action-result-policy/generated/action-result-policy.json");
+static ACTION_RESULT_RUNTIME_POLICY: OnceLock<ActionResultRuntimePolicy> = OnceLock::new();
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActionResultRuntimePolicy {
+    pub schema: String,
+    pub hash_algorithm: String,
+    pub sources: ActionResultSourcePolicy,
+    pub trust: ActionResultTrustRuntimePolicy,
+    pub limits: ActionResultLimitPolicy,
+    pub offline: ActionResultOfflinePolicy,
+    pub publication: ActionResultPublicationPolicy,
+    pub claims: ActionResultClaimPolicy,
+    pub gc: ActionResultGcPolicy,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActionResultSourcePolicy {
+    pub allowed_classes: Vec<String>,
+    pub local_enabled: bool,
+    pub http_enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActionResultTrustRuntimePolicy {
+    pub key_source: String,
+    pub require_record_signature: bool,
+    pub require_pathinfo_signature: bool,
+    pub require_producer_identity_match: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActionResultLimitPolicy {
+    pub max_sources: usize,
+    pub max_candidates: usize,
+    pub max_record_bytes: usize,
+    pub max_index_bytes: usize,
+    pub max_outputs: usize,
+    pub max_signatures: usize,
+    pub http_timeout_ms: u64,
+    pub http_retry_attempts: u32,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActionResultOfflinePolicy {
+    pub local_lookup: bool,
+    pub remote_lookup: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActionResultPublicationPolicy {
+    pub local_enabled: bool,
+    pub http_enabled: bool,
+    pub record_before_index: bool,
+    pub atomic_visibility: bool,
+    pub immutable_no_clobber: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActionResultClaimPolicy {
+    pub required_strength: String,
+    pub non_claims: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ActionResultGcPolicy {
+    pub retention_basis: String,
+    pub candidate_metadata_roots_outputs: bool,
+    pub max_metadata_entries: usize,
+}
+
+pub fn action_result_runtime_policy() -> &'static ActionResultRuntimePolicy {
+    ACTION_RESULT_RUNTIME_POLICY.get_or_init(|| {
+        let policy: ActionResultRuntimePolicy = serde_json::from_str(ACTION_RESULT_POLICY_JSON)
+            .expect("checked-in action-result policy must be valid JSON");
+        assert_eq!(policy.schema, ACTION_RESULT_POLICY_SCHEMA);
+        assert_eq!(policy.hash_algorithm, "BLAKE3");
+        assert_eq!(policy.sources.allowed_classes, [LOCAL_ACTION_RESULT_SOURCE_CLASS, HTTP_ACTION_RESULT_SOURCE_CLASS]);
+        assert_eq!(policy.claims.required_strength, crunch_action_result_core::STRONG_CLAIM);
+        assert!(policy.claims.non_claims.contains(&"ca-mapping-presence-is-not-output-trust".to_string()));
+        assert!(policy.claims.non_claims.contains(&"index-presence-is-not-output-trust".to_string()));
+        assert_eq!(policy.limits.max_sources, MAX_ACTION_RESULT_SOURCES);
+        assert_eq!(policy.limits.max_candidates, MAX_ACTION_RESULT_TOTAL_CANDIDATES);
+        assert_eq!(policy.limits.max_record_bytes, crunch_action_result_core::MAX_ACTION_RESULT_RECORD_BYTES);
+        assert_eq!(policy.limits.max_index_bytes, crunch_action_result_core::MAX_ACTION_RESULT_INDEX_BYTES);
+        assert_eq!(policy.limits.max_outputs, crunch_action_result_core::MAX_ACTION_RESULT_OUTPUTS);
+        assert_eq!(policy.limits.max_signatures, crunch_action_result_core::MAX_ACTION_RESULT_SIGNATURE_REFS);
+        assert_eq!(policy.limits.http_timeout_ms, DEFAULT_ACTION_RESULT_HTTP_TIMEOUT_MS);
+        assert_eq!(policy.limits.http_retry_attempts, MAX_ACTION_RESULT_HTTP_RETRIES);
+        assert!(policy.trust.require_record_signature);
+        assert!(policy.trust.require_pathinfo_signature);
+        assert!(policy.trust.require_producer_identity_match);
+        assert!(policy.publication.record_before_index);
+        assert!(policy.publication.atomic_visibility);
+        assert!(policy.publication.immutable_no_clobber);
+        assert!(policy.offline.local_lookup);
+        assert!(!policy.offline.remote_lookup);
+        assert_eq!(policy.gc.retention_basis, "live-admitted-store-paths");
+        assert!(!policy.gc.candidate_metadata_roots_outputs);
+        policy
+    })
+}
 
 const ACTION_RESULTS_DIR: &str = "action-results";
 const RECORDS_DIR: &str = "records";
@@ -79,6 +189,34 @@ pub struct ActionResultDiscoveryReport {
     pub remote_sources_opened: u32,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ActionResultGcCandidates {
+    pub record_paths: Vec<PathBuf>,
+    pub index_marker_paths: Vec<PathBuf>,
+}
+
+pub fn local_action_result_gc_candidates(
+    state_dir: &Path,
+    live_store_paths: &BTreeSet<String>,
+) -> Result<ActionResultGcCandidates, String> {
+    let store = LocalActionResultStore::new(state_dir);
+    let mut candidates = ActionResultGcCandidates::default();
+    let mut retained_result_refs = HashSet::new();
+    let mut visited_entries = 0usize;
+    collect_record_gc_candidates(
+        &store,
+        live_store_paths,
+        &mut retained_result_refs,
+        &mut candidates,
+        &mut visited_entries,
+    )?;
+    collect_index_gc_candidates(&store, &retained_result_refs, &mut candidates, &mut visited_entries)?;
+    candidates.record_paths.sort();
+    candidates.index_marker_paths.sort();
+    Ok(candidates)
+}
+
+// r[impl cache_substitution.shared_action_result_discovery]
 #[async_trait]
 pub trait ActionResultStore: Send + Sync + fmt::Debug {
     fn source_id(&self) -> &str;
@@ -162,7 +300,7 @@ impl LocalActionResultStore {
         };
         let mut result_refs = Vec::new();
         for entry in read_dir {
-            if result_refs.len() >= MAX_ACTION_RESULT_TOTAL_CANDIDATES {
+            if result_refs.len() >= action_result_runtime_policy().limits.max_candidates {
                 return Err("action-result-local-index-candidate-limit-exceeded".to_string());
             }
             let entry = entry.map_err(|error| format!("action-result-local-index-entry:{error}"))?;
@@ -199,6 +337,103 @@ impl LocalActionResultStore {
         }
         Ok(signed)
     }
+}
+
+fn collect_record_gc_candidates(
+    store: &LocalActionResultStore,
+    live_store_paths: &BTreeSet<String>,
+    retained_result_refs: &mut HashSet<String>,
+    candidates: &mut ActionResultGcCandidates,
+    visited_entries: &mut usize,
+) -> Result<(), String> {
+    let records_dir = store.root.join(RECORDS_DIR);
+    let entries = match std::fs::read_dir(&records_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(format!("action-result-gc-record-dir:{}:{error}", records_dir.display())),
+    };
+    for entry in entries {
+        check_gc_entry_budget(visited_entries)?;
+        let entry = entry.map_err(|error| format!("action-result-gc-record-entry:{error}"))?;
+        let path = entry.path();
+        if !entry.file_type().map_err(|error| format!("action-result-gc-record-type:{error}"))?.is_file() {
+            return Err("action-result-gc-record-entry-not-file".to_string());
+        }
+        let bytes = read_bounded_file(&path, action_result_runtime_policy().limits.max_record_bytes);
+        let signed = bytes
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<SignedActionResultRecord>(&bytes).ok())
+            .filter(|signed| validate_signed_record(signed).is_ok());
+        let Some(signed) = signed else {
+            candidates.record_paths.push(path);
+            continue;
+        };
+        let all_outputs_live = signed.record.outputs.iter().all(|output| live_store_paths.contains(&output.store_path));
+        if all_outputs_live {
+            retained_result_refs.insert(signed.record.result_ref);
+        } else {
+            candidates.record_paths.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn collect_index_gc_candidates(
+    store: &LocalActionResultStore,
+    retained_result_refs: &HashSet<String>,
+    candidates: &mut ActionResultGcCandidates,
+    visited_entries: &mut usize,
+) -> Result<(), String> {
+    let indexes_dir = store.root.join(INDEXES_DIR);
+    let action_dirs = match std::fs::read_dir(&indexes_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(format!("action-result-gc-index-dir:{}:{error}", indexes_dir.display())),
+    };
+    for action_dir in action_dirs {
+        check_gc_entry_budget(visited_entries)?;
+        let action_dir = action_dir.map_err(|error| format!("action-result-gc-index-entry:{error}"))?;
+        if !action_dir.file_type().map_err(|error| format!("action-result-gc-index-type:{error}"))?.is_dir() {
+            return Err("action-result-gc-index-entry-not-directory".to_string());
+        }
+        collect_action_index_gc_candidates(&action_dir.path(), retained_result_refs, candidates, visited_entries)?;
+    }
+    Ok(())
+}
+
+fn collect_action_index_gc_candidates(
+    action_dir: &Path,
+    retained_result_refs: &HashSet<String>,
+    candidates: &mut ActionResultGcCandidates,
+    visited_entries: &mut usize,
+) -> Result<(), String> {
+    let markers = std::fs::read_dir(action_dir)
+        .map_err(|error| format!("action-result-gc-action-index:{}:{error}", action_dir.display()))?;
+    for marker in markers {
+        check_gc_entry_budget(visited_entries)?;
+        let marker = marker.map_err(|error| format!("action-result-gc-index-marker:{error}"))?;
+        let path = marker.path();
+        if !marker.file_type().map_err(|error| format!("action-result-gc-marker-type:{error}"))?.is_file() {
+            return Err("action-result-gc-index-marker-not-file".to_string());
+        }
+        let result_ref = read_bounded_file(&path, action_result_runtime_policy().limits.max_index_bytes)
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .map(|value| value.trim().to_string());
+        if !result_ref.as_ref().is_some_and(|result_ref| retained_result_refs.contains(result_ref)) {
+            candidates.index_marker_paths.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn check_gc_entry_budget(visited_entries: &mut usize) -> Result<(), String> {
+    *visited_entries =
+        visited_entries.checked_add(1).ok_or_else(|| "action-result-gc-entry-count-overflow".to_string())?;
+    if *visited_entries > action_result_runtime_policy().gc.max_metadata_entries {
+        return Err("action-result-gc-entry-limit-exceeded".to_string());
+    }
+    Ok(())
 }
 
 #[async_trait]
@@ -259,7 +494,7 @@ impl HttpActionResultStore {
     }
 
     pub fn with_default_timeout(base_url: Url) -> Result<Self, String> {
-        Self::new(base_url, Duration::from_millis(DEFAULT_ACTION_RESULT_HTTP_TIMEOUT_MS))
+        Self::new(base_url, Duration::from_millis(action_result_runtime_policy().limits.http_timeout_ms))
     }
 
     fn index_url(&self, action_ref: &str) -> Result<Url, String> {
@@ -355,7 +590,7 @@ impl HttpActionResultStore {
         &self,
         signed: &SignedActionResultRecord,
     ) -> Result<ActionResultPublicationStatus, String> {
-        for _ in 0..MAX_ACTION_RESULT_HTTP_RETRIES {
+        for _ in 0..action_result_runtime_policy().limits.http_retry_attempts {
             let (index, etag) = self.fetch_index(&signed.record.action_ref).await?;
             if index.result_refs.contains(&signed.record.result_ref) {
                 return Ok(ActionResultPublicationStatus::Duplicate);
@@ -420,11 +655,15 @@ impl ActionResultStore for HttpActionResultStore {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ActionResultStoreSet {
     local: Vec<Box<dyn ActionResultStore>>,
     remote: Vec<Box<dyn ActionResultStore>>,
     offline: bool,
+    max_sources: usize,
+    max_candidates: usize,
+    publish_local_enabled: bool,
+    publish_remote_enabled: bool,
 }
 
 impl ActionResultStoreSet {
@@ -433,6 +672,10 @@ impl ActionResultStoreSet {
             local: Vec::new(),
             remote: Vec::new(),
             offline,
+            max_sources: action_result_runtime_policy().limits.max_sources,
+            max_candidates: action_result_runtime_policy().limits.max_candidates,
+            publish_local_enabled: action_result_runtime_policy().publication.local_enabled,
+            publish_remote_enabled: action_result_runtime_policy().publication.http_enabled,
         }
     }
 
@@ -448,6 +691,9 @@ impl ActionResultStoreSet {
         &self,
         record: &SignedActionResultRecord,
     ) -> Result<Vec<ActionResultPublicationReport>, String> {
+        if !self.publish_local_enabled {
+            return Err("action-result-local-publication-policy-disabled".to_string());
+        }
         let mut reports = Vec::with_capacity(self.local.len());
         for store in &self.local {
             reports.push(store.publish(record).await?);
@@ -459,6 +705,9 @@ impl ActionResultStoreSet {
         &self,
         record: &SignedActionResultRecord,
     ) -> Result<Vec<ActionResultPublicationReport>, String> {
+        if !self.publish_remote_enabled {
+            return Err("action-result-http-publication-policy-disabled".to_string());
+        }
         if self.offline {
             return Err("action-result-offline-remote-publication-rejected".to_string());
         }
@@ -475,14 +724,33 @@ impl ActionResultStoreSet {
             diagnostics: Vec::new(),
             remote_sources_opened: 0,
         };
-        discover_sources(&self.local, action_ref, false, &mut report).await;
+        let mut attempted_sources = 0usize;
+        discover_sources(
+            &self.local,
+            action_ref,
+            false,
+            self.max_sources,
+            self.max_candidates,
+            &mut attempted_sources,
+            &mut report,
+        )
+        .await;
         if self.offline {
             if !self.remote.is_empty() {
                 report.diagnostics.push("action-result-offline-remote-sources-skipped".to_string());
             }
             return report;
         }
-        discover_sources(&self.remote, action_ref, true, &mut report).await;
+        discover_sources(
+            &self.remote,
+            action_ref,
+            true,
+            self.max_sources,
+            self.max_candidates,
+            &mut attempted_sources,
+            &mut report,
+        )
+        .await;
         report
     }
 }
@@ -491,11 +759,19 @@ async fn discover_sources(
     stores: &[Box<dyn ActionResultStore>],
     action_ref: &str,
     is_remote: bool,
+    max_sources: usize,
+    max_candidates: usize,
+    attempted_sources: &mut usize,
     report: &mut ActionResultDiscoveryReport,
 ) {
     for store in stores {
-        if report.lookups.iter().map(|lookup| lookup.records.len()).sum::<usize>() >= MAX_ACTION_RESULT_TOTAL_CANDIDATES
-        {
+        if *attempted_sources >= max_sources {
+            report.diagnostics.push("action-result-source-limit-exceeded".to_string());
+            return;
+        }
+        *attempted_sources = attempted_sources.saturating_add(1);
+        let current_candidates = report.lookups.iter().map(|lookup| lookup.records.len()).sum::<usize>();
+        if current_candidates >= max_candidates {
             report.diagnostics.push("action-result-total-candidate-limit-exceeded".to_string());
             return;
         }
@@ -503,7 +779,17 @@ async fn discover_sources(
             report.remote_sources_opened = report.remote_sources_opened.saturating_add(1);
         }
         match store.lookup(action_ref).await {
-            Ok(lookup) => report.lookups.push(lookup),
+            Ok(lookup) => {
+                let remaining = max_candidates.saturating_sub(current_candidates);
+                if lookup.records.len() > remaining {
+                    report.diagnostics.push(format!(
+                        "action-result-source-rejected:{}:action-result-total-candidate-limit-exceeded",
+                        store.source_id()
+                    ));
+                    continue;
+                }
+                report.lookups.push(lookup);
+            }
             Err(error) => {
                 report.diagnostics.push(format!("action-result-source-rejected:{}:{error}", store.source_id()))
             }
@@ -516,9 +802,36 @@ fn validate_signed_record(signed: &SignedActionResultRecord) -> Result<(), Strin
     if signed.record_signatures.is_empty() {
         return Err("action-result-record-signature-missing".to_string());
     }
+    if signed.record_signatures.len() > action_result_runtime_policy().limits.max_signatures {
+        return Err("action-result-record-signature-count-invalid".to_string());
+    }
+    let mut canonical_signatures = signed.record_signatures.clone();
+    canonical_signatures.sort();
+    canonical_signatures.dedup();
+    if canonical_signatures != signed.record_signatures {
+        return Err("action-result-record-signatures-not-canonical".to_string());
+    }
+    for signature in &signed.record_signatures {
+        validate_detached_signature_shape(signature)?;
+    }
     let bytes = canonical_signed_record_bytes(signed)?;
     if bytes.len() > crunch_action_result_core::MAX_ACTION_RESULT_RECORD_BYTES {
         return Err("action-result-signed-record-too-large".to_string());
+    }
+    Ok(())
+}
+
+fn validate_detached_signature_shape(
+    signature: &crunch_action_result_core::DetachedRecordSignature,
+) -> Result<(), String> {
+    if signature.key_name.is_empty() || signature.key_name.len() > crunch_action_result_core::MAX_ACTION_RESULT_ID_BYTES
+    {
+        return Err("action-result-record-signature-key-invalid".to_string());
+    }
+    if signature.signature.is_empty()
+        || signature.signature.len() > crunch_action_result_core::MAX_ACTION_RESULT_ID_BYTES
+    {
+        return Err("action-result-record-signature-value-invalid".to_string());
     }
     Ok(())
 }
@@ -555,7 +868,10 @@ fn write_and_link_no_clobber(
     temp.sync_all()
         .map_err(|error| format!("action-result-publication-sync-temp:{}:{error}", temp_path.display()))?;
     match std::fs::hard_link(temp_path, final_path) {
-        Ok(()) => Ok(ActionResultPublicationStatus::Published),
+        Ok(()) => {
+            sync_parent_directory(final_path)?;
+            Ok(ActionResultPublicationStatus::Published)
+        }
         Err(error) if error.kind() == ErrorKind::AlreadyExists => {
             let existing = read_bounded_file(final_path, bytes.len().saturating_add(1))?;
             if existing == bytes {
@@ -568,6 +884,15 @@ fn write_and_link_no_clobber(
             Err(format!("action-result-publication-link:{}->{}:{error}", temp_path.display(), final_path.display()))
         }
     }
+}
+
+fn sync_parent_directory(path: &Path) -> Result<(), String> {
+    let parent = path.parent().ok_or_else(|| "action-result-publication-parent-missing".to_string())?;
+    let directory = std::fs::File::open(parent)
+        .map_err(|error| format!("action-result-publication-open-parent:{}:{error}", parent.display()))?;
+    directory
+        .sync_all()
+        .map_err(|error| format!("action-result-publication-sync-parent:{}:{error}", parent.display()))
 }
 
 fn unique_temp_path(final_path: &Path) -> PathBuf {
@@ -740,6 +1065,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn gc_retains_metadata_only_while_outputs_are_independently_live() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = LocalActionResultStore::new(temp.path());
+        let record = signed_record("gc-policy");
+        store.publish(&record).await.unwrap();
+        let live_paths = BTreeSet::from([record.record.outputs[0].store_path.clone()]);
+
+        let retained = local_action_result_gc_candidates(temp.path(), &live_paths).unwrap();
+        let collectable = local_action_result_gc_candidates(temp.path(), &BTreeSet::new()).unwrap();
+
+        assert!(retained.record_paths.is_empty());
+        assert!(retained.index_marker_paths.is_empty());
+        assert_eq!(collectable.record_paths.len(), 1);
+        assert_eq!(collectable.index_marker_paths.len(), 1);
+        assert!(!action_result_runtime_policy().gc.candidate_metadata_roots_outputs);
+    }
+
+    #[tokio::test]
+    async fn duplicate_detached_signatures_are_rejected_before_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = LocalActionResultStore::new(temp.path());
+        let mut record = signed_record("duplicate-signature");
+        record.record_signatures.push(record.record_signatures[0].clone());
+
+        let error = store.publish(&record).await.unwrap_err();
+
+        assert_eq!(error, "action-result-record-signatures-not-canonical");
+        assert!(!store.record_path(&record.record.result_ref).unwrap().exists());
+    }
+
+    #[tokio::test]
     async fn local_interrupted_publication_is_not_discoverable() {
         let temp = tempfile::tempdir().unwrap();
         let store = LocalActionResultStore::new(temp.path());
@@ -789,6 +1145,7 @@ mod tests {
     #[derive(Debug)]
     struct CountingRemoteStore {
         calls: Arc<Mutex<u32>>,
+        records: usize,
     }
 
     #[async_trait]
@@ -808,7 +1165,7 @@ mod tests {
                 source_id: self.source_id().to_string(),
                 source_class: self.source_class().to_string(),
                 index: canonical_action_result_index(action_ref.to_string(), Vec::new()).unwrap(),
-                records: Vec::new(),
+                records: vec![signed_record("bounded-source"); self.records],
                 diagnostics: Vec::new(),
             })
         }
@@ -822,13 +1179,55 @@ mod tests {
     async fn offline_discovery_never_opens_remote_sources() {
         let calls = Arc::new(Mutex::new(0));
         let mut stores = ActionResultStoreSet::new(true);
-        stores.add_remote(Box::new(CountingRemoteStore { calls: calls.clone() }));
+        stores.add_remote(Box::new(CountingRemoteStore {
+            calls: calls.clone(),
+            records: 0,
+        }));
 
         let report = stores.discover(&typed_ref(ACTION_REF_PREFIX, "action")).await;
 
         assert_eq!(*calls.lock().unwrap(), 0);
         assert_eq!(report.remote_sources_opened, 0);
         assert!(report.diagnostics.contains(&"action-result-offline-remote-sources-skipped".to_string()));
+    }
+
+    #[tokio::test]
+    async fn source_limit_bounds_empty_or_failing_remote_sources() {
+        let calls = Arc::new(Mutex::new(0));
+        let mut stores = ActionResultStoreSet::new(false);
+        stores.max_sources = 1;
+        stores.add_remote(Box::new(CountingRemoteStore {
+            calls: calls.clone(),
+            records: 0,
+        }));
+        stores.add_remote(Box::new(CountingRemoteStore {
+            calls: calls.clone(),
+            records: 0,
+        }));
+
+        let report = stores.discover(&typed_ref(ACTION_REF_PREFIX, "action")).await;
+
+        assert_eq!(*calls.lock().unwrap(), 1);
+        assert_eq!(report.remote_sources_opened, 1);
+        assert!(report.diagnostics.contains(&"action-result-source-limit-exceeded".to_string()));
+    }
+
+    #[tokio::test]
+    async fn aggregate_candidate_limit_rejects_the_offending_source_response() {
+        let calls = Arc::new(Mutex::new(0));
+        let mut stores = ActionResultStoreSet::new(false);
+        stores.max_candidates = 1;
+        stores.add_remote(Box::new(CountingRemoteStore {
+            calls: calls.clone(),
+            records: 2,
+        }));
+
+        let report = stores.discover(&typed_ref(ACTION_REF_PREFIX, "action")).await;
+
+        assert_eq!(*calls.lock().unwrap(), 1);
+        assert!(report.lookups.is_empty());
+        assert_eq!(report.remote_sources_opened, 1);
+        assert!(report.diagnostics[0].contains("action-result-total-candidate-limit-exceeded"));
     }
 
     #[test]

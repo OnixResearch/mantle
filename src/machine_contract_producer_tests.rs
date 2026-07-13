@@ -120,6 +120,37 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
         build_environment_reports: Vec::new(),
         network_policy_reports: Vec::new(),
         workspace_reports: Vec::new(),
+        action_result_reports: vec![crunch_build::ActionResultRuntimeReport {
+            schema: "mantle-action-result-runtime-report-v1".to_string(),
+            phase: "discovery".to_string(),
+            action_ref: "mantle-action://blake3/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            disposition: "reused".to_string(),
+            selected_result_ref: Some(
+                "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    .to_string(),
+            ),
+            selected_source_id: Some("local-action-results".to_string()),
+            selected_source_class: Some("local".to_string()),
+            trust_basis: vec!["record-signature-verified:fixture-key-1".to_string()],
+            conflict_class: None,
+            candidate_decisions: vec![crunch_action_result_core::CandidateDecision {
+                result_ref:
+                    "mantle-action-result://blake3/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                        .to_string(),
+                source_id: "local-action-results".to_string(),
+                source_class: "local".to_string(),
+                admitted: true,
+                diagnostics: Vec::new(),
+                trust_basis: vec!["record-signature-verified:fixture-key-1".to_string()],
+                output_set_digest_blake3: Some(
+                    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string(),
+                ),
+            }],
+            publication_result_refs: Vec::new(),
+            diagnostics: Vec::new(),
+            non_claims: vec!["index-presence-is-not-output-trust".to_string()],
+        }],
         native_dynamic_plans: Vec::new(),
         scheduler_priority_decisions: vec![scheduler_fixture_decision()],
         remote_telemetry_events: Vec::new(),

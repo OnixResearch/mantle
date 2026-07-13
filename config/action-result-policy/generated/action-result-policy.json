@@ -1,0 +1,52 @@
+{
+  "claims": {
+    "non_claims": [
+      "ca-mapping-presence-is-not-output-trust",
+      "executor-correctness",
+      "index-presence-is-not-output-trust"
+    ],
+    "required_strength": "strong"
+  },
+  "gc": {
+    "candidate_metadata_roots_outputs": false,
+    "max_metadata_entries": 10000,
+    "retention_basis": "live-admitted-store-paths"
+  },
+  "hash_algorithm": "BLAKE3",
+  "limits": {
+    "http_retry_attempts": 4,
+    "http_timeout_ms": 5000,
+    "max_candidates": 256,
+    "max_index_bytes": 262144,
+    "max_outputs": 64,
+    "max_record_bytes": 1048576,
+    "max_signatures": 64,
+    "max_sources": 16
+  },
+  "offline": {
+    "local_lookup": true,
+    "remote_lookup": false
+  },
+  "publication": {
+    "atomic_visibility": true,
+    "http_enabled": false,
+    "immutable_no_clobber": true,
+    "local_enabled": true,
+    "record_before_index": true
+  },
+  "schema": "mantle-action-result-runtime-policy-v1",
+  "sources": {
+    "allowed_classes": [
+      "local",
+      "http"
+    ],
+    "http_enabled": true,
+    "local_enabled": true
+  },
+  "trust": {
+    "key_source": "configured-trusted-public-keys",
+    "require_pathinfo_signature": true,
+    "require_producer_identity_match": true,
+    "require_record_signature": true
+  }
+}

@@ -4746,6 +4746,7 @@ fn remote_client_build_json_report(
         "hermeticity_audit_events": [],
         "build_environment_reports": [],
         "network_policy_reports": [],
+        "action_result_reports": [],
         "native_dynamic_plans": [],
         "scheduler_priority_decisions": &report.priority_decisions,
         "remote_telemetry_events": telemetry_events,

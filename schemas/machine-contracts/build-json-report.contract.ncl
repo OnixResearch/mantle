@@ -2,6 +2,7 @@
 # Eager exact predicate over the supported schema subset; do not edit.
 let C = import "prelude.ncl" in
 let DEFAULT_WORKSPACE_PATH_BYTES_MAX = 4096 in
+let MAX_ACTION_RESULT_CANDIDATES = 256 in
 let MAX_AGED_AFTER_EPOCHS = 79999 in
 let MAX_AST_GREP_CLAIM_LABEL_COUNT = 8 in
 let MAX_AST_GREP_FINDING_SUMMARY_COUNT = 1000000 in
@@ -48,6 +49,48 @@ let MIN_TELEMETRY_VALUE = 1 in
 let MIN_TRANSFER_BYTES = 0 in
 let PRIORITY_NON_CLAIM_COUNT = 5 in
 let SCHEDULING_PREFERENCE_FIELD_COUNT = 3 in
+let is_string_array = fun value => ((std.is_array (value)
+  && std.array.length (value) <= MAX_BUILD_REPORT_ROWS
+  && std.array.all (fun item_1 => ((std.is_string (item_1)
+  && C.IsRedactionSafe (item_1)))) (value))) in
+let is_action_result_candidate = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["admitted","diagnostics","output_set_digest_blake3","result_ref","source_class","source_id","trust_basis"]) (std.record.fields (value))
+  && (std.record.has_field "admitted" (value) && (((std.is_bool (std.record.get "admitted" (value))))))
+  && (std.record.has_field "diagnostics" (value) && (is_string_array (std.record.get "diagnostics" (value))))
+  && (std.record.has_field "output_set_digest_blake3" (value) && ((((std.record.get "output_set_digest_blake3" (value)) == null || ((std.is_string (std.record.get "output_set_digest_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "output_set_digest_blake3" (value))))))))
+  && (std.record.has_field "result_ref" (value) && (((std.is_string (std.record.get "result_ref" (value))
+  && C.IsNonEmptyString (std.record.get "result_ref" (value))))))
+  && (std.record.has_field "source_class" (value) && ((std.array.elem (std.record.get "source_class" (value)) ["local","http"]
+  && (std.is_string (std.record.get "source_class" (value))))))
+  && (std.record.has_field "source_id" (value) && (((std.is_string (std.record.get "source_id" (value))
+  && C.IsNonEmptyString (std.record.get "source_id" (value))))))
+  && (std.record.has_field "trust_basis" (value) && (is_string_array (std.record.get "trust_basis" (value)))))) in
+let is_action_result_report = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["action_ref","candidate_decisions","conflict_class","diagnostics","disposition","non_claims","phase","publication_result_refs","schema","selected_result_ref","selected_source_class","selected_source_id","trust_basis"]) (std.record.fields (value))
+  && (std.record.has_field "action_ref" (value) && (((std.is_string (std.record.get "action_ref" (value))
+  && C.IsNonEmptyString (std.record.get "action_ref" (value))))))
+  && (std.record.has_field "candidate_decisions" (value) && (((std.is_array (std.record.get "candidate_decisions" (value))
+  && std.array.length (std.record.get "candidate_decisions" (value)) <= MAX_ACTION_RESULT_CANDIDATES
+  && std.array.all (fun item_2 => is_action_result_candidate (item_2)) (std.record.get "candidate_decisions" (value))))))
+  && (std.record.has_field "conflict_class" (value) && ((((std.record.get "conflict_class" (value)) == null || ((std.is_string (std.record.get "conflict_class" (value))
+  && C.IsNonEmptyString (std.record.get "conflict_class" (value))))))))
+  && (std.record.has_field "diagnostics" (value) && (is_string_array (std.record.get "diagnostics" (value))))
+  && (std.record.has_field "disposition" (value) && ((std.array.elem (std.record.get "disposition" (value)) ["miss","reused","conflict","published"]
+  && (std.is_string (std.record.get "disposition" (value))))))
+  && (std.record.has_field "non_claims" (value) && (is_string_array (std.record.get "non_claims" (value))))
+  && (std.record.has_field "phase" (value) && ((std.array.elem (std.record.get "phase" (value)) ["discovery","publication"]
+  && (std.is_string (std.record.get "phase" (value))))))
+  && (std.record.has_field "publication_result_refs" (value) && (is_string_array (std.record.get "publication_result_refs" (value))))
+  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-action-result-runtime-report-v1"
+  && (std.is_string (std.record.get "schema" (value))))))
+  && (std.record.has_field "selected_result_ref" (value) && ((((std.record.get "selected_result_ref" (value)) == null || ((std.is_string (std.record.get "selected_result_ref" (value))
+  && C.IsNonEmptyString (std.record.get "selected_result_ref" (value))))))))
+  && (std.record.has_field "selected_source_class" (value) && ((std.array.elem (std.record.get "selected_source_class" (value)) ["local","http",null]
+  && ((std.record.get "selected_source_class" (value)) == null || ((std.is_string (std.record.get "selected_source_class" (value))))))))
+  && (std.record.has_field "selected_source_id" (value) && ((((std.record.get "selected_source_id" (value)) == null || ((std.is_string (std.record.get "selected_source_id" (value))
+  && C.IsNonEmptyString (std.record.get "selected_source_id" (value))))))))
+  && (std.record.has_field "trust_basis" (value) && (is_string_array (std.record.get "trust_basis" (value)))))) in
 let is_adapter_health = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["reason_code","status"]) (std.record.fields (value))
   && (std.record.has_field "reason_code" (value) && (((std.is_string (std.record.get "reason_code" (value))
@@ -256,10 +299,6 @@ let is_source_entry = fun value => ((std.is_record (value)
   && C.IsSafeReference (std.record.get "path" (value))))))
   && (std.record.has_field "role" (value) && (((std.is_string (std.record.get "role" (value))
   && C.IsNonEmptyString (std.record.get "role" (value)))))))) in
-let is_string_array = fun value => ((std.is_array (value)
-  && std.array.length (value) <= MAX_BUILD_REPORT_ROWS
-  && std.array.all (fun item_1 => ((std.is_string (item_1)
-  && C.IsRedactionSafe (item_1)))) (value))) in
 let is_toolchain = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["cargo","linker","rustc"]) (std.record.fields (value))
   && (std.record.has_field "cargo" (value) && (((std.is_string (std.record.get "cargo" (value))
@@ -916,7 +955,10 @@ let is_workspace = fun value => ((std.is_record (value)
   && (std.record.has_field "workspace_id" (value) && ((((std.record.get "workspace_id" (value)) == null || ((std.is_string (std.record.get "workspace_id" (value))
   && C.Utf8ByteLength (std.record.get "workspace_id" (value)) <= MAX_WORKSPACE_ID_BYTES)))))))) in
 C.FromPredicate (fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["ast_grep_structural_evidence","ast_grep_structural_evidence_diagnostics","build_environment_reports","cargo_build_evidence","cargo_build_evidence_diagnostics","counts","diagnostic_persistence_failures","failed","file","fod_mismatches","frontend_artifact_attestations","hermeticity_audit_events","hermeticity_mode","native_dynamic_plans","network_policy_reports","outcomes","output_dir","remote_observability","remote_telemetry_events","scheduler_policy","scheduler_priority_decisions","schema","state_dir","store_dir","workspace_reports"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["action_result_reports","ast_grep_structural_evidence","ast_grep_structural_evidence_diagnostics","build_environment_reports","cargo_build_evidence","cargo_build_evidence_diagnostics","counts","diagnostic_persistence_failures","failed","file","fod_mismatches","frontend_artifact_attestations","hermeticity_audit_events","hermeticity_mode","native_dynamic_plans","network_policy_reports","outcomes","output_dir","remote_observability","remote_telemetry_events","scheduler_policy","scheduler_priority_decisions","schema","state_dir","store_dir","workspace_reports"]) (std.record.fields (value))
+  && (!std.record.has_field "action_result_reports" (value) || (((std.is_array (std.record.get "action_result_reports" (value))
+  && std.array.length (std.record.get "action_result_reports" (value)) <= MAX_BUILD_REPORT_ROWS
+  && std.array.all (fun item_2 => is_action_result_report (item_2)) (std.record.get "action_result_reports" (value))))))
   && (std.record.has_field "ast_grep_structural_evidence" (value) && (((std.is_array (std.record.get "ast_grep_structural_evidence" (value))
   && std.array.length (std.record.get "ast_grep_structural_evidence" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_ast_grep_evidence (item_2)) (std.record.get "ast_grep_structural_evidence" (value))))))

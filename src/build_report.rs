@@ -37,6 +37,8 @@ pub struct BuildJsonReport {
     pub build_environment_reports: Vec<BuildJsonEnvironmentReport>,
     pub network_policy_reports: Vec<BuildJsonNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub scheduler_priority_decisions: Vec<crunch_pipeline::PriorityDecisionEvidence>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -387,6 +389,7 @@ fn build_json_report(
     let build_environment_reports = build_environment_reports(result);
     let network_policy_reports = build_network_policy_reports(result);
     let workspace_reports = result.workspace_reports.clone();
+    let action_result_reports = result.action_result_reports.clone();
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
     let scheduler_priority_decisions = result.priority_decisions.clone();
     let remote_telemetry_events = result
@@ -407,6 +410,7 @@ fn build_json_report(
         build_environment_reports,
         network_policy_reports,
         workspace_reports,
+        action_result_reports,
         native_dynamic_plans,
         scheduler_priority_decisions,
         remote_telemetry_events,
@@ -1086,6 +1090,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1149,6 +1154,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1284,6 +1290,21 @@ mod tests {
                 cleanup_reason: crunch_build::WorkspaceReasonCode::Accepted,
                 snapshot_ref: None,
             }],
+            action_result_reports: vec![crunch_build::ActionResultRuntimeReport {
+                schema: "mantle-action-result-runtime-report-v1".to_string(),
+                phase: "discovery".to_string(),
+                action_ref: "action-b3:demo".to_string(),
+                disposition: "reused".to_string(),
+                selected_result_ref: Some("result-b3:demo".to_string()),
+                selected_source_id: Some("local-state".to_string()),
+                selected_source_class: Some("local".to_string()),
+                trust_basis: vec!["record-signature-verified:builder-key-1".to_string()],
+                conflict_class: None,
+                candidate_decisions: Vec::new(),
+                publication_result_refs: Vec::new(),
+                diagnostics: Vec::new(),
+                non_claims: vec!["index-presence-is-not-output-trust".to_string()],
+            }],
             native_dynamic_plans: vec![crunch_build::NativeDynamicPlanReport {
                 mode: "native".to_string(),
                 producer_key: drv_key_for(&config.store_dir, &drv_path),
@@ -1330,6 +1351,14 @@ mod tests {
         assert!(!report.workspace_reports[0].shared_action_publish_allowed);
         assert!(!report.workspace_reports[0].original_execution_hermetic);
         assert!(report.workspace_reports[0].clean_comparison_matched);
+        assert_eq!(report.action_result_reports.len(), 1);
+        assert_eq!(report.action_result_reports[0].disposition, "reused");
+        assert_eq!(report.action_result_reports[0].selected_source_class.as_deref(), Some("local"));
+        assert!(
+            report.action_result_reports[0]
+                .non_claims
+                .contains(&"index-presence-is-not-output-trust".to_string())
+        );
         assert_eq!(report.native_dynamic_plans.len(), 1);
         assert_eq!(report.native_dynamic_plans[0].mode, "native");
         assert_eq!(report.native_dynamic_plans[0].output_name, "plan");
@@ -1448,6 +1477,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1850,6 +1880,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };
@@ -1990,6 +2021,7 @@ mod tests {
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
         };

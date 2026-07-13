@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use serde::Serialize;
 
+// r[impl build_correctness.shared_action_result_records]
 pub const ACTION_RESULT_SCHEMA: &str = "mantle-action-result-v1";
 pub const ACTION_RESULT_INDEX_SCHEMA: &str = "mantle-action-result-index-v1";
 pub const ACTION_RESULT_POLICY_SCHEMA: &str = "mantle-action-result-policy-v1";
@@ -29,8 +30,7 @@ pub const PUBLICATION_POLICY_REF_PREFIX: &str = "mantle-publication-policy://bla
 pub const SIGNATURE_REF_PREFIX: &str = "mantle-signature://blake3/";
 pub const CONFLICTING_ACTION_RESULTS: &str = "conflicting-action-results";
 pub const STRONG_CLAIM: &str = "strong";
-pub const SOURCE_CLASS_LOCAL: &str = "local";
-pub const SOURCE_CLASS_HTTP: &str = "http";
+const DEFAULT_CONFIGURED_SOURCE_CLASS: &str = "configured-source";
 pub const MAX_ACTION_RESULT_OUTPUTS: usize = 64;
 pub const MAX_ACTION_RESULT_METADATA_REFS: usize = 256;
 pub const MAX_ACTION_RESULT_SIGNATURE_REFS: usize = 64;
@@ -140,7 +140,7 @@ impl Default for ActionResultTrustPolicy {
             policy_id: "mantle-action-result-default-v1".to_string(),
             trusted_producers: Vec::new(),
             trusted_record_signers: Vec::new(),
-            allowed_source_classes: vec![SOURCE_CLASS_LOCAL.to_string(), SOURCE_CLASS_HTTP.to_string()],
+            allowed_source_classes: vec![DEFAULT_CONFIGURED_SOURCE_CLASS.to_string()],
             allowed_sandbox_policy_refs: Vec::new(),
             allowed_network_policy_refs: Vec::new(),
             required_non_claims: required_non_claims(),
@@ -161,6 +161,7 @@ pub struct CandidateAdmissionFacts {
     pub path_info_refs_linked: bool,
     pub path_info_signatures_verified: bool,
     pub producer_policy_admitted: bool,
+    pub publication_policy_admitted: bool,
     pub sandbox_policy_admitted: bool,
     pub network_policy_admitted: bool,
     pub reference_scans_admitted: bool,
@@ -445,6 +446,7 @@ fn validate_candidate_admission_facts(facts: &CandidateAdmissionFacts, diagnosti
     push_missing_fact(diagnostics, facts.path_info_refs_linked, "action-result-pathinfo-linkage-invalid");
     push_missing_fact(diagnostics, facts.path_info_signatures_verified, "action-result-pathinfo-signature-untrusted");
     push_missing_fact(diagnostics, facts.producer_policy_admitted, "action-result-producer-policy-rejected");
+    push_missing_fact(diagnostics, facts.publication_policy_admitted, "action-result-publication-policy-rejected");
     push_missing_fact(diagnostics, facts.sandbox_policy_admitted, "action-result-sandbox-policy-rejected");
     push_missing_fact(diagnostics, facts.network_policy_admitted, "action-result-network-policy-rejected");
     push_missing_fact(diagnostics, facts.reference_scans_admitted, "action-result-reference-scan-rejected");
@@ -699,6 +701,8 @@ mod tests {
 
     const PRODUCER: &str = "builder-key-1";
     const SOURCE: &str = "local-action-results";
+    const SOURCE_CLASS_LOCAL: &str = "local";
+    const SOURCE_CLASS_HTTP: &str = "http";
     const SIGNER: &str = "builder-key-1";
 
     fn typed_ref(prefix: &str, seed: &str) -> String {
@@ -740,6 +744,7 @@ mod tests {
         ActionResultTrustPolicy {
             trusted_producers: vec![PRODUCER.to_string()],
             trusted_record_signers: vec![SIGNER.to_string()],
+            allowed_source_classes: vec![SOURCE_CLASS_LOCAL.to_string(), SOURCE_CLASS_HTTP.to_string()],
             allowed_sandbox_policy_refs: vec![typed_ref(SANDBOX_POLICY_REF_PREFIX, "sandbox")],
             allowed_network_policy_refs: vec![typed_ref(NETWORK_POLICY_REF_PREFIX, "network")],
             ..ActionResultTrustPolicy::default()
@@ -756,6 +761,7 @@ mod tests {
             path_info_refs_linked: true,
             path_info_signatures_verified: true,
             producer_policy_admitted: true,
+            publication_policy_admitted: true,
             sandbox_policy_admitted: true,
             network_policy_admitted: true,
             reference_scans_admitted: true,
@@ -771,6 +777,7 @@ mod tests {
         }
     }
 
+    // r[verify build_correctness.shared_action_result_records]
     #[test]
     fn permutation_equivalent_records_and_indexes_have_identical_refs() {
         let mut left_input = record_input("same");
@@ -810,6 +817,7 @@ mod tests {
         assert!(plan.conflict_class.is_none());
     }
 
+    // r[verify build_correctness.shared_action_result_admission]
     #[test]
     fn conflicting_admitted_output_sets_fail_strong_reuse_without_source_order_selection() {
         let left = DiscoveredActionResultCandidate {
@@ -845,6 +853,7 @@ mod tests {
         candidate.facts.object_refs_complete = false;
         candidate.facts.path_info_signatures_verified = false;
         candidate.facts.producer_policy_admitted = false;
+        candidate.facts.publication_policy_admitted = false;
         candidate.facts.reference_scans_admitted = false;
 
         let plan = plan_strong_reuse(request(), vec![candidate]).unwrap();
@@ -857,6 +866,7 @@ mod tests {
         assert!(diagnostics.contains(&"action-result-object-incomplete".to_string()));
         assert!(diagnostics.contains(&"action-result-pathinfo-signature-untrusted".to_string()));
         assert!(diagnostics.contains(&"action-result-producer-policy-rejected".to_string()));
+        assert!(diagnostics.contains(&"action-result-publication-policy-rejected".to_string()));
         assert!(diagnostics.contains(&"action-result-reference-scan-rejected".to_string()));
     }
 

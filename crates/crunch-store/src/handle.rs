@@ -388,11 +388,24 @@ fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
     }
 }
 
-fn configured_action_result_stores(state_dir: &Path, remote_urls: &[Url]) -> ActionResultStoreSet {
+fn configured_action_result_stores(state_dir: &Path, remote_urls: &[String]) -> ActionResultStoreSet {
+    let policy = crate::action_result::action_result_runtime_policy();
     let mut stores = ActionResultStoreSet::new(remote_urls.is_empty());
-    stores.add_local(Box::new(LocalActionResultStore::new(state_dir)));
+    if policy.sources.local_enabled {
+        stores.add_local(Box::new(LocalActionResultStore::new(state_dir)));
+    }
+    if !policy.sources.http_enabled {
+        return stores;
+    }
     for remote_url in remote_urls {
-        match HttpActionResultStore::with_default_timeout(remote_url.clone()) {
+        let parsed = match Url::parse(remote_url) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                tracing::warn!(url = %remote_url, error = %error, "shared action-result HTTP source disabled");
+                continue;
+            }
+        };
+        match HttpActionResultStore::with_default_timeout(parsed) {
             Ok(store) => stores.add_remote(Box::new(store)),
             Err(error) => {
                 tracing::warn!(url = %remote_url, error = %error, "shared action-result HTTP source disabled");
@@ -518,7 +531,7 @@ impl StoreHandle {
         }
 
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
-        let action_result_stores = configured_action_result_stores(&config.state_dir, &remote_cache_urls);
+        let action_result_stores = configured_action_result_stores(&config.state_dir, &config.remote_cache_urls);
 
         Ok(Self {
             blob_service,
@@ -708,7 +721,7 @@ impl StoreHandle {
         }
 
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
-        let action_result_stores = configured_action_result_stores(&config.state_dir, &remote_cache_urls);
+        let action_result_stores = configured_action_result_stores(&config.state_dir, &config.remote_cache_urls);
 
         Ok(Self {
             blob_service: combined_blob,
@@ -805,6 +818,72 @@ impl StoreHandle {
 
     pub async fn discover_action_results(&self, action_ref: &str) -> ActionResultDiscoveryReport {
         self.action_result_stores.discover(action_ref).await
+    }
+
+    pub async fn probe_action_result_outputs(
+        &self,
+        record: &crunch_action_result_core::ActionResultRecord,
+    ) -> Result<BTreeMap<String, PathInfo>, String> {
+        let mut outputs = BTreeMap::new();
+        for output in &record.outputs {
+            let store_path = StorePath::from_absolute_path_with_prefix(output.store_path.as_bytes(), &self.store_dir)
+                .map_err(|_| format!("action-result-output-store-path-invalid:{}", output.store_path))?;
+            let digest = *store_path.digest();
+            let local = self
+                .pathinfo_service
+                .get(digest)
+                .await
+                .map_err(|error| format!("action-result-local-pathinfo-query:{error}"))?;
+            let path_info = match local {
+                Some(path_info) => path_info,
+                None => {
+                    let remote = self
+                        .remote_pathinfo
+                        .as_ref()
+                        .ok_or_else(|| "action-result-output-pathinfo-missing".to_string())?;
+                    remote
+                        .get(digest)
+                        .await
+                        .map_err(|error| format!("action-result-remote-pathinfo-query:{error}"))?
+                        .ok_or_else(|| "action-result-output-pathinfo-missing".to_string())?
+                }
+            };
+            if path_info.store_path != store_path {
+                return Err("action-result-output-pathinfo-store-path-mismatch".to_string());
+            }
+            if !self
+                .castore_has_complete_content(&path_info.node)
+                .await
+                .map_err(|error| format!("action-result-object-completeness:{error}"))?
+            {
+                return Err("action-result-output-object-incomplete".to_string());
+            }
+            if outputs.insert(output.name.clone(), path_info).is_some() {
+                return Err("action-result-output-name-duplicate".to_string());
+            }
+        }
+        Ok(outputs)
+    }
+
+    pub async fn admit_action_result_outputs(
+        &mut self,
+        outputs: &BTreeMap<String, PathInfo>,
+        is_root: bool,
+        root_source: Option<GcRootSource>,
+    ) -> Result<(), Error> {
+        for (output_name, path_info) in outputs {
+            self.persist_and_export_signed_output(PersistOutputRequest {
+                output_name,
+                output_path: &path_info.store_path,
+                path_info: path_info.clone(),
+                final_node: path_info.node.clone(),
+                provenance: None,
+                is_root,
+                root_source,
+            })
+            .await?;
+        }
+        Ok(())
     }
 
     pub async fn publish_local_action_result(

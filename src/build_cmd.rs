@@ -152,6 +152,7 @@ pub fn report_build_result(
     }
     if output_mode.is_human() {
         print_hermeticity_summary(result);
+        print_action_result_summary(result);
         if config.verbose {
             print_priority_summary(result);
         }
@@ -306,6 +307,52 @@ fn print_priority_summary(result: &PipelineResult) {
     for line in format_priority_summary(&result.priority_decisions) {
         eprintln!("{line}");
     }
+}
+
+fn print_action_result_summary(result: &PipelineResult) {
+    for line in format_action_result_summary(&result.action_result_reports) {
+        eprintln!("{line}");
+    }
+}
+
+fn format_action_result_summary(reports: &[crunch_build::ActionResultRuntimeReport]) -> Vec<String> {
+    let mut lines = Vec::new();
+    for report in reports {
+        let selected = report.selected_result_ref.as_deref().unwrap_or("none");
+        let source = report.selected_source_class.as_deref().unwrap_or("none");
+        let source_id = report.selected_source_id.as_deref().unwrap_or("none");
+        let conflict = report.conflict_class.as_deref().unwrap_or("none");
+        let trust_basis = if report.trust_basis.is_empty() {
+            "none".to_string()
+        } else {
+            report.trust_basis.join(",")
+        };
+        lines.push(format!(
+            "shared-action-result: phase={} disposition={} action={} selected={} source={} source_id={} trust={} conflict={} non_claims={}",
+            report.phase,
+            report.disposition,
+            report.action_ref,
+            selected,
+            source,
+            source_id,
+            trust_basis,
+            conflict,
+            report.non_claims.join(",")
+        ));
+        for decision in &report.candidate_decisions {
+            if decision.admitted {
+                continue;
+            }
+            lines.push(format!(
+                "shared-action-result-rejected: result={} source={} source_id={} diagnostics={}",
+                decision.result_ref,
+                decision.source_class,
+                decision.source_id,
+                decision.diagnostics.join(",")
+            ));
+        }
+    }
+    lines
 }
 
 fn format_priority_summary(decisions: &[crunch_pipeline::PriorityDecisionEvidence]) -> Vec<String> {
@@ -615,6 +662,24 @@ mod tests {
     const TEST_PRIORITY_PATH_NODES: u32 = 2;
     const TEST_PRIORITY_SUMMARY_LINE_COUNT: usize = 2;
 
+    fn sample_action_result_report(disposition: &str) -> crunch_build::ActionResultRuntimeReport {
+        crunch_build::ActionResultRuntimeReport {
+            schema: "mantle-action-result-runtime-report-v1".to_string(),
+            phase: "discovery".to_string(),
+            action_ref: "action-b3:demo".to_string(),
+            disposition: disposition.to_string(),
+            selected_result_ref: Some("result-b3:demo".to_string()),
+            selected_source_id: Some("cache.example.invalid".to_string()),
+            selected_source_class: Some("http".to_string()),
+            trust_basis: vec!["record-signature-verified:builder-key-1".to_string()],
+            conflict_class: None,
+            candidate_decisions: Vec::new(),
+            publication_result_refs: Vec::new(),
+            diagnostics: Vec::new(),
+            non_claims: vec!["index-presence-is-not-output-trust".to_string()],
+        }
+    }
+
     fn sample_priority_decision() -> crunch_pipeline::PriorityDecisionEvidence {
         let policy = crunch_build::SchedulingPolicy::default();
         let ready = crunch_build::ReadyGoalFacts::ordinary(TEST_PRIORITY_GOAL.to_string(), 0);
@@ -634,6 +699,19 @@ mod tests {
             None,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn format_action_result_summary_reports_selected_source_and_omits_empty_input() {
+        let lines = format_action_result_summary(&[sample_action_result_report("reused")]);
+
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("disposition=reused"));
+        assert!(lines[0].contains("selected=result-b3:demo"));
+        assert!(lines[0].contains("source=http"));
+        assert!(lines[0].contains("record-signature-verified:builder-key-1"));
+        assert!(lines[0].contains("index-presence-is-not-output-trust"));
+        assert!(format_action_result_summary(&[]).is_empty());
     }
 
     #[test]
