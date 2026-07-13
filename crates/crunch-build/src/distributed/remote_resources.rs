@@ -106,6 +106,7 @@ pub struct RemoteResourceAvailability {
 #[serde(deny_unknown_fields)]
 pub struct RemoteResourceLeaseScope {
     pub worker_endpoint_id: String,
+    pub worker_generation: u64,
     pub job_id: RemoteJobId,
     pub attempt_id: RemoteAttemptId,
     pub fence_generation: RemoteFenceGeneration,
@@ -351,6 +352,21 @@ pub fn remote_resource_requirement_digest(
 ) -> Result<String, RemoteResourceReasonCode> {
     let canonical = canonical_remote_resource_requirements(requirements)?;
     domain_hash_json(REMOTE_RESOURCE_REQUIREMENT_DOMAIN, &canonical)
+}
+
+pub fn remote_resource_remaining_capacity(
+    worker_endpoint_id: &str,
+    inventory: &RemoteWorkerResourceInventory,
+    active_leases: &[RemoteResourceLease],
+) -> Result<RemoteResourceAvailability, RemoteResourceReasonCode> {
+    validate_resource_identity(worker_endpoint_id)?;
+    let inventory = canonical_remote_worker_resource_inventory(inventory)?;
+    let total = totals_from_vector(&inventory.total);
+    let used = aggregate_worker_leases(worker_endpoint_id, active_leases)?;
+    let remaining = subtract_totals(&total, &used, RemoteResourceReasonCode::LeaseSnapshotOvercommitted)?;
+    debug_assert!(remaining_within_total(&remaining, &total));
+    debug_assert!(active_leases.len() <= MAX_REMOTE_RESOURCE_LEASES);
+    Ok(availability_from_totals(&remaining))
 }
 
 pub fn plan_remote_resource_availability(
@@ -885,10 +901,15 @@ fn named_quantities_from_map(values: &BTreeMap<String, u32>) -> Vec<RemoteNamedR
 
 fn validate_lease_scope(scope: &RemoteResourceLeaseScope) -> Result<(), RemoteResourceReasonCode> {
     validate_resource_identity(&scope.worker_endpoint_id)?;
-    if scope.job_id.as_str().is_empty() || scope.attempt_id.as_str().is_empty() || scope.fence_generation.get() == 0 {
+    if scope.worker_generation == 0
+        || scope.job_id.as_str().is_empty()
+        || scope.attempt_id.as_str().is_empty()
+        || scope.fence_generation.get() == 0
+    {
         return Err(RemoteResourceReasonCode::LeaseDigestInvalid);
     }
     debug_assert!(!scope.worker_endpoint_id.is_empty());
+    debug_assert!(scope.worker_generation > 0);
     debug_assert!(scope.fence_generation.get() > 0);
     Ok(())
 }
@@ -1214,6 +1235,7 @@ mod tests {
     fn scope(label: &str, fence: u64) -> RemoteResourceLeaseScope {
         RemoteResourceLeaseScope {
             worker_endpoint_id: "worker-a".to_string(),
+            worker_generation: TEST_WORKER_GENERATION,
             job_id: RemoteJobId::new(format!("job-{label}")).unwrap(),
             attempt_id: RemoteAttemptId::new(format!("attempt-{label}")).unwrap(),
             fence_generation: RemoteFenceGeneration::new(fence).unwrap(),

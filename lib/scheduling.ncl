@@ -15,6 +15,14 @@ let DefaultMaxBlockedRootPressure = 256 in
 let DefaultMaxHistoryEntries = 10000 in
 let DefaultMaxHistoryKeyBytesTotal = 4194304 in
 let DefaultMaxHistorySnapshotBytes = 8388608 in
+let DefaultMaxResourceClasses = 32 in
+let DefaultMaxResourceClassNameBytes = 64 in
+let DefaultMaxResourceLeases = 4096 in
+let DefaultMaxLocalityObservations = 4096 in
+let DefaultMaxCpuUnits = 1048576 in
+let DefaultMaxResourceCount = 1048576 in
+let DefaultMaxResourceBytes = 1125899906842624 in
+let DefaultMaxPlacementCandidates = 1024 in
 
 let PreferenceFieldContract = [|
   'known-graph,
@@ -76,6 +84,23 @@ let HistoryPolicyContract = {
     | default = 'structural,
 } in
 
+let ResourceBoundsContract = {
+  max_classes | Number | default = DefaultMaxResourceClasses,
+  max_class_name_bytes | Number | default = DefaultMaxResourceClassNameBytes,
+  max_leases | Number | default = DefaultMaxResourceLeases,
+  max_cpu_units | Number | default = DefaultMaxCpuUnits,
+  max_resource_count | Number | default = DefaultMaxResourceCount,
+  max_resource_bytes | Number | default = DefaultMaxResourceBytes,
+  max_placement_candidates | Number | default = DefaultMaxPlacementCandidates,
+} in
+
+let LocalityPolicyContract = {
+  max_observations | Number | default = DefaultMaxLocalityObservations,
+  basis | [| 'receiver-verified |] | default = 'receiver-verified,
+  stale | [| 'reject |] | default = 'reject,
+  unverified | [| 'no-verified-content |] | default = 'no-verified-content,
+} in
+
 let SchedulingPolicyContract = {
   schema
     | String
@@ -103,6 +128,11 @@ let SchedulingPolicyContract = {
   AgePolicy = AgePolicyContract,
   KnownGraphBounds = KnownGraphBoundsContract,
   HistoryPolicy = HistoryPolicyContract,
+  ResourceBounds = ResourceBoundsContract,
+  LocalityPolicy = LocalityPolicyContract,
+
+  default_resource_bounds | ResourceBoundsContract = {},
+  default_locality_policy | LocalityPolicyContract = {},
 
   default_policy
     | SchedulingPolicyContract

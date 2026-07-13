@@ -6,6 +6,8 @@ const BOUNDS_EXPRESSION: &str = r#"
 let scheduling = import "scheduling.ncl" in {
   known_graph = scheduling.default_known_graph_bounds,
   history = scheduling.default_history_policy,
+  resources = scheduling.default_resource_bounds,
+  locality = scheduling.default_locality_policy,
 }
 "#;
 const INVALID_POLICY_EXPRESSION: &str = r#"
@@ -70,6 +72,28 @@ fn nickel_scheduling_bounds_match_rust_kernel_limits() {
         value["history"]["max_snapshot_bytes"].as_u64(),
         Some(u64::from(crunch_build::scheduling::MAX_HISTORY_SNAPSHOT_BYTES))
     );
+    assert_eq!(
+        value["resources"]["max_classes"].as_u64(),
+        Some(crunch_build::distributed::MAX_REMOTE_RESOURCE_CLASSES as u64)
+    );
+    assert_eq!(
+        value["resources"]["max_leases"].as_u64(),
+        Some(crunch_build::distributed::MAX_REMOTE_RESOURCE_LEASES as u64)
+    );
+    assert_eq!(
+        value["resources"]["max_resource_bytes"].as_u64(),
+        Some(crunch_build::distributed::MAX_REMOTE_RESOURCE_BYTES)
+    );
+    assert_eq!(
+        value["resources"]["max_placement_candidates"].as_u64(),
+        Some(crunch_build::distributed::MAX_REMOTE_PLACEMENT_CANDIDATES as u64)
+    );
+    assert_eq!(
+        value["locality"]["max_observations"].as_u64(),
+        Some(crunch_build::distributed::MAX_REMOTE_LOCALITY_OBSERVATIONS as u64)
+    );
+    assert_eq!(value["locality"]["basis"], "receiver-verified");
+    assert_eq!(value["locality"]["stale"], "reject");
 }
 
 #[test]

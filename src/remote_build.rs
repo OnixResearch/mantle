@@ -20,6 +20,9 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+use crunch_build::distributed::CanonicalRemoteTransferManifest;
+use crunch_build::distributed::MAX_REMOTE_LOCALITY_OBSERVATIONS;
+use crunch_build::distributed::REMOTE_LOCALITY_SUMMARY_SCHEMA;
 pub use crunch_build::distributed::RemoteAssignmentNonce;
 pub use crunch_build::distributed::RemoteAttemptApplyDisposition;
 pub use crunch_build::distributed::RemoteAttemptAuthorizationFacts;
@@ -43,7 +46,18 @@ pub use crunch_build::distributed::RemoteAttemptTimeFacts;
 pub use crunch_build::distributed::RemoteEventId;
 pub use crunch_build::distributed::RemoteFenceGeneration;
 pub use crunch_build::distributed::RemoteJobId;
+pub use crunch_build::distributed::RemoteLocalityProbeObservation;
+pub use crunch_build::distributed::RemoteLocalityReasonCode;
+pub use crunch_build::distributed::RemoteLocalityScope;
+pub use crunch_build::distributed::RemoteNamedResourceQuantity;
 pub use crunch_build::distributed::RemotePayloadDigest;
+pub use crunch_build::distributed::RemoteResourceAvailability;
+pub use crunch_build::distributed::RemoteResourceLease;
+pub use crunch_build::distributed::RemoteResourceLeaseScope;
+pub use crunch_build::distributed::RemoteResourceReasonCode;
+use crunch_build::distributed::RemoteResourceRecoveryDisposition;
+pub use crunch_build::distributed::RemoteResourceRequirements;
+use crunch_build::distributed::RemoteResourceVector;
 use crunch_build::distributed::RemoteTelemetryBuffer;
 use crunch_build::distributed::RemoteTelemetryCapabilityClass;
 use crunch_build::distributed::RemoteTelemetryCategory;
@@ -68,12 +82,26 @@ use crunch_build::distributed::RemoteTransferDigest;
 use crunch_build::distributed::RemoteTransferManifest;
 use crunch_build::distributed::RemoteTransferPolicy;
 use crunch_build::distributed::RemoteTransferReasonCode;
+use crunch_build::distributed::RemoteTransferReceiverFacts;
+pub use crunch_build::distributed::RemoteVerifiedLocalitySummary;
+use crunch_build::distributed::RemoteWorkerPlacementFacts;
+pub use crunch_build::distributed::RemoteWorkerResourceInventory;
 use crunch_build::distributed::acknowledge_remote_transfer_chunk;
+use crunch_build::distributed::canonical_remote_resource_requirements;
+use crunch_build::distributed::canonical_remote_worker_resource_inventory;
 use crunch_build::distributed::canonicalize_remote_transfer_manifest;
 use crunch_build::distributed::decide_remote_attempt_retry;
 use crunch_build::distributed::derive_remote_attempt_id;
+use crunch_build::distributed::normalize_remote_verified_locality;
 use crunch_build::distributed::plan_remote_attempt_assignment;
 use crunch_build::distributed::plan_remote_attempt_report;
+use crunch_build::distributed::plan_remote_resource_availability;
+use crunch_build::distributed::plan_remote_resource_lease_recovery;
+use crunch_build::distributed::plan_remote_resource_lease_release;
+use crunch_build::distributed::plan_remote_resource_reservation;
+use crunch_build::distributed::rank_remote_worker_placement_candidates;
+use crunch_build::distributed::remote_resource_remaining_capacity;
+use crunch_build::distributed::validate_remote_resource_lease_snapshot;
 use fs2::FileExt;
 use nix_compat::store_path::StorePath;
 use rand::RngCore;
@@ -157,6 +185,13 @@ const LEGACY_LOG_MIGRATION_NON_CLAIM: &str =
 const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
 const REMOTE_ASSIGNMENT_NONCE_LABEL: &str = "remote-assignment-nonce";
+const REMOTE_RESOURCE_STATUS_NON_CLAIMS: [&str; 5] = [
+    "resource leases authorize scheduling capacity only",
+    "named tokens do not prove tool identity or license compliance",
+    "locality is receiver-verified for one manifest policy and worker generation",
+    "no global placement optimality",
+    "no output trust or release reproducibility",
+];
 const REMOTE_ASSIGNMENT_NONCE_BYTES: usize = 32;
 const LEGACY_MISSING_ATTEMPT_ID: &str = "legacy-missing-attempt-id";
 const REMOTE_CHILD_POLL_INTERVAL_MS: u64 = 10;
@@ -257,6 +292,10 @@ pub struct ConcreteBuildRequest {
     pub production_attempt: Option<RemoteProductionAttemptBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transfer_policy: Option<RemoteTransferPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_requirements: Option<RemoteResourceRequirements>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locality_scope: Option<RemoteLocalityScope>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1329,16 +1368,26 @@ fn legacy_missing_fence_generation() -> RemoteFenceGeneration {
     RemoteFenceGeneration::INITIAL
 }
 
+fn legacy_worker_generation() -> u64 {
+    RemoteFenceGeneration::INITIAL.get()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteWorkerRegistration {
     pub endpoint_id: String,
     pub protocol_version: u32,
+    /// Monotonic worker incarnation and locality-fact generation. Workers must
+    /// advance it before restart or any destructive content-cache transition.
+    #[serde(default = "legacy_worker_generation")]
+    pub worker_generation: u64,
     pub systems: Vec<String>,
     pub feature_labels: Vec<String>,
     pub sandbox_modes: Vec<String>,
     pub network_modes: Vec<String>,
     pub logical_store_prefixes: Vec<String>,
     pub concurrency: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_inventory: Option<RemoteWorkerResourceInventory>,
     pub output_signing_key_ids: Vec<String>,
     pub resumable_jobs: Vec<RemoteWorkerResumeSummary>,
 }
@@ -1350,6 +1399,10 @@ pub struct RemoteCoordinatorBuildRequest {
     pub required_features: Vec<String>,
     pub required_sandbox_mode: String,
     pub required_network_mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_requirements: Option<RemoteResourceRequirements>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locality_scope: Option<RemoteLocalityScope>,
     pub trusted_output_keys: Vec<String>,
     pub live_output_claims: Vec<String>,
     pub wait_for_worker: bool,
@@ -1379,6 +1432,14 @@ pub struct RemoteCoordinatorJobSummary {
     pub output_admission_completed: bool,
     #[serde(default)]
     pub last_attempt_reason_code: Option<RemoteAttemptReasonCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_requirements: Option<RemoteResourceRequirements>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_lease_id_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_fit: Option<crunch_build::ResourceFitClass>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locality: Option<RemoteVerifiedLocalitySummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1386,6 +1447,10 @@ pub struct RemoteCoordinatorState {
     pub workers: BTreeMap<String, RemoteWorkerRegistration>,
     pub jobs: BTreeMap<RemoteJobId, RemoteCoordinatorJobSummary>,
     pub live_output_claims: BTreeMap<String, String>,
+    #[serde(default)]
+    pub resource_leases: BTreeMap<String, RemoteResourceLease>,
+    #[serde(default)]
+    pub verified_locality_observations: BTreeMap<String, RemoteVerifiedLocalitySummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub legacy_log_migration: Option<RemoteLegacyLogMigrationSummary>,
     /// When set, mutations auto-save to this directory for durability.
@@ -1403,6 +1468,8 @@ impl Default for RemoteCoordinatorState {
             workers: BTreeMap::new(),
             jobs: BTreeMap::new(),
             live_output_claims: BTreeMap::new(),
+            resource_leases: BTreeMap::new(),
+            verified_locality_observations: BTreeMap::new(),
             legacy_log_migration: None,
             state_dir: None,
             allow_volatile_test_state: cfg!(test),
@@ -1419,6 +1486,8 @@ pub enum RemoteCoordinatorDispatchDecision {
         attempt_id: RemoteAttemptId,
         fence_generation: RemoteFenceGeneration,
         normalized_build_key: String,
+        resource_fit: crunch_build::ResourceFitClass,
+        locality: Option<RemoteVerifiedLocalitySummary>,
     },
     AttachExisting {
         job_id: RemoteJobId,
@@ -1506,17 +1575,24 @@ pub struct RemoteCoordinatorJobStatus {
     pub fence_generation: Option<RemoteFenceGeneration>,
     pub attempt_phase: Option<RemoteAttemptPhase>,
     pub attempt_reason_code: Option<RemoteAttemptReasonCode>,
+    pub resource_requirements: Option<RemoteResourceRequirements>,
+    pub resource_lease_id_blake3: Option<String>,
+    pub resource_fit: Option<crunch_build::ResourceFitClass>,
+    pub locality: Option<RemoteVerifiedLocalitySummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RemoteWorkerStatus {
     pub endpoint_id: String,
+    pub worker_generation: u64,
     pub systems: Vec<String>,
     pub feature_labels: Vec<String>,
     pub sandbox_modes: Vec<String>,
     pub network_modes: Vec<String>,
     pub logical_store_prefixes: Vec<String>,
     pub concurrency: u32,
+    pub resource_inventory: Option<RemoteWorkerResourceInventory>,
+    pub resource_remaining: Option<RemoteResourceAvailability>,
     pub output_signing_key_count: u32,
     pub resumable_job_count: u32,
 }
@@ -1559,7 +1635,9 @@ pub struct RemoteCoordinatorStatusSnapshot {
     pub recent_failures: Vec<RemoteFailureStatus>,
     pub log_cursors: Vec<RemoteLogCursorStatus>,
     pub attempt_reason_codes: Vec<RemoteAttemptReasonCode>,
+    pub resource_leases: Vec<RemoteResourceLease>,
     pub tickets: Vec<RemoteTicketView>,
+    pub non_claims: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1576,6 +1654,8 @@ pub struct RemoteBuildObservabilityReport {
     pub endpoint_id: Option<String>,
     pub attempt_reason_codes: Vec<String>,
     pub upload_summary: RemoteInputUploadPrivacySummary,
+    pub resource_lease: Option<RemoteResourceLease>,
+    pub locality: Option<RemoteVerifiedLocalitySummary>,
     pub transfer: RemoteTransferReport,
     pub trust_basis: RemoteOutputTrustBasis,
     pub outputs: Vec<RemoteBuildOutputObservability>,
@@ -1689,6 +1769,14 @@ pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &Remote
         || request.build_time_limit_secs > MAX_REMOTE_BUILD_TIME_SECS
     {
         return Err("build-time-limit-exceeded".to_string());
+    }
+    if let Some(requirements) = &request.resource_requirements {
+        canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
+    }
+    if let Some(scope) = &request.locality_scope
+        && (!is_blake3_hex_digest(&scope.manifest_digest_blake3) || !is_blake3_hex_digest(&scope.policy_digest_blake3))
+    {
+        return Err("remote-locality-scope-invalid".to_string());
     }
     Ok(())
 }
@@ -2668,6 +2756,8 @@ pub fn remote_build_observability_report(
     endpoint_id: Option<&str>,
     attempt_reason_codes: &[RemoteAttemptReasonCode],
     upload_summary: RemoteInputUploadPrivacySummary,
+    resource_lease: Option<&RemoteResourceLease>,
+    locality: Option<&RemoteVerifiedLocalitySummary>,
     admission: &RemoteOutputAdmissionReport,
     import_report: &RemoteOutputImportReport,
     non_claims: &[String],
@@ -2700,6 +2790,8 @@ pub fn remote_build_observability_report(
             .map(|reason| reason.as_str().to_string())
             .collect(),
         upload_summary,
+        resource_lease: resource_lease.cloned(),
+        locality: locality.cloned(),
         transfer: import_report.transfer.clone(),
         trust_basis: admission.trust_basis.clone(),
         outputs,
@@ -2725,12 +2817,21 @@ pub fn remote_operator_e2e_rail_report(
     let rejected_route_reasons =
         route_plan.rejected_routes.iter().map(|rejection| rejection.reason_code.clone()).collect::<Vec<_>>();
     let rail_non_claims = remote_operator_e2e_non_claims(route_plan.non_claim, non_claims);
+    let resource_lease = status.resource_leases.first();
+    let locality = status
+        .queued_jobs
+        .iter()
+        .chain(status.active_jobs.iter())
+        .chain(status.recent_jobs.iter())
+        .find_map(|job| job.locality.as_ref());
     let build_report = remote_build_observability_report(
         &selected_route,
         &rejected_route_reasons,
         Some(&status.endpoint_id),
         &status.attempt_reason_codes,
         upload_summary.clone(),
+        resource_lease,
+        locality,
         admission,
         import_report,
         &rail_non_claims,
@@ -3832,6 +3933,9 @@ pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> 
     if registration.protocol_version != REMOTE_PROTOCOL_VERSION {
         return Err("remote-worker-protocol-version-mismatch".to_string());
     }
+    if registration.worker_generation == 0 {
+        return Err("remote-worker-generation-zero".to_string());
+    }
     if registration.concurrency == 0 || registration.concurrency > MAX_REMOTE_WORKER_CONCURRENCY {
         return Err(format!("remote-worker-concurrency-exceeds-{MAX_REMOTE_WORKER_CONCURRENCY}"));
     }
@@ -3857,6 +3961,9 @@ pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> 
         &registration.output_signing_key_ids,
         MAX_REMOTE_CAPABILITIES,
     )?;
+    if let Some(inventory) = &registration.resource_inventory {
+        canonical_remote_worker_resource_inventory(inventory).map_err(|reason| reason.as_str().to_string())?;
+    }
     if registration.resumable_jobs.len() > MAX_REMOTE_STATUS_ITEMS {
         return Err(format!("remote-worker-resume-summary-count-exceeds-{MAX_REMOTE_STATUS_ITEMS}"));
     }
@@ -3931,6 +4038,14 @@ pub fn validate_coordinator_build_request(
         &request.live_output_claims,
         MAX_REMOTE_EXPECTED_OUTPUTS,
     )?;
+    if let Some(requirements) = &request.resource_requirements {
+        canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
+    }
+    if let Some(scope) = &request.locality_scope {
+        if !is_blake3_hex_digest(&scope.manifest_digest_blake3) || !is_blake3_hex_digest(&scope.policy_digest_blake3) {
+            return Err("remote-coordinator-locality-scope-invalid".to_string());
+        }
+    }
     if request.request.upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
         return Err("remote-coordinator-upload-byte-limit-exceeded".to_string());
     }
@@ -3957,6 +4072,11 @@ pub fn normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> R
     hash_ordered_values(&mut hasher, "required-feature", &request.required_features);
     hash_labeled_str(&mut hasher, "required-sandbox", &request.required_sandbox_mode);
     hash_labeled_str(&mut hasher, "required-network", &request.required_network_mode);
+    if let Some(requirements) = &request.resource_requirements {
+        let canonical =
+            canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
+        hash_ordered_values(&mut hasher, "semantic-accelerator-class", &canonical.semantic_accelerator_classes);
+    }
     Ok(hasher.finalize().to_hex().to_string())
 }
 
@@ -3990,16 +4110,90 @@ pub fn apply_worker_registration(
     validate_worker_registration(&registration)?;
     let adopted = validate_worker_resume_summaries(state, &registration)?;
     let mut candidate = state.clone();
-    candidate.workers.insert(registration.endpoint_id.clone(), registration);
+    let endpoint_id = registration.endpoint_id.clone();
+    let worker_generation = registration.worker_generation;
+    candidate.workers.insert(endpoint_id.clone(), registration);
+    candidate.verified_locality_observations.retain(|_, summary| {
+        summary.worker_endpoint_id != endpoint_id || summary.worker_generation == worker_generation
+    });
+    validate_coordinator_resource_state(&candidate)?;
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
     Ok(adopted)
+}
+
+pub fn probe_and_record_remote_worker_locality(
+    state: &mut RemoteCoordinatorState,
+    worker_endpoint_id: &str,
+    worker_generation: u64,
+    receiver_root: &Path,
+    manifest: &CanonicalRemoteTransferManifest,
+    admission: crate::remote_transfer::RemoteTransferAdmissionFacts,
+) -> Result<RemoteVerifiedLocalitySummary, String> {
+    let receiver_facts = crate::remote_transfer::probe_remote_transfer_receiver(receiver_root, manifest, admission)?;
+    record_receiver_verified_worker_locality(state, worker_endpoint_id, worker_generation, manifest, receiver_facts)
+}
+
+fn record_receiver_verified_worker_locality(
+    state: &mut RemoteCoordinatorState,
+    worker_endpoint_id: &str,
+    worker_generation: u64,
+    manifest: &CanonicalRemoteTransferManifest,
+    receiver_facts: RemoteTransferReceiverFacts,
+) -> Result<RemoteVerifiedLocalitySummary, String> {
+    let worker = state
+        .workers
+        .get(worker_endpoint_id)
+        .ok_or_else(|| "remote-coordinator-worker-unknown".to_string())?;
+    if worker.worker_generation != worker_generation {
+        return Err(RemoteLocalityReasonCode::WorkerGenerationStale.as_str().to_string());
+    }
+    let observation = RemoteLocalityProbeObservation {
+        worker_endpoint_id: worker_endpoint_id.to_string(),
+        worker_generation,
+        scope: RemoteLocalityScope {
+            manifest_digest_blake3: manifest.digest_blake3.as_str().to_string(),
+            policy_digest_blake3: manifest.manifest.policy_digest_blake3.as_str().to_string(),
+        },
+        receiver_probe_verified: true,
+        receiver_facts,
+    };
+    let summary = normalize_remote_verified_locality(worker_endpoint_id, worker_generation, manifest, &observation)
+        .map_err(|reason| reason.as_str().to_string())?;
+    let key = verified_locality_observation_key(&summary);
+    let mut candidate = state.clone();
+    if !candidate.verified_locality_observations.contains_key(&key)
+        && candidate.verified_locality_observations.len() >= MAX_REMOTE_LOCALITY_OBSERVATIONS
+    {
+        return Err("remote-locality-observation-limit-exceeded".to_string());
+    }
+    candidate.verified_locality_observations.insert(key, summary.clone());
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    assert_eq!(summary.worker_endpoint_id, worker_endpoint_id);
+    assert_eq!(summary.worker_generation, worker_generation);
+    Ok(summary)
+}
+
+fn verified_locality_observation_key(summary: &RemoteVerifiedLocalitySummary) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "worker", &summary.worker_endpoint_id);
+    hash_labeled_str(&mut hasher, "generation", &summary.worker_generation.to_string());
+    hash_labeled_str(&mut hasher, "manifest", &summary.scope.manifest_digest_blake3);
+    hash_labeled_str(&mut hasher, "policy", &summary.scope.policy_digest_blake3);
+    let digest = hasher.finalize().to_hex().to_string();
+    debug_assert!(is_blake3_hex_digest(&digest));
+    debug_assert!(!summary.worker_endpoint_id.is_empty());
+    digest
 }
 
 pub fn admit_remote_production_dispatch(
     state: &mut RemoteCoordinatorState,
     request: &ConcreteBuildRequest,
     endpoint_id: &str,
+    worker_generation: u64,
+    worker_concurrency: u32,
+    resource_inventory: Option<RemoteWorkerResourceInventory>,
     trusted_output_keys: &[String],
     now_unix_s: u64,
 ) -> Result<RemoteProductionAttemptBinding, String> {
@@ -4007,12 +4201,14 @@ pub fn admit_remote_production_dispatch(
     let registration = RemoteWorkerRegistration {
         endpoint_id: endpoint_id.to_string(),
         protocol_version: REMOTE_PROTOCOL_VERSION,
+        worker_generation,
         systems: vec![executable.system.clone()],
         feature_labels: Vec::new(),
         sandbox_modes: vec!["native".to_string()],
         network_modes: vec!["none".to_string()],
         logical_store_prefixes: vec![request.store_prefix.clone()],
-        concurrency: DEFAULT_REMOTE_CONCURRENCY,
+        concurrency: worker_concurrency,
+        resource_inventory,
         output_signing_key_ids: trusted_output_keys.to_vec(),
         resumable_jobs: Vec::new(),
     };
@@ -4023,6 +4219,8 @@ pub fn admit_remote_production_dispatch(
         required_features: Vec::new(),
         required_sandbox_mode: "native".to_string(),
         required_network_mode: "none".to_string(),
+        resource_requirements: request.resource_requirements.clone(),
+        locality_scope: request.locality_scope.clone(),
         trusted_output_keys: trusted_output_keys.to_vec(),
         live_output_claims: request.expected_outputs.iter().filter_map(|output| output.logical_path.clone()).collect(),
         wait_for_worker: false,
@@ -4570,27 +4768,30 @@ fn plan_coordinator_dispatch(
     if let Some(decision) = existing_job_decision(state, &normalized_key) {
         return Ok(decision);
     }
-    let Some(worker) = select_coordinator_worker(state, request) else {
+    let Some(worker) = select_coordinator_worker(state, request)? else {
         return Ok(no_worker_dispatch_decision(state, request));
     };
-    new_dispatch_decision(&worker.endpoint_id, normalized_key, assignment_nonce)
+    new_dispatch_decision(&worker, normalized_key, assignment_nonce)
 }
 
 fn new_dispatch_decision(
-    worker_endpoint_id: &str,
+    placement: &CoordinatorWorkerPlacement,
     normalized_build_key: String,
     assignment_nonce: &RemoteAssignmentNonce,
 ) -> Result<RemoteCoordinatorDispatchDecision, String> {
     let job_id = coordinator_job_id(&normalized_build_key, assignment_nonce);
     let fence_generation = RemoteFenceGeneration::INITIAL;
-    let attempt_id = derive_remote_attempt_id(&job_id, assignment_nonce, fence_generation, worker_endpoint_id)
-        .map_err(|reason| reason.as_str().to_string())?;
+    let attempt_id =
+        derive_remote_attempt_id(&job_id, assignment_nonce, fence_generation, &placement.worker_endpoint_id)
+            .map_err(|reason| reason.as_str().to_string())?;
     Ok(RemoteCoordinatorDispatchDecision::Dispatch {
-        worker_endpoint_id: worker_endpoint_id.to_string(),
+        worker_endpoint_id: placement.worker_endpoint_id.clone(),
         job_id,
         attempt_id,
         fence_generation,
         normalized_build_key,
+        resource_fit: placement.resource_fit,
+        locality: placement.locality.clone(),
     })
 }
 
@@ -4629,11 +4830,16 @@ fn admit_coordinator_dispatch_with_nonce(
         attempt_id,
         fence_generation,
         normalized_build_key,
+        ..
     } = &decision
     else {
         return Ok(decision);
     };
-    let summary = queued_job_summary(
+    let placement = coordinator_worker_placement_candidates(state, request)?
+        .into_iter()
+        .find(|placement| placement.worker_endpoint_id == *worker_endpoint_id)
+        .ok_or_else(|| "remote-worker-placement-selection-missing".to_string())?;
+    let mut summary = queued_job_summary(
         job_id,
         normalized_build_key,
         worker_endpoint_id,
@@ -4648,6 +4854,7 @@ fn admit_coordinator_dispatch_with_nonce(
         return Err("remote-coordinator-attempt-plan-mismatch".to_string());
     }
     let mut candidate = state.clone();
+    install_job_resource_reservation(&mut candidate, &mut summary, request, &placement)?;
     for claim in &summary.live_output_claims {
         candidate.live_output_claims.insert(claim.clone(), normalized_build_key.clone());
     }
@@ -4685,7 +4892,56 @@ fn queued_job_summary(
         transferred_bytes: 0,
         output_admission_completed: false,
         last_attempt_reason_code: None,
+        resource_requirements: request.resource_requirements.clone(),
+        resource_lease_id_blake3: None,
+        resource_fit: None,
+        locality: None,
     })
+}
+
+fn install_job_resource_reservation(
+    state: &mut RemoteCoordinatorState,
+    summary: &mut RemoteCoordinatorJobSummary,
+    request: &RemoteCoordinatorBuildRequest,
+    placement: &CoordinatorWorkerPlacement,
+) -> Result<(), String> {
+    summary.resource_fit = Some(placement.resource_fit);
+    summary.locality = placement.locality.clone();
+    let Some(requirements) = &request.resource_requirements else {
+        debug_assert_eq!(placement.resource_fit, crunch_build::ResourceFitClass::Unknown);
+        debug_assert!(summary.resource_lease_id_blake3.is_none());
+        return Ok(());
+    };
+    let worker = state
+        .workers
+        .get(&placement.worker_endpoint_id)
+        .ok_or_else(|| "remote-coordinator-worker-unknown".to_string())?;
+    let inventory = worker
+        .resource_inventory
+        .as_ref()
+        .ok_or_else(|| "remote-worker-resource-inventory-missing".to_string())?;
+    let attempt = summary
+        .current_attempt
+        .as_ref()
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    let scope = RemoteResourceLeaseScope {
+        worker_endpoint_id: placement.worker_endpoint_id.clone(),
+        worker_generation: worker.worker_generation,
+        job_id: summary.job_id.clone(),
+        attempt_id: attempt.attempt_id.clone(),
+        fence_generation: attempt.fence_generation,
+    };
+    let active_leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
+    let plan = plan_remote_resource_reservation(scope, inventory, requirements, &active_leases)
+        .map_err(|reason| reason.as_str().to_string())?;
+    if plan.resource_fit != placement.resource_fit {
+        return Err("remote-resource-placement-drift".to_string());
+    }
+    summary.resource_lease_id_blake3 = Some(plan.lease.lease_id_blake3.clone());
+    state.resource_leases.insert(plan.lease.lease_id_blake3.clone(), plan.lease);
+    assert!(summary.resource_lease_id_blake3.is_some());
+    assert_eq!(summary.resource_fit, Some(placement.resource_fit));
+    Ok(())
 }
 
 pub fn reassign_coordinator_attempt(
@@ -4739,9 +4995,22 @@ fn reassign_coordinator_attempt_with_nonce(
     )
     .map_err(|reason| reason.as_str().to_string())?;
     let normalized_build_key = job.normalized_build_key.clone();
-    let decision = dispatch_decision_from_attempt(worker_endpoint_id, &normalized_build_key, &next);
     let mut candidate = state.clone();
+    release_current_job_resource_lease(&mut candidate, job_id, previous)?;
     install_reassigned_attempt(&mut candidate, job_id, worker_endpoint_id, next)?;
+    install_reassigned_resource_lease(&mut candidate, job_id, worker_endpoint_id)?;
+    let updated_job = candidate.jobs.get(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let updated_attempt = updated_job
+        .current_attempt
+        .as_ref()
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    let decision = dispatch_decision_from_attempt(
+        worker_endpoint_id,
+        &normalized_build_key,
+        updated_attempt,
+        updated_job.resource_fit.unwrap_or(crunch_build::ResourceFitClass::Unknown),
+        updated_job.locality.clone(),
+    );
     persist_coordinator_candidate(&candidate)?;
     *state = candidate;
     Ok(decision)
@@ -4758,6 +5027,8 @@ fn dispatch_decision_from_attempt(
     worker_endpoint_id: &str,
     normalized_build_key: &str,
     attempt: &RemoteAttemptState,
+    resource_fit: crunch_build::ResourceFitClass,
+    locality: Option<RemoteVerifiedLocalitySummary>,
 ) -> RemoteCoordinatorDispatchDecision {
     RemoteCoordinatorDispatchDecision::Dispatch {
         worker_endpoint_id: worker_endpoint_id.to_string(),
@@ -4765,6 +5036,8 @@ fn dispatch_decision_from_attempt(
         attempt_id: attempt.attempt_id.clone(),
         fence_generation: attempt.fence_generation,
         normalized_build_key: normalized_build_key.to_string(),
+        resource_fit,
+        locality,
     }
 }
 
@@ -4775,6 +5048,7 @@ fn install_reassigned_attempt(
     attempt: RemoteAttemptState,
 ) -> Result<(), String> {
     let job = state.jobs.get_mut(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let worker_changed = job.assigned_worker_endpoint_id.as_deref() != Some(worker_endpoint_id);
     job.assigned_worker_endpoint_id = Some(worker_endpoint_id.to_string());
     job.phase = RemoteCoordinatorJobPhase::Queued;
     job.result_available = false;
@@ -4786,6 +5060,91 @@ fn install_reassigned_attempt(
     job.transferred_bytes = 0;
     job.output_admission_completed = false;
     job.last_attempt_reason_code = Some(RemoteAttemptReasonCode::Superseded);
+    job.resource_lease_id_blake3 = None;
+    job.resource_fit = None;
+    if worker_changed {
+        job.locality = None;
+    }
+    Ok(())
+}
+
+fn release_current_job_resource_lease(
+    state: &mut RemoteCoordinatorState,
+    job_id: &RemoteJobId,
+    current_attempt: &RemoteAttemptState,
+) -> Result<(), String> {
+    let job = state.jobs.get(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let Some(lease_id) = job.resource_lease_id_blake3.as_deref() else {
+        if job.resource_requirements.is_some() {
+            return Err("remote-resource-current-lease-missing".to_string());
+        }
+        return Ok(());
+    };
+    let lease = state
+        .resource_leases
+        .get(lease_id)
+        .cloned()
+        .ok_or_else(|| "remote-resource-current-lease-missing".to_string())?;
+    let worker_endpoint_id = job
+        .assigned_worker_endpoint_id
+        .clone()
+        .ok_or_else(|| "remote-resource-current-worker-missing".to_string())?;
+    let worker_generation = state
+        .workers
+        .get(&worker_endpoint_id)
+        .map(|worker| worker.worker_generation)
+        .ok_or_else(|| "remote-resource-current-worker-missing".to_string())?;
+    let scope = RemoteResourceLeaseScope {
+        worker_endpoint_id,
+        worker_generation,
+        job_id: job_id.clone(),
+        attempt_id: current_attempt.attempt_id.clone(),
+        fence_generation: current_attempt.fence_generation,
+    };
+    let release = plan_remote_resource_lease_release(&lease, &scope).map_err(|reason| reason.as_str().to_string())?;
+    state.resource_leases.remove(&release.lease_id_blake3);
+    debug_assert!(!state.resource_leases.contains_key(&release.lease_id_blake3));
+    debug_assert_eq!(release.released, lease.reserved);
+    Ok(())
+}
+
+fn install_reassigned_resource_lease(
+    state: &mut RemoteCoordinatorState,
+    job_id: &RemoteJobId,
+    worker_endpoint_id: &str,
+) -> Result<(), String> {
+    let (requirements, attempt) = {
+        let job = state.jobs.get(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+        (job.resource_requirements.clone(), job.current_attempt.clone())
+    };
+    let Some(requirements) = requirements else {
+        return Ok(());
+    };
+    let attempt = attempt.ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    let worker = state
+        .workers
+        .get(worker_endpoint_id)
+        .ok_or_else(|| "remote-coordinator-worker-unknown".to_string())?;
+    let inventory = worker
+        .resource_inventory
+        .as_ref()
+        .ok_or_else(|| "remote-worker-resource-inventory-missing".to_string())?;
+    let scope = RemoteResourceLeaseScope {
+        worker_endpoint_id: worker_endpoint_id.to_string(),
+        worker_generation: worker.worker_generation,
+        job_id: job_id.clone(),
+        attempt_id: attempt.attempt_id,
+        fence_generation: attempt.fence_generation,
+    };
+    let active_leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
+    let plan = plan_remote_resource_reservation(scope, inventory, &requirements, &active_leases)
+        .map_err(|reason| reason.as_str().to_string())?;
+    let job = state.jobs.get_mut(job_id).ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    job.resource_lease_id_blake3 = Some(plan.lease.lease_id_blake3.clone());
+    job.resource_fit = Some(plan.resource_fit);
+    state.resource_leases.insert(plan.lease.lease_id_blake3.clone(), plan.lease);
+    assert!(job.resource_lease_id_blake3.is_some());
+    assert_ne!(job.resource_fit, Some(crunch_build::ResourceFitClass::Unknown));
     Ok(())
 }
 
@@ -4838,12 +5197,26 @@ fn apply_attempt_plan_to_candidate(
     if let RemoteAttemptReportPayload::LogAppend { cursor, bytes } = &report.payload {
         apply_fenced_log_append(state, report, *cursor, bytes, log_policy)?;
     }
-    let job = state
-        .jobs
-        .get_mut(&report.identity.job_id)
-        .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
-    apply_attempt_payload_to_job(job, &report.payload, next_attempt);
-    job.last_attempt_reason_code = Some(reason_code);
+    {
+        let job = state
+            .jobs
+            .get_mut(&report.identity.job_id)
+            .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+        apply_attempt_payload_to_job(job, &report.payload, next_attempt);
+        job.last_attempt_reason_code = Some(reason_code);
+    }
+    if next_attempt.phase.is_terminal() {
+        release_current_job_resource_lease(state, &report.identity.job_id, next_attempt)?;
+        let job = state
+            .jobs
+            .get_mut(&report.identity.job_id)
+            .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+        job.resource_lease_id_blake3 = None;
+    }
+    debug_assert!(
+        !next_attempt.phase.is_terminal() || state.jobs[&report.identity.job_id].resource_lease_id_blake3.is_none()
+    );
+    debug_assert_eq!(state.jobs[&report.identity.job_id].current_attempt.as_ref(), Some(next_attempt));
     Ok(())
 }
 
@@ -4974,7 +5347,113 @@ fn coordinator_phase_for_attempt(phase: RemoteAttemptPhase) -> RemoteCoordinator
     }
 }
 
+fn validate_coordinator_resource_state(state: &RemoteCoordinatorState) -> Result<(), String> {
+    let inventories = state
+        .workers
+        .iter()
+        .filter_map(|(endpoint_id, worker)| {
+            worker.resource_inventory.clone().map(|inventory| (endpoint_id.clone(), inventory))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
+    validate_remote_resource_lease_snapshot(&inventories, &leases).map_err(|reason| reason.as_str().to_string())?;
+    for job in state.jobs.values() {
+        validate_job_resource_linkage(state, job)?;
+        if let Some(locality) = &job.locality {
+            validate_verified_locality_summary(locality)?;
+        }
+    }
+    for locality in state.verified_locality_observations.values() {
+        validate_verified_locality_summary(locality)?;
+    }
+    debug_assert_eq!(leases.len(), state.resource_leases.len());
+    debug_assert!(state.verified_locality_observations.len() <= MAX_REMOTE_LOCALITY_OBSERVATIONS);
+    Ok(())
+}
+
+fn validate_job_resource_linkage(
+    state: &RemoteCoordinatorState,
+    job: &RemoteCoordinatorJobSummary,
+) -> Result<(), String> {
+    let requires_live_lease = job.current_attempt.as_ref().is_some_and(|attempt| attempt.phase.is_live())
+        && job.resource_requirements.is_some();
+    if !requires_live_lease {
+        if job.resource_lease_id_blake3.is_some() {
+            return Err("remote-resource-terminal-lease-retained".to_string());
+        }
+        return Ok(());
+    }
+    let lease_id = job
+        .resource_lease_id_blake3
+        .as_deref()
+        .ok_or_else(|| "remote-resource-current-lease-missing".to_string())?;
+    let lease = state
+        .resource_leases
+        .get(lease_id)
+        .ok_or_else(|| "remote-resource-current-lease-missing".to_string())?;
+    let attempt = job.current_attempt.as_ref().expect("live quantified job has a current attempt");
+    let worker = job
+        .assigned_worker_endpoint_id
+        .as_deref()
+        .ok_or_else(|| "remote-resource-current-worker-missing".to_string())?;
+    let worker_generation = state
+        .workers
+        .get(worker)
+        .map(|registration| registration.worker_generation)
+        .ok_or_else(|| "remote-resource-current-worker-missing".to_string())?;
+    if lease.scope.worker_endpoint_id != worker
+        || lease.scope.worker_generation != worker_generation
+        || lease.scope.job_id != job.job_id
+        || lease.scope.attempt_id != attempt.attempt_id
+        || lease.scope.fence_generation != attempt.fence_generation
+    {
+        return Err("remote-resource-job-lease-scope-mismatch".to_string());
+    }
+    if job.resource_fit.is_none() {
+        return Err("remote-resource-fit-summary-missing".to_string());
+    }
+    debug_assert_eq!(lease.lease_id_blake3, lease_id);
+    debug_assert!(job.resource_requirements.is_some());
+    Ok(())
+}
+
+fn validate_verified_locality_summary(summary: &RemoteVerifiedLocalitySummary) -> Result<(), String> {
+    if summary.schema != REMOTE_LOCALITY_SUMMARY_SCHEMA
+        || summary.worker_endpoint_id.is_empty()
+        || summary.worker_generation == 0
+        || !is_blake3_hex_digest(&summary.scope.manifest_digest_blake3)
+        || !is_blake3_hex_digest(&summary.scope.policy_digest_blake3)
+    {
+        return Err("remote-locality-summary-invalid".to_string());
+    }
+    let objects = summary
+        .verified_present_object_count
+        .checked_add(summary.missing_object_count)
+        .ok_or_else(|| "remote-locality-object-count-overflow".to_string())?;
+    let bytes = summary
+        .verified_present_bytes
+        .checked_add(summary.missing_bytes)
+        .ok_or_else(|| "remote-locality-byte-count-overflow".to_string())?;
+    if objects != summary.demanded_object_count || bytes != summary.demanded_bytes {
+        return Err("remote-locality-summary-accounting-mismatch".to_string());
+    }
+    if summary.content_locality == crunch_build::ContentLocalityClass::FullyPresent
+        && (summary.missing_object_count != 0
+            || summary.missing_bytes != 0
+            || summary.transfer_cost != crunch_build::TransferCostClass::None)
+    {
+        return Err("remote-locality-full-summary-invalid".to_string());
+    }
+    if summary.non_claims.is_empty() || summary.non_claims.len() > MAX_REMOTE_CAPABILITIES {
+        return Err("remote-locality-non-claims-invalid".to_string());
+    }
+    debug_assert_eq!(objects, summary.demanded_object_count);
+    debug_assert_eq!(bytes, summary.demanded_bytes);
+    Ok(())
+}
+
 fn persist_coordinator_candidate(state: &RemoteCoordinatorState) -> Result<(), String> {
+    validate_coordinator_resource_state(state)?;
     let Some(state_dir) = state.state_dir.as_deref() else {
         if state.allow_volatile_test_state {
             return Ok(());
@@ -5038,19 +5517,96 @@ fn existing_job_to_dispatch_decision(job: &RemoteCoordinatorJobSummary) -> Remot
     }
 }
 
-fn select_coordinator_worker<'a>(
-    state: &'a RemoteCoordinatorState,
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CoordinatorWorkerPlacement {
+    worker_endpoint_id: String,
+    resource_fit: crunch_build::ResourceFitClass,
+    locality: Option<RemoteVerifiedLocalitySummary>,
+}
+
+fn select_coordinator_worker(
+    state: &RemoteCoordinatorState,
     request: &RemoteCoordinatorBuildRequest,
-) -> Option<&'a RemoteWorkerRegistration> {
-    let mut eligible = Vec::new();
-    for worker in state.workers.values() {
-        if worker_satisfies_request(worker, request).is_ok()
-            && active_jobs_for_worker(state, &worker.endpoint_id) < worker.concurrency
-        {
-            eligible.push(worker);
-        }
+) -> Result<Option<CoordinatorWorkerPlacement>, String> {
+    let placements = coordinator_worker_placement_candidates(state, request)?;
+    if placements.is_empty() {
+        return Ok(None);
     }
-    eligible.into_iter().next()
+    let facts = placements
+        .iter()
+        .map(|placement| RemoteWorkerPlacementFacts {
+            worker_endpoint_id: placement.worker_endpoint_id.clone(),
+            resource_fit: placement.resource_fit,
+            content_locality: placement
+                .locality
+                .as_ref()
+                .map_or(crunch_build::ContentLocalityClass::Unknown, |summary| summary.content_locality),
+            transfer_cost: placement
+                .locality
+                .as_ref()
+                .map_or(crunch_build::TransferCostClass::Unknown, |summary| summary.transfer_cost),
+        })
+        .collect::<Vec<_>>();
+    let ranked = rank_remote_worker_placement_candidates(&crunch_build::SchedulingPolicy::default(), &facts)
+        .map_err(|reason| reason.as_str().to_string())?;
+    let selected = &ranked[0].worker_endpoint_id;
+    let placement = placements
+        .into_iter()
+        .find(|placement| &placement.worker_endpoint_id == selected)
+        .ok_or_else(|| "remote-worker-placement-selection-missing".to_string())?;
+    debug_assert!(!placement.worker_endpoint_id.is_empty());
+    debug_assert_ne!(placement.resource_fit, crunch_build::ResourceFitClass::Constrained);
+    Ok(Some(placement))
+}
+
+fn coordinator_worker_placement_candidates(
+    state: &RemoteCoordinatorState,
+    request: &RemoteCoordinatorBuildRequest,
+) -> Result<Vec<CoordinatorWorkerPlacement>, String> {
+    let active_leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
+    let mut placements = Vec::new();
+    for worker in state.workers.values() {
+        if worker_satisfies_request(worker, request).is_err()
+            || active_jobs_for_worker(state, &worker.endpoint_id) >= worker.concurrency
+        {
+            continue;
+        }
+        let resource_fit = match (&request.resource_requirements, &worker.resource_inventory) {
+            (Some(requirements), Some(inventory)) => {
+                match plan_remote_resource_availability(&worker.endpoint_id, inventory, requirements, &active_leases) {
+                    Ok(plan) => plan.resource_fit,
+                    Err(_) => continue,
+                }
+            }
+            (Some(_), None) => continue,
+            (None, _) => crunch_build::ResourceFitClass::Unknown,
+        };
+        placements.push(CoordinatorWorkerPlacement {
+            worker_endpoint_id: worker.endpoint_id.clone(),
+            resource_fit,
+            locality: matching_verified_locality(state, worker, request),
+        });
+    }
+    debug_assert!(placements.len() <= state.workers.len());
+    debug_assert!(placements.iter().all(|placement| !placement.worker_endpoint_id.is_empty()));
+    Ok(placements)
+}
+
+fn matching_verified_locality(
+    state: &RemoteCoordinatorState,
+    worker: &RemoteWorkerRegistration,
+    request: &RemoteCoordinatorBuildRequest,
+) -> Option<RemoteVerifiedLocalitySummary> {
+    let scope = request.locality_scope.as_ref()?;
+    state
+        .verified_locality_observations
+        .values()
+        .find(|summary| {
+            summary.worker_endpoint_id == worker.endpoint_id
+                && summary.worker_generation == worker.worker_generation
+                && summary.scope == *scope
+        })
+        .cloned()
 }
 
 fn no_matching_worker_reason(state: &RemoteCoordinatorState, request: &RemoteCoordinatorBuildRequest) -> String {
@@ -5058,11 +5614,22 @@ fn no_matching_worker_reason(state: &RemoteCoordinatorState, request: &RemoteCoo
         return "no-workers-registered".to_string();
     }
     for worker in state.workers.values() {
+        if let Err(reason) = worker_satisfies_request(worker, request) {
+            return reason;
+        }
         if active_jobs_for_worker(state, &worker.endpoint_id) >= worker.concurrency {
             return "worker-concurrency-limit".to_string();
         }
-        if let Err(reason) = worker_satisfies_request(worker, request) {
-            return reason;
+        if request.resource_requirements.is_some() && worker.resource_inventory.is_none() {
+            return "remote-worker-resource-inventory-missing".to_string();
+        }
+        if let (Some(requirements), Some(inventory)) = (&request.resource_requirements, &worker.resource_inventory) {
+            let leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
+            if let Err(reason) =
+                plan_remote_resource_availability(&worker.endpoint_id, inventory, requirements, &leases)
+            {
+                return reason.as_str().to_string();
+            }
         }
     }
     "capability-mismatch".to_string()
@@ -5178,6 +5745,7 @@ pub fn coordinator_status_snapshot(
     if configured_concurrency == 0 || configured_concurrency > MAX_REMOTE_WORKER_CONCURRENCY {
         return Err("remote-status-concurrency-invalid".to_string());
     }
+    validate_coordinator_resource_state(state)?;
     if state.jobs.len() > MAX_REMOTE_STATUS_ITEMS || tickets.len() > MAX_REMOTE_STATUS_ITEMS {
         return Err(format!("remote-status-item-count-exceeds-{MAX_REMOTE_STATUS_ITEMS}"));
     }
@@ -5195,7 +5763,11 @@ pub fn coordinator_status_snapshot(
         endpoint_id: endpoint_id.to_string(),
         configured_concurrency,
         worker_count: bounded_runtime_count_u32(state.workers.len())?,
-        workers: state.workers.values().map(remote_worker_status).collect::<Result<Vec<_>, _>>()?,
+        workers: state
+            .workers
+            .values()
+            .map(|worker| remote_worker_status(state, worker))
+            .collect::<Result<Vec<_>, _>>()?,
         queued_jobs,
         active_jobs,
         recent_jobs,
@@ -5207,19 +5779,38 @@ pub fn coordinator_status_snapshot(
             .chain(state.jobs.values().filter_map(|job| job.last_attempt_reason_code))
             .take(MAX_REMOTE_STATUS_ITEMS)
             .collect(),
+        resource_leases: state.resource_leases.values().take(MAX_REMOTE_STATUS_ITEMS).cloned().collect(),
         tickets: tickets.iter().map(redacted_ticket_view).collect(),
+        non_claims: REMOTE_RESOURCE_STATUS_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
     })
 }
 
-fn remote_worker_status(worker: &RemoteWorkerRegistration) -> Result<RemoteWorkerStatus, String> {
+fn remote_worker_status(
+    state: &RemoteCoordinatorState,
+    worker: &RemoteWorkerRegistration,
+) -> Result<RemoteWorkerStatus, String> {
+    let resource_remaining = match &worker.resource_inventory {
+        Some(inventory) => Some(
+            remote_resource_remaining_capacity(
+                &worker.endpoint_id,
+                inventory,
+                &state.resource_leases.values().cloned().collect::<Vec<_>>(),
+            )
+            .map_err(|reason| reason.as_str().to_string())?,
+        ),
+        None => None,
+    };
     Ok(RemoteWorkerStatus {
         endpoint_id: worker.endpoint_id.clone(),
+        worker_generation: worker.worker_generation,
         systems: bounded_string_list(&worker.systems),
         feature_labels: bounded_string_list(&worker.feature_labels),
         sandbox_modes: bounded_string_list(&worker.sandbox_modes),
         network_modes: bounded_string_list(&worker.network_modes),
         logical_store_prefixes: bounded_string_list(&worker.logical_store_prefixes),
         concurrency: worker.concurrency,
+        resource_inventory: worker.resource_inventory.clone(),
+        resource_remaining,
         output_signing_key_count: bounded_runtime_count_u32(worker.output_signing_key_ids.len())?,
         resumable_job_count: bounded_runtime_count_u32(worker.resumable_jobs.len())?,
     })
@@ -5323,6 +5914,10 @@ fn coordinator_job_status(
         fence_generation: job.current_attempt.as_ref().map(|attempt| attempt.fence_generation),
         attempt_phase: job.current_attempt.as_ref().map(|attempt| attempt.phase),
         attempt_reason_code: job.last_attempt_reason_code,
+        resource_requirements: job.resource_requirements.clone(),
+        resource_lease_id_blake3: job.resource_lease_id_blake3.clone(),
+        resource_fit: job.resource_fit,
+        locality: job.locality.clone(),
     })
 }
 
@@ -5350,6 +5945,91 @@ pub fn decide_session_lease_release(phase: RemoteCoordinatorJobPhase) -> RemoteL
         return RemoteLeaseReleaseDecision::Retain;
     }
     RemoteLeaseReleaseDecision::Release
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RemoteCoordinatorTerminationCause {
+    Cancellation,
+    Timeout,
+    WorkerLoss,
+}
+
+impl RemoteCoordinatorTerminationCause {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cancellation => "remote-attempt-cancelled",
+            Self::Timeout => "remote-attempt-timed-out",
+            Self::WorkerLoss => "remote-worker-lost",
+        }
+    }
+
+    fn failure_phase(self) -> RemoteFailurePhase {
+        match self {
+            Self::Cancellation => RemoteFailurePhase::Queue,
+            Self::Timeout => RemoteFailurePhase::BuildExecution,
+            Self::WorkerLoss => RemoteFailurePhase::TransportSetup,
+        }
+    }
+}
+
+pub fn terminate_coordinator_attempt(
+    state: &mut RemoteCoordinatorState,
+    binding: &RemoteProductionAttemptBinding,
+    cause: RemoteCoordinatorTerminationCause,
+) -> Result<(), String> {
+    mark_coordinator_attempt_lost_with_diagnostic(state, binding, cause.failure_phase(), cause.as_str())
+}
+
+pub fn mark_coordinator_attempt_lost(
+    state: &mut RemoteCoordinatorState,
+    binding: &RemoteProductionAttemptBinding,
+    lost_phase: RemoteFailurePhase,
+) -> Result<(), String> {
+    mark_coordinator_attempt_lost_with_diagnostic(
+        state,
+        binding,
+        lost_phase,
+        RemoteAttemptReasonCode::Superseded.as_str(),
+    )
+}
+
+fn mark_coordinator_attempt_lost_with_diagnostic(
+    state: &mut RemoteCoordinatorState,
+    binding: &RemoteProductionAttemptBinding,
+    lost_phase: RemoteFailurePhase,
+    diagnostic: &str,
+) -> Result<(), String> {
+    let current = state
+        .jobs
+        .get(&binding.job_id)
+        .and_then(|job| job.current_attempt.as_ref())
+        .ok_or_else(|| RemoteAttemptReasonCode::LegacyStateRejected.as_str().to_string())?;
+    if current.attempt_id != binding.attempt_id || current.fence_generation != binding.fence_generation {
+        return Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string());
+    }
+    let current = current.clone();
+    let mut candidate = state.clone();
+    release_current_job_resource_lease(&mut candidate, &binding.job_id, &current)?;
+    let job = candidate
+        .jobs
+        .get_mut(&binding.job_id)
+        .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let mut superseded = current;
+    superseded.phase = RemoteAttemptPhase::Superseded;
+    job.current_attempt = Some(superseded);
+    job.phase = RemoteCoordinatorJobPhase::Lost;
+    job.lost_phase = Some(lost_phase);
+    job.result_available = false;
+    job.output_admission_completed = false;
+    job.resource_lease_id_blake3 = None;
+    job.last_attempt_reason_code = Some(RemoteAttemptReasonCode::Superseded);
+    job.short_error = Some(diagnostic.to_string());
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
+    assert_eq!(state.jobs[&binding.job_id].phase, RemoteCoordinatorJobPhase::Lost);
+    assert!(state.jobs[&binding.job_id].resource_lease_id_blake3.is_none());
+    Ok(())
 }
 
 impl RemoteFailurePhase {
@@ -6358,6 +7038,8 @@ pub fn concrete_remote_derivation_request(
         expected_outputs,
         production_attempt: None,
         transfer_policy: None,
+        resource_requirements: None,
+        locality_scope: None,
     })
 }
 
@@ -8349,6 +9031,9 @@ pub fn load_coordinator_state(state_dir: &Path) -> Result<RemoteCoordinatorState
         state.legacy_log_migration = Some(summary);
         migrated = true;
     }
+    if reconcile_coordinator_resource_leases(&mut state)? {
+        migrated = true;
+    }
     if reconcile_coordinator_log_summaries(state_dir, &mut state)? {
         migrated = true;
     }
@@ -8356,6 +9041,70 @@ pub fn load_coordinator_state(state_dir: &Path) -> Result<RemoteCoordinatorState
         save_coordinator_state(state_dir, &state)?;
     }
     Ok(state)
+}
+
+fn reconcile_coordinator_resource_leases(state: &mut RemoteCoordinatorState) -> Result<bool, RunError> {
+    let mut changed = false;
+    let lease_ids = state.resource_leases.keys().cloned().collect::<Vec<_>>();
+    for lease_id in lease_ids {
+        let lease = state
+            .resource_leases
+            .get(&lease_id)
+            .cloned()
+            .ok_or_else(|| RunError::Internal("resource lease disappeared during recovery".to_string()))?;
+        let current = state.jobs.get(&lease.scope.job_id).and_then(|job| job.current_attempt.as_ref());
+        let current_scope = current.and_then(|attempt| {
+            state.jobs.get(&lease.scope.job_id).and_then(|job| {
+                let worker_endpoint_id = job.assigned_worker_endpoint_id.as_ref()?;
+                let worker_generation = state.workers.get(worker_endpoint_id)?.worker_generation;
+                Some(RemoteResourceLeaseScope {
+                    worker_endpoint_id: worker_endpoint_id.clone(),
+                    worker_generation,
+                    job_id: job.job_id.clone(),
+                    attempt_id: attempt.attempt_id.clone(),
+                    fence_generation: attempt.fence_generation,
+                })
+            })
+        });
+        let recovery =
+            plan_remote_resource_lease_recovery(&lease, current_scope.as_ref(), current.map(|attempt| attempt.phase))
+                .map_err(|reason| RunError::Internal(reason.as_str().to_string()))?;
+        if recovery.disposition == RemoteResourceRecoveryDisposition::Release {
+            state.resource_leases.remove(&lease_id);
+            if let Some(job) = state.jobs.get_mut(&lease.scope.job_id)
+                && job.resource_lease_id_blake3.as_deref() == Some(lease_id.as_str())
+            {
+                job.resource_lease_id_blake3 = None;
+            }
+            changed = true;
+        }
+    }
+    let missing_live_leases = state
+        .jobs
+        .values()
+        .filter(|job| job.resource_requirements.is_some())
+        .filter(|job| job.current_attempt.as_ref().is_some_and(|attempt| attempt.phase.is_live()))
+        .filter(|job| job.resource_lease_id_blake3.is_none())
+        .map(|job| job.job_id.clone())
+        .collect::<Vec<_>>();
+    for job_id in missing_live_leases {
+        if let Some(job) = state.jobs.get_mut(&job_id) {
+            fail_closed_coordinator_job(job, RemoteAttemptReasonCode::DurableStateInvalid);
+            changed = true;
+        }
+    }
+    validate_coordinator_resource_state(state).map_err(RunError::Internal)?;
+    debug_assert!(missing_live_leases_are_resolved(state));
+    debug_assert!(state.resource_leases.len() <= crunch_build::distributed::MAX_REMOTE_RESOURCE_LEASES);
+    Ok(changed)
+}
+
+fn missing_live_leases_are_resolved(state: &RemoteCoordinatorState) -> bool {
+    state.jobs.values().all(|job| {
+        job.resource_requirements.is_none()
+            || !job.current_attempt.as_ref().is_some_and(|attempt| attempt.phase.is_live())
+            || job.resource_lease_id_blake3.is_some()
+    })
 }
 
 fn legacy_log_migration_summary(
@@ -8579,6 +9328,9 @@ fn fail_closed_coordinator_job(job: &mut RemoteCoordinatorJobSummary, reason_cod
     job.output_admission_completed = false;
     job.last_attempt_reason_code = Some(reason_code);
     job.short_error = Some(reason_code.as_str().to_string());
+    job.resource_lease_id_blake3 = None;
+    job.resource_fit = None;
+    job.locality = None;
 }
 
 fn rebuild_live_output_claims(state: &mut RemoteCoordinatorState) {
@@ -9204,6 +9956,14 @@ mod tests {
     const TEST_INTERACTIVE_LEASE_EXPIRES_UNIX_S: u64 = 2_000;
     const TEST_TRANSFER_CHECKPOINT: u64 = 1;
     const TEST_TRANSFERRED_BYTES: u64 = 64;
+    const TEST_RESOURCE_CPU_UNITS: u32 = 8;
+    const TEST_RESOURCE_MEMORY_BYTES: u64 = 16_384;
+    const TEST_RESOURCE_SCRATCH_BYTES: u64 = 32_768;
+    const TEST_RESOURCE_ACCELERATOR_COUNT: u32 = 1;
+    const TEST_RESOURCE_TOKEN_COUNT: u32 = 2;
+    const TEST_WORKER_CONCURRENCY: u32 = 4;
+    const TEST_LOCALITY_ARTIFACT_BYTES: u64 = 8;
+    const TEST_LOCALITY_CHUNK_BYTES: u32 = 8;
 
     fn fixture_log_control_summary(
         retained_start_cursor: u64,
@@ -9972,6 +10732,8 @@ mod tests {
             expected_outputs: fixture_expected_outputs(),
             production_attempt: None,
             transfer_policy: None,
+            resource_requirements: None,
+            locality_scope: None,
         };
         assert!(validate_concrete_request(&request, &ticket).is_err());
         redeem_after_queue(&mut ticket, false).unwrap();
@@ -10032,6 +10794,8 @@ mod tests {
             expected_outputs: fixture_expected_outputs(),
             production_attempt: None,
             transfer_policy: None,
+            resource_requirements: None,
+            locality_scope: None,
         };
         validate_concrete_request(&request, &ticket).unwrap();
         redeem_after_queue(&mut ticket, true).unwrap();
@@ -11459,6 +12223,241 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_resource_dispatches_commit_once_and_never_overcommit() {
+        let temp = tempfile::tempdir().expect("temporary concurrent coordinator state");
+        let mut initial = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        let mut worker = fixture_worker_registration();
+        worker.concurrency = TEST_WORKER_CONCURRENCY;
+        worker.resource_inventory = Some(fixture_resource_inventory());
+        apply_worker_registration(&mut initial, worker).expect("quantified worker registers");
+        let first_request = fixture_quantified_coordinator_request("resource-action-a", "resource-claim-a");
+        let second_request = fixture_quantified_coordinator_request("resource-action-b", "resource-claim-b");
+        let state_dir = temp.path().to_path_buf();
+        let (committed_tx, committed_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let first_thread = std::thread::spawn(move || {
+            let _guard = acquire_remote_coordinator_mutation_guard(&state_dir).expect("first mutation locks");
+            let mut state = load_coordinator_state(&state_dir).expect("first mutation loads");
+            let decision = admit_fixture_dispatch(&mut state, &first_request).expect("first resource request plans");
+            committed_tx.send(decision).expect("commit signal sends");
+            release_rx.recv().expect("release signal arrives");
+        });
+        let first = committed_rx.recv().expect("first resource request commits");
+        let busy = acquire_remote_coordinator_mutation_guard(temp.path())
+            .expect_err("concurrent mutation fails closed while committed state is locked");
+        release_tx.send(()).expect("first mutation releases");
+        first_thread.join().expect("first mutation thread joins");
+        let _guard = acquire_remote_coordinator_mutation_guard(temp.path()).expect("retry mutation locks");
+        let mut restarted = load_coordinator_state(temp.path()).expect("committed lease reloads");
+        let second = admit_fixture_dispatch(&mut restarted, &second_request).expect("second resource request plans");
+        let status = coordinator_status_snapshot("builder-1", TEST_WORKER_CONCURRENCY, &restarted, &[], &[])
+            .expect("resource status renders");
+        let before_shrink = restarted.clone();
+        let mut shrunken = fixture_worker_registration();
+        shrunken.concurrency = TEST_WORKER_CONCURRENCY;
+        let mut shrunken_inventory = fixture_resource_inventory();
+        shrunken_inventory.total.cpu_units = TEST_RESOURCE_CPU_UNITS.checked_sub(1).expect("fixture CPU shrinks");
+        shrunken.resource_inventory = Some(shrunken_inventory);
+        let shrink_error = apply_worker_registration(&mut restarted, shrunken)
+            .expect_err("registration cannot shrink below current reservations");
+        let mut new_generation = fixture_worker_registration();
+        new_generation.concurrency = TEST_WORKER_CONCURRENCY;
+        new_generation.resource_inventory = Some(fixture_resource_inventory());
+        new_generation.worker_generation =
+            new_generation.worker_generation.checked_add(1).expect("fixture worker generation advances");
+        let generation_error = apply_worker_registration(&mut restarted, new_generation)
+            .expect_err("new worker generation cannot inherit an old lease");
+
+        assert!(matches!(first, RemoteCoordinatorDispatchDecision::Dispatch {
+            resource_fit: crunch_build::ResourceFitClass::Exact,
+            ..
+        }));
+        assert!(busy.contains("remote-coordinator-mutation-lock-busy"));
+        assert!(
+            matches!(second, RemoteCoordinatorDispatchDecision::Reject { reason } if reason == RemoteResourceReasonCode::CpuUnavailable.as_str())
+        );
+        assert_eq!(restarted.resource_leases.len(), 1);
+        assert_eq!(restarted.jobs.len(), 1);
+        assert_eq!(status.resource_leases.len(), 1);
+        assert!(status.queued_jobs[0].resource_requirements.is_some());
+        assert_eq!(status.workers[0].resource_remaining.as_ref().expect("remaining capacity reports").cpu_units, 0);
+        assert!(status.non_claims.iter().any(|claim| claim.contains("do not prove tool identity")));
+        assert_eq!(shrink_error, RemoteResourceReasonCode::LeaseSnapshotOvercommitted.as_str());
+        assert_eq!(generation_error, "remote-resource-job-lease-scope-mismatch");
+        assert_eq!(restarted, before_shrink);
+    }
+
+    #[test]
+    fn resource_lease_restart_preserves_current_fence_and_stale_loss_cannot_release_it() {
+        let temp = tempfile::tempdir().expect("temporary restart coordinator state");
+        let mut state = RemoteCoordinatorState {
+            state_dir: Some(temp.path().to_path_buf()),
+            ..RemoteCoordinatorState::default()
+        };
+        let mut worker = fixture_worker_registration();
+        worker.concurrency = TEST_WORKER_CONCURRENCY;
+        worker.resource_inventory = Some(fixture_resource_inventory());
+        apply_worker_registration(&mut state, worker).expect("quantified worker registers");
+        let request = fixture_quantified_coordinator_request("resource-action-restart", "resource-claim-restart");
+        let dispatch = admit_fixture_dispatch(&mut state, &request).expect("resource request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+            panic!("quantified request must dispatch");
+        };
+        let stale = current_production_attempt_binding(&state, &job_id, "builder-1").expect("initial binding exists");
+        reassign_coordinator_attempt(
+            &mut state,
+            &job_id,
+            "builder-1",
+            RemoteAttemptFailureClass::Retryable,
+            RemoteAttemptRetryPolicy::default(),
+            fixture_retry_time(),
+        )
+        .expect("resource retry commits replacement lease");
+        let before_stale = state.clone();
+        let stale_error = mark_coordinator_attempt_lost(&mut state, &stale, RemoteFailurePhase::BuildExecution)
+            .expect_err("superseded attempt cannot release current capacity");
+        assert_eq!(state, before_stale);
+        let current = current_production_attempt_binding(&state, &job_id, "builder-1").expect("current binding exists");
+        mark_coordinator_attempt_lost(&mut state, &current, RemoteFailurePhase::BuildExecution)
+            .expect("current attempt releases capacity");
+        let restarted = load_coordinator_state(temp.path()).expect("released state reloads");
+        let remaining = remote_resource_remaining_capacity(
+            "builder-1",
+            restarted.workers["builder-1"].resource_inventory.as_ref().expect("inventory persists"),
+            &[],
+        )
+        .expect("full capacity recomputes");
+
+        assert_eq!(stale_error, RemoteAttemptReasonCode::StaleReportRejected.as_str());
+        assert!(restarted.resource_leases.is_empty());
+        assert_eq!(remaining.cpu_units, TEST_RESOURCE_CPU_UNITS);
+        assert_eq!(restarted.jobs[&job_id].phase, RemoteCoordinatorJobPhase::Lost);
+    }
+
+    #[test]
+    fn resource_leases_release_on_completion_cancellation_timeout_and_worker_loss() {
+        let mut completed = RemoteCoordinatorState::default();
+        let mut worker = fixture_worker_registration();
+        worker.concurrency = TEST_WORKER_CONCURRENCY;
+        worker.resource_inventory = Some(fixture_resource_inventory());
+        apply_worker_registration(&mut completed, worker.clone()).expect("completion worker registers");
+        let completion_request = fixture_quantified_coordinator_request("resource-complete", "resource-complete-claim");
+        let completion_dispatch = admit_fixture_dispatch(&mut completed, &completion_request)
+            .expect("completion resource request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = completion_dispatch else {
+            panic!("completion resource request must dispatch");
+        };
+        complete_current_fixture_attempt(&mut completed, &job_id);
+        assert!(completed.resource_leases.is_empty());
+        assert_eq!(completed.jobs[&job_id].phase, RemoteCoordinatorJobPhase::Finished);
+
+        let causes = [
+            RemoteCoordinatorTerminationCause::Cancellation,
+            RemoteCoordinatorTerminationCause::Timeout,
+            RemoteCoordinatorTerminationCause::WorkerLoss,
+        ];
+        for cause in causes {
+            let mut state = RemoteCoordinatorState::default();
+            apply_worker_registration(&mut state, worker.clone()).expect("termination worker registers");
+            let label = cause.as_str();
+            let request = fixture_quantified_coordinator_request(label, &format!("{label}-claim"));
+            let dispatch = admit_fixture_dispatch(&mut state, &request).expect("termination request dispatches");
+            let RemoteCoordinatorDispatchDecision::Dispatch { job_id, .. } = dispatch else {
+                panic!("termination resource request must dispatch");
+            };
+            let binding =
+                current_production_attempt_binding(&state, &job_id, "builder-1").expect("termination binding exists");
+            terminate_coordinator_attempt(&mut state, &binding, cause).expect("termination releases capacity");
+
+            assert!(state.resource_leases.is_empty());
+            assert_eq!(state.jobs[&job_id].phase, RemoteCoordinatorJobPhase::Lost);
+            assert_eq!(state.jobs[&job_id].short_error.as_deref(), Some(cause.as_str()));
+        }
+    }
+
+    #[test]
+    fn scheduling_quantities_do_not_change_action_key_but_semantic_classes_do() {
+        let baseline = fixture_quantified_coordinator_request("resource-identity", "resource-identity-claim");
+        let mut quantity_only = baseline.clone();
+        let reduced_cpu_units = TEST_RESOURCE_CPU_UNITS.checked_sub(1).expect("fixture CPU quantity reduces");
+        quantity_only.resource_requirements.as_mut().expect("requirements exist").quantities.cpu_units =
+            reduced_cpu_units;
+        quantity_only.request.resource_requirements = quantity_only.resource_requirements.clone();
+        let mut semantic_change = baseline.clone();
+        let semantic_requirements = semantic_change.resource_requirements.as_mut().expect("requirements exist");
+        semantic_requirements.quantities.accelerators[0].name = "amd-gfx942".to_string();
+        semantic_requirements.semantic_accelerator_classes = vec!["amd-gfx942".to_string()];
+        semantic_change.request.resource_requirements = semantic_change.resource_requirements.clone();
+        let baseline_key = normalized_remote_build_key(&baseline).expect("baseline key derives");
+        let quantity_key = normalized_remote_build_key(&quantity_only).expect("quantity key derives");
+        let semantic_key = normalized_remote_build_key(&semantic_change).expect("semantic key derives");
+
+        assert_eq!(baseline_key, quantity_key);
+        assert_ne!(baseline_key, semantic_key);
+        assert_ne!(baseline.resource_requirements, quantity_only.resource_requirements);
+        assert_eq!(baseline.request.payload, semantic_change.request.payload);
+    }
+
+    #[test]
+    fn receiver_verified_locality_prefers_only_hard_eligible_current_generation() {
+        let mut state = RemoteCoordinatorState::default();
+        let mut first = fixture_worker_registration();
+        first.endpoint_id = "a-worker".to_string();
+        let mut local = fixture_worker_registration();
+        local.endpoint_id = "b-worker".to_string();
+        apply_worker_registration(&mut state, first).expect("first worker registers");
+        apply_worker_registration(&mut state, local.clone()).expect("local worker registers");
+        let manifest = fixture_locality_manifest();
+        let artifact_id = manifest.manifest.artifacts[0].artifact_id.clone();
+        let mut complete_artifacts = BTreeSet::new();
+        complete_artifacts.insert(artifact_id);
+        let summary = record_receiver_verified_worker_locality(
+            &mut state,
+            "b-worker",
+            local.worker_generation,
+            &manifest,
+            RemoteTransferReceiverFacts {
+                complete_artifact_ids: complete_artifacts,
+                requested_content_identity_verified: true,
+                required_closure_metadata_verified: true,
+                path_info_admitted: true,
+                ..RemoteTransferReceiverFacts::default()
+            },
+        )
+        .expect("receiver locality verifies");
+        let mut request = fixture_coordinator_request();
+        request.locality_scope = Some(summary.scope.clone());
+        request.request.locality_scope = request.locality_scope.clone();
+        let preferred = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("locality-preferred"))
+            .expect("locality placement plans");
+        local.output_signing_key_ids = vec!["untrusted-builder-key".to_string()];
+        apply_worker_registration(&mut state, local.clone()).expect("trust mismatch registration applies");
+        let blocked = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("locality-blocked"))
+            .expect("hard eligibility placement plans");
+        local.output_signing_key_ids = vec!["builder-key".to_string()];
+        local.worker_generation = local.worker_generation.checked_add(1).expect("worker generation advances");
+        apply_worker_registration(&mut state, local).expect("new worker generation registers");
+        let stale = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("locality-stale"))
+            .expect("stale locality placement plans");
+
+        assert_eq!(summary.content_locality, crunch_build::ContentLocalityClass::FullyPresent);
+        assert_eq!(summary.transfer_cost, crunch_build::TransferCostClass::None);
+        assert!(
+            matches!(preferred, RemoteCoordinatorDispatchDecision::Dispatch { worker_endpoint_id, .. } if worker_endpoint_id == "b-worker")
+        );
+        assert!(
+            matches!(blocked, RemoteCoordinatorDispatchDecision::Dispatch { worker_endpoint_id, .. } if worker_endpoint_id == "a-worker")
+        );
+        assert!(state.verified_locality_observations.is_empty());
+        assert!(
+            matches!(stale, RemoteCoordinatorDispatchDecision::Dispatch { worker_endpoint_id, .. } if worker_endpoint_id == "a-worker")
+        );
+    }
+
+    #[test]
     fn coordinator_state_reset_cannot_reissue_job_or_attempt_identity() {
         let request = fixture_coordinator_request();
         let mut first_state = RemoteCoordinatorState::default();
@@ -12380,6 +13379,10 @@ mod tests {
             transferred_bytes: 0,
             output_admission_completed: false,
             last_attempt_reason_code: Some(RemoteAttemptReasonCode::LegacyStateRejected),
+            resource_requirements: None,
+            resource_lease_id_blake3: None,
+            resource_fit: None,
+            locality: None,
         });
         let snapshot =
             coordinator_status_snapshot("coordinator-1", 1, &state, &[], &[]).expect("status snapshot renders");
@@ -12429,6 +13432,8 @@ mod tests {
             Some("builder-1"),
             &[RemoteAttemptReasonCode::StaleReportRejected],
             upload_summary,
+            None,
+            None,
             &admission,
             &import_report,
             &[REMOTE_SESSION_NON_CLAIM.to_string()],
@@ -12474,6 +13479,8 @@ mod tests {
             None,
             &[],
             upload_summary,
+            None,
+            None,
             &admission,
             &import_report,
             &[],
@@ -12639,6 +13646,10 @@ mod tests {
             transferred_bytes: 0,
             output_admission_completed: false,
             last_attempt_reason_code: None,
+            resource_requirements: None,
+            resource_lease_id_blake3: None,
+            resource_fit: None,
+            locality: None,
         });
         let decision = plan_coordinator_dispatch(&state, &request, &fixture_assignment_nonce("lost-plan"))
             .expect("lost job decision");
@@ -13000,6 +14011,8 @@ mod tests {
             expected_outputs: fixture_expected_outputs(),
             production_attempt: None,
             transfer_policy: None,
+            resource_requirements: None,
+            locality_scope: None,
         }
     }
 
@@ -13244,19 +14257,107 @@ mod tests {
         }
     }
 
+    fn fixture_locality_manifest() -> CanonicalRemoteTransferManifest {
+        let policy = RemoteTransferPolicy::default();
+        let policy_digest =
+            crunch_build::distributed::canonical_remote_transfer_policy_digest(policy).expect("locality policy digest");
+        let artifact_id = crunch_build::distributed::RemoteTransferArtifactId::new("locality-artifact")
+            .expect("locality artifact id");
+        let artifact_digest = crunch_build::distributed::RemoteTransferDigest::new(
+            blake3::hash(b"locality-artifact").to_hex().to_string(),
+        )
+        .expect("locality artifact digest");
+        let chunk_digest =
+            crunch_build::distributed::RemoteTransferDigest::new(blake3::hash(b"locality-chunk").to_hex().to_string())
+                .expect("locality chunk digest");
+        crunch_build::distributed::canonicalize_remote_transfer_manifest(
+            crunch_build::distributed::RemoteTransferManifest {
+                schema: crunch_build::distributed::REMOTE_TRANSFER_MANIFEST_SCHEMA.to_string(),
+                session_id: crunch_build::distributed::RemoteTransferSessionId::new(
+                    blake3::hash(b"locality-session").to_hex().to_string(),
+                )
+                .expect("locality session id"),
+                job_id: RemoteJobId::new("locality-job").expect("locality job id"),
+                attempt_id: RemoteAttemptId::new("locality-attempt").expect("locality attempt id"),
+                fence_generation: RemoteFenceGeneration::INITIAL,
+                policy_digest_blake3: policy_digest,
+                store_prefix: "/mantle/store".to_string(),
+                requested_content_blake3: crunch_build::distributed::RemoteTransferDigest::new(
+                    blake3::hash(b"locality-request").to_hex().to_string(),
+                )
+                .expect("requested content digest"),
+                artifacts: vec![crunch_build::distributed::RemoteTransferArtifact {
+                    artifact_id,
+                    artifact_kind: crunch_build::distributed::RemoteTransferArtifactKind::CastoreBlob,
+                    digest_blake3: artifact_digest,
+                    size_bytes: TEST_LOCALITY_ARTIFACT_BYTES,
+                    required_for_completion: true,
+                    nar_sha256_hex: None,
+                    chunks: vec![crunch_build::distributed::RemoteTransferChunkDescriptor {
+                        index: 0,
+                        offset_bytes: 0,
+                        size_bytes: TEST_LOCALITY_CHUNK_BYTES,
+                        digest_blake3: chunk_digest,
+                    }],
+                }],
+            },
+            policy,
+        )
+        .expect("locality manifest canonicalizes")
+    }
+
+    fn fixture_resource_inventory() -> RemoteWorkerResourceInventory {
+        RemoteWorkerResourceInventory {
+            total: RemoteResourceVector {
+                cpu_units: TEST_RESOURCE_CPU_UNITS,
+                memory_bytes: TEST_RESOURCE_MEMORY_BYTES,
+                scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
+                accelerators: vec![RemoteNamedResourceQuantity {
+                    name: "nvidia-sm90".to_string(),
+                    quantity: TEST_RESOURCE_ACCELERATOR_COUNT,
+                }],
+                named_tokens: vec![RemoteNamedResourceQuantity {
+                    name: "linker-seat".to_string(),
+                    quantity: TEST_RESOURCE_TOKEN_COUNT,
+                }],
+            },
+        }
+    }
+
+    fn fixture_resource_requirements() -> RemoteResourceRequirements {
+        RemoteResourceRequirements {
+            quantities: fixture_resource_inventory().total,
+            semantic_accelerator_classes: vec!["nvidia-sm90".to_string()],
+        }
+    }
+
     fn fixture_worker_registration() -> RemoteWorkerRegistration {
         RemoteWorkerRegistration {
             endpoint_id: "builder-1".to_string(),
             protocol_version: REMOTE_PROTOCOL_VERSION,
+            worker_generation: legacy_worker_generation(),
             systems: vec![DEFAULT_REMOTE_ACTION_SYSTEM.to_string()],
             feature_labels: vec!["kvm".to_string()],
             sandbox_modes: vec!["bwrap".to_string()],
             network_modes: vec!["off".to_string()],
             logical_store_prefixes: vec!["/mantle/store".to_string()],
             concurrency: 1,
+            resource_inventory: None,
             output_signing_key_ids: vec!["builder-key".to_string()],
             resumable_jobs: Vec::new(),
         }
+    }
+
+    fn fixture_quantified_coordinator_request(action_id: &str, claim: &str) -> RemoteCoordinatorBuildRequest {
+        let mut request = fixture_coordinator_request();
+        request.request.payload = RemoteConcreteBuildPayload::Action {
+            action_id: action_id.to_string(),
+            spec_json: fixture_action_spec_json(action_id),
+        };
+        request.request.resource_requirements = Some(fixture_resource_requirements());
+        request.resource_requirements = request.request.resource_requirements.clone();
+        request.live_output_claims = vec![claim.to_string()];
+        request
     }
 
     fn fixture_coordinator_request() -> RemoteCoordinatorBuildRequest {
@@ -13266,6 +14367,8 @@ mod tests {
             required_features: vec!["kvm".to_string()],
             required_sandbox_mode: "bwrap".to_string(),
             required_network_mode: "off".to_string(),
+            resource_requirements: None,
+            locality_scope: None,
             trusted_output_keys: vec!["builder-key".to_string()],
             live_output_claims: vec!["claim-out".to_string()],
             wait_for_worker: false,
@@ -13382,6 +14485,8 @@ mod tests {
             required_features: vec!["kvm".to_string()],
             required_sandbox_mode: "bwrap".to_string(),
             required_network_mode: "off".to_string(),
+            resource_requirements: None,
+            locality_scope: None,
             trusted_output_keys: vec!["builder-key".to_string()],
             live_output_claims: vec!["claim-out".to_string()],
             wait_for_worker: false,

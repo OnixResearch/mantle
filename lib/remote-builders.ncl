@@ -117,6 +117,42 @@ let RemoteTransferPolicy = {
   control_bytes_max | Number | default = DefaultTransferControlBytes,
 } in
 
+let NamedResourceQuantity = {
+  name | String,
+  quantity
+    | doc "Positive bounded quantity validated by the Rust admission core"
+    | Number,
+} in
+
+let RemoteResourceVector = {
+  cpu_units | Number,
+  memory_bytes | Number,
+  scratch_bytes | Number,
+  accelerators | Array NamedResourceQuantity | default = [],
+  named_tokens
+    | doc "Opaque scarce-token quantities; never credentials"
+    | Array NamedResourceQuantity
+    | default = [],
+} in
+
+let RemoteResourceInventory = {
+  total | RemoteResourceVector,
+} in
+
+let RemoteResourceRequirements = {
+  quantities | RemoteResourceVector,
+  semantic_accelerator_classes
+    | doc "Semantic classes affect action identity; quantities remain scheduling-only"
+    | Array String
+    | default = [],
+} in
+
+let RemoteLocalityPolicy = {
+  basis | [| 'receiver-verified |] | default = 'receiver-verified,
+  stale | [| 'reject |] | default = 'reject,
+  unverified | [| 'no-verified-content |] | default = 'no-verified-content,
+} in
+
 let RemoteRetryPolicy = {
   max_attempts
     | doc "Total bounded attempts, including the initial assignment"
@@ -146,10 +182,18 @@ let RemoteCapabilityProfile = {
   features
     | Array String
     | default = [],
+  worker_generation
+    | doc "Positive monotonic worker/content generation; advance before restart or destructive cache changes"
+    | Number
+    | default = 1,
   max_concurrency
     | doc "Maximum parallel builds on this builder"
     | Number
     | default = DefaultRemoteConcurrency,
+  resource_inventory
+    | doc "Explicit quantified capacity; absence is never inferred from concurrency"
+    | RemoteResourceInventory
+    | optional,
   max_upload_bytes
     | doc "Maximum upload size per request"
     | Number
@@ -227,6 +271,10 @@ let RemoteBuilderPoolContract = {
   RemoteTelemetry
     | doc "Bounded disabled-by-default Prometheus and OTLP exporter configuration."
     = RemoteTelemetryExport,
+
+  ResourceInventory = RemoteResourceInventory,
+  ResourceRequirements = RemoteResourceRequirements,
+  LocalityPolicy = RemoteLocalityPolicy,
 
   pools
     | doc "List of configured remote builder pools."

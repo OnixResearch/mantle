@@ -3544,6 +3544,9 @@ fn run_build_command(
 
 struct RemoteBuildSelection {
     options: remote_build::RemoteClientBuildOptions,
+    worker_generation: u64,
+    worker_concurrency: u32,
+    resource_inventory: Option<crunch_build::distributed::RemoteWorkerResourceInventory>,
     telemetry: remote_telemetry_export::RemoteTelemetryExportConfig,
     trace_context: Option<remote_trace_context::RemoteTraceContext>,
     trace_health: remote_trace_context::RemoteTraceContextHealth,
@@ -3597,6 +3600,22 @@ fn remote_build_selection(
         .transpose()
         .map_err(RunError::Internal)?
         .unwrap_or_default();
+    let matching_profiles = farm_config
+        .pools
+        .iter()
+        .flat_map(|pool| pool.endpoints.iter())
+        .filter(|endpoint| endpoint.endpoint_id == builder)
+        .map(|endpoint| endpoint.profile.clone())
+        .collect::<Vec<_>>();
+    if matching_profiles.len() > 1 {
+        return Err(RunError::Internal(format!("remote builder {builder:?} has ambiguous capability profiles")));
+    }
+    let selected_profile = matching_profiles.first();
+    let worker_generation = selected_profile
+        .map_or(crunch_build::distributed::RemoteFenceGeneration::INITIAL.get(), |profile| profile.worker_generation);
+    let worker_concurrency =
+        selected_profile.map_or(remote_build::DEFAULT_REMOTE_CONCURRENCY, |profile| profile.max_concurrency);
+    let resource_inventory = selected_profile.and_then(|profile| profile.resource_inventory.clone());
     let traceparent = std::env::var(W3C_TRACEPARENT_ENV).ok();
     let tracestate = std::env::var(W3C_TRACESTATE_ENV).ok();
     let (trace_context, trace_health) = remote_trace_context::accept_remote_trace_context(
@@ -3620,6 +3639,9 @@ fn remote_build_selection(
     };
     Ok(Some(RemoteBuildSelection {
         options,
+        worker_generation,
+        worker_concurrency,
+        resource_inventory,
         telemetry: farm_config.telemetry,
         trace_context,
         trace_health,
@@ -3885,6 +3907,9 @@ async fn run_remote_build_dispatches_async(
             &mut coordinator,
             &plan.client.request,
             &selection.options.builder.endpoint_id,
+            selection.worker_generation,
+            selection.worker_concurrency,
+            selection.resource_inventory.clone(),
             &plan.client.trusted_output_keys,
             selection.options.now_unix_s,
         )

@@ -74,8 +74,12 @@ pub struct RemoteCapabilityProfile {
     pub network_mode: RemoteNetworkMode,
     #[serde(default)]
     pub features: Vec<String>,
+    #[serde(default = "default_worker_generation")]
+    pub worker_generation: u64,
     #[serde(default = "default_concurrency")]
     pub max_concurrency: u32,
+    #[serde(default)]
+    pub resource_inventory: Option<crunch_build::distributed::RemoteWorkerResourceInventory>,
     #[serde(default = "default_upload_bytes")]
     pub max_upload_bytes: u64,
     #[serde(default = "default_build_time_secs")]
@@ -95,6 +99,9 @@ fn default_system() -> String {
 fn default_network_mode() -> RemoteNetworkMode {
     RemoteNetworkMode::None
 }
+fn default_worker_generation() -> u64 {
+    1
+}
 fn default_concurrency() -> u32 {
     DEFAULT_REMOTE_MAX_CONCURRENCY
 }
@@ -112,7 +119,9 @@ impl Default for RemoteCapabilityProfile {
             sandbox_mode: RemoteSandboxMode::Practical,
             network_mode: RemoteNetworkMode::None,
             features: Vec::new(),
+            worker_generation: default_worker_generation(),
             max_concurrency: DEFAULT_REMOTE_MAX_CONCURRENCY,
+            resource_inventory: None,
             max_upload_bytes: DEFAULT_REMOTE_MAX_UPLOAD_BYTES,
             max_build_time_secs: DEFAULT_REMOTE_MAX_BUILD_TIME_SECS,
             retry_policy: RemoteAttemptRetryPolicy::default(),
@@ -223,9 +232,17 @@ impl RemoteBuildFarmConfig {
                 if endpoint.endpoint_id.is_empty() {
                     return Err("endpoint_id must not be empty".to_string());
                 }
+                if endpoint.profile.worker_generation == 0 {
+                    return Err(format!("endpoint '{}' worker generation must be positive", endpoint.endpoint_id));
+                }
                 endpoint.profile.retry_policy.validate().map_err(|reason| {
                     format!("endpoint '{}' retry policy: {}", endpoint.endpoint_id, reason.as_str())
                 })?;
+                if let Some(inventory) = &endpoint.profile.resource_inventory {
+                    crunch_build::distributed::canonical_remote_worker_resource_inventory(inventory).map_err(
+                        |reason| format!("endpoint '{}' resource inventory: {}", endpoint.endpoint_id, reason.as_str()),
+                    )?;
+                }
                 endpoint.profile.transfer_policy.validate().map_err(|reason| {
                     format!("endpoint '{}' transfer policy: {}", endpoint.endpoint_id, reason.as_str())
                 })?;
@@ -297,7 +314,9 @@ mod tests {
                         sandbox_mode: RemoteSandboxMode::Strict,
                         network_mode: RemoteNetworkMode::None,
                         features: vec!["tigerstyle".to_string()],
+                        worker_generation: default_worker_generation(),
                         max_concurrency: SAMPLE_MAX_CONCURRENCY,
+                        resource_inventory: None,
                         max_upload_bytes: DEFAULT_REMOTE_MAX_UPLOAD_BYTES,
                         max_build_time_secs: SAMPLE_MAX_BUILD_TIME_SECS,
                         retry_policy: RemoteAttemptRetryPolicy {
@@ -624,11 +643,130 @@ let remote = import "remote-builders.ncl" in
     }
 
     #[test]
+    fn nickel_resource_inventory_round_trips_typed_bounded_values() {
+        let temp = tempfile::tempdir().expect("temporary Nickel resource config dir");
+        let config_path = temp.path().join("remote-resources.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in {
+  pools = [({
+    pool_id = "resource-pool",
+    endpoints = [{
+      endpoint_id = "resource-worker",
+      profile.resource_inventory = ({
+        total = {
+          cpu_units = 16,
+          memory_bytes = 68719476736,
+          scratch_bytes = 1099511627776,
+          accelerators = [{ name = "nvidia-sm90", quantity = 2 }],
+          named_tokens = [{ name = "linker-seat", quantity = 4 }],
+        },
+      } | remote.ResourceInventory),
+    }],
+  } | remote.RemoteBuilderPool)],
+}
+"#,
+        )
+        .expect("Nickel resource config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let config: RemoteBuildFarmConfig = crunch_eval::evaluate_and_deserialize(&config_path, &import_paths)
+            .expect("typed Nickel resource inventory evaluates");
+        let inventory = config.pools[0].endpoints[0]
+            .profile
+            .resource_inventory
+            .as_ref()
+            .expect("resource inventory is present");
+
+        assert!(config.validate().is_ok());
+        assert_eq!(inventory.total.cpu_units, 16);
+        assert_eq!(inventory.total.accelerators[0].name, "nvidia-sm90");
+    }
+
+    #[test]
+    fn nickel_resource_requirements_and_locality_policy_match_rust_validation() {
+        let temp = tempfile::tempdir().expect("temporary Nickel requirements dir");
+        let requirements_path = temp.path().join("remote-requirements.ncl");
+        std::fs::write(
+            &requirements_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+({
+  quantities = {
+    cpu_units = 8,
+    memory_bytes = 16384,
+    scratch_bytes = 32768,
+    accelerators = [{ name = "nvidia-sm90", quantity = 1 }],
+    named_tokens = [{ name = "linker-seat", quantity = 2 }],
+  },
+  semantic_accelerator_classes = ["nvidia-sm90"],
+} | remote.ResourceRequirements)
+"#,
+        )
+        .expect("Nickel requirements write");
+        let locality_path = temp.path().join("remote-locality-policy.ncl");
+        std::fs::write(&locality_path, r#"let remote = import "remote-builders.ncl" in ({} | remote.LocalityPolicy)"#)
+            .expect("Nickel locality policy writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let requirements: crunch_build::distributed::RemoteResourceRequirements =
+            crunch_eval::evaluate_and_deserialize(&requirements_path, &import_paths)
+                .expect("typed Nickel requirements evaluate");
+        let locality: serde_json::Value = crunch_eval::evaluate_and_deserialize(&locality_path, &import_paths)
+            .expect("typed Nickel locality policy evaluates");
+        let canonical = crunch_build::distributed::canonical_remote_resource_requirements(&requirements)
+            .expect("Rust requirement validation agrees");
+
+        assert_eq!(canonical, requirements);
+        assert_eq!(locality["basis"], "receiver-verified");
+        assert_eq!(locality["stale"], "reject");
+        assert_eq!(locality["unverified"], "no-verified-content");
+    }
+
+    #[test]
+    fn nickel_resource_inventory_rejects_type_mismatch() {
+        let temp = tempfile::tempdir().expect("temporary invalid resource config dir");
+        let config_path = temp.path().join("invalid-remote-resources.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+({ total = { cpu_units = "many", memory_bytes = 1, scratch_bytes = 1 } }
+  | remote.ResourceInventory)
+"#,
+        )
+        .expect("invalid Nickel resource config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let result = crunch_eval::evaluate_and_deserialize::<serde_json::Value>(&config_path, &import_paths);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cpu_units"));
+    }
+
+    #[test]
     fn invalid_retry_policy_is_rejected() {
         let mut config = sample_config();
         config.pools[0].endpoints[0].profile.retry_policy.max_attempts = 0;
         let error = config.validate().expect_err("zero retry attempts fail closed");
         assert!(error.contains("retry-policy-invalid"));
+        assert!(error.contains("builder-01"));
+    }
+
+    #[test]
+    fn invalid_resource_inventory_is_rejected() {
+        let mut config = sample_config();
+        config.pools[0].endpoints[0].profile.resource_inventory =
+            Some(crunch_build::distributed::RemoteWorkerResourceInventory {
+                total: crunch_build::distributed::RemoteResourceVector {
+                    cpu_units: 0,
+                    memory_bytes: 1,
+                    scratch_bytes: 1,
+                    accelerators: Vec::new(),
+                    named_tokens: Vec::new(),
+                },
+            });
+        let error = config.validate().expect_err("zero CPU inventory fails closed");
+
+        assert!(error.contains("resource-quantity-zero"));
         assert!(error.contains("builder-01"));
     }
 
