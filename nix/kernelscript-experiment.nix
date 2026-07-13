@@ -143,15 +143,18 @@ let
         --arg object_blake3 "$(digest "$OUTPUT_ROOT/artifacts/probe_do_exit.ebpf.o")" \
         --arg loader_blake3 "$(digest "$OUTPUT_ROOT/artifacts/probe_do_exit")" \
         '{
-          schema:"mantle-kernelscript-production-evidence-v1",
+          schema:"mantle-kernelscript-probe-observation-v1",
           enabled_by_default:false,
-          authority:{
-            onixos_commit:"444be98d44c847daa32a3219285eebba83f51a84",
-            onixos_tree:"d31d4b597cbe988a230208f8c620b3e0b6bb6673",
-            onixos_flake_lock_blob:"5d79ac01408bdefb272f66a083c3656f25becdf9",
-            onixos_kernel_contract_blob:"6b4f930efb03e15a6d2536ef9a93d25c856a9e63",
-            nixpkgs_revision:"6201e203d09599479a3b3450ed24fa81537ebc4e",
-            nixpkgs_nar_hash:"sha256-ZojAnPuCdy657PbTq5V0Y+AHKhZAIwSIT2cb8UgAz/U="
+          authority_status:"reported-onixos-metadata-not-materialized-or-accepted",
+          reported_onixos_metadata:{
+            commit:"444be98d44c847daa32a3219285eebba83f51a84",
+            tree:"d31d4b597cbe988a230208f8c620b3e0b6bb6673",
+            flake_lock_blob:"5d79ac01408bdefb272f66a083c3656f25becdf9",
+            kernel_contract_blob:"6b4f930efb03e15a6d2536ef9a93d25c856a9e63"
+          },
+          materialized_nixpkgs_authority:{
+            revision:"6201e203d09599479a3b3450ed24fa81537ebc4e",
+            nar_hash:"sha256-ZojAnPuCdy657PbTq5V0Y+AHKhZAIwSIT2cb8UgAz/U="
           },
           compiler:{
             source_revision:"0c80d4e4ac0029d34cbc9d65e76d78c075b64555",
@@ -176,11 +179,12 @@ let
           ],
           generated_makefile_executed:false,
           generated_kbuild_executed:false,
-          module_status:"blocked-pending-authoritative-module-build-inputs",
+          core_admission_status:"blocked-production-shell-does-not-invoke-crunch-kernelscript-core",
+          module_status:"blocked-no-checked-nix-build-or-vm-load-gate",
           runtime_status:"separate-exact-kernel-vm-gate-required",
           non_claims:["not-language-soundness","not-compiler-soundness","not-kernel-safety","not-production-default","not-onix-deployment","not-chaoscontrol-evidence","not-release-eligibility"]
-        }' > "$OUTPUT_ROOT/evidence/production-evidence.json"
-      digest "$OUTPUT_ROOT/evidence/production-evidence.json" > "$OUTPUT_ROOT/evidence/production-evidence.blake3"
+        }' > "$OUTPUT_ROOT/evidence/probe-observation.json"
+      digest "$OUTPUT_ROOT/evidence/probe-observation.json" > "$OUTPUT_ROOT/evidence/probe-observation.blake3"
     '';
   };
   artifacts = onixPkgs.runCommand "mantle-kernelscript-production-artifacts" { } ''
@@ -200,16 +204,18 @@ let
   '';
   structuralCheck = onixPkgs.runCommand "mantle-kernelscript-production-structural-check" { } ''
     ${onixPkgs.jq}/bin/jq --exit-status '
-      .schema == "mantle-kernelscript-production-evidence-v1"
+      .schema == "mantle-kernelscript-probe-observation-v1"
       and .enabled_by_default == false
+      and .authority_status == "reported-onixos-metadata-not-materialized-or-accepted"
       and .compiler.upstream_binary_used == false
       and .compiler.ambient_opam_used == false
       and .target.running_host_btf_used == false
       and .generated_makefile_executed == false
       and .generated_kbuild_executed == false
-      and .module_status == "blocked-pending-authoritative-module-build-inputs"
-    ' ${artifacts}/evidence/production-evidence.json >/dev/null
-    test "$(${onixPkgs.b3sum}/bin/b3sum --no-names ${artifacts}/evidence/production-evidence.json)" = "$(cat ${artifacts}/evidence/production-evidence.blake3)"
+      and .core_admission_status == "blocked-production-shell-does-not-invoke-crunch-kernelscript-core"
+      and .module_status == "blocked-no-checked-nix-build-or-vm-load-gate"
+    ' ${artifacts}/evidence/probe-observation.json >/dev/null
+    test "$(${onixPkgs.b3sum}/bin/b3sum --no-names ${artifacts}/evidence/probe-observation.json)" = "$(cat ${artifacts}/evidence/probe-observation.blake3)"
     touch "$out"
   '';
   runtimeCheck = onixPkgs.testers.runNixOSTest {
