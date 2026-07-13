@@ -112,6 +112,12 @@ Pueue task 2220 then classified the already-landed `src/wasm_component_cmd.rs` J
 
 Pueue task 2236 ran the exact-policy Cairn closeout again on integrated `main`: validation covered 38 specs and 10 visible changes with no issues; proposal passed with receipt `4a98bec7a1bdc1d50c097c6f5291b2bba7fb1a08a944619be63665aa82d2a924`; design passed with receipt `b27c93910e023f9e2a8ee2cdd310132621c4f04b698082acdc3df02b9025d87b`; and tasks passed with receipt `96e07f837a2dffb4ea6cd6e17a59b02a1900e4d5a02929962421465f6fefb967`. Every gate used policy hash `d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c` and returned `valid: true` / `PASS`.
 
+### Accepted-spec synchronization
+
+Pueue task 2251 produced an unblocked two-spec dry-run plan with receipt `cdf8f447f43ceb9b19b77edfb3d21f9a8fcc62238cad430a67a4f41c483e8de3`. Pueue task 2253 executed the plan and returned receipt `af3861a3d6c0d3ca932b6c51c94a0843cb6111b497b53019e4cd8fef33ed765d`, but the accepted files remained byte-unchanged despite the mutation receipt. The five delta requirement blocks were therefore materialized explicitly in `cairn/specs/operator-diagnostics/spec.md` and `cairn/specs/remote-builds/spec.md`.
+
+Pueue task 2260 compiled and ran an independent exact-block comparator. It proved each delta requirement occurs exactly once and byte-identically in the accepted spec: operator telemetry (1831 bytes), exporter isolation (1691 bytes), immutable attempt logs (1740 bytes), pure log cursor kernel (1301 bytes), and diagnostic trace context (1119 bytes). Pueue task 2269 then reran exact-policy validation plus proposal/design/tasks gates on the synchronized tree: 38 specs and 10 visible changes validated with no issues, and all three gates returned the same current `PASS` receipts recorded above.
+
 ## Scheduler-priority audit
 
 Task 9 is complete. The remote production shell no longer infers priority from queue admission or worker assignment. It creates one immutable bounded ready-root snapshot before dispatch, computes stable BLAKE3 root identities, calls the existing ranking kernel exactly once, preserves the returned order for dispatch, emits one canonical candidate-count event at that real selection boundary, and carries the kernel-produced `PriorityDecisionEvidence` into the strict build JSON report.
