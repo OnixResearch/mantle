@@ -40,12 +40,17 @@ use tracing::info;
 use tracing::info as trace_info;
 use url::Url;
 
+use crate::ActionResultDiscoveryReport;
+use crate::ActionResultPublicationReport;
+use crate::ActionResultStoreSet;
 use crate::ArtifactProvenance;
 use crate::CaMappings;
 use crate::Error;
 use crate::GcReport;
 use crate::GcRootRecord;
 use crate::GcRootSource;
+use crate::HttpActionResultStore;
+use crate::LocalActionResultStore;
 use crate::Publisher;
 use crate::StoreAuditEvent;
 use crate::StoreAuditKind;
@@ -383,6 +388,20 @@ fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
     }
 }
 
+fn configured_action_result_stores(state_dir: &Path, remote_urls: &[Url]) -> ActionResultStoreSet {
+    let mut stores = ActionResultStoreSet::new(remote_urls.is_empty());
+    stores.add_local(Box::new(LocalActionResultStore::new(state_dir)));
+    for remote_url in remote_urls {
+        match HttpActionResultStore::with_default_timeout(remote_url.clone()) {
+            Ok(store) => stores.add_remote(Box::new(store)),
+            Err(error) => {
+                tracing::warn!(url = %remote_url, error = %error, "shared action-result HTTP source disabled");
+            }
+        }
+    }
+    stores
+}
+
 /// Dynamic dispatch via trait objects. Store operations are I/O-bound so
 /// the vtable cost is irrelevant.
 pub struct StoreHandle {
@@ -418,6 +437,8 @@ pub struct StoreHandle {
     advisory_metadata_cache: AdvisoryMetadataCache,
     #[cfg(test)]
     pub advisory_metadata_cache: AdvisoryMetadataCache,
+    /// Advisory shared action-result discovery/publication stores.
+    action_result_stores: ActionResultStoreSet,
     /// Output publication adapters called after successful admission.
     publishers: Vec<Arc<dyn Publisher>>,
 }
@@ -497,6 +518,7 @@ impl StoreHandle {
         }
 
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
+        let action_result_stores = configured_action_result_stores(&config.state_dir, &remote_cache_urls);
 
         Ok(Self {
             blob_service,
@@ -517,6 +539,7 @@ impl StoreHandle {
             output_substitution_reports: HashMap::new(),
             ca_mappings,
             advisory_metadata_cache,
+            action_result_stores,
             publishers: Vec::new(),
         })
     }
@@ -685,6 +708,7 @@ impl StoreHandle {
         }
 
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
+        let action_result_stores = configured_action_result_stores(&config.state_dir, &remote_cache_urls);
 
         Ok(Self {
             blob_service: combined_blob,
@@ -705,6 +729,7 @@ impl StoreHandle {
             output_substitution_reports: HashMap::new(),
             ca_mappings,
             advisory_metadata_cache,
+            action_result_stores,
             publishers: Vec::new(),
         })
     }
@@ -718,6 +743,7 @@ impl StoreHandle {
     pub fn from_services_with_store_dir(services: StoreHandleServices, store_dir: String) -> Self {
         let ca_mappings = CaMappings::load(&services.state_dir);
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&services.state_dir);
+        let action_result_stores = configured_action_result_stores(&services.state_dir, &[]);
         Self {
             blob_service: services.blob_service,
             directory_service: services.directory_service,
@@ -737,6 +763,7 @@ impl StoreHandle {
             output_substitution_reports: HashMap::new(),
             ca_mappings,
             advisory_metadata_cache,
+            action_result_stores,
             publishers: services.publishers,
         }
     }
@@ -774,6 +801,28 @@ impl StoreHandle {
     /// The logical store prefix (e.g. "/crunch/store").
     pub fn store_dir(&self) -> &str {
         &self.store_dir
+    }
+
+    pub async fn discover_action_results(&self, action_ref: &str) -> ActionResultDiscoveryReport {
+        self.action_result_stores.discover(action_ref).await
+    }
+
+    pub async fn publish_local_action_result(
+        &self,
+        record: &crunch_action_result_core::SignedActionResultRecord,
+    ) -> Result<Vec<ActionResultPublicationReport>, String> {
+        self.action_result_stores.publish_local(record).await
+    }
+
+    pub async fn publish_remote_action_result(
+        &self,
+        record: &crunch_action_result_core::SignedActionResultRecord,
+    ) -> Result<Vec<ActionResultPublicationReport>, String> {
+        self.action_result_stores.publish_remote(record).await
+    }
+
+    pub fn replace_action_result_stores(&mut self, stores: ActionResultStoreSet) {
+        self.action_result_stores = stores;
     }
 
     pub fn list_retained_roots(&self) -> Result<Vec<GcRootRecord>, Error> {

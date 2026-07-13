@@ -42,7 +42,7 @@ pub const MAX_ACTION_RESULT_PATH_BYTES: usize = 4_096;
 pub const MAX_ACTION_RESULT_ID_BYTES: usize = 512;
 pub const MAX_ACTION_RESULT_DIAGNOSTICS: usize = 1_024;
 
-const BLAKE3_HEX_CHARS: usize = 64;
+pub const BLAKE3_HEX_CHARS: usize = 64;
 const RECORD_DOMAIN: &[u8] = b"mantle.action-result.record.v1";
 const INDEX_DOMAIN: &[u8] = b"mantle.action-result.index.v1";
 const OUTPUT_SET_DOMAIN: &[u8] = b"mantle.action-result.output-set.v1";
@@ -250,7 +250,7 @@ pub fn canonical_action_result_index(
 ) -> Result<ActionResultIndex, String> {
     validate_typed_ref("action-ref", &action_ref, ACTION_REF_PREFIX)?;
     let result_refs = sorted_unique_strings(result_refs);
-    validate_bounded_refs("result-ref", &result_refs, ACTION_RESULT_REF_PREFIX, MAX_ACTION_RESULT_CANDIDATES)?;
+    validate_index_result_refs(&result_refs)?;
     let hashable = IndexHashable {
         schema: ACTION_RESULT_INDEX_SCHEMA,
         action_ref: &action_ref,
@@ -272,7 +272,7 @@ pub fn validate_action_result_index(index: &ActionResultIndex) -> Result<(), Str
         return Err("action-result-index-schema-unsupported".to_string());
     }
     validate_typed_ref("action-ref", &index.action_ref, ACTION_REF_PREFIX)?;
-    validate_bounded_refs("result-ref", &index.result_refs, ACTION_RESULT_REF_PREFIX, MAX_ACTION_RESULT_CANDIDATES)?;
+    validate_index_result_refs(&index.result_refs)?;
     if index.result_refs != sorted_unique_strings(index.result_refs.clone()) {
         return Err("action-result-index-not-canonical".to_string());
     }
@@ -552,6 +552,19 @@ fn validate_request(request: &StrongReuseRequest, candidate_count: usize) -> Res
         return Err("action-result-candidate-count-exceeded".to_string());
     }
     validate_policy(&request.policy)
+}
+
+fn validate_index_result_refs(refs: &[String]) -> Result<(), String> {
+    if refs.len() > MAX_ACTION_RESULT_CANDIDATES {
+        return Err("result-ref-count-invalid".to_string());
+    }
+    if refs != sorted_unique_strings(refs.to_vec()) {
+        return Err("result-ref-list-not-canonical".to_string());
+    }
+    for value in refs {
+        validate_typed_ref("result-ref", value, ACTION_RESULT_REF_PREFIX)?;
+    }
+    Ok(())
 }
 
 fn validate_bounded_refs(field: &str, refs: &[String], prefix: &str, count_max: usize) -> Result<(), String> {

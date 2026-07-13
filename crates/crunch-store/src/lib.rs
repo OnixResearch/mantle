@@ -6,6 +6,7 @@
 //! export), CA mapping persistence, and store queries. Consumers receive a
 //! `StoreHandle` — they do not construct or own individual services.
 
+mod action_result;
 mod archive;
 mod attestation;
 mod audit;
@@ -20,36 +21,20 @@ pub mod layer;
 pub mod metadata_cache;
 mod mutation_lock;
 mod policy;
+mod publisher;
 mod pull;
 mod push;
-mod publisher;
 mod query;
 mod roots;
 
-pub use completeness::{
-    CompletenessMarkerStore,
-    GLOBAL_COMPLETENESS_MARKERS,
-    recursive_castore_completeness,
-};
-
-pub use metadata_cache::{
-    AdmissionSummary,
-    AdvisoryMetadataCache,
-    MetadataCacheEntry,
-    MetadataCacheKey,
-    MetadataClass,
-    MetadataSchemaVersion,
-    MetadataValidity,
-    RefreshPolicy,
-    build_metadata_cache_key,
-    check_metadata_validity,
-    metadata_ttl_for_class,
-    new_metadata_entry,
-    DEFAULT_METADATA_TTL_SECS,
-    MAX_METADATA_CACHE_ENTRIES,
-    NEGATIVE_MISS_TTL_SECS,
-};
-
+pub use action_result::ActionResultDiscoveryReport;
+pub use action_result::ActionResultLookup;
+pub use action_result::ActionResultPublicationReport;
+pub use action_result::ActionResultPublicationStatus;
+pub use action_result::ActionResultStore;
+pub use action_result::ActionResultStoreSet;
+pub use action_result::HttpActionResultStore;
+pub use action_result::LocalActionResultStore;
 pub use archive::ARCHIVE_COMPATIBILITY;
 pub use archive::ARCHIVE_FORMAT_NAME;
 pub use archive::ARCHIVE_VERSION;
@@ -80,6 +65,9 @@ pub use ca_mapping::OutputMap;
 pub use closure::ClosureResolution;
 pub use closure::MAX_CLOSURE_DEPTH;
 pub use closure::resolve_closure;
+pub use completeness::CompletenessMarkerStore;
+pub use completeness::GLOBAL_COMPLETENESS_MARKERS;
+pub use completeness::recursive_castore_completeness;
 pub use error::Error;
 pub use export::MAX_EXPORT_DEPTH;
 pub use export::export_castore_to_disk;
@@ -93,12 +81,27 @@ pub use handle::PersistOutputRequest;
 pub use handle::StoreConfig;
 pub use handle::StoreHandle;
 pub use handle::StoreHandleServices;
+pub use metadata_cache::AdmissionSummary;
+pub use metadata_cache::AdvisoryMetadataCache;
+pub use metadata_cache::DEFAULT_METADATA_TTL_SECS;
+pub use metadata_cache::MAX_METADATA_CACHE_ENTRIES;
+pub use metadata_cache::MetadataCacheEntry;
+pub use metadata_cache::MetadataCacheKey;
+pub use metadata_cache::MetadataClass;
+pub use metadata_cache::MetadataSchemaVersion;
+pub use metadata_cache::MetadataValidity;
+pub use metadata_cache::NEGATIVE_MISS_TTL_SECS;
+pub use metadata_cache::RefreshPolicy;
+pub use metadata_cache::build_metadata_cache_key;
+pub use metadata_cache::check_metadata_validity;
+pub use metadata_cache::metadata_ttl_for_class;
+pub use metadata_cache::new_metadata_entry;
 pub use mutation_lock::StoreMutationGuard;
-pub use publisher::Publisher;
+pub use policy::StoreFallbackMode;
 pub use publisher::NoopPublisher;
+pub use publisher::Publisher;
 #[cfg(test)]
 pub use publisher::RecordingPublisher;
-pub use policy::StoreFallbackMode;
 pub use pull::PullOptions;
 pub use pull::PullReport;
 pub use pull::PullSource;

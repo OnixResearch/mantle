@@ -1498,6 +1498,7 @@ dependencies = [
  "async-trait",
  "blake3",
  "bzip2 0.6.1",
+ "crunch-action-result-core",
  "crunch-attestation",
  "crunch-delta",
  "data-encoding",
