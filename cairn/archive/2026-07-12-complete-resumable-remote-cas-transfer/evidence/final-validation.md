@@ -143,3 +143,30 @@ After checking the final task marker, pueue task 755 reran the same canonical-pa
 "valid": true
 "verdict": "PASS"
 ```
+
+## Sync repair and post-archive validation
+
+Cairn sync dry-run task 1235 and execute task 1237 returned no blockers, but execute left all three accepted specs byte-for-byte unchanged. The reviewed requirements were therefore materialized manually in `cairn/specs/remote-builds/spec.md`, `cairn/specs/store-transports/spec.md`, and `cairn/specs/verification-evidence/spec.md`. Pueue task 1253 then validated the repaired active tree with `"specs_validated": 33`, `"issues": []`, and `"valid": true` before the accepted-spec commit and archive.
+
+Cairn archive dry-run task 1262 and execute task 1271 completed without blockers under `CAIRN_ARCHIVE_DATE=2026-07-12`, producing `cairn/archive/2026-07-12-complete-resumable-remote-cas-transfer/`. Pueue task 1275 then ran this exact post-archive command:
+
+```text
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy cairn-policy/generated/cairn-policy.json
+```
+
+Exact output:
+
+```json
+{
+  "change_issues": [],
+  "changes": 6,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 30,
+  "valid": true
+}
+```
+
+The remaining active-change count includes the preserved untracked `cairn/changes/materialize-spacewasm-reference-cohort/`; this archive did not modify or adopt that unrelated work.
