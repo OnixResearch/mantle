@@ -6,8 +6,16 @@
 //!
 //! r[impl remote_builds.immutable_attempt_log_segments]
 
+#[cfg(target_os = "linux")]
+use std::ffi::CString;
 use std::fs;
+use std::fs::File;
+use std::io::Read;
 use std::io::Write;
+#[cfg(target_os = "linux")]
+use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -35,18 +43,25 @@ use crunch_build::distributed::plan_remote_attempt_log_retention;
 use crunch_build::distributed::seal_remote_attempt_log_record;
 use crunch_build::distributed::validate_remote_attempt_log_chain;
 use crunch_build::distributed::validate_remote_attempt_log_manifest;
+use rand::RngCore;
+use rand::rngs::OsRng;
 
 const REMOTE_ATTEMPT_LOG_STORE_DIR: &str = "remote-attempt-logs";
 const REMOTE_ATTEMPT_LOG_SEGMENTS_DIR: &str = "segments";
 const REMOTE_ATTEMPT_LOG_ANCHORS_DIR: &str = "anchors";
 const REMOTE_ATTEMPT_LOG_MANIFEST_FILE: &str = "manifest.json";
 const JSON_FILE_EXTENSION: &str = "json";
-const TEMP_FILE_EXTENSION: &str = "tmp";
 const REMOTE_ATTEMPT_LOG_SCOPE_DOMAIN: &str = "mantle-remote-attempt-log-scope-v1";
 const MAX_REMOTE_ATTEMPT_LOG_MANIFEST_FILE_BYTES: u64 = 2_097_152;
 const MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES: u64 = 8_388_608;
 const MAX_REMOTE_ATTEMPT_LOG_ANCHOR_FILE_BYTES: u64 = 131_072;
 const DURABLE_DIRECTORY_ANCESTOR_SYNC_COUNT: usize = 2;
+const IDENTITY_TEMP_RANDOM_BYTES: usize = 16;
+const HEX_CHARS_PER_BYTE: usize = 2;
+const IDENTITY_TEMP_CREATE_ATTEMPTS_MAX: u32 = 8;
+const BOUNDED_READ_PROBE_BYTES: u64 = 1;
+#[cfg(unix)]
+const PRIVATE_TEMP_FILE_MODE: u32 = 0o600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteAttemptLogDurabilityStep {
@@ -188,7 +203,7 @@ fn load_remote_attempt_log(
     policy: RemoteAttemptLogPolicy,
 ) -> Result<LoadedRemoteAttemptLog, String> {
     let paths = remote_attempt_log_paths(state_dir, scope);
-    if !paths.manifest.exists() {
+    if path_is_absent_no_follow(&paths.manifest, "manifest")? {
         let manifest = empty_remote_attempt_log_manifest(scope.clone(), DEFAULT_REMOTE_ATTEMPT_LOG_POLICY_NAME, policy)
             .map_err(reason)?;
         return Ok(LoadedRemoteAttemptLog {
@@ -261,68 +276,192 @@ fn commit_manifest(
     manifest: &RemoteAttemptLogManifest,
     policy: RemoteAttemptLogPolicy,
 ) -> Result<(), String> {
+    commit_manifest_with_hook(paths, manifest, policy, &mut no_publication_hook)
+}
+
+fn commit_manifest_with_hook(
+    paths: &RemoteAttemptLogPaths,
+    manifest: &RemoteAttemptLogManifest,
+    policy: RemoteAttemptLogPolicy,
+    hook: &mut impl FnMut(PublicationHookPoint, &Path, &Path) -> Result<(), String>,
+) -> Result<(), String> {
     validate_remote_attempt_log_manifest(manifest, policy).map_err(reason)?;
     let bytes = canonical_json_bytes(manifest, "manifest")?;
-    if u64::try_from(bytes.len()).map_err(|_| "attempt-log-manifest-size-overflow".to_string())?
-        > MAX_REMOTE_ATTEMPT_LOG_MANIFEST_FILE_BYTES
-    {
-        return Err("attempt-log-manifest-file-too-large".to_string());
-    }
+    validate_serialized_size(&bytes, MAX_REMOTE_ATTEMPT_LOG_MANIFEST_FILE_BYTES, "manifest")?;
     ensure_durable_dir(&paths.root)?;
-    let temp = manifest_temp_path(&paths.manifest, &manifest.manifest_blake3);
-    write_synced_file(&temp, &bytes, false)?;
-    fs::rename(&temp, &paths.manifest).map_err(|error| format!("attempt-log-manifest-commit-failed: {error}"))?;
-    sync_directory(&paths.root)
+    let temp = write_identity_owned_temp(&paths.manifest, manifest.manifest_blake3.as_str(), &bytes, hook)?;
+    if let Err(error) = hook(PublicationHookPoint::BeforePublish, &temp, &paths.manifest) {
+        remove_private_temp(&temp);
+        return Err(error);
+    }
+    match fs::rename(&temp, &paths.manifest) {
+        Ok(()) => sync_directory(&paths.root),
+        Err(error) => {
+            remove_private_temp(&temp);
+            Err(format!("attempt-log-manifest-commit-failed: {error}"))
+        }
+    }
 }
 
 fn publish_immutable_file(path: &Path, bytes: &[u8], bytes_max: u64) -> Result<(), String> {
-    let byte_count = u64::try_from(bytes.len()).map_err(|_| "attempt-log-object-size-overflow".to_string())?;
-    if byte_count > bytes_max {
-        return Err("attempt-log-object-file-too-large".to_string());
-    }
+    publish_immutable_file_with_hook(path, bytes, bytes_max, &mut no_publication_hook)
+}
+
+fn publish_immutable_file_with_hook(
+    path: &Path,
+    bytes: &[u8],
+    bytes_max: u64,
+    hook: &mut impl FnMut(PublicationHookPoint, &Path, &Path) -> Result<(), String>,
+) -> Result<(), String> {
+    validate_serialized_size(bytes, bytes_max, "object")?;
     let parent = path.parent().ok_or_else(|| "attempt-log-object-parent-missing".to_string())?;
     ensure_durable_dir(parent)?;
-    if path.exists() {
-        let existing = read_bounded_bytes(path, bytes_max, "immutable-object")?;
-        if existing == bytes {
-            return Ok(());
-        }
-        return Err("attempt-log-immutable-object-conflict".to_string());
+    let identity = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "attempt-log-object-identity-invalid".to_string())?;
+    let temp = write_identity_owned_temp(path, identity, bytes, hook)?;
+    if let Err(error) = hook(PublicationHookPoint::BeforePublish, &temp, path) {
+        remove_private_temp(&temp);
+        return Err(error);
     }
-    let temp = path.with_extension(TEMP_FILE_EXTENSION);
-    if temp.exists() {
-        let staged = read_bounded_bytes(&temp, bytes_max, "immutable-staged-object")?;
-        if staged != bytes {
-            return Err("attempt-log-immutable-staged-object-conflict".to_string());
-        }
-    } else {
-        write_synced_file(&temp, bytes, true)?;
-    }
-    match fs::rename(&temp, path) {
+    match rename_no_replace(&temp, path) {
         Ok(()) => sync_directory(parent),
-        Err(error) if path.exists() => {
-            let _ = fs::remove_file(&temp);
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            remove_private_temp(&temp);
             let existing = read_bounded_bytes(path, bytes_max, "immutable-object")?;
             if existing == bytes {
                 return Ok(());
             }
-            Err(format!("attempt-log-immutable-object-conflict: {error}"))
+            Err("attempt-log-immutable-object-conflict".to_string())
         }
-        Err(error) => Err(format!("attempt-log-immutable-object-commit-failed: {error}")),
+        Err(error) => {
+            remove_private_temp(&temp);
+            Err(format!("attempt-log-immutable-object-commit-failed: {error}"))
+        }
     }
 }
 
-fn write_synced_file(path: &Path, bytes: &[u8], create_new: bool) -> Result<(), String> {
-    let mut options = fs::OpenOptions::new();
-    options.write(true);
-    if create_new {
-        options.create_new(true);
-    } else {
-        options.create(true).truncate(true);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PublicationHookPoint {
+    BeforeTempCreate,
+    BeforePublish,
+}
+
+fn no_publication_hook(_point: PublicationHookPoint, _temp: &Path, _destination: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+fn write_identity_owned_temp(
+    destination: &Path,
+    identity: &str,
+    bytes: &[u8],
+    hook: &mut impl FnMut(PublicationHookPoint, &Path, &Path) -> Result<(), String>,
+) -> Result<PathBuf, String> {
+    let parent = destination.parent().ok_or_else(|| "attempt-log-temp-parent-missing".to_string())?;
+    for _ in 0..IDENTITY_TEMP_CREATE_ATTEMPTS_MAX {
+        let temp = identity_owned_temp_path(destination, identity)?;
+        hook(PublicationHookPoint::BeforeTempCreate, &temp, destination)?;
+        match create_new_private_file(&temp) {
+            Ok(mut file) => {
+                let write_result = file
+                    .write_all(bytes)
+                    .map_err(|error| format!("attempt-log-temp-write-failed: {error}"))
+                    .and_then(|()| file.sync_all().map_err(|error| format!("attempt-log-temp-sync-failed: {error}")));
+                drop(file);
+                if let Err(error) = write_result {
+                    remove_private_temp(&temp);
+                    return Err(error);
+                }
+                if let Err(error) = sync_directory(parent) {
+                    remove_private_temp(&temp);
+                    return Err(error);
+                }
+                return Ok(temp);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("attempt-log-temp-create-failed: {error}")),
+        }
     }
-    let mut file = options.open(path).map_err(|error| format!("attempt-log-file-open-failed: {error}"))?;
-    file.write_all(bytes).map_err(|error| format!("attempt-log-file-write-failed: {error}"))?;
-    file.sync_all().map_err(|error| format!("attempt-log-file-sync-failed: {error}"))
+    Err("attempt-log-temp-create-attempts-exhausted".to_string())
+}
+
+fn identity_owned_temp_path(destination: &Path, identity: &str) -> Result<PathBuf, String> {
+    let file_name = destination
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "attempt-log-temp-destination-name-invalid".to_string())?;
+    let mut random = [0_u8; IDENTITY_TEMP_RANDOM_BYTES];
+    OsRng
+        .try_fill_bytes(&mut random)
+        .map_err(|error| format!("attempt-log-temp-random-failed: {error}"))?;
+    let random_hex_capacity = IDENTITY_TEMP_RANDOM_BYTES
+        .checked_mul(HEX_CHARS_PER_BYTE)
+        .ok_or_else(|| "attempt-log-temp-random-capacity-overflow".to_string())?;
+    let mut random_hex = String::with_capacity(random_hex_capacity);
+    for byte in random {
+        use std::fmt::Write as _;
+        write!(&mut random_hex, "{byte:02x}").map_err(|_| "attempt-log-temp-random-format-failed".to_string())?;
+    }
+    if random_hex.len() != random_hex_capacity {
+        return Err("attempt-log-temp-random-length-invalid".to_string());
+    }
+    Ok(destination.with_file_name(format!(".{file_name}.{identity}.{random_hex}.tmp")))
+}
+
+#[cfg(unix)]
+fn create_new_private_file(path: &Path) -> std::io::Result<File> {
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(PRIVATE_TEMP_FILE_MODE)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+}
+
+#[cfg(not(unix))]
+fn create_new_private_file(_path: &Path) -> std::io::Result<File> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "secure create-new attempt-log temps are unsupported on this platform",
+    ))
+}
+
+#[cfg(target_os = "linux")]
+fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "attempt-log source contains NUL"))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "attempt-log destination contains NUL"))?;
+    // SAFETY: both pointers come from live CStrings. RENAME_NOREPLACE makes
+    // publication a single race-free filesystem operation.
+    let result = unsafe {
+        libc::renameat2(libc::AT_FDCWD, source.as_ptr(), libc::AT_FDCWD, destination.as_ptr(), libc::RENAME_NOREPLACE)
+    };
+    if result == 0 {
+        return Ok(());
+    }
+    Err(std::io::Error::last_os_error())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn rename_no_replace(_source: &Path, _destination: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic no-replace attempt-log publication is unsupported on this platform",
+    ))
+}
+
+fn remove_private_temp(path: &Path) {
+    let _ = fs::remove_file(path);
+}
+
+fn validate_serialized_size(bytes: &[u8], bytes_max: u64, kind: &str) -> Result<(), String> {
+    let byte_count = u64::try_from(bytes.len()).map_err(|_| format!("attempt-log-{kind}-size-overflow"))?;
+    if byte_count > bytes_max {
+        return Err(format!("attempt-log-{kind}-file-too-large"));
+    }
+    Ok(())
 }
 
 fn delete_expired_segments(paths: &RemoteAttemptLogPaths, digests: &[RemoteAttemptLogDigest]) -> Result<(), String> {
@@ -374,19 +513,57 @@ fn read_bounded_json<T: serde::de::DeserializeOwned>(path: &Path, bytes_max: u64
 }
 
 fn read_bounded_bytes(path: &Path, bytes_max: u64, kind: &str) -> Result<Vec<u8>, String> {
-    let metadata = fs::metadata(path).map_err(|error| format!("attempt-log-{kind}-metadata-failed: {error}"))?;
+    require_regular_path_no_follow(path, kind)?;
+    let mut file = open_regular_no_follow(path, kind)?;
+    let metadata = file.metadata().map_err(|error| format!("attempt-log-{kind}-opened-metadata-failed: {error}"))?;
     if !metadata.is_file() {
         return Err(format!("attempt-log-{kind}-not-regular-file"));
     }
     if metadata.len() > bytes_max {
         return Err(format!("attempt-log-{kind}-file-too-large"));
     }
-    let bytes = fs::read(path).map_err(|error| format!("attempt-log-{kind}-read-failed: {error}"))?;
-    let observed = u64::try_from(bytes.len()).map_err(|_| format!("attempt-log-{kind}-size-overflow"))?;
-    if observed > bytes_max {
-        return Err(format!("attempt-log-{kind}-file-too-large"));
-    }
+    let read_limit = bytes_max
+        .checked_add(BOUNDED_READ_PROBE_BYTES)
+        .ok_or_else(|| format!("attempt-log-{kind}-read-limit-overflow"))?;
+    let capacity = usize::try_from(metadata.len()).map_err(|_| format!("attempt-log-{kind}-capacity-overflow"))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    Read::by_ref(&mut file)
+        .take(read_limit)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("attempt-log-{kind}-read-failed: {error}"))?;
+    validate_serialized_size(&bytes, bytes_max, kind)?;
     Ok(bytes)
+}
+
+fn path_is_absent_no_follow(path: &Path, kind: &str) -> Result<bool, String> {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
+        Err(error) => Err(format!("attempt-log-{kind}-metadata-failed: {error}")),
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(format!("attempt-log-{kind}-symlink-rejected")),
+        Ok(metadata) if !metadata.is_file() => Err(format!("attempt-log-{kind}-not-regular-file")),
+        Ok(_) => Ok(false),
+    }
+}
+
+fn require_regular_path_no_follow(path: &Path, kind: &str) -> Result<(), String> {
+    if path_is_absent_no_follow(path, kind)? {
+        return Err(format!("attempt-log-{kind}-missing"));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn open_regular_no_follow(path: &Path, kind: &str) -> Result<File, String> {
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|error| format!("attempt-log-{kind}-open-no-follow-failed: {error}"))
+}
+
+#[cfg(not(unix))]
+fn open_regular_no_follow(_path: &Path, kind: &str) -> Result<File, String> {
+    Err(format!("attempt-log-{kind}-secure-read-unsupported"))
 }
 
 fn canonical_json_bytes(value: &impl serde::Serialize, kind: &str) -> Result<Vec<u8>, String> {
@@ -446,10 +623,6 @@ fn immutable_json_path(directory: &Path, digest: &RemoteAttemptLogDigest) -> Pat
     directory.join(digest.as_str()).with_extension(JSON_FILE_EXTENSION)
 }
 
-fn manifest_temp_path(manifest_path: &Path, digest: &RemoteAttemptLogDigest) -> PathBuf {
-    manifest_path.with_extension(format!("{}.{}", digest.as_str(), TEMP_FILE_EXTENSION))
-}
-
 fn ensure_durable_dir(path: &Path) -> Result<(), String> {
     fs::create_dir_all(path).map_err(|error| format!("attempt-log-directory-create-failed: {error}"))?;
     sync_directory(path)?;
@@ -466,7 +639,15 @@ fn ensure_durable_dir(path: &Path) -> Result<(), String> {
 
 #[cfg(unix)]
 fn sync_directory(path: &Path) -> Result<(), String> {
-    let directory = fs::File::open(path).map_err(|error| format!("attempt-log-directory-open-failed: {error}"))?;
+    let directory = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+        .map_err(|error| format!("attempt-log-directory-open-no-follow-failed: {error}"))?;
+    let metadata = directory.metadata().map_err(|error| format!("attempt-log-directory-metadata-failed: {error}"))?;
+    if !metadata.is_dir() {
+        return Err("attempt-log-directory-not-directory".to_string());
+    }
     directory.sync_all().map_err(|error| format!("attempt-log-directory-sync-failed: {error}"))
 }
 
@@ -564,6 +745,166 @@ mod tests {
             RemoteAttemptLogDurabilityStep::RetentionManifestDurable,
             RemoteAttemptLogDurabilityStep::ExpiredSegmentsDeleted,
         ]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_segment_is_rejected_without_reading_target_bytes() {
+        use std::os::unix::fs::symlink;
+
+        let state = tempfile::tempdir().unwrap();
+        append_remote_attempt_log(
+            state.path(),
+            &current(),
+            RemoteEventId::new("symlink-segment").unwrap(),
+            0,
+            b"payload",
+            policy(),
+        )
+        .unwrap();
+        let manifest = load_remote_attempt_log_manifest(state.path(), &scope(), policy()).unwrap();
+        let paths = remote_attempt_log_paths(state.path(), &scope());
+        let segment = manifest.segments.first().unwrap();
+        let segment_path = immutable_json_path(&paths.segments, &segment.segment_blake3);
+        let target = state.path().join("attacker-controlled-segment.json");
+        let original = fs::read(&segment_path).unwrap();
+        fs::write(&target, original).unwrap();
+        fs::remove_file(&segment_path).unwrap();
+        symlink(&target, &segment_path).unwrap();
+
+        let error = load_remote_attempt_log_manifest(state.path(), &scope(), policy()).unwrap_err();
+        assert!(error.contains("segment-symlink-rejected") || error.contains("segment-open-no-follow-failed"));
+        assert!(fs::symlink_metadata(&segment_path).unwrap().file_type().is_symlink());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn immutable_temp_symlinks_are_never_followed() {
+        use std::os::unix::fs::symlink;
+
+        let state = tempfile::tempdir().unwrap();
+        let destination = state.path().join("immutable").join("object.json");
+        let victim = state.path().join("victim.txt");
+        fs::write(&victim, b"unchanged").unwrap();
+        let mut hook = |point: PublicationHookPoint, temp: &Path, _destination: &Path| {
+            if point == PublicationHookPoint::BeforeTempCreate {
+                symlink(&victim, temp).map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        };
+        let error = publish_immutable_file_with_hook(
+            &destination,
+            b"must-not-reach-victim",
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            &mut hook,
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "attempt-log-temp-create-attempts-exhausted");
+        assert_eq!(fs::read(&victim).unwrap(), b"unchanged");
+        assert!(fs::symlink_metadata(&destination).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn manifest_temp_symlinks_are_never_followed() {
+        use std::os::unix::fs::symlink;
+
+        let state = tempfile::tempdir().unwrap();
+        let paths = remote_attempt_log_paths(state.path(), &scope());
+        let manifest =
+            empty_remote_attempt_log_manifest(scope(), DEFAULT_REMOTE_ATTEMPT_LOG_POLICY_NAME, policy()).unwrap();
+        let victim = state.path().join("manifest-victim.txt");
+        fs::write(&victim, b"unchanged").unwrap();
+        let mut hook = |point: PublicationHookPoint, temp: &Path, _destination: &Path| {
+            if point == PublicationHookPoint::BeforeTempCreate {
+                symlink(&victim, temp).map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        };
+        let error = commit_manifest_with_hook(&paths, &manifest, policy(), &mut hook).unwrap_err();
+
+        assert_eq!(error, "attempt-log-temp-create-attempts-exhausted");
+        assert_eq!(fs::read(&victim).unwrap(), b"unchanged");
+        assert!(fs::symlink_metadata(&paths.manifest).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn destination_creation_race_cannot_replace_immutable_winner() {
+        let state = tempfile::tempdir().unwrap();
+        let destination = state.path().join("immutable").join("object.json");
+        let mut hook = |point: PublicationHookPoint, _temp: &Path, destination: &Path| {
+            if point == PublicationHookPoint::BeforePublish {
+                fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(destination)
+                    .and_then(|mut file| file.write_all(b"concurrent-winner"))
+                    .map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        };
+        let error = publish_immutable_file_with_hook(
+            &destination,
+            b"losing-attempt",
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            &mut hook,
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "attempt-log-immutable-object-conflict");
+        assert_eq!(fs::read(&destination).unwrap(), b"concurrent-winner");
+        assert!(fs::symlink_metadata(&destination).unwrap().is_file());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn destination_symlink_race_cannot_redirect_immutable_publish() {
+        use std::os::unix::fs::symlink;
+
+        let state = tempfile::tempdir().unwrap();
+        let destination = state.path().join("immutable").join("object.json");
+        let victim = state.path().join("destination-victim.txt");
+        fs::write(&victim, b"unchanged").unwrap();
+        let mut hook = |point: PublicationHookPoint, _temp: &Path, destination: &Path| {
+            if point == PublicationHookPoint::BeforePublish {
+                symlink(&victim, destination).map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        };
+        let error = publish_immutable_file_with_hook(
+            &destination,
+            b"must-not-reach-victim",
+            MAX_REMOTE_ATTEMPT_LOG_SEGMENT_FILE_BYTES,
+            &mut hook,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("immutable-object-symlink-rejected"));
+        assert_eq!(fs::read(&victim).unwrap(), b"unchanged");
+        assert!(fs::symlink_metadata(&destination).unwrap().file_type().is_symlink());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn manifest_commit_replaces_destination_symlink_without_following_it() {
+        use std::os::unix::fs::symlink;
+
+        let state = tempfile::tempdir().unwrap();
+        let paths = remote_attempt_log_paths(state.path(), &scope());
+        ensure_durable_dir(&paths.root).unwrap();
+        let victim = state.path().join("manifest-destination-victim.txt");
+        fs::write(&victim, b"unchanged").unwrap();
+        symlink(&victim, &paths.manifest).unwrap();
+        let manifest =
+            empty_remote_attempt_log_manifest(scope(), DEFAULT_REMOTE_ATTEMPT_LOG_POLICY_NAME, policy()).unwrap();
+        commit_manifest(&paths, &manifest, policy()).unwrap();
+        let observed = load_remote_attempt_log_manifest(state.path(), &scope(), policy()).unwrap();
+
+        assert_eq!(observed, manifest);
+        assert_eq!(fs::read(&victim).unwrap(), b"unchanged");
+        assert!(fs::symlink_metadata(&paths.manifest).unwrap().is_file());
     }
 
     #[test]
