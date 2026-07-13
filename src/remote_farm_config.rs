@@ -10,6 +10,9 @@ use crunch_build::distributed::RemoteAttemptRetryPolicy;
 use crunch_build::distributed::RemoteTransferPolicy;
 use serde::Deserialize;
 
+use crate::remote_telemetry_export::RemoteTelemetryExportConfig;
+use crate::remote_telemetry_export::validate_remote_telemetry_export_config;
+
 const DEFAULT_REMOTE_SYSTEM: &str = "x86_64-linux";
 const DEFAULT_REMOTE_MAX_CONCURRENCY: u32 = 1;
 const DEFAULT_REMOTE_MAX_UPLOAD_BYTES: u64 = 1_073_741_824;
@@ -180,6 +183,8 @@ fn default_fallback_policy() -> RemoteFallbackPolicy {
 pub struct RemoteBuildFarmConfig {
     #[serde(default)]
     pub pools: Vec<RemoteBuilderPool>,
+    #[serde(default)]
+    pub telemetry: RemoteTelemetryExportConfig,
 }
 
 impl RemoteBuildFarmConfig {
@@ -225,6 +230,8 @@ impl RemoteBuildFarmConfig {
                 }
             }
         }
+        validate_remote_telemetry_export_config(&self.telemetry)
+            .map_err(|reason| format!("remote telemetry configuration: {reason}"))?;
         // Check for duplicate pool IDs.
         let mut seen_pools = std::collections::BTreeSet::new();
         for pool in &self.pools {
@@ -238,7 +245,10 @@ impl RemoteBuildFarmConfig {
 
 impl Default for RemoteBuildFarmConfig {
     fn default() -> Self {
-        Self { pools: Vec::new() }
+        Self {
+            pools: Vec::new(),
+            telemetry: RemoteTelemetryExportConfig::default(),
+        }
     }
 }
 
@@ -285,6 +295,7 @@ mod tests {
                     trusted_public_keys: Vec::new(),
                 }],
             }],
+            telemetry: RemoteTelemetryExportConfig::default(),
         }
     }
 
@@ -305,7 +316,10 @@ mod tests {
                 publishers: Vec::new(),
             })
             .collect();
-        let config = RemoteBuildFarmConfig { pools };
+        let config = RemoteBuildFarmConfig {
+            pools,
+            ..RemoteBuildFarmConfig::default()
+        };
         assert!(config.validate().is_err());
     }
 
@@ -322,6 +336,7 @@ mod tests {
                     ..Default::default()
                 },
             ],
+            ..RemoteBuildFarmConfig::default()
         };
         assert!(config.validate().is_err());
     }
@@ -343,6 +358,7 @@ mod tests {
                 ],
                 ..Default::default()
             }],
+            ..RemoteBuildFarmConfig::default()
         };
         assert!(config.validate().is_err());
     }
@@ -358,6 +374,7 @@ mod tests {
                 }],
                 ..Default::default()
             }],
+            ..RemoteBuildFarmConfig::default()
         };
         assert!(config.validate().is_err());
     }
@@ -369,6 +386,7 @@ mod tests {
                 pool_id: "".to_string(),
                 ..Default::default()
             }],
+            ..RemoteBuildFarmConfig::default()
         };
         assert!(config.validate().is_err());
     }
@@ -443,6 +461,60 @@ let configured_attempt_timeout_secs = 7200 in
         assert_eq!(config.pools[0].endpoints[0].profile.retry_policy.max_attempts, SAMPLE_MAX_ATTEMPTS);
         assert_eq!(config.pools[0].endpoints[0].profile.retry_policy.attempt_timeout_secs, SAMPLE_MAX_BUILD_TIME_SECS);
         assert_eq!(config.pools[0].endpoints[0].profile.transfer_policy, RemoteTransferPolicy::default(),);
+    }
+
+    #[test]
+    fn nickel_telemetry_contract_defaults_disabled_and_round_trips_bounds() {
+        let temp = tempfile::tempdir().expect("temporary Nickel telemetry config dir");
+        let config_path = temp.path().join("remote-telemetry.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+{
+  pools = [],
+  telemetry = ({
+    telemetry.event_capacity = 64,
+    telemetry.batch_size = 16,
+  } | remote.RemoteTelemetry),
+}
+"#,
+        )
+        .expect("Nickel telemetry config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let config: RemoteBuildFarmConfig = crunch_eval::evaluate_and_deserialize(&config_path, &import_paths)
+            .expect("typed Nickel telemetry policy evaluates");
+
+        assert!(config.validate().is_ok());
+        assert_eq!(config.telemetry.telemetry.event_capacity, 64);
+        assert_eq!(config.telemetry.telemetry.batch_size, 16);
+        assert!(!config.telemetry.prometheus.enabled);
+        assert!(!config.telemetry.otlp.enabled);
+    }
+
+    #[test]
+    fn nickel_telemetry_contract_rejects_type_mismatch() {
+        let temp = tempfile::tempdir().expect("temporary invalid telemetry config dir");
+        let config_path = temp.path().join("invalid-remote-telemetry.ncl");
+        std::fs::write(
+            &config_path,
+            r#"
+let remote = import "remote-builders.ncl" in
+{
+  pools = [],
+  telemetry = ({
+    telemetry.event_capacity = "unbounded",
+  } | remote.RemoteTelemetry),
+}
+"#,
+        )
+        .expect("invalid Nickel telemetry config writes");
+        let import_paths = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib").into_os_string()];
+        let error = crunch_eval::evaluate_and_deserialize::<RemoteBuildFarmConfig>(&config_path, &import_paths)
+            .expect_err("typed Nickel telemetry policy rejects string capacity");
+
+        assert!(error.to_string().contains("contract"));
+        assert!(error.to_string().contains("event_capacity"));
     }
 
     #[test]

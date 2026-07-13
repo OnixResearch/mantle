@@ -49,6 +49,52 @@ let DefaultTransferCheckpointBytes = 262144 in
 let DefaultTransferIdleProgressSteps = 1024 in
 let DefaultTransferReplayRounds = 4 in
 let DefaultTransferControlBytes = 1048576 in
+let DefaultTelemetryEventCapacity = 1024 in
+let DefaultTelemetryBatchSize = 128 in
+let DefaultOtlpTimeoutMs = 2000 in
+
+let RemoteTelemetryPolicy = {
+  event_capacity
+    | doc "Maximum provider-neutral lifecycle events admitted per export cycle"
+    | Number
+    | default = DefaultTelemetryEventCapacity,
+  batch_size
+    | doc "Maximum events carried by one exporter batch"
+    | Number
+    | default = DefaultTelemetryBatchSize,
+} in
+
+let RemotePrometheusTelemetry = {
+  enabled
+    | doc "Opt in to atomic Prometheus node-textfile snapshots"
+    | Bool
+    | default = false,
+  textfile_path
+    | doc "Existing non-symlinked node-textfile collector directory and output path"
+    | String
+    | default = "",
+} in
+
+let RemoteOtlpTelemetry = {
+  enabled
+    | doc "Opt in to OTLP/HTTP metrics delivery; plaintext endpoints must be literal loopback addresses"
+    | Bool
+    | default = false,
+  endpoint
+    | doc "Loopback OTLP/HTTP metrics endpoint without credentials, query, or fragment"
+    | String
+    | default = "",
+  timeout_ms
+    | doc "Bounded connect, write, and response timeout"
+    | Number
+    | default = DefaultOtlpTimeoutMs,
+} in
+
+let RemoteTelemetryExport = {
+  telemetry | RemoteTelemetryPolicy | default = {},
+  prometheus | RemotePrometheusTelemetry | default = {},
+  otlp | RemoteOtlpTelemetry | default = {},
+} in
 
 let RemoteTransferPolicy = {
   chunk_bytes_max | Number | default = DefaultTransferChunkBytes,
@@ -171,8 +217,17 @@ let RemoteBuilderPoolContract = {
     | doc "A configured remote builder pool with typed capability and trust facts."
     = RemoteBuilderPoolContract,
 
+  RemoteTelemetry
+    | doc "Bounded disabled-by-default Prometheus and OTLP exporter configuration."
+    = RemoteTelemetryExport,
+
   pools
     | doc "List of configured remote builder pools."
     | Array RemoteBuilderPoolContract
     | default = [],
+
+  telemetry
+    | doc "Disabled-by-default bounded remote lifecycle telemetry exporters."
+    | RemoteTelemetryExport
+    | default = {},
 }

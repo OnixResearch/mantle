@@ -64,10 +64,11 @@ mod release_publication;
 mod release_reproducibility;
 mod release_source;
 mod release_tree_copy;
+mod remote_attempt_log_store;
 #[allow(dead_code)]
 mod remote_build;
-mod remote_attempt_log_store;
 mod remote_farm_config;
+mod remote_telemetry_export;
 mod remote_transfer;
 mod rust_bootstrap_patch_plan;
 mod rust_plan;
