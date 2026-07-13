@@ -1,0 +1,20 @@
+[package]
+name = "crunch-kernelscript-adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mantle-kernelscript-core-adapter"
+path = "src/main.rs"
+
+[dependencies]
+blake3 = "=1.8.2"
+crunch-kernelscript-core = { path = "../crunch-kernelscript-core" }
+libc = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10.8"
+
+[dev-dependencies]
+tempfile = "3"

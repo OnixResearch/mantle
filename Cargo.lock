@@ -1385,6 +1385,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-kernelscript-adapter"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "crunch-kernelscript-core",
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "crunch-kernelscript-core"
 version = "0.1.0"
 dependencies = [

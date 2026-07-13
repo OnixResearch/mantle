@@ -1,133 +1,182 @@
-# Pinned KernelScript probe observation evidence
+# Core-backed pinned KernelScript probe observation evidence
 
 - Date: 2026-07-12
-- Branch: `agent/kernelscript-production`
-- Implementation lineage: pinned build slice begins at `c7745316`; this evidence
-  is bound to the repository commit that contains this file and the
-  `mantle-kernelscript-probe-observation-v1` claim-boundary correction.
-- Question: Can the reviewed KernelScript `v0.1.2` probe be generated, built,
-  structurally inspected, verifier-loaded, attached, and detached on one exact
-  locked Linux cohort without ambient opam/compiler/BTF state or execution of
-  generated build scripts?
-- Inspected evidence: locked Nix derivations and generated observation below;
-  exact-kernel NixOS VM log for bpftool load plus generated loader execution.
-- Decision: **yes for the probe on this exact cohort only**. This is an
-  observation, not a `crunch-kernelscript-core` admission receipt. Reported
-  OnixOS Git identifiers are not accepted authority because their bytes are not
-  materialized by this route.
+- Branch: `agent/kernelscript-core-adapter`
+- Question: Does the tracked production Nix shell delegate exact generated-shape
+  classification and receipt construction to `crunch-kernelscript-core` while
+  preserving the locked probe observation and external target/module blockers?
+- Inspected evidence: isolated baseline/final Rust tests, the actual production
+  package and structural check, retained core reports, and the exact-kernel VM
+  test/log listed below.
+- Decision: **yes for the adapter seam and exact Linux `6.18.20` probe
+  observation only**. The compiler observation is admitted through the core.
+  Both core receipts keep `target_identity_blake3 = null`, carry
+  `kernel-target-observation-only`, emit no candidate packs, and retain strict
+  non-claims. The private/kfunc receipt additionally carries
+  `module-build-and-vm-gate-absent`; that external task remains unchecked.
 - Owner: Mantle KernelScript experiment maintainers.
-- Next action: replace duplicate shell classification/record rendering with a
-  thin adapter over `crunch-kernelscript-core`; separately add checked Nix
-  module construction and exact-kernel module/kfunc VM gates.
+- Next action: leave the change active and obtain separate authoritative
+  Onix/module/kfunc evidence before touching the remaining unchecked tasks.
 
-## Materialized cohort
+## Baseline before edits
 
-The locked Nix authority is:
+Pueue task `1326`:
 
-- nixpkgs revision:
-  `6201e203d09599479a3b3450ed24fa81537ebc4e`;
-- nixpkgs NAR hash:
-  `sha256-ZojAnPuCdy657PbTq5V0Y+AHKhZAIwSIT2cb8UgAz/U=`;
-- target: `x86_64-linux`, Linux `6.18.20`;
-- compiler source revision:
-  `0c80d4e4ac0029d34cbc9d65e76d78c075b64555`;
-- compiler source archive SHA-256:
-  `9a00b96e1f127d4806c28b076f270acdc4bf4a8c558ca636bfd9f49268b479c1`;
-- compiler source archive BLAKE3:
-  `439431f81df45b043c218f4f5a41917ddd616e0defa35ff134c1cf5273124a57`.
+```console
+nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-kernelscript-baseline-core \
+  cargo test -p crunch-kernelscript-core
+```
 
-Reported OnixOS commit/tree/blob strings in the observation are metadata only.
-They were not materialized or remeasured by the checked derivation and are not
-called accepted authority here.
+```text
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
 
-## Build and structural observation
+Pueue task `1327`:
 
-Command:
+```console
+nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-kernelscript-baseline-integration \
+  cargo test -p mantle --test kernelscript_experiment
+```
+
+```text
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+## Production adapter boundary
+
+`crunch-kernelscript-adapter` is a small std binary/library. Its imperative
+shell:
+
+- validates hard request bounds before reading source/generated files;
+- uses no-follow descriptor opens and descriptor metadata;
+- caps generated member count, per-file bytes, and aggregate bytes before
+  allocation;
+- remeasures the official archive SHA-256 interoperability digest and BLAKE3;
+- reads the filtered repo-owned `packages/kernelscript-experiment/` source;
+- delegates profile/compiler/target admission, codegen planning, exact generated
+  classification, compilation planning, and canonical receipt construction to
+  `crunch-kernelscript-core`.
+
+The tracked Nix shell invokes the adapter twice, once for the probe and once for
+the private/kfunc generated shape. It no longer contains the previous
+`find`/`sort`/`diff`/`wc` exact-shape classifier or hand-built core receipt.
+Generated Makefile/Kbuild files remain evidence-only.
+
+The actual production command in pueue task `1808` returned:
+
+```console
+nix build --no-link --print-out-paths \
+  .#packages.x86_64-linux.kernelscript-production
+```
+
+```text
+/nix/store/16bs0rqm0nlxp32lq99ylvl35ck7710h-mantle-kernelscript-production-artifacts
+```
+
+The production structural check in pueue task `1783` returned:
 
 ```console
 nix build --no-link --print-out-paths \
   .#checks.x86_64-linux.kernelscript-production
 ```
 
-Result: success.
-
 ```text
-/nix/store/95fa5szaaq410kl0mxkly63w6jmsar0y-mantle-kernelscript-production-structural-check
+/nix/store/p93ggk2wc7pp06i9gfqbpqwrvydhx0ic-mantle-kernelscript-production-structural-check
 ```
 
-The corresponding artifact output was:
+The check proves both actual generated member arrays, report/receipt digest
+linkage, admitted compiler observations, rejected target authority, empty
+candidate packs, receipt non-claims, and the unchanged module blocker.
+
+## Current core identities and blockers
+
+Probe core report:
+
+- report BLAKE3:
+  `a9a79adadba7304333579810ceeb64461310d6bdb3efd7cc24fd27ba0d300211`;
+- generated manifest BLAKE3:
+  `1f014c68a41c0c9f761a0b8aeb1921317133688112a83a8acb0edfd380d50698`;
+- receipt BLAKE3:
+  `0e2052c92f7c04cd02d4b8bbe794eeed108fd6f1d76d17dc03a99be49e23fd0b`;
+- `target_identity_blake3: null`;
+- blocker: `kernel-target-observation-only`.
+
+Private/kfunc core report:
+
+- report BLAKE3:
+  `e7f9eeb219fe08abd2576dbb006de13886e902e25c64ae829562e996fa977668`;
+- generated manifest BLAKE3:
+  `4d60420961566a43e722a9c14bd34be71a546a6e46007fab7f09d5756f646fa5`;
+- receipt BLAKE3:
+  `e2e286e2290ffda8448d9497ee93b4e86eedcf0f1b2ed5b30069972a92d276fd`;
+- `target_identity_blake3: null`;
+- blockers: `kernel-target-observation-only` and
+  `module-build-and-vm-gate-absent`.
+
+The retained `mantle-kernelscript-probe-observation-v1` digest is:
 
 ```text
-/nix/store/bfbrggyqq5pggscyi8syr2i2f5rxfmif-mantle-kernelscript-production-artifacts
+f25eea0a0abfae600c1811d7c8de229b91a822ff3866765a87a26054176b4e15
 ```
 
-Its `evidence/probe-observation.json` has BLAKE3:
+Its authority status remains
+`reported-onixos-metadata-not-materialized-or-accepted`. It records the same
+probe object/loader identities as before and still says:
 
 ```text
-9d6d74ffceb2804ae9ff693f502b309898a6472843ed919667f5e4d38c0089fe
+module_status = blocked-no-checked-nix-build-or-vm-load-gate
 ```
-
-The observation records:
-
-- compiler binary BLAKE3
-  `0166b28f63171252a01b5f955028375231f7659eb2289b82eb89d5d92cc7faa2`;
-- compiler closure store-path-set BLAKE3
-  `4d940b485c3683153fa732a68abd69b9e03e17c1ced583bd906638ec1e44e047`;
-- kernel image BLAKE3
-  `848998e5b72b01114de5e291d2621342938d36e6936aa6e2da3fc0239f7d486e`;
-- target config BLAKE3
-  `af33e9e9a159b3025e6c7d158ced26ee677564c7176dfb20aec896d3dbd3b6ed`;
-- target BTF BLAKE3
-  `223a6b61393b8956124a574d0fac00057fc45171dd7bb56a7711ca1a224de5d7`;
-- probe eBPF object BLAKE3
-  `3721df3d155633bc8671905528da7701f7864b8276951c0793bdf7f020314f4c`;
-- probe loader BLAKE3
-  `fb189b35b2704c966223f0f301562a611fdca35829f975f42afcd9ba5c1a03e6`.
-
-The structural derivation checked ELF headers, sections, relocations, and BTF.
-The generated `Makefile` and `Kbuild` were retained but not executed.
 
 ## Exact-kernel VM observation
 
-Command:
+Pueue task `1784`:
 
 ```console
 nix build --no-link --print-out-paths \
   .#packages.x86_64-linux.kernelscript-production-runtime-check
 ```
 
-Result: success.
-
 ```text
-/nix/store/pq700fydagyyjgnb82m2522pspm8yshc-vm-test-run-mantle-kernelscript-production-runtime
+/nix/store/izr0kp7wsg0njza8zr98nyx0ns77ylx9-vm-test-run-mantle-kernelscript-production-runtime
 ```
 
-Relevant current Nix test log:
+Current `nix log` evidence from pueue task `1822`:
 
 ```text
 machine: must succeed: test -e /sys/fs/bpf/mantle-probe && rm /sys/fs/bpf/mantle-probe
-machine: (finished: must succeed: test -e /sys/fs/bpf/mantle-probe && rm /sys/fs/bpf/mantle-probe, in 0.01 seconds)
-machine: must succeed: /nix/store/bfbrggyqq5pggscyi8syr2i2f5rxfmif-mantle-kernelscript-production-artifacts/artifacts/probe_do_exit
-machine: (finished: must succeed: /nix/store/bfbrggyqq5pggscyi8syr2i2f5rxfmif-mantle-kernelscript-production-artifacts/artifacts/probe_do_exit, in 0.12 seconds)
-(finished: run the VM test script, in 13.83 seconds)
-test script finished in 13.86s
+machine: must succeed: /nix/store/16bs0rqm0nlxp32lq99ylvl35ck7710h-mantle-kernelscript-production-artifacts/artifacts/probe_do_exit
+(finished: run the VM test script, in 12.80 seconds)
+test script finished in 12.83s
 ```
 
-The checked test script also asserts `uname -r == 6.18.20`, uses bpftool to load
-the object as a kprobe program, verifies the pinned program exists, removes it,
-and requires the generated loader output to contain successful `do_exit`
-attach and detach markers.
+The checked test also requires `uname -r == 6.18.20`, bpftool verifier/load,
+and generated-loader attach/detach markers. This is exact-cohort observation,
+not generalized target authority.
 
-## Blockers and non-claims
+## Final focused Rust evidence
 
-The following remain blockers and their Cairn tasks stay unchecked:
+All Cargo targets were isolated under `/tmp`.
 
-1. `productionShell` performs duplicate exact-file classification/accounting
-   and observation rendering rather than invoking `crunch-kernelscript-core`.
-2. The checked Nix route does not build a module, and the checked VM route does
-   not load/unload a module or validate private-kfunc/XDP behavior.
+- Pueue `1778`: `cargo test -p crunch-kernelscript-core` — `20 passed`.
+- Pueue `1779`: `cargo test -p crunch-kernelscript-adapter` — `9 passed`.
+- Pueue `1781`: `cargo test -p mantle --test kernelscript_experiment` —
+  `6 passed`.
+- Pueue `1780`: strict Clippy for core + adapter finished successfully.
+- Pueue `1809`: package-scoped rustfmt plus the leaf integration file passed.
+- Pueue `1810`: `cargo -Zbuild-std=core,alloc check -p
+  crunch-kernelscript-core --target wasm32-unknown-unknown` finished
+  successfully.
 
-This evidence does not claim language or compiler soundness, kernel safety,
-cross-kernel compatibility, production readiness, default enablement, accepted
-Onix semantics, ChaosControl validation, release eligibility, or module/kfunc
-success.
+Positive coverage proves exact core admission, deterministic receipt identity,
+and production-shell/core parity. Negative coverage proves extra/missing shape
+rejection, hard pre-read bounds, aggregate/count caps, actual archive SHA-256
+drift rejection, no-follow symlink rejection, descriptor replacement safety,
+claim boundaries, and preserved module blocking.
+
+## Non-claims
+
+This evidence does not claim language/compiler soundness, accepted Onix target
+materialization, kernel safety, cross-kernel compatibility, core output
+inspection, module build/load/unload, private-kfunc/XDP runtime behavior,
+deployability, ChaosControl validation, production readiness, default
+enablement, release eligibility, or external authority completion.

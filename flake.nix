@@ -47,7 +47,8 @@
           if system == "x86_64-linux" then
             import ./nix/kernelscript-experiment.nix {
               inherit onixPkgs;
-              sourceRoot = ./.;
+              coreAdapter = kernelscriptCoreAdapter;
+              sourceRoot = src;
             }
           else
             null;
@@ -79,6 +80,7 @@
             || pkgs.lib.hasPrefix "${toString ./builders}/" (toString path)
             || pkgs.lib.hasPrefix "${toString ./examples}/" (toString path)
             || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" (toString path)
+            || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" (toString path)
             || pkgs.lib.hasPrefix "${toString ./docs}/" (toString path)
             || pkgs.lib.hasPrefix "${toString ./scripts}/" (toString path)
             || pkgs.lib.hasPrefix "${toString ./openspec}/" (toString path);
@@ -405,6 +407,18 @@
           nativeCheckInputs = [ pkgs.git ];
         };
 
+        kernelscriptCoreAdapter = craneLib.buildPackage {
+          pname = "crunch-kernelscript-adapter";
+          inherit
+            src
+            cargoArtifacts
+            nativeBuildInputs
+            buildInputs
+            ;
+          cargoExtraArgs = "--locked -p crunch-kernelscript-adapter --bin mantle-kernelscript-core-adapter";
+          doCheck = false;
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -495,6 +509,7 @@
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           kernelscript-compiler = kernelscriptExperiment.compiler;
+          kernelscript-core-adapter = kernelscriptCoreAdapter;
           kernelscript-production = kernelscriptExperiment.artifacts;
           kernelscript-production-cohort = kernelscriptExperiment.cohort;
           kernelscript-production-shell = kernelscriptExperiment.productionShell;

@@ -47,6 +47,13 @@ pub fn admit_kernel_target(profile: ExperimentProfile, facts: ResolvedKernelTarg
     validate_target_identity(&profile, &facts, &mut blockers);
     validate_target_artifacts(&profile, &facts, &mut blockers);
     validate_target_cohort(&profile, &facts, &mut blockers);
+    if !crate::profile::kernel_build_identity_has_onix_authority(&profile.target.kernel_build_identity) {
+        blockers.push(blocker(
+            "kernel-target-observation-only",
+            "target",
+            "materialized probe facts are observation evidence, not accepted Onix target authority",
+        ));
+    }
     if facts.ambient_inputs_used {
         blockers.push(blocker(
             "ambient-kernel-input",

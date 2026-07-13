@@ -145,6 +145,7 @@ fn validate_plan_binding(
         || plan.target_kernel_build_identity != profile.target.kernel_build_identity
         || plan.target_architecture != profile.target.architecture
         || plan.target_kernel_release != profile.target.kernel_release
+        || !crate::profile::kernel_build_identity_has_onix_authority(&profile.target.kernel_build_identity)
     {
         blockers.push(blocker(
             "candidate-plan-mismatch",

@@ -52,9 +52,11 @@ const MAX_NON_CLAIMS: u32 = 32;
 const MAX_FLAGS_PER_CLASS: u32 = 32;
 const GIT_REVISION_HEX_LENGTH: usize = 40;
 const ARTIFACT_REF_PREFIX: &str = "mantle://blake3/";
-const KERNEL_BUILD_IDENTITY_PREFIX: &str = "onix:blake3:kernel-build:";
+pub const ONIX_KERNEL_BUILD_IDENTITY_PREFIX: &str = "onix:blake3:kernel-build:";
+pub const OBSERVATION_KERNEL_BUILD_IDENTITY_PREFIX: &str = "observation:blake3:kernel-build:";
+pub const OPAM_LOCK_FORMAT: &str = "opam-lock";
+pub const NIX_CLOSURE_OBSERVATION_LOCK_FORMAT: &str = "nix-closure-observation";
 const SOURCE_EXTENSION: &str = ".ks";
-const LOCK_FORMAT: &str = "opam-lock";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileValidation {
@@ -136,7 +138,7 @@ fn validate_source_and_compiler(profile: &ExperimentProfile, blockers: &mut Vec<
 
 fn validate_dependency_lock(lock: &CompilerDependencyLock, text_bound: u32, blockers: &mut Vec<ExperimentBlocker>) {
     let count_matches = usize::try_from(lock.dependency_count).ok() == Some(lock.dependencies.len());
-    if lock.format != LOCK_FORMAT
+    if !matches!(lock.format.as_str(), OPAM_LOCK_FORMAT | NIX_CLOSURE_OBSERVATION_LOCK_FORMAT)
         || lock.dependencies.is_empty()
         || count_above_bound(lock.dependencies.len(), MAX_COMPILER_DEPENDENCIES)
         || !count_matches
@@ -144,7 +146,7 @@ fn validate_dependency_lock(lock: &CompilerDependencyLock, text_bound: u32, bloc
         blockers.push(blocker(
             "incomplete-compiler-dependency-lock",
             "compiler.dependency_lock",
-            "compiler dependencies require an exact bounded non-empty opam-lock cohort",
+            "compiler dependencies require an exact bounded non-empty opam-lock or Nix closure observation cohort",
         ));
         return;
     }
@@ -469,9 +471,20 @@ fn safe_flag(flag: &str, maximum_bytes: u32) -> bool {
 }
 
 fn valid_kernel_build_identity(value: &str) -> bool {
+    kernel_build_identity_digest(value).is_some()
+}
+
+pub(crate) fn kernel_build_identity_has_onix_authority(value: &str) -> bool {
     value
-        .strip_prefix(KERNEL_BUILD_IDENTITY_PREFIX)
+        .strip_prefix(ONIX_KERNEL_BUILD_IDENTITY_PREFIX)
         .is_some_and(|hex| lower_hex(hex, crate::BLAKE3_HEX_LENGTH))
+}
+
+fn kernel_build_identity_digest(value: &str) -> Option<&str> {
+    value
+        .strip_prefix(ONIX_KERNEL_BUILD_IDENTITY_PREFIX)
+        .or_else(|| value.strip_prefix(OBSERVATION_KERNEL_BUILD_IDENTITY_PREFIX))
+        .filter(|hex| lower_hex(hex, crate::BLAKE3_HEX_LENGTH))
 }
 
 fn lower_hex(value: &str, length: usize) -> bool {

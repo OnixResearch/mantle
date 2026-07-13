@@ -34,9 +34,10 @@ The experiment profile is a closed typed Nickel record. A no-std Rust functional
 core independently validates normalized facts and owns bounded code-generation
 plans, generated-project classification, explicit compilation plans, kernel
 input admission, output shape inspection, candidate projection, and canonical
-BLAKE3 receipts. Imperative shells may eventually materialize inputs and execute
-admitted requests, but the core has no filesystem, process, network, async,
-loader, or running-host API.
+BLAKE3 receipts. The production Nix shell uses a small std adapter for bounded
+no-follow reads and calls this core for generated-shape/receipt semantics. The
+core itself has no filesystem, process, network, async, loader, or running-host
+API.
 
 The official source archive is pinned by upstream SHA-256 and measured BLAKE3.
 A source pin is not a compiler-closure pin. Mantle will not claim compiler
@@ -69,11 +70,12 @@ candidate overclaim, and receipt leakage without standing up a compiler or
 kernel. Missing authoritative inputs remain exact bounded blockers rather than
 being replaced with host state.
 
-The experiment cannot currently produce a compiler-success receipt, execute
-code generation, build an artifact, claim real static-inspection success, load
-eBPF/modules, or grant deployability. Completing those tasks requires new
-reviewed source/toolchain and Onix target evidence, not merely unchecking a
-feature flag.
+The pinned Nix observation can execute code generation, build and inspect the
+probe, and emit core-backed blocked receipts. It still cannot admit the
+materialized Linux probe cohort as accepted Onix target authority, complete the
+private/kfunc module gate, load that module, or grant deployability. Completing
+those tasks requires new external authority and runtime evidence, not merely
+unchecking a feature flag.
 
 ## Alternatives Considered
 

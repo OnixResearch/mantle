@@ -14,10 +14,12 @@ const FIXTURE_ROOT: &str = "tests/fixtures/kernelscript-experiment";
 const PROFILE_FIXTURE: &str = "tests/fixtures/kernelscript-experiment/profile-positive.ncl";
 const SOURCE_DERIVATION: &str = "packages/kernelscript-experiment/source.ncl";
 const UPSTREAM_PINS: &str = "packages/kernelscript-experiment/upstream-pins.ncl";
+const PRODUCTION_NIX: &str = "nix/kernelscript-experiment.nix";
 const OFFICIAL_SOURCE_SRI: &str = "sha256-mgC5bh8SfUgGwosHbycKzcS/SoxVjKY2v9n0kmi0ecE=";
 const OFFICIAL_SOURCE_BLAKE3: &str = "439431f81df45b043c218f4f5a41917ddd616e0defa35ff134c1cf5273124a57";
 const EXPECTED_GENERATED_FILE_COUNT: usize = 6;
 const EXPECTED_COMPILER_DEPENDENCY_COUNT: usize = 4;
+const EXPECTED_CORE_ADAPTER_INVOCATIONS: usize = 2;
 const GENERATED_PATHS: &[(&str, &str)] = &[
     ("generated-userspace-probe/demo.c", "demo.c"),
     ("generated-userspace-probe/demo.ebpf.c", "demo.ebpf.c"),
@@ -118,6 +120,23 @@ fn fixture_source_blake3_matches_typed_profile_without_embedding_source_in_recei
     assert_eq!(digest, profile.source.digest_blake3.as_str());
     assert_eq!(u64::try_from(source.len()).unwrap(), profile.source.size_bytes);
     assert!(!serde_json::to_string(&profile).unwrap().contains("observe_exit"));
+}
+
+#[test]
+fn production_shell_delegates_shape_and_receipt_semantics_to_the_core_adapter() {
+    let source = std::fs::read_to_string(repo_root().join(PRODUCTION_NIX)).unwrap();
+    let invocation_count = source.matches("\"$CORE_ADAPTER\" \"$").count();
+
+    assert_eq!(invocation_count, EXPECTED_CORE_ADAPTER_INVOCATIONS);
+    assert!(source.contains("mantle-kernelscript-core-adapter"));
+    assert!(source.contains("probe-core-report.json"));
+    assert!(source.contains("kfunc-core-report.json"));
+    assert!(source.contains("generated-shapes-admitted-receipts-blocked-on-external-target-authority"));
+    assert!(source.contains("blocked-no-checked-nix-build-or-vm-load-gate"));
+    assert!(!source.contains("exact_shape()"));
+    assert!(!source.contains("generated shape drift"));
+    assert!(!source.contains("find \"$directory\""));
+    assert!(!source.contains("diff -u \"$expected\""));
 }
 
 #[test]

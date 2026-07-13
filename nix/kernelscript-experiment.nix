@@ -1,5 +1,6 @@
 {
   onixPkgs,
+  coreAdapter,
   sourceRoot,
 }:
 let
@@ -47,23 +48,157 @@ let
       onixPkgs.jq
     ];
   };
+  generatedFileMaxBytes = 8388608;
+  adapterBounds = {
+    max_generated_files = 8;
+    max_generated_file_bytes = generatedFileMaxBytes;
+    max_generated_total_bytes = 33554432;
+    max_compilation_steps = 16;
+    max_output_files = 8;
+    max_output_bytes = 67108864;
+    max_elf_sections = 512;
+    max_section_name_bytes = 256;
+    max_receipt_blockers = 32;
+    max_text_bytes = 4096;
+  };
+  toolRequest = role: version: path: {
+    inherit role version;
+    path = toString path;
+    configuration = "locked-nixpkgs:${role}:${version}";
+  };
+  commonToolchain = [
+    (toolRequest "ocaml" ocamlPackages.ocaml.version "${ocamlPackages.ocaml}/bin/ocaml")
+    (toolRequest "dune" ocamlPackages.dune_3.version "${ocamlPackages.dune_3}/bin/dune")
+    (toolRequest "menhir" ocamlPackages.menhir.version "${ocamlPackages.menhir}/bin/menhir")
+    (toolRequest "clang" onixPkgs.llvmPackages.clang.version "${onixPkgs.llvmPackages.clang}/bin/clang")
+    (toolRequest "c-compiler" onixPkgs.stdenv.cc.version "${onixPkgs.stdenv.cc}/bin/gcc")
+    (toolRequest "bpftool" onixPkgs.bpftools.version "${onixPkgs.bpftools}/bin/bpftool")
+    (toolRequest "libbpf" onixPkgs.libbpf.version "${onixPkgs.libbpf}/lib/libbpf.so.${onixPkgs.libbpf.version}")
+    (toolRequest "elf-library" onixPkgs.elfutils.version "${onixPkgs.elfutils.out}/lib/libelf-${onixPkgs.elfutils.version}.so")
+    (toolRequest "zlib" onixPkgs.zlib.version "${onixPkgs.zlib}/lib/libz.so.${onixPkgs.zlib.version}")
+  ];
+  commonAdapterRequest = {
+    schema = "mantle-kernelscript-core-adapter-request-v1";
+    compiler = {
+      version = "0.1.2";
+      source_revision = "0c80d4e4ac0029d34cbc9d65e76d78c075b64555";
+      source_archive_url = "https://github.com/multikernel/kernelscript/releases/download/v0.1.2/kernelscript-0.1.2-source.tar.gz";
+      source_archive_path = toString sourceArchive;
+      source_archive_sha256 = "9a00b96e1f127d4806c28b076f270acdc4bf4a8c558ca636bfd9f49268b479c1";
+      source_archive_blake3 = "439431f81df45b043c218f4f5a41917ddd616e0defa35ff134c1cf5273124a57";
+      executable_path = "${compiler}/bin/kernelscript";
+      closure_path_set_path = "${toolchainClosureInfo}/store-paths";
+      closure_package = "onixos-nixpkgs-toolchain-closure-path-set";
+      closure_version = "6201e203d09599479a3b3450ed24fa81537ebc4e";
+    };
+    toolchain = commonToolchain;
+    target = {
+      architecture = "x86-64";
+      kernel_release = kernelRelease;
+      cohort_label = "locked-nixpkgs-6201e203-linux-${kernelRelease}-probe-observation";
+      btf_path = kernelBtf;
+      headers_marker_path = "${kernelDev}/lib/modules/${kernelRelease}/build/Makefile";
+      config_path = toString kernel.configfile;
+    };
+    bpf_compiler_flags = [
+      "-target"
+      "bpf"
+      "-O2"
+      "-Wall"
+      "-Wextra"
+      "-g"
+      "-fno-builtin"
+    ];
+    userspace_compiler_flags = [
+      "-O2"
+      "-Wall"
+      "-Wextra"
+      "-lbpf"
+      "-lelf"
+      "-lz"
+    ];
+    module_compiler_flags = [ "-Werror" ];
+    bounds = adapterBounds;
+    receipt_blockers = [ ];
+  };
+  expectedFile = relative_path: class: {
+    inherit relative_path class;
+    required = true;
+    max_bytes = generatedFileMaxBytes;
+  };
+  probeAdapterRequest = onixPkgs.writeText "mantle-kernelscript-probe-core-request.json" (
+    builtins.toJSON (
+      commonAdapterRequest
+      // {
+        experiment_id = "kernelscript-v0.1.2-probe-observation";
+        source = {
+          relative_path = "probe_do_exit.ks";
+          path = "provided-by-production-shell";
+        };
+        output_classes = [
+          "generated-source-bundle"
+          "userspace-loader"
+          "ebpf-object"
+        ];
+        expected_generated_files = [
+          (expectedFile "Makefile" "makefile-evidence")
+          (expectedFile "probe_do_exit.c" "userspace-c")
+          (expectedFile "probe_do_exit.ebpf.c" "ebpf-c")
+        ];
+      }
+    )
+  );
+  kfuncAdapterRequest = onixPkgs.writeText "mantle-kernelscript-kfunc-core-request.json" (
+    builtins.toJSON (
+      commonAdapterRequest
+      // {
+        experiment_id = "kernelscript-v0.1.2-private-kfunc-observation";
+        source = {
+          relative_path = "private_kfunc.ks";
+          path = "provided-by-production-shell";
+        };
+        toolchain = commonToolchain ++ [
+          (toolRequest "kernel-build" kernel.version "${kernelDev}/lib/modules/${kernelRelease}/build/Makefile")
+        ];
+        output_classes = [
+          "generated-source-bundle"
+          "userspace-loader"
+          "ebpf-object"
+          "kernel-module"
+        ];
+        expected_generated_files = [
+          (expectedFile "Kbuild" "kbuild-evidence")
+          (expectedFile "Makefile" "makefile-evidence")
+          (expectedFile "private_kfunc.c" "userspace-c")
+          (expectedFile "private_kfunc.ebpf.c" "ebpf-c")
+          (expectedFile "private_kfunc.mod.c" "module-c")
+        ];
+        receipt_blockers = [
+          {
+            code = "module-build-and-vm-gate-absent";
+            subject = "kernel-module";
+            message = "checked Nix route does not build or VM-load the private/kfunc module case";
+          }
+        ];
+      }
+    )
+  );
   productionShell = onixPkgs.writeShellApplication {
     name = "mantle-kernelscript-production";
-    runtimeInputs = with onixPkgs; [
+    runtimeInputs = [ coreAdapter ] ++ (with onixPkgs; [
       bash
       coreutils
-      diffutils
-      findutils
-      gnugrep
-    ];
+    ]);
     excludeShellChecks = [ "SC2016" ];
     text = ''
       set -euo pipefail
-      readonly MAX_FILES=8
-      readonly MAX_FILE_BYTES=16777216
+      readonly MAX_OBSERVATION_FILE_BYTES=16777216
       readonly OUTPUT_ROOT="''${1:-''${out:?output root is required}}"
       readonly WORK_ROOT="''${TMPDIR:?TMPDIR is required}/mantle-kernelscript-production"
       readonly COMPILER="${compiler}/bin/kernelscript"
+      readonly CORE_ADAPTER="${coreAdapter}/bin/mantle-kernelscript-core-adapter"
+      readonly PROBE_CORE_REQUEST="${probeAdapterRequest}"
+      readonly KFUNC_CORE_REQUEST="${kfuncAdapterRequest}"
       readonly CLANG="${onixPkgs.llvmPackages.clang}/bin/clang"
       readonly CC="${onixPkgs.stdenv.cc}/bin/cc"
       readonly READELF="${onixPkgs.binutils}/bin/readelf"
@@ -78,24 +213,14 @@ let
 
       fail() { printf 'mantle-kernelscript-production: %s\n' "$1" >&2; exit 1; }
       digest() { "$B3SUM" --no-names "$1"; }
-      require_file() {
+      require_observation_file() {
         local path="$1"
         local size_bytes
-        test -f "$path" || fail "missing regular file: $path"
-        test ! -L "$path" || fail "unexpected symlink: $path"
+        test -f "$path" || fail "missing regular observation file: $path"
+        test ! -L "$path" || fail "unexpected observation symlink: $path"
         size_bytes="$(stat -c %s "$path")"
-        test "$size_bytes" -gt 0 || fail "empty file: $path"
-        test "$size_bytes" -le "$MAX_FILE_BYTES" || fail "oversize file: $path"
-      }
-      exact_shape() {
-        local directory="$1"
-        local expected="$2"
-        local count
-        find "$directory" -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort > "$WORK_ROOT/actual.txt"
-        diff -u "$expected" "$WORK_ROOT/actual.txt" || fail "generated shape drift"
-        count="$(wc -l < "$WORK_ROOT/actual.txt")"
-        test "$count" -le "$MAX_FILES" || fail "generated file count exceeds bound"
-        while IFS= read -r name; do require_file "$directory/$name"; done < "$WORK_ROOT/actual.txt"
+        test "$size_bytes" -gt 0 || fail "empty observation file: $path"
+        test "$size_bytes" -le "$MAX_OBSERVATION_FILE_BYTES" || fail "oversize observation file: $path"
       }
 
       rm -rf "$WORK_ROOT"
@@ -104,10 +229,10 @@ let
       cp "${fixtureRoot}/private_kfunc.ks" "${fixtureRoot}/xdp.kh" "$WORK_ROOT/kfunc/"
       (cd "$WORK_ROOT/probe" && "$COMPILER" compile probe_do_exit.ks --output generated --btf-vmlinux-path "$KERNEL_BTF")
       (cd "$WORK_ROOT/kfunc" && "$COMPILER" compile private_kfunc.ks --output generated --btf-vmlinux-path "$KERNEL_BTF")
-      printf '%s\n' Makefile probe_do_exit.c probe_do_exit.ebpf.c | LC_ALL=C sort > "$WORK_ROOT/probe.expected"
-      printf '%s\n' Kbuild Makefile private_kfunc.c private_kfunc.ebpf.c private_kfunc.mod.c | LC_ALL=C sort > "$WORK_ROOT/kfunc.expected"
-      exact_shape "$WORK_ROOT/probe/generated" "$WORK_ROOT/probe.expected"
-      exact_shape "$WORK_ROOT/kfunc/generated" "$WORK_ROOT/kfunc.expected"
+      "$CORE_ADAPTER" "$PROBE_CORE_REQUEST" "$WORK_ROOT/probe/probe_do_exit.ks" \
+        "$WORK_ROOT/probe/generated" "$WORK_ROOT/probe-core-report.json"
+      "$CORE_ADAPTER" "$KFUNC_CORE_REQUEST" "$WORK_ROOT/kfunc/private_kfunc.ks" \
+        "$WORK_ROOT/kfunc/generated" "$WORK_ROOT/kfunc-core-report.json"
 
       "$BPFTOOL" btf dump file "$KERNEL_BTF" format c > "$WORK_ROOT/build/vmlinux.h"
       "$CLANG" -target bpf -O2 -Wall -Wextra -g -fno-builtin -D__TARGET_ARCH_x86 \
@@ -121,7 +246,7 @@ let
         -Wl,-rpath,"$LIBBPF/lib:$ELFUTILS/lib:$ZLIB/lib" \
         -lbpf -lelf -lz -o "$WORK_ROOT/build/probe_do_exit"
       for artifact in probe_do_exit.ebpf.o probe_do_exit.skel.h probe_do_exit; do
-        require_file "$WORK_ROOT/build/$artifact"
+        require_observation_file "$WORK_ROOT/build/$artifact"
       done
 
       mkdir -p "$OUTPUT_ROOT/generated/probe" "$OUTPUT_ROOT/generated/kfunc" "$OUTPUT_ROOT/artifacts" "$OUTPUT_ROOT/evidence"
@@ -129,6 +254,8 @@ let
       cp "$WORK_ROOT/kfunc/generated"/* "$OUTPUT_ROOT/generated/kfunc/"
       cp "$WORK_ROOT/build/probe_do_exit.ebpf.o" "$WORK_ROOT/build/probe_do_exit.skel.h" \
         "$WORK_ROOT/build/probe_do_exit" "$OUTPUT_ROOT/artifacts/"
+      cp "$WORK_ROOT/probe-core-report.json" "$OUTPUT_ROOT/evidence/probe-core-report.json"
+      cp "$WORK_ROOT/kfunc-core-report.json" "$OUTPUT_ROOT/evidence/kfunc-core-report.json"
       "$READELF" -h -S -r "$OUTPUT_ROOT/artifacts/probe_do_exit.ebpf.o" > "$OUTPUT_ROOT/evidence/readelf.txt"
       "$OBJDUMP" -h "$OUTPUT_ROOT/artifacts/probe_do_exit.ebpf.o" > "$OUTPUT_ROOT/evidence/objdump.txt"
       "$BPFTOOL" btf dump file "$OUTPUT_ROOT/artifacts/probe_do_exit.ebpf.o" format raw > "$OUTPUT_ROOT/evidence/btf.txt"
@@ -142,6 +269,10 @@ let
         --arg closure_blake3 "$(digest "${toolchainClosureInfo}/store-paths")" \
         --arg object_blake3 "$(digest "$OUTPUT_ROOT/artifacts/probe_do_exit.ebpf.o")" \
         --arg loader_blake3 "$(digest "$OUTPUT_ROOT/artifacts/probe_do_exit")" \
+        --arg probe_core_report_blake3 "$(digest "$OUTPUT_ROOT/evidence/probe-core-report.json")" \
+        --arg kfunc_core_report_blake3 "$(digest "$OUTPUT_ROOT/evidence/kfunc-core-report.json")" \
+        --arg probe_core_receipt_blake3 "$("$JQ" --raw-output '.receipt.receipt_identity_blake3' "$OUTPUT_ROOT/evidence/probe-core-report.json")" \
+        --arg kfunc_core_receipt_blake3 "$("$JQ" --raw-output '.receipt.receipt_identity_blake3' "$OUTPUT_ROOT/evidence/kfunc-core-report.json")" \
         '{
           schema:"mantle-kernelscript-probe-observation-v1",
           enabled_by_default:false,
@@ -179,7 +310,12 @@ let
           ],
           generated_makefile_executed:false,
           generated_kbuild_executed:false,
-          core_admission_status:"blocked-production-shell-does-not-invoke-crunch-kernelscript-core",
+          core_admission_status:"generated-shapes-admitted-receipts-blocked-on-external-target-authority",
+          core_admission:{
+            adapter_schema:"mantle-kernelscript-core-adapter-report-v1",
+            probe:{report_blake3:$probe_core_report_blake3,receipt_identity_blake3:$probe_core_receipt_blake3},
+            kfunc:{report_blake3:$kfunc_core_report_blake3,receipt_identity_blake3:$kfunc_core_receipt_blake3}
+          },
           module_status:"blocked-no-checked-nix-build-or-vm-load-gate",
           runtime_status:"separate-exact-kernel-vm-gate-required",
           non_claims:["not-language-soundness","not-compiler-soundness","not-kernel-safety","not-production-default","not-onix-deployment","not-chaoscontrol-evidence","not-release-eligibility"]
@@ -212,10 +348,35 @@ let
       and .target.running_host_btf_used == false
       and .generated_makefile_executed == false
       and .generated_kbuild_executed == false
-      and .core_admission_status == "blocked-production-shell-does-not-invoke-crunch-kernelscript-core"
+      and .core_admission_status == "generated-shapes-admitted-receipts-blocked-on-external-target-authority"
+      and .core_admission.adapter_schema == "mantle-kernelscript-core-adapter-report-v1"
       and .module_status == "blocked-no-checked-nix-build-or-vm-load-gate"
     ' ${artifacts}/evidence/probe-observation.json >/dev/null
+    ${onixPkgs.jq}/bin/jq --exit-status '
+      .schema == "mantle-kernelscript-core-adapter-report-v1"
+      and .compiler_admission.admitted == true
+      and .target_admission.admitted == false
+      and any(.target_admission.blockers[]; .code == "kernel-target-observation-only")
+      and .receipt.stage_status == "blocked"
+      and .receipt.candidate_packs == []
+      and (.receipt.non_claims | index("not-production-readiness")) != null
+      and [.generated_manifest.members[].relative_path] == ["Makefile", "probe_do_exit.c", "probe_do_exit.ebpf.c"]
+    ' ${artifacts}/evidence/probe-core-report.json >/dev/null
+    ${onixPkgs.jq}/bin/jq --exit-status '
+      .schema == "mantle-kernelscript-core-adapter-report-v1"
+      and .compiler_admission.admitted == true
+      and .target_admission.admitted == false
+      and any(.target_admission.blockers[]; .code == "kernel-target-observation-only")
+      and any(.receipt.blockers[]; .code == "module-build-and-vm-gate-absent")
+      and .receipt.stage_status == "blocked"
+      and .receipt.candidate_packs == []
+      and [.generated_manifest.members[].relative_path] == ["Kbuild", "Makefile", "private_kfunc.c", "private_kfunc.ebpf.c", "private_kfunc.mod.c"]
+    ' ${artifacts}/evidence/kfunc-core-report.json >/dev/null
     test "$(${onixPkgs.b3sum}/bin/b3sum --no-names ${artifacts}/evidence/probe-observation.json)" = "$(cat ${artifacts}/evidence/probe-observation.blake3)"
+    test "$(${onixPkgs.b3sum}/bin/b3sum --no-names ${artifacts}/evidence/probe-core-report.json)" = "$(${onixPkgs.jq}/bin/jq --raw-output '.core_admission.probe.report_blake3' ${artifacts}/evidence/probe-observation.json)"
+    test "$(${onixPkgs.b3sum}/bin/b3sum --no-names ${artifacts}/evidence/kfunc-core-report.json)" = "$(${onixPkgs.jq}/bin/jq --raw-output '.core_admission.kfunc.report_blake3' ${artifacts}/evidence/probe-observation.json)"
+    test "$(${onixPkgs.jq}/bin/jq --raw-output '.receipt.receipt_identity_blake3' ${artifacts}/evidence/probe-core-report.json)" = "$(${onixPkgs.jq}/bin/jq --raw-output '.core_admission.probe.receipt_identity_blake3' ${artifacts}/evidence/probe-observation.json)"
+    test "$(${onixPkgs.jq}/bin/jq --raw-output '.receipt.receipt_identity_blake3' ${artifacts}/evidence/kfunc-core-report.json)" = "$(${onixPkgs.jq}/bin/jq --raw-output '.core_admission.kfunc.receipt_identity_blake3' ${artifacts}/evidence/probe-observation.json)"
     touch "$out"
   '';
   runtimeCheck = onixPkgs.testers.runNixOSTest {

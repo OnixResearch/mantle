@@ -9,9 +9,13 @@ It has two deliberately separate parts:
 2. an opt-in pinned Nix probe observation under
    [`nix/kernelscript-experiment.nix`](../nix/kernelscript-experiment.nix).
 
-The second part does **not** yet invoke the first. Its successful build and VM
-results are observations, not canonical Mantle admission receipts. This
-separation is an explicit blocker, not an implied acceptance boundary.
+The production shell invokes the first through the small
+`crunch-kernelscript-adapter` binary. The adapter performs bounded no-follow
+filesystem reads, delegates profile/compiler/target admission, exact generated
+shape classification, planning, and receipt construction to the core, and
+writes the two core reports retained by the Nix output. Successful build and VM
+results remain observations: both core receipts are blocked on the external
+target-authority boundary rather than promoted to accepted Onix materialization.
 
 The architecture boundary and rejected ambient-state alternatives are recorded
 in [ADR 0022](../adr/0022-bound-kernelscript-as-planning-only-experiment.md).
@@ -38,9 +42,11 @@ revision `6201e203d09599479a3b3450ed24fa81537ebc4e`, locked by
 `sha256-ZojAnPuCdy657PbTq5V0Y+AHKhZAIwSIT2cb8UgAz/U=`. The observation records
 BLAKE3 for the compiler binary and the sorted Nix closure path set.
 
-This is stronger than mutable opam resolution, but it is not yet a
-`crunch-kernelscript-core` compiler admission because the production shell does
-not construct and validate the typed compiler cohort through that core.
+This is stronger than mutable opam resolution. The production adapter now
+remeasures the archive SHA-256 interoperability field, archive/compiler/tool
+BLAKE3 identities, and sorted closure path-set identity, then admits that exact
+compiler observation through `crunch-kernelscript-core`. This compiler
+observation is not an accepted Onix kernel-target authority.
 
 ## Materialized target cohort and authority boundary
 
@@ -102,9 +108,12 @@ relocations, and BTF.
 
 The output record is
 `evidence/probe-observation.json`, schema
-`mantle-kernelscript-probe-observation-v1`. It is intentionally not named or
-shaped as a core experiment receipt. It contains explicit blockers for the
-missing core invocation and module route.
+`mantle-kernelscript-probe-observation-v1`. It remains intentionally separate
+from the core receipts. `evidence/probe-core-report.json` and
+`evidence/kfunc-core-report.json` carry the core-generated manifests, plans,
+and canonical receipts. Both receipts keep `target_identity_blake3 = null`,
+the `kernel-target-observation-only` blocker, no candidate packs, and strict
+non-claims; the kfunc receipt additionally preserves the unchecked module gate.
 
 The exact-kernel VM gate boots Linux `6.18.20`, loads the object through
 bpftool's verifier/load path, and runs the generated loader through successful
@@ -116,22 +125,16 @@ The Mantle template at
 is also disabled by default. It resolves only when the operator explicitly
 provides the generated pinned cohort import path.
 
-## Open blockers
+## Open blocker
 
-Two production tasks remain deliberately unchecked:
+The **private/kfunc module** task remains deliberately unchecked. The checked
+Nix route does not build it, and the checked VM route does not load/unload it or
+verify the kfunc/XDP object. Temporary or external prototype output is not
+sufficient to complete the task.
 
-1. **Core-backed orchestration and receipt:** replace the shell's duplicate
-   exact-file classification/accounting and observation rendering with a thin
-   imperative adapter that reads bounded bytes and invokes
-   `crunch-kernelscript-core` plans, classifier, inspections, and receipt
-   constructor. Until then, the Nix route is probe evidence, not Mantle
-   admission.
-2. **Private/kfunc module:** a temporary prototype produced a BTF-bearing module,
-   but the checked Nix route does not build it and the checked VM route does not
-   load/unload it or verify the kfunc/XDP object. Temporary prototype output is
-   not sufficient to complete the task.
-
-The feature remains disabled by default while either blocker exists.
+The feature remains disabled by default. Core-backed generated-shape admission
+and receipt identity do not grant external target authority or complete the
+module/kfunc gate.
 
 ## Exact non-claims
 
@@ -167,6 +170,8 @@ upgrade procedure.
 ```console
 nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-kernelscript-core \
   cargo test -p crunch-kernelscript-core
+nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-kernelscript-adapter \
+  cargo test -p crunch-kernelscript-adapter
 nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-kernelscript-integration \
   cargo test -p mantle --test kernelscript_experiment
 nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-kernelscript-core \
@@ -175,6 +180,6 @@ nix build --no-link .#checks.x86_64-linux.kernelscript-production
 nix build --no-link .#packages.x86_64-linux.kernelscript-production-runtime-check
 ```
 
-The first three commands validate the functional core and synthetic fixtures.
-The last two validate the separate pinned probe observation and exact-kernel VM
-rail. Neither command closes the two blockers above.
+The Rust commands validate the functional core, bounded adapter, and synthetic
+fixtures. The last two validate the core-backed pinned probe observation and
+exact-kernel VM rail. They do not complete the external module/kfunc gate.

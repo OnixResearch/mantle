@@ -468,6 +468,29 @@ fn exact_kernel_target_admission_binds_btf_headers_config_flags_and_toolchain() 
 }
 
 #[test]
+fn observation_target_can_be_planned_but_never_admitted_or_projected() {
+    let mut profile = profile();
+    let identity = format!("{OBSERVATION_KERNEL_BUILD_IDENTITY_PREFIX}{}", digest('7'));
+    profile.target.kernel_build_identity = identity.clone();
+    profile.target.btf.kernel_build_identity = identity.clone();
+    profile.target.headers.kernel_build_identity = identity.clone();
+    profile.target.config.kernel_build_identity = identity;
+    profile.compiler.dependency_lock.format = String::from(NIX_CLOSURE_OBSERVATION_LOCK_FORMAT);
+    let validation = validate_profile(profile.clone());
+    let admission = admit_kernel_target(profile.clone(), target_facts(&profile));
+    let manifest = classified(profile.clone(), false);
+    let plan = plan_compilation(profile.clone(), manifest).plan.unwrap();
+    let candidates = project_candidate_packs(profile, plan, Vec::new());
+
+    assert!(validation.blockers.is_empty(), "blockers: {:?}", validation.blockers);
+    assert!(!admission.admitted);
+    assert!(admission.target_identity_blake3.is_none());
+    assert!(admission.blockers.iter().any(|item| item.code == "kernel-target-observation-only"));
+    assert!(candidates.projections.is_empty());
+    assert!(candidates.blockers.iter().any(|item| item.code == "candidate-plan-mismatch"));
+}
+
+#[test]
 fn kernel_target_admission_rejects_missing_ambient_mismatched_and_stale_facts() {
     let profile = profile();
     let mut facts = target_facts(&profile);
