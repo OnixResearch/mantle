@@ -6525,7 +6525,7 @@ mod tests {
 
     #[test]
     fn default_store_prefix_is_mantle() {
-        let args = Args::parse_from(["mantle", "doctor"]);
+        let args = parse_args_with_cli_test_stack(Vec::from(["mantle", "doctor"])).expect("CLI parser test");
         assert_eq!(resolve_store_prefix(&args), "/mantle/store");
     }
 
@@ -6552,13 +6552,15 @@ mod tests {
 
     #[test]
     fn build_cli_rejects_strict_hermetic_with_impure() {
-        let err = Args::try_parse_from(["mantle", "build", "demo.ncl", "--strict-hermetic", "--impure"]).unwrap_err();
+        let err =
+            parse_args_with_cli_test_stack(Vec::from(["mantle", "build", "demo.ncl", "--strict-hermetic", "--impure"]))
+                .unwrap_err();
         assert!(err.to_string().contains("cannot be used with"));
     }
 
     #[test]
     fn build_cli_project_selector_is_not_implicit_rust_plan() {
-        let args = Args::parse_from(["mantle", "build", ".#app"]);
+        let args = parse_args_with_cli_test_stack(Vec::from(["mantle", "build", ".#app"])).expect("CLI parser test");
         assert!(matches!(args.command, Command::Build { .. }));
         assert!(!matches!(args.command, Command::RustPlan { .. }));
     }
@@ -6567,7 +6569,7 @@ mod tests {
     fn receipt_bundle_cli_accepts_trusted_public_key_flags() {
         const TEST_KEY_A: &str = "cache.example.com-1:tLAEn+EeaBUJYqEpTd2yeerr7Ic6+0vWe+aXL/vYUpE=";
         const TEST_KEY_B: &str = "cache.example.com-2:tLAEn+EeaBUJYqEpTd2yeerr7Ic6+0vWe+aXL/vYUpE=";
-        let export = Args::parse_from([
+        let export = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "receipt",
             "bundle",
@@ -6580,7 +6582,8 @@ mod tests {
             TEST_KEY_A,
             "--trusted-public-key",
             TEST_KEY_B,
-        ]);
+        ]))
+        .expect("CLI parser test");
         let Command::Receipt {
             action:
                 ReceiptAction::Bundle {
@@ -6595,7 +6598,7 @@ mod tests {
         };
         assert_eq!(trusted_public_keys, vec![TEST_KEY_A.to_string(), TEST_KEY_B.to_string()]);
 
-        let verify = Args::parse_from([
+        let verify = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "receipt",
             "bundle",
@@ -6608,14 +6611,15 @@ mod tests {
             "policy-v1",
             "--trusted-public-key",
             TEST_KEY_A,
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(verify.command, Command::Receipt {
             action: ReceiptAction::Bundle {
                 action: ReceiptBundleAction::Verify { trusted_public_keys, .. },
             },
         } if trusted_public_keys == vec![TEST_KEY_A.to_string()]));
 
-        let import = Args::parse_from([
+        let import = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "receipt",
             "bundle",
@@ -6628,7 +6632,8 @@ mod tests {
             "policy-v1",
             "--trusted-public-key",
             TEST_KEY_B,
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(import.command, Command::Receipt {
             action: ReceiptAction::Bundle {
                 action: ReceiptBundleAction::Import { trusted_public_keys, .. },
@@ -6694,7 +6699,7 @@ mod tests {
 
     #[test]
     fn remote_status_cli_accepts_endpoint_and_concurrency() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "remote",
             "status",
@@ -6702,7 +6707,8 @@ mod tests {
             "builder-1",
             "--concurrency",
             TEST_REMOTE_STATUS_CONCURRENCY_TEXT,
-        ]);
+        ]))
+        .expect("CLI parser test");
         let Command::Remote {
             action: RemoteAction::Status {
                 endpoint_id,
@@ -6748,7 +6754,8 @@ mod tests {
 
     #[test]
     fn self_build_cli_accepts_impure_mode() {
-        let args = Args::parse_from(["mantle", "self-build", "--impure"]);
+        let args =
+            parse_args_with_cli_test_stack(Vec::from(["mantle", "self-build", "--impure"])).expect("CLI parser test");
         assert!(matches!(args.command, Command::SelfBuild {
             impure: true,
             strict_hermetic: false,
@@ -6792,7 +6799,7 @@ mod tests {
 
     #[test]
     fn bootstrap_rust_source_provider_action_parses() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(vec![
             "mantle",
             "bootstrap",
             "rust-source-provider",
@@ -6800,7 +6807,8 @@ mod tests {
             "bootstrap/rust-source.ncl",
             "--output-dir",
             "/tmp/mantle-rust-provider",
-        ]);
+        ])
+        .unwrap();
 
         let Command::Bootstrap {
             action:
@@ -6827,7 +6835,7 @@ mod tests {
 
     #[test]
     fn bootstrap_rust_source_provider_action_parses_route_plan() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(vec![
             "mantle",
             "bootstrap",
             "rust-source-provider",
@@ -6837,7 +6845,8 @@ mod tests {
             "bootstrap/rust-source-musl-host-plan.ncl",
             "--output-dir",
             "/tmp/mantle-rust-provider",
-        ]);
+        ])
+        .unwrap();
 
         let Command::Bootstrap {
             action: Some(BootstrapAction::RustSourceProvider {
@@ -6854,7 +6863,7 @@ mod tests {
 
     #[test]
     fn bootstrap_rust_source_provider_action_parses_import_dir() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(vec![
             "mantle",
             "bootstrap",
             "rust-source-provider",
@@ -6863,7 +6872,8 @@ mod tests {
             "--smoke",
             "--output-dir",
             "/tmp/mantle-rust-provider",
-        ]);
+        ])
+        .unwrap();
 
         let Command::Bootstrap {
             action:
@@ -6887,7 +6897,7 @@ mod tests {
 
     #[test]
     fn bootstrap_rust_source_provider_action_parses_smoke_evidence_dir() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(vec![
             "mantle",
             "bootstrap",
             "rust-source-provider",
@@ -6898,7 +6908,8 @@ mod tests {
             "/tmp/mantle-rust-provider-smoke-evidence",
             "--output-dir",
             "/tmp/mantle-rust-provider",
-        ]);
+        ])
+        .unwrap();
 
         let Command::Bootstrap {
             action:
@@ -6918,7 +6929,9 @@ mod tests {
 
     #[test]
     fn bootstrap_offline_source_preflight_flag_parses() {
-        let args = Args::parse_from(["mantle", "bootstrap", "--fetch", "--offline-source-preflight"]);
+        let args =
+            parse_args_with_cli_test_stack(Vec::from(["mantle", "bootstrap", "--fetch", "--offline-source-preflight"]))
+                .expect("CLI parser test");
 
         let Command::Bootstrap {
             fetch,
@@ -6934,7 +6947,7 @@ mod tests {
 
     #[test]
     fn source_bundle_bootstrap_profile_subcommand_parses() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "source",
             "bundle",
@@ -6947,7 +6960,8 @@ mod tests {
             "/tmp/provider.json",
             "--bootstrap-source",
             "/tmp/src",
-        ]);
+        ]))
+        .expect("CLI parser test");
 
         let Command::Source {
             action:
@@ -6963,7 +6977,7 @@ mod tests {
 
     #[test]
     fn bootstrap_rust_source_provider_rejects_smoke_evidence_without_smoke() {
-        let err = Args::try_parse_from([
+        let err = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "bootstrap",
             "rust-source-provider",
@@ -6973,7 +6987,7 @@ mod tests {
             "/tmp/mantle-rust-provider-smoke-evidence",
             "--output-dir",
             "/tmp/mantle-rust-provider",
-        ])
+        ]))
         .unwrap_err();
         let rendered = err.to_string();
         assert!(rendered.contains("--smoke"));
@@ -7221,7 +7235,7 @@ let Plan = {
 
     #[test]
     fn release_create_accepts_provider_fixed_point_proof_flag() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "create",
@@ -7233,7 +7247,8 @@ let Plan = {
             "/tmp/self-hosting-proof",
             "--provider-fixed-point-proof",
             "/tmp/provider-fixed-point-proof",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::Release {
             action: ReleaseAction::Create {
                 provider_fixed_point_proof: Some(_),
@@ -7245,7 +7260,7 @@ let Plan = {
     #[test]
     fn release_create_accepts_source_acquisition_url_flag() {
         let source_url = "https://example.invalid/releases/mantle-src.tar";
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "create",
@@ -7257,7 +7272,8 @@ let Plan = {
             "/tmp/self-hosting-proof",
             "--source-acquisition-url",
             source_url,
-        ]);
+        ]))
+        .expect("CLI parser test");
         let Command::Release {
             action:
                 ReleaseAction::Create {
@@ -7273,7 +7289,7 @@ let Plan = {
 
     #[test]
     fn release_create_accepts_external_evidence_flags() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "create",
@@ -7293,7 +7309,8 @@ let Plan = {
             "identity-linkage-sidecar",
             "--external-evidence-non-claim",
             "not semantic validation by Mantle",
-        ]);
+        ]))
+        .expect("CLI parser test");
         let Command::Release {
             action:
                 ReleaseAction::Create {
@@ -7317,7 +7334,7 @@ let Plan = {
 
     #[test]
     fn release_create_accepts_kani_toolchain_evidence_flag() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "create",
@@ -7329,7 +7346,8 @@ let Plan = {
             "/tmp/self-hosting-proof",
             "--kani-toolchain-evidence",
             "/tmp/kani-toolchain.json",
-        ]);
+        ]))
+        .expect("CLI parser test");
         let Command::Release {
             action: ReleaseAction::Create {
                 kani_toolchain_evidence,
@@ -7344,14 +7362,15 @@ let Plan = {
 
     #[test]
     fn release_verify_accepts_required_external_evidence_role() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "verify",
             "/tmp/release-bundle",
             "--require-external-evidence-role",
             "stack-provenance-trace",
-        ]);
+        ]))
+        .expect("CLI parser test");
         let Command::Release {
             action:
                 ReleaseAction::Verify {
@@ -7488,14 +7507,15 @@ let Plan = {
 
     #[test]
     fn release_verify_accepts_onix_stack_release_profile() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "verify",
             "/tmp/release-bundle",
             "--release-profile",
             "onix-stack",
-        ]);
+        ]))
+        .expect("CLI parser test");
         let Command::Release {
             action:
                 ReleaseAction::Verify {
@@ -7513,7 +7533,7 @@ let Plan = {
 
     #[test]
     fn release_create_accepts_git_source_flags() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "create",
@@ -7531,7 +7551,8 @@ let Plan = {
             "refs/heads/main",
             "--git-source-tag",
             "v0.1.0",
-        ]);
+        ]))
+        .expect("CLI parser test");
         let Command::Release {
             action:
                 ReleaseAction::Create {
@@ -7553,7 +7574,7 @@ let Plan = {
 
     #[test]
     fn release_gauntlet_continuous_accepts_track_inputs() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "gauntlet",
@@ -7564,7 +7585,8 @@ let Plan = {
             "/tmp/repeatability.json",
             "--report-path",
             "/tmp/report.json",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::Release {
             action: ReleaseAction::Gauntlet {
                 action: ReleaseGauntletAction::Continuous { track, .. },
@@ -7574,7 +7596,7 @@ let Plan = {
 
     #[test]
     fn release_gauntlet_canonicalize_accepts_report_kind() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "gauntlet",
@@ -7582,7 +7604,8 @@ let Plan = {
             "--kind",
             "substitution-cache-attack",
             "/tmp/report.json",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::Release {
             action: ReleaseAction::Gauntlet {
                 action: ReleaseGauntletAction::Canonicalize {
@@ -7595,7 +7618,7 @@ let Plan = {
 
     #[test]
     fn release_gauntlet_accepts_strict_hermeticity_regression_inputs() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "gauntlet",
@@ -7608,7 +7631,8 @@ let Plan = {
             "/tmp/evidence.json",
             "--report-path",
             "/tmp/report.json",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::Release {
             action: ReleaseAction::Gauntlet {
                 action: ReleaseGauntletAction::StrictHermeticityRegression { evidence, .. },
@@ -7618,14 +7642,15 @@ let Plan = {
 
     #[test]
     fn release_witness_rebuild_accepts_require_independent_source_flag() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "witness-rebuild",
             "/tmp/witness-request",
             "--require-independent-source",
             "--check",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::Release {
             action: ReleaseAction::WitnessRebuild {
                 require_independent_source: true,
@@ -7637,14 +7662,15 @@ let Plan = {
 
     #[test]
     fn release_witness_rebuild_accepts_require_git_source_flag() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "witness-rebuild",
             "/tmp/witness-request",
             "--require-git-source",
             "--check",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::Release {
             action: ReleaseAction::WitnessRebuild {
                 require_git_source: true,
@@ -7656,20 +7682,20 @@ let Plan = {
 
     #[test]
     fn release_witness_rebuild_rejects_conflicting_source_replay_modes() {
-        let result = Args::try_parse_from([
+        let result = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "witness-rebuild",
             "/tmp/witness-request",
             "--require-independent-source",
             "--require-git-source",
-        ]);
+        ]));
         assert!(result.is_err());
     }
 
     #[test]
     fn release_verify_accepts_provider_fixed_point_proof_flags() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "release",
             "verify",
@@ -7677,7 +7703,8 @@ let Plan = {
             "--provider-fixed-point-proof",
             "/tmp/provider-fixed-point-proof",
             "--require-provider-fixed-point-proof",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::Release {
             action: ReleaseAction::Verify {
                 provider_fixed_point_proof: Some(_),
@@ -7689,7 +7716,14 @@ let Plan = {
 
     #[test]
     fn self_build_cli_accepts_cargo_free_out_dir() {
-        let args = Args::parse_from(["mantle", "self-build", "--cargo-free", "--out", "/tmp/mantle-out"]);
+        let args = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "self-build",
+            "--cargo-free",
+            "--out",
+            "/tmp/mantle-out",
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::SelfBuild {
             cargo_free: true,
             fixed_point: false,
@@ -7700,14 +7734,15 @@ let Plan = {
 
     #[test]
     fn self_build_cli_accepts_cargo_free_fixed_point_out_dir() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "self-build",
             "--cargo-free",
             "--fixed-point",
             "--out",
             "/tmp/mantle-fixed-point",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::SelfBuild {
             cargo_free: true,
             fixed_point: true,
@@ -7718,7 +7753,7 @@ let Plan = {
 
     #[test]
     fn self_build_cli_accepts_cargo_free_toolchain_closure_manifest() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "self-build",
             "--cargo-free",
@@ -7726,7 +7761,8 @@ let Plan = {
             "/tmp/mantle-out",
             "--toolchain-closure",
             "/tmp/toolchain.json",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::SelfBuild {
             cargo_free: true,
             toolchain_closure: Some(_),
@@ -7736,7 +7772,7 @@ let Plan = {
 
     #[test]
     fn self_build_cli_accepts_cargo_free_rust_source_provider() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "self-build",
             "--cargo-free",
@@ -7744,7 +7780,8 @@ let Plan = {
             "/tmp/mantle-out",
             "--rust-source-provider",
             "/tmp/rust-source-provider",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::SelfBuild {
             cargo_free: true,
             rust_source_provider: Some(_),
@@ -7754,7 +7791,7 @@ let Plan = {
 
     #[test]
     fn self_build_cli_accepts_cargo_free_target_triple() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "self-build",
             "--cargo-free",
@@ -7762,7 +7799,8 @@ let Plan = {
             "/tmp/mantle-out",
             "--target",
             "x86_64-unknown-linux-musl",
-        ]);
+        ]))
+        .expect("CLI parser test");
         assert!(matches!(args.command, Command::SelfBuild {
             cargo_free: true,
             targets,
@@ -7772,8 +7810,13 @@ let Plan = {
 
     #[test]
     fn self_build_cli_rejects_toolchain_closure_without_cargo_free() {
-        let err =
-            Args::try_parse_from(["mantle", "self-build", "--toolchain-closure", "/tmp/toolchain.json"]).unwrap_err();
+        let err = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "self-build",
+            "--toolchain-closure",
+            "/tmp/toolchain.json",
+        ]))
+        .unwrap_err();
         let rendered = err.to_string();
         assert!(rendered.contains("--cargo-free"));
         assert!(rendered.contains("required"));
@@ -7781,12 +7824,12 @@ let Plan = {
 
     #[test]
     fn self_build_cli_rejects_rust_source_provider_without_cargo_free() {
-        let err = Args::try_parse_from([
+        let err = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "self-build",
             "--rust-source-provider",
             "/tmp/rust-source-provider",
-        ])
+        ]))
         .unwrap_err();
         let rendered = err.to_string();
         assert!(rendered.contains("--cargo-free"));
@@ -7795,8 +7838,14 @@ let Plan = {
 
     #[test]
     fn self_build_cli_rejects_fixed_point_without_cargo_free() {
-        let err =
-            Args::try_parse_from(["mantle", "self-build", "--fixed-point", "--out", "/tmp/mantle-out"]).unwrap_err();
+        let err = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "self-build",
+            "--fixed-point",
+            "--out",
+            "/tmp/mantle-out",
+        ]))
+        .unwrap_err();
         let rendered = err.to_string();
         assert!(rendered.contains("--cargo-free"));
         assert!(rendered.contains("required"));
@@ -7804,7 +7853,7 @@ let Plan = {
 
     #[test]
     fn cargo_free_fixed_point_accepts_strict_hermetic_mode() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "self-build",
             "--cargo-free",
@@ -7812,7 +7861,8 @@ let Plan = {
             "--strict-hermetic",
             "--out",
             "/tmp/mantle-fixed-point",
-        ]);
+        ]))
+        .expect("CLI parser test");
 
         assert!(matches!(args.command, Command::SelfBuild {
             cargo_free: true,
@@ -7825,7 +7875,7 @@ let Plan = {
 
     #[test]
     fn cargo_free_fixed_point_rejects_impure_mode() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "self-build",
             "--cargo-free",
@@ -7833,7 +7883,8 @@ let Plan = {
             "--impure",
             "--out",
             "/tmp/mantle-fixed-point",
-        ]);
+        ]))
+        .expect("CLI parser test");
         let ctx = build_run_context(&args);
         let err = run_self_build_from_command(&ctx, &args.command).unwrap_err();
 
@@ -7842,7 +7893,7 @@ let Plan = {
 
     #[test]
     fn cargo_free_fixed_point_rejects_legacy_options() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(Vec::from([
             "mantle",
             "self-build",
             "--cargo-free",
@@ -7851,7 +7902,8 @@ let Plan = {
             "/tmp/mantle-fixed-point",
             "--jobs",
             "1",
-        ]);
+        ]))
+        .expect("CLI parser test");
 
         let err = run(args).unwrap_err();
 
