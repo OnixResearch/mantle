@@ -11,6 +11,8 @@ const STORE_PREFIX: &str = "/mantle/store";
 const INPUT_STORE_PATH: &str = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-production-input";
 const INPUT_BYTES: usize = 196_608;
 const OUTPUT_BYTES: usize = 262_144;
+const PRODUCTION_SCALE_OUTPUT_BYTES: usize = 8_388_608;
+const MIN_PRODUCTION_SCALE_OUTPUT_CHUNKS: usize = 100;
 const PATTERN_MODULUS: usize = 251;
 const INTERRUPT_AFTER_CHUNKS: &str = "1";
 const TICKET_ID: &str = "production-ticket";
@@ -70,11 +72,8 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
     let substitution = &report["outcomes"][0]["outputs"][0]["substitution"];
     assert_eq!(substitution["mode"], "streaming");
     assert!(substitution["reused_bytes"].as_u64().unwrap_or(0) >= partial.transferred_bytes);
-    let output_path = PathBuf::from(
-        report["outcomes"][0]["outputs"][0]["path"]
-            .as_str()
-            .expect("imported output path"),
-    );
+    let output_path =
+        PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("imported output path"));
     assert_eq!(fs::read(output_path).expect("imported output bytes"), patterned_bytes(OUTPUT_BYTES));
     let completed = output_checkpoint_with_most_acknowledgements(&state_dir);
     assert!(completed.acknowledged_chunks > partial.acknowledged_chunks);
@@ -91,11 +90,7 @@ fn production_stdio_resumes_interrupted_multi_chunk_input_upload() {
     fs::create_dir_all(&state_dir).expect("state dir");
     fs::create_dir_all(&store_dir).expect("store dir");
     fs::write(&output_source, patterned_bytes(OUTPUT_BYTES)).expect("output source");
-    fs::write(
-        physical_store_path(&store_dir, INPUT_STORE_PATH),
-        patterned_bytes(INPUT_BYTES),
-    )
-    .expect("input source");
+    fs::write(physical_store_path(&store_dir, INPUT_STORE_PATH), patterned_bytes(INPUT_BYTES)).expect("input source");
     write_ticket_state(&state_dir);
     write_fetch_derivation(&build_file, &output_source);
 
@@ -121,11 +116,8 @@ fn production_stdio_resumes_interrupted_multi_chunk_input_upload() {
     assert!(completed.acknowledged_chunks > partial.acknowledged_chunks);
     assert!(completed.transferred_bytes > u64::try_from(INPUT_BYTES).unwrap());
     let report: Value = serde_json::from_slice(&resumed.stdout).expect("resumed production JSON report");
-    let imported_path = PathBuf::from(
-        report["outcomes"][0]["outputs"][0]["path"]
-            .as_str()
-            .expect("imported output path"),
-    );
+    let imported_path =
+        PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("imported output path"));
     assert_eq!(fs::read(imported_path).unwrap(), patterned_bytes(OUTPUT_BYTES));
 }
 
@@ -139,11 +131,7 @@ fn production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission()
     fs::create_dir_all(&state_dir).unwrap();
     fs::create_dir_all(&store_dir).unwrap();
     fs::write(&output_source, patterned_bytes(OUTPUT_BYTES)).unwrap();
-    fs::write(
-        physical_store_path(&store_dir, INPUT_STORE_PATH),
-        patterned_bytes(INPUT_BYTES),
-    )
-    .unwrap();
+    fs::write(physical_store_path(&store_dir, INPUT_STORE_PATH), patterned_bytes(INPUT_BYTES)).unwrap();
     write_ticket_state_with_upload_limit(&state_dir, REJECTING_UPLOAD_BYTES);
     write_fetch_derivation(&build_file, &output_source);
 
@@ -155,6 +143,73 @@ fn production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission()
     assert!(transfer_checkpoints(&state_dir).is_empty());
     assert_eq!(fs::read_dir(&store_dir).unwrap().count(), 1);
     assert_eq!(fs::read(physical_store_path(&store_dir, INPUT_STORE_PATH)).unwrap(), patterned_bytes(INPUT_BYTES));
+}
+
+#[test]
+fn production_stdio_delta_unavailable_falls_back_to_bounded_full_nar_and_admits() {
+    let root = tempfile::tempdir().expect("production delta fallback tempdir");
+    let fixture = setup_production_fixture(root.path(), OUTPUT_BYTES, MAX_UPLOAD_BYTES);
+    let completed = remote_build_command(&fixture.state_dir, &fixture.store_dir, &fixture.build_file)
+        .arg("--remote-delta")
+        .output()
+        .expect("run production delta-unavailable fallback");
+    assert!(completed.status.success(), "fallback stderr={}", String::from_utf8_lossy(&completed.stderr));
+    let report: Value = serde_json::from_slice(&completed.stdout).expect("fallback production JSON report");
+    let substitution = &report["outcomes"][0]["outputs"][0]["substitution"];
+    assert_eq!(substitution["mode"], "full");
+    assert_eq!(substitution["fallback_reason"], "delta-unavailable");
+    let imported_path =
+        PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("fallback imported output path"));
+    assert_eq!(fs::read(imported_path).unwrap(), patterned_bytes(OUTPUT_BYTES));
+    let output_checkpoint = output_checkpoint_with_most_acknowledgements(&fixture.state_dir);
+    assert!(output_checkpoint.acknowledged_chunks > 1);
+    assert!(output_checkpoint.transferred_bytes > u64::try_from(OUTPUT_BYTES).unwrap());
+}
+
+#[test]
+fn production_stdio_streams_and_admits_8_mib_output() {
+    let root = tempfile::tempdir().expect("production 8 MiB tempdir");
+    let fixture = setup_production_fixture(root.path(), PRODUCTION_SCALE_OUTPUT_BYTES, MAX_UPLOAD_BYTES);
+    let completed = remote_build_command(&fixture.state_dir, &fixture.store_dir, &fixture.build_file)
+        .output()
+        .expect("run production 8 MiB transfer");
+    assert!(completed.status.success(), "8 MiB stderr={}", String::from_utf8_lossy(&completed.stderr));
+    let report: Value = serde_json::from_slice(&completed.stdout).expect("8 MiB production JSON report");
+    let substitution = &report["outcomes"][0]["outputs"][0]["substitution"];
+    assert_eq!(substitution["mode"], "streaming");
+    assert_eq!(substitution["fallback_reason"], Value::Null);
+    let imported_path =
+        PathBuf::from(report["outcomes"][0]["outputs"][0]["path"].as_str().expect("8 MiB imported output path"));
+    assert_eq!(fs::read(imported_path).unwrap(), patterned_bytes(PRODUCTION_SCALE_OUTPUT_BYTES));
+    let output_checkpoint = output_checkpoint_with_most_acknowledgements(&fixture.state_dir);
+    assert!(output_checkpoint.acknowledged_chunks > MIN_PRODUCTION_SCALE_OUTPUT_CHUNKS);
+    assert!(output_checkpoint.transferred_bytes > u64::try_from(PRODUCTION_SCALE_OUTPUT_BYTES).unwrap());
+}
+
+struct ProductionFixture {
+    state_dir: PathBuf,
+    store_dir: PathBuf,
+    build_file: PathBuf,
+}
+
+fn setup_production_fixture(root: &Path, output_bytes: usize, max_upload_bytes: u64) -> ProductionFixture {
+    let state_dir = root.join("state");
+    let store_dir = root.join("store");
+    let output_source = root.join("output-source.bin");
+    let build_file = root.join("remote-production.ncl");
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::create_dir_all(&store_dir).unwrap();
+    fs::write(&output_source, patterned_bytes(output_bytes)).unwrap();
+    fs::write(physical_store_path(&store_dir, INPUT_STORE_PATH), patterned_bytes(INPUT_BYTES)).unwrap();
+    write_ticket_state_with_upload_limit(&state_dir, max_upload_bytes);
+    write_fetch_derivation(&build_file, &output_source);
+    assert!(output_bytes > 0);
+    assert!(max_upload_bytes > 0);
+    ProductionFixture {
+        state_dir,
+        store_dir,
+        build_file,
+    }
 }
 
 #[derive(Debug)]
@@ -204,17 +259,14 @@ fn transfer_checkpoints(state_dir: &Path) -> Vec<CheckpointSummary> {
 }
 
 fn read_checkpoint_summary(path: &Path) -> CheckpointSummary {
-    let value: Value = serde_json::from_slice(&fs::read(path).expect("checkpoint bytes"))
-        .expect("checkpoint JSON");
+    let value: Value = serde_json::from_slice(&fs::read(path).expect("checkpoint bytes")).expect("checkpoint JSON");
     CheckpointSummary {
         path: path.to_path_buf(),
         acknowledged_chunks: value["checkpoint"]["acknowledged_chunk_digests"]
             .as_array()
             .expect("acknowledged chunk array")
             .len(),
-        transferred_bytes: value["checkpoint"]["transferred_bytes"]
-            .as_u64()
-            .expect("transferred byte count"),
+        transferred_bytes: value["checkpoint"]["transferred_bytes"].as_u64().expect("transferred byte count"),
     }
 }
 
@@ -264,20 +316,14 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
             }
         }
     });
-    fs::write(
-        ticket_dir.join("tickets.json"),
-        serde_json::to_vec_pretty(&state).expect("ticket state JSON"),
-    )
-    .expect("ticket state");
+    fs::write(ticket_dir.join("tickets.json"), serde_json::to_vec_pretty(&state).expect("ticket state JSON"))
+        .expect("ticket state");
 }
 
 fn write_fetch_derivation(path: &Path, output_source: &Path) {
     let bytes = fs::read(output_source).expect("output source bytes");
     let digest = sha2::Sha256::digest(&bytes);
-    let hash = format!(
-        "sha256-{}",
-        base64::engine::general_purpose::STANDARD.encode(digest)
-    );
+    let hash = format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(digest));
     let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
     let source = format!(
         r#"let mantle = import "{}" in
@@ -308,7 +354,5 @@ fn physical_store_path(store_dir: &Path, logical_path: &str) -> PathBuf {
 }
 
 fn patterned_bytes(size: usize) -> Vec<u8> {
-    (0..size)
-        .map(|index| u8::try_from(index % PATTERN_MODULUS).expect("pattern byte"))
-        .collect()
+    (0..size).map(|index| u8::try_from(index % PATTERN_MODULUS).expect("pattern byte")).collect()
 }

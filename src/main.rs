@@ -260,6 +260,10 @@ enum Command {
         /// Remote request build-time limit in seconds.
         #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_BUILD_TIME_SECS)]
         remote_build_time_secs: u64,
+
+        /// Offer bounded delta transfer with full-NAR streaming fallback to the remote builder.
+        #[arg(long)]
+        remote_delta: bool,
     },
 
     /// Run no-mutate operator preflight checks for a workflow profile
@@ -3236,6 +3240,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             builder_args,
             trusted_builder_keys,
             remote_build_time_secs,
+            remote_delta,
         } => run_build_command(
             ctx,
             file.as_ref(),
@@ -3257,6 +3262,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             builder_args,
             trusted_builder_keys,
             *remote_build_time_secs,
+            *remote_delta,
         ),
         _ => unreachable!("build helper called with non-build command"),
     }
@@ -3293,6 +3299,7 @@ fn run_build_command(
     remote_builder_args: &[String],
     trusted_builder_keys: &[String],
     remote_build_time_secs: u64,
+    remote_delta: bool,
 ) -> Result<(), RunError> {
     let max_jobs = crunch_pipeline::resolve_max_jobs(jobs);
     let substituter_urls: Vec<String> = if no_substitute {
@@ -3313,6 +3320,7 @@ fn run_build_command(
             remote_builder_args,
             trusted_builder_keys,
             remote_build_time_secs,
+            remote_delta,
             ctx,
         )?
     };
@@ -3504,6 +3512,7 @@ fn remote_build_selection(
     builder_args: &[String],
     trusted_builder_keys: &[String],
     build_time_limit_secs: u64,
+    remote_delta: bool,
     ctx: &RunContext,
 ) -> Result<Option<RemoteBuildSelection>, RunError> {
     if builder.is_none() && ticket.is_none() && builder_program.is_none() && builder_args.is_empty() {
@@ -3514,6 +3523,11 @@ fn remote_build_selection(
     let ticket = remote_build::parse_remote_ticket_credential(ticket).map_err(RunError::Internal)?;
     let (program, args) = remote_stdio_builder_command(builder, builder_program, builder_args, ctx)?;
     let trusted_output_keys = remote_trusted_builder_keys(trusted_builder_keys, builder_program, builder, ctx)?;
+    let transfer_capabilities = if remote_delta {
+        remote_build::RemoteTransferCapabilities::delta_and_full().with_streaming()
+    } else {
+        remote_build::RemoteTransferCapabilities::full_only().with_streaming()
+    };
     let options = remote_build::RemoteClientBuildOptions {
         store_prefix: ctx.store_prefix.clone(),
         ticket,
@@ -3526,7 +3540,7 @@ fn remote_build_selection(
         now_unix_s: unix_time_now_s()?,
         build_time_limit_secs,
         client_endpoint: None,
-        transfer_capabilities: remote_build::RemoteTransferCapabilities::full_only().with_streaming(),
+        transfer_capabilities,
     };
     Ok(Some(RemoteBuildSelection { options }))
 }
@@ -3675,8 +3689,8 @@ async fn run_remote_build_dispatches_async(
     state_dir: &Path,
     store_prefix: &str,
 ) -> Result<remote_build::RemoteClientBuildReport, RunError> {
-    let _coordinator_mutation_guard = remote_build::acquire_remote_coordinator_mutation_guard(state_dir)
-        .map_err(RunError::Internal)?;
+    let _coordinator_mutation_guard =
+        remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
     let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
@@ -3730,14 +3744,9 @@ async fn run_remote_build_dispatches_async(
                 .map_err(RunError::Internal)?;
         }
         let request = plan.client.request.clone();
-        remote_build::prepare_remote_production_input_transfer(
-            &store,
-            &mut plan.command,
-            &request,
-            state_dir,
-        )
-        .await
-        .map_err(|err| RunError::Internal(format!("remote input stream preparation failed: {err}")))?;
+        remote_build::prepare_remote_production_input_transfer(&store, &mut plan.command, &request, state_dir)
+            .await
+            .map_err(|err| RunError::Internal(format!("remote input stream preparation failed: {err}")))?;
         let transcript = remote_build::run_stdio_remote_child(&plan.command)?;
         let admission = remote_build::admit_fenced_remote_stdio_output(
             &mut coordinator,
@@ -5615,7 +5624,7 @@ mod tests {
 
     #[test]
     fn build_cli_accepts_remote_builder_ticket_dispatch_flags() {
-        let args = Args::parse_from([
+        let args = parse_args_with_cli_test_stack(vec![
             "mantle",
             "build",
             "demo.ncl",
@@ -5629,13 +5638,16 @@ mod tests {
             "serve",
             "--trusted-builder-key",
             "builder-key",
-        ]);
+            "--remote-delta",
+        ])
+        .expect("remote builder CLI flags parse");
         let Command::Build {
             builder,
             ticket,
             builder_program,
             builder_args,
             trusted_builder_keys,
+            remote_delta,
             ..
         } = args.command
         else {
@@ -5647,6 +5659,7 @@ mod tests {
         assert_eq!(builder_program.as_deref(), Some(Path::new("/bin/remote-builder")));
         assert_eq!(builder_args, vec!["serve".to_string()]);
         assert_eq!(trusted_builder_keys, vec!["builder-key".to_string()]);
+        assert!(remote_delta);
     }
 
     #[test]
