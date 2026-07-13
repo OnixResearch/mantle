@@ -1367,7 +1367,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_comparison_reports_divergence_without_rewriting_truth() {
+    fn replay_comparison_reports_match_and_divergence_without_rewriting_truth() {
         let original = RemoteFailureExecutionSummary {
             failure_phase: Some(RemoteFailureDebugPhase::Execution),
             failure_reason_code: Some("sandbox-exit-nonzero".to_string()),
@@ -1376,6 +1376,7 @@ mod tests {
             log_head_blake3: None,
             captured_manifest_blake3: None,
         };
+        let matching = compare_remote_failure_replay(&original, &original).unwrap();
         let mut replay = original.clone();
         replay.failure_phase = None;
         replay.failure_reason_code = None;
@@ -1385,6 +1386,8 @@ mod tests {
             .push(RemoteFailureDebugDigest::new("d".repeat(BLAKE3_HEX_LENGTH_CHARS)).unwrap());
         let comparison = compare_remote_failure_replay(&original, &replay).unwrap();
 
+        assert_eq!(matching.class, RemoteFailureReplayComparisonClass::Match);
+        assert!(matching.divergent_fact_classes.is_empty());
         assert_eq!(comparison.class, RemoteFailureReplayComparisonClass::Diverged);
         assert!(comparison.original_result_immutable);
         assert!(comparison.replay_output_requires_ordinary_admission);

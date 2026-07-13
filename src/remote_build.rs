@@ -171,6 +171,14 @@ const STORE_PATH_HASH_CHARS: usize = 32;
 const REMOTE_ACTION_SPEC_SCHEMA: &str = "mantle-remote-action-v1";
 const DEFAULT_REMOTE_ACTION_SYSTEM: &str = "x86_64-linux";
 const REMOTE_LOCAL_BUILD_WORKDIR_NAME: &str = "mantle-remote-builds";
+const REMOTE_FAILURE_WORKSPACE_DIR: &str = "remote-failure-workspaces";
+const REMOTE_FAILURE_WORKSPACE_SCAN_MAX: usize = 2;
+const REMOTE_LOCAL_EXECUTOR_THREADS: usize = 2;
+const REMOTE_FAILURE_CLEANUP_ENTRIES_MAX: usize = 4_096;
+#[cfg(unix)]
+const REMOTE_FAILURE_CLEANUP_DIRECTORY_MODE: u32 = 0o700;
+#[cfg(unix)]
+const REMOTE_FAILURE_CLEANUP_FILE_MODE: u32 = 0o600;
 const REMOTE_CLIENT_REQUEST_ID_LABEL: &str = "remote-client-request";
 const REMOTE_CLIENT_SESSION_ID_LABEL: &str = "remote-client-session";
 const REMOTE_TRANSFER_ARTIFACTS_PER_PATHINFO_OUTPUT: usize = 2;
@@ -298,6 +306,8 @@ pub struct ConcreteBuildRequest {
     pub resource_requirements: Option<RemoteResourceRequirements>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locality_scope: Option<RemoteLocalityScope>,
+    #[serde(default)]
+    pub failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1415,6 +1425,20 @@ pub struct RemoteCoordinatorBuildRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RemoteFailureDebugStatus {
+    pub bundle_ref: String,
+    pub capture_outcome_code: String,
+    pub cleanup_status_code: String,
+    pub immutable_log_available: bool,
+    pub non_claim: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replay_attempt_identity: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replay_comparison_class: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteCoordinatorJobSummary {
     pub job_id: RemoteJobId,
     pub normalized_build_key: String,
@@ -1427,6 +1451,8 @@ pub struct RemoteCoordinatorJobSummary {
     pub immutable_log: Option<RemoteAttemptLogControlSummary>,
     #[serde(default)]
     pub observability_health: Option<RemoteAttemptObservabilityHealth>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_debug: Option<RemoteFailureDebugStatus>,
     pub short_error: Option<String>,
     #[serde(default)]
     pub current_attempt: Option<RemoteAttemptState>,
@@ -1583,6 +1609,8 @@ pub struct RemoteCoordinatorJobStatus {
     pub short_error: Option<String>,
     pub immutable_log: Option<RemoteAttemptLogControlSummary>,
     pub observability_health: Option<RemoteAttemptObservabilityHealth>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_debug: Option<RemoteFailureDebugStatus>,
     pub attempt_id: Option<RemoteAttemptId>,
     pub fence_generation: Option<RemoteFenceGeneration>,
     pub attempt_phase: Option<RemoteAttemptPhase>,
@@ -1621,6 +1649,8 @@ pub struct RemoteFailureStatus {
     pub retry_class: RemoteRetryClass,
     pub short_error: Option<String>,
     pub attempt_reason_code: Option<RemoteAttemptReasonCode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_debug: Option<RemoteFailureDebugStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -2207,7 +2237,8 @@ fn execute_remote_local_build(
 
     #[cfg(target_os = "linux")]
     {
-        let rt = tokio::runtime::Builder::new_current_thread()
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(REMOTE_LOCAL_EXECUTOR_THREADS)
             .enable_all()
             .build()
             .map_err(|err| format!("remote-local-executor-runtime: {err}"))?;
@@ -2253,7 +2284,11 @@ async fn execute_remote_local_build_linux(
     let pathinfo_service = store.pathinfo_service();
     let workdir = std::env::temp_dir().join(REMOTE_LOCAL_BUILD_WORKDIR_NAME);
     std::fs::create_dir_all(&workdir).map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
-    let bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
+    let failure_workspace_root = remote_failure_workspace_root(executor, request)?;
+    let mut bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
+    if request.failure_debug_policy.capture.enabled {
+        bwrap_service = bwrap_service.with_failure_workspace_root(failure_workspace_root.clone());
+    }
     let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
     let dispatch = crunch_build::DispatchBuildService::new(fetch_service, bwrap_service);
     let workspace_reports = crunch_build::WorkspaceReportCollector::default();
@@ -2275,8 +2310,43 @@ async fn execute_remote_local_build_linux(
     );
     builder.set_root_retention_source(Some(crunch_store::GcRootSource::Build));
     let build_result = builder.build(&drv_path, &mut known_paths).await;
-    release_remote_execution_workspace(executor, workspace_lease)?;
-    let outcome = build_result.map_err(|err| format!("remote-local-executor-build: {err}"))?;
+    let outcome = match build_result {
+        Ok(outcome) => {
+            release_remote_execution_workspace(executor, workspace_lease)?;
+            outcome
+        }
+        Err(error) => {
+            let debug_ref = publish_remote_worker_failure_debug(executor, request, &failure_workspace_root);
+            let cleanup = cleanup_remote_failure_workspace(&failure_workspace_root);
+            let workspace_release = release_remote_execution_workspace(executor, workspace_lease);
+            let mut message = format!("remote-local-executor-build: {error}");
+            match debug_ref {
+                Ok(Some(debug_ref)) => {
+                    message.push_str("; ");
+                    message.push_str(&debug_ref);
+                }
+                Ok(None) => {}
+                Err(capture_error) => {
+                    let safe_error = crunch_build::distributed::redact_remote_failure_diagnostic(&capture_error)
+                        .unwrap_or_else(|_| "capture-failed".to_string());
+                    message.push_str("; remote-failure-debug-capture-failed:");
+                    message.push_str(&safe_error);
+                }
+            }
+            if let Err(cleanup_error) = cleanup
+                && cleanup_error.kind() != std::io::ErrorKind::NotFound
+            {
+                message.push_str("; remote-failure-workspace-cleanup-degraded");
+            }
+            if let Err(release_error) = workspace_release {
+                let safe_error = crunch_build::distributed::redact_remote_failure_diagnostic(&release_error)
+                    .unwrap_or_else(|_| "workspace-release-failed".to_string());
+                message.push_str("; remote-workspace-release-degraded:");
+                message.push_str(&safe_error);
+            }
+            return Err(message);
+        }
+    };
     remote_execution_outcome_from_build_outcome(request, plan, &outcome)
 }
 
@@ -2362,6 +2432,122 @@ fn release_remote_execution_workspace(
         return Err(format!("remote workspace release rejected: {}", plan.reason.as_str()));
     }
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn remote_failure_workspace_root(
+    executor: &RemoteLocalBuildExecutor,
+    request: &ConcreteBuildRequest,
+) -> Result<PathBuf, String> {
+    let attempt = request
+        .production_attempt
+        .as_ref()
+        .ok_or_else(|| "remote-failure-workspace-attempt-missing".to_string())?;
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "domain", "mantle-remote-failure-workspace-v1");
+    hash_labeled_str(&mut hasher, "request-id", &request.request_id);
+    hash_labeled_str(&mut hasher, "attempt-id", attempt.attempt_id.as_str());
+    hash_labeled_str(&mut hasher, "fence-generation", &attempt.fence_generation.get().to_string());
+    Ok(executor.state_dir.join(REMOTE_FAILURE_WORKSPACE_DIR).join(hasher.finalize().to_hex().as_str()))
+}
+
+#[cfg(target_os = "linux")]
+fn publish_remote_worker_failure_debug(
+    executor: &RemoteLocalBuildExecutor,
+    request: &ConcreteBuildRequest,
+    failure_workspace_root: &Path,
+) -> Result<Option<String>, String> {
+    if !request.failure_debug_policy.capture.enabled {
+        return Ok(None);
+    }
+    let attempt = request
+        .production_attempt
+        .as_ref()
+        .ok_or_else(|| "remote-failure-worker-attempt-missing".to_string())?
+        .clone();
+    let capture_root =
+        sole_retained_failure_workspace(failure_workspace_root)?.map(|workspace| workspace.join("scratches"));
+    let created_unix_s = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "remote-failure-worker-clock-before-epoch".to_string())?
+        .as_secs();
+    let outcome = crate::remote_failure_debug::publish_remote_failure_debug_bundle(
+        crate::remote_failure_debug::RemoteFailureDebugPublishRequest {
+            state_dir: &executor.state_dir,
+            capture_root: capture_root.as_deref(),
+            facts: crate::remote_failure_debug::RemoteFailureDebugSourceFacts {
+                request: request.clone(),
+                attempt,
+                immutable_log: None,
+                route_class: "worker-local-execution".to_string(),
+                worker_capability_classes: vec!["bubblewrap".to_string(), "pre-cleanup-capture".to_string()],
+                sandbox_policy_class: "bubblewrap".to_string(),
+                network_policy_class: "request-policy".to_string(),
+                transfer_status_class: "input-transfer-complete".to_string(),
+                admission_status_class: "not-admitted".to_string(),
+                workspace_mode: crunch_build::distributed::RemoteFailureWorkspaceMode::Ephemeral,
+                failure_phase: crunch_build::distributed::RemoteFailureDebugPhase::Execution,
+                failure_reason_code: "sandbox-build-failed".to_string(),
+                cleanup_status_code: "cleanup-attempted-after-capture".to_string(),
+                created_unix_s,
+            },
+            policy: request.failure_debug_policy.clone(),
+        },
+    )?;
+    Ok(Some(outcome.bundle_ref))
+}
+
+#[cfg(target_os = "linux")]
+fn sole_retained_failure_workspace(root: &Path) -> Result<Option<PathBuf>, String> {
+    let entries = match std::fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("remote-failure-workspace-read-failed:{error}")),
+    };
+    let mut retained = Vec::new();
+    for entry in entries {
+        if retained.len() >= REMOTE_FAILURE_WORKSPACE_SCAN_MAX {
+            return Err("remote-failure-workspace-count-exceeded".to_string());
+        }
+        let path = entry.map_err(|error| format!("remote-failure-workspace-entry-failed:{error}"))?.path();
+        let metadata = std::fs::symlink_metadata(&path)
+            .map_err(|error| format!("remote-failure-workspace-metadata-failed:{error}"))?;
+        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            retained.push(path);
+        }
+    }
+    if retained.len() > 1 {
+        return Err("remote-failure-workspace-ambiguous".to_string());
+    }
+    Ok(retained.pop())
+}
+
+#[cfg(target_os = "linux")]
+fn cleanup_remote_failure_workspace(root: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    if !root.exists() {
+        return Ok(());
+    }
+    let mut pending = vec![root.to_path_buf()];
+    let mut visited = 0_usize;
+    while let Some(path) = pending.pop() {
+        if visited >= REMOTE_FAILURE_CLEANUP_ENTRIES_MAX {
+            return Err(std::io::Error::other("remote failure cleanup entry limit exceeded"));
+        }
+        visited = visited.saturating_add(1);
+        let metadata = std::fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        if metadata.is_dir() {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(REMOTE_FAILURE_CLEANUP_DIRECTORY_MODE))?;
+            pending.extend(std::fs::read_dir(&path)?.filter_map(Result::ok).map(|entry| entry.path()));
+        } else if metadata.is_file() {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(REMOTE_FAILURE_CLEANUP_FILE_MODE))?;
+        }
+    }
+    std::fs::remove_dir_all(root)
 }
 
 fn local_derivation_registry(
@@ -2467,11 +2653,14 @@ pub fn bind_remote_production_dispatch(
     plan: &mut RemoteClientDispatchPlan,
     attempt: RemoteProductionAttemptBinding,
     transfer_policy: RemoteTransferPolicy,
+    failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy,
     state_dir: &Path,
 ) -> Result<(), String> {
     transfer_policy.validate().map_err(|reason| reason.as_str().to_string())?;
+    failure_debug_policy.validate().map_err(|reason| reason.as_str().to_string())?;
     plan.client.request.production_attempt = Some(attempt);
     plan.client.request.transfer_policy = Some(transfer_policy);
+    plan.client.request.failure_debug_policy = failure_debug_policy;
     let mut request_frame_updated = false;
     for frame in &mut plan.command.input_frames {
         if let RemoteFrame::BuildRequest { request } = frame {
@@ -2493,6 +2682,7 @@ pub fn bind_remote_production_dispatch(
     });
     assert!(plan.client.request.production_attempt.is_some());
     assert!(plan.client.request.transfer_policy.is_some());
+    debug_assert!(plan.client.request.failure_debug_policy.validate().is_ok());
     Ok(())
 }
 
@@ -4399,7 +4589,7 @@ fn current_production_attempt_binding(
     })
 }
 
-fn start_remote_production_attempt_if_queued(
+pub fn start_remote_production_attempt_if_queued(
     state: &mut RemoteCoordinatorState,
     binding: &RemoteProductionAttemptBinding,
     now_unix_s: u64,
@@ -5044,6 +5234,7 @@ fn queued_job_summary(
         lost_phase: None,
         immutable_log: None,
         observability_health: None,
+        failure_debug: None,
         short_error: None,
         current_attempt: Some(current_attempt),
         transfer_checkpoint: None,
@@ -6139,6 +6330,7 @@ fn push_status_failure(recent_failures: &mut Vec<RemoteFailureStatus>, job: &Rem
         retry_class: RemoteRetryClass::Terminal,
         short_error: job.short_error.as_deref().map(bounded_untrusted_text),
         attempt_reason_code: job.last_attempt_reason_code,
+        failure_debug: job.failure_debug.clone(),
     });
 }
 
@@ -6218,6 +6410,7 @@ fn coordinator_job_status(
         short_error: job.short_error.as_deref().map(bounded_untrusted_text),
         immutable_log: job.immutable_log.clone(),
         observability_health: job.observability_health.clone(),
+        failure_debug: job.failure_debug.clone(),
         attempt_id: job.current_attempt.as_ref().map(|attempt| attempt.attempt_id.clone()),
         fence_generation: job.current_attempt.as_ref().map(|attempt| attempt.fence_generation),
         attempt_phase: job.current_attempt.as_ref().map(|attempt| attempt.phase),
@@ -7297,6 +7490,34 @@ pub fn plan_remote_ssh_stdio_client_dispatch(
     plan_remote_client_dispatch_for_binding(input, options, RemoteTransportBinding::SshStdio)
 }
 
+pub fn plan_remote_stdio_replay_dispatch(
+    request: ConcreteBuildRequest,
+    options: &RemoteClientBuildOptions,
+) -> Result<RemoteClientDispatchPlan, String> {
+    validate_remote_client_options(options)?;
+    plan_remote_executable_request(&request)?;
+    if request.production_attempt.is_some() || request.transfer_policy.is_some() {
+        return Err("remote-replay-request-stale-authority".to_string());
+    }
+    if request.store_prefix != options.store_prefix {
+        return Err("remote-replay-request-store-prefix-mismatch".to_string());
+    }
+    let client = remote_loopback_client_for_request(request, options);
+    let command = RemoteStdioCommand {
+        binding: RemoteTransportBinding::Stdio,
+        program: options.builder.program.clone(),
+        args: options.builder.args.clone(),
+        input_frames: remote_client_request_frames(&client),
+        timeout_secs: options.build_time_limit_secs,
+        production_transfer: None,
+    };
+    Ok(RemoteClientDispatchPlan {
+        label: "remote-failure-replay".to_string(),
+        command,
+        client,
+    })
+}
+
 fn plan_remote_client_dispatch_for_binding(
     input: RemoteClientDerivationInput,
     options: &RemoteClientBuildOptions,
@@ -7348,6 +7569,7 @@ pub fn concrete_remote_derivation_request(
         transfer_policy: None,
         resource_requirements: None,
         locality_scope: None,
+        failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
     })
 }
 
@@ -8044,6 +8266,50 @@ pub fn complete_remote_production_attempt(
     if applied.disposition != RemoteAttemptApplyDisposition::Applied {
         return Err(applied.reason_code.as_str().to_string());
     }
+    Ok(())
+}
+
+pub fn fail_remote_production_attempt(
+    state: &mut RemoteCoordinatorState,
+    binding: &RemoteProductionAttemptBinding,
+    event_number: u64,
+) -> Result<(), String> {
+    let report = production_attempt_report(binding, "failure", event_number, RemoteAttemptReportPayload::Failure {
+        failure_class: RemoteAttemptFailureClass::Retryable,
+        reason_code: RemoteAttemptReasonCode::RetryAllowed,
+    })?;
+    let applied = apply_coordinator_attempt_report(
+        state,
+        &report,
+        RemoteAttemptAuthorizationFacts {
+            worker_authorized: true,
+            output_admission_authorized: false,
+        },
+        RemoteLogRetentionPolicy::default(),
+    )?;
+    if applied.disposition != RemoteAttemptApplyDisposition::Applied {
+        return Err(applied.reason_code.as_str().to_string());
+    }
+    Ok(())
+}
+
+pub fn record_remote_failure_debug_status(
+    state: &mut RemoteCoordinatorState,
+    binding: &RemoteProductionAttemptBinding,
+    status: RemoteFailureDebugStatus,
+) -> Result<(), String> {
+    let mut candidate = state.clone();
+    let job = candidate
+        .jobs
+        .get_mut(&binding.job_id)
+        .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
+    let current = job.current_attempt.as_ref().ok_or_else(|| "remote-coordinator-attempt-missing".to_string())?;
+    if current.attempt_id != binding.attempt_id || current.fence_generation != binding.fence_generation {
+        return Err(RemoteAttemptReasonCode::StaleReportRejected.as_str().to_string());
+    }
+    job.failure_debug = Some(status);
+    persist_coordinator_candidate(&candidate)?;
+    *state = candidate;
     Ok(())
 }
 
@@ -9729,6 +9995,9 @@ pub fn cmd_remote(
             endpoint_id,
             concurrency,
         } => cmd_remote_status(endpoint_id, concurrency, state_dir, json_output),
+        crate::RemoteAction::Debug { action } => {
+            crate::remote_failure_debug::cmd_remote_failure_debug(action, state_dir, json_output)
+        }
         crate::RemoteAction::Serve {
             endpoint_id,
             binding,
@@ -11056,6 +11325,7 @@ mod tests {
             transfer_policy: None,
             resource_requirements: None,
             locality_scope: None,
+            failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
         };
         assert!(validate_concrete_request(&request, &ticket).is_err());
         redeem_after_queue(&mut ticket, false).unwrap();
@@ -11118,6 +11388,7 @@ mod tests {
             transfer_policy: None,
             resource_requirements: None,
             locality_scope: None,
+            failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
         };
         validate_concrete_request(&request, &ticket).unwrap();
         redeem_after_queue(&mut ticket, true).unwrap();
@@ -13700,6 +13971,15 @@ mod tests {
             lost_phase: Some(RemoteFailurePhase::TransportSetup),
             immutable_log: Some(fixture_log_control_summary(7, 9, true)),
             observability_health: None,
+            failure_debug: Some(RemoteFailureDebugStatus {
+                bundle_ref: format!("remote-failure-debug:{}", "a".repeat(BLAKE3_HEX_LENGTH_CHARS)),
+                capture_outcome_code: "metadata-only".to_string(),
+                cleanup_status_code: "cleanup-complete".to_string(),
+                immutable_log_available: true,
+                non_claim: crunch_build::distributed::REMOTE_FAILURE_DEBUG_NON_CLAIM.to_string(),
+                replay_attempt_identity: None,
+                replay_comparison_class: None,
+            }),
             short_error: Some(format!("diagnostic\u{0007}{}", "x".repeat(MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES))),
             current_attempt: None,
             transfer_checkpoint: None,
@@ -13721,7 +14001,10 @@ mod tests {
         assert_eq!(snapshot.log_cursors[0].next_cursor, 9);
         assert!(snapshot.log_cursors[0].truncated);
         assert!(snapshot.recent_failures[0].short_error.as_ref().unwrap().contains("<truncated>"));
+        assert_eq!(snapshot.recent_failures[0].failure_debug.as_ref().unwrap().capture_outcome_code, "metadata-only");
+        assert!(snapshot.recent_jobs[0].failure_debug.is_some());
         assert!(!rendered.contains('\u{0007}'));
+        assert!(!rendered.contains("/home/"));
         assert_eq!(bounded_untrusted_text("authorization bearer SHOULD_NOT_LEAK"), SECRET_REDACTION);
     }
 
@@ -13967,6 +14250,7 @@ mod tests {
             lost_phase: Some(RemoteFailurePhase::BuildExecution),
             immutable_log: None,
             observability_health: None,
+            failure_debug: None,
             short_error: Some("worker restart lost job".to_string()),
             current_attempt: None,
             transfer_checkpoint: None,
@@ -14341,6 +14625,7 @@ mod tests {
             transfer_policy: None,
             resource_requirements: None,
             locality_scope: None,
+            failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
         }
     }
 

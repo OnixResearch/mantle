@@ -285,6 +285,10 @@ pub struct BubblewrapBuildService<BS, DS> {
     /// Handle to a [DirectoryService], used by filesystems spawned during builds.
     directory_service: DS,
 
+    /// Optional worker-owned root where failed sandboxes are retained before
+    /// an upper-layer diagnostic shell ingests allowlisted evidence.
+    failure_workspace_root: Option<PathBuf>,
+
     // semaphore to track number of concurrently running builds.
     // this is necessary, as otherwise we very quickly run out of open file handles.
     concurrent_builds: tokio::sync::Semaphore,
@@ -299,8 +303,14 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
             workdir,
             blob_service,
             directory_service,
+            failure_workspace_root: None,
             concurrent_builds: tokio::sync::Semaphore::new(2),
         }
+    }
+
+    pub fn with_failure_workspace_root(mut self, failure_workspace_root: PathBuf) -> Self {
+        self.failure_workspace_root = Some(failure_workspace_root);
+        self
     }
 }
 
@@ -397,12 +407,14 @@ where
             } else {
                 format!("nonzero exit code: {}\n{}", outcome.output().status, log)
             };
+            retain_failed_sandbox(sandbox_dir, self.failure_workspace_root.as_deref(), &build_name_str);
             return Err(std::io::Error::other(msg));
         }
 
         let outputs: Vec<_> = request.outputs.iter().filter_map(|o| outcome.find_path(o)).collect();
         if outputs.len() != request.outputs.len() {
             warn!("Not all outputs produced");
+            retain_failed_sandbox(sandbox_dir, self.failure_workspace_root.as_deref(), &build_name_str);
             return Err(std::io::Error::other("Not all outputs produced".to_string()));
         }
         let patterns = ReferencePattern::new(request.refscan_needles);
@@ -452,6 +464,25 @@ where
     }
 }
 
+fn retain_failed_sandbox(sandbox_dir: tempfile::TempDir, root: Option<&Path>, build_name: &str) {
+    let Some(root) = root else {
+        return;
+    };
+    let sandbox_path = sandbox_dir.keep();
+    if let Err(error) = std::fs::create_dir_all(root) {
+        warn!(?error, "failed to create diagnostic failure-workspace root");
+        let _ = std::fs::remove_dir_all(&sandbox_path);
+        return;
+    }
+    let destination = root.join(build_name);
+    if let Err(error) = std::fs::rename(&sandbox_path, &destination) {
+        warn!(?error, "failed to retain diagnostic failure workspace");
+        let _ = std::fs::remove_dir_all(&sandbox_path);
+        return;
+    }
+    info!(failure_workspace = %destination.display(), "retained failed sandbox for bounded diagnostic capture");
+}
+
 #[cfg(test)]
 mod tests {
     use snix_castore::Directory;
@@ -468,6 +499,27 @@ mod tests {
     fn tmp_ds() -> RedbDirectoryService {
         RedbDirectoryService::new_temporary("snix-build-bwrap-tests".to_string(), RedbDirectoryServiceConfig::default())
             .unwrap()
+    }
+
+    #[test]
+    fn failed_sandbox_retention_moves_workspace_only_when_configured() {
+        let root = tempfile::tempdir().unwrap();
+        let sandbox = tempfile::tempdir().unwrap();
+        std::fs::write(sandbox.path().join("trace.json"), b"bounded diagnostic").unwrap();
+        retain_failed_sandbox(sandbox, Some(root.path()), "attempt-a");
+
+        assert_eq!(std::fs::read(root.path().join("attempt-a/trace.json")).unwrap(), b"bounded diagnostic");
+        assert!(root.path().join("attempt-a").is_dir());
+    }
+
+    #[test]
+    fn failed_sandbox_without_retention_root_is_cleaned_by_tempdir_drop() {
+        let sandbox = tempfile::tempdir().unwrap();
+        let path = sandbox.path().to_path_buf();
+        retain_failed_sandbox(sandbox, None, "attempt-b");
+
+        assert!(!path.exists());
+        assert!(!path.is_dir());
     }
 
     async fn insert_blob(bs: &MemoryBlobService, data: &[u8], executable: bool) -> Node {

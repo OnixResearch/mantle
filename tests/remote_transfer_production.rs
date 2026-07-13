@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -21,7 +22,7 @@ const BUILDER_ID: &str = "production-builder";
 const MAX_BUILD_TIME_SECS: u64 = 600;
 const MAX_UPLOAD_BYTES: u64 = 1_073_741_824;
 const REJECTING_UPLOAD_BYTES: u64 = 1;
-const TICKET_USES: u32 = 2;
+const TICKET_USES: u32 = 3;
 const TEST_CREATED_UNIX_S: u64 = 1;
 const TEST_EXPIRES_UNIX_S: u64 = u64::MAX;
 const INPUT_INTERRUPT_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_INPUT_CHUNKS";
@@ -35,10 +36,19 @@ const OTLP_OUTAGE_ENDPOINT: &str = "http://127.0.0.1:9/v1/metrics";
 const OTLP_TEST_TIMEOUT_MS: u32 = 100;
 const MALFORMED_TRACEPARENT_BYTES: usize = 4_096;
 const REMOTE_ATTEMPT_LOG_DIR: &str = "remote-attempt-logs";
+const REMOTE_FAILURE_DEBUG_BUNDLE_DIR: &str = "remote-failure-debug/bundles";
+const EXPECTED_FAILURE_DEBUG_BUNDLES: usize = 1;
 const MAX_DIAGNOSTIC_SCAN_FILES: usize = 4_096;
 const MAX_DIAGNOSTIC_SCAN_BYTES: usize = 1_048_576;
 const MAX_DIAGNOSTIC_JSON_NODES: usize = 65_536;
 const PRIORITY_LIFECYCLE_PREFIX_COUNT: usize = 5;
+const WRONG_BUILDER_KEY: &str = "wrong-builder-key";
+const CAPTURED_TRACE: &str = "bounded-trace-event";
+const DISALLOWED_TRACE: &str = "DO_NOT_CAPTURE";
+const EXPECTED_WORKER_AND_COORDINATOR_BUNDLES: usize = 2;
+const BLAKE3_HEX_CHARS: usize = 64;
+const REJECTING_CAPTURE_FILE_BYTES: u64 = 4;
+const ACCEPTING_CAPTURE_FILE_BYTES: u64 = 4_096;
 
 #[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
@@ -68,6 +78,51 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
     assert!(state_diagnostics_contain(&state_dir, "transfer-cutoff"));
     assert!(!state_diagnostics_contain(&state_dir, "execution-failed"));
     assert!(!state_diagnostics_contain(&state_dir, "output-admitted"));
+    let failure_bundles = failure_debug_bundle_dirs(&state_dir);
+    assert_eq!(failure_bundles.len(), EXPECTED_FAILURE_DEBUG_BUNDLES);
+    let failure_bundle = &failure_bundles[0];
+    let manifest: Value = serde_json::from_slice(&fs::read(failure_bundle.join("manifest.json")).unwrap()).unwrap();
+    let bundle_digest = manifest["bundle_blake3"].as_str().expect("bundle digest");
+    assert_eq!(manifest["failure_phase"], "input-transfer");
+    assert_eq!(manifest["capture_outcome_code"], "metadata-only");
+    assert_eq!(manifest["cleanup_status_code"], "cleanup-not-observed");
+    assert!(manifest["immutable_log"].is_object());
+    let bundle_before_inspect = snapshot_file_tree(failure_bundle);
+    let inspect = Command::new(env!("CARGO_BIN_EXE_mantle"))
+        .args(["--json", "--state-dir"])
+        .arg(&state_dir)
+        .args(["remote", "debug", "inspect", bundle_digest])
+        .output()
+        .expect("inspect failure debug bundle in clean process");
+    assert!(inspect.status.success(), "inspect stderr={}", String::from_utf8_lossy(&inspect.stderr));
+    let inspect_json: Value = serde_json::from_slice(&inspect.stdout).expect("inspect JSON");
+    assert_eq!(inspect_json["bundle_blake3"], bundle_digest);
+    assert_eq!(inspect_json["captured_artifact_count"], 0);
+    let replay_plan = Command::new(env!("CARGO_BIN_EXE_mantle"))
+        .args(["--json", "--state-dir"])
+        .arg(&state_dir)
+        .args(["remote", "debug", "replay-plan", bundle_digest])
+        .output()
+        .expect("plan failure debug replay in clean process");
+    assert!(replay_plan.status.success(), "replay-plan stderr={}", String::from_utf8_lossy(&replay_plan.stderr));
+    let replay_json: Value = serde_json::from_slice(&replay_plan.stdout).expect("replay plan JSON");
+    assert_eq!(replay_json["executable"], false);
+    assert!(replay_json["blockers"].as_array().unwrap().iter().any(|blocker| blocker == "replay-policy-denied"));
+    assert_eq!(snapshot_file_tree(failure_bundle), bundle_before_inspect);
+    let status = Command::new(env!("CARGO_BIN_EXE_mantle"))
+        .args(["--json", "--state-dir"])
+        .arg(&state_dir)
+        .args(["remote", "status"])
+        .output()
+        .expect("render remote failure status");
+    assert!(status.status.success(), "status stderr={}", String::from_utf8_lossy(&status.stderr));
+    let status_json: Value = serde_json::from_slice(&status.stdout).expect("remote status JSON");
+    let failure_debug = &status_json["active_jobs"][0]["failure_debug"];
+    assert_eq!(failure_debug["bundle_ref"], format!("remote-failure-debug:{bundle_digest}"));
+    assert_eq!(failure_debug["capture_outcome_code"], "metadata-only");
+    let status_text = String::from_utf8(status.stdout).unwrap();
+    assert!(!status_text.contains(TICKET_SECRET));
+    assert!(!status_text.contains(root.path().to_str().unwrap()));
     let first_run_checkpoints = transfer_checkpoints(&state_dir);
     let completed_upload = first_run_checkpoints
         .iter()
@@ -203,6 +258,178 @@ fn production_stdio_streams_and_admits_8_mib_output() {
 }
 
 #[test]
+fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_changing_failure_truth() {
+    let root = tempfile::Builder::new()
+        .prefix("failure-debug-capture")
+        .tempdir()
+        .expect("failure debug capture tempdir");
+    let state_dir = root.path().join("state");
+    let store_dir = root.path().join("store");
+    let build_file = root.path().join("remote-failure.ncl");
+    let config = root.path().join("failure-debug.ncl");
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::create_dir_all(&store_dir).unwrap();
+    write_ticket_state(&state_dir);
+    write_failing_capture_derivation(&build_file);
+    write_capture_debug_config(&config);
+
+    let failed = remote_build_command(&state_dir, &store_dir, &build_file)
+        .arg("--remote-observability-config")
+        .arg(&config)
+        .env("CRUNCH_NO_FUSE", "1")
+        .output()
+        .expect("run captured remote sandbox failure");
+    assert!(!failed.status.success());
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(stderr.contains("remote-failure-debug:"), "missing worker bundle ref: {stderr}");
+    assert!(stderr.contains("remote-local-executor-build"), "missing original execution failure: {stderr}");
+    let bundles = recursive_failure_debug_bundle_dirs(&state_dir);
+    assert_eq!(bundles.len(), EXPECTED_WORKER_AND_COORDINATOR_BUNDLES);
+    let capture_outcomes = bundles
+        .iter()
+        .map(|bundle| {
+            let manifest: Value = serde_json::from_slice(&fs::read(bundle.join("manifest.json")).unwrap()).unwrap();
+            manifest["capture_outcome_code"].as_str().unwrap().to_string()
+        })
+        .collect::<Vec<_>>();
+    let captured_bundle = bundles
+        .iter()
+        .find(|bundle| {
+            let manifest: Value = serde_json::from_slice(&fs::read(bundle.join("manifest.json")).unwrap()).unwrap();
+            manifest["capture_outcome_code"] == "captured"
+        })
+        .unwrap_or_else(|| panic!("worker capture bundle missing; outcomes={capture_outcomes:?}; stderr={stderr}"));
+    let manifest: Value = serde_json::from_slice(&fs::read(captured_bundle.join("manifest.json")).unwrap()).unwrap();
+    let worker_bundle_digest = manifest["bundle_blake3"].as_str().unwrap();
+    assert_eq!(worker_bundle_digest.len(), BLAKE3_HEX_CHARS);
+    assert_eq!(manifest["failure_phase"], "execution");
+    assert_eq!(manifest["cleanup_status_code"], "cleanup-attempted-after-capture");
+    let capture_manifest_digest = manifest["captured_artifact_manifest_ref"]["digest_blake3"].as_str().unwrap();
+    let capture_manifest_path = captured_bundle.join("objects").join(format!("{capture_manifest_digest}.json"));
+    let capture_manifest: Value = serde_json::from_slice(&fs::read(capture_manifest_path).unwrap()).unwrap();
+    let artifacts = capture_manifest["payload"]["artifacts"].as_array().unwrap();
+    assert_eq!(artifacts.len(), 1);
+    assert_eq!(artifacts[0]["relative_path"], "build/trace.json");
+    let object_digest = artifacts[0]["object_blake3"].as_str().unwrap();
+    let captured_bytes = fs::read(captured_bundle.join("capture-cas").join(format!("{object_digest}.bin"))).unwrap();
+    assert_eq!(captured_bytes, CAPTURED_TRACE.as_bytes());
+    let all_bundle_bytes = snapshot_file_tree(captured_bundle)
+        .keys()
+        .map(|relative| fs::read(captured_bundle.join(relative)).unwrap())
+        .flatten()
+        .collect::<Vec<_>>();
+    assert!(!String::from_utf8_lossy(&all_bundle_bytes).contains(DISALLOWED_TRACE));
+    let inspect = Command::new(env!("CARGO_BIN_EXE_mantle"))
+        .args(["--json", "--state-dir"])
+        .arg(&state_dir)
+        .args(["remote", "debug", "inspect", worker_bundle_digest])
+        .output()
+        .expect("inspect portable worker capture bundle after cleanup");
+    assert!(inspect.status.success(), "worker inspect stderr={}", String::from_utf8_lossy(&inspect.stderr));
+    let inspect_json: Value = serde_json::from_slice(&inspect.stdout).unwrap();
+    assert_eq!(inspect_json["captured_artifact_count"], 1);
+    assert!(!String::from_utf8(inspect.stdout).unwrap().contains(root.path().to_str().unwrap()));
+    assert!(failure_workspace_directories(&state_dir).is_empty());
+    assert!(fs::read_dir(&store_dir).unwrap().next().is_none());
+}
+
+#[test]
+fn oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure() {
+    let root = tempfile::Builder::new()
+        .prefix("failure-debug-oversized")
+        .tempdir()
+        .expect("oversized failure debug tempdir");
+    let state_dir = root.path().join("state");
+    let store_dir = root.path().join("store");
+    let build_file = root.path().join("remote-failure.ncl");
+    let config = root.path().join("failure-debug.ncl");
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::create_dir_all(&store_dir).unwrap();
+    write_ticket_state(&state_dir);
+    write_failing_capture_derivation(&build_file);
+    write_capture_debug_config_with_file_bytes(&config, REJECTING_CAPTURE_FILE_BYTES);
+
+    let failed = remote_build_command(&state_dir, &store_dir, &build_file)
+        .arg("--remote-observability-config")
+        .arg(&config)
+        .env("CRUNCH_NO_FUSE", "1")
+        .output()
+        .expect("run oversized captured remote sandbox failure");
+    assert!(!failed.status.success());
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(stderr.contains("remote-local-executor-build"));
+    assert!(stderr.contains("remote-failure-debug:"), "stderr={stderr}");
+    let bundles = recursive_failure_debug_bundle_dirs(&state_dir);
+    assert_eq!(bundles.len(), EXPECTED_WORKER_AND_COORDINATOR_BUNDLES);
+    let rejected_bundle = bundles
+        .iter()
+        .find(|bundle| {
+            let manifest: Value = serde_json::from_slice(&fs::read(bundle.join("manifest.json")).unwrap()).unwrap();
+            manifest["capture_outcome_code"] == "capture-rejected"
+        })
+        .expect("oversized capture rejection bundle");
+    assert!(!rejected_bundle.join("capture-cas").read_dir().unwrap().any(|entry| entry.is_ok()));
+    assert!(failure_workspace_directories(&state_dir).is_empty());
+    assert!(fs::read_dir(&store_dir).unwrap().next().is_none());
+}
+
+#[test]
+fn failed_output_admission_replays_under_new_fence_without_rewriting_original_bundle() {
+    let root = tempfile::Builder::new()
+        .prefix("failure-debug-replay")
+        .tempdir()
+        .expect("failure debug replay tempdir");
+    let fixture = setup_production_fixture(root.path(), OUTPUT_BYTES, MAX_UPLOAD_BYTES);
+    let config = root.path().join("failure-debug.ncl");
+    write_failure_debug_config(&config, true);
+
+    let failed = remote_build_command(&fixture.state_dir, &fixture.store_dir, &fixture.build_file)
+        .arg("--remote-observability-config")
+        .arg(&config)
+        .arg("--trusted-builder-key")
+        .arg(WRONG_BUILDER_KEY)
+        .output()
+        .expect("run output-admission failure");
+    assert!(!failed.status.success());
+    let failed_stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(failed_stderr.contains("untrusted-output-key"), "unexpected failure stderr: {failed_stderr}");
+    let bundles = failure_debug_bundle_dirs(&fixture.state_dir);
+    assert_eq!(bundles.len(), EXPECTED_FAILURE_DEBUG_BUNDLES);
+    let bundle_dir = &bundles[0];
+    let manifest_bytes = fs::read(bundle_dir.join("manifest.json")).unwrap();
+    let manifest: Value = serde_json::from_slice(&manifest_bytes).unwrap();
+    let bundle_digest = manifest["bundle_blake3"].as_str().unwrap();
+    let original_attempt_id = manifest["original_attempt_id"].as_str().unwrap();
+    let original_fence = manifest["original_fence_generation"].as_u64().unwrap();
+    assert_eq!(manifest["failure_phase"], "execution");
+
+    let rejected_replay = remote_failure_replay_command(&fixture.state_dir, &fixture.store_dir, bundle_digest)
+        .arg("--trusted-builder-key")
+        .arg(WRONG_BUILDER_KEY)
+        .output()
+        .expect("execute rejected remote failure replay");
+    assert!(!rejected_replay.status.success());
+    assert!(String::from_utf8_lossy(&rejected_replay.stderr).contains("untrusted-output-key"));
+    assert_eq!(fs::read(bundle_dir.join("manifest.json")).unwrap(), manifest_bytes);
+
+    let replay = remote_failure_replay_command(&fixture.state_dir, &fixture.store_dir, bundle_digest)
+        .output()
+        .expect("execute remote failure replay");
+    assert!(replay.status.success(), "replay stderr={}", String::from_utf8_lossy(&replay.stderr));
+    let report: Value = serde_json::from_slice(&replay.stdout).expect("replay report JSON");
+    let replay_identity = report["replay_attempt_identity"].as_str().unwrap();
+    let replay_parts = replay_identity.split(':').collect::<Vec<_>>();
+    assert_eq!(replay_parts.len(), 3);
+    assert_ne!(replay_parts[1], original_attempt_id);
+    assert!(replay_parts[2].parse::<u64>().unwrap() > original_fence);
+    assert_eq!(report["comparison"]["class"], "diverged");
+    assert_eq!(report["original_result_immutable"], true);
+    assert_eq!(report["ordinary_output_admission_applied"], true);
+    assert_eq!(report["admitted_output_count"], 1);
+    assert_eq!(fs::read(bundle_dir.join("manifest.json")).unwrap(), manifest_bytes);
+}
+
+#[test]
 fn production_stdio_exports_prometheus_and_propagates_bounded_trace_context() {
     let root = tempfile::Builder::new()
         .prefix("observability-positive")
@@ -289,6 +516,28 @@ fn setup_production_fixture(root: &Path, output_bytes: usize, max_upload_bytes: 
         store_dir,
         build_file,
     }
+}
+
+fn write_capture_debug_config(path: &Path) {
+    write_capture_debug_config_with_file_bytes(path, ACCEPTING_CAPTURE_FILE_BYTES);
+}
+
+fn write_capture_debug_config_with_file_bytes(path: &Path, file_bytes_max: u64) {
+    let contract = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/remote-builders.ncl");
+    let source = format!(
+        "let remote = import \"{}\" in {{ pools = [], failure_debug = ({{ capture = {{ enabled = true, allowed_relative_paths = [\"build/trace.json\"], sensitivity = 'restricted-diagnostic, file_count_max = 1, total_bytes_max = {file_bytes_max}, file_bytes_max = {file_bytes_max}, depth_max = 4, failure_mode = 'diagnostic-only }} }} | remote.RemoteFailureDebug) }}",
+        contract.display(),
+    );
+    fs::write(path, source).expect("capture debug config");
+}
+
+fn write_failure_debug_config(path: &Path, replay_enabled: bool) {
+    let contract = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/remote-builders.ncl");
+    let source = format!(
+        "let remote = import \"{}\" in {{ pools = [], failure_debug = ({{ replay_enabled = {replay_enabled} }} | remote.RemoteFailureDebug) }}",
+        contract.display(),
+    );
+    fs::write(path, source).expect("failure debug config");
 }
 
 fn write_observability_config(path: &Path, prometheus: Option<&Path>, otlp_endpoint: Option<&str>) {
@@ -389,6 +638,86 @@ fn transfer_checkpoints(state_dir: &Path) -> Vec<CheckpointSummary> {
     checkpoints
 }
 
+fn recursive_failure_debug_bundle_dirs(state_dir: &Path) -> Vec<PathBuf> {
+    let mut pending = vec![state_dir.to_path_buf()];
+    let mut bundles = Vec::new();
+    let mut visited = 0_usize;
+    while let Some(path) = pending.pop() {
+        assert!(visited < MAX_DIAGNOSTIC_SCAN_FILES, "failure debug bundle scan limit exceeded");
+        visited = visited.saturating_add(1);
+        if path.ends_with(REMOTE_FAILURE_DEBUG_BUNDLE_DIR) {
+            bundles.extend(
+                fs::read_dir(&path)
+                    .unwrap()
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path())
+                    .filter(|entry| entry.is_dir()),
+            );
+            continue;
+        }
+        if path.is_dir() {
+            pending.extend(fs::read_dir(path).unwrap().filter_map(Result::ok).map(|entry| entry.path()));
+        }
+    }
+    bundles.sort();
+    bundles
+}
+
+fn failure_workspace_directories(state_dir: &Path) -> Vec<PathBuf> {
+    let mut pending = vec![state_dir.to_path_buf()];
+    let mut workspaces = Vec::new();
+    let mut visited = 0_usize;
+    while let Some(path) = pending.pop() {
+        assert!(visited < MAX_DIAGNOSTIC_SCAN_FILES, "failure workspace scan limit exceeded");
+        visited = visited.saturating_add(1);
+        if path.file_name().is_some_and(|name| name == "remote-failure-workspaces") {
+            workspaces.extend(
+                fs::read_dir(&path)
+                    .unwrap()
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path())
+                    .filter(|entry| entry.is_dir()),
+            );
+            continue;
+        }
+        if path.is_dir() {
+            pending.extend(fs::read_dir(path).unwrap().filter_map(Result::ok).map(|entry| entry.path()));
+        }
+    }
+    workspaces
+}
+
+fn failure_debug_bundle_dirs(state_dir: &Path) -> Vec<PathBuf> {
+    let root = state_dir.join(REMOTE_FAILURE_DEBUG_BUNDLE_DIR);
+    let mut bundles = fs::read_dir(root)
+        .expect("remote failure debug bundle root")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect::<Vec<_>>();
+    bundles.sort();
+    bundles
+}
+
+fn snapshot_file_tree(root: &Path) -> BTreeMap<PathBuf, String> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut snapshot = BTreeMap::new();
+    let mut visited = 0_usize;
+    while let Some(path) = pending.pop() {
+        assert!(visited < MAX_DIAGNOSTIC_SCAN_FILES, "bundle snapshot file limit exceeded");
+        visited = visited.saturating_add(1);
+        if path.is_dir() {
+            pending.extend(fs::read_dir(&path).unwrap().filter_map(Result::ok).map(|entry| entry.path()));
+            continue;
+        }
+        let relative = path.strip_prefix(root).unwrap().to_path_buf();
+        let bytes = fs::read(&path).expect("bundle snapshot file reads");
+        snapshot.insert(relative, blake3::hash(&bytes).to_hex().to_string());
+    }
+    assert!(!snapshot.is_empty());
+    snapshot
+}
+
 fn state_diagnostics_contain(state_dir: &Path, needle: &str) -> bool {
     assert!(!needle.is_empty());
     let mut pending = vec![state_dir.join(REMOTE_ATTEMPT_LOG_DIR)];
@@ -464,6 +793,25 @@ fn read_checkpoint_summary(path: &Path) -> CheckpointSummary {
     }
 }
 
+fn remote_failure_replay_command(state_dir: &Path, store_dir: &Path, bundle_digest: &str) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_mantle"));
+    command.args(["--json", "--state-dir"]).arg(state_dir).arg("--store").arg(store_dir).args([
+        "--store-prefix",
+        STORE_PREFIX,
+        "remote",
+        "debug",
+        "replay",
+        bundle_digest,
+        "--builder",
+        BUILDER_ID,
+        "--ticket",
+        &format!("{TICKET_ID}:{TICKET_SECRET}"),
+        "--remote-build-time-secs",
+        &MAX_BUILD_TIME_SECS.to_string(),
+    ]);
+    command
+}
+
 fn remote_build_command(state_dir: &Path, store_dir: &Path, build_file: &Path) -> Command {
     let mut command = Command::new(assert_cmd::cargo::cargo_bin("mantle"));
     command.args([
@@ -512,6 +860,28 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
     });
     fs::write(ticket_dir.join("tickets.json"), serde_json::to_vec_pretty(&state).expect("ticket state JSON"))
         .expect("ticket state");
+}
+
+fn write_failing_capture_derivation(path: &Path) {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let source = format!(
+        r#"let mantle = import "{}" in
+{{
+  name = "production-remote-failure",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "printf '{}' > trace.json; printf 'DO_NOT_' > secret.txt; printf 'CAPTURE' >> secret.txt; exit 7"],
+  outputs = ["out"],
+  env = {{}},
+  inputs = [],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+        CAPTURED_TRACE,
+    );
+    fs::write(path, source).expect("failing capture derivation");
 }
 
 fn write_fetch_derivation(path: &Path, output_source: &Path) {

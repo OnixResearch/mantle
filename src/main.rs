@@ -114,6 +114,7 @@ const W3C_TRACEPARENT_ENV: &str = "TRACEPARENT";
 const W3C_TRACESTATE_ENV: &str = "TRACESTATE";
 const REMOTE_TEST_INTERRUPT_AFTER_OUTPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS";
 const REMOTE_TRANSFER_INTERRUPTION_REASON_FRAGMENT: &str = "transfer-interrupted-after-checkpoint";
+const REMOTE_FAILURE_REPLAY_LEASE_SECS: u64 = 3_600;
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
@@ -1857,6 +1858,11 @@ pub enum RemoteAction {
         #[arg(long, default_value_t = remote_build::DEFAULT_REMOTE_CONCURRENCY)]
         concurrency: u32,
     },
+    /// Inspect, plan replay, execute replay, or retain remote failure debug bundles
+    Debug {
+        #[command(subcommand)]
+        action: RemoteFailureDebugAction,
+    },
     /// Print remote server protocol metadata or serve one framed stdio session
     Serve {
         /// Builder endpoint id expected by clients
@@ -1883,6 +1889,49 @@ pub enum RemoteAction {
         /// Separate worker execution/CAS state; defaults to the global state directory.
         #[arg(long, hide = true)]
         execution_state_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RemoteFailureDebugAction {
+    /// Validate and render one bounded redacted bundle summary without executing anything
+    Inspect {
+        /// Bundle digest, remote-failure-debug:<digest> reference, or explicit bundle directory
+        bundle: String,
+    },
+    /// Validate and render a side-effect-free replay plan
+    ReplayPlan {
+        /// Bundle digest, remote-failure-debug:<digest> reference, or explicit bundle directory
+        bundle: String,
+    },
+    /// Execute the stored request as a new fenced attempt through ordinary admission
+    Replay {
+        /// Bundle digest, remote-failure-debug:<digest> reference, or explicit bundle directory
+        bundle: String,
+        /// Remote builder endpoint id
+        #[arg(long)]
+        builder: String,
+        /// Bearer ticket as <ticket-id>:<secret>
+        #[arg(long)]
+        ticket: String,
+        /// Program to spawn for stdio dispatch; defaults to this Mantle binary
+        #[arg(long)]
+        builder_program: Option<PathBuf>,
+        /// Argument passed to --builder-program; repeat for multiple arguments
+        #[arg(long = "builder-arg")]
+        builder_args: Vec<String>,
+        /// Trusted remote builder signing key name; repeat for multiple keys
+        #[arg(long = "trusted-builder-key")]
+        trusted_builder_keys: Vec<String>,
+        /// Replay build-time limit in seconds
+        #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_BUILD_TIME_SECS)]
+        remote_build_time_secs: u64,
+    },
+    /// Delete only expired unleased remote failure debug roots
+    Gc {
+        /// Retention decision time; defaults to the current Unix timestamp
+        #[arg(long)]
+        now_unix_s: Option<u64>,
     },
 }
 
@@ -2500,6 +2549,12 @@ fn remote_command_label(action: &RemoteAction) -> &'static str {
     match action {
         RemoteAction::Ticket { action } => remote_ticket_command_label(action),
         RemoteAction::Status { .. } => "remote.status",
+        RemoteAction::Debug { action } => match action {
+            RemoteFailureDebugAction::Inspect { .. } => "remote.debug.inspect",
+            RemoteFailureDebugAction::ReplayPlan { .. } => "remote.debug.replay-plan",
+            RemoteFailureDebugAction::Replay { .. } => "remote.debug.replay",
+            RemoteFailureDebugAction::Gc { .. } => "remote.debug.gc",
+        },
         RemoteAction::Serve { .. } => "remote.serve",
     }
 }
@@ -2795,9 +2850,30 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             ctx.json,
             unix_time_now_s()?,
         ),
-        Command::Remote { action } => {
-            remote_build::cmd_remote(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
-        }
+        Command::Remote { action } => match action.clone() {
+            RemoteAction::Debug {
+                action:
+                    RemoteFailureDebugAction::Replay {
+                        bundle,
+                        builder,
+                        ticket,
+                        builder_program,
+                        builder_args,
+                        trusted_builder_keys,
+                        remote_build_time_secs,
+                    },
+            } => cmd_remote_failure_debug_replay(
+                &bundle,
+                &builder,
+                &ticket,
+                builder_program.as_deref(),
+                &builder_args,
+                &trusted_builder_keys,
+                remote_build_time_secs,
+                &ctx,
+            ),
+            other => remote_build::cmd_remote(other, &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json),
+        },
         Command::Artifact { action } => {
             artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)
         }
@@ -3549,6 +3625,7 @@ struct RemoteBuildSelection {
     worker_concurrency: u32,
     resource_inventory: Option<crunch_build::distributed::RemoteWorkerResourceInventory>,
     telemetry: remote_telemetry_export::RemoteTelemetryExportConfig,
+    failure_debug: crunch_build::distributed::RemoteFailureDebugPolicy,
     trace_context: Option<remote_trace_context::RemoteTraceContext>,
     trace_health: remote_trace_context::RemoteTraceContextHealth,
 }
@@ -3644,6 +3721,7 @@ fn remote_build_selection(
         worker_concurrency,
         resource_inventory,
         telemetry: farm_config.telemetry,
+        failure_debug: farm_config.failure_debug,
         trace_context,
         trace_health,
     }))
@@ -3786,10 +3864,270 @@ fn run_remote_build_dispatches(
     rt.block_on(run_remote_build_dispatches_async(selection, inputs, output_dir, state_dir, store_prefix))
 }
 
+#[allow(clippy::too_many_arguments)]
+fn cmd_remote_failure_debug_replay(
+    bundle_selector: &str,
+    builder: &str,
+    ticket: &str,
+    builder_program: Option<&Path>,
+    builder_args: &[String],
+    trusted_builder_keys: &[String],
+    build_time_limit_secs: u64,
+    ctx: &RunContext,
+) -> Result<(), RunError> {
+    let bundle_dir = remote_failure_debug::resolve_bundle_selector(&ctx.resolved_state_dir, bundle_selector)?;
+    let (bundle, policy) =
+        remote_failure_debug::load_and_validate_remote_failure_debug_bundle(&bundle_dir).map_err(RunError::Internal)?;
+    let now_unix_s = unix_time_now_s()?;
+    let _lease = remote_failure_debug::acquire_remote_failure_debug_lease(
+        &bundle_dir,
+        now_unix_s,
+        REMOTE_FAILURE_REPLAY_LEASE_SECS,
+    )
+    .map_err(RunError::Internal)?;
+    let request = remote_failure_debug::load_remote_failure_replay_request(&bundle_dir).map_err(RunError::Internal)?;
+    let parsed_ticket = remote_build::parse_remote_ticket_credential(ticket).map_err(RunError::Internal)?;
+    let (program, args) = remote_stdio_builder_command(builder, builder_program, builder_args, ctx)?;
+    let trusted_output_keys = remote_trusted_builder_keys(trusted_builder_keys, builder_program, builder, ctx)?;
+    let options = remote_build::RemoteClientBuildOptions {
+        store_prefix: ctx.store_prefix.clone(),
+        ticket: parsed_ticket,
+        builder: remote_build::RemoteStdioBuilderCommand {
+            endpoint_id: builder.to_string(),
+            program,
+            args,
+        },
+        trusted_output_keys,
+        now_unix_s,
+        build_time_limit_secs,
+        client_endpoint: None,
+        transfer_capabilities: remote_build::RemoteTransferCapabilities::full_only().with_streaming(),
+    };
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|error| RunError::Internal(format!("remote failure replay tokio runtime: {error}")))?;
+    let result = rt.block_on(run_remote_failure_debug_replay_async(
+        bundle,
+        policy,
+        request,
+        options,
+        &ctx.store,
+        &ctx.resolved_state_dir,
+        &ctx.store_prefix,
+    ))?;
+    if ctx.json {
+        println!(
+            "{}",
+            serde_json::to_string(&result).map_err(|error| {
+                RunError::Internal(format!("serializing remote failure replay report: {error}"))
+            })?
+        );
+    } else {
+        println!("source-bundle: {}", result["source_bundle_blake3"].as_str().unwrap_or("invalid"));
+        println!("replay-attempt: {}", result["replay_attempt_identity"].as_str().unwrap_or("invalid"));
+        println!("comparison: {}", result["comparison"]["class"].as_str().unwrap_or("invalid"));
+        println!("output-count: {}", result["admitted_output_count"].as_u64().unwrap_or(0));
+    }
+    Ok(())
+}
+
+async fn run_remote_failure_debug_replay_async(
+    bundle: crunch_build::distributed::RemoteFailureDebugBundle,
+    policy: crunch_build::distributed::RemoteFailureDebugPolicy,
+    request: remote_build::ConcreteBuildRequest,
+    options: remote_build::RemoteClientBuildOptions,
+    output_dir: &Path,
+    state_dir: &Path,
+    store_prefix: &str,
+) -> Result<serde_json::Value, RunError> {
+    if request.store_prefix != store_prefix {
+        return Err(RunError::Internal("remote failure replay store-prefix mismatch".to_string()));
+    }
+    let _coordinator_mutation_guard =
+        remote_build::acquire_remote_coordinator_mutation_guard(state_dir).map_err(RunError::Internal)?;
+    let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        state_dir: state_dir.to_path_buf(),
+        output_dir: output_dir.to_path_buf(),
+        remote_cache_urls: Vec::new(),
+        fallback_mode: crunch_store::StoreFallbackMode::Practical,
+        store_dir: store_prefix.to_string(),
+        base_state_dirs: Vec::new(),
+    })
+    .await
+    .map_err(|error| RunError::Internal(format!("opening replay store: {error}")))?;
+    let mut coordinator = remote_build::load_coordinator_state(state_dir)?;
+    let retry_policy = crunch_build::distributed::RemoteAttemptRetryPolicy::default();
+    let failure_observed_unix_s = options.now_unix_s.saturating_sub(retry_policy.retry_delay_secs);
+    let overall_deadline_unix_s = options
+        .now_unix_s
+        .checked_add(retry_policy.attempt_timeout_secs)
+        .ok_or_else(|| RunError::Internal("remote failure replay deadline overflow".to_string()))?;
+    let decision = remote_build::reassign_coordinator_attempt(
+        &mut coordinator,
+        &bundle.original_job_id,
+        &options.builder.endpoint_id,
+        crunch_build::distributed::RemoteAttemptFailureClass::Retryable,
+        retry_policy,
+        crunch_build::distributed::RemoteAttemptTimeFacts {
+            now_unix_s: options.now_unix_s,
+            failure_observed_unix_s,
+            overall_deadline_unix_s,
+        },
+    )
+    .map_err(|error| RunError::Internal(format!("remote failure replay assignment: {error}")))?;
+    let remote_build::RemoteCoordinatorDispatchDecision::Dispatch {
+        job_id,
+        attempt_id,
+        fence_generation,
+        ..
+    } = decision
+    else {
+        return Err(RunError::Internal("remote failure replay did not receive dispatch authority".to_string()));
+    };
+    let attempt = remote_build::RemoteProductionAttemptBinding {
+        job_id,
+        attempt_id,
+        fence_generation,
+    };
+    remote_build::start_remote_production_attempt_if_queued(&mut coordinator, &attempt, options.now_unix_s)
+        .map_err(|error| RunError::Internal(format!("remote failure replay start: {error}")))?;
+    let mut dispatch =
+        remote_build::plan_remote_stdio_replay_dispatch(request, &options).map_err(RunError::Internal)?;
+    remote_build::bind_remote_production_dispatch(
+        &mut dispatch,
+        attempt.clone(),
+        crunch_build::distributed::RemoteTransferPolicy::default(),
+        policy,
+        state_dir,
+    )
+    .map_err(RunError::Internal)?;
+    let replay_request = dispatch.client.request.clone();
+    remote_build::prepare_remote_production_input_transfer(&store, &mut dispatch.command, &replay_request, state_dir)
+        .await
+        .map_err(|error| RunError::Internal(format!("remote failure replay input transfer: {error}")))?;
+    let transcript = match remote_build::run_stdio_remote_child(&dispatch.command) {
+        Ok(transcript) => transcript,
+        Err(error) => {
+            let _failure = remote_build::fail_remote_production_attempt(
+                &mut coordinator,
+                &attempt,
+                options.now_unix_s.saturating_add(1),
+            );
+            return Err(error);
+        }
+    };
+    let admission = match remote_build::admit_fenced_remote_stdio_output(
+        &mut coordinator,
+        &attempt,
+        true,
+        &replay_request,
+        &dispatch.client.trusted_output_keys,
+        &transcript,
+        options.now_unix_s,
+    ) {
+        Ok(admission) => admission,
+        Err(error) => {
+            let _failure = remote_build::fail_remote_production_attempt(
+                &mut coordinator,
+                &attempt,
+                options.now_unix_s.saturating_add(1),
+            );
+            return Err(RunError::Internal(format!("remote failure replay output admission: {error}")));
+        }
+    };
+    let import_report = remote_build::import_admitted_remote_stdio_outputs(
+        &mut store,
+        &replay_request,
+        &admission,
+        &transcript,
+        true,
+        Some(crunch_store::GcRootSource::Build),
+    )
+    .await
+    .map_err(|error| RunError::Internal(format!("remote failure replay output import: {error}")))?;
+    remote_build::complete_remote_production_attempt(
+        &mut coordinator,
+        &attempt,
+        &admission.output_digest_blake3,
+        options.now_unix_s.saturating_add(1),
+    )
+    .map_err(|error| RunError::Internal(format!("remote failure replay completion: {error}")))?;
+    let comparison = compare_completed_remote_failure_replay(&bundle, &admission)?;
+    let attempt_identity =
+        format!("{}:{}:{}", attempt.job_id.as_str(), attempt.attempt_id.as_str(), attempt.fence_generation.get());
+    let status = remote_build::RemoteFailureDebugStatus {
+        bundle_ref: format!("remote-failure-debug:{}", bundle.bundle_blake3.as_str()),
+        capture_outcome_code: bundle.capture_outcome_code.clone(),
+        cleanup_status_code: bundle.cleanup_status_code.clone(),
+        immutable_log_available: bundle.immutable_log.is_some(),
+        non_claim: crunch_build::distributed::REMOTE_FAILURE_DEBUG_NON_CLAIM.to_string(),
+        replay_attempt_identity: Some(attempt_identity.clone()),
+        replay_comparison_class: Some(format!("{:?}", comparison.class).to_ascii_lowercase()),
+    };
+    remote_build::record_remote_failure_debug_status(&mut coordinator, &attempt, status).map_err(RunError::Internal)?;
+    Ok(serde_json::json!({
+        "schema": "mantle-remote-failure-replay-report-v1",
+        "source_bundle_blake3": bundle.bundle_blake3,
+        "replay_attempt_identity": attempt_identity,
+        "admitted_output_digest_blake3": admission.output_digest_blake3,
+        "admitted_output_count": import_report.outputs.len(),
+        "comparison": comparison,
+        "original_result_immutable": true,
+        "ordinary_output_admission_applied": true,
+        "non_claim": crunch_build::distributed::REMOTE_FAILURE_DEBUG_NON_CLAIM,
+    }))
+}
+
+fn compare_completed_remote_failure_replay(
+    bundle: &crunch_build::distributed::RemoteFailureDebugBundle,
+    admission: &remote_build::RemoteOutputAdmissionReport,
+) -> Result<crunch_build::distributed::RemoteFailureReplayComparison, RunError> {
+    let original_log = bundle
+        .immutable_log
+        .as_ref()
+        .and_then(|log| log.head_record_blake3.as_ref())
+        .map(|digest| crunch_build::distributed::RemoteFailureDebugDigest::new(digest.as_str().to_string()))
+        .transpose()
+        .map_err(|reason| RunError::Internal(reason.as_str().to_string()))?;
+    let replay_output =
+        crunch_build::distributed::RemoteFailureDebugDigest::new(admission.output_digest_blake3.clone())
+            .map_err(|reason| RunError::Internal(reason.as_str().to_string()))?;
+    crunch_build::distributed::compare_remote_failure_replay(
+        &crunch_build::distributed::RemoteFailureExecutionSummary {
+            failure_phase: Some(bundle.failure_phase),
+            failure_reason_code: Some(bundle.failure_reason_code.clone()),
+            exit_status_class: "failure".to_string(),
+            admitted_output_digests: Vec::new(),
+            log_head_blake3: original_log,
+            captured_manifest_blake3: bundle
+                .captured_artifact_manifest_ref
+                .as_ref()
+                .map(|reference| reference.digest_blake3.clone()),
+        },
+        &crunch_build::distributed::RemoteFailureExecutionSummary {
+            failure_phase: None,
+            failure_reason_code: None,
+            exit_status_class: "success".to_string(),
+            admitted_output_digests: vec![replay_output],
+            log_head_blake3: None,
+            captured_manifest_blake3: None,
+        },
+    )
+    .map_err(|reason| RunError::Internal(reason.as_str().to_string()))
+}
+
 #[derive(Debug)]
 struct RemoteFailureObservabilityOutcome {
     immutable_log: Result<remote_build::RemoteAttemptLogControlSummary, String>,
     exporters: remote_telemetry_export::RemoteTelemetryExportReport,
+    failure_debug: Option<Result<remote_failure_debug::RemoteFailureDebugPublishOutcome, String>>,
+    attempt_failure: Option<Result<(), String>>,
+}
+
+struct RemoteFailureDebugEmissionContext<'a> {
+    policy: &'a crunch_build::distributed::RemoteFailureDebugPolicy,
+    request: &'a remote_build::ConcreteBuildRequest,
+    route_class: &'a str,
+    created_unix_s: u64,
 }
 
 fn remote_protocol_failure_fact(reason: &str) -> remote_build::RemoteProductionTelemetryFact {
@@ -3810,6 +4148,7 @@ fn record_remote_failure_observability(
     attempt: &remote_build::RemoteProductionAttemptBinding,
     telemetry: &mut crunch_build::distributed::RemoteTelemetryBuffer,
     fact: remote_build::RemoteProductionTelemetryFact,
+    debug_context: Option<RemoteFailureDebugEmissionContext<'_>>,
 ) -> RemoteFailureObservabilityOutcome {
     assert!(matches!(
         fact,
@@ -3826,10 +4165,114 @@ fn record_remote_failure_observability(
         remote_build::append_remote_production_observability_log(coordinator, attempt, telemetry)
     };
     let exporters = remote_telemetry_export::export_remote_telemetry(export_config, &telemetry.events);
+    let failure_debug = debug_context.map(|context| {
+        let result = publish_remote_failure_debug_observability(
+            state_dir,
+            attempt,
+            immutable_log.as_ref().ok().cloned(),
+            fact,
+            context,
+        );
+        if let Ok(outcome) = &result {
+            let status = remote_build::RemoteFailureDebugStatus {
+                bundle_ref: outcome.bundle_ref.clone(),
+                capture_outcome_code: outcome.capture_outcome_code.clone(),
+                cleanup_status_code: outcome.cleanup_status_code.clone(),
+                immutable_log_available: outcome.immutable_log_available,
+                non_claim: outcome.non_claim.clone(),
+                replay_attempt_identity: None,
+                replay_comparison_class: None,
+            };
+            let _diagnostic_status = remote_build::record_remote_failure_debug_status(coordinator, attempt, status);
+        }
+        result
+    });
+    let attempt_failure = if matches!(
+        fact,
+        remote_build::RemoteProductionTelemetryFact::StaleFenceRejected
+            | remote_build::RemoteProductionTelemetryFact::TransferCutoff { accepted: false }
+    ) {
+        None
+    } else {
+        Some(remote_build::fail_remote_production_attempt(
+            coordinator,
+            attempt,
+            telemetry.accepted_events.saturating_add(1),
+        ))
+    };
     debug_assert!(telemetry.accepted_events >= accepted_events_before);
     RemoteFailureObservabilityOutcome {
         immutable_log,
         exporters,
+        failure_debug,
+        attempt_failure,
+    }
+}
+
+fn annotate_remote_failure_error(error: RunError, observability: &RemoteFailureObservabilityOutcome) -> RunError {
+    let Some(Ok(debug)) = observability.failure_debug.as_ref() else {
+        return error;
+    };
+    RunError::Internal(format!(
+        "{error}; bundle_ref={}; capture_outcome={}; cleanup_status={}; immutable_log_available={}; non_claim={}",
+        debug.bundle_ref,
+        debug.capture_outcome_code,
+        debug.cleanup_status_code,
+        debug.immutable_log_available,
+        debug.non_claim,
+    ))
+}
+
+fn publish_remote_failure_debug_observability(
+    state_dir: &Path,
+    attempt: &remote_build::RemoteProductionAttemptBinding,
+    immutable_log: Option<remote_build::RemoteAttemptLogControlSummary>,
+    fact: remote_build::RemoteProductionTelemetryFact,
+    context: RemoteFailureDebugEmissionContext<'_>,
+) -> Result<remote_failure_debug::RemoteFailureDebugPublishOutcome, String> {
+    let (failure_phase, failure_reason_code, transfer_status_class, admission_status_class) =
+        remote_failure_debug_fact_classes(fact);
+    remote_failure_debug::publish_remote_failure_debug_bundle(remote_failure_debug::RemoteFailureDebugPublishRequest {
+        state_dir,
+        capture_root: None,
+        facts: remote_failure_debug::RemoteFailureDebugSourceFacts {
+            request: context.request.clone(),
+            attempt: attempt.clone(),
+            immutable_log,
+            route_class: context.route_class.to_string(),
+            worker_capability_classes: vec!["fenced-output-admission".to_string(), "framed-stdio".to_string()],
+            sandbox_policy_class: "remote-builder-policy".to_string(),
+            network_policy_class: "remote-builder-policy".to_string(),
+            transfer_status_class: transfer_status_class.to_string(),
+            admission_status_class: admission_status_class.to_string(),
+            workspace_mode: crunch_build::distributed::RemoteFailureWorkspaceMode::Ephemeral,
+            failure_phase,
+            failure_reason_code: failure_reason_code.to_string(),
+            cleanup_status_code: "cleanup-not-observed".to_string(),
+            created_unix_s: context.created_unix_s,
+        },
+        policy: context.policy.clone(),
+    })
+}
+
+fn remote_failure_debug_fact_classes(
+    fact: remote_build::RemoteProductionTelemetryFact,
+) -> (crunch_build::distributed::RemoteFailureDebugPhase, &'static str, &'static str, &'static str) {
+    use crunch_build::distributed::RemoteFailureDebugPhase;
+    match fact {
+        remote_build::RemoteProductionTelemetryFact::StaleFenceRejected => {
+            (RemoteFailureDebugPhase::OutputAdmission, "stale-fence-rejected", "not-available", "rejected")
+        }
+        remote_build::RemoteProductionTelemetryFact::ExecutionFailed => {
+            (RemoteFailureDebugPhase::Execution, "execution-failed", "complete", "not-admitted")
+        }
+        remote_build::RemoteProductionTelemetryFact::OutputRejected => {
+            (RemoteFailureDebugPhase::OutputAdmission, "output-rejected", "complete", "rejected")
+        }
+        remote_build::RemoteProductionTelemetryFact::TransferCutoff { accepted: false } => {
+            (RemoteFailureDebugPhase::InputTransfer, "transfer-cutoff", "interrupted", "not-available")
+        }
+        _ => (RemoteFailureDebugPhase::Route, "unsupported-failure-fact", "not-available", "not-available"),
     }
 }
 
@@ -3926,6 +4369,7 @@ async fn run_remote_build_dispatches_async(
             &mut plan,
             attempt.clone(),
             crunch_build::distributed::RemoteTransferPolicy::default(),
+            selection.failure_debug.clone(),
             state_dir,
         )
         .map_err(|err| RunError::Internal(format!("remote production transfer binding failed: {err}")))?;
@@ -3965,7 +4409,7 @@ async fn run_remote_build_dispatches_async(
             Ok(transcript) => transcript,
             Err(error) => {
                 let failure_fact = remote_protocol_failure_fact(&error.to_string());
-                let _failure_observability = record_remote_failure_observability(
+                let failure_observability = record_remote_failure_observability(
                     &selection.telemetry,
                     telemetry_policy,
                     state_dir,
@@ -3973,8 +4417,14 @@ async fn run_remote_build_dispatches_async(
                     &attempt,
                     &mut telemetry,
                     failure_fact,
+                    Some(RemoteFailureDebugEmissionContext {
+                        policy: &selection.failure_debug,
+                        request: &request,
+                        route_class: &selection.options.builder.endpoint_id,
+                        created_unix_s: selection.options.now_unix_s,
+                    }),
                 );
-                return Err(error);
+                return Err(annotate_remote_failure_error(error, &failure_observability));
             }
         };
         for event in &transcript.telemetry.events {
@@ -3991,7 +4441,7 @@ async fn run_remote_build_dispatches_async(
         ) {
             Ok(admission) => admission,
             Err(error) => {
-                let _failure_observability = record_remote_failure_observability(
+                let failure_observability = record_remote_failure_observability(
                     &selection.telemetry,
                     telemetry_policy,
                     state_dir,
@@ -3999,8 +4449,17 @@ async fn run_remote_build_dispatches_async(
                     &attempt,
                     &mut telemetry,
                     remote_build::RemoteProductionTelemetryFact::OutputRejected,
+                    Some(RemoteFailureDebugEmissionContext {
+                        policy: &selection.failure_debug,
+                        request: &request,
+                        route_class: &selection.options.builder.endpoint_id,
+                        created_unix_s: selection.options.now_unix_s,
+                    }),
                 );
-                return Err(RunError::Internal(format!("remote output import admission failed: {error}")));
+                return Err(annotate_remote_failure_error(
+                    RunError::Internal(format!("remote output import admission failed: {error}")),
+                    &failure_observability,
+                ));
             }
         };
         let import_report = remote_build::import_admitted_remote_stdio_outputs(
@@ -5807,6 +6266,7 @@ mod tests {
                 &attempt,
                 &mut telemetry,
                 fact,
+                None,
             )
         })
         .collect::<Vec<_>>();
