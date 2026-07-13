@@ -397,10 +397,7 @@ pub async fn prepare_nar_node_transfer_artifact(
     let mut file = tokio::fs::File::create(&path)
         .await
         .map_err(|err| format!("creating NAR spool {}: {err}", path.display()))?;
-    store
-        .render_nar(node, &mut file)
-        .await
-        .map_err(|err| format!("rendering transfer NAR: {err}"))?;
+    store.render_nar(node, &mut file).await.map_err(|err| format!("rendering transfer NAR: {err}"))?;
     file.flush().await.map_err(|err| format!("flushing NAR spool: {err}"))?;
     drop(file);
     let nar_sha256_hex = hash_file_sha256_hex(&path)?;
@@ -743,10 +740,8 @@ pub fn begin_remote_transfer_receive(
         previous.as_ref().map(|state| &state.checkpoint),
     )
     .map_err(reason)?;
-    let last_progress_step = previous
-        .as_ref()
-        .map(|state| state.lease.last_progress_step)
-        .unwrap_or(INITIAL_PROGRESS_STEP);
+    let last_progress_step =
+        previous.as_ref().map(|state| state.lease.last_progress_step).unwrap_or(INITIAL_PROGRESS_STEP);
     let credit = RemoteTransferCreditState {
         acknowledged_chunk_digests: resume.acknowledged_chunk_digests,
         transferred_bytes: resume.transferred_bytes,
@@ -795,10 +790,7 @@ impl RemoteTransferReceiveSession {
 
     /// Validate exact demand and receiver capacity before advertising one
     /// byte/chunk grant to the sender.
-    pub fn credit_for_chunk(
-        &self,
-        missing: &RemoteTransferChunkDemand,
-    ) -> Result<RemoteTransferCreditGrant, String> {
+    pub fn credit_for_chunk(&self, missing: &RemoteTransferChunkDemand) -> Result<RemoteTransferCreditGrant, String> {
         if !self.demand.missing_chunks.iter().any(|candidate| candidate == missing) {
             return Err(reason(RemoteTransferReasonCode::ChunkNotDemanded));
         }
@@ -1213,10 +1205,7 @@ pub fn remote_transfer_receiver_root(state_dir: &Path, session: &RemoteTransferS
 
 /// Resolve one assembled receiver artifact without exposing the hashed spool
 /// layout to protocol callers.
-pub fn remote_transfer_received_artifact_path(
-    receiver_root: &Path,
-    artifact_id: &RemoteTransferArtifactId,
-) -> PathBuf {
+pub fn remote_transfer_received_artifact_path(receiver_root: &Path, artifact_id: &RemoteTransferArtifactId) -> PathBuf {
     receiver_artifact_path(receiver_root, artifact_id)
 }
 
@@ -1361,12 +1350,7 @@ fn transfer_lease_from_manifest(
     Ok(RemoteTransferLease {
         schema: REMOTE_TRANSFER_LEASE_SCHEMA.to_string(),
         scope: scope.clone(),
-        artifact_ids: manifest
-            .manifest
-            .artifacts
-            .iter()
-            .map(|artifact| artifact.artifact_id.clone())
-            .collect(),
+        artifact_ids: manifest.manifest.artifacts.iter().map(|artifact| artifact.artifact_id.clone()).collect(),
         expires_unix_s: options.lease_expires_unix_s,
         last_progress_step: INITIAL_PROGRESS_STEP,
     })
@@ -1694,10 +1678,7 @@ fn open_new_file_no_follow(path: &Path, read: bool) -> std::io::Result<File> {
 fn open_regular_file_no_follow(path: &Path, purpose: &str) -> Result<Option<File>, String> {
     use std::os::unix::fs::OpenOptionsExt;
 
-    let result = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(path);
+    let result = OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC).open(path);
     finish_regular_file_open(result, path, purpose)
 }
 
@@ -1714,17 +1695,14 @@ fn open_regular_file_no_follow(path: &Path, purpose: &str) -> Result<Option<File
     finish_regular_file_open(File::open(path), path, purpose)
 }
 
-fn finish_regular_file_open(
-    result: std::io::Result<File>,
-    path: &Path,
-    purpose: &str,
-) -> Result<Option<File>, String> {
+fn finish_regular_file_open(result: std::io::Result<File>, path: &Path, purpose: &str) -> Result<Option<File>, String> {
     let file = match result {
         Ok(file) => file,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("opening {purpose} without symlink following {}: {error}", path.display())),
     };
-    let metadata = file.metadata().map_err(|error| format!("reading {purpose} metadata {}: {error}", path.display()))?;
+    let metadata =
+        file.metadata().map_err(|error| format!("reading {purpose} metadata {}: {error}", path.display()))?;
     if !metadata.is_file() {
         return Err(format!("{purpose} is not a regular file: {}", path.display()));
     }
@@ -1771,7 +1749,9 @@ fn sync_parent_directory_no_follow(parent: &Path) -> Result<(), String> {
     if !metadata.is_dir() {
         return Err(format!("atomic parent is not a directory: {}", parent.display()));
     }
-    directory.sync_all().map_err(|error| format!("syncing atomic parent {}: {error}", parent.display()))?;
+    directory
+        .sync_all()
+        .map_err(|error| format!("syncing atomic parent {}: {error}", parent.display()))?;
     assert!(metadata.is_dir());
     assert!(parent.file_name().is_some() || parent.parent().is_none());
     Ok(())
@@ -1782,7 +1762,8 @@ fn sync_parent_directory_no_follow(parent: &Path) -> Result<(), String> {
     if fs::symlink_metadata(parent).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
         return Err(format!("atomic parent symlink rejected: {}", parent.display()));
     }
-    let directory = File::open(parent).map_err(|error| format!("opening atomic parent {}: {error}", parent.display()))?;
+    let directory =
+        File::open(parent).map_err(|error| format!("opening atomic parent {}: {error}", parent.display()))?;
     let metadata = directory
         .metadata()
         .map_err(|error| format!("reading atomic parent metadata {}: {error}", parent.display()))?;
@@ -2210,13 +2191,9 @@ mod tests {
         fs::remove_file(&checkpoint).unwrap();
         symlink(&checkpoint_victim, &checkpoint).unwrap();
 
-        let checkpoint_error = load_remote_transfer_state(
-            &state_dir,
-            &scope,
-            RemoteTransferPolicy::default(),
-            TEST_NOW_UNIX_S,
-        )
-        .unwrap_err();
+        let checkpoint_error =
+            load_remote_transfer_state(&state_dir, &scope, RemoteTransferPolicy::default(), TEST_NOW_UNIX_S)
+                .unwrap_err();
         assert!(checkpoint_error.contains("without symlink following"));
         assert_eq!(fs::read(&checkpoint_victim).unwrap(), checkpoint_bytes);
 
@@ -2255,12 +2232,8 @@ mod tests {
         fs::rename(&chunk, &victim).unwrap();
         symlink(&victim, &chunk).unwrap();
 
-        let error = probe_remote_transfer_receiver(
-            &receiver,
-            &prepared.manifest,
-            admitted_options(None).admission,
-        )
-        .unwrap_err();
+        let error = probe_remote_transfer_receiver(&receiver, &prepared.manifest, admitted_options(None).admission)
+            .unwrap_err();
         assert!(error.contains("without symlink following"));
         assert!(victim.is_file());
     }
@@ -2292,8 +2265,8 @@ mod tests {
 
         let other = root.path().join("other");
         fs::write(&other, b"different-inode").unwrap();
-        let race_error = verify_same_published_file(&fs::metadata(&target).unwrap(), &fs::metadata(&other).unwrap())
-            .unwrap_err();
+        let race_error =
+            verify_same_published_file(&fs::metadata(&target).unwrap(), &fs::metadata(&other).unwrap()).unwrap_err();
         assert_eq!(race_error, "atomic destination changed during publication");
 
         let real_parent = root.path().join("real-parent");
@@ -2309,8 +2282,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("growing-checkpoint");
         let file = File::create(&path).unwrap();
-        file.set_len(MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD.saturating_add(1))
-            .unwrap();
+        file.set_len(MAX_REMOTE_TRANSFER_DURABLE_STATE_BYTES_HARD.saturating_add(1)).unwrap();
         drop(file);
         let opened = File::open(&path).unwrap();
         let error = read_transfer_checkpoint_bounded(opened, 1).unwrap_err();

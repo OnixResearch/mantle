@@ -17,7 +17,6 @@ use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
-use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -53,6 +52,9 @@ use rand::rngs::OsRng;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::release_capability::ReleaseCapabilityRoot;
+use crate::release_capability::ReleaseRootKind;
+use crate::release_capability::ValidatedReleasePath;
 use crate::remote_build::ConcreteBuildRequest;
 use crate::remote_build::RemoteAttemptLogControlSummary;
 use crate::remote_build::RemoteProductionAttemptBinding;
@@ -263,6 +265,7 @@ pub fn load_remote_failure_replay_request(bundle_dir: &Path) -> Result<ConcreteB
         .map_err(|error| format!("remote-failure-action-object-invalid: {error}"))?;
     replay.production_attempt = None;
     replay.transfer_policy = None;
+    replay.failure_replay = None;
     validate_replay_request_matches_bundle(&replay, &bundle)?;
     Ok(replay)
 }
@@ -515,11 +518,14 @@ fn observe_capture_requests(
     root: &Path,
     requests: &[crunch_build::distributed::RemoteFailureCaptureRequest],
 ) -> Result<Vec<RemoteFailureCaptureObservation>, String> {
+    let root = open_capture_root(root)?;
     let mut observations = Vec::with_capacity(requests.len());
     for request in requests {
-        let path = confined_relative_path(root, &request.relative_path)?;
-        let metadata =
-            fs::symlink_metadata(&path).map_err(|error| format!("remote-failure-capture-metadata-failed:{error}"))?;
+        let relative = validated_capture_path(&request.relative_path)?;
+        let metadata = root
+            .dir()
+            .symlink_metadata(relative.as_str())
+            .map_err(|error| format!("remote-failure-capture-metadata-failed:{error}"))?;
         observations.push(RemoteFailureCaptureObservation {
             relative_path: request.relative_path.clone(),
             kind: observed_kind(&metadata),
@@ -530,35 +536,50 @@ fn observe_capture_requests(
 }
 
 fn read_capture_file_nofollow(root: &Path, relative_path: &str, bytes_max: u64) -> Result<Vec<u8>, String> {
-    let path = confined_relative_path(root, relative_path)?;
-    read_bounded_bytes(&path, bytes_max, "capture")
+    let root = open_capture_root(root)?;
+    let relative = validated_capture_path(relative_path)?;
+    let observed = root
+        .dir()
+        .symlink_metadata(relative.as_str())
+        .map_err(|error| format!("remote-failure-capture-metadata-failed:{error}"))?;
+    if observed.file_type().is_symlink() || !observed.is_file() {
+        return Err("remote-failure-capture-not-regular-file".to_string());
+    }
+    if observed.len() > bytes_max {
+        return Err("remote-failure-capture-too-large".to_string());
+    }
+    let mut file = root
+        .open_file_read_nofollow(&relative)
+        .map_err(|error| format!("remote-failure-capture-open-no-follow-failed:{error}"))?;
+    let opened = file.metadata().map_err(|error| format!("remote-failure-capture-opened-metadata-failed:{error}"))?;
+    if !opened.is_file() || opened.len() != observed.len() {
+        return Err("remote-failure-capture-type-or-size-drift".to_string());
+    }
+    let read_limit = bytes_max
+        .checked_add(BOUNDED_READ_PROBE_BYTES)
+        .ok_or_else(|| "remote-failure-capture-read-limit-overflow".to_string())?;
+    let capacity = usize::try_from(opened.len()).map_err(|_| "remote-failure-capture-capacity-overflow".to_string())?;
+    let mut bytes = Vec::with_capacity(capacity);
+    Read::by_ref(&mut file)
+        .take(read_limit)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("remote-failure-capture-read-failed:{error}"))?;
+    if u64::try_from(bytes.len()).map_err(|_| "remote-failure-capture-size-overflow".to_string())? > bytes_max {
+        return Err("remote-failure-capture-too-large".to_string());
+    }
+    Ok(bytes)
 }
 
-fn confined_relative_path(root: &Path, relative_path: &str) -> Result<PathBuf, String> {
-    let relative = Path::new(relative_path);
-    if relative.is_absolute() || relative.components().any(|component| !matches!(component, Component::Normal(_))) {
-        return Err("remote-failure-capture-path-invalid".to_string());
-    }
-    let mut current = root.to_path_buf();
-    let components = relative.components().collect::<Vec<_>>();
-    for (index, component) in components.iter().enumerate() {
-        let Component::Normal(name) = component else {
-            return Err("remote-failure-capture-path-invalid".to_string());
-        };
-        current.push(name);
-        let metadata = fs::symlink_metadata(&current)
-            .map_err(|error| format!("remote-failure-capture-component-metadata-failed:{error}"))?;
-        if metadata.file_type().is_symlink() {
-            return Err("remote-failure-capture-symlink-rejected".to_string());
-        }
-        if index + 1 < components.len() && !metadata.is_dir() {
-            return Err("remote-failure-capture-parent-not-directory".to_string());
-        }
-    }
-    Ok(current)
+fn open_capture_root(root: &Path) -> Result<ReleaseCapabilityRoot, String> {
+    ReleaseCapabilityRoot::open_ambient_nofollow(ReleaseRootKind::RemoteFailureCapture, root)
+        .map_err(|error| format!("remote-failure-capture-root-open-no-follow-failed:{error}"))
 }
 
-fn observed_kind(metadata: &fs::Metadata) -> RemoteFailureCaptureObservedKind {
+fn validated_capture_path(relative_path: &str) -> Result<ValidatedReleasePath, String> {
+    ValidatedReleasePath::new(relative_path).map_err(|error| format!("remote-failure-capture-path-invalid:{error:?}"))
+}
+
+fn observed_kind(metadata: &cap_std::fs::Metadata) -> RemoteFailureCaptureObservedKind {
     let file_type = metadata.file_type();
     if file_type.is_file() {
         return RemoteFailureCaptureObservedKind::RegularFile;
@@ -568,19 +589,6 @@ fn observed_kind(metadata: &fs::Metadata) -> RemoteFailureCaptureObservedKind {
     }
     if file_type.is_symlink() {
         return RemoteFailureCaptureObservedKind::Symlink;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::FileTypeExt;
-        if file_type.is_socket() {
-            return RemoteFailureCaptureObservedKind::Socket;
-        }
-        if file_type.is_fifo() {
-            return RemoteFailureCaptureObservedKind::Fifo;
-        }
-        if file_type.is_block_device() || file_type.is_char_device() {
-            return RemoteFailureCaptureObservedKind::Device;
-        }
     }
     RemoteFailureCaptureObservedKind::Unsupported
 }
@@ -681,9 +689,15 @@ fn json_contains_secret_material(value: &serde_json::Value, visited: &mut usize)
             serde_json::Value::Object(fields) => {
                 for (key, value) in fields {
                     let key = key.to_ascii_lowercase();
-                    if key.contains("password")
+                    let nonempty_environment =
+                        key == "env" && value.as_object().is_some_and(|environment| !environment.is_empty());
+                    if nonempty_environment
+                        || key.contains("password")
                         || key.contains("secret")
                         || key.contains("token")
+                        || key.contains("credential")
+                        || key.contains("access_key")
+                        || key.contains("api_key")
                         || key.contains("private_key")
                         || key.contains("private-key")
                     {
@@ -829,7 +843,7 @@ fn validate_replay_request_matches_bundle(
     request: &ConcreteBuildRequest,
     bundle: &RemoteFailureDebugBundle,
 ) -> Result<(), String> {
-    if request.production_attempt.is_some() || request.transfer_policy.is_some() {
+    if request.production_attempt.is_some() || request.transfer_policy.is_some() || request.failure_replay.is_some() {
         return Err("remote-failure-replay-stale-authority-present".to_string());
     }
     if request.request_id.is_empty() || bundle.original_fence_generation.get() == 0 {
@@ -1245,6 +1259,7 @@ mod tests {
             production_attempt: None,
             transfer_policy: None,
             failure_debug_policy: RemoteFailureDebugPolicy::default(),
+            failure_replay: None,
         }
     }
 
@@ -1410,6 +1425,45 @@ mod tests {
     }
 
     #[test]
+    fn capture_rejects_final_and_parent_symlink_escape_before_publication() {
+        for allowed_path in ["build/link", "escape/trace.json"] {
+            let state = tempfile::tempdir().unwrap();
+            let sandbox = tempfile::tempdir().unwrap();
+            let external = tempfile::tempdir().unwrap();
+            fs::create_dir(sandbox.path().join("build")).unwrap();
+            fs::write(external.path().join("trace.json"), b"HOST_CONTENT_MUST_NOT_LEAK").unwrap();
+            symlink(external.path().join("trace.json"), sandbox.path().join("build/link")).unwrap();
+            symlink(external.path(), sandbox.path().join("escape")).unwrap();
+            let policy = RemoteFailureDebugPolicy {
+                capture: RemoteFailureCapturePolicy {
+                    enabled: true,
+                    allowed_relative_paths: vec![allowed_path.to_string()],
+                    sensitivity: RemoteFailureCaptureSensitivity::RestrictedDiagnostic,
+                    ..RemoteFailureCapturePolicy::default()
+                },
+                ..RemoteFailureDebugPolicy::default()
+            };
+            let result = publish_remote_failure_debug_bundle(RemoteFailureDebugPublishRequest {
+                state_dir: state.path(),
+                capture_root: Some(sandbox.path()),
+                facts: facts(),
+                policy,
+            });
+            let bundles = state.path().join(REMOTE_FAILURE_DEBUG_STORE_DIR).join(BUNDLES_DIR);
+
+            if let Ok(outcome) = result {
+                assert_eq!(outcome.capture_outcome_code, "capture-rejected");
+                let bundle_path = bundle_dir(state.path(), &outcome);
+                let (bundle, _) = load_and_validate_remote_failure_debug_bundle(&bundle_path).unwrap();
+                assert!(bundle.captured_artifact_manifest_ref.is_none());
+                assert!(!bundle_path.join(CAPTURE_CAS_DIR).read_dir().unwrap().any(|entry| entry.is_ok()));
+            }
+            assert!(bundles.read_dir().unwrap().filter_map(Result::ok).count() <= 1);
+            assert_eq!(fs::read(external.path().join("trace.json")).unwrap(), b"HOST_CONTENT_MUST_NOT_LEAK");
+        }
+    }
+
+    #[test]
     fn tampered_manifest_object_and_capture_bytes_fail_closed() {
         let state = tempfile::tempdir().unwrap();
         let policy = RemoteFailureDebugPolicy {
@@ -1494,6 +1548,41 @@ mod tests {
         assert!(!replay.executable);
         assert!(replay.blockers.iter().any(|blocker| blocker.contains("action-request-redacted")));
         assert!(load_remote_failure_replay_request(&path).is_err());
+    }
+
+    #[test]
+    fn raw_environment_values_are_excluded_and_block_replay() {
+        let state = tempfile::tempdir().unwrap();
+        let mut environment_facts = facts();
+        environment_facts.request.payload = crate::remote_build::RemoteConcreteBuildPayload::Action {
+            action_id: "debug-action".to_string(),
+            spec_json: serde_json::json!({
+                "schema": "mantle-remote-action-v1",
+                "action_id": "debug-action",
+                "builder": "/bin/false",
+                "outputs": ["out"],
+                "env": { "MODE": "SHOULD_NOT_RENDER" },
+            })
+            .to_string(),
+        };
+        let policy = RemoteFailureDebugPolicy {
+            replay_enabled: true,
+            ..RemoteFailureDebugPolicy::default()
+        };
+        let outcome = publish_remote_failure_debug_bundle(RemoteFailureDebugPublishRequest {
+            state_dir: state.path(),
+            capture_root: None,
+            facts: environment_facts,
+            policy,
+        })
+        .unwrap();
+        let path = bundle_dir(state.path(), &outcome);
+        let (bundle, _) = load_and_validate_remote_failure_debug_bundle(&path).unwrap();
+        let action_bytes = fs::read(object_path(&path, &bundle.action_ref)).unwrap();
+
+        assert_eq!(bundle.action_ref.kind, "action-request-redacted");
+        assert!(!String::from_utf8_lossy(&action_bytes).contains("SHOULD_NOT_RENDER"));
+        assert!(!plan_remote_failure_replay_from_disk(&path).unwrap().executable);
     }
 
     #[test]

@@ -603,3 +603,20 @@
 // build-report health live under root `src/`. Scheduler-priority instrumentation
 // remains an explicit active-task blocker until a real lazy-goal priority
 // decision reaches the remote dispatch seam.
+
+// Remote failure-debug bundle bridge.
+//
+// r[impl operator_diagnostics.remote_failure_debug_bundle]
+// r[verify operator_diagnostics.remote_failure_debug_bundle]
+// r[impl operator_diagnostics.remote_failure_replay]
+// r[verify operator_diagnostics.remote_failure_replay]
+// r[impl remote_builds.failure_debug_capture]
+// r[verify remote_builds.failure_debug_capture]
+// Deterministic bundle/capture/replay/comparison/retention kernels live in
+// `crates/crunch-build/src/distributed/remote_failure_debug.rs`. The root shell
+// owns atomic bundle publication, immutable-log reference composition,
+// capability-confined no-follow capture, worker quarantine cleanup, redacted
+// inspect/replay-plan/GC rendering, newly identified replay jobs, ordinary
+// fenced output admission, and bounded status reports. Core, shell,
+// multiprocess publication, worker capture, clean-process inspect, retention,
+// and failed/successful replay tests provide positive and negative evidence.

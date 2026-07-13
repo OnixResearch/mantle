@@ -287,6 +287,13 @@ pub struct RemoteProductionAttemptBinding {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RemoteFailureReplayBinding {
+    pub source_bundle_blake3: crunch_build::distributed::RemoteFailureDebugDigest,
+    pub execution_blake3: crunch_build::distributed::RemoteFailureDebugDigest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConcreteBuildRequest {
     pub request_id: String,
     pub store_prefix: String,
@@ -308,6 +315,8 @@ pub struct ConcreteBuildRequest {
     pub locality_scope: Option<RemoteLocalityScope>,
     #[serde(default)]
     pub failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_replay: Option<RemoteFailureReplayBinding>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1433,6 +1442,8 @@ pub struct RemoteFailureDebugStatus {
     pub immutable_log_available: bool,
     pub non_claim: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_bundle_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay_attempt_identity: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay_comparison_class: Option<String>,
@@ -2321,9 +2332,13 @@ async fn execute_remote_local_build_linux(
             let workspace_release = release_remote_execution_workspace(executor, workspace_lease);
             let mut message = format!("remote-local-executor-build: {error}");
             match debug_ref {
-                Ok(Some(debug_ref)) => {
-                    message.push_str("; ");
-                    message.push_str(&debug_ref);
+                Ok(Some(debug)) => {
+                    message.push_str("; worker_bundle_ref=");
+                    message.push_str(&debug.bundle_ref);
+                    message.push_str("; worker_capture_outcome=");
+                    message.push_str(&debug.capture_outcome_code);
+                    message.push_str("; worker_cleanup_status=");
+                    message.push_str(&debug.cleanup_status_code);
                 }
                 Ok(None) => {}
                 Err(capture_error) => {
@@ -2456,7 +2471,7 @@ fn publish_remote_worker_failure_debug(
     executor: &RemoteLocalBuildExecutor,
     request: &ConcreteBuildRequest,
     failure_workspace_root: &Path,
-) -> Result<Option<String>, String> {
+) -> Result<Option<crate::remote_failure_debug::RemoteFailureDebugPublishOutcome>, String> {
     if !request.failure_debug_policy.capture.enabled {
         return Ok(None);
     }
@@ -2494,7 +2509,7 @@ fn publish_remote_worker_failure_debug(
             policy: request.failure_debug_policy.clone(),
         },
     )?;
-    Ok(Some(outcome.bundle_ref))
+    Ok(Some(outcome))
 }
 
 #[cfg(target_os = "linux")]
@@ -4366,6 +4381,10 @@ pub fn normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> R
     hash_ordered_values(&mut hasher, "input-ref", &request.request.input_refs);
     hash_ordered_values(&mut hasher, "source-input-ref", &request.request.source_input_refs);
     hash_expected_outputs_for_key(&mut hasher, &request.request.expected_outputs);
+    if let Some(replay) = &request.request.failure_replay {
+        hash_labeled_str(&mut hasher, "failure-replay-source-bundle", replay.source_bundle_blake3.as_str());
+        hash_labeled_str(&mut hasher, "failure-replay-execution", replay.execution_blake3.as_str());
+    }
     hash_labeled_str(&mut hasher, "required-system", &request.required_system);
     hash_ordered_values(&mut hasher, "required-feature", &request.required_features);
     hash_labeled_str(&mut hasher, "required-sandbox", &request.required_sandbox_mode);
@@ -5546,14 +5565,16 @@ fn apply_attempt_plan_to_candidate(
     if let RemoteAttemptReportPayload::LogAppend { cursor, bytes } = &report.payload {
         apply_fenced_log_append(state, report, *cursor, bytes, log_policy)?;
     }
-    {
+    let release_live_output_claims = matches!(&report.payload, RemoteAttemptReportPayload::Failure { .. });
+    let (normalized_build_key, live_output_claims) = {
         let job = state
             .jobs
             .get_mut(&report.identity.job_id)
             .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
         apply_attempt_payload_to_job(job, &report.payload, next_attempt);
         job.last_attempt_reason_code = Some(reason_code);
-    }
+        (job.normalized_build_key.clone(), job.live_output_claims.clone())
+    };
     if next_attempt.phase.is_terminal() {
         release_current_job_resource_lease(state, &report.identity.job_id, next_attempt)?;
         let job = state
@@ -5561,6 +5582,13 @@ fn apply_attempt_plan_to_candidate(
             .get_mut(&report.identity.job_id)
             .ok_or_else(|| "remote-coordinator-job-unknown".to_string())?;
         job.resource_lease_id_blake3 = None;
+    }
+    if release_live_output_claims {
+        for claim in live_output_claims {
+            if state.live_output_claims.get(&claim) == Some(&normalized_build_key) {
+                state.live_output_claims.remove(&claim);
+            }
+        }
     }
     debug_assert!(
         !next_attempt.phase.is_terminal() || state.jobs[&report.identity.job_id].resource_lease_id_blake3.is_none()
@@ -7499,6 +7527,9 @@ pub fn plan_remote_stdio_replay_dispatch(
     if request.production_attempt.is_some() || request.transfer_policy.is_some() {
         return Err("remote-replay-request-stale-authority".to_string());
     }
+    if request.failure_replay.is_none() {
+        return Err("remote-replay-binding-missing".to_string());
+    }
     if request.store_prefix != options.store_prefix {
         return Err("remote-replay-request-store-prefix-mismatch".to_string());
     }
@@ -7570,6 +7601,7 @@ pub fn concrete_remote_derivation_request(
         resource_requirements: None,
         locality_scope: None,
         failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
+        failure_replay: None,
     })
 }
 
@@ -11326,6 +11358,7 @@ mod tests {
             resource_requirements: None,
             locality_scope: None,
             failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
+            failure_replay: None,
         };
         assert!(validate_concrete_request(&request, &ticket).is_err());
         redeem_after_queue(&mut ticket, false).unwrap();
@@ -11389,6 +11422,7 @@ mod tests {
             resource_requirements: None,
             locality_scope: None,
             failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
+            failure_replay: None,
         };
         validate_concrete_request(&request, &ticket).unwrap();
         redeem_after_queue(&mut ticket, true).unwrap();
@@ -13056,6 +13090,32 @@ mod tests {
     }
 
     #[test]
+    fn replay_execution_identity_forces_a_new_normalized_job_key() {
+        let original = fixture_coordinator_request();
+        let mut replay_a = original.clone();
+        replay_a.request.failure_replay = Some(RemoteFailureReplayBinding {
+            source_bundle_blake3: crunch_build::distributed::RemoteFailureDebugDigest::new(
+                "a".repeat(BLAKE3_HEX_LENGTH_CHARS),
+            )
+            .unwrap(),
+            execution_blake3: crunch_build::distributed::RemoteFailureDebugDigest::new(
+                "b".repeat(BLAKE3_HEX_LENGTH_CHARS),
+            )
+            .unwrap(),
+        });
+        let mut replay_b = replay_a.clone();
+        replay_b.request.failure_replay.as_mut().unwrap().execution_blake3 =
+            crunch_build::distributed::RemoteFailureDebugDigest::new("c".repeat(BLAKE3_HEX_LENGTH_CHARS)).unwrap();
+        let original_key = normalized_remote_build_key(&original).unwrap();
+        let replay_a_key = normalized_remote_build_key(&replay_a).unwrap();
+        let replay_b_key = normalized_remote_build_key(&replay_b).unwrap();
+
+        assert_ne!(original_key, replay_a_key);
+        assert_ne!(replay_a_key, replay_b_key);
+        assert_ne!(original_key, replay_b_key);
+    }
+
+    #[test]
     fn coordinator_state_reset_cannot_reissue_job_or_attempt_identity() {
         let request = fixture_coordinator_request();
         let mut first_state = RemoteCoordinatorState::default();
@@ -13977,6 +14037,7 @@ mod tests {
                 cleanup_status_code: "cleanup-complete".to_string(),
                 immutable_log_available: true,
                 non_claim: crunch_build::distributed::REMOTE_FAILURE_DEBUG_NON_CLAIM.to_string(),
+                worker_bundle_ref: None,
                 replay_attempt_identity: None,
                 replay_comparison_class: None,
             }),
@@ -14626,6 +14687,7 @@ mod tests {
             resource_requirements: None,
             locality_scope: None,
             failure_debug_policy: crunch_build::distributed::RemoteFailureDebugPolicy::default(),
+            failure_replay: None,
         }
     }
 

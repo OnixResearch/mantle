@@ -29,6 +29,7 @@ pub(crate) enum ReleaseRootKind {
     Bootstrap,
     BuildArtifact,
     Store,
+    RemoteFailureCapture,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

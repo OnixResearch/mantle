@@ -329,6 +329,17 @@ fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_ch
     let inspect_json: Value = serde_json::from_slice(&inspect.stdout).unwrap();
     assert_eq!(inspect_json["captured_artifact_count"], 1);
     assert!(!String::from_utf8(inspect.stdout).unwrap().contains(root.path().to_str().unwrap()));
+    let status = Command::new(env!("CARGO_BIN_EXE_mantle"))
+        .args(["--json", "--state-dir"])
+        .arg(&state_dir)
+        .args(["remote", "status"])
+        .output()
+        .expect("render worker capture status");
+    assert!(status.status.success());
+    let status_json: Value = serde_json::from_slice(&status.stdout).unwrap();
+    let debug_status = &status_json["recent_failures"][0]["failure_debug"];
+    assert_eq!(debug_status["capture_outcome_code"], "captured");
+    assert_eq!(debug_status["worker_bundle_ref"], format!("remote-failure-debug:{worker_bundle_digest}"));
     assert!(failure_workspace_directories(&state_dir).is_empty());
     assert!(fs::read_dir(&store_dir).unwrap().next().is_none());
 }
@@ -379,7 +390,7 @@ fn failed_output_admission_replays_under_new_fence_without_rewriting_original_bu
         .prefix("failure-debug-replay")
         .tempdir()
         .expect("failure debug replay tempdir");
-    let fixture = setup_production_fixture(root.path(), OUTPUT_BYTES, MAX_UPLOAD_BYTES);
+    let fixture = setup_replay_fixture(root.path());
     let config = root.path().join("failure-debug.ncl");
     write_failure_debug_config(&config, true);
 
@@ -388,6 +399,7 @@ fn failed_output_admission_replays_under_new_fence_without_rewriting_original_bu
         .arg(&config)
         .arg("--trusted-builder-key")
         .arg(WRONG_BUILDER_KEY)
+        .env("CRUNCH_NO_FUSE", "1")
         .output()
         .expect("run output-admission failure");
     assert!(!failed.status.success());
@@ -399,6 +411,7 @@ fn failed_output_admission_replays_under_new_fence_without_rewriting_original_bu
     let manifest_bytes = fs::read(bundle_dir.join("manifest.json")).unwrap();
     let manifest: Value = serde_json::from_slice(&manifest_bytes).unwrap();
     let bundle_digest = manifest["bundle_blake3"].as_str().unwrap();
+    let original_job_id = manifest["original_job_id"].as_str().unwrap();
     let original_attempt_id = manifest["original_attempt_id"].as_str().unwrap();
     let original_fence = manifest["original_fence_generation"].as_u64().unwrap();
     assert_eq!(manifest["failure_phase"], "execution");
@@ -409,7 +422,16 @@ fn failed_output_admission_replays_under_new_fence_without_rewriting_original_bu
         .output()
         .expect("execute rejected remote failure replay");
     assert!(!rejected_replay.status.success());
-    assert!(String::from_utf8_lossy(&rejected_replay.stderr).contains("untrusted-output-key"));
+    let rejected_replay_stderr = String::from_utf8_lossy(&rejected_replay.stderr);
+    assert!(
+        rejected_replay_stderr.contains("untrusted-output-key"),
+        "rejected replay stderr={rejected_replay_stderr}"
+    );
+    let coordinator: Value = serde_json::from_slice(
+        &fs::read(fixture.state_dir.join("remote-coordinator-state.json")).expect("replay coordinator state"),
+    )
+    .expect("replay coordinator JSON");
+    assert_eq!(coordinator["live_output_claims"].as_object().unwrap().len(), 0);
     assert_eq!(fs::read(bundle_dir.join("manifest.json")).unwrap(), manifest_bytes);
 
     let replay = remote_failure_replay_command(&fixture.state_dir, &fixture.store_dir, bundle_digest)
@@ -420,8 +442,10 @@ fn failed_output_admission_replays_under_new_fence_without_rewriting_original_bu
     let replay_identity = report["replay_attempt_identity"].as_str().unwrap();
     let replay_parts = replay_identity.split(':').collect::<Vec<_>>();
     assert_eq!(replay_parts.len(), 3);
+    assert_ne!(replay_parts[0], original_job_id);
     assert_ne!(replay_parts[1], original_attempt_id);
-    assert!(replay_parts[2].parse::<u64>().unwrap() > original_fence);
+    assert!(replay_parts[2].parse::<u64>().unwrap() > 0);
+    assert!(original_fence > 0);
     assert_eq!(report["comparison"]["class"], "diverged");
     assert_eq!(report["original_result_immutable"], true);
     assert_eq!(report["ordinary_output_admission_applied"], true);
@@ -496,6 +520,21 @@ struct ProductionFixture {
     state_dir: PathBuf,
     store_dir: PathBuf,
     build_file: PathBuf,
+}
+
+fn setup_replay_fixture(root: &Path) -> ProductionFixture {
+    let state_dir = root.join("state");
+    let store_dir = root.join("store");
+    let build_file = root.join("remote-replay.ncl");
+    fs::create_dir_all(&state_dir).unwrap();
+    fs::create_dir_all(&store_dir).unwrap();
+    write_ticket_state(&state_dir);
+    write_replayable_derivation(&build_file);
+    ProductionFixture {
+        state_dir,
+        store_dir,
+        build_file,
+    }
 }
 
 fn setup_production_fixture(root: &Path, output_bytes: usize, max_upload_bytes: u64) -> ProductionFixture {
@@ -795,20 +834,26 @@ fn read_checkpoint_summary(path: &Path) -> CheckpointSummary {
 
 fn remote_failure_replay_command(state_dir: &Path, store_dir: &Path, bundle_digest: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_mantle"));
-    command.args(["--json", "--state-dir"]).arg(state_dir).arg("--store").arg(store_dir).args([
-        "--store-prefix",
-        STORE_PREFIX,
-        "remote",
-        "debug",
-        "replay",
-        bundle_digest,
-        "--builder",
-        BUILDER_ID,
-        "--ticket",
-        &format!("{TICKET_ID}:{TICKET_SECRET}"),
-        "--remote-build-time-secs",
-        &MAX_BUILD_TIME_SECS.to_string(),
-    ]);
+    command
+        .env("CRUNCH_NO_FUSE", "1")
+        .args(["--json", "--state-dir"])
+        .arg(state_dir)
+        .arg("--store")
+        .arg(store_dir)
+        .args([
+            "--store-prefix",
+            STORE_PREFIX,
+            "remote",
+            "debug",
+            "replay",
+            bundle_digest,
+            "--builder",
+            BUILDER_ID,
+            "--ticket",
+            &format!("{TICKET_ID}:{TICKET_SECRET}"),
+            "--remote-build-time-secs",
+            &MAX_BUILD_TIME_SECS.to_string(),
+        ]);
     command
 }
 
@@ -860,6 +905,27 @@ fn write_ticket_state_with_upload_limit(state_dir: &Path, max_upload_bytes: u64)
     });
     fs::write(ticket_dir.join("tickets.json"), serde_json::to_vec_pretty(&state).expect("ticket state JSON"))
         .expect("ticket state");
+}
+
+fn write_replayable_derivation(path: &Path) {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/lib.ncl");
+    let source = format!(
+        r#"let mantle = import "{}" in
+{{
+  name = "production-remote-replay",
+  builder = "/bin/sh",
+  system = 'x86_64-linux,
+  args = ["-c", "printf replay-ok > $out"],
+  outputs = ["out"],
+  env = {{}},
+  inputs = [],
+  addressing_mode = 'input-addressed,
+  sandbox = 'native,
+}} | mantle.Derivation
+"#,
+        lib.display(),
+    );
+    fs::write(path, source).expect("replayable derivation");
 }
 
 fn write_failing_capture_derivation(path: &Path) {
